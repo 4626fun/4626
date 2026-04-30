@@ -284,6 +284,23 @@ function isCanonicalPaymasterPolicyFallbackError(error: unknown): boolean {
   )
 }
 
+function isPrivyEmbeddedConnector(context: TxRouterContext): boolean {
+  const connectorId = normalizeConnectorId(context.connectorId)
+  const connectorName = normalizeConnectorName(context.connectorName)
+  return connectorId.includes('privy-embedded') || (connectorName.includes('privy') && connectorName.includes('embedded'))
+}
+
+function requiresSponsoredCanonical4337(context: TxRouterContext): boolean {
+  return context.executionMode === 'canonical' && context.signerType === 'EOA' && isPrivyEmbeddedConnector(context)
+}
+
+function embeddedCanonicalSponsorshipRequiredError(reason: string): Error {
+  return new Error(
+    `Paymaster sponsorship is required for embedded canonical execution, but it was unavailable: ${reason}. ` +
+      'Connect a funded external fallback signer or retry after sponsorship is available.',
+  )
+}
+
 function toRoutedCalls(params: { swapTx: TransactionRequest; approvalTx?: TransactionRequest | null }): RoutedCall[] {
   const calls: RoutedCall[] = []
   if (params.approvalTx) calls.push(normalizeTx(params.approvalTx))
@@ -439,13 +456,19 @@ export function detectTxSendMode(context: TxRouterContext): TxRoutingDecision {
       !smartWalletDetected && context.publicClient && context.canonicalAddress && context.signerAddress
         ? 'canonical4337'
         : 'canonicalDirect'
-    const fallbackMode: TxSendMode = mode === 'canonical4337' ? 'canonicalDirect' : mode
+    const fallbackMode: TxSendMode =
+      mode === 'canonical4337' && !requiresSponsoredCanonical4337(context) ? 'canonicalDirect' : mode
     const decision: TxRoutingDecision = {
       mode,
       fallbackMode,
       smartWalletDetected,
       supportsSendCallsHint: sendCallsHint,
-      reason: mode === 'canonical4337' ? 'canonical owner signer path' : 'canonical connector-native direct path',
+      reason:
+        mode === 'canonical4337'
+          ? requiresSponsoredCanonical4337(context)
+            ? 'canonical owner signer path; direct fallback disabled for embedded signer'
+            : 'canonical owner signer path'
+          : 'canonical connector-native direct path',
     }
     context.debug?.({
       event: 'route_selected',
@@ -681,6 +704,20 @@ async function sendViaCanonical4337(params: {
   }
   const sender = canonicalIdentity
   if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
+    const reason = 'swap-router native-value call is not eligible for the current paymaster path'
+    if (requiresSponsoredCanonical4337(context)) {
+      context.debug?.({
+        event: 'send_error',
+        mode: decision.mode,
+        fallbackMode: decision.fallbackMode,
+        method: 'eth_sendUserOperation',
+        chainId: context.chainId,
+        sender,
+        callTargets: calls.map((call) => call.to),
+        error: reason,
+      })
+      throw embeddedCanonicalSponsorshipRequiredError(reason)
+    }
     context.debug?.({
       event: 'send_fallback',
       mode: decision.mode,
@@ -689,7 +726,7 @@ async function sendViaCanonical4337(params: {
       chainId: context.chainId,
       sender,
       callTargets: calls.map((call) => call.to),
-      error: 'Bypassing paymaster path for swap-router native-value call',
+      error: reason,
     })
     return sendViaMode({
       context,
@@ -729,6 +766,19 @@ async function sendViaCanonical4337(params: {
     const normalized = normalizeCanonicalSendError(error)
     const shouldFallbackToCanonicalDirect = isCanonicalPaymasterPolicyFallbackError(error)
     if (shouldFallbackToCanonicalDirect) {
+      if (requiresSponsoredCanonical4337(context)) {
+        context.debug?.({
+          event: 'send_error',
+          mode: decision.mode,
+          fallbackMode: decision.fallbackMode,
+          method: 'eth_sendUserOperation',
+          chainId: context.chainId,
+          sender,
+          callTargets: calls.map((call) => call.to),
+          error: normalized.message,
+        })
+        throw embeddedCanonicalSponsorshipRequiredError(normalized.message)
+      }
       context.debug?.({
         event: 'send_fallback',
         mode: decision.mode,

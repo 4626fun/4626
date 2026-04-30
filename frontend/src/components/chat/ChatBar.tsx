@@ -193,13 +193,15 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
       : 'flex flex-col'
 
   return (
-    <div className={containerClasses} style={variant === 'desktop' ? { width: 280 } : undefined}>
+    <div className={containerClasses} style={variant === 'desktop' ? { width: 292 } : undefined}>
       {/* Header / toggle pill */}
       {variant === 'desktop' ? (
         <button
           type="button"
           onClick={onToggle}
-          className="flex items-center justify-between gap-2 rounded-t-xl px-4 py-2.5 bg-zinc-900 border border-white/10 border-b-0 text-zinc-200 hover:bg-zinc-800 transition-colors select-none"
+          className={`flex items-center justify-between gap-2 border border-white/10 bg-black/75 px-4 py-2.5 text-zinc-200 shadow-[0_18px_46px_-26px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-colors select-none hover:border-white/15 hover:bg-black/85 ${
+            expanded ? 'rounded-t-2xl border-b-0' : 'rounded-2xl'
+          }`}
         >
           <span className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4" />
@@ -251,7 +253,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
           className={
             variant === 'mobile'
               ? 'flex flex-col flex-1 bg-black'
-              : 'flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-xl overflow-hidden max-h-[420px]'
+              : 'flex flex-col bg-black/82 backdrop-blur-xl border border-white/10 border-t-0 rounded-b-2xl overflow-hidden max-h-[420px] shadow-[0_26px_72px_-36px_rgba(0,0,0,0.95)]'
           }
         >
           {variant === 'mobile' && (

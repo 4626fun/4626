@@ -258,7 +258,7 @@ export function ConnectButton({
     }
     return {
       container: {
-        top: 'var(--space-2)',
+        top: 'var(--space-4)',
         right: 'var(--space-2)',
         bottom: 'var(--space-2)',
         width: '26rem',
@@ -376,16 +376,6 @@ export function ConnectButton({
                   <div className="h-px bg-white/8 my-2" />
                 </>
               ) : null}
-              <a
-                href={`https://basescan.org/address/${canonicalIdentity.cswAddress ?? address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-              >
-                <span className="label block">View on Basescan</span>
-              </a>
-              <div className="h-px bg-white/8 my-2" />
-                
               {!auth.hasSession ? (
                 <button
                   type="button"

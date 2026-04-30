@@ -17,6 +17,7 @@
     "api/**/*.ts",
     "api/_handlers/**/*.ts",
     "server/_lib/**/*.ts",
+    "server/_lib/**/*.d.ts",
     "server/auth/**/*.ts",
     "server/debank/**/*.ts",
     "server/dexscreener/**/*.ts",

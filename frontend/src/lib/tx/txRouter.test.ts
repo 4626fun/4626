@@ -410,6 +410,42 @@ describe('txRouter', () => {
     expect(sendTransaction).toHaveBeenCalledTimes(1)
   })
 
+  it('does not fallback to direct gas send when embedded canonical sponsorship is denied', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
+      new Error('request denied - swap_router_value_not_allowed'),
+    )
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      connectorId: 'privy-embedded',
+      connectorName: 'Privy Embedded EOA',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+    })
+
+    await expect(
+      buildAndSendSwap({
+        context,
+        swapTx: {
+          to: ADDRESS_A,
+          from: ADDRESS_B,
+          data: '0xbbbb',
+          value: '0',
+          chainId: 8453,
+        },
+      }),
+    ).rejects.toThrow(/paymaster sponsorship is required/i)
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).not.toHaveBeenCalled()
+  })
+
   it('falls back to canonical direct when parent-CSW ERC-4337 swap sponsorship is denied', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
       new Error('request denied - swap_router_value_not_allowed'),
@@ -496,6 +532,39 @@ describe('txRouter', () => {
     expect(result.send.transactionHash).toBe(HASH_B)
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(sendTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not bypass paymaster into direct gas send for embedded native-value swap-router calls', async () => {
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      connectorId: 'privy-embedded',
+      connectorName: 'Privy Embedded EOA',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+    })
+
+    await expect(
+      buildAndSendSwap({
+        context,
+        swapTx: {
+          to: ADDRESS_A,
+          from: ADDRESS_B,
+          data: '0x3593564c',
+          value: '123',
+          chainId: 8453,
+        },
+      }),
+    ).rejects.toThrow(/paymaster sponsorship is required/i)
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(sendTransaction).not.toHaveBeenCalled()
   })
 
   it('locks canonical approval+swap sendCalls fallback to parent-CSW ERC-4337', async () => {

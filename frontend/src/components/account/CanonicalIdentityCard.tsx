@@ -156,14 +156,9 @@ export function CanonicalIdentityDropdown({
               <JazziconAvatar address={identity.cswAddress} size={32} />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-sm text-white truncate">
-                {cswBasename.displayName ?? formatShort(identity.cswAddress)}
-              </div>
-              <div className="text-[11px] text-zinc-500 truncate">Coinbase Smart Wallet · source of truth</div>
+              <AddressWithBasescan address={identity.cswAddress} className="text-sm text-white" />
+              <div className="text-[11px] text-zinc-500 truncate">Coinbase Smart Wallet | Source of truth</div>
             </div>
-          </div>
-          <div className="mt-1.5 ml-10">
-            <CopyableAddress address={identity.cswAddress} variant="muted" />
           </div>
           {coinBadge && coinBadge.logoUrl && coinBadge.symbol ? (
             <div className="mt-2 ml-10 flex items-center gap-1.5 text-[11px] text-zinc-400">
@@ -235,16 +230,15 @@ export function CanonicalIdentityDropdown({
               <JazziconAvatar address={identity.executionSubAccountAddress} size={24} />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-zinc-300 truncate">
-                {executionSubAccountBasename.displayName ?? formatShort(identity.executionSubAccountAddress)}
-              </div>
+              <AddressWithBasescan
+                address={identity.executionSubAccountAddress}
+                variant="muted"
+                className="text-xs text-zinc-300"
+              />
               <div className="text-[10px] text-zinc-600 truncate" title="App-scoped execution wallet for 4626 actions">
                 App execution wallet for 4626 actions
               </div>
             </div>
-          </div>
-          <div className="mt-1 ml-8">
-            <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
           </div>
         </div>
       ) : identity.executionTrack === 'legacy-owner-install' ? (
@@ -263,61 +257,11 @@ export function CanonicalIdentityDropdown({
         <div className="mx-4 my-2 h-px bg-white/8" />
       ) : null}
 
-      {/* Active external signer (Rabby / MetaMask / CBW) */}
-      {identity.externalEoaAddress ? (
-        <div className="px-4 pb-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Signer · external
-          </div>
-          <div className="mt-1.5 flex items-center gap-2.5">
-            {externalEoaBasename.avatar ? (
-              <img
-                src={externalEoaBasename.avatar}
-                alt=""
-                width={24}
-                height={24}
-                className="rounded-full flex-shrink-0 object-cover"
-                style={{ width: 24, height: 24 }}
-              />
-            ) : (
-              <JazziconAvatar address={identity.externalEoaAddress} size={24} />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="text-xs text-zinc-300 truncate">
-                {externalEoaBasename.displayName ?? formatShort(identity.externalEoaAddress)}
-              </div>
-              <div className="text-[10px] text-zinc-600 truncate">Used for approvals and signatures</div>
-            </div>
-          </div>
-          <div className="mt-1 ml-8">
-            <CopyableAddress address={identity.externalEoaAddress} variant="muted" />
-          </div>
-        </div>
-      ) : (
-        onRequestConnectWallet ? (
-          <button
-            type="button"
-            onClick={onRequestConnectWallet}
-            className="w-full text-left px-4 py-3 hover:bg-white/4 transition-colors"
-          >
-            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-              Signer · external
-            </div>
-            <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
-            <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer">
-              Optional secondary signer (Rabby / MetaMask / Coinbase Wallet)
-            </div>
-          </button>
-        ) : null
-      )}
-
       {/* Privy embedded (auto-provisioned) */}
       {embeddedAddress ? (
-        <div className="px-4 pt-2 pb-3">
+        <div className="px-4 pb-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            {identity.activeSigner === 'embedded'
-              ? 'Embedded signer · active session'
-              : 'Embedded signer · fallback'}
+            Embedded signer
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {privyBasename.avatar ? (
@@ -333,22 +277,57 @@ export function CanonicalIdentityDropdown({
               <JazziconAvatar address={embeddedAddress} size={24} />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-zinc-300 truncate">
-                {privyBasename.displayName ?? formatShort(embeddedAddress)}
-              </div>
-              <div className="text-[10px] text-zinc-600 truncate">
-                {identity.activeSigner === 'embedded'
-                  ? 'Current session signer'
-                  : identity.externalEoaAddress
-                    ? 'Fallback signer; session may still use this address'
-                    : 'Fallback signer for session continuity'}
-              </div>
+              <AddressWithBasescan address={embeddedAddress} variant="muted" className="text-xs text-zinc-300" />
+              <div className="text-[10px] text-zinc-600 truncate">Primary wallet for approvals and signatures</div>
             </div>
           </div>
-          <div className="mt-1 ml-8">
-            <CopyableAddress address={embeddedAddress} variant="muted" />
+        </div>
+      ) : null}
+
+      {/* Active external signer (Rabby / MetaMask / CBW) */}
+      {identity.externalEoaAddress ? (
+        <div className="px-4 pt-2 pb-3">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            External signer
+          </div>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            {externalEoaBasename.avatar ? (
+              <img
+                src={externalEoaBasename.avatar}
+                alt=""
+                width={24}
+                height={24}
+                className="rounded-full flex-shrink-0 object-cover"
+                style={{ width: 24, height: 24 }}
+              />
+            ) : (
+              <JazziconAvatar address={identity.externalEoaAddress} size={24} />
+            )}
+            <div className="min-w-0 flex-1">
+              <AddressWithBasescan
+                address={identity.externalEoaAddress}
+                label={externalEoaBasename.displayName}
+                variant="muted"
+                className="text-xs text-zinc-300"
+              />
+              <div className="text-[10px] text-zinc-600 truncate">Secondary wallet for approvals and signatures</div>
+            </div>
           </div>
         </div>
+      ) : onRequestConnectWallet ? (
+        <button
+          type="button"
+          onClick={onRequestConnectWallet}
+          className="w-full text-left px-4 py-3 hover:bg-white/4 transition-colors"
+        >
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            External signer
+          </div>
+          <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer">
+            Optional secondary signer (Rabby / MetaMask / Coinbase Wallet)
+          </div>
+        </button>
       ) : null}
     </div>
   )
@@ -398,6 +377,61 @@ function resolvePrimaryLabel(input: PrimaryLabelInput): PrimaryLabel {
     }
   }
   return { label: 'Sign in', title: 'Sign in', avatarUrl: null }
+}
+
+function AddressWithBasescan({
+  address,
+  label,
+  className,
+  variant = 'default',
+}: {
+  address: string
+  label?: string | null
+  className?: string
+  variant?: 'default' | 'muted' | 'pill'
+}) {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <CopyableAddress address={address} label={label} className={className} variant={variant} />
+      <a
+        href={`https://basescan.org/address/${address}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="View on Basescan"
+        aria-label="View on Basescan"
+        className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-zinc-200 opacity-80 transition hover:text-white hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-sky-300/50"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <BasescanIcon />
+      </a>
+    </span>
+  )
+}
+
+function BasescanIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      className="h-3.5 w-3.5"
+      fill="none"
+    >
+      <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" opacity="0.35" />
+      <path
+        d="M4.25 9.1a4.35 4.35 0 0 1 7.5-3.05"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9.45 5.2h2.65v2.65"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
 }
 
 function formatShort(value: string | null | undefined): string {

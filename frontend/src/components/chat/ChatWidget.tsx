@@ -19,7 +19,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { X } from 'lucide-react'
 import { type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/provider'
-import { CHAT_OPEN_REQUEST_EVENT, isChatOpenRequest } from '@/lib/chat/openChat'
+import { CHAT_OPEN_REQUEST_EVENT, isChatOpenRequest, type ChatOpenRequest } from '@/lib/chat/openChat'
+import { toast } from '@/components/ui/Toast'
 import {
   getBasenameAutocompleteCandidate,
   resolveDmRecipient,
@@ -103,6 +104,7 @@ function ChatWidgetInner() {
   const [newDmPreviewLoading, setNewDmPreviewLoading] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
+  const [pendingOpenRequest, setPendingOpenRequest] = useState<ChatOpenRequest | null>(null)
   const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
 
   const maybeConnectMessaging = useCallback(() => {
@@ -189,6 +191,38 @@ function ChatWidgetInner() {
     }
   }, [isMobile])
 
+  const processOpenRequest = useCallback(async (request: ChatOpenRequest) => {
+    if (request.kind === 'group') {
+      handleOpenChat({
+        id: request.conversationId,
+        type: 'group',
+        name: request.name,
+        imageUrl: request.imageUrl ?? undefined,
+        unreadCount: 0,
+        seedCommandId: request.seedCommandId ?? null,
+      } as ChatConversation)
+      return
+    }
+
+    const dmResult = await startDm(request.peerAddress, {
+      nameHint: request.nameHint ?? undefined,
+      imageUrl: request.imageUrl ?? undefined,
+    })
+    if (!dmResult.ok) {
+      toast.error(formatStartDmError(dmResult), { duration: 8_000 })
+      return
+    }
+    handleOpenChat({
+      id: dmResult.conversationId,
+      type: 'dm',
+      name: request.nameHint || `${request.peerAddress.slice(0, 6)}…${request.peerAddress.slice(-4)}`,
+      peerAddress: dmResult.peerAddress,
+      imageUrl: request.imageUrl ?? undefined,
+      unreadCount: 0,
+      seedCommandId: request.seedCommandId ?? null,
+    } as ChatConversation)
+  }, [handleOpenChat, startDm])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -196,40 +230,25 @@ function ChatWidgetInner() {
       const detail = (event as CustomEvent<unknown>).detail
       if (!isChatOpenRequest(detail)) return
 
-      if (detail.kind === 'group') {
-        handleOpenChat({
-          id: detail.conversationId,
-          type: 'group',
-          name: detail.name,
-          imageUrl: detail.imageUrl ?? undefined,
-          unreadCount: 0,
-          seedCommandId: detail.seedCommandId ?? null,
-        } as ChatConversation)
+      if (detail.kind === 'dm' && status !== 'connected') {
+        setPendingOpenRequest(detail)
+        void connect()
         return
       }
 
-      if (status !== 'connected') {
-        void connect()
-      }
-
-      void (async () => {
-        const dmResult = await startDm(detail.peerAddress, { nameHint: detail.nameHint ?? undefined })
-        if (!dmResult.ok) return
-        handleOpenChat({
-          id: dmResult.conversationId,
-          type: 'dm',
-          name: detail.nameHint || `${detail.peerAddress.slice(0, 6)}…${detail.peerAddress.slice(-4)}`,
-          peerAddress: dmResult.peerAddress,
-          imageUrl: detail.imageUrl ?? undefined,
-          unreadCount: 0,
-          seedCommandId: detail.seedCommandId ?? null,
-        } as ChatConversation)
-      })()
+      void processOpenRequest(detail)
     }
 
     window.addEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
     return () => window.removeEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
-  }, [connect, handleOpenChat, startDm, status])
+  }, [connect, processOpenRequest, status])
+
+  useEffect(() => {
+    if (!pendingOpenRequest || status !== 'connected') return
+    const request = pendingOpenRequest
+    setPendingOpenRequest(null)
+    void processOpenRequest(request)
+  }, [pendingOpenRequest, processOpenRequest, status])
 
   useEffect(() => {
     if (!pendingDeepLinkIntent) return
@@ -497,10 +516,10 @@ function ChatWidgetInner() {
         )}
       </div>
 
-      <div className="fixed bottom-0 right-4 z-50 hidden md:flex items-end gap-2 pointer-events-none">
+      <div className="fixed bottom-4 right-5 z-50 hidden md:flex items-end gap-3 pointer-events-none">
         {/* Chat windows — stack from right to left */}
         {openWindows.map((win) => (
-          <div key={win.id} className="pointer-events-auto">
+          <div key={win.id} className="pointer-events-auto motion-safe:animate-slide-up">
             <ChatWindow
               conversationId={win.id}
               conversationName={win.name}

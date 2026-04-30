@@ -978,7 +978,7 @@ export async function buildAccountsMePayload(params: {
         profileId: profileIdForTrack,
         canonicalCswAddress: canonicalCswAddressForTrack,
         baseSubAccountAddress: rawBaseSubAccount,
-        privyUser,
+        privyUser: privyUser ?? null,
       })
     : null
   const baseSubAccountSummary = summarizeBaseSubAccount({

@@ -2,7 +2,7 @@ import {
   LEGACY_DEPLOYMENT_BATCHER,
   MODULE_MISMATCH_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
-} from '../../config/contracts.defaults'
+} from '../../config/contracts.defaults.js'
 
 export function deploymentBatcherNotConfiguredMessage(receivedBatcher?: string | null): string {
   const received =
