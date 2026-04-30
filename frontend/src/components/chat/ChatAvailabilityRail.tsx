@@ -5,7 +5,6 @@ import {
   Bot,
   ChevronRight,
   Hash,
-  MessageSquare,
   PanelLeftClose,
   Search,
   Sparkles,

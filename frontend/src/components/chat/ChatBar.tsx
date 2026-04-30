@@ -152,7 +152,16 @@ function ConversationItem({
 }
 
 export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'desktop' }: Props) {
-  const { status, error, connect, conversations, resetInstallations, installationLimitInboxId } = useXmtp()
+  const {
+    status,
+    error,
+    connect,
+    conversations,
+    resetInstallations,
+    resetLocalState,
+    installationLimitInboxId,
+    localStateResetRequired,
+  } = useXmtp()
   const accountContext = useAccountContext()
   const hasWalletIdentity = Boolean(accountContext.signerAddress)
   const xmtpModeLabel = accountContext.activeAccountType === 'SMART_WALLET' ? 'Smart Wallet' : 'User Wallet'
@@ -281,13 +290,31 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
                   <span className="block text-[10px] text-zinc-500">{xmtpModeHint}</span>
                 </div>
               ) : null}
-              <button
-                type="button"
-                onClick={connect}
-                className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
-              >
-                {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}
-              </button>
+              {!localStateResetRequired ? (
+                <button
+                  type="button"
+                  onClick={connect}
+                  className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
+                >
+                  {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}
+                </button>
+              ) : null}
+              {localStateResetRequired ? (
+                <>
+                  <div className="text-[11px] text-amber-200/80 leading-relaxed">
+                    This browser’s XMTP cache no longer validates against your inbox. Reset local messaging state,
+                    then sign once to create a fresh installation.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void resetLocalState()}
+                    className="px-4 py-2 rounded-lg bg-amber-500/10 text-amber-300 text-xs font-medium hover:bg-amber-500/15 transition-colors"
+                    title="Clears only this browser's local XMTP database, then reconnects."
+                  >
+                    Reset local XMTP state
+                  </button>
+                </>
+              ) : null}
               {installationLimitInboxId ? (
                 <>
                   <div className="text-[11px] text-amber-200/80 leading-relaxed">

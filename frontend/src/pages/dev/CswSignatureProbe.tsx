@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi'
 import {
   decodeAbiParameters,
+  encodeFunctionData,
   encodeAbiParameters,
   getAddress,
   hashMessage,
@@ -15,6 +16,8 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { _submitOwnerViaPreparedCalls, type OwnerApprovalStageEvent } from '@/lib/wallet/onboardingWallet'
 
 const CSW_OWNER_ABI = [
   {
@@ -37,6 +40,16 @@ const CSW_OWNER_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'index', type: 'uint256' }],
     outputs: [{ type: 'bytes' }],
+  },
+] as const
+
+const CSW_OWNER_MUTATION_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
   },
 ] as const
 
@@ -242,6 +255,10 @@ export function CswSignatureProbe() {
   const [ownerReadState, setOwnerReadState] = useState<StepState>(INITIAL_STEP)
   const [signState, setSignState] = useState<StepState>(INITIAL_STEP)
   const [connectState, setConnectState] = useState<StepState>(INITIAL_STEP)
+  const [preparedCallsState, setPreparedCallsState] = useState<StepState>(INITIAL_STEP)
+  const [preparedCallsTxHash, setPreparedCallsTxHash] = useState<string | null>(null)
+  const [preparedCallEventLog, setPreparedCallEventLog] = useState<string[]>([])
+  const [ownerToAddInput, setOwnerToAddInput] = useState('0x2f4ec723ff6add6ab81b7befbec04ce31151613f')
   const [ownerSlots, setOwnerSlots] = useState<OwnerSlot[]>([])
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
 
@@ -254,6 +271,10 @@ export function CswSignatureProbe() {
   const targetOwnerAddress = useMemo(() => {
     return ownerSlots.find((slot) => slot.index === targetOwnerIndex)?.ownerAddress ?? null
   }, [ownerSlots, targetOwnerIndex])
+  const paymasterUrlForPreparedCalls = useMemo(() => {
+    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+    return resolveCdpPaymasterUrl(paymasterEnv) ?? null
+  }, [])
 
   const preferredConnector = useMemo(() => {
     const baseFirst =
@@ -503,6 +524,83 @@ export function CswSignatureProbe() {
     }
   }
 
+  async function runPreparedCallsOwnerAdd() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'self-auth session required',
+        detail: 'Connected signer must equal CSW address for this prepared-calls lane.',
+      })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call wallet_prepareCalls/wallet_sendPreparedCalls.',
+      })
+      return
+    }
+
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const data = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+
+    const runId = `probe-${Date.now()}`
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({ kind: 'pending', label: 'submitting via wallet_prepareCalls…' })
+    try {
+      const txHash = await _submitOwnerViaPreparedCalls({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        sender: normalizedCswAddress,
+        to: normalizedCswAddress,
+        data,
+        paymasterUrl: paymasterUrlForPreparedCalls,
+        approvalRunId: runId,
+        executionMode: 'canonicalSmartWallet',
+        signerAddress: connectedAddress,
+        canonicalCswAddress: normalizedCswAddress,
+        onStageEvent: (event: OwnerApprovalStageEvent) => {
+          const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
+          setPreparedCallEventLog((prev) => [...prev, row].slice(-8))
+        },
+      })
+      setPreparedCallsTxHash(txHash)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'prepared-calls owner add submitted',
+        detail: txHash,
+      })
+    } catch (error) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'prepared-calls owner add failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-6 py-10 text-sm">
       <header className="space-y-2">
@@ -615,6 +713,47 @@ export function CswSignatureProbe() {
             probe typed data
           </button>
         </div>
+      </section>
+
+      <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
+        <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+          Self-call owner add (prepared calls)
+        </div>
+        <div className="text-xs text-zinc-500">
+          Runs wallet_prepareCalls, then personal_sign, then wallet_sendPreparedCalls against the connected CSW session.
+          Use this lane from Base App for addOwnerAddress self-call testing.
+        </div>
+        <label className="space-y-1">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner address to add</div>
+          <input
+            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
+            value={ownerToAddInput}
+            onChange={(event) => setOwnerToAddInput(event.target.value)}
+            spellCheck={false}
+          />
+        </label>
+        <div className="text-[11px] text-zinc-500">
+          paymasterUrl: <span className="font-mono text-zinc-300">{paymasterUrlForPreparedCalls ?? '(none)'}</span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
+            onClick={runPreparedCallsOwnerAdd}
+          >
+            run prepared-calls owner add
+          </button>
+        </div>
+        <StatusRow title="prepared calls lane" state={preparedCallsState} />
+        {preparedCallsTxHash ? <KeyValue label="preparedCallsTxHash" value={preparedCallsTxHash} /> : null}
+        {preparedCallEventLog.length ? (
+          <div className="space-y-1">
+            <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">prepared calls events</div>
+            <div className="rounded border border-zinc-800 bg-black/50 px-2 py-1 font-mono text-[11px] text-zinc-300">
+              {preparedCallEventLog.join('\n')}
+            </div>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">

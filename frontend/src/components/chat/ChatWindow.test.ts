@@ -36,6 +36,17 @@ describe('shouldAttemptInactiveDmRecovery', () => {
     ).toBe(false)
   })
 
+  it('returns false for XMTP inbox validation failures', () => {
+    expect(
+      shouldAttemptInactiveDmRecovery({
+        reason: 'InboxValidationFailed("f1cb93da12e9fb6935084c613638d4005e5c5fd91b02e9ef0355add7309ae673")',
+        conversationType: 'dm',
+        dmPeerAddress: '0x1111111111111111111111111111111111111111',
+        dmPeerInboxId: null,
+      }),
+    ).toBe(false)
+  })
+
   it('returns false when there is no peer address', () => {
     expect(
       shouldAttemptInactiveDmRecovery({

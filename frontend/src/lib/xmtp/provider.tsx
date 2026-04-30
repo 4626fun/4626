@@ -132,9 +132,13 @@ type XmtpContextValue = {
   inboxId: string | null
   /** InboxId extracted from a 10/10 installations error (if present). */
   installationLimitInboxId: string | null
+  /** True when the local XMTP OPFS installation is no longer accepted by the network. */
+  localStateResetRequired: boolean
   connect: () => Promise<void>
   /** Emergency recovery: revoke installations to free a slot, then reconnect. */
   resetInstallations: () => Promise<void>
+  /** Clears only this browser's local XMTP database and reconnects with a fresh installation. */
+  resetLocalState: () => Promise<void>
   disconnect: () => void
   conversations: ChatConversation[]
   loadMessages: (conversationId: string) => Promise<ChatMessage[]>
@@ -265,8 +269,10 @@ const XmtpContext = createContext<XmtpContextValue>({
   identityAddress: null,
   inboxId: null,
   installationLimitInboxId: null,
+  localStateResetRequired: false,
   connect: async () => {},
   resetInstallations: async () => {},
+  resetLocalState: async () => {},
   disconnect: noop,
   conversations: [],
   loadMessages: async () => [],
@@ -341,6 +347,15 @@ function writeStoredSignerType(address: string, signerType: 'SCW' | 'EOA'): void
   }
 }
 
+function clearStoredSignerType(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(signerTypeStorageKey(address))
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export function readStoredEncKeyHex(address: string): string | null {
   const raw = inMemoryEncKeys.get(encKeyStorageKey(address)) ?? null
   if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
@@ -350,6 +365,10 @@ export function readStoredEncKeyHex(address: string): string | null {
 export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
   if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
   inMemoryEncKeys.set(encKeyStorageKey(address), encKeyHex)
+}
+
+function clearStoredEncKeyHex(address: string): void {
+  inMemoryEncKeys.delete(encKeyStorageKey(address))
 }
 
 function closeClientSafe(client: Client | null | undefined): void {
@@ -616,6 +635,31 @@ async function hasOpfsDatabase(): Promise<boolean> {
   }
 }
 
+async function deleteXmtpOpfsDatabaseFiles(): Promise<number> {
+  const opfs = await Opfs.create()
+  try {
+    const files = await opfs.listFiles()
+    const prefix = `xmtp-${XMTP_ENV}-`
+    const candidates = files.filter((file) => file.startsWith(prefix))
+    let deleted = 0
+    for (const file of candidates) {
+      const ok = await opfs.deleteFile(file)
+      if (ok) deleted += 1
+      xmtpDebug(`[xmtp] Deleted local OPFS file: ${file} (${ok})`)
+    }
+    return deleted
+  } finally {
+    opfs.close()
+  }
+}
+
+function isLocalXmtpStateInvalidError(message: string): boolean {
+  return (
+    /InboxValidationFailed/i.test(message) ||
+    /synced \d+ messages?, \d+ failed \d+ succeeded/i.test(message)
+  )
+}
+
 function getEthereumAddressFromInboxState(state: any): string | null {
   const identifiers = Array.isArray(state?.identifiers) ? state.identifiers : []
   for (const id of identifiers) {
@@ -673,6 +717,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<ChatConversation[]>([])
   const [inboxId, setInboxId] = useState<string | null>(null)
   const [installationLimitInboxId, setInstallationLimitInboxId] = useState<string | null>(null)
+  const [localStateResetRequired, setLocalStateResetRequired] = useState(false)
 
   const clientRef = useRef<Client | null>(null)
   const convoStreamRef = useRef<AsyncStreamProxy<any> | null>(null)
@@ -711,6 +756,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       identityAddressRef.current = null
       setInboxId(null)
       setInstallationLimitInboxId(null)
+      setLocalStateResetRequired(false)
     }
   }, [isConnected, address])
 
@@ -728,6 +774,28 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       conversationsRef.current = []
       identityAddressRef.current = null
   }
+
+  const markLocalStateInvalid = useCallback((errorMessage: string): void => {
+    try { convoStreamRef.current?.end() } catch {}
+    try { msgStreamRef.current?.end() } catch {}
+    for (const s of perConvoStreamsRef.current.values()) {
+      try { s.end() } catch {}
+    }
+    perConvoStreamsRef.current.clear()
+    perConvoCbRef.current.clear()
+    try { clientRef.current?.close() } catch {}
+    clientRef.current = null
+    setStatus('error')
+    setError(
+      'XMTP local messaging state is out of sync with the network. Reset local messaging state, then reconnect.',
+    )
+    setInstallationLimitInboxId(null)
+    setLocalStateResetRequired(true)
+    setConversations([])
+    conversationsRef.current = []
+    identityAddressRef.current = null
+    console.warn('[xmtp] local state reset required:', errorMessage)
+  }, [])
 
   // ------- resolve address → display name (Basename / truncated) -------
   const nameCache = useRef<Map<string, string>>(new Map())
@@ -1206,6 +1274,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         if (mountedRef.current) {
           setAutoConnectEnabled(xmtpIdentityAddress)
           setStatus('connected')
+          setError(null)
+          setInstallationLimitInboxId(null)
+          setLocalStateResetRequired(false)
         }
 
         // Auto-create a DM conversation with the Keepr agent so it appears
@@ -1382,6 +1453,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           const isUninitialized = syncMsg.toLowerCase().includes('uninitialized')
           console.warn('[xmtp] Client.build restored but setupConversations failed:', syncMsg)
 
+          if (isLocalXmtpStateInvalidError(syncMsg)) {
+            markLocalStateInvalid(syncMsg)
+            return
+          }
+
           if (isUninitialized) {
             // Critical anti-churn path: register the restored installation in-place.
             // Do NOT fall through to Client.create here — that would burn a new
@@ -1538,7 +1614,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       clientRef.current = client
       setInboxId(client.inboxId ?? null)
-      await setupConversations(client)
+      try {
+        await setupConversations(client)
+      } catch (setupErr) {
+        const setupMsg = setupErr instanceof Error ? setupErr.message : String(setupErr)
+        if (isLocalXmtpStateInvalidError(setupMsg)) {
+          markLocalStateInvalid(setupMsg)
+          return
+        }
+        throw setupErr
+      }
 
       // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here.
       // Each revocation consumes 1 of the inbox's 256 lifetime updates.
@@ -1550,6 +1635,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        if (isLocalXmtpStateInvalidError(msg)) {
+          markLocalStateInvalid(msg)
+          return
+        }
         setIdentityAddress(null)
         identityAddressRef.current = null
         if (isInstallationLimitError(msg)) {
@@ -1564,7 +1653,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } finally {
       connectInFlightRef.current = false
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1747,11 +1836,42 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
   }, [address, walletClient, installationLimitInboxId, publicClient, connect, connector, xmtpModeOverride, resolveXmtpIdentityAddress])
 
+  const resetLocalState = useCallback(async () => {
+    if (!address || !walletClient) throw new Error('Connect wallet first.')
+    const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
+
+    setStatus('connecting')
+    setError(null)
+    setInstallationLimitInboxId(null)
+    setLocalStateResetRequired(false)
+    connectCooldownUntilRef.current = 0
+    connectInFlightRef.current = false
+
+    clearAutoConnect(targetIdentity)
+    clearStoredSignerType(targetIdentity)
+    clearStoredEncKeyHex(targetIdentity)
+    await cleanup()
+
+    try {
+      const deleted = await deleteXmtpOpfsDatabaseFiles()
+      xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
+      setStatus('error')
+      setError(`Could not clear local XMTP state: ${msg}`)
+      setLocalStateResetRequired(true)
+      throw err
+    }
+
+    await connect()
+  }, [address, walletClient, identityAddress, connect])
+
   // ------- disconnect -------
   const disconnect = useCallback(() => {
     void cleanup()
     setStatus('idle')
     setError(null)
+    setLocalStateResetRequired(false)
     setIdentityAddress(null)
     setConversations([])
     conversationsRef.current = []
@@ -1792,10 +1912,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         .filter((m) => typeof m.content === 'string' || m.fallback)
         .map((m) => decodedToChat(m, client.inboxId!))
     } catch (e) {
-      console.error('[xmtp] loadMessages error:', e)
+      const msg = e instanceof Error ? e.message : String(e)
+      if (isLocalXmtpStateInvalidError(msg)) {
+        markLocalStateInvalid(msg)
+      } else {
+        console.error('[xmtp] loadMessages error:', e)
+      }
       return []
     }
-  }, [])
+  }, [markLocalStateInvalid])
 
   // ------- send message -------
   const sendMessage = useCallback(async (
@@ -1840,10 +1965,17 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         isSelf: true,
       }
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (isLocalXmtpStateInvalidError(msg)) {
+        markLocalStateInvalid(msg)
+        throw new Error(
+          'XMTP local messaging state is out of sync. Reset local messaging state, then reconnect.',
+        )
+      }
       console.error('[xmtp] sendMessage error:', e)
       throw e
     }
-  }, [])
+  }, [markLocalStateInvalid])
 
   // ------- start DM -------
   const startDm = useCallback(async (
@@ -2031,8 +2163,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identityAddress,
         inboxId,
         installationLimitInboxId,
+        localStateResetRequired,
         connect,
         resetInstallations,
+        resetLocalState,
         disconnect,
         conversations,
         loadMessages,
