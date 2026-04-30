@@ -20,6 +20,7 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
+import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress } from './EthosScorePill'
 
 type AgentRow = {
   creatorAddress: string
@@ -64,19 +65,6 @@ function resolveAgentAddress(value: string | null | undefined): `0x${string}` | 
   return value.toLowerCase() as `0x${string}`
 }
 
-function formatScore(score: number | null | undefined): string {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return 'No score'
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(score)
-}
-
-function scoreTone(score: number | null | undefined): string {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return 'border-white/10 bg-white/[0.04] text-zinc-500'
-  if (score >= 1800) return 'border-emerald-300/25 bg-emerald-400/10 text-emerald-200'
-  if (score >= 1200) return 'border-brand-primary/25 bg-brand-primary/10 text-blue-200'
-  if (score >= 700) return 'border-amber-300/25 bg-amber-400/10 text-amber-200'
-  return 'border-white/10 bg-white/[0.04] text-zinc-400'
-}
-
 function scoreRank(score: number | null | undefined): number {
   return typeof score === 'number' && Number.isFinite(score) ? score : -1
 }
@@ -104,6 +92,9 @@ function RailAvatar(props: {
   imageUrl?: string | null
   icon?: ReactNode
   status?: 'available' | 'recent' | 'agent' | 'conversation'
+  ethosAddress?: string | null
+  ethosScore?: number | null
+  ethosLevel?: string | null
 }) {
   const dotClass =
     props.status === 'available'
@@ -115,27 +106,32 @@ function RailAvatar(props: {
           : 'bg-zinc-500'
 
   return (
-    <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
-      {props.imageUrl ? (
-        <img src={props.imageUrl} alt="" className="h-full w-full object-cover" />
+    <div className="relative h-11 w-11 shrink-0">
+      <div className="relative h-9 w-9 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
+        {props.imageUrl ? (
+          <img src={props.imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.04em] text-zinc-400">
+            {props.icon ?? initials(props.name)}
+          </div>
+        )}
+        {props.status ? (
+          <span className={cn('absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-black/80', dotClass)} />
+        ) : null}
+      </div>
+      {props.ethosScore !== undefined ? (
+        <EthosAvatarScoreBadge
+          score={props.ethosScore}
+          level={props.ethosLevel}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2"
+        />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase tracking-[0.04em] text-zinc-400">
-          {props.icon ?? initials(props.name)}
-        </div>
+        <EthosAvatarScoreForAddress
+          address={props.ethosAddress}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2"
+        />
       )}
-      {props.status ? (
-        <span className={cn('absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-black/80', dotClass)} />
-      ) : null}
     </div>
-  )
-}
-
-function ScorePill({ score, level }: { score?: number | null; level?: string | null }) {
-  return (
-    <span className={cn('shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tabular-nums', scoreTone(score))}>
-      {formatScore(score)}
-      {level ? <span className="ml-1 hidden text-current/65 xl:inline">{level}</span> : null}
-    </span>
   )
 }
 
@@ -205,7 +201,12 @@ function ConversationUserRow({ conversation }: { conversation: ChatConversation 
         }
       }}
     >
-      <RailAvatar name={name} imageUrl={identity.avatar ?? conversation.imageUrl ?? null} status="conversation" />
+      <RailAvatar
+        name={name}
+        imageUrl={identity.avatar ?? conversation.imageUrl ?? null}
+        status="conversation"
+        ethosAddress={peerAddress}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>
@@ -232,11 +233,16 @@ function PresenceUserRow({ user }: { user: AvailabilityUser }) {
       label={`Open chat with ${name}`}
       onClick={() => requestOpenChat({ kind: 'dm', peerAddress: user.address, nameHint: name, imageUrl: user.avatarUrl ?? identity.avatar ?? null })}
     >
-      <RailAvatar name={name} imageUrl={user.avatarUrl ?? identity.avatar ?? null} status={user.status} />
+      <RailAvatar
+        name={name}
+        imageUrl={user.avatarUrl ?? identity.avatar ?? null}
+        status={user.status}
+        ethosScore={user.ethosScore}
+        ethosLevel={user.ethosLevel}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>
-          <ScorePill score={user.ethosScore} level={user.ethosLevel} />
         </div>
         <div className="mt-0.5 truncate text-[11px] text-zinc-500">
           {identity.secondary ?? (user.status === 'available' ? 'Available now' : 'Recently active')}
@@ -252,6 +258,20 @@ function BaseAgentRow({ agent }: { agent: BaseXmtpAgent }) {
   const [resolving, setResolving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(agent.address ?? null)
+
+  useEffect(() => {
+    if (resolvedAddress || !agent.handle) return
+    let cancelled = false
+    resolveBasenameAddress(agent.handle)
+      .then((address) => {
+        if (cancelled) return
+        setResolvedAddress(resolveAgentAddress(address))
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [agent.handle, resolvedAddress])
 
   async function openAgentChat() {
     if (resolving) return
@@ -285,7 +305,13 @@ function BaseAgentRow({ agent }: { agent: BaseXmtpAgent }) {
       disabled={resolving || (!agent.address && !agent.handle)}
       onClick={() => void openAgentChat()}
     >
-      <RailAvatar name={agent.name} imageUrl={directIdentity.avatar ?? null} icon={<Bot className="h-4 w-4 text-brand-primary" />} status="agent" />
+      <RailAvatar
+        name={agent.name}
+        imageUrl={directIdentity.avatar ?? null}
+        icon={<Bot className="h-4 w-4 text-brand-primary" />}
+        status="agent"
+        ethosAddress={resolvedAddress}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[13px] font-medium text-zinc-100">{agent.name}</div>
@@ -319,7 +345,13 @@ function CreatorAgentRow({ agent }: { agent: AgentRow }) {
         if (agentAddress) requestOpenChat({ kind: 'dm', peerAddress: agentAddress, nameHint: name, imageUrl: creatorIdentity.avatar ?? null })
       }}
     >
-      <RailAvatar name={name} imageUrl={creatorIdentity.avatar ?? null} icon={<Bot className="h-4 w-4 text-brand-primary" />} status="agent" />
+      <RailAvatar
+        name={name}
+        imageUrl={creatorIdentity.avatar ?? null}
+        icon={<Bot className="h-4 w-4 text-brand-primary" />}
+        status="agent"
+        ethosAddress={agent.creatorAddress}
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>

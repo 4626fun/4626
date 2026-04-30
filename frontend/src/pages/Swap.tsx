@@ -1906,7 +1906,7 @@ export function Swap() {
               error={
                 tokenInBalanceError ??
                 (sponsoredNativeInputBlocked
-                  ? 'Sponsored canonical swaps cannot sell native ETH directly because the paymaster cannot sponsor tx.value. Use WETH for sponsored swaps, or connect a funded external signer.'
+                  ? 'Gas-sponsored swaps use WETH instead of native ETH. Switch Sell to WETH to continue.'
                   : null) ??
                 error ??
                 (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
@@ -1951,7 +1951,7 @@ export function Swap() {
                 canonicalExecutionSetupRequired
                   ? 'Enable 4626 signing'
                   : sponsoredNativeInputBlocked
-                    ? 'Use WETH for sponsored swap'
+                    ? 'Switch Sell to WETH'
                     : undefined
               }
               onPrimaryAction={
@@ -1966,7 +1966,7 @@ export function Swap() {
                 canonicalExecutionSetupRequired
                   ? 'Finish one-time account setup before canonical swaps can execute.'
                   : sponsoredNativeInputBlocked
-                    ? 'WETH is an ERC-20, so the canonical paymaster path can sponsor the approval and swap.'
+                    ? 'WETH keeps the swap on the sponsored ERC-20 path.'
                   : null
               }
             />

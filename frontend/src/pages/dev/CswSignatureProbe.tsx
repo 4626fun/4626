@@ -53,6 +53,33 @@ const CSW_OWNER_MUTATION_ABI = [
   },
 ] as const
 
+const CREATE2_DEPLOYER_AUTH_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'authorizedDeployers',
+    stateMutability: 'view',
+    inputs: [{ name: 'deployer', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'setAuthorizedDeployer',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'deployer', type: 'address' },
+      { name: 'allowed', type: 'bool' },
+    ],
+    outputs: [],
+  },
+] as const
+
 type OwnerSlot = {
   index: number
   ownerBytes: Hex
@@ -132,6 +159,10 @@ function decodeOwnerSlot(index: number, ownerBytes: Hex): OwnerSlot {
 
 function hexByteLength(value: Hex): number {
   return Math.max(0, (value.length - 2) / 2)
+}
+
+function isTxHash(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
 }
 
 type ParsedWalletSignature = {
@@ -259,6 +290,14 @@ export function CswSignatureProbe() {
   const [preparedCallsTxHash, setPreparedCallsTxHash] = useState<string | null>(null)
   const [preparedCallEventLog, setPreparedCallEventLog] = useState<string[]>([])
   const [ownerToAddInput, setOwnerToAddInput] = useState('0x2f4ec723ff6add6ab81b7befbec04ce31151613f')
+  const [preparedCallsUsePaymaster, setPreparedCallsUsePaymaster] = useState(true)
+  const [create2DeployerInput, setCreate2DeployerInput] = useState('0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd')
+  const [authorizedDeployerInput, setAuthorizedDeployerInput] = useState('0xab6d5c10b03300326cd7fab7267ae192842967b5')
+  const [create2ReadState, setCreate2ReadState] = useState<StepState>(INITIAL_STEP)
+  const [create2WriteState, setCreate2WriteState] = useState<StepState>(INITIAL_STEP)
+  const [create2TxHash, setCreate2TxHash] = useState<string | null>(null)
+  const [create2OwnerAddress, setCreate2OwnerAddress] = useState<string | null>(null)
+  const [create2IsAuthorized, setCreate2IsAuthorized] = useState<boolean | null>(null)
   const [ownerSlots, setOwnerSlots] = useState<OwnerSlot[]>([])
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
 
@@ -568,24 +607,56 @@ export function CswSignatureProbe() {
     const runId = `probe-${Date.now()}`
     setPreparedCallsTxHash(null)
     setPreparedCallEventLog([])
-    setPreparedCallsState({ kind: 'pending', label: 'submitting via wallet_prepareCalls…' })
+    setPreparedCallsState({
+      kind: 'pending',
+      label: `submitting via wallet_prepareCalls${preparedCallsUsePaymaster ? ' (with paymaster)' : ' (no paymaster)'}…`,
+    })
     try {
-      const txHash = await _submitOwnerViaPreparedCalls({
-        walletRequest: async (args) => await request(args),
-        chainId: base.id,
-        sender: normalizedCswAddress,
-        to: normalizedCswAddress,
-        data,
-        paymasterUrl: paymasterUrlForPreparedCalls,
-        approvalRunId: runId,
-        executionMode: 'canonicalSmartWallet',
-        signerAddress: connectedAddress,
-        canonicalCswAddress: normalizedCswAddress,
-        onStageEvent: (event: OwnerApprovalStageEvent) => {
-          const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
-          setPreparedCallEventLog((prev) => [...prev, row].slice(-8))
-        },
-      })
+      const appendEvent = (row: string) => {
+        setPreparedCallEventLog((prev) => [...prev, row].slice(-10))
+      }
+      const runAttempt = async (params: { paymasterUrl: string | null; attemptLabel: string }) => {
+        appendEvent(`attempt:${params.attemptLabel}`)
+        return await _submitOwnerViaPreparedCalls({
+          walletRequest: async (args) => await request(args),
+          chainId: base.id,
+          sender: normalizedCswAddress,
+          to: normalizedCswAddress,
+          data,
+          paymasterUrl: params.paymasterUrl,
+          approvalRunId: `${runId}-${params.attemptLabel}`,
+          executionMode: 'canonicalSmartWallet',
+          signerAddress: connectedAddress,
+          canonicalCswAddress: normalizedCswAddress,
+          onStageEvent: (event: OwnerApprovalStageEvent) => {
+            const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
+            appendEvent(row)
+          },
+        })
+      }
+
+      let txHash: `0x${string}`
+      try {
+        txHash = await runAttempt({
+          paymasterUrl: preparedCallsUsePaymaster ? paymasterUrlForPreparedCalls : null,
+          attemptLabel: preparedCallsUsePaymaster ? 'with_paymaster' : 'without_paymaster',
+        })
+      } catch (firstError) {
+        const message = describeError(firstError)
+        const lower = message.toLowerCase()
+        const retryWithoutPaymaster =
+          preparedCallsUsePaymaster &&
+          (lower.includes('failed to fetch rpc request') ||
+            lower.includes('internal error') ||
+            lower.includes('failed to fetch'))
+        if (!retryWithoutPaymaster) throw firstError
+        appendEvent('fallback:retry_without_paymaster')
+        txHash = await runAttempt({
+          paymasterUrl: null,
+          attemptLabel: 'without_paymaster_fallback',
+        })
+      }
+
       setPreparedCallsTxHash(txHash)
       setPreparedCallsState({
         kind: 'ok',
@@ -596,6 +667,137 @@ export function CswSignatureProbe() {
       setPreparedCallsState({
         kind: 'err',
         label: 'prepared-calls owner add failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function loadCreate2AuthorizationStatus() {
+    if (!publicClient) {
+      setCreate2ReadState({ kind: 'err', label: 'Base client unavailable', detail: 'Reload and retry.' })
+      return
+    }
+    if (!isAddress(create2DeployerInput)) {
+      setCreate2ReadState({ kind: 'err', label: 'invalid create2 deployer address' })
+      return
+    }
+    if (!isAddress(authorizedDeployerInput)) {
+      setCreate2ReadState({ kind: 'err', label: 'invalid deployer-to-authorize address' })
+      return
+    }
+    const create2 = getAddress(create2DeployerInput)
+    const candidate = getAddress(authorizedDeployerInput)
+    setCreate2ReadState({ kind: 'pending', label: 'reading create2 authorization state…' })
+    try {
+      const [ownerRead, authorizedRead] = await Promise.all([
+        publicClient.readContract({
+          address: create2,
+          abi: CREATE2_DEPLOYER_AUTH_ABI,
+          functionName: 'owner',
+        }),
+        publicClient.readContract({
+          address: create2,
+          abi: CREATE2_DEPLOYER_AUTH_ABI,
+          functionName: 'authorizedDeployers',
+          args: [candidate],
+        }),
+      ])
+      setCreate2OwnerAddress(String(ownerRead))
+      setCreate2IsAuthorized(Boolean(authorizedRead))
+      setCreate2ReadState({
+        kind: 'ok',
+        label: `owner loaded; candidate authorization is ${Boolean(authorizedRead) ? 'enabled' : 'disabled'}`,
+      })
+    } catch (error) {
+      setCreate2ReadState({
+        kind: 'err',
+        label: 'failed to read create2 authorization state',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function authorizeCreate2Deployer() {
+    if (!walletClient || !connectedAddress) {
+      setCreate2WriteState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!publicClient) {
+      setCreate2WriteState({ kind: 'err', label: 'Base client unavailable' })
+      return
+    }
+    if (!isAddress(create2DeployerInput)) {
+      setCreate2WriteState({ kind: 'err', label: 'invalid create2 deployer address' })
+      return
+    }
+    if (!isAddress(authorizedDeployerInput)) {
+      setCreate2WriteState({ kind: 'err', label: 'invalid deployer-to-authorize address' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setCreate2WriteState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call eth_sendTransaction.',
+      })
+      return
+    }
+    const create2 = getAddress(create2DeployerInput)
+    const candidate = getAddress(authorizedDeployerInput)
+    const ownerRead = await publicClient.readContract({
+      address: create2,
+      abi: CREATE2_DEPLOYER_AUTH_ABI,
+      functionName: 'owner',
+    })
+    const ownerAddress = getAddress(String(ownerRead))
+    setCreate2OwnerAddress(ownerAddress)
+    if (connectedAddress.toLowerCase() !== ownerAddress.toLowerCase()) {
+      setCreate2WriteState({
+        kind: 'err',
+        label: 'wrong signer connected',
+        detail: `Connect owner ${ownerAddress} to call setAuthorizedDeployer.`,
+      })
+      return
+    }
+
+    const data = encodeFunctionData({
+      abi: CREATE2_DEPLOYER_AUTH_ABI,
+      functionName: 'setAuthorizedDeployer',
+      args: [candidate, true],
+    })
+
+    setCreate2TxHash(null)
+    setCreate2WriteState({ kind: 'pending', label: 'awaiting setAuthorizedDeployer signature…' })
+    try {
+      const hashRaw = await request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: connectedAddress,
+            to: create2,
+            data,
+            value: '0x0',
+          },
+        ],
+      })
+      if (!isTxHash(hashRaw)) {
+        throw new Error('eth_sendTransaction did not return a transaction hash')
+      }
+      setCreate2TxHash(hashRaw)
+      setCreate2WriteState({
+        kind: 'ok',
+        label: 'setAuthorizedDeployer transaction submitted',
+        detail: hashRaw,
+      })
+      setCreate2ReadState({ kind: 'pending', label: 'refreshing create2 authorization state…' })
+      await loadCreate2AuthorizationStatus()
+    } catch (error) {
+      setCreate2WriteState({
+        kind: 'err',
+        label: 'setAuthorizedDeployer failed',
         detail: describeError(error),
       })
     }
@@ -717,6 +919,54 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+          Create2 deployer authorization
+        </div>
+        <div className="text-xs text-zinc-500">
+          Sends setAuthorizedDeployer(candidate, true). Must be signed by the create2 deployer owner.
+        </div>
+        <label className="space-y-1">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Create2 deployer</div>
+          <input
+            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
+            value={create2DeployerInput}
+            onChange={(event) => setCreate2DeployerInput(event.target.value)}
+            spellCheck={false}
+          />
+        </label>
+        <label className="space-y-1">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Deployer to authorize</div>
+          <input
+            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
+            value={authorizedDeployerInput}
+            onChange={(event) => setAuthorizedDeployerInput(event.target.value)}
+            spellCheck={false}
+          />
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
+            onClick={loadCreate2AuthorizationStatus}
+          >
+            load auth status
+          </button>
+          <button
+            type="button"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
+            onClick={authorizeCreate2Deployer}
+          >
+            authorize via setAuthorizedDeployer
+          </button>
+        </div>
+        <StatusRow title="create2 auth read" state={create2ReadState} />
+        <StatusRow title="create2 auth write" state={create2WriteState} />
+        {create2OwnerAddress ? <KeyValue label="create2Owner" value={create2OwnerAddress} /> : null}
+        {create2IsAuthorized !== null ? <KeyValue label="isAuthorized(candidate)" value={String(create2IsAuthorized)} /> : null}
+        {create2TxHash ? <KeyValue label="create2AuthorizeTxHash" value={create2TxHash} /> : null}
+      </section>
+
+      <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
+        <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
           Self-call owner add (prepared calls)
         </div>
         <div className="text-xs text-zinc-500">
@@ -731,6 +981,14 @@ export function CswSignatureProbe() {
             onChange={(event) => setOwnerToAddInput(event.target.value)}
             spellCheck={false}
           />
+        </label>
+        <label className="flex items-center gap-2 text-xs text-zinc-300">
+          <input
+            type="checkbox"
+            checked={preparedCallsUsePaymaster}
+            onChange={(event) => setPreparedCallsUsePaymaster(event.target.checked)}
+          />
+          include paymaster capability
         </label>
         <div className="text-[11px] text-zinc-500">
           paymasterUrl: <span className="font-mono text-zinc-300">{paymasterUrlForPreparedCalls ?? '(none)'}</span>

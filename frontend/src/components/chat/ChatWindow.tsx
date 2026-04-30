@@ -17,6 +17,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { useAccountContext } from '@/wallet/accountContext'
 import { getAgentIdentity } from './agentIdentity'
+import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import {
   CHAT_COMMAND_CATEGORIES,
   type ChatCommandCategoryId,
@@ -898,27 +899,35 @@ export function ChatWindow({
               <button
                 type="button"
                 onClick={() => handleOpenPeerProfile()}
-                className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                className="relative h-10 w-10 shrink-0"
                 aria-label="Open profile"
                 title="Open profile"
               >
-                {headerAvatar ? (
-                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  headerInitials
-                )}
+                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[10px] font-medium uppercase text-zinc-300 ring-1 ring-transparent transition-colors hover:ring-white/25">
+                  {headerAvatar ? (
+                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    headerInitials
+                  )}
+                </span>
+                <EthosAvatarScoreForAddress
+                  address={copyablePeerAddress}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
+                />
               </button>
             ) : (
-              <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[10px] font-medium text-zinc-300 uppercase shrink-0">
-                {headerAvatar ? (
-                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  headerInitials
-                )}
+              <div className="relative h-10 w-10 shrink-0">
+                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[10px] font-medium uppercase text-zinc-300">
+                  {headerAvatar ? (
+                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    headerInitials
+                  )}
+                </span>
               </div>
             )}
             <div className="min-w-0 text-left">
-              <div className="text-sm font-semibold text-zinc-100 truncate">
+              <div className="truncate text-sm font-semibold text-zinc-100">
                 {headerName}
               </div>
               {headerSubline && (
@@ -971,27 +980,35 @@ export function ChatWindow({
               <button
                 type="button"
                 onClick={(event) => handleOpenPeerProfile(event)}
-                className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0 ring-1 ring-transparent hover:ring-white/25 transition-colors"
+                className="relative h-9 w-9 shrink-0"
                 aria-label="Open profile"
                 title="Open profile"
               >
-                {headerAvatar ? (
-                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  headerInitials
-                )}
+                <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[9px] font-medium uppercase text-zinc-300 ring-1 ring-transparent transition-colors hover:ring-white/25">
+                  {headerAvatar ? (
+                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    headerInitials
+                  )}
+                </span>
+                <EthosAvatarScoreForAddress
+                  address={copyablePeerAddress}
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 scale-90"
+                />
               </button>
             ) : (
-              <div className="w-7 h-7 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[9px] font-medium text-zinc-300 uppercase shrink-0">
-                {headerAvatar ? (
-                  <img src={headerAvatar} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  headerInitials
-                )}
+              <div className="relative h-9 w-9 shrink-0">
+                <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[9px] font-medium uppercase text-zinc-300">
+                  {headerAvatar ? (
+                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    headerInitials
+                  )}
+                </span>
               </div>
             )}
             <div className="min-w-0">
-              <div className="text-sm text-zinc-200 font-medium truncate">{headerName}</div>
+              <div className="truncate text-sm font-medium text-zinc-200">{headerName}</div>
               {headerSubline && (
                 <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
               )}

@@ -12,6 +12,7 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
 import { LoadingInline } from '@/components/ui/LoadingState'
+import { EthosAvatarScoreForAddress } from './EthosScorePill'
 
 type Props = {
   expanded: boolean
@@ -114,18 +115,26 @@ function ConversationItem({
       })}
       className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-white/5 transition-colors border-b border-white/5 last:border-b-0"
     >
-      <div className="shrink-0 w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center text-[11px] font-medium text-zinc-300 uppercase">
-        {avatar ? (
-          <img src={avatar} alt="" className="w-full h-full object-cover" />
-        ) : (
-          initials(displayName)
-        )}
+      <div className="relative h-10 w-10 shrink-0">
+        <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[11px] font-medium uppercase text-zinc-300">
+          {avatar ? (
+            <img src={avatar} alt="" className="h-full w-full object-cover" />
+          ) : (
+            initials(displayName)
+          )}
+        </div>
+        <EthosAvatarScoreForAddress
+          address={peerAddress}
+          className="absolute bottom-0 left-1/2 -translate-x-1/2"
+        />
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm text-zinc-200 font-medium truncate">
-            {displayName}
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-medium text-zinc-200">
+              {displayName}
+            </span>
           </span>
           {lensBadge && (
             <span className="shrink-0 inline-flex items-center rounded-full border border-cyan-400/25 bg-cyan-500/10 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.08em] text-cyan-200">
