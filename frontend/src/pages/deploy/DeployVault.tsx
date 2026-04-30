@@ -124,7 +124,7 @@ import {
   type DeployTimelineStageId,
 } from '@/features/deploy-vault/deploySteps'
 
-const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 10_000_000n
+const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
@@ -7739,7 +7739,7 @@ function DeployVaultMain() {
   const deployMode = useMemo(() => resolveDeployMode(), [])
   const strictNoEoaMode = deployMode === 'no_eoa_strict'
   const minFirstDepositTokens = useMemo(() => {
-    // Deployment flow currently enforces an exact 10M creator-token first deposit.
+    // Deployment flow currently enforces an exact 50M creator-token first deposit.
     // Keep UI/runtime locked to that value so query/env overrides cannot drift and fail late.
     const env = parsePositiveTokenAmount(
       (import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '',
@@ -7751,7 +7751,7 @@ function DeployVaultMain() {
       requested = query ?? env
     }
     if (requested !== null && requested !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
-      logger.warn('[DeployVault] ignoring minFirstDepositTokens override; enforcing 10M policy', {
+      logger.warn('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
         requested: requested.toString(),
         enforced: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
       })
