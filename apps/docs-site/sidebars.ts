@@ -14,6 +14,7 @@ const sidebars: SidebarsConfig = {
       id: 'index',
       label: 'Welcome',
     },
+    'wallet-architecture',
 
     {
       type: 'category',

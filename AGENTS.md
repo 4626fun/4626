@@ -94,6 +94,15 @@ Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-
 
 Canonical architecture reference: `docs/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the three-tier CSW address model (`profiles.csw_address` → `profiles.base_sub_account` → `profiles.primary_embedded_eoa`), and the `executionMode` / send-mode routing table.
 
+Wallet-role model for user-facing docs and copy:
+
+- **Canonical CSW (parent) = identity + custody source of truth.**
+- **Base sub-account = default user execution sender on app surfaces.**
+- **Privy embedded EOA = primary signer for the sub-account lane.**
+- **Connected external EOA = fallback/override signer lane.**
+- **Privy server wallet = delegated server-side signer for automation/deploy-session tracks.**
+- Keep this role split explicit in docs and UI copy; do not collapse signer role into canonical identity language.
+
 - **Verified email is the canonical 4626 identity and recovery key.**
 - **No 4626 account is considered fully created until email OTP verification completes.**
 - **All entry points converge to the same account model**: website, Base app, and Telegram must resolve into one 4626 account model keyed by verified email.

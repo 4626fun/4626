@@ -56,6 +56,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 ## Quick Links
 
+- [Wallet Architecture](/wallet-architecture) - canonical CSW, sub-account, signer roles, and trust boundaries
 - [Users](/users) - product usage and troubleshooting
 - [Creators](/creators) - launch and creator workflows
 - [Developers](/developers) - build and contribute

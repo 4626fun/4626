@@ -23,6 +23,41 @@ Users enter 4626 through one of three connection methods, each with a different 
 
 Full architecture, state machine, and file references: [4626 Connection Methods](/4626-connection-methods). Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 
+## Per-user wallet role chart
+
+For one user, 4626 uses multiple wallets with different jobs. The key split is:
+
+- **Canonical CSW** is identity + custody.
+- **Sub-account** is user execution.
+- **Embedded EOA** is the default signer for that execution lane.
+- **External EOA** is fallback/override.
+
+```mermaid
+flowchart TD
+  CSW["Canonical CSW (parent)\nIdentity + custody anchor"]
+  Sub["Execution Sub-account\n(app-scoped sender)"]
+  Embedded["Privy Embedded EOA\nPrimary signer"]
+  External["Connected External EOA\nFallback signer"]
+  Server["Privy Server Wallet\nServer automation signer"]
+
+  CSW -->|"derives"| Sub
+  Embedded -->|"signs user app actions for"| Sub
+  External -.->|"fallback / override"| Sub
+  Server -->|"signs server-side UserOps as delegated owner on"| CSW
+```
+
+### Wallet inventory (user-facing model)
+
+| Wallet | Function | Why we use it |
+|---|---|---|
+| Canonical CSW (parent) | Source-of-truth identity + custody account | Stable cross-app identity and ownership anchor |
+| Base sub-account | User-initiated execution sender on `app.4626.fun` | Fast execution lane without repeated passkey prompts |
+| Privy embedded EOA | Primary signer for sub-account lane | Best UX and reliable in-app signing |
+| Connected external EOA | Fallback signer / explicit override | Recovery and user-controlled signing path |
+| Privy server wallet (delegated owner) | Server-side signing for deploy/session/agent operations | Headless automation while preserving canonical CSW identity |
+
+> Assets remain tied to the canonical CSW identity model. The sub-account exists to execute app actions with better UX.
+
 ## Capability Negotiation (High Level)
 
 ```mermaid

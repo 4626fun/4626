@@ -80,6 +80,11 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          to: '/wallet-architecture',
+          label: 'Wallet Architecture',
+          position: 'left',
+        },
+        {
           to: '/operations/deployment/releases',
           label: 'Change Log',
           position: 'right',
@@ -99,6 +104,10 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
+            {
+              label: 'Wallet Architecture',
+              to: '/wallet-architecture',
+            },
             {
               label: 'Four Compressions',
               to: '/compressions',
