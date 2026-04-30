@@ -153,10 +153,16 @@ function startRuntime(): void {
 
   try {
     const refresher = startAlfaClubPrivyTokenRefresher()
-    stopRefresher = refresher.stop
-    logger.info('[hermit] AlfaClub Privy token refresher started', {
-      intervalMinutes: 30,
-    })
+    if (!refresher.started) {
+      logger.info('[hermit] AlfaClub Privy token refresher not started', {
+        reason: refresher.reason ?? 'unknown',
+      })
+    } else {
+      stopRefresher = refresher.stop
+      logger.info('[hermit] AlfaClub Privy token refresher started', {
+        intervalMinutes: 30,
+      })
+    }
   } catch (error) {
     logger.warn('[hermit] AlfaClub Privy token refresher not started', {
       error: asErrorMessage(error),

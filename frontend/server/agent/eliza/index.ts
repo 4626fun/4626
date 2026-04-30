@@ -2290,6 +2290,12 @@ async function main() {
       try {
         const mod = await import('../../_lib/alfaclub/privyTokenRefresher.js')
         const refresher = mod.startAlfaClubPrivyTokenRefresher()
+        if (!refresher.started) {
+          logger.info('[alfaclub-refresher] not started', {
+            reason: refresher.reason ?? 'unknown',
+          })
+          return
+        }
         logger.info('[alfaclub-refresher] started', {
           intervalMinutes: 30,
         })

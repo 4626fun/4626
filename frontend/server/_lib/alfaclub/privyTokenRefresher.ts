@@ -425,6 +425,29 @@ export async function runAlfaClubPrivyRefreshOnce(
 export interface AlfaClubRefresherHandle {
   stop: () => void
   runNow: () => Promise<AlfaClubRefresherOutcome>
+  /** True when the in-process loop is actually running. False when an env
+   *  gate left the loop disabled. Always present so callers can log it. */
+  started: boolean
+  /** Populated when `started` is false. Currently `disabled` (env gate off). */
+  reason?: 'disabled'
+}
+
+/**
+ * Reads the long-lived-host opt-in flag for the in-process Privy token
+ * refresher. Default OFF: the canonical refresher is the Vercel cron at
+ * `/api/v1/alfaclub/chat-token-refresh`, which calls
+ * `runAlfaClubPrivyRefreshOnce` directly. A second writer running on a
+ * Railway-hosted agent would race the cron and overwrite the
+ * `alfaclub_runtime_secret.chat_jwt` slot under a different `updated_by`,
+ * masking the source of truth.
+ *
+ * Set `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=1` (or `true`) to opt the
+ * long-lived host back in — only do this if you're intentionally retiring
+ * the Vercel cron path for this environment.
+ */
+function isInProcessRefresherEnabled(): boolean {
+  const raw = String(process.env.ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 /**
@@ -432,11 +455,33 @@ export interface AlfaClubRefresherHandle {
  * `runNow()`. Fires once immediately (to bootstrap env → DB on first run
  * and to self-heal if the agent booted near a token expiry) then on a
  * fixed interval.
+ *
+ * Gated by `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED` (default off) so a
+ * Railway-hosted agent does not silently compete with the canonical
+ * Vercel cron writer for the same DB slot. The gate can be bypassed by
+ * passing `opts.force = true` from a test.
  */
 export function startAlfaClubPrivyTokenRefresher(opts?: {
   intervalMs?: number
   deps?: AlfaClubRefresherDependencies
+  /** Bypasses the `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED` env gate. Tests
+   *  set this so they can exercise tick behavior without depending on the
+   *  process env. Production callers should never set this. */
+  force?: boolean
 }): AlfaClubRefresherHandle {
+  if (!opts?.force && !isInProcessRefresherEnabled()) {
+    const log = opts?.deps?.log ?? logger
+    log.info('[alfaclub-refresher] in-process loop disabled (Vercel cron is canonical)', {
+      flag: 'ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED',
+    })
+    return {
+      stop: () => {},
+      runNow: async () => ({ status: 'error', error: 'refresher_disabled' }),
+      started: false,
+      reason: 'disabled',
+    }
+  }
+
   const intervalMs = opts?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
   const deps = opts?.deps ?? {}
   let firstTick = true
@@ -484,5 +529,6 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
       clearInterval(handle)
     },
     runNow,
+    started: true,
   }
 }

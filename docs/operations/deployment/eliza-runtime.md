@@ -85,6 +85,38 @@ Keep the deployment split clean:
 - Do not add a Vercel cron for `/api/agent/process`.
 - If `/api/agent/process` starts firing from a Vercel deployment, treat that as config drift. The usual symptom is repeated `503` noise because XMTP-primary env such as `XMTP_AGENT_KEY_ENCRYPTION_KEY` is intentionally not present there.
 
+## AlfaClub control path (Vercel cron is canonical)
+
+The AlfaClub chat bridge and Privy token refresher run as **Vercel crons**:
+
+- `POST /api/v1/alfaclub/chat-bridge-run` — bridge tick (CRON_SECRET-gated).
+- `POST /api/v1/alfaclub/chat-token-refresh` — Privy refresher (CRON_SECRET-gated, every 30 min).
+
+Railway-hosted long-lived agents (Eliza primary, Hermit AlfaClub runtime) **must not** also run the Privy refresher in-process. A second writer races the cron and overwrites the `alfaclub_runtime_secret.chat_jwt` slot under a different `updated_by`, hiding the source of truth and producing 401-loop symptoms. The in-process refresher is therefore default-OFF, gated by:
+
+```
+ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED=
+```
+
+Leave unset on Railway. Set to `1` only if you are intentionally retiring the Vercel cron path for that environment.
+
+The chat bridge itself is independently gated by `ALFACLUB_CHAT_BRIDGE_ENABLED` (default unset) so a Railway agent can opt into in-process command polling without owning token refresh.
+
+### Symptoms of cron / Railway double-write
+
+- Supabase `alfaclub_runtime_secret.chat_jwt` `updated_by` column flapping between `privy-token-refresher` (Vercel cron) and `cursor-hermit-rotate` / similar (Railway-side identity).
+- `chat-token-refresh` returning HTTP 502 `privy_refresh_failed:400:{"error":"Invalid auth token","code":"missing_or_invalid_token"}` shortly after a Railway redeploy.
+- `chat_jwt` expiry timestamp regressing or jumping inconsistently relative to refresh-cron schedule.
+
+### Recovery (operator playbook)
+
+1. Confirm `ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED` is unset on every Railway service that boots Eliza or the Hermit AlfaClub runtime.
+2. Confirm `ALFACLUB_CHAT_BRIDGE_ENABLED` is unset on every Railway service unless you have an explicit reason to run the bridge in-process.
+3. Once a fresh Privy triplet is available (alfaclub.app browser session → devtools → Local Storage / Cookies):
+   - Set `ALFACLUB_CHAT_JWT`, `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN`, `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN` on the Vercel deployment, **or** POST the new JWT to `/api/v1/alfaclub/chat-token` (admin-only).
+   - The next `/api/v1/alfaclub/chat-token-refresh` cron tick (within 30 min) will rotate the DB-backed token and the bridge will pick it up on its next tick.
+4. To verify which writer last touched the slot, query Supabase: `select updated_at, updated_by from alfaclub_runtime_secret where key = 'chat_jwt'`. Expected: `privy-token-refresher`. Anything else (e.g. `cursor-hermit-rotate`) means a long-lived host is still running the in-process refresher.
+
 ## Go / No-Go Gates
 
 Ship only if all pass:

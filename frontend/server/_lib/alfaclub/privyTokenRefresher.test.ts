@@ -455,6 +455,7 @@ describe('startAlfaClubPrivyTokenRefresher boot behavior', () => {
     const handle = startAlfaClubPrivyTokenRefresher({
       intervalMs: 60 * 60 * 1000,
       deps,
+      force: true,
     })
 
     // queueMicrotask uses the microtask queue; one turn of the scheduler
@@ -611,5 +612,145 @@ describe('refreshPrivySession Privy response parsing', () => {
     await expect(
       refreshPrivySession({ accessToken: 'at-old', refreshToken: 'rt-old' }),
     ).rejects.toThrow(/privy_refresh_failed:400/)
+  })
+})
+
+describe('startAlfaClubPrivyTokenRefresher env gate', () => {
+  const ENV_KEY = 'ALFACLUB_CHAT_PRIVY_REFRESHER_ENABLED'
+  let priorEnv: string | undefined
+
+  beforeEach(() => {
+    priorEnv = process.env[ENV_KEY]
+    delete process.env[ENV_KEY]
+  })
+
+  afterEach(() => {
+    if (priorEnv === undefined) delete process.env[ENV_KEY]
+    else process.env[ENV_KEY] = priorEnv
+  })
+
+  it('returns started:false reason:disabled when env flag is unset (default)', () => {
+    const refresh = vi.fn()
+    const handle = startAlfaClubPrivyTokenRefresher({
+      deps: {
+        readAccessToken: async () => 'at',
+        readRefreshToken: async () => 'rt',
+        readIdentityToken: async () => null,
+        refresh,
+        writeBundle: vi.fn(),
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      },
+    })
+    expect(handle.started).toBe(false)
+    expect(handle.reason).toBe('disabled')
+    handle.stop()
+  })
+
+  it('does not call refresh or writeBundle when disabled', async () => {
+    const refresh = vi.fn()
+    const writeBundle = vi.fn()
+    const handle = startAlfaClubPrivyTokenRefresher({
+      deps: {
+        readAccessToken: async () => 'at',
+        readRefreshToken: async () => 'rt',
+        readIdentityToken: async () => null,
+        refresh,
+        writeBundle,
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      },
+    })
+    // Drain microtasks; an enabled refresher would have invoked refresh by now.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    expect(refresh).not.toHaveBeenCalled()
+    expect(writeBundle).not.toHaveBeenCalled()
+    expect(handle.started).toBe(false)
+    handle.stop()
+  })
+
+  it('runNow on a disabled handle is a no-op error outcome', async () => {
+    const handle = startAlfaClubPrivyTokenRefresher({
+      deps: {
+        readAccessToken: async () => 'at',
+        readRefreshToken: async () => 'rt',
+        readIdentityToken: async () => null,
+        refresh: vi.fn(),
+        writeBundle: vi.fn(),
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      },
+    })
+    const outcome = await handle.runNow()
+    expect(outcome).toEqual({ status: 'error', error: 'refresher_disabled' })
+    handle.stop()
+  })
+
+  for (const value of ['1', 'true', 'yes', 'on', 'TRUE']) {
+    it(`enables the loop when env flag is "${value}"`, async () => {
+      process.env[ENV_KEY] = value
+      const refresh = vi.fn(
+        async (): Promise<PrivyRefreshBundle> => ({
+          accessToken: 'at-new',
+          identityToken: 'id-new',
+          refreshToken: 'rt-new',
+        }),
+      )
+      const writeBundle = vi.fn(async () => {})
+      const handle = startAlfaClubPrivyTokenRefresher({
+        intervalMs: 60 * 60 * 1000,
+        deps: {
+          readAccessToken: async () => 'at',
+          readRefreshToken: async () => 'rt',
+          readIdentityToken: async () => null,
+          refresh,
+          writeBundle,
+          log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+        },
+      })
+      expect(handle.started).toBe(true)
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      expect(refresh).toHaveBeenCalledTimes(1)
+      handle.stop()
+    })
+  }
+
+  it('opts.force=true bypasses the env gate', async () => {
+    delete process.env[ENV_KEY]
+    const refresh = vi.fn(
+      async (): Promise<PrivyRefreshBundle> => ({
+        accessToken: 'at-new',
+        identityToken: 'id-new',
+        refreshToken: 'rt-new',
+      }),
+    )
+    const handle = startAlfaClubPrivyTokenRefresher({
+      intervalMs: 60 * 60 * 1000,
+      force: true,
+      deps: {
+        readAccessToken: async () => 'at',
+        readRefreshToken: async () => 'rt',
+        readIdentityToken: async () => null,
+        refresh,
+        writeBundle: vi.fn(async () => {}),
+        log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      },
+    })
+    expect(handle.started).toBe(true)
+    handle.stop()
+  })
+
+  it('value "0" or "false" leaves the loop disabled', () => {
+    process.env[ENV_KEY] = '0'
+    const handle1 = startAlfaClubPrivyTokenRefresher({
+      deps: { log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+    })
+    expect(handle1.started).toBe(false)
+    handle1.stop()
+    process.env[ENV_KEY] = 'false'
+    const handle2 = startAlfaClubPrivyTokenRefresher({
+      deps: { log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } },
+    })
+    expect(handle2.started).toBe(false)
+    handle2.stop()
   })
 })
