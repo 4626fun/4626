@@ -75,6 +75,6 @@ EXPOSE 8080
 ENV XMTP_DB_DIRECTORY=/data/.xmtp-data
 
 # Entrypoint: fix volume permissions (Railway mounts as root), then drop to node.
-# Use a bash wrapper so we can filter known non-fatal native SQLCipher noise that
-# bypasses Node's process.stderr monkeypatching.
-CMD ["bash", "-lc", "install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node bash server/agent/eliza/run-agent.sh"]
+# AGENT_PROCESS=hermit runs the AlfaClub/Pinata Hermit lane without booting the
+# Keepr XMTP runtime. Default remains Keepr for the existing production service.
+CMD ["bash", "-lc", "if [ \"${AGENT_PROCESS:-keepr}\" = \"hermit\" ]; then exec gosu node bash server/agent/hermit/run-hermit.sh; fi; install -d -m 0755 /data/.xmtp-data && find /data/.xmtp-data -xdev -exec chown -h node:node {} + && exec gosu node bash server/agent/eliza/run-agent.sh"]
