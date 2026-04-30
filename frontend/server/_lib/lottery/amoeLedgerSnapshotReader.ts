@@ -42,6 +42,42 @@ import {
 import { AmoeServerError } from './lotteryAmoeErrors.js'
 
 // ----------------------------------------------------------------------------
+// Typed error subclasses (PR 6a)
+// ----------------------------------------------------------------------------
+//
+// The reader has two distinct "snapshot not available" reasons:
+//
+//   1. The L1 burn row for `(signup_id, spend_ref_id)` does not exist.
+//      The caller must have skipped phase A (`POST .../burn-credits`)
+//      or supplied the wrong `spendRefId`. The client should NOT retry
+//      this with the same key — it will never succeed.
+//
+//   2. The L1 row exists, but no confirmed L2 snapshot has been
+//      published for its epoch yet (publisher cron hasn't caught up,
+//      or the burn happened in the current open epoch). The client
+//      SHOULD retry after the next epoch boundary + publisher tick.
+//
+// Both subclass `AmoeServerError('amoe_ledger_snapshot_unavailable')`
+// so existing callers that pivot on the parent class / message keep
+// working. Phase B (the modified `_amoeSubmitZk.ts` shipping in PR 6b)
+// will introspect the subclass to choose 409 vs 425 and to compute
+// `retryAfterUnixSec`.
+
+export class AmoeBurnRowMissingError extends AmoeServerError {
+  override readonly name = 'AmoeBurnRowMissingError'
+  constructor() {
+    super('amoe_ledger_snapshot_unavailable')
+  }
+}
+
+export class AmoeSnapshotNotYetConfirmedError extends AmoeServerError {
+  override readonly name = 'AmoeSnapshotNotYetConfirmedError'
+  constructor() {
+    super('amoe_ledger_snapshot_unavailable')
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Public interface
 // ----------------------------------------------------------------------------
 
@@ -131,7 +167,10 @@ export class AmoeLedgerSnapshotPgReader implements AmoeLedgerSnapshotReader {
       projected_at: Date | string
     }>
     if (burnRows.length === 0) {
-      throw new AmoeServerError('amoe_ledger_snapshot_unavailable')
+      // No L1 row for this `(signup_id, spend_ref_id)`. Phase B (in
+      // PR 6b) maps this to a 409 — the client must call phase A
+      // first or correct `spendRefId`.
+      throw new AmoeBurnRowMissingError()
     }
     const epoch = BigInt(burnRows[0]!.epoch as string | number | bigint)
 
@@ -151,7 +190,11 @@ export class AmoeLedgerSnapshotPgReader implements AmoeLedgerSnapshotReader {
       tree_blob: AmoeLedgerTreeBlob | string
     }>
     if (snapshotRows.length === 0) {
-      throw new AmoeServerError('amoe_ledger_snapshot_unavailable')
+      // L1 row exists but the publisher hasn't confirmed an L2
+      // snapshot for its epoch yet. Phase B maps this to a 425
+      // — retryable after the next publisher tick (currently
+      // `*/15 * * * *`).
+      throw new AmoeSnapshotNotYetConfirmedError()
     }
     const blobRaw = snapshotRows[0]!.tree_blob
     // node-postgres returns JSONB columns as already-parsed objects, but

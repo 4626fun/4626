@@ -18,8 +18,11 @@ import {
   type AmoeLedgerTreeBlob,
 } from '../lottery/amoeLedgerSnapshotBuilder.js'
 import {
+  AmoeBurnRowMissingError,
   AmoeLedgerSnapshotPgReader,
+  AmoeSnapshotNotYetConfirmedError,
 } from '../lottery/amoeLedgerSnapshotReader.js'
+import { AmoeServerError } from '../lottery/lotteryAmoeErrors.js'
 import {
   buildAmoeMerkleSnapshot,
   getAmoeMerklePath,
@@ -81,6 +84,46 @@ describe('AmoeLedgerSnapshotPgReader.readSnapshotForBurn', () => {
     // The L2 query MUST filter on publish_confirmed_at IS NOT NULL.
     const l2Text = calls[1]!.textParts.join('?')
     expect(l2Text).toMatch(/publish_confirmed_at\s+IS\s+NOT\s+NULL/i)
+  })
+
+  // PR 6a — typed subclasses let phase B disambiguate "call phase A
+  // first" vs "retry after the next epoch boundary".
+  it('throws AmoeBurnRowMissingError (subclass of AmoeServerError) when the burn row is missing', async () => {
+    const { db } = makeCapturingDb([{ rows: [] }])
+    const reader = new AmoeLedgerSnapshotPgReader(db)
+    let caught: unknown = null
+    try {
+      await reader.readSnapshotForBurn({ signupId: 1n, spendRefId: 'sref-X' })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(AmoeBurnRowMissingError)
+    // Backward compat: still pivots on parent class + same message.
+    expect(caught).toBeInstanceOf(AmoeServerError)
+    expect((caught as Error).message).toBe('amoe_ledger_snapshot_unavailable')
+  })
+
+  it('throws AmoeSnapshotNotYetConfirmedError when the L1 row exists but the L2 snapshot is unconfirmed', async () => {
+    const { db } = makeCapturingDb([
+      {
+        rows: [
+          { epoch: 3, projected_at: new Date('2026-04-30T00:01:00Z') },
+        ],
+      },
+      { rows: [] },
+    ])
+    const reader = new AmoeLedgerSnapshotPgReader(db)
+    let caught: unknown = null
+    try {
+      await reader.readSnapshotForBurn({ signupId: 1n, spendRefId: 'sref-Y' })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught).toBeInstanceOf(AmoeSnapshotNotYetConfirmedError)
+    expect(caught).toBeInstanceOf(AmoeServerError)
+    // The two new error classes are distinct from each other.
+    expect(caught).not.toBeInstanceOf(AmoeBurnRowMissingError)
+    expect((caught as Error).message).toBe('amoe_ledger_snapshot_unavailable')
   })
 
   it('round-trips: build → reader → verifyMerklePath works on the recovered snapshot', async () => {

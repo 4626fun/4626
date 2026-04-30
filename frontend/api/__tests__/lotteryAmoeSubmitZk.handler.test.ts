@@ -891,6 +891,32 @@ describe('message binding', () => {
     }
   })
 
+  // Fix #1 (mirrored from PR #457 review): `Date.parse('not-a-date')`
+  // is NaN, and `NaN <= Date.now()` is false. Without an explicit
+  // `Number.isFinite` check, a malformed `expiresAt` would slip past
+  // the expiry guard and weaken the replay-window contract for any
+  // signed payload with a non-ISO timestamp. Same fix lives in
+  // `_amoeBurnCredits.ts` (the bug is identical because that handler
+  // was extracted from this one).
+  it('rejects non-parseable expiresAt as message_expired (Fix #1)', async () => {
+    const restore = setEnabledEnv()
+    try {
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({
+        method: 'POST',
+        body: validBody({
+          message: buildValidMessage({ expiresAt: 'not-a-date' }),
+        }),
+      })
+      const res = createMockRes()
+      await handler(req, res)
+      expect(res.statusCode).toBe(400)
+      expect(res.body?.error).toBe('message_expired')
+    } finally {
+      restore()
+    }
+  })
+
   // Order matters: message-binding errors must surface BEFORE signature
   // verification, otherwise a leaked sig over an unbound message could
   // mask the real issue and give an attacker an oracle.

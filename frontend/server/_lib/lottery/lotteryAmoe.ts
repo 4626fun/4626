@@ -8,6 +8,24 @@ import {
   AmoeInsufficientCreditsError,
   AmoeServerError,
 } from './lotteryAmoeErrors.js'
+import {
+  AMOE_EPOCH_GENESIS_SECONDS,
+  AMOE_EPOCH_LENGTH_SECONDS,
+} from './amoeWitness.js'
+
+/**
+ * Local copy of `computeAmoeEpoch` from `amoeSubmitZk.ts` — inlined
+ * here to avoid a circular import (amoeSubmitZk imports from
+ * lotteryAmoe). Kept byte-for-byte identical to the canonical version;
+ * a static test in `amoePointsEligibility.test.ts` (or future test)
+ * can pin this if drift is ever a concern. Both versions read from
+ * the same `AMOE_EPOCH_GENESIS_SECONDS` / `AMOE_EPOCH_LENGTH_SECONDS`
+ * constants in `amoeWitness.ts`, so the spec-anchor cannot drift.
+ */
+function computeAmoeEpochLocal(nowSec: bigint): bigint {
+  if (nowSec <= AMOE_EPOCH_GENESIS_SECONDS) return 0n
+  return (nowSec - AMOE_EPOCH_GENESIS_SECONDS) / AMOE_EPOCH_LENGTH_SECONDS
+}
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -612,6 +630,21 @@ export async function consumeAmoeCreditsForEntry(params: {
   creditsRemaining: number
   creditsPerEntry: number
   entriesAvailable: number
+  /**
+   * ISO-8601 timestamp of the persisted burn row (`points.created_at`).
+   * For idempotent retries against the same `refId`, this returns the
+   * ORIGINAL burn time — not `Date.now()` at retry time. Callers that
+   * derive epoch / scheduling metadata from the burn (e.g. phase B
+   * `eligibleSubmitAfter`) MUST use this field, not the wall clock,
+   * to keep retries stable.
+   */
+  burnedAt: string
+  /**
+   * AMOE epoch derived from `burnedAt` via `computeAmoeEpoch`. Same
+   * stability guarantee as `burnedAt`. Returned as a string to avoid
+   * BigInt JSON-serialization issues at the API boundary.
+   */
+  burnEpoch: string
 }> {
   const wallet = normalizeWallet(params.wallet)
   const requiredCredits =
@@ -626,12 +659,19 @@ export async function consumeAmoeCreditsForEntry(params: {
     const nextCredits = current - requiredCredits
     memCredits.set(wallet, nextCredits)
     const snapshot = toCreditSnapshot(wallet, nextCredits)
+    // Mem-fallback path is test-only (no DB). Without persistence we
+    // cannot meaningfully replay an "original" burn time, so we return
+    // wall-clock — tests that care about idempotent stability should
+    // pin time via `vi.useFakeTimers()`.
+    const nowMs = Date.now()
     return {
       wallet,
       consumed: requiredCredits,
       creditsRemaining: snapshot.credits,
       creditsPerEntry: snapshot.creditsPerEntry,
       entriesAvailable: snapshot.entriesAvailable,
+      burnedAt: new Date(nowMs).toISOString(),
+      burnEpoch: computeAmoeEpochLocal(BigInt(Math.floor(nowMs / 1000))).toString(),
     }
   }
 
@@ -646,6 +686,9 @@ export async function consumeAmoeCreditsForEntry(params: {
   // paid-action sources (e.g. has_creator_coin) and referral_* contribute 0,
   // so they cannot fund AMOE entries even though they still count toward
   // tier/leaderboard via `readUnifiedPointsForSignup`.
+  //
+  // We `RETURNING created_at` from the INSERT so the new-insert path can
+  // surface the actual persisted burn time (Fix #2 from PR #457 review).
   const spendAttempt = await db.sql`
     WITH current AS (
       SELECT COALESCE(credits, 0)::bigint AS credits
@@ -658,16 +701,21 @@ export async function consumeAmoeCreditsForEntry(params: {
       FROM current
       WHERE current.credits >= ${requiredCredits}
       ON CONFLICT DO NOTHING
-      RETURNING id
+      RETURNING id, created_at
     )
     SELECT
       (SELECT credits FROM current) AS credits_before,
-      EXISTS(SELECT 1 FROM ins) AS inserted;
+      EXISTS(SELECT 1 FROM ins) AS inserted,
+      (SELECT created_at FROM ins) AS inserted_at;
   `
   const inserted = spendAttempt.rows?.[0]?.inserted === true
+  let burnedAtRaw: unknown = inserted ? spendAttempt.rows?.[0]?.inserted_at : null
   if (!inserted) {
+    // Idempotent retry path: source `created_at` from the existing
+    // persisted row so the returned `burnedAt`/`burnEpoch` match the
+    // ORIGINAL debit, not the retry's wall clock (Fix #2).
     const existingSpend = await db.sql`
-      SELECT id
+      SELECT id, created_at
       FROM points
       WHERE signup_id = ${signupId}
         AND source = ${'amoe_entry_spend'}
@@ -675,11 +723,27 @@ export async function consumeAmoeCreditsForEntry(params: {
         AND amount = ${-requiredCredits}
       LIMIT 1;
     `
-    const alreadySpent = Boolean(existingSpend.rows?.[0]?.id)
+    const existingRow = existingSpend.rows?.[0]
+    const alreadySpent = Boolean(existingRow?.id)
     if (!alreadySpent) throw new AmoeInsufficientCreditsError()
+    burnedAtRaw = existingRow?.created_at ?? null
   }
 
   const creditsRemaining = await readAmoeEligibleCreditsForSignup(db, signupId)
+
+  // Coerce DB `created_at` (Date | string | null) to ISO. If the driver
+  // returned null (shouldn't happen — the row was just observed), fall
+  // back to wall-clock so the response shape stays valid; observability
+  // would catch the path via the typecheck on `burnedAt` being non-empty.
+  const burnedAtMs =
+    burnedAtRaw instanceof Date
+      ? burnedAtRaw.getTime()
+      : typeof burnedAtRaw === 'string' && burnedAtRaw.length > 0
+        ? Date.parse(burnedAtRaw)
+        : NaN
+  const burnedAtMsResolved = Number.isFinite(burnedAtMs) ? burnedAtMs : Date.now()
+  const burnedAtIso = new Date(burnedAtMsResolved).toISOString()
+  const burnEpoch = computeAmoeEpochLocal(BigInt(Math.floor(burnedAtMsResolved / 1000))).toString()
 
   const snapshot = toCreditSnapshot(wallet, creditsRemaining)
   return {
@@ -688,6 +752,8 @@ export async function consumeAmoeCreditsForEntry(params: {
     creditsRemaining: snapshot.credits,
     creditsPerEntry: snapshot.creditsPerEntry,
     entriesAvailable: snapshot.entriesAvailable,
+    burnedAt: burnedAtIso,
+    burnEpoch,
   }
 }
 

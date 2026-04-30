@@ -534,7 +534,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ) {
       throw new AmoeBadRequestError('lottery_manager_mismatch')
     }
-    if (Date.parse(parsedMessage.expiresAt) <= Date.now()) {
+    // `Date.parse` returns NaN for malformed ISO strings, and
+    // `NaN <= Date.now()` is always false — so any non-parseable
+    // `expiresAt` would slip past the expiry guard, weakening the
+    // replay-window contract for signed payloads. Reject non-finite
+    // values explicitly. (Same fix lives in `_amoeBurnCredits.ts`;
+    // the bug is identical because that handler was extracted from
+    // here.)
+    const parsedExpiryMs = Date.parse(parsedMessage.expiresAt)
+    if (!Number.isFinite(parsedExpiryMs) || parsedExpiryMs <= Date.now()) {
       throw new AmoeBadRequestError('message_expired')
     }
 
