@@ -593,7 +593,7 @@ describe('deploy session dry run', () => {
     const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const ownerWord = TEST_OWNER.slice(2).padStart(64, '0')
     const balanceWord = (1_000_000n * 10n ** 18n).toString(16).padStart(64, '0')
-    const neededWord = (50_000_000n * 10n ** 18n).toString(16).padStart(64, '0')
+    const neededWord = (10_000_000n * 10n ** 18n).toString(16).padStart(64, '0')
     sendTransactionMock.mockRejectedValueOnce(
       new Error(`execution reverted: custom error 0xe450d38c: ${ownerWord}${balanceWord}${neededWord}`),
     )
@@ -614,7 +614,7 @@ describe('deploy session dry run', () => {
     expect(res.body?.data?.ok).toBe(false)
     expect(res.body?.data?.failure?.error).toContain('ERC20InsufficientBalance()')
     expect(res.body?.data?.failure?.error).toContain('1,000,000 creator tokens')
-    expect(res.body?.data?.failure?.error).toContain('50,000,000')
+    expect(res.body?.data?.failure?.error).toContain('10,000,000')
   })
 
   it('skips phase2 core during dry-run when all projected core contracts already exist', async () => {

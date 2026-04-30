@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi'
 import {
   decodeAbiParameters,
   encodeAbiParameters,
@@ -14,6 +14,7 @@ import {
   type Hex,
 } from 'viem'
 import { base } from 'viem/chains'
+import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 
 const CSW_OWNER_ABI = [
   {
@@ -129,6 +130,8 @@ function makeChallengeHash(): Hex {
 
 export function CswSignatureProbe() {
   const { address: connectedAddress, chainId } = useAccount()
+  const { connectAsync, connectors, isPending: isConnectPending } = useConnect()
+  const { disconnectAsync } = useDisconnect()
   const publicClient = usePublicClient({ chainId: base.id })
   const { data: walletClient } = useWalletClient()
 
@@ -137,6 +140,7 @@ export function CswSignatureProbe() {
   const [challengeHash, setChallengeHash] = useState<Hex>(() => makeChallengeHash())
   const [ownerReadState, setOwnerReadState] = useState<StepState>(INITIAL_STEP)
   const [signState, setSignState] = useState<StepState>(INITIAL_STEP)
+  const [connectState, setConnectState] = useState<StepState>(INITIAL_STEP)
   const [ownerSlots, setOwnerSlots] = useState<OwnerSlot[]>([])
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
 
@@ -149,6 +153,62 @@ export function CswSignatureProbe() {
   const targetOwnerAddress = useMemo(() => {
     return ownerSlots.find((slot) => slot.index === targetOwnerIndex)?.ownerAddress ?? null
   }, [ownerSlots, targetOwnerIndex])
+
+  const preferredConnector = useMemo(() => {
+    const baseFirst =
+      connectors.find((connector) => {
+        const text = `${connector.id ?? ''} ${connector.name ?? ''}`.toLowerCase()
+        return text.includes('coinbase') || text.includes('base')
+      }) ?? null
+    if (baseFirst) return baseFirst
+    return selectPreferredWalletConnector(connectors)
+  }, [connectors])
+
+  async function connectWallet() {
+    if (!preferredConnector) {
+      setConnectState({
+        kind: 'err',
+        label: 'no wallet connector found',
+        detail: 'No wagmi connector is available in this context.',
+      })
+      return
+    }
+    setConnectState({
+      kind: 'pending',
+      label: `opening ${preferredConnector.name ?? preferredConnector.id ?? 'wallet'}…`,
+    })
+    try {
+      const result = await connectAsync({
+        connector: preferredConnector,
+        chainId: base.id,
+      })
+      const connected = result.accounts?.[0] ?? '—'
+      setConnectState({
+        kind: 'ok',
+        label: `connected via ${preferredConnector.name ?? preferredConnector.id ?? 'wallet'}`,
+        detail: `${connected} on chain ${result.chainId}`,
+      })
+    } catch (error) {
+      setConnectState({
+        kind: 'err',
+        label: 'connect failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function disconnectWallet() {
+    try {
+      await disconnectAsync()
+      setConnectState({ kind: 'ok', label: 'disconnected' })
+    } catch (error) {
+      setConnectState({
+        kind: 'err',
+        label: 'disconnect failed',
+        detail: describeError(error),
+      })
+    }
+  }
 
   async function loadOwnerSlots() {
     if (!publicClient) {
@@ -326,6 +386,31 @@ export function CswSignatureProbe() {
       </header>
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
+        <div className="space-y-2 rounded border border-zinc-800 bg-black/40 p-3">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Base App wallet</div>
+          <div className="text-xs text-zinc-500">
+            Use this first when testing inside Base App. It prefers the Coinbase/Base connector.
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500 disabled:opacity-50"
+              onClick={connectWallet}
+              disabled={isConnectPending}
+            >
+              {isConnectPending ? 'connecting…' : 'connect wallet'}
+            </button>
+            <button
+              type="button"
+              className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-500"
+              onClick={disconnectWallet}
+            >
+              disconnect
+            </button>
+          </div>
+          <StatusRow title="wallet connect" state={connectState} />
+        </div>
+
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1">
             <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">CSW address</div>

@@ -122,6 +122,29 @@ describe('computeAmoeEpoch', () => {
   it('day length is exactly 86400 seconds', () => {
     expect(AMOE_EPOCH_SECONDS).toBe(86400n)
   })
+
+  // ---- Regression: witness ↔ submitZk constant unification ---------------
+  //
+  // Before the PR 5a hotfix, `amoeWitness.AMOE_EPOCH_GENESIS_SECONDS` was
+  // mistakenly set to `1_777_939_200` (= 2026-05-05T00:00:00Z) while
+  // `amoeSubmitZk.AMOE_EPOCH_GENESIS_UNIX_SEC` (correct) was
+  // `1_777_507_200` (= 2026-04-30T00:00:00Z). Both names now read from
+  // the same `amoeWitness` constant; this test pins that wiring so any
+  // future contributor who re-introduces a duplicate constant will see
+  // a red CI immediately rather than discovering the desync at
+  // production cron-time.
+  it('AMOE_EPOCH_GENESIS_UNIX_SEC === AMOE_EPOCH_GENESIS_SECONDS (single SoT)', async () => {
+    const witness = await import('../lottery/amoeWitness.js')
+    expect(AMOE_EPOCH_GENESIS_UNIX_SEC).toBe(witness.AMOE_EPOCH_GENESIS_SECONDS)
+    // Sanity: both equal the verified UTC midnight constant.
+    expect(witness.AMOE_EPOCH_GENESIS_SECONDS).toBe(1_777_507_200n)
+  })
+
+  it('AMOE_EPOCH_SECONDS === AMOE_EPOCH_LENGTH_SECONDS (single SoT)', async () => {
+    const witness = await import('../lottery/amoeWitness.js')
+    expect(AMOE_EPOCH_SECONDS).toBe(witness.AMOE_EPOCH_LENGTH_SECONDS)
+    expect(witness.AMOE_EPOCH_LENGTH_SECONDS).toBe(86_400n)
+  })
 })
 
 // ----------------------------------------------------------------------------

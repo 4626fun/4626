@@ -130,6 +130,7 @@ export function CanonicalIdentityDropdown({
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
   const privyBasename = useBasenameForAddress(identity.privyEmbeddedAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
+  const embeddedAddress = identity.privyEmbeddedAddress
 
   return (
     <div className="flex flex-col">
@@ -139,7 +140,7 @@ export function CanonicalIdentityDropdown({
           resolved yet. */}
       {identity.cswAddress ? (
         <div className="px-4 pt-3 pb-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Canonical</div>
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Primary identity</div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {cswBasename.avatar ? (
               <img
@@ -157,7 +158,7 @@ export function CanonicalIdentityDropdown({
               <div className="text-sm text-white truncate">
                 {cswBasename.displayName ?? formatShort(identity.cswAddress)}
               </div>
-              <div className="text-[11px] text-zinc-500">Coinbase Smart Wallet</div>
+              <div className="text-[11px] text-zinc-500 truncate">Coinbase Smart Wallet · source of truth</div>
             </div>
           </div>
           <div className="mt-1.5 ml-10">
@@ -181,7 +182,7 @@ export function CanonicalIdentityDropdown({
       ) : identity.loadingCsw ? (
         <div className="px-4 pt-3 pb-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Canonical
+            Primary identity
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-full bg-white/5 animate-pulse" />
@@ -197,7 +198,7 @@ export function CanonicalIdentityDropdown({
       ) : identity.cswMissing ? (
         <div className="px-4 pt-3 pb-2">
           <div className="text-[10px] uppercase tracking-wider text-amber-300/80 font-medium">
-            Canonical · needs setup
+            Primary identity · needs setup
           </div>
           <div className="mt-1.5 text-xs text-zinc-300">
             No Coinbase Smart Wallet linked to this profile yet.
@@ -219,8 +220,8 @@ export function CanonicalIdentityDropdown({
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             Execution sub-account
           </div>
-          <div className="mt-1 text-[10px] text-zinc-600">
-            App-scoped execution wallet for 4626 actions
+          <div className="mt-1 text-[10px] text-zinc-600 truncate" title="App-scoped execution wallet for 4626 actions">
+            App execution wallet for 4626 actions
           </div>
           <div className="mt-1.5">
             <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
@@ -231,8 +232,8 @@ export function CanonicalIdentityDropdown({
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             Execution sub-account
           </div>
-          <div className="mt-1 text-[10px] text-zinc-600">
-            Legacy owner path active — no sub-account registered.
+          <div className="mt-1 text-[10px] text-zinc-600 truncate" title="Legacy owner path active — no sub-account registered.">
+            Legacy owner path active; no sub-account.
           </div>
         </div>
       ) : null}
@@ -246,7 +247,7 @@ export function CanonicalIdentityDropdown({
       {identity.externalEoaAddress ? (
         <div className="px-4 pb-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Active signer · external
+            Signer · external
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {externalEoaBasename.avatar ? (
@@ -265,7 +266,7 @@ export function CanonicalIdentityDropdown({
               <div className="text-xs text-zinc-300 truncate">
                 {externalEoaBasename.displayName ?? formatShort(identity.externalEoaAddress)}
               </div>
-              <div className="text-[10px] text-zinc-600">External wallet — signing on behalf of CSW</div>
+              <div className="text-[10px] text-zinc-600 truncate">Used for approvals and signatures</div>
             </div>
           </div>
           <div className="mt-1 ml-8">
@@ -280,21 +281,21 @@ export function CanonicalIdentityDropdown({
             className="w-full text-left px-4 py-3 hover:bg-white/4 transition-colors"
           >
             <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-              Active signer · external
+              Signer · external
             </div>
             <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
-            <div className="text-[10px] text-zinc-600 mt-0.5">
-              Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer
+            <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer">
+              Optional secondary signer (Rabby / MetaMask / Coinbase Wallet)
             </div>
           </button>
         ) : null
       )}
 
       {/* Privy embedded (auto-provisioned) */}
-      {identity.privyEmbeddedAddress ? (
+      {embeddedAddress ? (
         <div className="px-4 pt-2 pb-3">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Embedded signer · auto
+            Embedded signer · fallback
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {privyBasename.avatar ? (
@@ -307,21 +308,23 @@ export function CanonicalIdentityDropdown({
                 style={{ width: 20, height: 20 }}
               />
             ) : (
-              <JazziconAvatar address={identity.privyEmbeddedAddress} size={20} />
+              <JazziconAvatar address={embeddedAddress} size={20} />
             )}
             <div className="min-w-0 flex-1">
               <div className="text-xs text-zinc-300 truncate">
-                {privyBasename.displayName ?? formatShort(identity.privyEmbeddedAddress)}
+                {privyBasename.displayName ?? formatShort(embeddedAddress)}
               </div>
-              <div className="text-[10px] text-zinc-600">
+              <div className="text-[10px] text-zinc-600 truncate">
                 {identity.activeSigner === 'embedded'
-                  ? 'Default signer — Privy-managed'
-                  : 'Idle — Privy-managed, available as fallback'}
+                  ? 'Current session signer'
+                  : identity.externalEoaAddress
+                    ? 'Fallback signer; session may still use this address'
+                    : 'Fallback signer for session continuity'}
               </div>
             </div>
           </div>
           <div className="mt-1 ml-8">
-            <CopyableAddress address={identity.privyEmbeddedAddress} variant="muted" />
+            <CopyableAddress address={embeddedAddress} variant="muted" />
           </div>
         </div>
       ) : null}

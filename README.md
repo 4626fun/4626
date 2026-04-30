@@ -44,6 +44,24 @@ This monorepo includes:
 - CRE automation workflows (`cre/`) for tending, reporting, settlement, and queue operations.
 - Docusaurus docs site (`apps/docs-site/`) fed by `docs/` content and generated references.
 
+## Per-User Wallet Architecture
+
+4626 uses a role-separated wallet model for each user:
+
+| Wallet | Function | Why we use it |
+| --- | --- | --- |
+| Canonical CSW (parent) | Identity + custody anchor | Stable account-of-record across Base/Zora |
+| Base sub-account | App-scoped user execution sender | Better UX for high-frequency app actions |
+| Privy embedded EOA | Primary signer for sub-account lane | Silent in-app signing without repeated passkey prompts |
+| Connected external EOA | Fallback/override signer | Recovery and explicit user-controlled signing path |
+| Privy server wallet | Delegated server-side signer on CSW | Headless automation (deploy/session/agent) while preserving canonical identity |
+
+Operational principle:
+
+- Keep **canonical identity/custody** on the parent CSW.
+- Route **user app execution** through the sub-account lane.
+- Treat **embedded signer** as default primary signer and **external EOA** as fallback/override.
+
 ## System Atlas
 
 ### 1) Architecture (Experience -> Control -> Protocol)
