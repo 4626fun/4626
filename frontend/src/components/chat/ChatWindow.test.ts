@@ -58,10 +58,32 @@ describe('shouldAttemptInactiveDmRecovery', () => {
     ).toBe(false)
   })
 
-  it('returns false for unrelated errors', () => {
+  it('returns true for missing DM conversations with a peer address', () => {
     expect(
       shouldAttemptInactiveDmRecovery({
         reason: 'conversation_not_found',
+        conversationType: 'dm',
+        dmPeerAddress: '0x1111111111111111111111111111111111111111',
+        dmPeerInboxId: null,
+      }),
+    ).toBe(true)
+  })
+
+  it('returns true for missing DM conversations with a peer inbox id', () => {
+    expect(
+      shouldAttemptInactiveDmRecovery({
+        reason: 'conversation_not_found',
+        conversationType: 'dm',
+        dmPeerAddress: null,
+        dmPeerInboxId: 'peer-inbox-id',
+      }),
+    ).toBe(true)
+  })
+
+  it('returns false for unrelated errors', () => {
+    expect(
+      shouldAttemptInactiveDmRecovery({
+        reason: 'send_failed',
         conversationType: 'dm',
         dmPeerAddress: '0x1111111111111111111111111111111111111111',
         dmPeerInboxId: null,

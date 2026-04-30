@@ -14,7 +14,7 @@ export function shouldAttemptInactiveDmRecovery(params: {
   const hasPeerAddress = Boolean(params.dmPeerAddress && isEvmAddress(params.dmPeerAddress))
   const hasPeerInboxId = Boolean(params.dmPeerInboxId?.trim())
   if (!hasPeerAddress && !hasPeerInboxId) return false
-  return /group is inactive/i.test(params.reason)
+  return /group is inactive/i.test(params.reason) || /conversation_not_found/i.test(params.reason)
 }
 
 export function resolveCommandCenterVisibility(params: {

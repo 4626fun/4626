@@ -147,7 +147,7 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.code).toBe('ok')
   })
 
-  it('fails for sub-account track when Base Account provider is not hydrated', () => {
+  it('falls back to embedded owner path when sub-account provider is not hydrated', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'migration-pending',
@@ -163,8 +163,28 @@ describe('evaluateCanonicalSignerGate', () => {
     })
 
     expect(result.required).toBe(true)
+    expect(result.ready).toBe(true)
+    expect(result.code).toBe('ok')
+  })
+
+  it('waits for owner check before falling back when sub-account provider is not hydrated', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'migration-pending',
+      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      baseSubAccountAddress: '0x2222222222222222222222222222222222222222',
+      subAccountProviderReady: false,
+      clientStatus: 'ready',
+      authStatus: 'authenticated',
+      embeddedWalletDetected: true,
+      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
+      embeddedWalletCanSign: true,
+      ownerCheckStatus: 'unknown',
+    })
+
+    expect(result.required).toBe(true)
     expect(result.ready).toBe(false)
-    expect(result.code).toBe('base-sub-account-provider-missing')
+    expect(result.code).toBe('owner-check-pending')
   })
 
   it('fails for none-yet track before swap execution setup', () => {

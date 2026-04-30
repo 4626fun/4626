@@ -154,6 +154,20 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       )
     }
     if (input.subAccountProviderReady !== true) {
+      if (input.ownerCheckStatus === 'owner') {
+        return {
+          required: true,
+          ready: true,
+          code: 'ok',
+          reason: null,
+        }
+      }
+      if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {
+        return gateFailure(
+          'owner-check-pending',
+          'Waiting for canonical ownership check before falling back from sub-account routing.',
+        )
+      }
       return gateFailure(
         'base-sub-account-provider-missing',
         'Reconnect with Base Account to route canonical swaps through your 4626 sub-account.',

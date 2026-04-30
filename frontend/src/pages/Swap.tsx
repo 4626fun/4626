@@ -975,7 +975,7 @@ export function Swap() {
 
   const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
     queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
-    enabled: Boolean(!subAccountTrack && canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
+    enabled: Boolean(canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
     staleTime: 10_000,
     queryFn: async () => {
       if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return false
@@ -1094,8 +1094,10 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const useSubAccountCanonicalSigner = executionMode === 'canonical' && subAccountTrack && canonicalSignerGate.ready
-  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && !subAccountTrack && canonicalSignerGate.ready
+  const useSubAccountCanonicalSigner =
+    executionMode === 'canonical' && subAccountTrack && subAccountRuntime.ready && canonicalSignerGate.ready
+  const usePrivyEmbeddedCanonicalSigner =
+    executionMode === 'canonical' && canonicalSignerGate.ready && (!subAccountTrack || !subAccountRuntime.ready)
   const canonicalSignerAddress =
     executionMode === 'canonical'
       ? (useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null)
@@ -1142,7 +1144,15 @@ export function Swap() {
         : 'Privy Embedded EOA (required)'
       : (connector?.name ?? null)
   const executionAddress =
-    executionMode === 'canonical' && subAccountTrack ? baseSubAccountAddress : (accountContext.activeAccount ?? null)
+    executionMode === 'canonical'
+      ? useSubAccountCanonicalSigner
+        ? baseSubAccountAddress
+        : canonicalAddress
+      : (accountContext.activeAccount ?? null)
+  const routerExecutionTrack =
+    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
+      ? 'legacy-owner-install'
+      : executionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
@@ -1438,17 +1448,21 @@ export function Swap() {
   // ─── Token balances ───────────────────────────────────────────────────────
   const isTokenInNative = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
   const isTokenOutNative = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+  const balanceOwnerAddress =
+    executionMode === 'canonical'
+      ? (canonicalAddress ?? executionAddress)
+      : executionAddress
   const { data: tokenInBalData } = useBalance({
-    address: executionAddress ?? undefined,
+    address: balanceOwnerAddress ?? undefined,
     token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
     chainId: swapChainId,
-    query: { enabled: Boolean(executionAddress) && isAddress(tokenIn) },
+    query: { enabled: Boolean(balanceOwnerAddress) && isAddress(tokenIn) },
   })
   const { data: tokenOutBalData } = useBalance({
-    address: executionAddress ?? undefined,
+    address: balanceOwnerAddress ?? undefined,
     token: isTokenOutNative ? undefined : (tokenOut as `0x${string}`),
     chainId: swapChainId,
-    query: { enabled: Boolean(executionAddress) && isAddress(tokenOut) },
+    query: { enabled: Boolean(balanceOwnerAddress) && isAddress(tokenOut) },
   })
   const tokenInBalanceLabel = fmtBal(tokenInBalData)
   const tokenOutBalanceLabel = fmtBal(tokenOutBalData)
@@ -1496,7 +1510,7 @@ export function Swap() {
     canonicalAddress,
     signerAddress: executionSignerAddress,
     executionMode,
-    executionTrack,
+    executionTrack: routerExecutionTrack,
     executionAddress,
     executionReady,
     expectedSessionAddress: executionMode === 'canonical' ? (privyEmbeddedEoaAddress ?? executionSignerAddress) : executionSignerAddress,
@@ -2116,6 +2130,7 @@ export function Swap() {
               <div>execution: {txDebug.executionAddress ?? '--'}</div>
               <div>signer: {txDebug.signerAddress ?? '--'}</div>
               <div>canonical: {txDebug.canonicalAddress ?? '--'}</div>
+              <div>balance owner: {balanceOwnerAddress ?? '--'}</div>
             </div>
             <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
               <div>supports5792: {txDebug.capabilities.supports5792 ? 'yes' : 'no'}</div>
