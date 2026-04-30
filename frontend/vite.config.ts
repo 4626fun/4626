@@ -278,6 +278,10 @@ function localApiRoutesPlugin(): Plugin {
         '/api/deploy/v2/session/resume': () => import('./api/_handlers/deploy/v2/session/_resume'),
         '/api/deploy/v2/session/start': () => import('./api/_handlers/deploy/v2/session/_start'),
         '/api/deploy/v2/session/status': () => import('./api/_handlers/deploy/v2/session/_status'),
+        '/api/v1/vault/chat/status': () => import('./api/_handlers/v1/vault/chat/_status'),
+        '/api/v1/vault/chat/join': () => import('./api/_handlers/v1/vault/chat/_join'),
+        '/api/v1/vault/chat/policy': () => import('./api/_handlers/v1/vault/chat/_policy'),
+        '/api/v1/vault/chat/recheck': () => import('./api/_handlers/v1/vault/chat/_recheck'),
         '/api/deploy/solanaInfraStatus': () => import('./api/[...path]'),
         '/api/deploy/provisionSolanaRoute': () => import('./api/[...path]'),
         '/api/deploy/registerSolanaBridgeToken': () => import('./api/[...path]'),
@@ -323,6 +327,10 @@ function localApiRoutesPlugin(): Plugin {
         '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),
         '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
+        '/api/v1/chat/availability': () => import('./api/_handlers/v1/chat/_availability'),
+        '/api/v1/chat/presence/heartbeat': () => import('./api/_handlers/v1/chat/_presenceHeartbeat'),
+        '/api/v1/chat/search': () => import('./api/_handlers/v1/chat/_search'),
+        '/api/v1/chat/agents': () => import('./api/_handlers/v1/chat/_agents'),
         '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
       }
       const patternRoutes: Array<{

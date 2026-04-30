@@ -51,7 +51,12 @@ type OwnerSlot = {
 type ProbeResult = {
   method: string
   signature: Hex
-  parsedSignatureKind: 'raw-ecdsa' | 'signature-wrapper' | 'signature-wrapper-bytes' | 'unknown'
+  parsedSignatureKind:
+    | 'raw-ecdsa'
+    | 'signature-wrapper'
+    | 'signature-wrapper-bytes'
+    | 'signature-wrapper-leading-offset'
+    | 'unknown'
   parsedOwnerIndex: number | null
   parsedOwnerAddress: Address | null
   parsedOwnerIndexMatchesTarget: boolean
@@ -117,7 +122,12 @@ function hexByteLength(value: Hex): number {
 }
 
 type ParsedWalletSignature = {
-  kind: 'raw-ecdsa' | 'signature-wrapper' | 'signature-wrapper-bytes' | 'unknown'
+  kind:
+    | 'raw-ecdsa'
+    | 'signature-wrapper'
+    | 'signature-wrapper-bytes'
+    | 'signature-wrapper-leading-offset'
+    | 'unknown'
   ownerIndex: number | null
   signatureData: Hex | null
   ecdsaSignature: Hex | null
@@ -165,12 +175,35 @@ function parseWalletSignature(signature: Hex): ParsedWalletSignature {
       ecdsaSignature: decoded.ecdsaSignature,
     }
   } catch {
-    return {
-      kind: 'unknown',
-      ownerIndex: null,
-      signatureData: null,
-      ecdsaSignature: null,
+    // fall through
+  }
+
+  // Observed Base App return shape:
+  // [0]=0x20, [1]=ownerIndex, [2]=0x40, [3]=0x41, [4..]=r,s,v
+  // i.e. a single leading ABI offset word before SignatureWrapper tuple bytes.
+  try {
+    if (hexByteLength(signature) >= 96) {
+      const headWord = signature.slice(2, 66).toLowerCase()
+      if (headWord === '0000000000000000000000000000000000000000000000000000000000000020') {
+        const stripped = (`0x${signature.slice(66)}`) as Hex
+        const decoded = tryDecodeTuple(stripped)
+        return {
+          kind: 'signature-wrapper-leading-offset',
+          ownerIndex: decoded.ownerIndex,
+          signatureData: decoded.signatureData,
+          ecdsaSignature: decoded.ecdsaSignature,
+        }
+      }
     }
+  } catch {
+    // fall through
+  }
+
+  return {
+    kind: 'unknown',
+    ownerIndex: null,
+    signatureData: null,
+    ecdsaSignature: null,
   }
 }
 

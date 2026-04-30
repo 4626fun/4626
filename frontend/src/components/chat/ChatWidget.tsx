@@ -18,7 +18,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { X } from 'lucide-react'
-import { XmtpChatProvider, type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/provider'
+import { type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/provider'
+import { CHAT_OPEN_REQUEST_EVENT, isChatOpenRequest } from '@/lib/chat/openChat'
 import {
   getBasenameAutocompleteCandidate,
   resolveDmRecipient,
@@ -187,6 +188,48 @@ function ChatWidgetInner() {
       setBarExpanded(false)
     }
   }, [isMobile])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleOpenRequest = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (!isChatOpenRequest(detail)) return
+
+      if (detail.kind === 'group') {
+        handleOpenChat({
+          id: detail.conversationId,
+          type: 'group',
+          name: detail.name,
+          imageUrl: detail.imageUrl ?? undefined,
+          unreadCount: 0,
+          seedCommandId: detail.seedCommandId ?? null,
+        } as ChatConversation)
+        return
+      }
+
+      if (status !== 'connected') {
+        void connect()
+      }
+
+      void (async () => {
+        const dmResult = await startDm(detail.peerAddress, { nameHint: detail.nameHint ?? undefined })
+        if (!dmResult.ok) return
+        handleOpenChat({
+          id: dmResult.conversationId,
+          type: 'dm',
+          name: detail.nameHint || `${detail.peerAddress.slice(0, 6)}…${detail.peerAddress.slice(-4)}`,
+          peerAddress: dmResult.peerAddress,
+          imageUrl: detail.imageUrl ?? undefined,
+          unreadCount: 0,
+          seedCommandId: detail.seedCommandId ?? null,
+        } as ChatConversation)
+      })()
+    }
+
+    window.addEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
+    return () => window.removeEventListener(CHAT_OPEN_REQUEST_EVENT, handleOpenRequest as EventListener)
+  }, [connect, handleOpenChat, startDm, status])
 
   useEffect(() => {
     if (!pendingDeepLinkIntent) return
@@ -597,8 +640,8 @@ function ChatWidgetInner() {
 }
 
 /**
- * Self-contained chat widget — wraps itself in the XMTP provider.
- * Drop this into any layout to get the full chat experience.
+ * Chat widget dock. The app layout owns the XMTP provider so directory pages,
+ * the availability rail, and the dock all share one client.
  */
 export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
   const { chatActivated, setChatActivated } = useChatActivation({ initiallyActivated: props.initiallyActivated })
@@ -613,9 +656,5 @@ export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
     )
   }
 
-  return (
-    <XmtpChatProvider>
-      <ChatWidgetInner />
-    </XmtpChatProvider>
-  )
+  return <ChatWidgetInner />
 }

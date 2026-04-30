@@ -5,13 +5,14 @@
  * with identity resolution (Base Name / Lens / truncated address).
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { MessageSquare, Bot, ExternalLink, Users } from 'lucide-react'
 import { apiFetch } from '@/lib/api/apiBase'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp } from '@/lib/xmtp/provider'
+import { requestOpenChat } from '@/lib/chat/openChat'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { AgentVerificationCard } from '@/components/agents/AgentVerificationCard'
 import { LoadingInline } from '@/components/ui/LoadingState'
@@ -108,8 +109,7 @@ function AgentCard({
 }
 
 export function AgentDirectory() {
-  const { status, connect, startDm } = useXmtp()
-  const [messagingAddress, setMessagingAddress] = useState<string | null>(null)
+  const { status, connect } = useXmtp()
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['agentDirectory'],
@@ -124,25 +124,13 @@ export function AgentDirectory() {
   })
 
   const handleMessage = useCallback(
-    async (agentAddress: string) => {
-      if (status !== 'connected') {
-        setMessagingAddress(agentAddress)
-        await connect()
-        return
-      }
-      setMessagingAddress(null)
-      const dmResult = await startDm(agentAddress as `0x${string}`)
-      if (dmResult.ok) {
-        // The ChatWidget will auto-show the new conversation
+    (agentAddress: string) => {
+      if (/^0x[a-fA-F0-9]{40}$/.test(agentAddress)) {
+        requestOpenChat({ kind: 'dm', peerAddress: agentAddress as `0x${string}`, nameHint: 'Creator agent' })
       }
     },
-    [status, connect, startDm],
+    [],
   )
-
-  // After connecting, start the DM that was pending
-  if (status === 'connected' && messagingAddress) {
-    void handleMessage(messagingAddress)
-  }
 
   const agents = data?.agents ?? []
 

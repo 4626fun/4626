@@ -17,11 +17,22 @@ export function WorkspaceRoomsTab(props: {
   }) => void
   onTelegramUnlink: (payload: { chatId: string; roomChatId: string }) => void
   onXmtpPing: () => void
+  onVaultChatPolicyUpdate: (payload: {
+    groupId: string
+    shareTokenAddress: string
+    minHoldingRaw: string
+    graceHours: number
+    enabled: boolean
+  }) => void
 }) {
   const [chatId, setChatId] = useState('')
   const [roomChatId, setRoomChatId] = useState('')
   const [minSharesRaw, setMinSharesRaw] = useState('1')
   const [graceHours, setGraceHours] = useState('24')
+  const [xmtpGroupId, setXmtpGroupId] = useState('')
+  const [shareTokenAddress, setShareTokenAddress] = useState('')
+  const [vaultChatMinSharesRaw, setVaultChatMinSharesRaw] = useState('1')
+  const [vaultChatGraceHours, setVaultChatGraceHours] = useState('24')
 
   if (props.isLoading && !props.data) {
     return (
@@ -140,6 +151,67 @@ export function WorkspaceRoomsTab(props: {
         </div>
         <Button size="sm" disabled={props.isMutating || !data.xmtp.linked} onClick={props.onXmtpPing}>
           Send test summary
+        </Button>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-white/5 p-4 space-y-3 xl:col-span-2">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm text-zinc-100">Vault XMTP holder chat</div>
+            <div className="mt-0.5 text-xs text-zinc-500">Token-gated group membership enforced by keeper rechecks.</div>
+          </div>
+          <Badge variant="info">Policy</Badge>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-zinc-500">XMTP group ID</span>
+            <input
+              value={xmtpGroupId}
+              onChange={(event) => setXmtpGroupId(event.target.value)}
+              placeholder={data.xmtp.conversationId ?? 'Group conversation ID'}
+              className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-100"
+            />
+          </label>
+          <label className="space-y-1 md:col-span-2">
+            <span className="text-zinc-500">Share token address</span>
+            <input
+              value={shareTokenAddress}
+              onChange={(event) => setShareTokenAddress(event.target.value)}
+              placeholder="0x..."
+              className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-100"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-zinc-500">Minimum raw shares</span>
+            <input
+              value={vaultChatMinSharesRaw}
+              onChange={(event) => setVaultChatMinSharesRaw(event.target.value)}
+              className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-100"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="text-zinc-500">Grace hours</span>
+            <input
+              value={vaultChatGraceHours}
+              onChange={(event) => setVaultChatGraceHours(event.target.value)}
+              className="w-full rounded-md border border-white/10 bg-black/20 px-2 py-1.5 text-zinc-100"
+            />
+          </label>
+        </div>
+        <Button
+          size="sm"
+          disabled={props.isMutating}
+          onClick={() =>
+            props.onVaultChatPolicyUpdate({
+              groupId: xmtpGroupId || data.xmtp.conversationId || '',
+              shareTokenAddress,
+              minHoldingRaw: vaultChatMinSharesRaw || '1',
+              graceHours: Number(vaultChatGraceHours) || 24,
+              enabled: true,
+            })
+          }
+        >
+          Enable holder chat
         </Button>
       </div>
     </div>

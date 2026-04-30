@@ -10,6 +10,7 @@ import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
+import { XmtpChatProvider } from '@/lib/xmtp/provider'
 
 const LazyVaultNavBar = lazy(async () => {
   const mod = await import('../brand/VaultNavBar')
@@ -19,6 +20,11 @@ const LazyVaultNavBar = lazy(async () => {
 const LazyChatWidget = lazy(async () => {
   const mod = await import('../chat/ChatWidget')
   return { default: mod.ChatWidget }
+})
+
+const LazyChatAvailabilityRail = lazy(async () => {
+  const mod = await import('../chat/ChatAvailabilityRail')
+  return { default: mod.ChatAvailabilityRail }
 })
 
 const LazyAccountWalletRail = lazy(async () => {
@@ -126,6 +132,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     )
   const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
   const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
+  const shouldEnableChat = interactive && chatEnabled && hostMode === 'app'
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -269,19 +276,28 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         Skip to content
       </a>
 
-      {/* Main */}
-      <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-        <Suspense fallback={<AppLoadingState intent="page" />}>
-          <Outlet />
-        </Suspense>
-      </main>
+      {shouldEnableChat ? (
+        <XmtpChatProvider>
+          {/* Main */}
+          <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+            <Suspense fallback={<AppLoadingState intent="page" />}>
+              <Outlet />
+            </Suspense>
+          </main>
 
-      {/* Chat widget — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
-      {interactive && chatEnabled && hostMode === 'app' ? (
-        <Suspense fallback={null}>
-          <LazyChatWidget initiallyActivated />
-        </Suspense>
-      ) : null}
+          {/* Chat discovery and dock — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
+          <Suspense fallback={null}>
+            <LazyChatAvailabilityRail />
+            <LazyChatWidget initiallyActivated />
+          </Suspense>
+        </XmtpChatProvider>
+      ) : (
+        <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+          <Suspense fallback={<AppLoadingState intent="page" />}>
+            <Outlet />
+          </Suspense>
+        </main>
+      )}
 
       {/* Vercel Flags Explorer bridge — exposes flag state to the Toolbar */}
       <FlagToolbarBridge />

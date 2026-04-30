@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { SegmentedTabs } from '@/components/ui/Tabs'
 import { useCreatorWorkspace } from '@/hooks/useCreatorWorkspace'
+import { apiFetch } from '@/lib/api/apiBase'
 import type { WorkspaceTabId } from '@/lib/workspace/types'
 import { WorkspaceOverviewTab } from './WorkspaceOverviewTab'
 import { WorkspaceStrategiesTab } from './WorkspaceStrategiesTab'
@@ -154,6 +155,30 @@ export function CreatorWorkspacePanel(props: {
               body: 'Operator requested a status ping from the workspace panel.',
             })
           }
+          onVaultChatPolicyUpdate={async (payload) => {
+            if (!canMutate) {
+              toast.error('Viewer role cannot run workspace actions')
+              return
+            }
+            setErrorMessage(null)
+            try {
+              const res = await apiFetch(`/api/v1/vault/chat/policy?vault=${props.vaultAddress}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              })
+              const json = await res.json().catch(() => null)
+              if (!res.ok || !json?.success) {
+                throw new Error(json?.error ?? 'Vault chat policy update failed')
+              }
+              toast.success('Vault chat policy updated')
+              void workspace.rooms.refetch()
+            } catch (error) {
+              const message = error instanceof Error && error.message ? error.message : 'Vault chat policy update failed'
+              setErrorMessage(message)
+              toast.error(message)
+            }
+          }}
         />
       ) : null}
 
