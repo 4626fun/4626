@@ -3907,7 +3907,14 @@ window.__Continuity = Continuity;
       // Entrance is a scale-reveal + slide-from-right (not upward pan)
       // so the vaults chapter feels distinct from the CCA/accrue/dual
       // sections that preceded it. Exit still fades via sceneOp.
-      const sceneOp = multiMapSmooth(p, [0, 0.10, 0.82, 0.94], [0, 1, 1, 0]);
+      // POLISH (Vaults→Close handoff): pulled the exit-fade window later
+      // so the gap between vaults dimming out and close phase-A resolving
+      // shrinks. Was [0.82, 0.94] which left ~6% of the chapter (≈25vh of
+      // 420vh) as pure black before the close overture started ramping at
+      // p=0.02 of close. Now [0.88, 0.99] — vaults stays present longer
+      // and the fade-to-black tail is ≈1vh of scroll, dovetailing into the
+      // close overture which now opens at p=0.00 (see chapter-close).
+      const sceneOp = multiMapSmooth(p, [0, 0.10, 0.88, 0.99], [0, 1, 1, 0]);
       const sceneY = 0; // retired upward pan
       // POLISH (Dual → Vaults): retired sceneX (56→0px). The per-card FLIP
       // below already carries each vault card from its dual-branch position
@@ -3920,13 +3927,13 @@ window.__Continuity = Continuity;
       // cards converge inward). Scene blur: entry 6→0, exit 0→4 so the
       // grid softens into atmosphere as the close chapter focus takes over.
       const sceneScale = multiMapEased(p,
-        [0, 0.18, 0.82, 0.96],
+        [0, 0.18, 0.88, 1.00],
         [0.962, 1, 1, 0.93],
         easeOutCubic
       );
       const sceneX = 0;
       const sceneBlur = multiMapEased(p,
-        [0, 0.14, 0.82, 0.96],
+        [0, 0.14, 0.88, 1.00],
         [6, 0, 0, 4],
         easeOutCubic
       );
@@ -3975,12 +3982,13 @@ window.__Continuity = Continuity;
       // resolve into one'. This matches the close scene's central-focus
       // composition (hero token + central logo), handing off structurally
       // rather than through an upward drift.
-      //   Exit window: p 0.82 → 0.96
+      //   Exit window: p 0.88 → 1.00 (was 0.82 → 0.96; tightened to
+      //   shrink the black gap before close resolves)
       //   Inward X displacement: outer cards ±30% of their offset from
       //     center, inner cards ±12% — staircase emphasizes the pull.
       //   Depth: scene scale 1 → 0.92 + blur 0 → 4 so the grid recedes
       //     slightly as it condenses.
-      const exitConvergeRaw = Math.max(0, Math.min(1, (p - 0.82) / (0.96 - 0.82)));
+      const exitConvergeRaw = Math.max(0, Math.min(1, (p - 0.88) / (1.00 - 0.88)));
       const exitConvergeT = easeOutCubic(exitConvergeRaw);
       // Per-card inward pull factors — outer cards move more than inner
       const vcConvergeFactor = [0.30, 0.12, 0.12, 0.30];
@@ -4485,16 +4493,19 @@ window.__Continuity = Continuity;
       // a scale + letter-spread dissolve (NOT an upward pan).
       // POLISH (Vaults → Close): opened cold at p=0.00 (scale 1.04, spread
       // 0.18em, blur 6px) with zero inheritance from the vaults chapter.
-      // Pushed the entry stops slightly later (0.02–0.08) so vault's exit
-      // fade (scene dims out p 0.82–0.94 of vaults) has room to complete
-      // before the overture begins resolving. Reduced amplitudes (scale
-      // 1.04→1.02, spread 0.18em→0.10em, blur 6→3px) for a ceremonial
-      // restrained resolve rather than a dramatic opening. easeOutCubic
-      // throughout so the overture settles confidently.
-      const phaseAOp       = multiMapEased(p, [0.02, 0.08, 0.14, 0.20], [0, 1, 1, 0], easeOutCubic);
-      const overtureScale  = multiMapEased(p, [0.02, 0.12], [1.02, 1.00], easeOutCubic);
-      const overtureSpread = multiMapEased(p, [0.02, 0.14], [0.10, 0], easeOutCubic); // em
-      const overtureBlur   = multiMapEased(p, [0.02, 0.12], [3, 0], easeOutCubic); // px
+      // Originally pushed the entry stops slightly later (0.02–0.08) so
+      // vault's exit fade had room to complete before the overture began
+      // resolving — but that left a noticeable black pause between scenes.
+      // Now: vaults exit was tightened to [0.88, 0.99] and the overture
+      // opens at p=0.00 and reaches full opacity by p=0.04 so the two
+      // scenes crossfade through a brief overlap and the gap collapses.
+      // Reduced amplitudes (scale 1.04→1.02, spread 0.18em→0.10em, blur
+      // 6→3px) for a ceremonial restrained resolve rather than a dramatic
+      // opening. easeOutCubic throughout so the overture settles confidently.
+      const phaseAOp       = multiMapEased(p, [0.00, 0.04, 0.14, 0.20], [0, 1, 1, 0], easeOutCubic);
+      const overtureScale  = multiMapEased(p, [0.00, 0.08], [1.02, 1.00], easeOutCubic);
+      const overtureSpread = multiMapEased(p, [0.00, 0.10], [0.10, 0], easeOutCubic); // em
+      const overtureBlur   = multiMapEased(p, [0.00, 0.08], [3, 0], easeOutCubic); // px
 
       // ═══ PHASE B-E RETIRED (Restructure round) ═══
       // The card dance (share card → underlying card → converge → vault
