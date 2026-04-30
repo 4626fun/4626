@@ -5,6 +5,8 @@ import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
+import App from './App'
+import { AppQueryProvider } from './web3/Web3Providers'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -28,23 +30,14 @@ const WaitlistInviteEntry = lazyNamed(
   'WaitlistInviteEntry',
 )
 const Waitlist = lazyNamed(() => import('./pages/Waitlist'), 'Waitlist')
-const LazyProtectedAppBoundary = lazy(async () => {
-  const [appModule, web3Module] = await Promise.all([
-    import('./App'),
-    import('./web3/Web3Providers'),
-  ])
-  const App = appModule.default
-  const AppQueryProvider = web3Module.AppQueryProvider
-  return {
-    default: function ProtectedAppBoundary() {
-      return (
-        <AppQueryProvider>
-          <App />
-        </AppQueryProvider>
-      )
-    },
-  }
-})
+
+function ProtectedAppBoundary() {
+  return (
+    <AppQueryProvider>
+      <App />
+    </AppQueryProvider>
+  )
+}
 
 function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) {
   const location = useLocation()
@@ -104,7 +97,7 @@ export function RootRouter() {
             path="*"
             element={
               <LazyRouteBoundary>
-                <LazyProtectedAppBoundary />
+                <ProtectedAppBoundary />
               </LazyRouteBoundary>
             }
           />

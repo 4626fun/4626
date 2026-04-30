@@ -19,6 +19,9 @@ import {
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { EthosAvatarScoreForUserkey } from '@/components/chat/EthosScorePill'
+import { useZoraProfile } from '@/lib/zora/hooks'
+import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
 
 type TokenRowProps = {
   rank: number
@@ -53,6 +56,21 @@ function IdentityAddressChip({ address }: { address: string }) {
     >
       {label}
     </span>
+  )
+}
+
+function CreatorSocialEthosBadge({ coin }: { coin: ZoraCoin }) {
+  const profileIdentifier = getZoraCreatorProfileIdentifier(coin)
+  const profileQuery = useZoraProfile(profileIdentifier ?? undefined)
+  const ethosUserkey = useMemo(() => buildEthosSocialUserkeyFromZoraProfile(profileQuery.data), [profileQuery.data])
+
+  if (!ethosUserkey) return null
+
+  return (
+    <EthosAvatarScoreForUserkey
+      userkey={ethosUserkey}
+      className="absolute left-1/2 top-[calc(100%-5px)] -translate-x-1/2"
+    />
   )
 }
 
@@ -210,13 +228,16 @@ export function TokenRow({
             aria-hidden="true"
           />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
-            {avatarUrl ? (
-              <img src={avatarUrl} alt={name} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover shrink-0" />
-            ) : (
-              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
-                <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
-              </div>
-            )}
+            <div className="relative h-7 w-7 shrink-0 sm:h-8 sm:w-8">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={name} className="h-full w-full rounded-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800">
+                  <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
+                </div>
+              )}
+              <CreatorSocialEthosBadge coin={coin} />
+            </div>
             <div className="min-w-0 explore-token-name">
               {isSameNameSymbol ? (
                 // Single display for matching name/symbol (common for creator coins)

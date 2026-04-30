@@ -5,6 +5,7 @@ import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 import {
   buildAndSendApproval,
+  buildAndSendCalls,
   buildAndSendSwap,
   detectTxSendMode,
   type TxRouterContext,
@@ -51,6 +52,7 @@ const HARD_FAILURE_WINDOW_MS = 20_000
 const HARD_FAILURE_THRESHOLD = 3
 const HARD_FAILURE_COOLDOWN_MS = 15_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
+const WETH_DEPOSIT_SELECTOR = '0xd0e30db0'
 
 type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
 
@@ -581,6 +583,11 @@ export function useSwapExecution(params: {
       }),
     [params.canonicalAddress, params.executionAddress, params.signerAddress],
   )
+  const wrapNativeInputForSponsoredCanonical =
+    params.executionMode === 'canonical' &&
+    params.connectorId === 'privy-embedded' &&
+    params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+  const effectiveTokenIn = wrapNativeInputForSponsoredCanonical ? CONTRACTS.weth : params.tokenIn
 
   useEffect(() => {
     if (!swapDebugEnabled) return
@@ -1040,12 +1047,12 @@ export function useSwapExecution(params: {
     try {
       const parsableAmount = toParsableAmount(params.amountInUnits)
       if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
-      const tokenInDecimals = await getTokenDecimals(params.tokenIn)
+      const tokenInDecimals = await getTokenDecimals(effectiveTokenIn)
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       if (!guardInputPolicy(amount)) return
       const data = await fetchTradeQuote({
-        tokenIn: params.tokenIn,
+        tokenIn: effectiveTokenIn,
         tokenOut: params.tokenOut,
         tokenInChainId: swapChainId,
         tokenOutChainId: swapChainId,
@@ -1094,7 +1101,7 @@ export function useSwapExecution(params: {
     params.executionMode,
     params.amountInUnits,
     params.parsedSlippage,
-    params.tokenIn,
+    effectiveTokenIn,
     params.tokenOut,
     swapChainId,
     quoteReady,
@@ -1127,9 +1134,10 @@ export function useSwapExecution(params: {
       setStatus('No token approval required for CDP swap path')
       return
     }
-    // Native ETH does not require ERC20 approvals (Permit2/allowance).
-    // Uniswap Trading API will embed the amount in `tx.value` for native input.
-    if (params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS) {
+    // Native ETH normally does not require ERC20 approvals. In sponsored
+    // canonical mode we quote WETH and wrap ETH inside the UserOp, so WETH
+    // allowance still needs the regular approval check.
+    if (!wrapNativeInputForSponsoredCanonical && params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS) {
       setError('')
       setApprovalData({ approval: null, cancel: null })
       setStatus('No token approval required for ETH')
@@ -1141,7 +1149,7 @@ export function useSwapExecution(params: {
     try {
       const parsableAmount = toParsableAmount(params.amountInUnits)
       if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
-      const tokenInDecimals = await getTokenDecimals(params.tokenIn)
+      const tokenInDecimals = await getTokenDecimals(effectiveTokenIn)
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       if (!guardInputPolicy(amount)) return
       if (swapDebugEnabled) {
@@ -1149,14 +1157,14 @@ export function useSwapExecution(params: {
           ...prev,
           allowanceCheck: {
             walletAddress: params.executionAddress ?? '',
-            token: params.tokenIn,
+            token: effectiveTokenIn,
             amount,
           },
         }))
         console.debug('[swap][allowance-check]', {
           chainId: Number(swapChainId),
           walletAddress: params.executionAddress,
-          token: params.tokenIn,
+          token: effectiveTokenIn,
           amount,
           connectorId: params.connectorId ?? null,
           connectorName: params.connectorName ?? null,
@@ -1165,7 +1173,7 @@ export function useSwapExecution(params: {
       }
       const data = await checkTradeApproval({
         walletAddress: params.executionAddress,
-        token: params.tokenIn,
+        token: effectiveTokenIn,
         amount,
         chainId: swapChainId,
         tokenOut: params.tokenOut,
@@ -1185,6 +1193,8 @@ export function useSwapExecution(params: {
     params.executionAddress,
     params.executionMode,
     params.tokenIn,
+    effectiveTokenIn,
+    wrapNativeInputForSponsoredCanonical,
     params.tokenOut,
     params.amountInUnits,
     params.connectorId,
@@ -1252,12 +1262,12 @@ export function useSwapExecution(params: {
       if (runId !== quoteRunRef.current) return
       const amount = parseUnits(parsableAmount, tokenInDecimals).toString()
       if (!guardInputPolicy(amount)) return
-      if (swapDebugEnabled && params.tokenIn.trim().toLowerCase() !== NATIVE_TOKEN_ADDRESS) {
+      if (swapDebugEnabled && effectiveTokenIn.trim().toLowerCase() !== NATIVE_TOKEN_ADDRESS) {
         setTxDebug((prev) => ({
           ...prev,
           allowanceCheck: {
             walletAddress: params.executionAddress ?? '',
-            token: params.tokenIn,
+            token: effectiveTokenIn,
             amount,
           },
         }))
@@ -1268,11 +1278,11 @@ export function useSwapExecution(params: {
         !isQuoteStale() &&
         (!permit2DisabledForSwap || !pickPermitData(quote)) &&
         readQuoteInputAmount(quote) === amount &&
-        readQuoteInputToken(quote) === params.tokenIn.toLowerCase()
+        readQuoteInputToken(quote) === effectiveTokenIn.toLowerCase()
       const nextQuote = canReuseCurrentQuote
         ? quote!
         : await fetchTradeQuote({
-            tokenIn: params.tokenIn,
+            tokenIn: effectiveTokenIn,
             tokenOut: params.tokenOut,
             tokenInChainId: swapChainId,
             tokenOutChainId: swapChainId,
@@ -1288,11 +1298,11 @@ export function useSwapExecution(params: {
       const isCdpQuote = isCdpProviderQuote(nextQuote)
       if (!isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
       const nextApproval =
-        params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS || isCdpQuote
+        effectiveTokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS || isCdpQuote
           ? ({ approval: null, cancel: null } as any)
           : await checkTradeApproval({
               walletAddress: params.executionAddress,
-              token: params.tokenIn,
+              token: effectiveTokenIn,
               amount,
               chainId: swapChainId,
               tokenOut: params.tokenOut,
@@ -1364,6 +1374,7 @@ export function useSwapExecution(params: {
     }
   }, [
     params.tokenIn,
+    effectiveTokenIn,
     params.tokenOut,
     params.amountInUnits,
     params.parsedDeadlineMinutes,
@@ -1619,11 +1630,28 @@ export function useSwapExecution(params: {
           bundledApproval: Boolean(approvalTx),
         })
       }
-      const { routing, send } = await buildAndSendSwap({
-        context,
-        swapTx,
-        approvalTx,
-      })
+      const wrapTx = wrapNativeInputForSponsoredCanonical
+        ? ({
+            to: CONTRACTS.weth,
+            from: params.signerAddress ?? '',
+            data: WETH_DEPOSIT_SELECTOR,
+            value: parseUnits(toParsableAmount(params.amountInUnits) ?? '0', 18).toString(),
+            chainId: swapChainId,
+          } satisfies TransactionRequest)
+        : null
+      if (wrapTx && BigInt(wrapTx.value ?? '0') <= 0n) {
+        throw new Error('Enter a valid amount greater than 0.')
+      }
+      const { routing, send } = wrapTx
+        ? await buildAndSendCalls({
+            context,
+            calls: [wrapTx, ...(approvalTx ? [approvalTx] : []), swapTx],
+          })
+        : await buildAndSendSwap({
+            context,
+            swapTx,
+            approvalTx,
+          })
       const nextHash = send.transactionHash ?? send.txHashes[send.txHashes.length - 1] ?? null
       setTxHash(nextHash)
       setTxState('pending')
@@ -1651,7 +1679,7 @@ export function useSwapExecution(params: {
         sender: send.sender,
         txHash: nextHash,
         callsId: send.callsId,
-        callTargets: [swapTx.to],
+        callTargets: [wrapTx?.to, swapTx.to].filter(Boolean) as string[],
         at: Date.now(),
       })
       setTxState('success')
@@ -1673,6 +1701,7 @@ export function useSwapExecution(params: {
     swapChainId,
     params.executionMode,
     params.executionAddress,
+    params.amountInUnits,
     params.ensureCanonicalSession,
     params.hasSession,
     params.signerAddress,
@@ -1683,6 +1712,7 @@ export function useSwapExecution(params: {
     params.sessionAddress,
     params.sessionHydrated,
     params.signerType,
+    wrapNativeInputForSponsoredCanonical,
     normalizedCapabilities,
     getErrorMessage,
     updateAttemptDebug,

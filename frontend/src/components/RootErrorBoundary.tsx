@@ -33,6 +33,51 @@ type RootErrorBoundaryState = {
 }
 
 type MonitoringHook = (error: Error, info: ErrorInfo) => void
+const DYNAMIC_IMPORT_RECOVERY_KEY = 'cv:root-boundary:dynamic-import-reload-at'
+const DYNAMIC_IMPORT_RECOVERY_COUNT_KEY = 'cv:root-boundary:dynamic-import-reload-count'
+const DYNAMIC_IMPORT_RECOVERY_WINDOW_MS = 15_000
+const DYNAMIC_IMPORT_RECOVERY_MAX_RELOADS = 3
+
+function isDynamicImportFetchError(error: Error): boolean {
+  const message = String(error?.message ?? '').toLowerCase()
+  return (
+    message.includes('failed to fetch dynamically imported module') ||
+    message.includes('importing a module script failed') ||
+    message.includes('chunkloaderror') ||
+    message.includes('loading chunk')
+  )
+}
+
+function shouldReloadForDynamicImportError(error: Error): boolean {
+  if (typeof window === 'undefined') return false
+  if (!isDynamicImportFetchError(error)) return false
+  try {
+    const last = Number(window.sessionStorage.getItem(DYNAMIC_IMPORT_RECOVERY_KEY) ?? '0')
+    const count = Number(window.sessionStorage.getItem(DYNAMIC_IMPORT_RECOVERY_COUNT_KEY) ?? '0')
+    const now = Date.now()
+    const withinWindow = Number.isFinite(last) && now - last < DYNAMIC_IMPORT_RECOVERY_WINDOW_MS
+    if (withinWindow && Number.isFinite(count) && count >= DYNAMIC_IMPORT_RECOVERY_MAX_RELOADS) return false
+    window.sessionStorage.setItem(DYNAMIC_IMPORT_RECOVERY_KEY, String(now))
+    window.sessionStorage.setItem(
+      DYNAMIC_IMPORT_RECOVERY_COUNT_KEY,
+      String(withinWindow && Number.isFinite(count) ? count + 1 : 1),
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+function reloadWithCacheBuster(): void {
+  if (typeof window === 'undefined') return
+  try {
+    const next = new URL(window.location.href)
+    next.searchParams.set('__cv_reload', String(Date.now()))
+    window.location.replace(next.toString())
+  } catch {
+    window.location.reload()
+  }
+}
 
 function reportToMonitoring(error: Error, info: ErrorInfo): void {
   try {
@@ -61,6 +106,9 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
     // Console log is visible to developers (DevTools) only — never in the DOM.
     console.error('[RootErrorBoundary] uncaught render error', error, errorInfo)
     reportToMonitoring(error, errorInfo)
+    if (shouldReloadForDynamicImportError(error)) {
+      window.setTimeout(reloadWithCacheBuster, 50)
+    }
   }
 
   handleRetry = (): void => {
@@ -72,14 +120,13 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
   }
 
   handleReload = (): void => {
-    if (typeof window !== 'undefined') {
-      window.location.reload()
-    }
+    reloadWithCacheBuster()
   }
 
   render(): ReactNode {
     if (this.state.hasError) {
       const showRawForDev = import.meta.env.DEV && this.state.error?.message
+      const isDynamicImportError = this.state.error ? isDynamicImportFetchError(this.state.error) : false
       return (
         <div
           role="alert"
@@ -100,10 +147,13 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
             <div style={{ fontSize: '0.75rem', letterSpacing: '0.1em', color: '#71717a' }}>
               APPLICATION ERROR
             </div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 500 }}>Something went wrong</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 500 }}>
+              {isDynamicImportError ? 'Reload needed' : 'Something went wrong'}
+            </div>
             <div style={{ fontSize: '0.875rem', lineHeight: 1.6, color: '#a1a1aa' }}>
-              The app ran into an unexpected error. Your wallet and account are unaffected.
-              Try again, or reload the page if the issue persists.
+              {isDynamicImportError
+                ? 'The dev server updated while this page was loading. Your wallet and account are unaffected. Reload the page to fetch the latest app modules.'
+                : 'The app ran into an unexpected error. Your wallet and account are unaffected. Try again, or reload the page if the issue persists.'}
             </div>
             {showRawForDev ? (
               <div

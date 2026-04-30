@@ -702,10 +702,12 @@ const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_OWNABLE_TRANSFER_OWNERSHIP = '0xf2fde38b'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
+const SELECTOR_SWAP_PROXY_EXECUTE = '0x2894adf9' // execute(address,address,uint256,bytes,bytes[],uint256)
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_NO_DEADLINE = '0xb858183f'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE_NO_DEADLINE = '0x04e45aaf'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_NO_DEADLINE = '0x09b81346'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_SINGLE_NO_DEADLINE = '0x5023b4df'
+const SELECTOR_WETH_DEPOSIT = '0xd0e30db0' // deposit()
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT = '0xc04b8d59'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE = '0x414bf389'
 const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT = '0xf28c0498'
@@ -1025,6 +1027,8 @@ export function validatePayoutRouterProtocolRewardsArg(
 }
 // Uniswap Universal Router on Base (current deployment).
 const BASE_UNIVERSAL_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
+// Uniswap SDK swap proxy, used by Trading API routes that wrap Universal Router calls.
+const UNISWAP_SWAP_PROXY_DEPLOY_ADDRESS = getAddress(`0x${'02E5be68D46DAc0B524905bfF209cf47EE6dB2a9'}`)
 // Uniswap v3 SwapRouter02 on Base (exactInput/exactInputSingle).
 const BASE_V3_SWAP_ROUTER = getAddress(`0x${'2626664c2603336E57B271c5C0b26F421741e481'}`)
 const CREATOR_OVAULT_CODE_ID = keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex)
@@ -1046,8 +1050,8 @@ const UNISWAP_UNIVERSAL_ROUTER_ABI = [
 type InnerCall = { target: Address; value: bigint; data: Hex }
 
 type RateLimitBucket = { count: number; resetAtMs: number }
-const RATE_LIMIT_WINDOW_MS = 60_000
-const RATE_LIMIT_MAX_REQUESTS = 50
+const RATE_LIMIT_WINDOW_MS = Number.parseInt(process.env.PAYMASTER_SESSION_RATE_LIMIT_WINDOW_MS ?? '', 10) || 60_000
+const RATE_LIMIT_MAX_REQUESTS = Number.parseInt(process.env.PAYMASTER_SESSION_RATE_LIMIT_MAX_REQUESTS ?? '', 10) || 120
 const rateLimitBuckets: Map<string, RateLimitBucket> = new Map()
 
 // FIX: FINDING-05 — per-sender UserOp sponsorship limit to prevent gas budget exhaustion.
@@ -1055,21 +1059,33 @@ const rateLimitBuckets: Map<string, RateLimitBucket> = new Map()
 // In-memory Map with TTL; sufficient for single-instance rate limiting, complements
 // the per-IP rate limit above. For full distributed enforcement, use a shared store.
 type SponsorshipBucket = { count: number; resetAtMs: number }
-const SPONSORSHIP_WINDOW_MS = 3_600_000 // 1 hour
-const SPONSORSHIP_MAX_OPS_PER_SENDER = 20 // max 20 sponsored UserOps per sender per hour
+const SPONSORSHIP_WINDOW_MS = Number.parseInt(process.env.PAYMASTER_SPONSORSHIP_WINDOW_MS ?? '', 10) || 3_600_000 // 1 hour
+const SPONSORSHIP_MAX_OPS_PER_SENDER = Number.parseInt(process.env.PAYMASTER_SPONSORSHIP_MAX_OPS_PER_SENDER ?? '', 10) || 120
 const sponsorshipBuckets: Map<string, SponsorshipBucket> = new Map()
 
-function checkSponsorshipLimit(sender: string): boolean {
+function sponsorshipWeightForMethod(method: string): number {
+  // A single visible UserOp can make several read/preflight RPCs. Only count
+  // calls that either issue final paymaster data or submit the sponsored op.
+  if (method === 'pm_getPaymasterData') return 1
+  if (method === 'eth_sendUserOperation') return 1
+  return 0
+}
+
+function checkSponsorshipLimit(sender: string, weight = 1): { allowed: boolean; resetAtMs: number } {
+  if (weight <= 0) return { allowed: true, resetAtMs: Date.now() + SPONSORSHIP_WINDOW_MS }
   const key = sender.toLowerCase()
   const now = Date.now()
   const bucket = sponsorshipBuckets.get(key)
   if (!bucket || now >= bucket.resetAtMs) {
-    sponsorshipBuckets.set(key, { count: 1, resetAtMs: now + SPONSORSHIP_WINDOW_MS })
-    return true
+    const resetAtMs = now + SPONSORSHIP_WINDOW_MS
+    sponsorshipBuckets.set(key, { count: weight, resetAtMs })
+    return { allowed: true, resetAtMs }
   }
-  if (bucket.count >= SPONSORSHIP_MAX_OPS_PER_SENDER) return false
-  bucket.count++
-  return true
+  if (bucket.count + weight > SPONSORSHIP_MAX_OPS_PER_SENDER) {
+    return { allowed: false, resetAtMs: bucket.resetAtMs }
+  }
+  bucket.count += weight
+  return { allowed: true, resetAtMs: bucket.resetAtMs }
 }
 
 // Periodically clean up expired sponsorship buckets to prevent memory leaks.
@@ -1748,14 +1764,15 @@ async function computeCreate2AddressFromStore(params: {
   return getCreate2Address({ from: params.deployer, salt: params.salt, bytecodeHash: initCodeHash })
 }
 
-function enforceRateLimit(key: string) {
+function enforceRateLimit(key: string, weight = 1) {
+  if (weight <= 0) return
   const now = Date.now()
   const cur = rateLimitBuckets.get(key)
   if (!cur || now >= cur.resetAtMs) {
-    rateLimitBuckets.set(key, { count: 1, resetAtMs: now + RATE_LIMIT_WINDOW_MS })
+    rateLimitBuckets.set(key, { count: weight, resetAtMs: now + RATE_LIMIT_WINDOW_MS })
     return
   }
-  cur.count += 1
+  cur.count += weight
   if (cur.count > RATE_LIMIT_MAX_REQUESTS) {
     throw new Error('rate_limited')
   }
@@ -1960,6 +1977,7 @@ async function validateInnerCalls(params: {
     BASE_UNIVERSAL_ROUTER_CURRENT,
     ...(configuredSwapRouter ? [configuredSwapRouter] : []),
   ])
+  const allowedSwapProxyRouters = new Set<Address>([UNISWAP_SWAP_PROXY_DEPLOY_ADDRESS])
   const allowedPayoutRouterV3Routers = new Set<Address>([
     BASE_V3_SWAP_ROUTER,
     ...(configuredSwapRouter ? [configuredSwapRouter] : []),
@@ -1991,9 +2009,8 @@ async function validateInnerCalls(params: {
   for (const c of innerCalls) {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
-    const isRouterSwapCall =
-      allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
-    if (!isRouterSwapCall) throw new Error('value_transfer_not_allowed')
+    const isWethDeposit = c.target === expectedWethToken && selector === SELECTOR_WETH_DEPOSIT
+    if (!isWethDeposit) throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -2331,17 +2348,27 @@ async function validateInnerCalls(params: {
         let sawSwapRouter = false
         let swapRouterCalls = 0
         let approvalCalls = 0
+        let wethDepositCalls = 0
         let approvedToken: Address | null = null
+        let wrappedToken: Address | null = null
         let swapRouterCallData: Hex | null = null
         let swapRouterTarget: Address | null = null
-        let swapRouterKind: 'universal' | 'v3' | null = null
+        let swapRouterKind: 'universal' | 'swap-proxy' | 'v3' | null = null
         let approvalSpender: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
+          if (c.target === expectedWethToken && selector === SELECTOR_WETH_DEPOSIT) {
+            if (c.value <= 0n) throw new Error('weth_deposit_value_invalid')
+            wethDepositCalls += 1
+            if (wethDepositCalls > 1) throw new Error('weth_deposit_call_count_not_allowed')
+            wrappedToken = expectedWethToken
+            continue
+          }
 
           const isUniversalRouterCall = allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+          const isSwapProxyCall = allowedSwapProxyRouters.has(c.target) && selector === SELECTOR_SWAP_PROXY_EXECUTE
           const isV3RouterCall = allowedPayoutRouterV3Routers.has(c.target) && ALLOWED_V3_SWAP_ROUTER_SELECTORS.has(selector)
-          if (isUniversalRouterCall || isV3RouterCall) {
+          if (isUniversalRouterCall || isSwapProxyCall || isV3RouterCall) {
             if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
             if (isUniversalRouterCall) assertCanonicalSwapRouterExecuteEncoding(c.data)
             sawSwapRouter = true
@@ -2349,7 +2376,7 @@ async function validateInnerCalls(params: {
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
             swapRouterCallData = c.data
             swapRouterTarget = c.target
-            swapRouterKind = isUniversalRouterCall ? 'universal' : 'v3'
+            swapRouterKind = isUniversalRouterCall ? 'universal' : isSwapProxyCall ? 'swap-proxy' : 'v3'
             continue
           }
 
@@ -2381,17 +2408,18 @@ async function validateInnerCalls(params: {
           return { matched: false, creatorToken: null as Address | null }
         }
 
-        if (sawSwapRouter && approvedToken && swapRouterCallData) {
+        const swapInputToken = approvedToken ?? wrappedToken
+        if (sawSwapRouter && swapInputToken && swapRouterCallData) {
           if (swapRouterKind === 'universal') {
-            assertSwapRouterPayloadReferencesToken(swapRouterCallData, approvedToken)
+            assertSwapRouterPayloadReferencesToken(swapRouterCallData, swapInputToken)
           } else {
-            assertRawSwapPayloadReferencesToken(swapRouterCallData, approvedToken)
+            assertRawSwapPayloadReferencesToken(swapRouterCallData, swapInputToken)
           }
         }
 
         return {
-          matched: sawSwapRouter && approvalCalls === 1 && swapRouterCalls === 1 && !!approvedToken,
-          creatorToken: approvedToken,
+          matched: sawSwapRouter && approvalCalls <= 1 && swapRouterCalls === 1 && !!swapInputToken,
+          creatorToken: swapInputToken,
         }
       })()
 
@@ -3331,6 +3359,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.paymasterRpc,
   )
   if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(200).json(jsonRpcError(null, -32005, 'Rate limit exceeded'))
   }
 
@@ -3404,7 +3433,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const sender = getAddress(senderRaw)
 
       // FIX: FINDING-05 — enforce per-sender hourly UserOp sponsorship limit.
-      if (!checkSponsorshipLimit(sender)) {
+      // Preflight methods are intentionally weight 0; otherwise one visible
+      // swap can consume several quota units before the actual submit.
+      const sponsorshipLimit = checkSponsorshipLimit(sender, sponsorshipWeightForMethod(method))
+      if (!sponsorshipLimit.allowed) {
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil((sponsorshipLimit.resetAtMs - Date.now()) / 1000))))
         return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32005, 'Sponsorship limit exceeded for this sender'))
       }
 
@@ -3452,8 +3485,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32002, 'request denied - not authenticated'))
       }
 
-      // Basic rate limit: per session address.
-      enforceRateLimit(sessionAddress)
+      // Basic rate limit: per session address. Count only sponsorship
+      // issuance/submission so a single UserOp preflight sequence doesn't
+      // burn the session quota before the user can submit.
+      enforceRateLimit(sessionAddress, sponsorshipWeightForMethod(method))
       const initCode = isHexString(initCodeRaw) ? (initCodeRaw as Hex) : null
       const factoryRaw = extracted.userOp?.factory
       const factoryDataRaw = extracted.userOp?.factoryData

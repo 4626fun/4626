@@ -13,6 +13,11 @@ function shouldSuppressEarlyDevNoise(args: unknown[]): boolean {
     joined.includes('motion() is deprecated. use motion.create() instead') ||
     joined.includes('lit is in dev mode. not recommended for production') ||
     joined.includes('unable to refresh tokens - token is missing or no longer valid') ||
+    joined.includes('cannot redefine property: ethereum') ||
+    joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    joined.includes('accessing element.ref was removed in react 19') ||
+    (joined.includes('failed to fetch dynamically imported module:') &&
+      (joined.includes('chrome-extension://') || joined.includes('moz-extension://'))) ||
     (joined.includes('each child in a list should have a unique "key" prop') &&
       joined.includes('check the render method of `fragment`') &&
       joined.includes('child from me'))

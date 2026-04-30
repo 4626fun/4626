@@ -8,11 +8,13 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
+import { EthosAvatarScoreForUserkey } from '@/components/chat/EthosScorePill'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
+import { buildEthosSocialUserkeyFromZoraProfile } from '@/lib/ethos/zoraSocial'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 import {
@@ -394,6 +396,7 @@ export function ExploreCreatorDetail() {
 
   // Profile info
   const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
+  const ethosSocialUserkey = buildEthosSocialUserkeyFromZoraProfile(profile)
   const avatarUrl = profile?.avatar?.medium || profile?.avatar?.small || coin?.mediaContent?.previewImage?.medium || coin?.creatorProfile?.avatar?.previewImage?.medium
   const displayName = profile?.displayName || coin?.name || 'Creator'
   const handle = profile?.handle || coin?.creatorProfile?.handle
@@ -455,13 +458,19 @@ export function ExploreCreatorDetail() {
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {/* Avatar & Name */}
             <div className="flex items-start gap-3 sm:gap-4">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={displayName} className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl object-cover shrink-0" />
-              ) : (
-                <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-linear-to-br from-zinc-600 to-zinc-700 flex items-center justify-center shrink-0">
-                  <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
-                </div>
-              )}
+              <div className="relative h-14 w-14 shrink-0 sm:h-20 sm:w-20">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={displayName} className="h-full w-full rounded-xl object-cover sm:rounded-2xl" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center rounded-xl bg-linear-to-br from-zinc-600 to-zinc-700 sm:rounded-2xl">
+                    <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
+                  </div>
+                )}
+                <EthosAvatarScoreForUserkey
+                  userkey={ethosSocialUserkey}
+                  className="absolute left-1/2 top-[calc(100%-6px)] -translate-x-1/2 scale-110"
+                />
+              </div>
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl sm:text-2xl font-semibold text-white truncate">{displayName}</h1>
                 {handle && (

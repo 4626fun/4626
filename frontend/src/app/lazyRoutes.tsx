@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
+import { Swap as SwapPage } from '../pages/Swap'
 
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -174,7 +175,11 @@ export const ExploreContentPoolAlias = lazyNamed(
   () => import('../pages/explore/ExploreContentPoolAlias'),
   'ExploreContentPoolAlias',
 )
-export const Swap = lazyNamed(() => import('../pages/Swap'), 'Swap')
+// Keep the heavily edited trade surface out of React.lazy during local
+// development. Vite can otherwise leave a tab holding a rejected lazy import
+// promise after HMR/server restarts, which traps `/swap` behind the root
+// boundary even once the module is available again.
+export const Swap = SwapPage
 export const AlfaClubLiquidity = lazyNamed(
   () => import('../pages/AlfaClubLiquidity'),
   'AlfaClubLiquidity',

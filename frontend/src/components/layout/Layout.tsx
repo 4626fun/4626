@@ -11,11 +11,7 @@ import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
-
-const LazyVaultNavBar = lazy(async () => {
-  const mod = await import('../brand/VaultNavBar')
-  return { default: mod.VaultNavBar }
-})
+import { VaultNavBar } from '@/components/brand/VaultNavBar'
 
 const LazyChatWidget = lazy(async () => {
   const mod = await import('../chat/ChatWidget')
@@ -257,11 +253,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,rgba(255,255,255,0.06),transparent_62%)]" />
       </div>
       <div aria-hidden="true" className="noise-overlay" />
-      {showTopNavBar ? (
-        <Suspense fallback={null}>
-          <LazyVaultNavBar interactive={interactive} />
-        </Suspense>
-      ) : null}
+      {showTopNavBar ? <VaultNavBar interactive={interactive} /> : null}
       {showAccountMode ? (
         <Suspense fallback={null}>
           <LazyAccountWalletRail />

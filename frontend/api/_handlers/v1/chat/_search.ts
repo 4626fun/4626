@@ -7,17 +7,26 @@ import {
   handleOptions,
   RATE_LIMITS,
   rateLimitKey,
+  readJsonBody,
   setCors,
   setNoStore,
 } from '../../../../packages/server-core/src/index.js'
-import { getCachedEthosScoreByAddress } from '../../../../server/_lib/chat/ethosClient.js'
+import {
+  getCachedEthosScoreByAddress,
+  getCachedEthosScoreByUserkey,
+  getCachedEthosScoresByUserkeys,
+  normalizeEthosUserkey,
+} from '../../../../server/_lib/chat/ethosClient.js'
 import { normalizeChatAddress } from '../../../../server/_lib/chat/presence.js'
+
+const MAX_BULK_USERKEYS = 100
+const MAX_SEARCH_BODY_BYTES = 32_768
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
   if (handleOptions(req, res)) return
-  if (req.method !== 'GET') return res.status(405).json({ success: false, error: 'Method not allowed' })
+  if (req.method !== 'GET' && req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' })
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/chat/search', kind: 'read' })
   if (!g.ok) return
@@ -32,15 +41,58 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
+  if (req.method === 'POST') {
+    const body = await readJsonBody<{ userkeys?: unknown }>(req, { maxBytes: MAX_SEARCH_BODY_BYTES }).catch(() => null)
+    const rawUserkeys = Array.isArray(body?.userkeys) ? body.userkeys : []
+    const userkeys = Array.from(
+      new Set(
+        rawUserkeys
+          .map((value) => (typeof value === 'string' ? normalizeEthosUserkey(value) : null))
+          .filter((value): value is string => Boolean(value))
+          .slice(0, MAX_BULK_USERKEYS),
+      ),
+    )
+
+    if (userkeys.length === 0) {
+      return res.status(200).json({ success: true, data: { users: [], agents: [], vaults: [] } })
+    }
+
+    let scores = new Map<string, Awaited<ReturnType<typeof getCachedEthosScoreByUserkey>>>()
+    try {
+      scores = await getCachedEthosScoresByUserkeys(userkeys)
+    } catch {
+      scores = new Map()
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        users: userkeys.map((userkey) => {
+          const address = userkey.startsWith('address:') ? normalizeChatAddress(userkey.slice('address:'.length)) : null
+          const ethos = scores.get(userkey) ?? null
+          return {
+            address,
+            userkey,
+            ethosScore: ethos?.score ?? null,
+            ethosLevel: ethos?.level ?? null,
+          }
+        }),
+        agents: [],
+        vaults: [],
+      },
+    })
+  }
+
   const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
   const address = normalizeChatAddress(query)
-  if (!address) {
+  const userkey = address ? `address:${address}` : normalizeEthosUserkey(query)
+  if (!userkey) {
     return res.status(200).json({ success: true, data: { users: [], agents: [], vaults: [] } })
   }
 
   let ethos = null
   try {
-    ethos = await getCachedEthosScoreByAddress(address)
+    ethos = address ? await getCachedEthosScoreByAddress(address) : await getCachedEthosScoreByUserkey(userkey)
   } catch {
     ethos = null
   }
@@ -49,7 +101,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     success: true,
     data: {
       users: [{
-        address,
+        address: address ?? null,
+        userkey,
         ethosScore: ethos?.score ?? null,
         ethosLevel: ethos?.level ?? null,
       }],

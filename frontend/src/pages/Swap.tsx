@@ -1448,8 +1448,6 @@ export function Swap() {
   // ─── Token balances ───────────────────────────────────────────────────────
   const isTokenInNative = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
   const isTokenOutNative = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
-  const sponsoredNativeInputBlocked =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner && isTokenInNative
   const balanceOwnerAddress =
     executionMode === 'canonical'
       ? (canonicalAddress ?? executionAddress)
@@ -1544,13 +1542,6 @@ export function Swap() {
     sessionAddress: authAddress,
     ensureCanonicalSession,
   })
-  const handleUseWethForSponsoredSwap = useCallback(() => {
-    setTokenIn(CONTRACTS.weth)
-    if (tokenOut.trim().toLowerCase() === CONTRACTS.weth.toLowerCase()) {
-      setTokenOut(CONTRACTS.usdc)
-    }
-    resetTradeState()
-  }, [resetTradeState, setTokenIn, setTokenOut, tokenOut])
   const showCanonicalSessionGuardHint =
     activePanel === 'swap' &&
     executionMode === 'canonical' &&
@@ -1905,9 +1896,6 @@ export function Swap() {
               status={status}
               error={
                 tokenInBalanceError ??
-                (sponsoredNativeInputBlocked
-                  ? 'Gas-sponsored swaps use WETH instead of native ETH. Switch Sell to WETH to continue.'
-                  : null) ??
                 error ??
                 (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
               }
@@ -1933,7 +1921,7 @@ export function Swap() {
               }}
               onSwitchTokens={handleSwitchTokens}
               onReviewTrade={() => {
-                if (unverifiedSelectionMode || sponsoredNativeInputBlocked) return
+                if (unverifiedSelectionMode) return
                 void handleReviewTrade()
               }}
               onSetSlippagePct={setSlippagePct}
@@ -1950,23 +1938,17 @@ export function Swap() {
               primaryActionLabel={
                 canonicalExecutionSetupRequired
                   ? 'Enable 4626 signing'
-                  : sponsoredNativeInputBlocked
-                    ? 'Switch Sell to WETH'
-                    : undefined
+                  : undefined
               }
               onPrimaryAction={
                 canonicalExecutionSetupRequired
                   ? handleEnableCanonicalSigning
-                  : sponsoredNativeInputBlocked
-                    ? handleUseWethForSponsoredSwap
-                    : undefined
+                  : undefined
               }
-              forcePrimaryActionEnabled={canonicalExecutionSetupRequired || sponsoredNativeInputBlocked}
+              forcePrimaryActionEnabled={canonicalExecutionSetupRequired}
               primaryActionHint={
                 canonicalExecutionSetupRequired
                   ? 'Finish one-time account setup before canonical swaps can execute.'
-                  : sponsoredNativeInputBlocked
-                    ? 'WETH keeps the swap on the sponsored ERC-20 path.'
                   : null
               }
             />
