@@ -29,17 +29,17 @@ The resulting split is intentional:
 ```mermaid
 flowchart LR
   subgraph Identity["User-visible identity (Zora/Base CSW [You])"]
-    CSW["Canonical CSW (parent)"]
+    CSW["Canonical CSW (parent)"]:::identity
   end
 
   subgraph AppExecution["App execution"]
-    Sub["Base sub-account"]
-    Embedded["Privy embedded EOA"]
-    External["Connected external EOA"]
+    Sub["Base sub-account"]:::execution
+    Embedded["Privy embedded EOA"]:::execution
+    External["Connected external EOA"]:::fallback
   end
 
   subgraph Automation["Server automation"]
-    Server["Privy server wallet"]
+    Server["Privy server wallet"]:::automation
   end
 
   CSW -->|"derives app sender"| Sub
@@ -51,11 +51,6 @@ flowchart LR
   classDef execution fill:#DCFCE7,stroke:#16A34A,stroke-width:2px,color:#14532D;
   classDef fallback fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
   classDef automation fill:#F3E8FF,stroke:#9333EA,stroke-width:2px,color:#581C87;
-
-  class CSW identity;
-  class Sub,Embedded execution;
-  class External fallback;
-  class Server automation;
 ```
 
 ## Wallet model table

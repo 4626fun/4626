@@ -127,6 +127,7 @@ export function CanonicalIdentityDropdown({
   onRequestConnectWallet?: () => void
 }) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
+  const executionSubAccountBasename = useBasenameForAddress(identity.executionSubAccountAddress)
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
   const privyBasename = useBasenameForAddress(identity.privyEmbeddedAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
@@ -220,10 +221,29 @@ export function CanonicalIdentityDropdown({
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             Execution sub-account
           </div>
-          <div className="mt-1 text-[10px] text-zinc-600 truncate" title="App-scoped execution wallet for 4626 actions">
-            App execution wallet for 4626 actions
+          <div className="mt-1.5 flex items-center gap-2.5">
+            {executionSubAccountBasename.avatar ? (
+              <img
+                src={executionSubAccountBasename.avatar}
+                alt=""
+                width={24}
+                height={24}
+                className="rounded-full flex-shrink-0 object-cover"
+                style={{ width: 24, height: 24 }}
+              />
+            ) : (
+              <JazziconAvatar address={identity.executionSubAccountAddress} size={24} />
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-zinc-300 truncate">
+                {executionSubAccountBasename.displayName ?? formatShort(identity.executionSubAccountAddress)}
+              </div>
+              <div className="text-[10px] text-zinc-600 truncate" title="App-scoped execution wallet for 4626 actions">
+                App execution wallet for 4626 actions
+              </div>
+            </div>
           </div>
-          <div className="mt-1.5">
+          <div className="mt-1 ml-8">
             <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
           </div>
         </div>
@@ -295,20 +315,22 @@ export function CanonicalIdentityDropdown({
       {embeddedAddress ? (
         <div className="px-4 pt-2 pb-3">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Embedded signer · fallback
+            {identity.activeSigner === 'embedded'
+              ? 'Embedded signer · active session'
+              : 'Embedded signer · fallback'}
           </div>
           <div className="mt-1.5 flex items-center gap-2.5">
             {privyBasename.avatar ? (
               <img
                 src={privyBasename.avatar}
                 alt=""
-                width={20}
-                height={20}
+                width={24}
+                height={24}
                 className="rounded-full flex-shrink-0 object-cover"
-                style={{ width: 20, height: 20 }}
+                style={{ width: 24, height: 24 }}
               />
             ) : (
-              <JazziconAvatar address={embeddedAddress} size={20} />
+              <JazziconAvatar address={embeddedAddress} size={24} />
             )}
             <div className="min-w-0 flex-1">
               <div className="text-xs text-zinc-300 truncate">

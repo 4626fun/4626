@@ -51,6 +51,12 @@ type OwnerSlot = {
 type ProbeResult = {
   method: string
   signature: Hex
+  parsedSignatureKind: 'raw-ecdsa' | 'signature-wrapper' | 'signature-wrapper-bytes' | 'unknown'
+  parsedOwnerIndex: number | null
+  parsedOwnerAddress: Address | null
+  parsedOwnerIndexMatchesTarget: boolean
+  parsedSignatureData: Hex | null
+  ecdsaSignatureForRecovery: Hex | null
   replaySafeHash: Hex
   recoveredDirect: Address | null
   recoveredPrefixed: Address | null
@@ -103,6 +109,68 @@ function decodeOwnerSlot(index: number, ownerBytes: Hex): OwnerSlot {
     ownerBytesLength,
     ownerType: 'unknown',
     ownerAddress: null,
+  }
+}
+
+function hexByteLength(value: Hex): number {
+  return Math.max(0, (value.length - 2) / 2)
+}
+
+type ParsedWalletSignature = {
+  kind: 'raw-ecdsa' | 'signature-wrapper' | 'signature-wrapper-bytes' | 'unknown'
+  ownerIndex: number | null
+  signatureData: Hex | null
+  ecdsaSignature: Hex | null
+}
+
+function parseWalletSignature(signature: Hex): ParsedWalletSignature {
+  if (hexByteLength(signature) === 65) {
+    return {
+      kind: 'raw-ecdsa',
+      ownerIndex: null,
+      signatureData: signature,
+      ecdsaSignature: signature,
+    }
+  }
+
+  const tryDecodeTuple = (value: Hex) => {
+    const [ownerIndexRaw, signatureData] = decodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      value,
+    )
+    const ownerIndex = Number(ownerIndexRaw)
+    const ecdsaSignature = hexByteLength(signatureData) === 65 ? signatureData : null
+    return { ownerIndex, signatureData, ecdsaSignature }
+  }
+
+  try {
+    const decoded = tryDecodeTuple(signature)
+    return {
+      kind: 'signature-wrapper',
+      ownerIndex: decoded.ownerIndex,
+      signatureData: decoded.signatureData,
+      ecdsaSignature: decoded.ecdsaSignature,
+    }
+  } catch {
+    // fall through
+  }
+
+  try {
+    const [innerBytes] = decodeAbiParameters([{ type: 'bytes' }], signature)
+    const decoded = tryDecodeTuple(innerBytes)
+    return {
+      kind: 'signature-wrapper-bytes',
+      ownerIndex: decoded.ownerIndex,
+      signatureData: decoded.signatureData,
+      ecdsaSignature: decoded.ecdsaSignature,
+    }
+  } catch {
+    return {
+      kind: 'unknown',
+      ownerIndex: null,
+      signatureData: null,
+      ecdsaSignature: null,
+    }
   }
 }
 
@@ -334,13 +402,21 @@ export function CswSignatureProbe() {
         }
       }
 
-      const recoveredDirect = await recoverAddress({ hash: replaySafeHash, signature }).catch(() => null)
+      const parsedSignature = parseWalletSignature(signature)
+      const recoverableSignature = parsedSignature.ecdsaSignature
+      const recoveredDirect = recoverableSignature
+        ? await recoverAddress({ hash: replaySafeHash, signature: recoverableSignature }).catch(() => null)
+        : null
       const prefixedHash = hashMessage({ raw: replaySafeHash })
-      const recoveredPrefixed = await recoverAddress({ hash: prefixedHash, signature }).catch(() => null)
-      const wrappedSignature = encodeAbiParameters(
-        [{ type: 'uint256' }, { type: 'bytes' }],
-        [BigInt(targetOwnerIndex), signature],
-      )
+      const recoveredPrefixed = recoverableSignature
+        ? await recoverAddress({ hash: prefixedHash, signature: recoverableSignature }).catch(() => null)
+        : null
+      const wrappedSignature = recoverableSignature
+        ? encodeAbiParameters(
+            [{ type: 'uint256' }, { type: 'bytes' }],
+            [BigInt(targetOwnerIndex), recoverableSignature],
+          )
+        : null
       const targetOwnerLower = targetOwnerAddress?.toLowerCase() ?? null
       const directMatchesTarget = Boolean(
         recoveredDirect && targetOwnerLower && recoveredDirect.toLowerCase() === targetOwnerLower,
@@ -348,10 +424,22 @@ export function CswSignatureProbe() {
       const prefixedMatchesTarget = Boolean(
         recoveredPrefixed && targetOwnerLower && recoveredPrefixed.toLowerCase() === targetOwnerLower,
       )
+      const parsedOwnerAddress =
+        parsedSignature.ownerIndex !== null
+          ? ownerSlots.find((slot) => slot.index === parsedSignature.ownerIndex)?.ownerAddress ?? null
+          : null
+      const parsedOwnerIndexMatchesTarget =
+        parsedSignature.ownerIndex !== null && parsedSignature.ownerIndex === targetOwnerIndex
 
       setProbeResult({
         method,
         signature,
+        parsedSignatureKind: parsedSignature.kind,
+        parsedOwnerIndex: parsedSignature.ownerIndex,
+        parsedOwnerAddress,
+        parsedOwnerIndexMatchesTarget,
+        parsedSignatureData: parsedSignature.signatureData,
+        ecdsaSignatureForRecovery: recoverableSignature,
         replaySafeHash,
         recoveredDirect,
         recoveredPrefixed,
@@ -359,15 +447,23 @@ export function CswSignatureProbe() {
         targetOwnerAddress,
         directMatchesTarget,
         prefixedMatchesTarget,
-        wrappedSignature,
+        wrappedSignature: wrappedSignature ?? ('0x' as Hex),
       })
       setSignState({
         kind: 'ok',
         label: `${method} signature captured`,
-        detail:
-          directMatchesTarget || prefixedMatchesTarget
-            ? 'Recovered signer matches selected owner index.'
-            : 'Recovered signer does not match selected owner index.',
+        detail: (() => {
+          if (parsedOwnerIndexMatchesTarget) {
+            return `Signature wrapper owner index matches target (${targetOwnerIndex}).`
+          }
+          if (parsedSignature.ownerIndex !== null) {
+            return `Signature wrapper owner index=${parsedSignature.ownerIndex}; target=${targetOwnerIndex}.`
+          }
+          if (directMatchesTarget || prefixedMatchesTarget) {
+            return 'Recovered signer matches selected owner index.'
+          }
+          return 'Recovered signer does not match selected owner index.'
+        })(),
       })
     } catch (error) {
       setSignState({ kind: 'err', label: `${method} failed`, detail: describeError(error) })
@@ -516,15 +612,24 @@ export function CswSignatureProbe() {
         <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">probe result</div>
           <KeyValue label="method" value={probeResult.method} />
+          <KeyValue label="parsedSignatureKind" value={probeResult.parsedSignatureKind} />
           <KeyValue label="replaySafeHash" value={probeResult.replaySafeHash} />
           <KeyValue label="targetOwnerIndex" value={String(probeResult.targetOwnerIndex)} />
           <KeyValue label="targetOwnerAddress" value={probeResult.targetOwnerAddress ?? '—'} />
+          <KeyValue label="parsedOwnerIndex" value={probeResult.parsedOwnerIndex !== null ? String(probeResult.parsedOwnerIndex) : '—'} />
+          <KeyValue label="parsedOwnerAddress" value={probeResult.parsedOwnerAddress ?? '—'} />
+          <KeyValue label="parsedOwnerIndexMatchesTarget" value={String(probeResult.parsedOwnerIndexMatchesTarget)} />
+          <KeyValue label="parsedSignatureData" value={probeResult.parsedSignatureData ?? '—'} />
+          <KeyValue label="ecdsaSignatureForRecovery" value={probeResult.ecdsaSignatureForRecovery ?? '—'} />
           <KeyValue label="recoveredDirect(hash=replaySafeHash)" value={probeResult.recoveredDirect ?? '—'} />
           <KeyValue label="recoveredPrefixed(hash=EIP191(replaySafeHash))" value={probeResult.recoveredPrefixed ?? '—'} />
           <KeyValue label="directMatchesTarget" value={String(probeResult.directMatchesTarget)} />
           <KeyValue label="prefixedMatchesTarget" value={String(probeResult.prefixedMatchesTarget)} />
-          <KeyValue label="signatureData" value={probeResult.signature} />
-          <KeyValue label="wrappedSignature(abi.encode(index,bytes))" value={probeResult.wrappedSignature} />
+          <KeyValue label="signatureData(raw return)" value={probeResult.signature} />
+          <KeyValue
+            label="wrappedSignature(abi.encode(targetIndex,ecdsaSig))"
+            value={probeResult.wrappedSignature === '0x' ? '— (no recoverable 65-byte signature)' : probeResult.wrappedSignature}
+          />
         </section>
       ) : null}
     </div>

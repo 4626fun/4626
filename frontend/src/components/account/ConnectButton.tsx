@@ -657,7 +657,10 @@ function getSignedInSessionCopy({
   if (!sessionAddress) return '4626 session is active.'
 
   if (embeddedAddress && normalizeAddressKey(sessionAddress) === normalizeAddressKey(embeddedAddress)) {
-    return `Session signer: ${formatAddress(sessionAddress)} (embedded fallback).`
+    if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
+      return `Session signer: ${formatAddress(sessionAddress)} (embedded); approvals use connected signer.`
+    }
+    return `Session signer: ${formatAddress(sessionAddress)} (embedded).`
   }
 
   if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
