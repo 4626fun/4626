@@ -829,9 +829,8 @@ body {
 }
 
 /* ─── 13 · Footer · air ──────────────────────────────────────────────── */
-.footer {
-  border-top: 1px solid rgba(210, 220, 240, 0.04);
-}
+/* (legacy hairline retired — the softer gradient + breathing room in
+   the §Nav & Footer block below now own the close→footer transition.) */
 
 /* ─── 13.5 · Chrome UI · scan-line + audio toggle ───────────────────── */
 /* The scan-line originally swept in saturated #0052FF. Trade the colour
@@ -1001,17 +1000,41 @@ body {
 }
 .nav.visible { transition: opacity 0.6s var(--ease-cinematic), transform 0.6s var(--ease-cinematic) !important; }
 
+/* The footer used to read as a hard plate slamming in below the close
+   crescendo ("crash into the bottom" feedback). Three changes soften
+   the arrival:
+   1. Generous top padding (8rem) gives the finale poster room to
+      breathe before the footer copy appears.
+   2. A long top-fade gradient that stays fully transparent for the
+      first ~20% of the footer so the close scene's deep-space backdrop
+      bleeds straight through, then ramps to a dense plate behind the
+      brand + links so the type holds on its own ground.
+   3. No top border, plus a small negative margin-top so the gradient
+      starts pulling slightly into the close section's tail rather than
+      arriving as a separate band. */
 .footer {
   border-top: none !important;
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.78) 0%,
-    rgba(0, 0, 0, 0.4) 55%,
+    rgba(0, 0, 0, 0.82) 0%,
+    rgba(0, 0, 0, 0.65) 25%,
+    rgba(0, 0, 0, 0.32) 55%,
+    rgba(0, 0, 0, 0.08) 80%,
     rgba(0, 0, 0, 0) 100%
   ) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
-  padding-top: 4rem !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  padding-top: 8rem !important;
+  margin-top: -3rem !important;
+}
+@media (max-width: 768px) {
+  /* On phones the close chapter sits closer to the bottom of the
+     viewport, so trim the breathing distance so the footer remains
+     discoverable without two thumb-flicks. */
+  .footer {
+    padding-top: 5rem !important;
+    margin-top: -1.5rem !important;
+  }
 }
 
 /* ─── Nav & Footer typography: match the page's display elegance ───── */

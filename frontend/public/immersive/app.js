@@ -1033,14 +1033,28 @@ window.addEventListener('scroll', () => {
 // ────────────────────────────────────────────
 // 5. NAV VISIBILITY
 // ────────────────────────────────────────────
+// The nav is shown at the very top of the page, then hides once the
+// user begins scrolling into the immersive arc — a persistent header
+// competes with the cinematic chapters and breaks the storytelling.
+// Threshold is intentionally generous (~1.2% scroll progress) so a
+// tiny accidental wheel-tick doesn't dismiss the nav, but any real
+// scroll intent does. Returns to visible at the very top so the
+// brand mark + nav links are still discoverable on first paint.
 const nav = document.getElementById('main-nav');
-ScrollTrigger.create({
-  trigger: document.body,
-  start: 'top -2%',
-  onUpdate: (self) => {
-    nav.classList.toggle('visible', self.progress > 0.005);
-  }
-});
+if (nav) {
+  // Initial state: visible at the top of the document.
+  nav.classList.add('visible');
+  ScrollTrigger.create({
+    trigger: document.body,
+    start: 'top top',
+    end: 'bottom bottom',
+    onUpdate: (self) => {
+      // Hide once the user has scrolled past the top threshold; show
+      // again only when they're back at the very top.
+      nav.classList.toggle('visible', self.progress < 0.012);
+    }
+  });
+}
 
 // ────────────────────────────────────────────
 // 5.5 SCAN LINE ACTIVATION
