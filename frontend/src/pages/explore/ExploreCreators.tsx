@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PageMeta, META } from '@/components/seo/PageMeta'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
@@ -19,6 +19,8 @@ import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScroll
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
+import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
+import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
@@ -41,8 +43,9 @@ const REMOTE_SEARCH_MIN_QUERY_LENGTH = 3
 const LIVE_METRICS_REFETCH_MS = 10_000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
-const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
+const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
 const CREATORS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const ETHOS_FILTER_VALUES = ['all', '1200', '1600', '1800'] as const
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
@@ -101,6 +104,12 @@ const SCREENSHOT_DEMO_COINS: ZoraCoin[] = [
     payoutRecipientAddress: '0xffffffffffffffffffffffffffffffffffffffff',
   },
 ]
+
+type CreatorEthosRecord = {
+  coinKey: string
+  userkey: string | null
+  score: EthosScoreValue | null
+}
 
 type ExploreMetrics = {
   scope: 'creators'
@@ -179,6 +188,23 @@ function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
     out.push(coin)
   }
   return out
+}
+
+function getCoinKey(coin: ZoraCoin, fallbackIndex?: number): string {
+  const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
+  if (address) return address
+  return `${coin.creatorAddress ?? ''}:${coin.symbol ?? ''}:${coin.name ?? ''}:${fallbackIndex ?? ''}`.toLowerCase()
+}
+
+function deriveImmediateEthosUserkey(coin: ZoraCoin): string | null {
+  void coin
+  return null
+}
+
+function getEthosFilterMinimum(value: string): number | null {
+  if (value === 'all') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 function buildProfileIdentifierCandidates(query: string): string[] {
@@ -274,6 +300,7 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
+  const [ethosFilter, setEthosFilter] = useState<(typeof ETHOS_FILTER_VALUES)[number]>('all')
   const screenshotMode = useScreenshotMode()
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
@@ -494,7 +521,81 @@ export function ExploreCreators() {
     : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
   const creatorsTotalCount = creatorsTotalDisplay ?? 0
   const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
-  const displayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
+  const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
+
+  const profileIdentifiers = useMemo(() => {
+    return baseDisplayCoins.map((coin) => ({
+      coinKey: getCoinKey(coin),
+      identifier: getZoraCreatorProfileIdentifier(coin),
+      immediateUserkey: deriveImmediateEthosUserkey(coin),
+    }))
+  }, [baseDisplayCoins])
+
+  const profileQueries = useQueries({
+    queries: profileIdentifiers.map(({ coinKey, identifier, immediateUserkey }) => ({
+      queryKey: ['explore', 'creators', 'ethos-profile-userkey', coinKey, identifier],
+      queryFn: async () => {
+        if (!identifier) return null
+        const profile = await fetchZoraProfile(identifier)
+        return buildEthosSocialUserkeyFromZoraProfile(profile)
+      },
+      enabled: Boolean(identifier && !immediateUserkey),
+      staleTime: 6 * 60 * 60 * 1000,
+      retry: 1,
+    })),
+  })
+
+  const coinEthosUserkeys = useMemo(() => {
+    const out = new Map<string, string>()
+    profileIdentifiers.forEach((entry, index) => {
+      const userkey = entry.immediateUserkey ?? profileQueries[index]?.data ?? null
+      if (userkey) out.set(entry.coinKey, userkey)
+    })
+    return out
+  }, [profileIdentifiers, profileQueries])
+
+  const ethosScoreQueries = useQueries({
+    queries: Array.from(coinEthosUserkeys.entries()).map(([coinKey, userkey]) => ({
+      queryKey: ['explore', 'creators', 'ethos-score', coinKey, userkey],
+      queryFn: () => fetchEthosScoreForUserkey(userkey),
+      enabled: Boolean(userkey),
+      staleTime: 6 * 60 * 60 * 1000,
+      retry: 1,
+    })),
+  })
+
+  const ethosByCoinKey = useMemo(() => {
+    const out = new Map<string, CreatorEthosRecord>()
+    const entries = Array.from(coinEthosUserkeys.entries())
+    entries.forEach(([coinKey, userkey], index) => {
+      out.set(coinKey, {
+        coinKey,
+        userkey,
+        score: ethosScoreQueries[index]?.data ?? null,
+      })
+    })
+    return out
+  }, [coinEthosUserkeys, ethosScoreQueries])
+
+  const displayCoins = useMemo(() => {
+    const minimumScore = getEthosFilterMinimum(ethosFilter)
+    const filtered =
+      minimumScore == null
+        ? baseDisplayCoins
+        : baseDisplayCoins.filter((coin) => {
+            const score = ethosByCoinKey.get(getCoinKey(coin))?.score?.score
+            return typeof score === 'number' && score >= minimumScore
+          })
+
+    if (currentSort !== 'ethosScore') return filtered
+
+    return [...filtered].sort((a, b) => {
+      const aScore = ethosByCoinKey.get(getCoinKey(a))?.score?.score ?? Number.NEGATIVE_INFINITY
+      const bScore = ethosByCoinKey.get(getCoinKey(b))?.score?.score ?? Number.NEGATIVE_INFINITY
+      return bScore - aScore
+    })
+  }, [baseDisplayCoins, currentSort, ethosByCoinKey, ethosFilter])
+
   const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
   const creatorsTotalUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsTotal : creatorsTotalDisplay
   const creatorsNew24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsNew24h : creatorsNew24hDisplay
@@ -642,7 +743,43 @@ export function ExploreCreators() {
           onSortChange={handleSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          sortOptions={[
+            { label: 'Volume', value: 'volume' },
+            { label: 'Market cap', value: 'marketCap' },
+            { label: 'Price change', value: 'priceChange' },
+            { label: 'Ethos score', value: 'ethosScore' },
+            { label: 'Recently added', value: 'new' },
+          ]}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+          extraFilters={
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-zinc-500">Ethos</span>
+              <div className="flex h-8 items-center gap-0.5 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
+                {[
+                  { label: 'All', value: 'all' },
+                  { label: '1200+', value: '1200' },
+                  { label: '1600+', value: '1600' },
+                  { label: '1800+', value: '1800' },
+                ].map((filter) => {
+                  const active = ethosFilter === filter.value
+                  return (
+                    <button
+                      key={filter.value}
+                      type="button"
+                      onClick={() => setEthosFilter(filter.value as (typeof ETHOS_FILTER_VALUES)[number])}
+                      className={`h-6 rounded-full border px-2 text-[10px] font-medium leading-none transition-all duration-200 ${
+                        active
+                          ? 'border-blue-300/35 bg-blue-500/20 text-blue-100'
+                          : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          }
         />
       }
       table={
@@ -679,8 +816,10 @@ export function ExploreCreators() {
                   <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
                 ) : (
                   displayCoins.map((coin, index) => {
+                    const coinKey = getCoinKey(coin)
                     const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
                     const isExpanded = expandedFees === rowId
+                    const ethos = ethosByCoinKey.get(coinKey) ?? null
                     return (
                       <TokenRow
                         key={coin.address || index}
@@ -690,6 +829,8 @@ export function ExploreCreators() {
                         timeframe={currentTimeFilter}
                         collapseIdentity={collapseIdentity}
                         migratedCoins={migratedCoins ?? undefined}
+                        ethosUserkey={ethos?.userkey ?? null}
+                        ethosScore={ethos?.score ?? null}
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

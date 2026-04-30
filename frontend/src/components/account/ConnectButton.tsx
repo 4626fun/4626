@@ -623,7 +623,6 @@ function useIsPhoneViewport(): boolean {
     if (typeof window === 'undefined') return
     const mediaQuery = window.matchMedia('(max-width: 767px)')
     const handleChange = (event: MediaQueryListEvent) => setIsPhone(event.matches)
-    setIsPhone(mediaQuery.matches)
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [])
@@ -642,19 +641,19 @@ function getSignedInSessionCopy({
   connectedAddress: string | null
   embeddedAddress: string | null
 }): string {
-  if (walletMatchesSession) return 'Session matches connected signer.'
+  if (walletMatchesSession) return 'Session ready for sponsored smart-wallet actions.'
 
   if (!sessionAddress) return '4626 session is active.'
 
   if (embeddedAddress && normalizeAddressKey(sessionAddress) === normalizeAddressKey(embeddedAddress)) {
     if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
-      return `Session signer: ${formatAddress(sessionAddress)} (embedded); approvals use connected signer.`
+      return `Embedded signer ready; connected wallet is available as fallback.`
     }
-    return `Session signer: ${formatAddress(sessionAddress)} (embedded).`
+    return `Embedded signer ready for your smart wallet.`
   }
 
   if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
-    return `Session signer: ${formatAddress(sessionAddress)}; approvals use connected signer.`
+    return `Session signer: ${formatAddress(sessionAddress)}; connected wallet is fallback.`
   }
 
   return `Session signer: ${formatAddress(sessionAddress)}.`

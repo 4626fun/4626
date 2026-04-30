@@ -19,7 +19,7 @@ import {
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { EthosAvatarScoreForUserkey } from '@/components/chat/EthosScorePill'
+import { EthosAvatarScoreBadge, EthosAvatarScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { useZoraProfile } from '@/lib/zora/hooks'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
 
@@ -31,6 +31,8 @@ type TokenRowProps = {
   collapseIdentity?: boolean
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
+  ethosUserkey?: string | null
+  ethosScore?: EthosScoreValue | null
   isExpanded?: boolean
   onToggleFees?: () => void
 }
@@ -59,17 +61,41 @@ function IdentityAddressChip({ address }: { address: string }) {
   )
 }
 
-function CreatorSocialEthosBadge({ coin }: { coin: ZoraCoin }) {
+function CreatorSocialEthosBadge({
+  coin,
+  ethosUserkey,
+  ethosScore,
+}: {
+  coin: ZoraCoin
+  ethosUserkey?: string | null
+  ethosScore?: EthosScoreValue | null
+}) {
   const profileIdentifier = getZoraCreatorProfileIdentifier(coin)
-  const profileQuery = useZoraProfile(profileIdentifier ?? undefined)
-  const ethosUserkey = useMemo(() => buildEthosSocialUserkeyFromZoraProfile(profileQuery.data), [profileQuery.data])
+  const shouldResolveProfile = ethosUserkey === undefined
+  const profileQuery = useZoraProfile(shouldResolveProfile ? profileIdentifier ?? undefined : undefined)
+  const resolvedEthosUserkey = useMemo(
+    () => ethosUserkey ?? buildEthosSocialUserkeyFromZoraProfile(profileQuery.data),
+    [ethosUserkey, profileQuery.data],
+  )
 
-  if (!ethosUserkey) return null
+  if (!resolvedEthosUserkey) return null
+
+  if (ethosScore) {
+    return (
+      <EthosAvatarScoreBadge
+        score={ethosScore.score}
+        level={ethosScore.level}
+        profileQuery={resolvedEthosUserkey}
+        profileQueryKind="userkey"
+        className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2"
+      />
+    )
+  }
 
   return (
     <EthosAvatarScoreForUserkey
-      userkey={ethosUserkey}
-      className="absolute left-1/2 top-[calc(100%-5px)] -translate-x-1/2"
+      userkey={resolvedEthosUserkey}
+      className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2"
     />
   )
 }
@@ -82,6 +108,8 @@ export function TokenRow({
   timeframe = '1d',
   collapseIdentity = false,
   migratedCoins,
+  ethosUserkey,
+  ethosScore,
   isExpanded,
   onToggleFees,
 }: TokenRowProps) {
@@ -141,9 +169,9 @@ export function TokenRow({
   const stickyLeft = getStickyLeftMap(columns)
   const feeGroupSpan = useMemo(() => buildGroupSpans(columns).find((g) => g.id === 'fees') ?? null, [columns])
 
-  // Sticky identity cells: reduce “overlay” feel with a subtle divider + softer bg.
+  // Sticky identity cells stay flat so rows read like Uniswap's continuous list.
   const stickyCellClass =
-    'sticky bg-vault-bg/70 backdrop-blur-sm group-hover:bg-white/4 border-r border-white/8'
+    'sticky bg-vault-bg/45 backdrop-blur-sm group-hover:bg-white/[0.025]'
 
   const canToggleFees = typeof onToggleFees === 'function'
 
@@ -207,12 +235,12 @@ export function TokenRow({
     <>
       <Link
         to={detailPath}
-        className="group grid items-center text-xs hover:bg-white/4 transition-colors cursor-pointer min-w-max"
+        className="group grid items-center text-xs hover:bg-white/[0.025] transition-colors cursor-pointer min-w-max"
         style={{ gridTemplateColumns }}
       >
         {/* Rank */}
         <span
-          className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
+          className={`${stickyCellClass} z-20 text-zinc-700 tabular-nums px-3 py-2 text-center sm:text-right`}
           style={{ left: stickyLeft.rank }}
         >
           {rank}
@@ -228,15 +256,15 @@ export function TokenRow({
             aria-hidden="true"
           />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
-            <div className="relative h-7 w-7 shrink-0 sm:h-8 sm:w-8">
+            <div className="relative h-10 w-10 shrink-0 sm:h-11 sm:w-11">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={name} className="h-full w-full rounded-full object-cover" />
+                <img src={avatarUrl} alt={name} className="mx-auto h-7 w-7 rounded-full object-cover sm:h-8 sm:w-8" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800">
+                <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-8 sm:w-8">
                   <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
-              <CreatorSocialEthosBadge coin={coin} />
+              <CreatorSocialEthosBadge coin={coin} ethosUserkey={ethosUserkey} ethosScore={ethosScore} />
             </div>
             <div className="min-w-0 explore-token-name">
               {isSameNameSymbol ? (
@@ -255,6 +283,11 @@ export function TokenRow({
 
         {/* Holders */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
+
+        {/* Ethos */}
+        <span className="px-3 py-2 text-center text-zinc-300 tabular-nums">
+          {ethosScore?.score != null ? ethosScore.score.toLocaleString(undefined, { useGrouping: false }) : '—'}
+        </span>
 
         {/* Market cap */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>
@@ -304,7 +337,7 @@ export function TokenRow({
         </span>
       </Link>
       {isExpanded ? (
-        <div className="app-meta-value border-b border-white/8 bg-vault-bg/40 min-w-max text-zinc-400">
+        <div className="app-meta-value bg-vault-bg/40 min-w-max text-zinc-400">
           <div className="grid" style={{ gridTemplateColumns }}>
             <div
               className="px-3 py-3"
@@ -371,8 +404,8 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
 
-  const stickyHeaderCellClass = 'sticky z-50 bg-vault-bg border-r border-white/8'
-  const stickyGroupClass = 'sticky z-40 bg-vault-bg border-r border-white/8'
+  const stickyHeaderCellClass = 'sticky z-50 bg-vault-bg/95'
+  const stickyGroupClass = 'sticky z-40 bg-vault-bg/95'
 
   return (
     <div className="bg-vault-bg border-b border-white/8">
@@ -386,7 +419,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
           return (
             <div
               key={g.id}
-              className={`px-3 py-2 text-[10px] font-medium text-zinc-600 border-b border-white/8 ${alignClass} ${
+              className={`px-3 py-2 text-[10px] font-medium text-zinc-600 ${alignClass} ${
                 hasSticky ? stickyGroupClass : ''
               } ${g.id === 'identity' ? 'explore-sticky-identity-group-header' : ''}`}
               style={{
@@ -413,6 +446,8 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
               <span title="Fee version: 1% (V4, after June 2025) or 3% (Legacy)">{c.label}</span>
             ) : c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
+            ) : c.id === 'ethosScore' ? (
+              <span title="Ethos Credibility Score derived from the creator social profile">Ethos</span>
             ) : c.id === 'totalFees' ? (
               <span title="Total fees (volume × fee %)">{c.label}</span>
             ) : (
@@ -470,14 +505,14 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
   const columns = getExploreColumns({ variant: 'creators', timeframe: '1d', collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
-  const stickyCellClass = 'sticky z-10 bg-vault-card/70 backdrop-blur-sm'
+  const stickyCellClass = 'sticky z-10 bg-vault-bg/45 backdrop-blur-sm'
 
   return (
     <div className="grid items-center min-w-max" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
       </div>
-      <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
+      <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
           <div className="space-y-1 explore-token-name">

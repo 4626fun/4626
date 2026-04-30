@@ -868,7 +868,7 @@ export function Swap() {
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
   const subAccountRuntime = useSwapSubAccountRuntime({
-    enabled: subAccountTrack,
+    enabled: false,
     canonicalAddress,
     baseSubAccountAddress,
     baseAccountWallet,
@@ -1047,6 +1047,9 @@ export function Swap() {
 
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
+  const preferParentCswCanonical4337 = executionMode === 'canonical'
+  const canonicalGateExecutionTrack =
+    preferParentCswCanonical4337 && subAccountTrack ? 'legacy-owner-install' : executionTrack
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
     if (privyClientStatus !== 'ready') return 'unknown'
     if (privyReady !== true) return 'unknown'
@@ -1070,10 +1073,10 @@ export function Swap() {
     () =>
       evaluateCanonicalSignerGate({
         executionMode,
-        executionTrack,
+        executionTrack: canonicalGateExecutionTrack,
         canonicalAddress,
         baseSubAccountAddress,
-        subAccountProviderReady: subAccountRuntime.ready,
+        subAccountProviderReady: false,
         clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
@@ -1082,11 +1085,10 @@ export function Swap() {
         ownerCheckStatus: canonicalOwnerCheckStatus,
       }),
     [
+      canonicalGateExecutionTrack,
       executionMode,
-      executionTrack,
       canonicalAddress,
       baseSubAccountAddress,
-      subAccountRuntime.ready,
       privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
@@ -1094,10 +1096,9 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const useSubAccountCanonicalSigner =
-    executionMode === 'canonical' && subAccountTrack && subAccountRuntime.ready && canonicalSignerGate.ready
+  const useSubAccountCanonicalSigner = false
   const usePrivyEmbeddedCanonicalSigner =
-    executionMode === 'canonical' && canonicalSignerGate.ready && (!subAccountTrack || !subAccountRuntime.ready)
+    executionMode === 'canonical' && canonicalSignerGate.ready
   const canonicalSignerAddress =
     executionMode === 'canonical'
       ? (useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null)

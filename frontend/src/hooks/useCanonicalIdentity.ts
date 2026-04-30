@@ -79,7 +79,7 @@ export type CanonicalIdentity = {
   creatorCoinAddress: Address | null
   /** Loading state for async CSW → coin lookup. */
   loadingCoin: boolean
-  /** App-scoped execution sub-account used for day-to-day actions. */
+  /** Optional app-scoped execution sub-account, hidden unless a route actively uses it. */
   executionSubAccountAddress: Address | null
   /** Server-derived execution track classification. */
   executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet' | null

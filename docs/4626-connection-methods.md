@@ -29,7 +29,8 @@
 
 This is secure but disruptive for an app that sends frequent transactions. 4626 solves this differently for two distinct contexts:
 
-- **User-initiated frontend transactions** (swaps, deposits, vault interactions) use a **sub-account** derived from the CSW, signed silently by a Privy embedded EOA.
+- **User-initiated sponsored swaps** use the **parent CSW** as the ERC-4337 sender, signed silently by a Privy embedded EOA that is a CSW owner.
+- **Optional app-scoped transactions** may use a **sub-account** derived from the CSW when a route explicitly opts into that provider.
 - **Server-side agent operations** (XMTP messaging, ERC-8004 identity, deploy-session automation) use the **CSW directly** as the ERC-4337 sender, signed by a Privy server-managed wallet added as a CSW owner via `addOwnerAddress`.
 
 Both require a one-time passkey authorization from the user. Previously, these were separate ceremonies at different points in the user journey. The batched ceremony consolidates them into a single onboarding session — the user sees two passkey popups back-to-back during account setup, then never again.
@@ -38,25 +39,26 @@ Both require a one-time passkey authorization from the user. Previously, these w
 
 ## 2. The Two Execution Paths
 
-### User-Side: Sub-Account
+### User-Side: Parent CSW Sponsored Path
 
 | Aspect | Detail |
 |---|---|
-| **Purpose** | Frontend-initiated transactions (swaps, vaults, deposits) |
-| **Execution address** | Sub-account (derived smart contract wallet, scoped to `app.4626.fun`) |
-| **Signer** | Privy embedded EOA (secp256k1, stored in browser/Privy enclave) |
-| **On-chain `msg.sender`** | Sub-account address |
+| **Purpose** | Frontend-initiated sponsored swaps |
+| **Execution address** | Canonical parent CSW |
+| **Signer** | Privy embedded EOA confirmed as a CSW owner |
+| **On-chain `msg.sender`** | Parent CSW address |
 | **UX after setup** | Fully silent — no popups, no passkey prompts |
-| **Setup mechanism** | `wallet_addSubAccount` (wallet-provider RPC method) |
-| **DB column** | `profiles.base_sub_account` |
+| **Setup mechanism** | CSW owner/signing authority for the embedded EOA |
+| **DB column** | `profiles.csw_address`, `profiles.primary_embedded_eoa` |
 
-The sub-account is a first-class Coinbase Smart Wallet feature designed by Base for apps that need frequent transactions without passkey popups. It evolved from session keys — Base pivoted to sub-accounts after safety and gas challenges with per-signer permission enforcement in smart contracts.
+The sub-account remains optional infrastructure for future app-scoped execution, but the proven production swap path uses the parent CSW directly through `canonical4337` so balances, approvals, and swap receipts stay on the same canonical account.
 
 Transaction flow after setup:
 ```
-wallet_prepareCalls
+eth_sendUserOperation
   → owner.sign()   ← Privy embedded EOA (silent, no popup)
-  → wallet_sendPreparedCalls
+  → EntryPoint + paymaster
+  → parent CSW executes WETH deposit / approval / swap
 ```
 
 ### Server-Side: Direct Owner Delegation

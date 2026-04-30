@@ -115,20 +115,27 @@ function RailAvatar(props: {
             {props.icon ?? initials(props.name)}
           </div>
         )}
-        {props.status ? (
-          <span className={cn('absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-black/80', dotClass)} />
-        ) : null}
       </div>
+      {props.status ? (
+        <span
+          className={cn(
+            'absolute right-1 top-0 h-2.5 w-2.5 rounded-full border border-black/85 ring-1 ring-black/40',
+            dotClass,
+          )}
+        />
+      ) : null}
       {props.ethosScore !== undefined ? (
         <EthosAvatarScoreBadge
           score={props.ethosScore}
           level={props.ethosLevel}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2"
+          profileQuery={props.ethosAddress}
+          profileQueryKind="address"
+          className="absolute bottom-1 left-1/2 -translate-x-1/2"
         />
       ) : (
         <EthosAvatarScoreForAddress
           address={props.ethosAddress}
-          className="absolute bottom-0 left-1/2 -translate-x-1/2"
+          className="absolute bottom-1 left-1/2 -translate-x-1/2"
         />
       )}
     </div>
@@ -147,7 +154,7 @@ function RowShell(props: {
       disabled={props.disabled}
       onClick={props.onClick}
       aria-label={props.label}
-      className="group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-transparent px-2.5 py-2.5 text-left transition-[background,border-color,transform] duration-200 motion-reduce:transition-none hover:-translate-y-px hover:border-white/10 hover:bg-white/[0.055] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/70"
+      className="group relative flex w-full items-center gap-3 rounded-2xl border border-transparent px-2.5 py-2.5 text-left transition-[background,border-color,transform] duration-200 motion-reduce:transition-none hover:-translate-y-px hover:border-white/10 hover:bg-white/[0.055] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/70"
     >
       <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 left-0 w-px bg-brand-primary/0 transition-colors group-hover:bg-brand-primary/50" />
       {props.children}
@@ -237,6 +244,7 @@ function PresenceUserRow({ user }: { user: AvailabilityUser }) {
         name={name}
         imageUrl={user.avatarUrl ?? identity.avatar ?? null}
         status={user.status}
+        ethosAddress={user.address}
         ethosScore={user.ethosScore}
         ethosLevel={user.ethosLevel}
       />

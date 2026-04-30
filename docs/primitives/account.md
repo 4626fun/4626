@@ -17,7 +17,7 @@ The Account primitive is the execution surface: it determines how users authoriz
 
 Users enter 4626 through one of three connection methods, each with a different wallet architecture but the same verified-email canonical identity:
 
-- **Coinbase Smart Wallet (Base Account)** — three-tier model: parent CSW (`profiles.csw_address`, passkey-signed, canonical asset account) → app-scoped sub-account (`profiles.base_sub_account`, the user-initiated execution address on `app.4626.fun`) → Privy embedded EOA (`profiles.primary_embedded_eoa`, silent signer for the sub-account). `executionMode: 'canonical'`.
+- **Coinbase Smart Wallet (Base Account)** — parent CSW (`profiles.csw_address`, canonical asset account and sponsored swap sender) signed by the Privy embedded EOA (`profiles.primary_embedded_eoa`) through `canonical4337`. An app-scoped sub-account (`profiles.base_sub_account`) may exist, but it is optional infrastructure rather than the default user-facing execution account. `executionMode: 'canonical'`.
 - **External EOA** — single-tier: the user's MetaMask / Rabby / WalletConnect wallet signs directly. `executionMode: 'eoa'`.
 - **Telegram Mini App** — identity-link only; wallet setup is deferred to a full browser via the TMA handoff.
 
@@ -27,22 +27,23 @@ Full architecture, state machine, and file references: [4626 Connection Methods]
 
 For one user, 4626 uses multiple wallets with different jobs. The key split is:
 
-- **Canonical CSW** is identity + custody.
-- **Sub-account** is user execution.
-- **Embedded EOA** is the default signer for that execution lane.
+- **Canonical CSW** is identity, custody, and the default sponsored swap sender.
+- **Embedded EOA** signs sponsored actions for that smart wallet.
+- **Sub-account** is optional app-scoped infrastructure, hidden unless a route actually sends from it.
 - **External EOA** is fallback/override.
 
 ```mermaid
 flowchart TD
   CSW["Canonical CSW (parent)\nIdentity + custody anchor"]
-  Sub["Execution Sub-account\n(app-scoped sender)"]
   Embedded["Privy Embedded EOA\nPrimary signer"]
+  Sub["Optional Sub-account\n(app-scoped lane)"]
   External["Connected External EOA\nFallback signer"]
   Server["Privy Server Wallet\nServer automation signer"]
 
-  CSW -->|"derives"| Sub
-  Embedded -->|"signs user app actions for"| Sub
-  External -.->|"fallback / override"| Sub
+  Embedded -->|"signs sponsored UserOps for"| CSW
+  CSW -.->|"may derive future app sender"| Sub
+  Embedded -.->|"can sign if route opts in"| Sub
+  External -.->|"fallback / override"| CSW
   Server -->|"signs server-side UserOps as delegated owner on"| CSW
 ```
 
@@ -50,13 +51,25 @@ flowchart TD
 
 | Wallet | Function | Why we use it |
 |---|---|---|
-| Canonical CSW (parent) | Source-of-truth identity + custody account | Stable cross-app identity and ownership anchor |
-| Base sub-account | User-initiated execution sender on `app.4626.fun` | Fast execution lane without repeated passkey prompts |
-| Privy embedded EOA | Primary signer for sub-account lane | Best UX and reliable in-app signing |
+| Canonical CSW (parent) | Source-of-truth identity, custody account, and default sponsored swap sender | Stable cross-app identity, ownership anchor, and no balance split |
+| Privy embedded EOA | Primary signer for parent-CSW sponsored UserOps | Best UX and reliable in-app signing without repeated passkey prompts |
+| Base sub-account | Optional app-scoped execution lane | Future high-frequency route support when the provider is actively used |
 | Connected external EOA | Fallback signer / explicit override | Recovery and user-controlled signing path |
 | Privy server wallet (delegated owner) | Server-side signing for deploy/session/agent operations | Headless automation while preserving canonical CSW identity |
 
-> Assets remain tied to the canonical CSW identity model. The sub-account exists to execute app actions with better UX.
+> Assets and sponsored swap execution stay on the canonical CSW by default. The sub-account is kept out of user-facing copy unless a route actually sends from it.
+
+## Known-good sponsored canonical swap
+
+For sponsored ETH-to-token swaps in canonical mode, the working pattern is:
+
+```text
+canonical CSW sender + Privy embedded EOA signature + ERC-4337 paymaster
+```
+
+The app wraps native ETH inside the UserOperation (`WETH.deposit()`), approves the Uniswap swap proxy, then swaps through the proxy. The swap proxy call itself must carry zero native ETH value. This preserves sponsorship safety while still letting the user start from ETH in the UI.
+
+Runbook: [Sponsored Canonical Swap Pattern](/operations/sponsored-canonical-swap-pattern).
 
 ## Capability Negotiation (High Level)
 

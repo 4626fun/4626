@@ -310,6 +310,12 @@ export function CswSignatureProbe() {
   const targetOwnerAddress = useMemo(() => {
     return ownerSlots.find((slot) => slot.index === targetOwnerIndex)?.ownerAddress ?? null
   }, [ownerSlots, targetOwnerIndex])
+  const parsedOwnerIndexSuggestion = useMemo(() => {
+    if (!probeResult) return null
+    if (probeResult.parsedOwnerIndex === null) return null
+    if (probeResult.parsedOwnerIndex === targetOwnerIndex) return null
+    return probeResult.parsedOwnerIndex
+  }, [probeResult, targetOwnerIndex])
   const paymasterUrlForPreparedCalls = useMemo(() => {
     const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
     return resolveCdpPaymasterUrl(paymasterEnv) ?? null
@@ -859,6 +865,15 @@ export function CswSignatureProbe() {
               value={targetOwnerIndex}
               onChange={(event) => setTargetOwnerIndex(Number(event.target.value))}
             />
+            {parsedOwnerIndexSuggestion !== null ? (
+              <button
+                type="button"
+                className="mt-2 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-200 hover:border-amber-400/60"
+                onClick={() => setTargetOwnerIndex(parsedOwnerIndexSuggestion)}
+              >
+                use parsed owner index ({parsedOwnerIndexSuggestion})
+              </button>
+            ) : null}
           </label>
         </div>
         <div className="grid gap-3 md:grid-cols-2">

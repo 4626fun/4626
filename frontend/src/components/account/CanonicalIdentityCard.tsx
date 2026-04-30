@@ -115,9 +115,9 @@ export function CanonicalIdentityCard({
 }
 
 /**
- * Dropdown body content — three rows (canonical / active signer / embedded)
- * with per-row copy buttons. Rendered inside the existing DropdownLayer
- * that ConnectButton owns.
+ * Dropdown body content — canonical smart wallet first, then signer lanes.
+ * The app-scoped sub-account is intentionally not surfaced here unless a
+ * future route actively uses it as the transaction sender.
  */
 export function CanonicalIdentityDropdown({
   identity,
@@ -127,7 +127,6 @@ export function CanonicalIdentityDropdown({
   onRequestConnectWallet?: () => void
 }) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
-  const executionSubAccountBasename = useBasenameForAddress(identity.executionSubAccountAddress)
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
   const privyBasename = useBasenameForAddress(identity.privyEmbeddedAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
@@ -157,7 +156,9 @@ export function CanonicalIdentityDropdown({
             )}
             <div className="min-w-0 flex-1">
               <AddressWithBasescan address={identity.cswAddress} className="text-sm text-white" />
-              <div className="text-[11px] text-zinc-500 truncate">Coinbase Smart Wallet | Source of truth</div>
+              <div className="text-[11px] text-zinc-500 truncate">
+                Coinbase Smart Wallet | Holds assets and executes swaps
+              </div>
             </div>
           </div>
           {coinBadge && coinBadge.logoUrl && coinBadge.symbol ? (
@@ -210,53 +211,6 @@ export function CanonicalIdentityDropdown({
         <div className="mx-4 my-2 h-px bg-white/8" />
       ) : null}
 
-      {/* Execution sub-account (app-scoped signer address) */}
-      {identity.executionSubAccountAddress ? (
-        <div className="px-4 pb-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Execution sub-account
-          </div>
-          <div className="mt-1.5 flex items-center gap-2.5">
-            {executionSubAccountBasename.avatar ? (
-              <img
-                src={executionSubAccountBasename.avatar}
-                alt=""
-                width={24}
-                height={24}
-                className="rounded-full flex-shrink-0 object-cover"
-                style={{ width: 24, height: 24 }}
-              />
-            ) : (
-              <JazziconAvatar address={identity.executionSubAccountAddress} size={24} />
-            )}
-            <div className="min-w-0 flex-1">
-              <AddressWithBasescan
-                address={identity.executionSubAccountAddress}
-                variant="muted"
-                className="text-xs text-zinc-300"
-              />
-              <div className="text-[10px] text-zinc-600 truncate" title="App-scoped execution wallet for 4626 actions">
-                App execution wallet for 4626 actions
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : identity.executionTrack === 'legacy-owner-install' ? (
-        <div className="px-4 pb-2">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Execution sub-account
-          </div>
-          <div className="mt-1 text-[10px] text-zinc-600 truncate" title="Legacy owner path active — no sub-account registered.">
-            Legacy owner path active; no sub-account.
-          </div>
-        </div>
-      ) : null}
-
-      {(identity.executionSubAccountAddress || identity.executionTrack === 'legacy-owner-install') &&
-      (identity.externalEoaAddress || identity.privyEmbeddedAddress) ? (
-        <div className="mx-4 my-2 h-px bg-white/8" />
-      ) : null}
-
       {/* Privy embedded (auto-provisioned) */}
       {embeddedAddress ? (
         <div className="px-4 pb-2">
@@ -278,7 +232,7 @@ export function CanonicalIdentityDropdown({
             )}
             <div className="min-w-0 flex-1">
               <AddressWithBasescan address={embeddedAddress} variant="muted" className="text-xs text-zinc-300" />
-              <div className="text-[10px] text-zinc-600 truncate">Primary wallet for approvals and signatures</div>
+              <div className="text-[10px] text-zinc-600 truncate">Signs sponsored actions for your smart wallet</div>
             </div>
           </div>
         </div>
@@ -310,7 +264,7 @@ export function CanonicalIdentityDropdown({
                 variant="muted"
                 className="text-xs text-zinc-300"
               />
-              <div className="text-[10px] text-zinc-600 truncate">Secondary wallet for approvals and signatures</div>
+              <div className="text-[10px] text-zinc-600 truncate">Fallback / recovery wallet</div>
             </div>
           </div>
         </div>
@@ -324,8 +278,8 @@ export function CanonicalIdentityDropdown({
             External signer
           </div>
           <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer">
-            Optional secondary signer (Rabby / MetaMask / Coinbase Wallet)
+          <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a fallback wallet">
+            Optional fallback wallet (Rabby / MetaMask / Coinbase Wallet)
           </div>
         </button>
       ) : null}

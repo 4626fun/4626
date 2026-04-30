@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/api/apiBase'
@@ -8,6 +9,28 @@ export type EthosScoreValue = {
   level: string | null
 }
 
+type EthosProfileSummary = EthosScoreValue & {
+  userkey: string
+  displayName: string | null
+  username: string | null
+  avatarUrl: string | null
+  description: string | null
+  profileUrl: string | null
+  stats: {
+    reviews: {
+      positive: number
+      neutral: number
+      negative: number
+      total: number
+      positivePct: number | null
+    }
+    vouches: {
+      receivedCount: number
+      receivedAmountWeiTotal: string | null
+    }
+  }
+}
+
 type PendingUserkeyScore = {
   resolve: (value: EthosScoreValue | null) => void
   reject: (error: Error) => void
@@ -16,6 +39,8 @@ type PendingUserkeyScore = {
 const USERKEY_BATCH_DELAY_MS = 12
 const pendingUserkeyScores = new Map<string, PendingUserkeyScore[]>()
 let userkeyBatchTimer: ReturnType<typeof setTimeout> | null = null
+const ETHOS_MARK_SRC =
+  'https://cdn.prod.website-files.com/6659e70ed26d2373ff8f8c3d/66a68f3c9c2b3076186315e6_ob-ow-framed-mark-sm.png'
 
 function isAddress(value: string | null | undefined): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -44,8 +69,25 @@ function normalizeEthosUserkey(value: string | null | undefined): string | null 
 }
 
 function formatScore(score: number | null | undefined): string {
-  if (typeof score !== 'number' || !Number.isFinite(score)) return 'No score'
-  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 }).format(score)
+  if (typeof score !== 'number' || !Number.isFinite(score)) return 'No Credibility Score'
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0, useGrouping: false }).format(score)
+}
+
+function formatCredibilityScoreLabel(score: number | null | undefined, level?: string | null): string {
+  const scoreText = formatScore(score)
+  return level ? `Ethos Credibility Score ${scoreText} · ${level}` : `Ethos Credibility Score ${scoreText}`
+}
+
+function formatReviewSummary(profile: EthosProfileSummary | null | undefined): string {
+  if (!profile) return 'No review data'
+  const pct = profile.stats.reviews.positivePct
+  const label = pct === null ? '0% positive' : `${pct}% positive`
+  return `${label} · ${profile.stats.reviews.total} reviews`
+}
+
+function formatVouchSummary(profile: EthosProfileSummary | null | undefined): string {
+  const count = profile?.stats.vouches.receivedCount ?? 0
+  return `${count.toLocaleString()} voucher${count === 1 ? '' : 's'}`
 }
 
 function scoreTone(score: number | null | undefined): string {
@@ -129,21 +171,39 @@ function fetchBatchedEthosScoreForUserkey(userkey: string): Promise<EthosScoreVa
   })
 }
 
+export function fetchEthosScoreForUserkey(userkey: string): Promise<EthosScoreValue | null> {
+  return fetchBatchedEthosScoreForUserkey(userkey)
+}
+
 function EthosMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        'inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[#00b3ff] text-black shadow-[0_0_10px_rgba(0,179,255,0.45)]',
+        'inline-flex h-3.5 w-3.5 items-center justify-center overflow-hidden rounded-full bg-[#171a1f]',
         className,
       )}
       aria-hidden="true"
     >
-      <svg viewBox="0 0 32 32" className="h-2.5 w-2.5" fill="currentColor">
-        <path d="M16.035 14.286a2.188 2.188 0 0 0 2.159-2.188 1.698 1.698 0 0 1 .756-1.42 1.705 1.705 0 0 1 2.477.64 1.72 1.72 0 0 1-1.524 2.49 2.188 2.188 0 0 0-2.183 2.326 2.188 2.188 0 0 0 2.184 2.058 1.694 1.694 0 0 1 1.419.756 1.718 1.718 0 0 1-.743 2.526 1.723 1.723 0 0 1-1.341.005 1.727 1.727 0 0 1-1.045-1.577 2.188 2.188 0 0 0-2.2-2.188 2.188 2.188 0 0 0-2.188 2.188 1.7 1.7 0 0 1-.756 1.42 1.706 1.706 0 0 1-2.184-.231 1.71 1.71 0 0 1 1.23-2.897 2.188 2.188 0 0 0 2.18-2.39 2.188 2.188 0 0 0-2.18-1.994 1.707 1.707 0 0 1-.665-.133 1.707 1.707 0 0 1 0-3.153 1.723 1.723 0 0 1 1.33 0 1.7 1.7 0 0 1 1.044 1.576 2.188 2.188 0 0 0 2.23 2.188Z" />
-        <path d="M16 32C7.163 32 0 24.837 0 16S7.163 0 16 0s16 7.163 16 16-7.163 16-16 16Zm0-24.574A6.081 6.081 0 0 0 7.792 7.793a6.086 6.086 0 0 0-.37 8.208 6.087 6.087 0 0 0 .293 8.127A6.085 6.085 0 0 0 16 24.575a6.084 6.084 0 0 0 8.27-.43 6.094 6.094 0 0 0 .307-8.147 6.09 6.09 0 0 0-1.038-8.783A6.085 6.085 0 0 0 16 7.425Z" />
-      </svg>
+      <img src={ETHOS_MARK_SRC} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
     </span>
   )
+}
+
+function clampPopoverLeft(left: number): number {
+  if (typeof window === 'undefined') return left
+  return Math.max(8, Math.min(left, window.innerWidth - 268))
+}
+
+function clampPopoverTop(top: number): number {
+  if (typeof window === 'undefined') return top
+  return Math.max(8, Math.min(top, window.innerHeight - 230))
+}
+
+function getPopoverPositionNearPoint(point: { clientX: number; clientY: number }): { left: number; top: number } {
+  return {
+    left: clampPopoverLeft(point.clientX + 12),
+    top: clampPopoverTop(point.clientY + 14),
+  }
 }
 
 function useEthosScoreQuery(query: string | null | undefined, queryKeyKind: 'address' | 'userkey') {
@@ -154,10 +214,33 @@ function useEthosScoreQuery(query: string | null | undefined, queryKeyKind: 'add
     queryFn: async (): Promise<EthosScoreValue | null> => {
       if (!normalized) return null
       return queryKeyKind === 'userkey'
-        ? fetchBatchedEthosScoreForUserkey(normalized)
+        ? fetchEthosScoreForUserkey(normalized)
         : fetchSingleEthosScore(normalized)
     },
     enabled: Boolean(normalized),
+    staleTime: 6 * 60 * 60 * 1000,
+  })
+}
+
+function useEthosProfileSummary(
+  query: string | null | undefined,
+  queryKeyKind: 'address' | 'userkey',
+  enabled: boolean,
+) {
+  const normalized = queryKeyKind === 'address' ? normalizeAddress(query) : normalizeEthosUserkey(query)
+
+  return useQuery({
+    queryKey: ['chatEthosProfileSummary', queryKeyKind, normalized],
+    queryFn: async (): Promise<EthosProfileSummary | null> => {
+      if (!normalized) return null
+      const res = await apiFetch(`/api/v1/chat/search?q=${encodeURIComponent(normalized)}&profile=1`)
+      if (!res.ok) throw new Error('Failed to load Ethos profile')
+      const json = (await res.json()) as {
+        data?: { users?: Array<{ ethosProfile?: EthosProfileSummary | null }> }
+      }
+      return json.data?.users?.[0]?.ethosProfile ?? null
+    },
+    enabled: Boolean(enabled && normalized),
     staleTime: 6 * 60 * 60 * 1000,
   })
 }
@@ -193,7 +276,7 @@ export function EthosScorePill({
         scoreTone(score),
         className,
       )}
-      title={hasScore ? `ETHOS score ${formatScore(score)}` : 'No ETHOS score'}
+      title={hasScore ? formatCredibilityScoreLabel(score, level) : 'No Ethos Credibility Score'}
     >
       {formatScore(score)}
       {!compact && level ? <span className="ml-1 hidden text-current/65 xl:inline">{level}</span> : null}
@@ -204,26 +287,108 @@ export function EthosScorePill({
 export function EthosAvatarScoreBadge({
   score,
   level,
+  profileQuery,
+  profileQueryKind = 'userkey',
   className,
 }: {
   score?: number | null
   level?: string | null
+  profileQuery?: string | null
+  profileQueryKind?: 'address' | 'userkey'
   className?: string
 }) {
   const hasScore = typeof score === 'number' && Number.isFinite(score)
+  const [hoverIntent, setHoverIntent] = useState(false)
+  const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null)
+  const badgeRef = useRef<HTMLSpanElement | null>(null)
+  const profile = useEthosProfileSummary(profileQuery, profileQueryKind, hoverIntent)
+  const profileValue = profile.data ?? null
   if (!hasScore) return null
+
+  const showPopoverNearBadge = () => {
+    setHoverIntent(true)
+    const rect = badgeRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPopoverPosition({
+      left: clampPopoverLeft(rect.left),
+      top: clampPopoverTop(rect.bottom + 7),
+    })
+  }
+
+  const showPopoverNearMouse = (point: { clientX: number; clientY: number }) => {
+    setHoverIntent(true)
+    setPopoverPosition(getPopoverPositionNearPoint(point))
+  }
+
+  const hidePopover = () => {
+    setPopoverPosition(null)
+  }
 
   return (
     <span
+      ref={badgeRef}
       className={cn(
-        'pointer-events-none inline-flex items-center gap-1 rounded-full border border-brand-primary/35 bg-black/90 py-px pl-1.5 pr-0.5 text-[9px] font-semibold leading-none text-blue-100 shadow-[0_6px_18px_-8px_rgba(0,82,255,0.85)] ring-1 ring-black/80',
+        'group/ethos pointer-events-auto relative inline-flex h-[16px] items-center gap-0.5 rounded-md border border-white/15 bg-[#07080a]/95 py-0 pl-1.5 pr-0.5 text-[9px] font-semibold leading-none text-white shadow-[0_1px_2px_rgba(0,0,0,0.55)]',
         className,
       )}
-      title={`ETHOS score ${formatScore(score)}${level ? ` · ${level}` : ''}`}
-      aria-label={`ETHOS score ${formatScore(score)}`}
+      title={formatCredibilityScoreLabel(score, level)}
+      aria-label={formatCredibilityScoreLabel(score, level)}
+      onMouseEnter={showPopoverNearMouse}
+      onMouseMove={showPopoverNearMouse}
+      onMouseLeave={hidePopover}
+      onFocus={showPopoverNearBadge}
+      onBlur={hidePopover}
+      tabIndex={-1}
     >
-      <span className="min-w-4 text-center tabular-nums">{formatScore(score)}</span>
+      <span className="min-w-[1.6rem] text-center tabular-nums tracking-[-0.02em]">{formatScore(score)}</span>
       <EthosMark />
+      {popoverPosition ? (
+        <span
+          className="pointer-events-none fixed z-[9999] block w-[260px] overflow-hidden rounded-2xl border border-white/10 bg-[#050607] text-left text-white shadow-[0_18px_56px_-18px_rgba(0,0,0,0.95)] ring-1 ring-black/60"
+          style={{ left: popoverPosition.left, top: popoverPosition.top }}
+          role="tooltip"
+        >
+          <span className="block p-3">
+            <span className="flex items-start gap-3">
+              <span className="block h-11 w-11 shrink-0 overflow-hidden rounded-full border border-white/12 bg-white/8">
+                {profileValue?.avatarUrl ? (
+                  <img src={profileValue.avatarUrl} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-[11px] text-zinc-500">E</span>
+                )}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold leading-tight text-white">
+                  {profileValue?.displayName ?? 'Ethos profile'}
+                </span>
+                {profileValue?.username ? (
+                  <span className="mt-0.5 block truncate text-xs font-normal text-zinc-500">@{profileValue.username}</span>
+                ) : null}
+                {profileValue?.description ? (
+                  <span className="mt-2 line-clamp-2 block text-[11px] font-normal leading-snug text-zinc-300">
+                    {profileValue.description}
+                  </span>
+                ) : null}
+              </span>
+            </span>
+          </span>
+          <span className="grid grid-cols-[1fr_auto] items-end gap-3 border-t border-white/10 px-3 py-2.5">
+            <span className="space-y-1.5 text-[11px] font-normal leading-tight">
+              <span className="block text-zinc-300">{formatReviewSummary(profileValue)}</span>
+              <span className="block text-zinc-400">{formatVouchSummary(profileValue)}</span>
+            </span>
+            <span className="text-right">
+              <span className="block font-serif text-[30px] leading-none text-white">{formatScore(score)}</span>
+              <span className="mt-0.5 block text-[10px] font-semibold capitalize text-zinc-300">{level ?? 'Neutral'}</span>
+            </span>
+          </span>
+          {profileValue?.profileUrl ? (
+            <span className="block border-t border-white/10 px-3 py-2 text-center text-[11px] font-semibold text-white">
+              View profile
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </span>
   )
 }
@@ -269,6 +434,8 @@ export function EthosAvatarScoreForAddress({
     <EthosAvatarScoreBadge
       score={value.score}
       level={value.level}
+      profileQuery={address}
+      profileQueryKind="address"
       className={className}
     />
   )
@@ -290,6 +457,8 @@ export function EthosAvatarScoreForUserkey({
     <EthosAvatarScoreBadge
       score={value.score}
       level={value.level}
+      profileQuery={userkey}
+      profileQueryKind="userkey"
       className={className}
     />
   )

@@ -75,6 +75,7 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **Do not add new ad hoc session polling around `useSiweAuth()`**: session restoration already dedupes shared `/api/auth/me` work. New auth consumers should reuse the existing hook/provider path instead of layering separate refresh effects.
 - **Railway primary must fail fast if misconfigured**: standby mode or `AGENT_CONSUME_XMTP=false` on Railway is a startup error, not a healthy passive mode. When Postgres is configured, the DB-backed runtime lease lock is expected to stay enabled for the Railway primary.
 - **Transaction routing has two `executionMode` values and four send modes.** User-initiated frontend code paths branch on `executionMode: 'canonical' | 'eoa'` (exported from `frontend/src/lib/uniswap/walletMode.ts`). `txRouter` (`frontend/src/lib/tx/txRouter.ts`) selects one of: `sendCalls` (EIP-5792 atomic batching on CSW sub-account connectors), `canonical4337` (ERC-4337 UserOp via CDP paymaster — strongest fallback for CSW), `canonicalDirect` (direct `executeBatch` on the CSW contract), or `eoaDirect` (standard `eth_sendTransaction`, one tx at a time). Only `eoaDirect` is non-atomic (approval and swap sequential). Canonical approval+swap and parent-CSW fallback paths must stay locked to `canonical4337`; do not fall back to direct gas sends when sponsorship is denied. Full routing table: Section 5 of `docs/4626-connection-methods.md`.
+- **Known-good sponsored ETH→token canonical swap shape:** `canonical4337` + `eth_sendUserOperation`; canonical CSW is the sender/asset owner; Privy embedded EOA signs as CSW owner; calls are `WETH.deposit()` → `WETH.approve(...)` → Uniswap swap proxy `execute(address,address,uint256,bytes,bytes[],uint256)` at `0x02E5be68D46DAc0B524905bfF209cf47EE6dB2a9` (`0x2894adf9`). The router/proxy call must have zero native value; native ETH enters only via WETH deposit. Runbook: `docs/operations/sponsored-canonical-swap-pattern.md`.
 
 ### Token identity invariants
 
@@ -92,13 +93,14 @@ These are product-level rules, not implementation suggestions. Future auth/onboa
 
 Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`, and delegated signer / agent lifecycle mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This section defines the product-facing account states layered on top of those rules.
 
-Canonical architecture reference: `docs/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the three-tier CSW address model (`profiles.csw_address` → `profiles.base_sub_account` → `profiles.primary_embedded_eoa`), and the `executionMode` / send-mode routing table.
+Canonical architecture reference: `docs/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the CSW address model, and the `executionMode` / send-mode routing table.
 
 Wallet-role model for user-facing docs and copy:
 
 - **Canonical CSW (parent) = identity + custody source of truth.**
-- **Base sub-account = default user execution sender on app surfaces.**
-- **Privy embedded EOA = primary signer for the sub-account lane.**
+- **Canonical CSW (parent) = primary user execution sender for sponsored canonical swaps.**
+- **Privy embedded EOA = primary signer for parent-CSW sponsored UserOps.**
+- **Base sub-account = optional app-scoped execution lane; keep hidden unless a route is actively using it as sender.**
 - **Connected external EOA = fallback/override signer lane.**
 - **Privy server wallet = delegated server-side signer for automation/deploy-session tracks.**
 - Keep this role split explicit in docs and UI copy; do not collapse signer role into canonical identity language.
@@ -120,7 +122,7 @@ Wallet-role model for user-facing docs and copy:
 - **The Base referral flow is an acquisition path into the same canonical-wallet policy, not a second canonical-wallet model.** If a user is routed through Base app to finish CSW setup, they still return to the single canonical wallet/account rules defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - **`linked` / `waitlist-joined` is not the same as wallet-ready.** Verified email plus successful channel binding or waitlist join can complete without immediate CSW owner confirmation.
 - **`execution-ready` / wallet-ready is defined per execution track.** Product features that require wallet execution must check the right track for the user's connection method:
-  - **User-initiated frontend execution-ready (CSW path, `executionMode === 'canonical'`)**: canonical parent CSW recorded in `profiles.csw_address`, Privy embedded EOA present in `profiles.primary_embedded_eoa`, and an app-scoped sub-account created via `wallet_addSubAccount` with its signer configured to the embedded EOA via `setToOwnerAccount()` — persisted in `profiles.base_sub_account` through `POST /onboarding/register-sub-account`. The sub-account is the `msg.sender` for user-initiated swaps and vault interactions; the parent CSW remains the asset-holding account visible on Base/Zora.
+  - **User-initiated frontend execution-ready (CSW path, `executionMode === 'canonical'`)**: canonical parent CSW recorded in `profiles.csw_address`, Privy embedded EOA present in `profiles.primary_embedded_eoa`, and the embedded EOA confirmed as an owner/signing authority for the parent CSW. Sponsored swaps use `canonical4337` with the parent CSW as ERC-4337 sender and the embedded EOA as signer. An app-scoped sub-account may still exist in `profiles.base_sub_account`, but it is optional infrastructure and must not be shown as the primary execution account unless the active route actually sends from it.
   - **User-initiated frontend execution-ready (external EOA path, `executionMode === 'eoa'`)**: external wallet connected via wagmi, `profiles.primary_wallet` populated, no sub-account (EOAs are not smart contract wallets). The EOA address is the execution address.
   - **Server-side agent / deploy-session execution-ready**: unchanged — follows the direct owner delegation path in `.cursor/rules/csw-agent-lifecycle.mdc`. The parent CSW is the ERC-4337 sender with a Privy server wallet delegated via `addOwnerAddress`. This track is orthogonal to the user-initiated frontend path above.
 - **Features that require wallet execution must stay gated until the account is `execution-ready` on the correct track.**

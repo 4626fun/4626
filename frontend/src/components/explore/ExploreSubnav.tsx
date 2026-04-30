@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { useUniswapServiceStatus } from '@/lib/uniswap/hooks'
@@ -71,6 +72,7 @@ export function ExploreSubnav({
   timeFilters = DEFAULT_TIME_FILTERS,
   sortOptions = DEFAULT_SORT_OPTIONS,
   disableUniswapTimeGating = false,
+  extraFilters,
 }: {
   searchPlaceholder?: string
   searchValue?: string
@@ -84,6 +86,7 @@ export function ExploreSubnav({
   timeFilters?: readonly ExploreTimeFilterOption[]
   sortOptions?: readonly ExploreSortOption[]
   disableUniswapTimeGating?: boolean
+  extraFilters?: ReactNode
 }) {
   const location = useLocation()
 
@@ -178,6 +181,7 @@ export function ExploreSubnav({
               <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
             ) : null}
           </div>
+          {extraFilters ? <div className="flex items-center">{extraFilters}</div> : null}
         </div>
       </div>
 

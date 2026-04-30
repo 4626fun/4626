@@ -13,6 +13,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 import {
   getCachedEthosScoreByAddress,
+  getCachedEthosProfileByUserkey,
   getCachedEthosScoreByUserkey,
   getCachedEthosScoresByUserkeys,
   normalizeEthosUserkey,
@@ -86,15 +87,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const query = typeof req.query.q === 'string' ? req.query.q.trim() : ''
   const address = normalizeChatAddress(query)
   const userkey = address ? `address:${address}` : normalizeEthosUserkey(query)
+  const includeProfile = String(req.query.profile ?? '').trim() === '1'
   if (!userkey) {
     return res.status(200).json({ success: true, data: { users: [], agents: [], vaults: [] } })
   }
 
   let ethos = null
+  let profile = null
   try {
     ethos = address ? await getCachedEthosScoreByAddress(address) : await getCachedEthosScoreByUserkey(userkey)
+    if (includeProfile) profile = await getCachedEthosProfileByUserkey(userkey)
   } catch {
     ethos = null
+    profile = null
   }
 
   return res.status(200).json({
@@ -105,6 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         userkey,
         ethosScore: ethos?.score ?? null,
         ethosLevel: ethos?.level ?? null,
+        ethosProfile: profile,
       }],
       agents: [],
       vaults: [],

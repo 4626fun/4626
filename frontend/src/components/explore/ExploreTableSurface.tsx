@@ -52,7 +52,7 @@ export function ExploreTableSurface({
       />
 
       <div className="overflow-x-auto scrollbar-hide" id={bodyId} data-scrolled="0" onScroll={onBodyScroll}>
-        <div className="min-w-max divide-y divide-white/6">{body}</div>
+        <div className="min-w-max">{body}</div>
       </div>
     </>
   )

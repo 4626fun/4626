@@ -21,12 +21,12 @@ Full architecture: `docs/4626-connection-methods.md` — three connection method
 
 The canonical asset-holding account above does not automatically equal the ERC-4337 `sender`. The correct `sender` depends on which track is executing:
 
-- **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the ERC-4337 `sender` / execution address is the app-scoped **sub-account** (`profiles.base_sub_account`), not the parent CSW. The sub-account is created via `wallet_addSubAccount`, scoped to `app.4626.fun`, and its signer is routed to the Privy embedded EOA (`profiles.primary_embedded_eoa`) via `setToOwnerAccount()`. Swaps and vault interactions submitted from `app.4626.fun` MUST sender-route through the sub-account.
+- **User-initiated frontend execution (CSW, `executionMode === 'canonical'`)**: the default ERC-4337 `sender` / execution address for sponsored swaps is the parent CSW (`profiles.csw_address`) through `canonical4337`, with the Privy embedded EOA (`profiles.primary_embedded_eoa`) signing as a confirmed CSW owner. This is the first-class proven path for canonical custody and gas sponsorship. An app-scoped sub-account (`profiles.base_sub_account`) may still exist as optional future/app-scoped infrastructure, but user-facing routes must not promote it as the sender unless that route actively submits from the sub-account provider.
 - **User-initiated frontend execution (external EOA, `executionMode === 'eoa'`)**: no sub-account. `msg.sender` is the user's EOA directly. `sendTransaction` is used; ERC-4337 UserOps do not apply to this track.
 - **Server-side agent and deploy-session ERC-4337 UserOps (XMTP agent, ERC-8004 identity, deploy-session automation)**: the ERC-4337 `sender` is the parent CSW (`profiles.csw_address`), with a Privy server wallet added as a delegated owner via `addOwnerAddress`. Mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This track MUST NOT route through sub-accounts — sub-accounts are scoped to the user's browser session.
 
 ## Common rules across tracks
 
-- `msg.sender` MUST match the track — do not submit user-initiated frontend UserOps from the parent CSW, and do not submit server-side automation UserOps from a sub-account.
+- `msg.sender` MUST match the track — sponsored canonical swaps use the parent CSW; server-side automation uses the parent CSW with its server-side delegated signer; sub-account sends are allowed only for routes that explicitly opt into the sub-account provider.
 - Asset checks, balance reads, and owner index resolution always use the parent CSW, regardless of which track is executing.
 - If you are unsure which track applies to a code path, check whether the caller is a wagmi/Privy connector in the user's browser (user-initiated frontend) or a server/agent surface (server-side). When in doubt, do not fall back silently — surface the ambiguity.

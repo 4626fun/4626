@@ -1,15 +1,19 @@
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
 
-function normalizeXUsername(value: string | null | undefined): string | null {
+export function normalizeXUsername(value: string | null | undefined): string | null {
   const username = typeof value === 'string' ? value.trim().replace(/^@+/, '') : ''
   if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) return null
   return username
 }
 
+export function buildEthosSocialUserkeyFromXUsername(value: string | null | undefined): string | null {
+  const xUsername = normalizeXUsername(value)
+  if (!xUsername) return null
+  return `service:x.com:username:${xUsername}`
+}
+
 export function buildEthosSocialUserkeyFromZoraProfile(profile: ZoraProfile | null | undefined): string | null {
-  const xUsername = normalizeXUsername(profile?.socialAccounts?.twitter?.username)
-  if (xUsername) return `service:x.com:username:${xUsername}`
-  return null
+  return buildEthosSocialUserkeyFromXUsername(profile?.socialAccounts?.twitter?.username)
 }
 
 export function getZoraCreatorProfileIdentifier(coin: ZoraCoin | null | undefined): string | null {
