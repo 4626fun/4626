@@ -32,41 +32,9 @@ import {
   type RetrySubmissionRelay,
   type RetrySubmissionOutcome,
 } from '../../../../server/_lib/lottery/amoeReplayRetry.js'
+import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 
 declare const process: { env: Record<string, string | undefined> }
-
-/**
- * Read the Vercel cron-shared secret. Returns null if unset \u2014 cron
- * authorization fails closed in that case.
- */
-function readCronSecret(): string | null {
-  const candidates = [process.env.CRON_SECRET, process.env.AMOE_CRON_SECRET]
-  for (const c of candidates) {
-    const v = String(c ?? '').trim()
-    if (v.length >= 16) return v
-  }
-  return null
-}
-
-/**
- * Validate the Authorization header against the cron secret. We accept
- * `Bearer <secret>` or just `<secret>` for compatibility with both
- * Vercel's cron format and manual `curl` invocations during ops drills.
- */
-function isAuthorizedCron(req: VercelRequest): boolean {
-  const expected = readCronSecret()
-  if (!expected) return false
-  const header = String(req.headers['authorization'] ?? '').trim()
-  if (!header) return false
-  const provided = header.startsWith('Bearer ') ? header.slice(7).trim() : header
-  // Constant-time-ish compare (length-then-byte).
-  if (provided.length !== expected.length) return false
-  let mismatch = 0
-  for (let i = 0; i < provided.length; i++) {
-    mismatch |= provided.charCodeAt(i) ^ expected.charCodeAt(i)
-  }
-  return mismatch === 0
-}
 
 /**
  * Test seam \u2014 inject a relay so the integration test can drive the

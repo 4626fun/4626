@@ -31,6 +31,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'lottery/amoe/submit-zk': () => import('./v1/lottery/_amoeSubmitZk.js'),
   'lottery/amoe/retry-zk': () => import('./v1/lottery/_amoeRetryZk.js'),
   'lottery/amoe/retry-cron': () => import('./v1/lottery/_amoeRetryCron.js'),
+  'lottery/amoe/publish-cron': () => import('./v1/lottery/_amoePublishCron.js'),
   'lottery/amoe/twitter-checkin': () => import('./v1/lottery/_amoeTwitterCheckin.js'),
   'gauge/epoch': () => import('./v1/gauge/_epoch.js'),
   'gauge/vaults': () => import('./v1/gauge/_vaults.js'),

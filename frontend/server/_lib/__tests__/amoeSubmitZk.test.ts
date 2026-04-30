@@ -658,6 +658,123 @@ describe('orchestrateAmoeSubmitZk — end-to-end', () => {
     }
   })
 
+  it('PR 5b: when ledgerSnapshotReader is injected, skips stub-allow gate and uses reader snapshot', async () => {
+    // Reader path is the production points-burn half. We forge a valid
+    // single-leaf snapshot so the witness-tree assembly succeeds, then
+    // assert the orchestrator (a) didn't trip the stub-allow gate even
+    // though `AMOE_ZK_SNAPSHOT_STUB_ALLOW` is unset, and (b) called the
+    // reader exactly once with our `(profileId, spendRefId)`.
+    const restore = setEnv({
+      AMOE_SIGNUP_SALT: FIXTURE_SALT_HEX,
+      AMOE_ZK_SNAPSHOT_STUB_ALLOW: undefined, // gate stays closed
+    })
+    try {
+      const { buildAmoeLedgerSnapshotFromSingleEntry, computeAmoeWalletAddrCommit } =
+        await import('../lottery/amoeWitness.js')
+      const {
+        deriveSignupIdHash,
+        deriveSpendRefIdHash,
+        deriveTwitterCreditNullifier,
+        readAmoeSignupSalt,
+      } = await import('../lottery/amoeIdentifiers.js')
+      const { pointsToUsd1e6 } = await import('../lottery/lotteryAmoe.js')
+      const inputs = makeInputs({ pointsBurned: 250 })
+      const epoch =
+        (AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n -
+          AMOE_EPOCH_GENESIS_UNIX_SEC) / AMOE_EPOCH_SECONDS
+      const salt = readAmoeSignupSalt()
+      const signupIdHash = deriveSignupIdHash({ profileId: inputs.profileId, salt })
+      const spendRefIdHash = deriveSpendRefIdHash({
+        spendRefId: inputs.spendRefId,
+        salt,
+      })
+      const twitterCreditNullifier = deriveTwitterCreditNullifier({
+        twitterHandle: inputs.twitterHandle,
+        salt,
+      })
+      void twitterCreditNullifier // bound through circuit; unused here
+      const walletAddrCommit = computeAmoeWalletAddrCommit(
+        BigInt(inputs.wallet),
+        twitterCreditNullifier,
+      )
+      const pointsLedgerSnapshot = buildAmoeLedgerSnapshotFromSingleEntry({
+        signupIdHash,
+        spendRefIdHash,
+        pointsBurnedAsUSD: pointsToUsd1e6(250),
+        epoch,
+        walletAddrCommit,
+      })
+
+      const reader = {
+        readSnapshotForBurn: vi.fn(async () => ({
+          epoch,
+          pointsLedgerSnapshot,
+          pointsLedgerLeafIndex: 0,
+          rootHex: ('0x' + pointsLedgerSnapshot.root.toString(16).padStart(64, '0')) as
+            `0x${string}`,
+        })),
+      }
+
+      const result = await orchestrateAmoeSubmitZk(inputs, {
+        wasmPath: 'mock',
+        zkeyPath: 'mock',
+        snarkjs: makeEchoSnarkjs(),
+        nowSec: AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n,
+        ledgerSnapshotReader: reader as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['ledgerSnapshotReader'],
+      })
+      expect(result.epoch).toBe(epoch)
+      expect(reader.readSnapshotForBurn).toHaveBeenCalledTimes(1)
+      expect(reader.readSnapshotForBurn).toHaveBeenCalledWith({
+        signupId: inputs.profileId,
+        spendRefId: inputs.spendRefId,
+      })
+      // Result must include the twitter-credit nullifier (PR 5b).
+      expect(typeof result.twitterCreditNullifier).toBe('bigint')
+      expect(result.twitterCreditNullifier).toBeGreaterThan(0n)
+    } finally {
+      restore()
+    }
+  })
+
+  it('PR 5b: throws amoe_ledger_snapshot_epoch_mismatch when reader returns wrong epoch', async () => {
+    const restore = setEnv({
+      AMOE_SIGNUP_SALT: FIXTURE_SALT_HEX,
+      AMOE_ZK_SNAPSHOT_STUB_ALLOW: undefined,
+    })
+    try {
+      const { buildAmoeMerkleSnapshot } = await import('../lottery/amoeMerkleTree.js')
+      const fakeSnapshot = buildAmoeMerkleSnapshot([1n])
+      const reader = {
+        readSnapshotForBurn: vi.fn(async () => ({
+          // Reader returns a DIFFERENT epoch than the orchestrator's
+          // computed epoch. Orchestrator must refuse rather than build
+          // a witness against the wrong root.
+          epoch: 999n,
+          pointsLedgerSnapshot: fakeSnapshot,
+          pointsLedgerLeafIndex: 0,
+          rootHex: ('0x' + fakeSnapshot.root.toString(16).padStart(64, '0')) as
+            `0x${string}`,
+        })),
+      }
+      let err: unknown = null
+      try {
+        await orchestrateAmoeSubmitZk(makeInputs(), {
+          wasmPath: 'mock',
+          zkeyPath: 'mock',
+          snarkjs: makeEchoSnarkjs(),
+          nowSec: AMOE_EPOCH_GENESIS_UNIX_SEC + AMOE_EPOCH_SECONDS * 7n + 1n,
+          ledgerSnapshotReader: reader as unknown as Parameters<typeof orchestrateAmoeSubmitZk>[1]['ledgerSnapshotReader'],
+        })
+      } catch (e) {
+        err = e
+      }
+      expect(err).toBeInstanceOf(AmoeServerError)
+      expect((err as Error).message).toBe('amoe_ledger_snapshot_epoch_mismatch')
+    } finally {
+      restore()
+    }
+  })
+
   it('wraps a snarkjs failure as AmoeProofGenerationError', async () => {
     const restore = setEnv({
       AMOE_SIGNUP_SALT: FIXTURE_SALT_HEX,

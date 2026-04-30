@@ -65,6 +65,8 @@ import {
   markSettled,
   type AmoeReplayProofBlob,
 } from '../../../../server/_lib/lottery/amoeReplayStore.js'
+import { AmoeLedgerSnapshotPgReader } from '../../../../server/_lib/lottery/amoeLedgerSnapshotReader.js'
+import { getDb } from '../../../../server/_lib/db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -604,6 +606,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { wasmPath, zkeyPath } = defaultAmoeZkAssetPaths()
 
+    // PR 5b: production points-burn half of the witness can read from the
+    // published ledger snapshot via `AmoeLedgerSnapshotPgReader`. The
+    // wiring is gated on `AMOE_ZK_SNAPSHOT_READER_ENABLED` (default OFF)
+    // because the current submit handler ordering credits the AMOE entry
+    // (which produces the L1 burn row) AFTER orchestrate() — so a fresh
+    // submission has no `(signup_id, spend_ref_id)` row yet and the
+    // reader would always throw `amoe_ledger_snapshot_unavailable`.
+    //
+    // A future PR will split burn-then-submit into two API calls so the
+    // ledger snapshot for `(signup_id, spend_ref_id)` is durably
+    // confirmed at epoch N-1 before the prover runs. Once that lands,
+    // flip `AMOE_ZK_SNAPSHOT_READER_ENABLED=1` to enable the reader path.
+    // Until then, the orchestrator falls back to the stub snapshot.
+    //
+    // Test hooks override `orchestrate`, so they bypass this entirely.
+    let ledgerSnapshotReader: AmoeLedgerSnapshotPgReader | undefined
+    if (
+      !__testHooks.orchestrate &&
+      process.env.AMOE_ZK_SNAPSHOT_READER_ENABLED === '1'
+    ) {
+      const db = await getDb()
+      ledgerSnapshotReader = db ? new AmoeLedgerSnapshotPgReader(db) : undefined
+    }
+
     let result
     try {
       result = await orchestrate(
@@ -617,7 +643,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           profileId: BigInt(profileId),
           lotteryAmoeRouter,
         },
-        { wasmPath, zkeyPath },
+        { wasmPath, zkeyPath, ledgerSnapshotReader },
       )
     } catch (proveErr) {
       // Best-effort: don't mask the original error if the row update
@@ -654,10 +680,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pointsBurnNullifierHex = bigintToBytes32Hex(
       result.proof.pubInputs[AMOE_PLONK_PUB_INPUT_SLOT.pointsBurnNullifier],
     )
+    // PR 5b: persist the twitter-credit nullifier so the publisher cron
+    // can recover it when projecting this burn into L1. The orchestrator
+    // derived it from the user's twitter handle (which we never persist).
+    const twitterCreditNullifierHex = bigintToBytes32Hex(
+      result.twitterCreditNullifier,
+    )
     await markProven(submissionId, {
       nonceCommitHex,
       walletCommitHex,
       pointsBurnNullifierHex,
+      twitterCreditNullifierHex,
       proofBlob,
     })
 
@@ -732,10 +765,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     // refId binds the credit debit to the replay-store row so the
-    // ledger can dedupe. Keyed on submissionId (UUID) rather than the
-    // raw nonce so a successful retry shares the credit-debit identity
-    // with its original submission.
-    const refId = `zk:${submissionId}`
+    // publisher's projector can join `points.source_id` against
+    // `amoe_zk_submissions.spend_ref_id` and resolve burn context.
+    //
+    // PR 5b correctness: this MUST equal the `spendRefId` stored on
+    // the submission row above, otherwise `defaultLookupBurnContext`
+    // returns no row, the projector skips the burn, and the published
+    // root is computed from a partial L1 (corrupting epoch completeness).
+    //
+    // Idempotency for double-submit retries is preserved by the
+    // `points (signup_id, source, source_id)` partial unique index plus
+    // `consumeAmoeCreditsForEntry`'s ON CONFLICT DO NOTHING — a retry
+    // with the same client-supplied `spendRefId` still dedupes.
+    const refId = spendRefId
 
     const creditSpend = await consumeAmoeCreditsForEntry({
       wallet,

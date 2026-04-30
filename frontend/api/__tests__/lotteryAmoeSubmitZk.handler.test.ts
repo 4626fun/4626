@@ -1009,6 +1009,9 @@ describe('happy path', () => {
         },
         epoch: 7n,
         pointsBurnedAsUSD: 250_000_000n,
+        // PR 5b: orchestrator now returns the derived twitter-credit
+        // nullifier so the handler can persist it on the markProven row.
+        twitterCreditNullifier: 0xdeadbeefcafe1234567890abcdefn,
       }))
       const relay = vi.fn(async () => FIXTURE_TX as `0x${string}`)
 
@@ -1052,15 +1055,17 @@ describe('happy path', () => {
       // bare mocks, but we can at least check both were called).
       expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledTimes(1)
       const debitArg = consumeAmoeCreditsForEntryMock.mock.calls[0]?.[0]
-      // PR 4 — refId is now `zk:${submissionId}` (the replay-store UUID),
-      // not `zk:${nonce}`. This switch lets the points ledger and the
-      // replay store join on a single column for audit (1:1 with the
-      // submission row, not 1:1 with the user-provided nonce).
+      // PR 5b correctness fix — refId is now the original client-supplied
+      // `spendRefId`, NOT `zk:${submissionId}`. This is required so that
+      // `points.source_id == amoe_zk_submissions.spend_ref_id` and the
+      // publisher's `defaultLookupBurnContext` join succeeds. Mismatch
+      // would cause the projector to skip the burn and the publisher to
+      // emit a partial root (Codex review on PR 5b).
       expect(debitArg).toMatchObject({
         wallet: CANONICAL_WALLET,
         requiredCredits: 250,
+        refId: 'idem-2026-04-29-aaaa',
       })
-      expect(debitArg.refId).toMatch(/^zk:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     } finally {
       restore()
     }

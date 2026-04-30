@@ -39,10 +39,13 @@ import {
   readAmoeSignupSalt,
 } from './amoeIdentifiers.js'
 import { buildAmoeLedgerSnapshotStub } from './amoeLedgerSnapshotStub.js'
+import type { AmoeLedgerSnapshotReader } from './amoeLedgerSnapshotReader.js'
 import {
   AMOE_EPOCH_GENESIS_SECONDS,
   AMOE_EPOCH_LENGTH_SECONDS,
   assembleAmoeWitness,
+  buildAmoeAllowlistSnapshotFromSingleWallet,
+  computeAmoeWalletAddrCommit,
   type AmoeWitnessTreeContext,
 } from './amoeWitness.js'
 import {
@@ -153,6 +156,20 @@ export interface AmoeSubmitZkProveOptions {
    * the epoch deterministically.
    */
   nowSec?: bigint
+  /**
+   * PR 5b: production injects an `AmoeLedgerSnapshotPgReader` here so
+   * the orchestrator pulls the CONFIRMED L2 snapshot from
+   * `amoe_points_burn_ledger_snapshots` instead of the single-leaf
+   * stub. When omitted, falls back to the stub (gated by
+   * AMOE_ZK_SNAPSHOT_STUB_ALLOW=1; production deployments must NOT
+   * leave the reader unset).
+   *
+   * Note: the stub still owns the *allowlist* half until the allowlist
+   * publisher PR ships. The reader injected here only replaces the
+   * points-burn half; the allowlist single-leaf snapshot is built
+   * inline from the requesting wallet.
+   */
+  ledgerSnapshotReader?: AmoeLedgerSnapshotReader
 }
 
 export interface AmoeSubmitZkOrchestrationResult {
@@ -164,6 +181,15 @@ export interface AmoeSubmitZkOrchestrationResult {
   epoch: bigint
   /** USD-1e6 value the entry will burn (echo of pubInputs[5] for response payload). */
   pointsBurnedAsUSD: bigint
+  /**
+   * The twitter-credit nullifier (private input the orchestrator
+   * derived from the user's twitter handle), exported so the handler
+   * can persist it on the replay row at `markProven` time. The PR 5b
+   * publisher reads this column when projecting the burn into the
+   * points-burn ledger — without it, the L1 row cannot be bound to
+   * the same wallet-addr commitment that the proof committed to.
+   */
+  twitterCreditNullifier: bigint
 }
 
 /**
@@ -211,6 +237,65 @@ export function defaultAmoeZkAssetPaths(): { wasmPath: string; zkeyPath: string 
  *         the handler (defense-in-depth)
  * @throws AmoeProofGenerationError on prover crash / witness mismatch
  */
+/**
+ * Internal: resolve `AmoeWitnessTreeContext` from either the real PG
+ * reader (PR 5b production) or the single-leaf stub (PR 3 dev/staging).
+ */
+async function resolveAmoeWitnessTrees(args: {
+  reader: AmoeLedgerSnapshotReader | undefined
+  walletBigint: bigint
+  epoch: bigint
+  signupIdHash: bigint
+  spendRefIdHash: bigint
+  twitterCreditNullifier: bigint
+  pointsBurnedAsUSD: bigint
+  spendRefId: string
+  profileId: bigint
+}): Promise<AmoeWitnessTreeContext> {
+  if (args.reader) {
+    // Production path: real points-burn ledger snapshot from L2.
+    const readResult = await args.reader.readSnapshotForBurn({
+      signupId: args.profileId,
+      spendRefId: args.spendRefId,
+    })
+    if (readResult.epoch !== args.epoch) {
+      // Defensive: the reader returned a snapshot for a different
+      // epoch than the one we're submitting against. This would only
+      // happen if a burn was projected into the wrong epoch (publisher
+      // bug), or if the request raced an epoch rollover. Either way,
+      // refuse rather than build a witness against the wrong root.
+      throw new AmoeServerError('amoe_ledger_snapshot_epoch_mismatch')
+    }
+    // Allowlist remains the single-leaf inline build until the
+    // allowlist publisher PR ships. This is identical to what the stub
+    // would produce; we just don't gate it on AMOE_ZK_SNAPSHOT_STUB_ALLOW
+    // because the points-burn half is already production-grade.
+    const allowlistSnapshot = buildAmoeAllowlistSnapshotFromSingleWallet(
+      args.walletBigint,
+      args.epoch,
+    )
+    return {
+      allowlistSnapshot,
+      allowlistLeafIndex: 0,
+      pointsLedgerSnapshot: readResult.pointsLedgerSnapshot,
+      pointsLedgerLeafIndex: readResult.pointsLedgerLeafIndex,
+    }
+  }
+  // Dev/staging path: single-leaf stub for both halves. Gated by
+  // AMOE_ZK_SNAPSHOT_STUB_ALLOW=1.
+  // Reference computeAmoeWalletAddrCommit so the import stays live in
+  // builds that don't take the reader-injected path.
+  void computeAmoeWalletAddrCommit
+  return buildAmoeLedgerSnapshotStub({
+    walletBigint: args.walletBigint,
+    epoch: args.epoch,
+    signupIdHash: args.signupIdHash,
+    spendRefIdHash: args.spendRefIdHash,
+    twitterCreditNullifier: args.twitterCreditNullifier,
+    pointsBurnedAsUSD: args.pointsBurnedAsUSD,
+  })
+}
+
 export async function orchestrateAmoeSubmitZk(
   inputs: AmoeSubmitZkOrchestrationInputs,
   proveOpts: AmoeSubmitZkProveOptions,
@@ -253,15 +338,33 @@ export async function orchestrateAmoeSubmitZk(
   const pointsBurnedAsUSD = pointsToUsd1e6(inputs.pointsBurned)
 
   // ------------------------------------------------------------------
-  // Step 4: snapshot stub (PR 5 replaces this with real reader)
+  // Step 4: snapshot resolution
   // ------------------------------------------------------------------
-  const trees: AmoeWitnessTreeContext = buildAmoeLedgerSnapshotStub({
+  // PR 5b production path: when a real `AmoeLedgerSnapshotPgReader` is
+  // injected, pull the CONFIRMED L2 snapshot for the requesting burn.
+  // The reader throws `amoe_ledger_snapshot_unavailable` (mapped by the
+  // handler to a retryable 503) when:
+  //   * the burn has not yet been projected to L1, or
+  //   * the L2 snapshot for that burn's epoch has not yet been
+  //     confirmed on-chain.
+  //
+  // The allowlist half is still the single-leaf stub until the
+  // allowlist publisher PR ships; we build it inline here so we don't
+  // depend on the AMOE_ZK_SNAPSHOT_STUB_ALLOW gate when a real points-
+  // ledger reader is in use.
+  const trees: AmoeWitnessTreeContext = await resolveAmoeWitnessTrees({
+    reader: proveOpts.ledgerSnapshotReader,
     walletBigint,
     epoch,
     signupIdHash,
     spendRefIdHash,
     twitterCreditNullifier,
     pointsBurnedAsUSD,
+    spendRefId: inputs.spendRefId,
+    profileId:
+      typeof inputs.profileId === 'bigint'
+        ? inputs.profileId
+        : BigInt(Math.trunc(Number(inputs.profileId))),
   })
 
   // ------------------------------------------------------------------
@@ -316,6 +419,7 @@ export async function orchestrateAmoeSubmitZk(
     proof,
     epoch,
     pointsBurnedAsUSD,
+    twitterCreditNullifier,
   }
 }
 

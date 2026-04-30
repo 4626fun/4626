@@ -141,6 +141,14 @@ export interface AmoeSubmissionMarkProvenParams {
   /** Hex `0x...` of the points-burn nullifier (pubInputs slot). */
   pointsBurnNullifierHex: `0x${string}`
   /**
+   * Hex `0x...` of the twitter-credit nullifier (private input the
+   * orchestrator derived from the user's twitter handle). Persisted
+   * here so the publisher's projection step can recover it without
+   * round-tripping the handle. Optional for backwards-compat with
+   * pre-PR-5b callers; new code MUST supply it.
+   */
+  twitterCreditNullifierHex?: `0x${string}`
+  /**
    * The full proof + pubInputs blob, kept as JSONB for retries. We
    * GC this aggressively (see §7 of the design doc) because at ~5KB
    * per row it adds up.
@@ -254,6 +262,7 @@ async function ensureAmoeReplayStoreSchema(
       nonce_commit_hex           TEXT,
       wallet_commit_hex          TEXT,
       points_burn_nullifier_hex  TEXT,
+      twitter_credit_nullifier_hex TEXT,
       proof_blob                 JSONB,
       proof_kept_until           TIMESTAMPTZ,
       spend_ref_id               TEXT         NOT NULL,
@@ -293,6 +302,14 @@ async function ensureAmoeReplayStoreSchema(
   await db.sql`
     ALTER TABLE amoe_zk_submissions
       ADD COLUMN IF NOT EXISTS retry_started_at TIMESTAMPTZ;
+  `
+  // Forward-compat (PR 5b): the publisher's projection step joins
+  // against this column to recover the twitter-credit nullifier the
+  // submit handler derived. Pre-PR-5b rows have it NULL; the
+  // projector skips those (they have no on-chain identity binding).
+  await db.sql`
+    ALTER TABLE amoe_zk_submissions
+      ADD COLUMN IF NOT EXISTS twitter_credit_nullifier_hex TEXT;
   `
   // Partial unique index over `nonce_commit_hex IS NOT NULL`. This is
   // the portable form of `UNIQUE NULLS NOT DISTINCT` (PG 15+). Using
@@ -540,6 +557,11 @@ export async function markProven(
           nonce_commit_hex = ${params.nonceCommitHex.toLowerCase()},
           wallet_commit_hex = ${params.walletCommitHex.toLowerCase()},
           points_burn_nullifier_hex = ${params.pointsBurnNullifierHex.toLowerCase()},
+          twitter_credit_nullifier_hex = ${
+            params.twitterCreditNullifierHex
+              ? params.twitterCreditNullifierHex.toLowerCase()
+              : null
+          },
           proof_blob = ${proofBlobJson}::jsonb,
           proof_kept_until = ${proofKeptUntil}
       WHERE id = ${id}
