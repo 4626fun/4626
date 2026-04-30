@@ -39,4 +39,5 @@ export const ALFA_CREATOR_KEY_POOL_ABI = parseAbi([
   'function getReserves() view returns (uint256 creatorCoinReserve, uint256 keyReserve)',
   'function balanceOf(address account) view returns (uint256)',
   'function totalSupply() view returns (uint256)',
+  'function feeBps() view returns (uint16)',
 ])

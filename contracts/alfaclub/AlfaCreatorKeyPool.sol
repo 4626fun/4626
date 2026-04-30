@@ -29,13 +29,23 @@ import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
-    uint256 public constant FEE_BPS = 690;
     uint256 public constant BPS = 10_000;
+    /// @dev Hard ceiling on configurable fee. Must stay below `BPS` so the
+    ///      buy-side gross-up `BPS / (BPS - feeBps)` cannot divide by zero or
+    ///      blow up. 10% is well above any room-type fee we expect to ship
+    ///      (today: 3 bps Social, 690 bps Trading) and leaves headroom without
+    ///      letting a misconfigured factory deploy a confiscatory pool.
+    uint256 public constant MAX_FEE_BPS = 1_000;
 
     address public immutable factory;
     address public immutable friendKey;
     address public immutable creatorCoin;
     uint256 public immutable keyTokenId;
+    /// @notice Swap fee in basis points, fixed at construction by the factory
+    ///         based on the room type of `keyTokenId` (e.g. 3 for Social,
+    ///         690 for Trading). No setter — fee is part of the pool's
+    ///         identity.
+    uint16 public immutable feeBps;
 
     // -------------------------------------------------------------------------
     // Pair reserves (the AMM's two priced assets)
@@ -77,13 +87,18 @@ contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
     error WrongTokenId(uint256 tokenId);
     error BatchTransfersUnsupported();
     error FeeOnTransferUnsupported();
+    error FeeBpsTooHigh(uint256 feeBps);
 
-    constructor(address _friendKey, address _creatorCoin, uint256 _keyTokenId) ERC20("4626 AlfaClub Key LP", "akLP") {
+    constructor(address _friendKey, address _creatorCoin, uint256 _keyTokenId, uint16 _feeBps)
+        ERC20("4626 AlfaClub Key LP", "akLP")
+    {
         if (_friendKey == address(0) || _creatorCoin == address(0)) revert ZeroAddress();
+        if (_feeBps > MAX_FEE_BPS) revert FeeBpsTooHigh(_feeBps);
         factory = msg.sender;
         friendKey = _friendKey;
         creatorCoin = _creatorCoin;
         keyTokenId = _keyTokenId;
+        feeBps = _feeBps;
     }
 
     /// @notice The two priced reserves of the AMM pair. LP shares are NOT included.
@@ -188,7 +203,7 @@ contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
 
         // x*y=k on the pair reserves; fee taken on the input leg in creator coin.
         uint256 creatorCoinInAfterFee = _ceilDiv(creatorCoinReserve * keyAmount, keyReserve - keyAmount);
-        creatorCoinAmountIn = _ceilDiv(creatorCoinInAfterFee * BPS, BPS - FEE_BPS);
+        creatorCoinAmountIn = _ceilDiv(creatorCoinInAfterFee * BPS, BPS - feeBps);
     }
 
     function buyKeys(uint256 keyAmount, uint256 maxCreatorCoinAmount, address recipient)
@@ -213,7 +228,7 @@ contract AlfaCreatorKeyPool is ERC20, IERC1155Receiver, ReentrancyGuard {
         if (creatorCoinReserve == 0 || keyReserve == 0) revert InsufficientReserves();
 
         uint256 grossOut = (creatorCoinReserve * keyAmount) / (keyReserve + keyAmount);
-        uint256 fee = (grossOut * FEE_BPS) / BPS;
+        uint256 fee = (grossOut * feeBps) / BPS;
         creatorCoinAmountOut = grossOut - fee;
         if (creatorCoinAmountOut == 0) revert InsufficientReserves();
     }

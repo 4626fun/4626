@@ -19,6 +19,7 @@ contract MockCreatorCoin is ERC20 {
 
 contract MockFriendKey is ERC1155Supply {
     mapping(uint256 => address) public creatorByTokenId;
+    mapping(uint256 => uint8) public roomTypes;
     mapping(address => uint256) public bondingCurveReserves;
     mapping(uint256 => mapping(address => uint256)) public keyHoldingSince;
 
@@ -29,6 +30,10 @@ contract MockFriendKey is ERC1155Supply {
     function createRoom(uint256 tokenId, address creator, address recipient, uint256 amount) external {
         creatorByTokenId[tokenId] = creator;
         _mint(recipient, tokenId, amount, "");
+    }
+
+    function setRoomType(uint256 tokenId, uint8 roomType) external {
+        roomTypes[tokenId] = roomType;
     }
 
     function mintKeys(address recipient, uint256 tokenId, uint256 amount) external {
@@ -307,5 +312,106 @@ contract AlfaCreatorKeyLPTest is Test {
         vm.expectRevert(AlfaCreatorKeyPool.SlippageExceeded.selector);
         pool.sellKeys(1, quote + 1, trader);
         vm.stopPrank();
+    }
+
+    /// @dev Default-mocked room type is 0 (Trading) so the existing pool created
+    /// in `_createPool` must wire up the legacy 690 bps fee.
+    function testTradingPoolUsesTradingFee() public {
+        AlfaCreatorKeyPool pool = _createPool();
+        assertEq(pool.feeBps(), 690);
+        assertEq(factory.TRADING_FEE_BPS(), 690);
+    }
+
+    /// @dev A Social room (roomTypes = 1) must spawn a pool with the 3 bps fee.
+    function testSocialPoolUsesSocialFee() public {
+        uint256 socialTokenId = 42;
+        friendKey.createRoom(socialTokenId, creator, lpCreator, 1);
+        friendKey.mintKeys(lpCreator, socialTokenId, 50);
+        friendKey.setRoomType(socialTokenId, 1);
+
+        vm.prank(owner);
+        factory.setPairAllowed(address(creatorCoin), socialTokenId, true);
+
+        vm.startPrank(lpCreator);
+        creatorCoin.approve(address(factory), type(uint256).max);
+        friendKey.setApprovalForAll(address(factory), true);
+        address poolAddress = factory.createPoolWithInitialLiquidity(
+            address(creatorCoin), socialTokenId, INITIAL_KEYS, INITIAL_CREATOR_COIN, lpCreator
+        );
+        vm.stopPrank();
+
+        AlfaCreatorKeyPool socialPool = AlfaCreatorKeyPool(poolAddress);
+        assertEq(socialPool.feeBps(), 3);
+        assertEq(factory.SOCIAL_FEE_BPS(), 3);
+    }
+
+    /// @dev Same reserves: a Social pool quotes a smaller buy-in and a larger
+    /// sell-out than a Trading pool. The fee tier is the only thing changing
+    /// between the two pools so quote math has to differ in the expected
+    /// direction (lower fee = better trade for the user).
+    function testSocialAndTradingPoolsQuoteDifferentlyForSameReserves() public {
+        AlfaCreatorKeyPool tradingPool = _createPool();
+
+        uint256 socialTokenId = 7;
+        friendKey.createRoom(socialTokenId, creator, lpCreator, 1);
+        friendKey.mintKeys(lpCreator, socialTokenId, 50);
+        friendKey.setRoomType(socialTokenId, 1);
+
+        vm.prank(owner);
+        factory.setPairAllowed(address(creatorCoin), socialTokenId, true);
+
+        vm.startPrank(lpCreator);
+        creatorCoin.approve(address(factory), type(uint256).max);
+        friendKey.setApprovalForAll(address(factory), true);
+        address socialAddress = factory.createPoolWithInitialLiquidity(
+            address(creatorCoin), socialTokenId, INITIAL_KEYS, INITIAL_CREATOR_COIN, lpCreator
+        );
+        vm.stopPrank();
+        AlfaCreatorKeyPool socialPool = AlfaCreatorKeyPool(socialAddress);
+
+        // Reserves are identical between the two pools by construction.
+        (uint256 tradingC, uint256 tradingK) = tradingPool.getReserves();
+        (uint256 socialC, uint256 socialK) = socialPool.getReserves();
+        assertEq(tradingC, socialC);
+        assertEq(tradingK, socialK);
+
+        // Buy: a Trading buyer pays MORE creator coin than a Social buyer.
+        assertGt(tradingPool.quoteBuyKeys(1), socialPool.quoteBuyKeys(1));
+        // Sell: a Trading seller receives LESS creator coin than a Social seller.
+        assertLt(tradingPool.quoteSellKeys(1), socialPool.quoteSellKeys(1));
+    }
+
+    /// @dev An unsupported room type (>= 2) must revert pool creation with a
+    /// clear custom error rather than silently defaulting to one of the fees.
+    function testFactoryRejectsUnsupportedRoomType() public {
+        uint256 weirdTokenId = 9001;
+        friendKey.createRoom(weirdTokenId, creator, lpCreator, 1);
+        friendKey.mintKeys(lpCreator, weirdTokenId, 50);
+        friendKey.setRoomType(weirdTokenId, 2);
+
+        vm.prank(owner);
+        factory.setPairAllowed(address(creatorCoin), weirdTokenId, true);
+
+        vm.startPrank(lpCreator);
+        creatorCoin.approve(address(factory), type(uint256).max);
+        friendKey.setApprovalForAll(address(factory), true);
+        vm.expectRevert(
+            abi.encodeWithSelector(AlfaCreatorKeyLPFactory.UnsupportedRoomType.selector, weirdTokenId, uint8(2))
+        );
+        factory.createPoolWithInitialLiquidity(
+            address(creatorCoin), weirdTokenId, INITIAL_KEYS, INITIAL_CREATOR_COIN, lpCreator
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev Pool deployed directly (bypassing the factory) cannot exceed the
+    /// hard fee ceiling. Defends against a future factory bug that maps a
+    /// new room type to an unreasonable fee.
+    function testPoolRejectsFeeAboveMax() public {
+        AlfaCreatorKeyPool tradingPool = _createPool();
+        uint16 tooHigh = uint16(tradingPool.MAX_FEE_BPS()) + 1;
+
+        vm.expectRevert(abi.encodeWithSelector(AlfaCreatorKeyPool.FeeBpsTooHigh.selector, tooHigh));
+        new AlfaCreatorKeyPool(address(friendKey), address(creatorCoin), TOKEN_ID, tooHigh);
     }
 }

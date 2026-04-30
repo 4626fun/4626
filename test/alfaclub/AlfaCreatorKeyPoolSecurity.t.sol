@@ -83,6 +83,7 @@ contract SenderFeeCreatorCoin is ERC20 {
 
 contract MockFriendKey is ERC1155Supply {
     mapping(uint256 => address) public creatorByTokenId;
+    mapping(uint256 => uint8) public roomTypes;
     mapping(uint256 => mapping(address => uint256)) public keyHoldingSince;
 
     mapping(uint256 => uint256) private sold;

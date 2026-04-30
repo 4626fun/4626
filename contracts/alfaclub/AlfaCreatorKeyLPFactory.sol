@@ -10,6 +10,7 @@ import {AlfaCreatorKeyPool} from "./AlfaCreatorKeyPool.sol";
 
 interface IAlfaFriendKey {
     function creatorByTokenId(uint256 tokenId) external view returns (address);
+    function roomTypes(uint256 tokenId) external view returns (uint8);
 }
 
 /**
@@ -21,6 +22,17 @@ contract AlfaCreatorKeyLPFactory is Ownable {
 
     address public constant BASE_ALFA_CLUB_FRIEND_KEY = 0xAF0Bf8593dC6CA973DF2132731B0F9B5F974FA9F;
     address public immutable friendKey;
+
+    // Room-type encoding from the AlfaClub FriendKey contract:
+    //   0 = Trading rooms
+    //   1 = Social rooms
+    // Pool fees are room-type-scoped and immutable per pool. Trading rooms
+    // run the legacy 6.9% fee that funds creator/treasury splits; Social
+    // rooms use a near-zero 3 bps fee so social key churn isn't penalised.
+    uint8 internal constant ROOM_TYPE_TRADING = 0;
+    uint8 internal constant ROOM_TYPE_SOCIAL = 1;
+    uint16 public constant TRADING_FEE_BPS = 690;
+    uint16 public constant SOCIAL_FEE_BPS = 3;
 
     mapping(address => bool) public poolCreatorAllowed;
     mapping(address => mapping(uint256 => bool)) public pairAllowed;
@@ -45,6 +57,7 @@ contract AlfaCreatorKeyLPFactory is Ownable {
     error PairNotAllowed(address creatorCoin, uint256 tokenId);
     error PoolAlreadyExists(address creatorCoin, uint256 tokenId);
     error FriendKeyCreatorMissing(uint256 tokenId);
+    error UnsupportedRoomType(uint256 tokenId, uint8 roomType);
 
     constructor(address initialOwner) Ownable(initialOwner) {
         if (initialOwner == address(0)) revert ZeroAddress();
@@ -83,7 +96,10 @@ contract AlfaCreatorKeyLPFactory is Ownable {
         address creator = IAlfaFriendKey(friendKey).creatorByTokenId(tokenId);
         if (creator == address(0)) revert FriendKeyCreatorMissing(tokenId);
 
-        pool = address(new AlfaCreatorKeyPool(friendKey, creatorCoin, tokenId));
+        uint8 roomType = IAlfaFriendKey(friendKey).roomTypes(tokenId);
+        uint16 feeBps = _feeBpsForRoomType(tokenId, roomType);
+
+        pool = address(new AlfaCreatorKeyPool(friendKey, creatorCoin, tokenId, feeBps));
         getPool[creatorCoin][tokenId] = pool;
         allPools.push(pool);
 
@@ -92,5 +108,11 @@ contract AlfaCreatorKeyLPFactory is Ownable {
         AlfaCreatorKeyPool(pool).mintInitialLiquidity(keyAmount, creatorCoinAmount, recipient);
 
         emit PoolCreated(creatorCoin, tokenId, pool, creator, keyAmount, creatorCoinAmount, recipient);
+    }
+
+    function _feeBpsForRoomType(uint256 tokenId, uint8 roomType) internal pure returns (uint16) {
+        if (roomType == ROOM_TYPE_TRADING) return TRADING_FEE_BPS;
+        if (roomType == ROOM_TYPE_SOCIAL) return SOCIAL_FEE_BPS;
+        revert UnsupportedRoomType(tokenId, roomType);
     }
 }
