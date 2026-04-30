@@ -4,6 +4,7 @@ import {
   BASE_DEFAULTS,
   LEGACY_DEPLOYMENT_BATCHER,
   MODULE_MISMATCH_DEPLOYMENT_BATCHER,
+  PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER,
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   normalizeCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.ts'
@@ -30,6 +31,7 @@ describe('creatorVaultBatcher config normalization', () => {
   it('normalizeCreatorVaultBatcherAddress rejects deprecated aliases', () => {
     expect(normalizeCreatorVaultBatcherAddress(LEGACY_DEPLOYMENT_BATCHER)).toBeUndefined()
     expect(normalizeCreatorVaultBatcherAddress(MODULE_MISMATCH_DEPLOYMENT_BATCHER)).toBeUndefined()
+    expect(normalizeCreatorVaultBatcherAddress(PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER)).toBeUndefined()
   })
 
   it('normalizeCreatorVaultBatcherAddress keeps canonical batcher', () => {

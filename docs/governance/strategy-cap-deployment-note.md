@@ -1,37 +1,43 @@
-# Deployment note — `strategyMaxAssets` cap PR
+# Deployment note — `strategyMaxAssets` caps
 
-**Status: HOLD FOR REVIEW. Do not deploy from this branch.**
+This note covers the current CreatorOVault deployment path for strategy valuation caps.
 
 ## What changes on-chain
 
-This PR bumps `MODULE_STORAGE_VERSION` from `CreatorOVaultModuleStorage.v1` to `CreatorOVaultModuleStorage.v2` and appends the `strategyMaxAssets` mapping at the end of the storage layout (after `_adminModule`). Existing storage slots are untouched, but the version bump means:
+The current CreatorOVault module storage fingerprint is `CreatorOVaultModuleStorage.current`. The vault and all three modules must advertise the same fingerprint so `setModulesOnce` can reject mismatched module storage at deploy time.
 
-- Any existing deployed `CreatorOVault` instance running v1 modules will FAIL `setModulesOnce` if you try to plug in v2 modules — that's the safety check (`_validateModuleIdentity` reverts on mismatch). Re-deploying the modules and pointing the vault at them must therefore be a coordinated operation, not a hot-swap on a live vault.
-- Newly deployed vaults pick up v2 directly with no migration step.
+The current CreatorOVault storage layout includes `strategyMaxAssets` at the end of the module storage struct. The cap is a governance trust ceiling:
 
-## What this PR does NOT change
+> The maximum valuation the vault is willing to trust from this strategy until governance/operator review updates the cap.
+
+`strategyMaxAssets` is not an allocation target and not a promise that the strategy should always hold that amount. Allocation remains governed by strategy weights, debt budgets, queue behavior, and keeper actions.
+
+Previously deployed vaults that do not expose `setStrategyMaxAssets` are outside this release path.
+
+## What this rollout does not change
 
 - No changes to the Solana programs.
-- No changes to the indexer's contract ABI consumers other than the new event `UpdateStrategyMaxAssets(address,uint256,uint256)`.
-- No Vercel-deployed surface is modified.
-- No production Supabase migration is applied. The migration file `supabase/migrations/20260429000000_add_max_assets_cap.sql` is committed for the next scheduled migration window.
+- No Vercel deployment is required for this note.
+- No Supabase schema migration should be re-applied; production already has `public.workspace_strategy_targets.max_assets_cap NUMERIC(78,0) NULL`.
+- No on-chain transaction should be broadcast until simulation is clean and governance/operator approval is explicit.
+- Pending strategy feature rows are entitlements only until provisioning produces concrete per-creator strategy addresses.
 
 ## Pre-deployment checklist
 
-1. PR reviewed and signed off (see `docs/governance/strategy-cap-runbook.md`).
-2. CI is green; specifically `test/vault/strategies/CreatorOVaultStrategies.MaxAssetsCap.t.sol` passes.
-3. The 5 pre-existing `main` test failures are confirmed unchanged (i.e. this PR does not cause new failures).
-4. Operator UI mirror has been merged & deployed to staging; the `max_assets_cap` column appears next to the on-chain value.
-5. Governance has agreed initial caps for any pending strategies (`ajna_sleeve`, `charm_active_lp`, `solana_bridge_strategy`).
+1. Current CreatorOVault bytecode and modules compile with the same `CreatorOVaultModuleStorage.current` fingerprint.
+2. `test/vault/strategies/CreatorOVaultStrategies.MaxAssetsCap.t.sol` passes.
+3. Deployment simulation is clean without `--broadcast`.
+4. Governance has classified every strategy before activation: `internal-accounting`, `oracle-backed`, or `capped`.
+5. Governance has chosen initial trust ceilings for any capped strategy using the runbook formula:
+   `cap = max(intended debt ceiling, current strategy NAV) + safety buffer`.
+6. For pending strategy features, concrete per-creator strategy addresses are known before any cap or activation calldata is prepared.
 
-## Order of operations on the deploy day
+## Order of operations
 
-1. Merge this PR.
-2. Run the Supabase migration in the next scheduled window (`workspace_strategy_targets.max_assets_cap`).
-3. Redeploy the three modules (`CreatorOVaultCoreModule`, `CreatorOVaultStrategiesModule`, `CreatorOVaultAdminModule`) — they all advertise `CreatorOVaultModuleStorage.v2`.
-4. For new vaults: deploy with the new modules from the start (`setModulesOnce` against v2 modules).
-5. For each newly-classified strategy, execute the runbook ordering:
-   1. `setStrategyMaxAssets(strategy, cap)` if `capped`.
+1. Simulate the current CreatorOVault infra deployment without `--broadcast`.
+2. After approval, deploy current CreatorOVault infra using the documented Base mainnet deployment path.
+3. For each newly-classified strategy, execute governance actions in this order:
+   1. `setStrategyMaxAssets(strategy, cap)` if the strategy requires a cap.
    2. `addStrategy(strategy, weight, true)`.
-   3. Mirror in Supabase + UI.
-6. Do NOT push to Vercel as part of this rollout. The frontend changes shipped in this PR (operator UI mirror) ride the next regular Vercel deploy — they are read-only display of an existing column and are safe to release alongside other changes.
+   3. Mirror the cap, classification, and rationale in Supabase.
+4. Do not activate uncapped externally-valued strategies. A `strategyMaxAssets` value of `0` means uncapped and is not valid for a strategy classified as `capped`.

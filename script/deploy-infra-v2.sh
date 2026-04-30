@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Historical filename retained for operator scripts. This deploys the current
+# CreatorOVault phased infra and bytecode store.
 DEFAULT_RELEASE_TAG="v1.9.2"
 DEFAULT_SHARED_GLOBAL_OUTPUT_PATH="${ROOT_DIR}/tmp/base-${DEFAULT_RELEASE_TAG}-shared-global.json"
 
@@ -217,7 +219,7 @@ recover_v2_handoff_from_deployer_log_fallback() {
     printf 'CREATOR_VAULT_BATCHER_AUTO_HANDOFF=%s\n' "$deployment_batcher_addr"
   } >> "$BASE_RELEASE_HANDOFF_ENV_PATH"
 
-  echo "Recovered v2 handoff values from deployer log fallback."
+  echo "Recovered current phased-infra handoff values from deployer log fallback."
 }
 
 is_known_deployment_batcher_verify_mismatch() {
@@ -311,7 +313,7 @@ main() {
 
   print_infra_configuration
 
-  echo "Deploying v2 bytecode store + deployer on Base mainnet..."
+  echo "Deploying current bytecode store + phased deployer on Base mainnet..."
   deployer_log="$(mktemp "${TMPDIR:-/tmp}/4626-deployer-v2-XXXXXX.log")"
   set +e
   forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
@@ -349,7 +351,7 @@ main() {
     echo "Skipping treasury-only Solana batcher config (set RUN_TREASURY_SOLANA_CONFIG=1 with protocolTreasury signer to enable)."
   fi
 
-  echo "Seeding v2 bytecode store (idempotent)..."
+  echo "Seeding current bytecode store (idempotent)..."
   forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
     --rpc-url "$BASE_RPC_URL" \
     --broadcast

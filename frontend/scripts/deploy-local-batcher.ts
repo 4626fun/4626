@@ -7,7 +7,7 @@ import { base } from 'viem/chains'
 import { isDeprecatedCreatorVaultBatcherAddress } from '../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../src/lib/deploy/deploymentBatcherConfigError.js'
 
-const DEFAULT_SOURCE_BATCHER = '0xe3F9490CfD6bd3D68010405d18Bf772C167E7178' as Address
+const DEFAULT_SOURCE_BATCHER = '0x004684670d284EF607E1B2424fcf8ccBda8ef828' as Address
 // Anvil account #0. Local-only default used to deploy the replacement batcher onto the fork.
 const DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'

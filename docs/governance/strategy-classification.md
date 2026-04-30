@@ -2,14 +2,21 @@
 
 Source-of-truth list of every strategy considered for `CreatorOVault`. Each row pins the valuation mode (per [the onboarding checklist](./strategy-onboarding-checklist.md)) and the cap rationale, if any.
 
+`solana_ovault_mesh` is not a `CreatorOVault` strategy. It is a Phase 2b routing entitlement for Solana OVault compose/peer wiring and must not be included in `addStrategy` or `strategyMaxAssets` cap batches.
+
 Update this file in the same PR that adds, classifies, or re-caps a strategy.
 
 | Strategy | Feature flag | Class | `strategyMaxAssets` (initial) | Rationale |
 | --- | --- | --- | --- | --- |
-| AJNA 4626 sleeve | `ajna_sleeve` | `capped` (pending) | TBD on activation — propose 1% of vault TVL or absolute floor, whichever is larger | AJNA quote-token valuation depends on pool state; cap is a pricing safety bound until oracle path is validated |
-| Charm Alpha LP | `charm_active_lp` | `capped` (pending) | TBD on activation — start small and re-review after 30 days | LP valuation revalued via tick price; manipulation-sensitive |
-| Solana bridge strategy | `solana_bridge_strategy` | `capped` (pending) | TBD on activation — small absolute cap | Cross-chain inventory; off-chain reconciliation is part of the valuation path |
-| Solana OVault mesh | `solana_ovault_mesh` | TODO classify before next governance action | n/a | Currently `active` per `creator_strategy_features` — needs an explicit class entry before any non-trivial allocation |
+| AJNA 4626 sleeve | `ajna_sleeve` | `capped` unless valuation is verified as internal-accounting or oracle-backed | TBD on activation: `max(intended debt ceiling, current strategy NAV) + safety buffer` | AJNA can grow if more creator coins are deposited/lent; cap is a trust ceiling until the valuation path is validated |
+| Charm Alpha LP | `charm_active_lp` | `capped` | TBD on activation: cap total trusted NAV, not just creator-token inventory | LP inventory can shift between creator token and USDC; valuation is market-state sensitive and needs active review after large rebalances |
+| Solana bridge strategy | `solana_bridge_strategy` | `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | TBD on activation: start tighter than local strategies unless reconciliation confidence is high | Cross-chain inventory; keeper/reconciliation trust is part of the valuation path |
+
+## Non-strategy entitlements
+
+| Entitlement | Feature flag | Classification | Cap handling |
+| --- | --- | --- | --- |
+| Solana OVault mesh | `solana_ovault_mesh` | Phase 2b routing entitlement, not a Phase 3 strategy allocation | No `setStrategyMaxAssets` or `addStrategy` calldata applies. Track route/peer/config risk in the deploy runbook, not the strategy cap register. |
 
 ## How to update
 
@@ -20,4 +27,4 @@ Update this file in the same PR that adds, classifies, or re-caps a strategy.
 ## Cross-references
 
 - Live `creator_strategy_features` queue (Supabase, project `4626fun`): governance must confirm class before flipping any of these to `active` with non-trivial weight.
-- Live `workspace_strategy_targets` (Supabase, project `4626fun`): currently zero rows; first row must include `max_assets_cap` if the strategy is `capped`.
+- Live `workspace_strategy_targets` (Supabase, project `4626fun`): capped strategy rows must include `max_assets_cap`, `updated_source = 'governance-runbook'`, and notes with the valuation class, intended debt ceiling, estimated NAV, safety buffer, and review triggers.

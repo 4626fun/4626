@@ -19,11 +19,13 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 //   is surfaced immediately instead of silently remapping.
 export const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f248B68ca')
 export const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
+export const PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('004684670d284EF607E1B2424fcf8ccBda8ef828')
 
 const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
   MODULE_MISMATCH_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -71,8 +73,8 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('6925d601cf618AFB9F55099C0FF3d30769a5e141'),
-  universalCreate2DeployerFromStore: addr('02feAFb12fDF2c0Ef65dA3038584Dd4EA3b1E2A9'),
+  universalBytecodeStore: addr('77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5'),
+  universalCreate2DeployerFromStore: addr('808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd'),
 
   // AA helpers
   vaultActivationBatcher: addr('7Cc0050842433968cc7A0884d192b61FD0b46F63'),

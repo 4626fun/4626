@@ -16,7 +16,9 @@ In our architecture, `CreatorOVault.totalAssets()` walks the strategy list and c
 1. The strategy's valuation being structurally non-manipulable (internal accounting only, or a vetted oracle), OR
 2. An explicit governance cap that bounds how much the vault is willing to recognise from that strategy regardless of what it claims.
 
-`strategyMaxAssets` (see `setStrategyMaxAssets`) is the on-chain knob enforcing (2). This checklist makes sure (1) or (2) is decided BEFORE the strategy goes live.
+`strategyMaxAssets` (see `setStrategyMaxAssets`) is the on-chain knob enforcing (2). It is a governance trust ceiling: the maximum valuation the vault is willing to trust from this strategy until governance/operator review updates the cap. It is not an allocation target and not a promise that the strategy should always hold that amount.
+
+This checklist makes sure (1) or (2) is decided BEFORE the strategy goes live.
 
 ## Valuation modes
 
@@ -33,6 +35,7 @@ OpenZeppelin's defense write-up describes the strongest forms of this mode: trac
 Onboarding requirements:
 - [ ] Source of every term in `getTotalAssets()` is explicitly traced and shown to be vault-controlled.
 - [ ] No `balanceOf(address(this))` reads on tokens that any party can transfer in.
+- [ ] Accounting model reviewed and documented, even if governance does not set a tight cap.
 - [ ] Reviewer signs off in PR description; classification recorded.
 
 ### `oracle-backed`
@@ -43,6 +46,7 @@ Onboarding requirements:
 - [ ] Oracle source identified and listed in the PR description.
 - [ ] Heartbeat / deviation parameters reviewed.
 - [ ] Manipulation-cost analysis: what does it cost an attacker to push the oracle by N%, and is the resulting inflation bounded by that?
+- [ ] Cap accounts for oracle confidence, expected NAV drift, and oracle/rate-limit risk.
 - [ ] Reviewer signs off; classification recorded.
 - [ ] Even when oracle-backed, a conservative `setStrategyMaxAssets` cap is RECOMMENDED for the first weeks of live operation while the oracle behaviour is observed.
 
@@ -52,20 +56,21 @@ The strategy is neither pure internal-accounting nor backed by a vetted oracle �
 
 Onboarding requirements:
 - [ ] `setStrategyMaxAssets(strategy, cap)` called BEFORE the strategy is added with non-zero weight or before `forceDeployToStrategies()` is run.
-- [ ] Cap rationale documented: what failure does the cap survive, and how was the number chosen.
+- [ ] Cap chosen as `max(intended debt ceiling, current strategy NAV) + safety buffer`.
+- [ ] Cap rationale documented: what failure does the cap survive, how was the number chosen, and what review trigger will update it.
 - [ ] Re-review scheduled (default: 30 days, or after material TVL / strategy changes).
 - [ ] Cap value mirrored to `workspace_strategy_targets.max_assets_cap` so the operator UI shows it next to the on-chain value.
 
-## Pending strategies (status as of this PR)
+## Pending deploy features
 
-| Strategy / feature flag | Tentative class | Required action before non-trivial allocation |
+| Feature flag | Role | Required action before non-trivial allocation |
 | --- | --- | --- |
-| `ajna_sleeve` (AJNA 4626 sleeve) | `capped` (until oracle path on AJNA quote token verified) | Set `strategyMaxAssets` to a small cap (e.g. 1% of vault TVL) on the first activation. |
-| `charm_active_lp` (Charm Alpha Vault) | `capped` (LP positions revalued via tick — manipulation-sensitive) | `strategyMaxAssets` cap REQUIRED. Re-review after 30 days. |
-| `solana_bridge_strategy` (cross-chain inventory) | `capped` (off-chain reconciliation is part of the valuation path) | `strategyMaxAssets` cap REQUIRED until oracle/proof path is added. |
-| `solana_ovault_mesh` (currently `active`) | TODO classify | Confirm class in PR description; if `capped`, set cap immediately. |
+| `ajna_sleeve` (AJNA 4626 sleeve) | Phase 3 strategy; `capped` unless the valuation path is verified as internal-accounting or oracle-backed | Before activation, locate the concrete strategy address, compute intended debt ceiling and current estimated NAV, then set a trust ceiling with buffer. |
+| `charm_active_lp` (Charm Alpha Vault) | Phase 3 strategy; `capped` because LP positions are revalued through market state | Before activation, cap total trusted NAV, not just creator-token inventory; re-review after large swap/LP inventory shifts. |
+| `solana_bridge_strategy` (cross-chain inventory) | Phase 3 strategy; `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | Start tighter because valuation depends on keeper/reconciliation trust; re-review if reconciliation changes or fails. |
+| `solana_ovault_mesh` (currently `active`) | Phase 2b routing entitlement, not a `CreatorOVault` strategy | Do not generate `setStrategyMaxAssets` or `addStrategy` calldata. Track route/peer/config risk in the deploy runbook, not the strategy cap flow. |
 
-Note: as of writing, `workspace_strategy_targets` in Supabase has zero rows — there are no whitelisted on-chain strategy targets yet. This is the moment to enforce the rule. `creator_strategy_features` has the four entries above queued.
+Pending Phase 3 strategy features are entitlements only until the activation/provisioning flow produces concrete per-creator strategy addresses. Non-strategy deploy entitlements do not produce strategy cap calldata.
 
 ## Onboarding flow
 
@@ -73,9 +78,9 @@ Note: as of writing, `workspace_strategy_targets` in Supabase has zero rows — 
 2. In the PR description, fill in:
    - Valuation class (`internal-accounting` / `oracle-backed` / `capped`).
    - For `oracle-backed`: oracle source, heartbeat, deviation, manipulation-cost note.
-   - For `capped`: proposed `strategyMaxAssets` value and how it was chosen.
+   - For `capped`: intended debt ceiling, current estimated NAV, proposed `strategyMaxAssets`, safety buffer, and how the cap was chosen.
 3. Reviewer confirms classification matches the code.
-4. After deploy, governance executes (in order):
+4. After deploy/provisioning, governance executes (in order):
    1. `setStrategyMaxAssets(strategy, cap)` if applicable. **Set the cap BEFORE `addStrategy`** so any auto-allocation respects the cap from block 0.
    2. `addStrategy(strategy, weight, addToQueue=true)` only after the cap is in place.
    3. Operator UI / Supabase row mirrors the cap.

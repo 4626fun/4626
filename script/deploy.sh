@@ -6,14 +6,14 @@
 #
 # Usage:
 #   ./script/deploy.sh infrastructure    - Deploy all core contracts
-#   ./script/deploy.sh infra-v2          - Deploy phased infra + seed bytecode store
+#   ./script/deploy.sh infra-v2          - Deploy current phased infra + seed bytecode store
 #   ./script/deploy.sh release           - Canonical Base v1.9.2 full release rollout
 #   ./script/deploy.sh full-release      - Same as release
 #
 # Environment:
 #   PRIVATE_KEY         - Deployer private key
 #   RPC_URL             - Base RPC URL (default: https://mainnet.base.org)
-#   BASE_RPC_URL        - Base RPC URL for v2 deployer (Alchemy recommended)
+#   BASE_RPC_URL        - Base RPC URL for phased deployer (Alchemy recommended)
 #   ETHERSCAN_API_KEY   - For contract verification
 #
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -54,8 +54,8 @@ print_banner() {
 print_usage() {
     echo -e "${YELLOW}Usage:${NC}"
     echo "  ./script/deploy.sh infrastructure         Deploy all core contracts"
-    echo "  ./script/deploy.sh infra-v2               Deploy v2 infra and seed bytecode store"
-    echo "  ./script/deploy.sh release                Deploy fresh shared/global + deterministic v2 infra"
+    echo "  ./script/deploy.sh infra-v2               Deploy current phased infra and seed bytecode store"
+    echo "  ./script/deploy.sh release                Deploy fresh shared/global + deterministic phased infra"
     echo "  ./script/deploy.sh full-release           Same as release"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
@@ -66,10 +66,11 @@ print_usage() {
     echo -e "${YELLOW}Environment Variables:${NC}"
     echo "  PRIVATE_KEY         - Your deployer private key"
     echo "  RPC_URL             - Base RPC URL (default: mainnet.base.org)"
-    echo "  BASE_RPC_URL        - Base RPC URL for v2 deployer"
+    echo "  BASE_RPC_URL        - Base RPC URL for phased deployer"
     echo "  ETHERSCAN_API_KEY   - For contract verification"
     echo ""
     echo -e "${YELLOW}Note:${NC}"
+    echo "  The infra-v2 command name is historical; it deploys the current CreatorOVault infra."
     echo "  Legacy per-token deploy entrypoints are retired."
     echo "  Use the app deploy-session flow at /deploy for creator vault launches."
     echo ""
@@ -108,7 +109,8 @@ deploy_infrastructure() {
     echo "3. Launch creator vaults via the app deploy-session flow (/deploy)"
 }
 
-# Deploy v2 bytecode store + deployer + DeploymentBatcher, then seed store
+# Deploy current bytecode store + deployer + DeploymentBatcher, then seed store.
+# The called script filename is historical and remains stable for operator runbooks.
 deploy_infra_v2() {
     bash "$ROOT_DIR/script/deploy-infra-v2.sh"
 }

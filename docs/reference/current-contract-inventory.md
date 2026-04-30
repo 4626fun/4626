@@ -5,7 +5,7 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Generated on: 2026-04-25
+Generated on: 2026-04-29
 Scope: current live Base infra addresses plus the canonical `v1.9.2` split Phase-1 deployment stack for new per-creator vaults.
 
 ## Sources
@@ -26,14 +26,16 @@ Scope: current live Base infra addresses plus the canonical `v1.9.2` split Phase
 | `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
 | `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
-| `bytecodeStore` | `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A` |
-| `create2DeployerFromStore` | `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0` |
-| `creatorOVaultCoreModule` | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |
-| `creatorOVaultStrategiesModule` | `0x0f1A26b93AD56BBbC5e0486A920621944FF6ABd6` |
-| `creatorOVaultAdminModule` | `0xFC40e9768eeaAE634CBD2A72DA0CF809d3c908e0` |
-| `deploymentBatcher` | `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c` |
-| `deploymentBatcherPhase3Helper` | `0xF185Cb60E108E324f67e75cf8106B8e9950c16ed` |
-| `deploymentBatcherUniV4Helper` | `0xfe1C5eaa76942208298f510c820e7E8328f6d031` |
+| `bytecodeStore` | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |
+| `create2DeployerFromStore` | `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd` |
+| `creatorOVaultCoreModule` | `0xF670590D1070B1C30E8da76176E841b6e753fDb9` |
+| `creatorOVaultStrategiesModule` | `0x7cCFA3E1c7eF5ADab9C9676430c27244f8c8ec7A` |
+| `creatorOVaultAdminModule` | `0x48512Db9cDddC3f259036605A8eBD3C8e5dE1598` |
+| `deploymentBatcher` | `0x004684670d284EF607E1B2424fcf8ccBda8ef828` |
+| `deploymentBatcherPhase2Module` | `0x9794735D53dA4f0884eA43E2764A7E4dd2a38826` |
+| `deploymentBatcherPhase3Helper` | `0x7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c` |
+| `deploymentBatcherUniV4Helper` | `0xCd10BEcd96c13b63cEff49A646Eca1fe6D2f2CC7` |
+| `deploymentBatcherUtilsHelper` | `0xb79615C6B128E953347fcd6061DeaEc867482EEC` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
@@ -47,11 +49,11 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
 | `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
-| `universalBytecodeStore` | `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A` |
-| `universalCreate2DeployerFromStore` | `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0` |
+| `universalBytecodeStore` | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |
+| `universalCreate2DeployerFromStore` | `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd` |
 | `vaultActivationBatcher` | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
-| `creatorVaultBatcher` | `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c` |
-| `creatorVaultBatcherAutoHandoff` | `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c` |
+| `creatorVaultBatcher` | `0x004684670d284EF607E1B2424fcf8ccBda8ef828` |
+| `creatorVaultBatcherAutoHandoff` | `0x004684670d284EF607E1B2424fcf8ccBda8ef828` |
 
 ## Active Deployment Snapshots
 
@@ -72,8 +74,10 @@ Current snapshot set:
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase3Helper=0xF185Cb60E108E324f67e75cf8106B8e9950c16ed`
-- `DeploymentBatcherUniV4Helper=0xfe1C5eaa76942208298f510c820e7E8328f6d031`
+- `DeploymentBatcherPhase2Module=0x9794735D53dA4f0884eA43E2764A7E4dd2a38826`
+- `DeploymentBatcherPhase3Helper=0x7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c`
+- `DeploymentBatcherUniV4Helper=0xCd10BEcd96c13b63cEff49A646Eca1fe6D2f2CC7`
+- `DeploymentBatcherUtilsHelper=0xb79615C6B128E953347fcd6061DeaEc867482EEC`
 
 ## Bytecode / CodeId Evidence
 
@@ -108,8 +112,8 @@ The active bytecode manifest must include all three entries.
 2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
 3. Run `forge test --match-contract SeedCreatorRegistryConfigTest`.
 4. Confirm `DeploymentBatcher` wiring onchain:
-   - `cast call 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c "bytecodeStore()(address)"`
-   - `cast call 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c "create2Deployer()(address)"`
-   - `cast call 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c "vaultCoreModule()(address)"`
-   - `cast call 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c "vaultStrategiesModule()(address)"`
-   - `cast call 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c "vaultAdminModule()(address)"`
+   - `cast call 0x004684670d284EF607E1B2424fcf8ccBda8ef828 "bytecodeStore()(address)"`
+   - `cast call 0x004684670d284EF607E1B2424fcf8ccBda8ef828 "create2Deployer()(address)"`
+   - `cast call 0x004684670d284EF607E1B2424fcf8ccBda8ef828 "vaultCoreModule()(address)"`
+   - `cast call 0x004684670d284EF607E1B2424fcf8ccBda8ef828 "vaultStrategiesModule()(address)"`
+   - `cast call 0x004684670d284EF607E1B2424fcf8ccBda8ef828 "vaultAdminModule()(address)"`

@@ -21,7 +21,7 @@ interface ICreatorOVaultStrategiesModuleInternal {
 contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;

@@ -128,7 +128,7 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 10_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-const SPLIT_PHASE1_PHASE3_HELPER = addr('A2Bb16F729229705a7F101d3be11ad51Ae90aC83')
+const SPLIT_PHASE1_PHASE3_HELPER = addr('7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c')
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
@@ -8865,10 +8865,10 @@ function DeployVaultMain() {
     if (bytecodeInfraQuery.isError) return (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data) return 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data.storeSupportsChunking) {
-      return 'Deployment infra uses a v1 bytecode store (no chunking). Deploy the v2 bytecode store + v2 deployer + new deployment batcher.'
+      return 'Deployment infra uses an unchunked bytecode store. Deploy the current chunked bytecode store, phased deployer, and deployment batcher.'
     }
     if (bytecodeInfraQuery.data.missing.length > 0) {
-      return `Bytecode store is missing: ${bytecodeInfraQuery.data.missing.join(', ')}. Seed the v2 store, then retry.`
+      return `Bytecode store is missing: ${bytecodeInfraQuery.data.missing.join(', ')}. Seed the current bytecode store, then retry.`
     }
     return null
   }, [

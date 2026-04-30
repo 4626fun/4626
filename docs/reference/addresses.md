@@ -24,19 +24,21 @@ Deployed contract addresses for 4626.
 | CreatorLotteryManager | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | CreatorVRFConsumerV2_5 | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
 | SolanaBridgeAdapter | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
-| UniversalBytecodeStoreV2 | `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A` |
-| UniversalCreate2DeployerFromStore | `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0` |
-| CreatorOVaultCoreModule | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |
-| CreatorOVaultStrategiesModule | `0x0f1A26b93AD56BBbC5e0486A920621944FF6ABd6` |
-| CreatorOVaultAdminModule | `0xFC40e9768eeaAE634CBD2A72DA0CF809d3c908e0` |
-| DeploymentBatcher | `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c` |
-| DeploymentBatcherPhase3Helper | `0xF185Cb60E108E324f67e75cf8106B8e9950c16ed` |
-| DeploymentBatcherUniV4Helper | `0xfe1C5eaa76942208298f510c820e7E8328f6d031` |
+| UniversalBytecodeStoreV2 | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |
+| UniversalCreate2DeployerFromStore | `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd` |
+| CreatorOVaultCoreModule | `0xF670590D1070B1C30E8da76176E841b6e753fDb9` |
+| CreatorOVaultStrategiesModule | `0x7cCFA3E1c7eF5ADab9C9676430c27244f8c8ec7A` |
+| CreatorOVaultAdminModule | `0x48512Db9cDddC3f259036605A8eBD3C8e5dE1598` |
+| DeploymentBatcher | `0x004684670d284EF607E1B2424fcf8ccBda8ef828` |
+| DeploymentBatcherPhase2Module | `0x9794735D53dA4f0884eA43E2764A7E4dd2a38826` |
+| DeploymentBatcherPhase3Helper | `0x7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c` |
+| DeploymentBatcherUniV4Helper | `0xCd10BEcd96c13b63cEff49A646Eca1fe6D2f2CC7` |
+| DeploymentBatcherUtilsHelper | `0xb79615C6B128E953347fcd6061DeaEc867482EEC` |
 
 Notes:
 - Shared/global contracts carry over where still canonical; the active deployment entrypoint is the split Phase-1 batcher above.
 - The repo's canonical deployment namespace is `v1.9.2` (fresh CREATE2 salt space for new per-creator deploys).
-- `DeploymentBatcherPhase3Helper` and `DeploymentBatcherUniV4Helper` are constructor-created by `DeploymentBatcher`.
+- `DeploymentBatcherPhase2Module`, `DeploymentBatcherPhase3Helper`, `DeploymentBatcherUniV4Helper`, and `DeploymentBatcherUtilsHelper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 
 ### Per-Creator Deployments

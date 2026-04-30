@@ -63,7 +63,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
