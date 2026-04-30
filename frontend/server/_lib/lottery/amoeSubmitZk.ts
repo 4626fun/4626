@@ -40,6 +40,8 @@ import {
 } from './amoeIdentifiers.js'
 import { buildAmoeLedgerSnapshotStub } from './amoeLedgerSnapshotStub.js'
 import {
+  AMOE_EPOCH_GENESIS_SECONDS,
+  AMOE_EPOCH_LENGTH_SECONDS,
   assembleAmoeWitness,
   type AmoeWitnessTreeContext,
 } from './amoeWitness.js'
@@ -59,22 +61,34 @@ declare const process: { env: Record<string, string | undefined>; cwd(): string 
  * Daily AMOE epoch length, in seconds. Pinned at 86400 — must match
  * `EPOCH_SECONDS` in `circuits/amoe/amoe_eligibility.circom:157`.
  *
+ * **Single source of truth:** this is now a re-export of
+ * {@link AMOE_EPOCH_LENGTH_SECONDS} from `amoeWitness.ts`. The two
+ * names exist for historical reasons (this module predates the witness
+ * module's promotion to canonical-constant owner in PR 5a) but they
+ * MUST always equal the same bigint — a desync would mean the submit
+ * handler computes a different epoch than the points-burn-ledger
+ * publisher, leaving entries unprovable.
+ *
  * Changing this is a breaking change to the circuit and requires
  * regenerating the zkey, the verifier, and every fixture. Do not
  * touch without an explicit zk-circuit change ticket.
  */
-export const AMOE_EPOCH_SECONDS = 86400n
+export const AMOE_EPOCH_SECONDS = AMOE_EPOCH_LENGTH_SECONDS
 
 /**
  * Genesis anchor for the AMOE epoch counter — first UTC midnight after
- * PR #426 (witness construction) merged. Lock this with a named export
- * so any caller that needs the same epoch arithmetic (the publisher in
- * PR 5, the replay-store cron in PR 4, debug tooling) reads the SAME
- * constant rather than redefining it.
+ * PR #426 (witness construction) merged.
  *
- * Value: `2026-04-30T00:00:00Z` → `Date.UTC(2026, 3, 30) / 1000`.
+ * **Single source of truth:** this is now a re-export of
+ * {@link AMOE_EPOCH_GENESIS_SECONDS} from `amoeWitness.ts`. The two
+ * names exist for historical reasons; a regression test in
+ * `amoeSubmitZk.test.ts` pins `AMOE_EPOCH_GENESIS_UNIX_SEC ===
+ * AMOE_EPOCH_GENESIS_SECONDS` so they cannot silently drift apart.
+ *
+ * Value: `2026-04-30T00:00:00Z` → `Date.UTC(2026, 3, 30) / 1000` =
+ * 1_777_507_200.
  */
-export const AMOE_EPOCH_GENESIS_UNIX_SEC = 1777507200n // 2026-04-30T00:00:00Z
+export const AMOE_EPOCH_GENESIS_UNIX_SEC = AMOE_EPOCH_GENESIS_SECONDS
 
 /**
  * Compute the current AMOE epoch number for a given Unix-second

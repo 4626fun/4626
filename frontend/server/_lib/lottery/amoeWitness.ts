@@ -116,10 +116,11 @@ export const AMOE_MAX_POINTS_BURNED_AS_USD = (1n << 64n) - 1n
  * epoch (UTC). The first epoch (E=0) starts at this instant; subsequent
  * epochs roll over every {@link AMOE_EPOCH_LENGTH_SECONDS} seconds.
  *
- * **Pinned value:** `2026-04-30T00:00:00Z` = 1777939200. This is the first
- * UTC midnight strictly after PR #426 (the witness module) merged at
- * 2026-04-29T06:10:43Z, satisfying the design constraint in
- * `docs/security/amoe-points-burn-ledger-sot.md` §10.
+ * **Pinned value:** `2026-04-30T00:00:00Z` = 1_777_507_200. This is the
+ * first UTC midnight strictly after PR #426 (the witness module) merged
+ * at 2026-04-29T06:10:43Z, satisfying the design constraint in
+ * `docs/security/amoe-points-burn-ledger-sot.md` §10. Verified:
+ * `Date.UTC(2026, 3, 30, 0, 0, 0) / 1000 === 1_777_507_200`.
  *
  * **Why a hard-coded constant, not env:** the epoch index is a public
  * input to every PLONK proof and is bound on-chain by
@@ -128,11 +129,17 @@ export const AMOE_MAX_POINTS_BURNED_AS_USD = (1n << 64n) - 1n
  * desync every downstream proof. Pinning here means both modules import
  * the same value at module load.
  *
+ * **Single source of truth:** `amoeSubmitZk.ts` re-exports this value
+ * (under the legacy name `AMOE_EPOCH_GENESIS_UNIX_SEC`) so that the
+ * submit-handler and the points-burn-ledger publisher cannot drift
+ * apart. A regression test in `amoeSubmitZk.test.ts` asserts the two
+ * names point at the same bigint.
+ *
  * **Mutation forbidden post-launch:** changing this value is equivalent
  * to invalidating every previously-published epoch root and would brick
  * every in-flight proof. Treat it as a circuit constant.
  */
-export const AMOE_EPOCH_GENESIS_SECONDS = 1_777_939_200n as const
+export const AMOE_EPOCH_GENESIS_SECONDS = 1_777_507_200n as const
 
 /**
  * Length of one AMOE epoch in seconds — 86400 = 1 UTC day.
