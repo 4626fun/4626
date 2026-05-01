@@ -1,4 +1,19 @@
--- Migration: Add `amoe_entry_refund` source to the AMOE-eligibility view.
+-- Migration: Add `amoe_entry_refund` source + `amoe_burn_credits_intents`
+-- table to support the orphan-burn refund cron (PR 6c).
+--
+-- Two changes are bundled because they're co-dependent: the refund cron
+-- only emits a refund when an intent row exists, and the intent row is
+-- only written by the burn-credits endpoint that PR 6b introduced.
+--
+-- 1. Adds an `amoe_entry_refund` arm to `points_amoe_eligible_balance`
+--    so a compensating row actually restores the user's eligible balance.
+-- 2. Adds a new `amoe_burn_credits_intents` table that the burn-credits
+--    handler writes a row into immediately after the points debit. The
+--    refund cron requires an intent row to exist before it will emit a
+--    refund, which scopes the cron strictly to phase-A burns from the
+--    new burn-credits endpoint and excludes legacy debits from the
+--    older `/api/v1/lottery/amoe/submit` handler that share the same
+--    `source='amoe_entry_spend'`.
 --
 -- Motivation
 -- ----------
@@ -16,13 +31,17 @@
 -- `points_unique_source_full` UNIQUE index makes the refund
 -- INSERT idempotent.
 --
--- The compensation row only restores the user's eligible balance if the
--- AMOE-eligibility view's CASE statement actually counts it. Today the
--- view (introduced by `20260427180000_amoe_eligible_points_view.sql`)
--- only matches `amoe_entry_spend` for AMOE-internal sources, so a new
--- `amoe_entry_refund` row would fall through the `ELSE 0` arm and have
--- no effect on the eligible-balance calculation. This migration adds
--- the missing CASE arm.
+-- Why scope by intent (not just `source='amoe_entry_spend'`)
+-- ----------------------------------------------------------
+-- The legacy `/api/v1/lottery/amoe/submit` endpoint also writes
+-- `amoe_entry_spend` debit rows via `consumeAmoeCreditsForEntry`, but
+-- those are tied to a successful relay — the entry already happened
+-- on chain, no refund is owed. Legacy submits never write
+-- `amoe_zk_submissions` rows, so we cannot disambiguate by the
+-- presence of a settled submission. We need an explicit forward
+-- marker that says "this burn came from the burn-credits endpoint
+-- and is therefore eligible for orphan-refund". `amoe_burn_credits_intents`
+-- is that marker.
 --
 -- L1-projector interaction
 -- ------------------------
@@ -47,6 +66,9 @@
 --   `supabase/migrations/20260430190000_amoe_entry_refund_source.sql`.
 -- Keep them in lockstep.
 
+-- ---------------------------------------------------------------------------
+-- 1. Eligibility view — add `amoe_entry_refund` arm
+-- ---------------------------------------------------------------------------
 CREATE OR REPLACE VIEW public.points_amoe_eligible_balance AS
 SELECT
   signup_id,
@@ -115,3 +137,16 @@ GROUP BY signup_id;
 
 COMMENT ON VIEW public.points_amoe_eligible_balance IS
   'Per-signup sum of points-ledger rows whose source is on the AMOE free-action allowlist. Used by consumeAmoeCreditsForEntry to gate free lottery entries. Excludes paid-action sources (has_creator_coin) and tainted sources (referral_passthrough, deprecated referral_*). The amoe_entry_refund source is the compensating credit written by the PR 6c refund cron for orphan phase-A burns. See docs/security/amoe-points-source-audit.md and docs/security/amoe-burn-then-submit-design.md §5.1.';
+
+-- ---------------------------------------------------------------------------
+-- 2. Burn-credits intents — forward marker for orphan-refund eligibility
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.amoe_burn_credits_intents (
+  signup_id     BIGINT      NOT NULL,
+  spend_ref_id  TEXT        NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (signup_id, spend_ref_id)
+);
+
+COMMENT ON TABLE public.amoe_burn_credits_intents IS
+  'Forward marker written by the burn-credits handler (PR 6b) one row per (signup_id, spend_ref_id) immediately after the points debit. The refund cron (PR 6c) requires a matching intent row before emitting a refund. This scopes the cron strictly to phase-A burns from the new burn-credits endpoint and excludes legacy debits from /api/v1/lottery/amoe/submit that share the same points source. See docs/security/amoe-burn-then-submit-design.md §5.1.';

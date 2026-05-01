@@ -197,6 +197,13 @@ describe('amoeBurnRefund — findOrphanBurns', () => {
     // Refund-skip subquery (source='amoe_entry_refund' is parameterised)
     expect(text).toMatch(/r\.source = \?/i)
     expect(calls[0]!.params).toContain('amoe_entry_refund')
+    // Phase-A scope guard: must reference the intents table via an EXISTS
+    // join on (signup_id, spend_ref_id). This is the P1 fix that prevents
+    // legacy /api/v1/lottery/amoe/submit debits from being misclassified
+    // as orphans — see docs/security/amoe-burn-then-submit-design.md §5.1.
+    expect(text).toMatch(/amoe_burn_credits_intents/i)
+    expect(text).toMatch(/i\.signup_id = p\.signup_id/i)
+    expect(text).toMatch(/i\.spend_ref_id = p\.source_id/i)
     // Age cutoff via INTERVAL multiplication, ageSec passed as a param
     expect(text).toMatch(/INTERVAL '1 second' \* \?/)
     expect(calls[0]!.params).toContain(86_400 * 7)
@@ -204,6 +211,41 @@ describe('amoeBurnRefund — findOrphanBurns', () => {
     expect(text).toMatch(/ORDER BY p\.created_at ASC/)
     expect(text).toMatch(/LIMIT \?/)
     expect(calls[0]!.params).toContain(25)
+  })
+
+  // Regression test for the P1 bug Codex caught on PR #461 first commit.
+  // The original orphan-detection query had only two NOT EXISTS predicates
+  // (settled-submission, prior-refund) which meant any `amoe_entry_spend`
+  // debit — including legacy ones from POST /api/v1/lottery/amoe/submit
+  // (which never write `amoe_zk_submissions` rows because they relay
+  // immediately rather than via phase-B ZK submission) — would qualify
+  // as orphans after `REFUND_AGE_EPOCHS` and get incorrectly refunded,
+  // effectively granting free / duplicated AMOE credits.
+  //
+  // The fix scopes refunds via an explicit `amoe_burn_credits_intents`
+  // forward marker that ONLY the burn-credits handler writes. This test
+  // pins the contract: the SQL MUST contain a positive EXISTS on the
+  // intents table joined by (signup_id, spend_ref_id). If a future
+  // refactor drops or weakens that predicate, this test fails.
+  it('does NOT refund debits without an intent row (legacy /submit protection)', async () => {
+    const { db, calls } = captureDb(async () => ({ rows: [] }))
+    await findOrphanBurns(db, { ageSec: 86_400 * 7, limit: 25 })
+    const text = calls[0]!.text
+    // The intents table must appear inside a positive EXISTS, NOT a
+    // NOT EXISTS — missing-intent rows must be filtered OUT, not IN.
+    // Match an EXISTS whose body references amoe_burn_credits_intents,
+    // and ensure no NOT EXISTS clause is keyed off the intents table.
+    const intentExistsRegex =
+      /\bAND\s+EXISTS\s*\(\s*SELECT[\s\S]+?FROM\s+amoe_burn_credits_intents\b/i
+    expect(text).toMatch(intentExistsRegex)
+    expect(text).not.toMatch(
+      /NOT\s+EXISTS\s*\([^)]*amoe_burn_credits_intents/i,
+    )
+    // The join keys must be the canonical (signup_id, spend_ref_id)
+    // pair that the burn-credits handler writes — not, e.g., a wallet
+    // address or a points.id, both of which would be incorrect.
+    expect(text).toMatch(/i\.signup_id\s*=\s*p\.signup_id/i)
+    expect(text).toMatch(/i\.spend_ref_id\s*=\s*p\.source_id/i)
   })
 
   it('rejects positive amounts (data corruption)', async () => {

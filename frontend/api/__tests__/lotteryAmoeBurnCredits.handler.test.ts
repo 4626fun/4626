@@ -159,6 +159,15 @@ vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
   parseAmoeEntryMessage: parseTestEntryMessage,
 }))
 
+// PR 6c P1 hotfix v2 (Codex follow-up): the phase-A intent marker is
+// now written ATOMICALLY by `consumeAmoeCreditsForEntry`'s debit CTE in
+// the lib layer, NOT by a follow-up INSERT in the handler. So the
+// handler no longer touches `db/postgres.js` directly and we don't need
+// to mock it here. Lib-layer atomicity is covered by the SQL canary in
+// `server/_lib/__tests__/lotteryAmoe.consumeAmoeCreditsForEntry.test.ts`
+// (intent_ins CTE assertion) plus the orphan-refund canary in
+// `server/_lib/__tests__/amoeBurnRefund.test.ts`.
+
 import { getV1ApiHandler } from '../_handlers/_routes.v1.js'
 
 // ---------------------------------------------------------------------------
@@ -265,6 +274,14 @@ beforeEach(() => {
     // NOT recompute from `Date.now()`.
     burnedAt: '2026-04-29T12:00:00.000Z',
     burnEpoch: '17',
+    // PR 6c P1 hotfix v2: lib still returns the resolved profile id and
+    // canonical spendRefId (they're observable side outputs of the debit
+    // CTE), but the handler no longer needs them — the intent row is
+    // written atomically inside `consumeAmoeCreditsForEntry` itself.
+    // Kept on the mock contract so any future regression that asserts
+    // these fields stays green.
+    signupId: PROFILE_ID,
+    spendRefId: 'idem-2026-04-29-aaaa',
   })
 })
 
@@ -502,6 +519,8 @@ describe('lottery/amoe/burn-credits — enabled', () => {
       entriesAvailable: 7,
       burnedAt: '2026-04-29T12:00:00.000Z',
       burnEpoch: '17',
+      signupId: PROFILE_ID,
+      spendRefId: 'idem-2026-04-29-aaaa',
     })
     const { res } = await callBurn(validBody())
     expect(res.statusCode).toBe(200)
@@ -538,6 +557,8 @@ describe('lottery/amoe/burn-credits — enabled', () => {
       entriesAvailable: 7,
       burnedAt: '2026-04-29T12:00:00.000Z',
       burnEpoch: '17',
+      signupId: PROFILE_ID,
+      spendRefId: 'idem-2026-04-29-aaaa',
     })
     const second = await callBurn(validBody())
     expect(second.res.statusCode).toBe(200)

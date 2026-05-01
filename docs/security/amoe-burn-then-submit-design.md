@@ -167,11 +167,82 @@ The new failure mode is: **phase A succeeded, phase B never called or never succ
 - A new lightweight cron `_amoeBurnRefundCron.ts` walks `points` rows directly with `source='amoe_entry_spend' AND amount<0` that:
   - have NO matching `amoe_zk_submissions` row in state `settled`, AND
   - have NO existing `amoe_entry_refund` row (so re-running the cron is a no-op), AND
+  - HAVE a matching row in `amoe_burn_credits_intents` (the phase-A scope guard — see below), AND
   - are older than `REFUND_AGE_EPOCHS` (default 7 epochs ≈ 7 days; tunable via `AMOE_REFUND_AGE_EPOCHS`).
 - For each match, the cron INSERTs a compensating `+pointsBurned` row in `points` with `source='amoe_entry_refund'` and `source_id=spendRefId`. Idempotency is provided by the existing `points_unique_source_full` UNIQUE index — `ON CONFLICT DO NOTHING` makes a second-pass a no-op.
 - Refund rows do NOT enter the on-chain ledger root — the L0 → L1 projector (`amoeLedgerProjector.ts:316-317`) filters `amount < 0`, so positive refunds cannot retroactively forge a Merkle leaf.
-- Migration `035_amoe_entry_refund_source.sql` (mirrored to `supabase/migrations/20260430190000_amoe_entry_refund_source.sql`) adds an `amoe_entry_refund` arm to the `points_amoe_eligible_balance` view's CASE so the compensation actually restores the user's eligible balance.
+- Migration `035_amoe_entry_refund_source.sql` (mirrored to `supabase/migrations/20260430190000_amoe_entry_refund_source.sql`) adds (a) an `amoe_entry_refund` arm to the `points_amoe_eligible_balance` view's CASE so the compensation actually restores the user's eligible balance, and (b) the `amoe_burn_credits_intents` table described below.
 - Implementation chose to scan `points` (L0) directly rather than `amoe_points_burn_ledger` (L1) so the cron remains correct even when the publisher cron is paused, mis-deployed, or behind. We did NOT add an `expired_at` column on L1 — the TTL is computed at query time from `points.created_at`, which is simpler and avoids a destructive migration.
+
+#### 5.1.1 Phase-A scope guard — `amoe_burn_credits_intents`
+
+A naive orphan-detection query that just looks for `source='amoe_entry_spend' AND amount<0` rows lacking a settled `amoe_zk_submissions` row will incorrectly classify legitimate **legacy** debits as orphans. The legacy `POST /api/v1/lottery/amoe/submit` handler (`frontend/api/_handlers/v1/lottery/_amoeSubmit.ts`) calls `consumeAmoeCreditsForEntry` after a successful relay, so it writes the same `source='amoe_entry_spend'` rows but never writes `amoe_zk_submissions` rows (it relays directly, skipping the phase-B ZK submission path). Without an additional scope guard, when ops set `AMOE_REFUND_CRON_ENABLED=1` every successful legacy entry older than `REFUND_AGE_EPOCHS` would be "refunded" — effectively granting users free / duplicated AMOE credits. (Codex caught this on PR #461's first commit; see review comment for the failure-mode walkthrough.)
+
+Fix: explicit forward-marker table.
+
+```sql
+CREATE TABLE IF NOT EXISTS public.amoe_burn_credits_intents (
+  signup_id     BIGINT      NOT NULL,
+  spend_ref_id  TEXT        NOT NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (signup_id, spend_ref_id)
+);
+```
+
+- The intent row is written **atomically with the debit** inside `consumeAmoeCreditsForEntry` (lib helper). The debit's CTE has a sibling `intent_ins AS (INSERT INTO amoe_burn_credits_intents ... SELECT signup_id, spend_ref_id FROM ins ON CONFLICT DO NOTHING)` clause. Postgres single-statement transactional atomicity guarantees both rows commit or neither does — there is no window where a debit can land without its marker. See §5.1.2 for the Codex follow-up that drove this design.
+- The legacy `_amoeSubmit.ts` handler does NOT write into this table. By construction, then, the table membership is exactly the set of phase-A burns eligible for orphan-refund.
+- The idempotent-retry path in `consumeAmoeCreditsForEntry` (existing-row case) opportunistically backfills the intent row via a sibling `intent_backfill` CTE so any debits that landed before this hotfix shipped get marked on retry. The backfill is non-fatal on failure — the helper still returns the original `burnedAt`/`burnEpoch`, and a subsequent retry will try again.
+- The refund cron's `findOrphanBurns` query gains a fourth predicate — `EXISTS (SELECT 1 FROM amoe_burn_credits_intents i WHERE i.signup_id = p.signup_id AND i.spend_ref_id = p.source_id)` — which scopes the cron strictly to phase-A burns and excludes legacy debits.
+
+Alternatives considered (rejected):
+- New source value (`amoe_entry_spend_zk`): too invasive — would require updating the projector, the eligibility view, the ledger reader, and the witness builder.
+- Structural pattern-matching on `spendRefId` format: brittle; depends on legacy clients never adopting the new format.
+- Time-gating by hardcoded deploy timestamp: brittle; depends on a wall-clock cutoff that nobody can verify after the fact.
+
+The forward marker is the explicit, auditable contract: the cron only refunds rows that the burn-credits handler said "yes, this is mine".
+
+#### 5.1.2 Atomic intent write — Codex P1 follow-up
+
+The **first** version of the phase-A scope guard (PR #464 commit `db67c53`) wrote the intent marker as a separate `INSERT INTO amoe_burn_credits_intents` statement issued by the burn-credits handler **after** `consumeAmoeCreditsForEntry` returned. Codex flagged this as P1 ([review on #464](https://github.com/wenakita/4626/pull/464)):
+
+> The new phase-A marker write runs as a separate query after `consumeAmoeCreditsForEntry` has already committed the points debit, so any transient DB failure on this INSERT can return a 500 while leaving a successful burn without an `amoe_burn_credits_intents` row. In that state, the refund cron’s new EXISTS guard will permanently skip that burn, so users can lose credits unless they happen to retry with the same `spendRefId`. This should be atomic with the debit (or otherwise guaranteed) to avoid creating unrecoverable unmarked burns.
+
+The failure mode is real: the debit succeeds, the handler is killed by a transient pool error before the second statement, the user sees a 500 and may not retry (or may retry with a different `spendRefId`), and the original debit is now permanently invisible to the refund cron — even though it has no settled `amoe_zk_submissions` row. The user has burned points for nothing and the safety net is silent.
+
+**Fix.** Move the intent insert into the same single SQL statement as the debit, sharing a CTE chain. Postgres single-statement transactions are atomic — either both rows are visible to subsequent transactions, or neither is. The structural invariant becomes:
+
+```
+WITH current AS (
+  SELECT credits FROM points_amoe_eligible_balance WHERE signup_id = $1
+),
+ins AS (
+  INSERT INTO points (...) SELECT ... FROM current WHERE current.credits >= $required
+  ON CONFLICT DO NOTHING RETURNING id, created_at
+),
+intent_ins AS (
+  INSERT INTO amoe_burn_credits_intents (signup_id, spend_ref_id)
+  SELECT $1, $spendRefId FROM ins   -- only fires when ins inserted
+  ON CONFLICT DO NOTHING RETURNING signup_id
+)
+SELECT ... ;
+```
+
+Key properties:
+
+- `intent_ins` reads `FROM ins`, so it only fires when the debit row was actually inserted — no spurious markers on the insufficient-credits short-circuit.
+- `ON CONFLICT DO NOTHING` on the intents PK makes concurrent retries with the same `spendRefId` collapse to a no-op.
+- The handler in `_amoeBurnCredits.ts` no longer touches the intent table directly. It does not import `getDb` and does not issue any post-debit DB write for the intent. (A code comment at the relevant section pins this so a future refactor doesn't accidentally re-introduce the race.)
+
+Idempotent-retry path (existing debit row, e.g. retry against the same `spendRefId`) similarly uses a CTE — `existing` selects the prior row and `intent_backfill` opportunistically writes the marker via the same `ON CONFLICT DO NOTHING` insert. This handles two cases: (a) debits committed during the brief window before this hotfix shipped on `main` (`525cb0f`), and (b) any pathological case where a prior call's CTE committed but a follow-up application-layer step failed.
+
+The lib-layer change is paired with a lib-layer SQL canary in `frontend/server/_lib/__tests__/amoeBurnCreditsAtomicIntent.test.ts` that:
+
+- Locates `consumeAmoeCreditsForEntry` in source
+- Asserts the function body contains an `intent_ins AS (...)` CTE that INSERTs into `amoe_burn_credits_intents` and SELECTs `FROM ins`
+- Asserts every `INSERT INTO amoe_burn_credits_intents` in the function body lives inside an `intent_ins` or `intent_backfill` CTE (no standalone post-debit INSERT)
+- Asserts the handler does NOT import `getDb` and does NOT contain `INSERT INTO amoe_burn_credits_intents` at all
+
+This structural canary is the long-term lock-in. It fails the build if anyone refactors the helper into a two-statement layout, regardless of whether they get the migrations / cron / handler / tests right elsewhere.
 
 **Option 2: "explicit refund endpoint".**
 

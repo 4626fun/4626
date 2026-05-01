@@ -320,6 +320,10 @@ A second cron, `_amoeBurnRefundCron.ts`, ships alongside the publisher in PR 6c.
 **Schedule:** `*/15 * * * *` (same cadence as the publisher).
 **Purpose:** writes a compensating `+pointsBurned` row for any phase-A debit that has been orphaned (no `amoe_zk_submissions.state='settled'` for the same `spend_ref_id`) for more than `REFUND_AGE_EPOCHS` (default 7).
 
+**Phase-A scope guard.** A debit only qualifies as an orphan if it has a matching row in `amoe_burn_credits_intents`. This guard prevents the cron from refunding legacy `POST /api/v1/lottery/amoe/submit` debits, which write the same `source='amoe_entry_spend'` rows but never write `amoe_zk_submissions` and so would otherwise be misclassified as orphans. See [`amoe-burn-then-submit-design.md`](./amoe-burn-then-submit-design.md) §5.1.1 for the full rationale.
+
+**Atomic intent write.** The `amoe_burn_credits_intents` row is written inside the same single SQL statement as the debit, via a sibling `intent_ins` CTE in `consumeAmoeCreditsForEntry` that selects FROM the debit's `ins` CTE. Postgres single-statement transactional atomicity guarantees both rows commit together or neither does, so a transient DB failure cannot leave a debit without a marker (which would otherwise be permanently skipped by the `EXISTS` guard above and result in silent credit loss). The idempotent-retry path carries a parallel `intent_backfill` CTE so any pre-hotfix debit gets its marker written on the next retry. See [`amoe-burn-then-submit-design.md`](./amoe-burn-then-submit-design.md) §5.1.2 for the full Codex follow-up rationale and the structural canary that pins the invariant.
+
 ### Feature flags & tunables
 
 | Env var | Default | Purpose |
@@ -351,7 +355,11 @@ A second cron, `_amoeBurnRefundCron.ts`, ships alongside the publisher in PR 6c.
 
 ### Production enable sequence
 
-1. Confirm migration `035_amoe_entry_refund_source.sql` is applied (`points_amoe_eligible_balance` view's CASE includes `WHEN source = 'amoe_entry_refund' THEN amount`).
+1. Confirm migration `035_amoe_entry_refund_source.sql` is applied: `points_amoe_eligible_balance` view's CASE includes `WHEN source = 'amoe_entry_refund' THEN amount`, AND `amoe_burn_credits_intents` table exists with primary key `(signup_id, spend_ref_id)`.
+   ```sql
+   -- Quick verification:
+   SELECT to_regclass('public.amoe_burn_credits_intents');  -- expected: 'amoe_burn_credits_intents' (not NULL)
+   ```
 2. Set `AMOE_REFUND_CRON_ENABLED=1` in Vercel → Production env.
 3. Re-deploy.
 4. Watch the next 4 ticks (= 1 hour) in Vercel Logs:
@@ -371,6 +379,7 @@ ORDER BY created_at DESC
 LIMIT 50;
 
 -- Orphan candidates the next tick would refund (count only).
+-- Predicate (4) is the phase-A scope guard — see §5.1.1 of the design doc.
 SELECT COUNT(*)
 FROM points p
 WHERE p.source = 'amoe_entry_spend'
@@ -383,6 +392,22 @@ WHERE p.source = 'amoe_entry_spend'
   AND NOT EXISTS (
     SELECT 1 FROM points r
     WHERE r.signup_id = p.signup_id AND r.source = 'amoe_entry_refund' AND r.source_id = p.source_id
+  )
+  AND EXISTS (
+    SELECT 1 FROM amoe_burn_credits_intents i
+    WHERE i.signup_id = p.signup_id AND i.spend_ref_id = p.source_id
+  );
+
+-- Legacy /submit debits that the cron will NEVER refund (sanity check).
+-- This is the set the P1 fix protects — should grow as users use the
+-- legacy submit handler, but should NEVER appear in `amoe_entry_refund`.
+SELECT COUNT(*)
+FROM points p
+WHERE p.source = 'amoe_entry_spend'
+  AND p.amount < 0
+  AND NOT EXISTS (
+    SELECT 1 FROM amoe_burn_credits_intents i
+    WHERE i.signup_id = p.signup_id AND i.spend_ref_id = p.source_id
   );
 
 -- Sanity: refund-source rows MUST never appear in the L1 ledger.
@@ -406,3 +431,5 @@ Unset `AMOE_REFUND_CRON_ENABLED` (or set to anything other than `'1'`) and re-de
 |---|---|
 | 2026-04-30 | Initial runbook, shipping with PR 5b (#450) follow-up. |
 | 2026-04-30 | Added orphan-burn refund cron (PR 6c) section. |
+| 2026-04-30 | PR 6c P1 fix — documented `amoe_burn_credits_intents` phase-A scope guard. |
+| 2026-04-30 | PR 6c P1 v2 — documented atomic intent insert (Codex follow-up on #464); intent row now written inside debit CTE, eliminating post-debit race window. |

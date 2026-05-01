@@ -236,7 +236,19 @@ function toIsoString(value: unknown): string {
  *   2. have NO `amoe_zk_submissions` row in state `settled` for the
  *      same `(signup_id, spend_ref_id)` (phase B never landed),
  *   3. have NO existing `amoe_entry_refund` row keyed by the same
- *      `source_id` (refund hasn't run yet).
+ *      `source_id` (refund hasn't run yet),
+ *   4. HAVE a matching `amoe_burn_credits_intents` row written by the
+ *      `POST /api/v1/lottery/amoe/burn-credits` handler.
+ *
+ * Predicate (4) is the phase-A scope guard. Without it, legacy debits
+ * from the older `POST /api/v1/lottery/amoe/submit` endpoint — which
+ * also writes `source='amoe_entry_spend'` rows via
+ * `consumeAmoeCreditsForEntry` but never writes `amoe_zk_submissions`
+ * — would be misclassified as orphans and incorrectly refunded after
+ * `REFUND_AGE_EPOCHS`, effectively granting free / duplicated AMOE
+ * credits when `AMOE_REFUND_CRON_ENABLED=1` is turned on. The intents
+ * table is the explicit forward marker that scopes the cron to phase-A
+ * burns only. See docs/security/amoe-burn-then-submit-design.md §5.1.
  *
  * Returns at most `limit` candidates, oldest-first, so a backlog
  * drains deterministically across ticks.
@@ -282,6 +294,15 @@ export async function findOrphanBurns(
         WHERE r.signup_id = p.signup_id
           AND r.source = ${'amoe_entry_refund'}
           AND r.source_id = p.source_id
+      )
+      -- Phase-A scope guard: only refund debits that the burn-credits
+      -- handler explicitly marked as eligible. Excludes legacy debits
+      -- from /api/v1/lottery/amoe/submit which share the same source.
+      AND EXISTS (
+        SELECT 1
+        FROM amoe_burn_credits_intents AS i
+        WHERE i.signup_id = p.signup_id
+          AND i.spend_ref_id = p.source_id
       )
     ORDER BY p.created_at ASC
     LIMIT ${limit};

@@ -360,6 +360,25 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     GROUP BY signup_id;
   `
 
+  // Burn-credits intents — forward marker the burn-credits handler writes
+  // into one row per (signup_id, spend_ref_id) immediately after a phase-A
+  // points debit. The PR 6c refund cron requires a matching intent row
+  // before emitting an `amoe_entry_refund`, scoping refunds strictly to
+  // phase-A burns and excluding legacy `/api/v1/lottery/amoe/submit`
+  // debits that share the same `source='amoe_entry_spend'`.
+  //
+  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION at
+  // `frontend/db/migrations/035_amoe_entry_refund_source.sql` (and its
+  // Supabase mirror). If you change one, update the other.
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS public.amoe_burn_credits_intents (
+      signup_id     BIGINT      NOT NULL,
+      spend_ref_id  TEXT        NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (signup_id, spend_ref_id)
+    );
+  `
+
   amoeSchemaEnsured = true
 }
 
@@ -646,6 +665,19 @@ export async function consumeAmoeCreditsForEntry(params: {
    * BigInt JSON-serialization issues at the API boundary.
    */
   burnEpoch: string
+  /**
+   * Resolved (or newly created) `profiles.id` that owns the burn. Surfaced
+   * so phase-A callers (`_amoeBurnCredits.ts`) can write a matching row
+   * into `amoe_burn_credits_intents` without re-running profile resolution.
+   * Mem-fallback (no DB) returns `null`.
+   */
+  signupId: number | null
+  /**
+   * Stable `spend_ref_id` actually persisted on the `points` row. Returned
+   * verbatim so phase-A callers don't have to re-derive the auto-generated
+   * default when `refId` is omitted.
+   */
+  spendRefId: string
 }> {
   const wallet = normalizeWallet(params.wallet)
   const requiredCredits =
@@ -665,6 +697,14 @@ export async function consumeAmoeCreditsForEntry(params: {
     // wall-clock — tests that care about idempotent stability should
     // pin time via `vi.useFakeTimers()`.
     const nowMs = Date.now()
+    // Mem-fallback synthesizes a spend ref so the return shape matches the
+    // DB path. `signupId: null` flags "no persisted profile" — phase-A
+    // callers must guard before writing an `amoe_burn_credits_intents`
+    // row, but in practice this branch is only hit by tests that don't
+    // exercise the intent path.
+    const memSpendRefId =
+      normalizeRefId(params.refId) ??
+      `amoe-spend:${wallet}:${nowMs.toString(36)}:${randomBytes(6).toString('hex')}`
     return {
       wallet,
       consumed: requiredCredits,
@@ -673,6 +713,8 @@ export async function consumeAmoeCreditsForEntry(params: {
       entriesAvailable: snapshot.entriesAvailable,
       burnedAt: new Date(nowMs).toISOString(),
       burnEpoch: computeAmoeEpochLocal(BigInt(Math.floor(nowMs / 1000))).toString(),
+      signupId: null,
+      spendRefId: memSpendRefId,
     }
   }
 
@@ -690,6 +732,14 @@ export async function consumeAmoeCreditsForEntry(params: {
   //
   // We `RETURNING created_at` from the INSERT so the new-insert path can
   // surface the actual persisted burn time (Fix #2 from PR #457 review).
+  //
+  // Phase-A intent marker (`intent_ins` CTE) is written ATOMICALLY with
+  // the debit. Postgres treats a single statement as one transactional
+  // unit, and CTEs share its snapshot — so either both rows commit or
+  // neither does. This closes the race Codex flagged on the original
+  // PR 6c hotfix where a separate post-debit INSERT could fail and
+  // leave an unmarked burn that the refund cron would permanently
+  // skip. See docs/security/amoe-burn-then-submit-design.md §5.1.1.
   const spendAttempt = await db.sql`
     WITH current AS (
       SELECT COALESCE(credits, 0)::bigint AS credits
@@ -703,11 +753,19 @@ export async function consumeAmoeCreditsForEntry(params: {
       WHERE current.credits >= ${requiredCredits}
       ON CONFLICT DO NOTHING
       RETURNING id, created_at
+    ),
+    intent_ins AS (
+      INSERT INTO amoe_burn_credits_intents (signup_id, spend_ref_id)
+      SELECT ${signupId}, ${spendRefId}
+      FROM ins
+      ON CONFLICT DO NOTHING
+      RETURNING signup_id
     )
     SELECT
       (SELECT credits FROM current) AS credits_before,
       EXISTS(SELECT 1 FROM ins) AS inserted,
-      (SELECT created_at FROM ins) AS inserted_at;
+      (SELECT created_at FROM ins) AS inserted_at,
+      EXISTS(SELECT 1 FROM intent_ins) AS intent_inserted;
   `
   const inserted = spendAttempt.rows?.[0]?.inserted === true
   let burnedAtRaw: unknown = inserted ? spendAttempt.rows?.[0]?.inserted_at : null
@@ -715,14 +773,39 @@ export async function consumeAmoeCreditsForEntry(params: {
     // Idempotent retry path: source `created_at` from the existing
     // persisted row so the returned `burnedAt`/`burnEpoch` match the
     // ORIGINAL debit, not the retry's wall clock (Fix #2).
+    //
+    // We also opportunistically backfill the phase-A intent marker on
+    // retry. Two cases this covers:
+    //   (a) Retries against debits written before the intent table
+    //       existed (legacy `c46f4fa` rows committed during the brief
+    //       window between PR 6c shipping and this hotfix landing).
+    //   (b) A pathological case where the original debit's CTE
+    //       committed but a follow-on operation rolled back at the
+    //       application layer — the marker insert is idempotent
+    //       (PRIMARY KEY (signup_id, spend_ref_id) + ON CONFLICT).
+    //
+    // Failure to backfill on retry is non-fatal — the retry still
+    // returns the same `burnedAt` / `burnEpoch` as the original burn,
+    // and a subsequent retry will try again. The handler does NOT
+    // depend on intent-row presence.
     const existingSpend = await db.sql`
-      SELECT id, created_at
-      FROM points
-      WHERE signup_id = ${signupId}
-        AND source = ${'amoe_entry_spend'}
-        AND source_id = ${spendRefId}
-        AND amount = ${-requiredCredits}
-      LIMIT 1;
+      WITH existing AS (
+        SELECT id, created_at
+        FROM points
+        WHERE signup_id = ${signupId}
+          AND source = ${'amoe_entry_spend'}
+          AND source_id = ${spendRefId}
+          AND amount = ${-requiredCredits}
+        LIMIT 1
+      ),
+      intent_backfill AS (
+        INSERT INTO amoe_burn_credits_intents (signup_id, spend_ref_id)
+        SELECT ${signupId}, ${spendRefId}
+        FROM existing
+        ON CONFLICT DO NOTHING
+        RETURNING signup_id
+      )
+      SELECT id, created_at FROM existing;
     `
     const existingRow = existingSpend.rows?.[0]
     const alreadySpent = Boolean(existingRow?.id)
@@ -755,6 +838,8 @@ export async function consumeAmoeCreditsForEntry(params: {
     entriesAvailable: snapshot.entriesAvailable,
     burnedAt: burnedAtIso,
     burnEpoch,
+    signupId,
+    spendRefId,
   }
 }
 

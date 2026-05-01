@@ -348,6 +348,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     // ----------------------------------------------------------------
+    // 5b. Phase-A intent marker. Written ATOMICALLY inside
+    //     `consumeAmoeCreditsForEntry`'s debit CTE — do NOT add a
+    //     follow-up INSERT here. Codex flagged the original layout
+    //     (post-debit handler-side INSERT) as P1: a transient failure
+    //     after the debit committed would leave an unmarked burn
+    //     that the refund cron would skip permanently. The marker is
+    //     now part of the same single-statement transaction as the
+    //     debit (Postgres CTE atomicity), so either both rows commit
+    //     or neither does. See lotteryAmoe.ts `consumeAmoeCreditsForEntry`
+    //     and docs/security/amoe-burn-then-submit-design.md §5.1.1.
+    // ----------------------------------------------------------------
+
+    // ----------------------------------------------------------------
     // 6. Compute eligibleSubmitAfter from the PERSISTED burn time
     //    (not `Date.now()` at response time). `consumeAmoeCreditsForEntry`
     //    sources `burnedAt` / `burnEpoch` from the actual `points` row
