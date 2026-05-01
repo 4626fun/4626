@@ -12,7 +12,7 @@
 
 > **ExploreCreators**(): `Element`
 
-Defined in: [src/pages/explore/ExploreCreators.tsx:300](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreCreators.tsx#L300)
+Defined in: [src/pages/explore/ExploreCreators.tsx:312](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreCreators.tsx#L312)
 
 #### Returns
 

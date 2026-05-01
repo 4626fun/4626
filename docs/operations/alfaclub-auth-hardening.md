@@ -122,6 +122,106 @@ patch can split health out into a dedicated `alfaclub_auth_health`
 table without changing the read API; consumers should rely on the
 `/chat-auth-health` endpoint, not the row keys.
 
+## External GitHub Actions monitor
+
+The repo ships an external probe that runs on GitHub Actions every 5
+minutes and on `workflow_dispatch`. A failed workflow run is the
+alerting signal — GitHub emails the repo's notification list and
+surfaces the failure in the Actions tab.
+
+| File | Purpose |
+| --- | --- |
+| [`.github/workflows/alfaclub-auth-health-monitor.yml`](../../.github/workflows/alfaclub-auth-health-monitor.yml) | Cron + manual dispatch wrapper. Runs the script with the secret. |
+| [`frontend/scripts/alfaclub-auth-health-monitor.mjs`](../../frontend/scripts/alfaclub-auth-health-monitor.mjs) | The probe itself. Node 20, no deps. Same script runs in CI and locally. |
+| [`frontend/server/_lib/alfaclub/authHealthMonitor.test.ts`](../../frontend/server/_lib/alfaclub/authHealthMonitor.test.ts) | 44 tests covering the alert matrix (including the wake-oncall `refresh_failed_low_expiry` condition), redaction guarantees, fetch timeout coverage of the body read, and exit-code contract. |
+
+### Setting the GitHub secret
+
+The monitor needs the cron secret to call the endpoint. Set it once
+per repo:
+
+```sh
+# Anywhere with `gh` and repo write access. The value is read from
+# stdin so it never appears in shell history or process listings.
+gh secret set ALFACLUB_HEALTH_CRON_SECRET --repo wenakita/4626 < /path/to/cron-secret-file
+```
+
+Or via the web UI: **Repo → Settings → Secrets and variables → Actions
+→ New repository secret**, name `ALFACLUB_HEALTH_CRON_SECRET`, value
+the same `CRON_SECRET` configured on Vercel for
+`/api/v1/alfaclub/chat-auth-health`.
+
+To override the URL (e.g. point the probe at a staging deploy), set a
+**repository variable** (not a secret) named `ALFACLUB_HEALTH_URL`.
+Default is `https://app.4626.fun/api/v1/alfaclub/chat-auth-health`.
+
+### Alerting model
+
+A failed workflow run (exit code ≠ 0) triggers GitHub's standard
+notification path:
+
+1. Email to repo collaborators (configurable per user under **Settings
+   → Notifications → Actions**).
+2. A red badge in the **Actions** tab and on every PR's status check
+   panel.
+3. Web / mobile app push if the user has subscribed to the workflow.
+
+GitHub Actions itself only sends email and on-GitHub notifications
+for failed runs — it does not natively forward to PagerDuty or Slack.
+To page an external incident channel, wire one of your existing
+integrations to the workflow separately (for example, PagerDuty's
+GitHub Actions integration, a repository webhook on the `workflow_run`
+event, or a follow-up step in the workflow that calls your incident
+API on failure). The script's stderr line is structured for grep so
+those downstream consumers can route on `<reason>`:
+
+```
+alfaclub-auth-health: FAIL <reason> minutesUntilExpiry=<n> writer=<…> anomaly=<…> lastSuccess.at=<…> lastFailure.at=<…>
+```
+
+`<reason>` is one of: `http_status_<code>`, `response_not_success`,
+`missing_data`, `missing_live_chat_jwt`, `expiring_soon`,
+`refresh_failed_low_expiry`, `writer_anomaly`, `missing_last_success`,
+`failure_after_success`, `fetch_error`. The thresholds match the
+[Recommended monitoring thresholds](#recommended-monitoring-thresholds)
+table above; `expiring_soon` defaults to 20 minutes (override via
+`ALFACLUB_HEALTH_MIN_EXPIRY_MINUTES`) and the wake-oncall
+`refresh_failed_low_expiry` defaults to 30 minutes (override via
+`ALFACLUB_HEALTH_REFRESH_FAILED_LOW_EXPIRY_MINUTES`).
+
+### Running the monitor locally
+
+The same script runs on an operator's machine without GitHub Actions:
+
+```sh
+ALFACLUB_HEALTH_CRON_SECRET=…  \
+  node frontend/scripts/alfaclub-auth-health-monitor.mjs
+```
+
+Optional env:
+
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `ALFACLUB_HEALTH_URL` | `https://app.4626.fun/api/v1/alfaclub/chat-auth-health` | Endpoint override (staging, alt domain). |
+| `ALFACLUB_HEALTH_MIN_EXPIRY_MINUTES` | `20` | Threshold for the `expiring_soon` reason. |
+| `ALFACLUB_HEALTH_REFRESH_FAILED_LOW_EXPIRY_MINUTES` | `30` | Threshold for the wake-oncall `refresh_failed_low_expiry` reason (Privy 400 + narrow expiry window). |
+| `ALFACLUB_HEALTH_FETCH_TIMEOUT_MS` | `15000` | Max time to wait on the GET (covers headers + body). |
+
+Exit codes: `0` healthy, `1` alert (one of the FAIL reasons listed
+above), `2` misconfig (missing secret, bad URL).
+
+### What the monitor will not print
+
+The script enforces a redaction layer in addition to the endpoint's
+own contract (the endpoint never returns the raw JWT). On stdout /
+stderr the monitor emits **only** the documented summary fields:
+`status` (via the FAIL/OK header), `minutesUntilExpiry`, `writer`,
+`anomaly`, `lastSuccess.at`, `lastFailure.at`. Anything else from the
+response body is dropped. As defense-in-depth, JWT-shaped substrings,
+`Bearer …` headers, and long opaque base64url runs are stripped from
+any error string before it reaches the logs. The
+`ALFACLUB_HEALTH_CRON_SECRET` value is never logged.
+
 ## Recovery playbook — bridge is 401-ing
 
 1. **Probe**. From any operator machine with `CRON_SECRET`:

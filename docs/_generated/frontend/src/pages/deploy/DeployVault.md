@@ -12,7 +12,7 @@
 
 > **DeployVault**(): `Element`
 
-Defined in: [src/pages/deploy/DeployVault.tsx:837](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/DeployVault.tsx#L837)
+Defined in: [src/pages/deploy/DeployVault.tsx:838](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/DeployVault.tsx#L838)
 
 #### Returns
 

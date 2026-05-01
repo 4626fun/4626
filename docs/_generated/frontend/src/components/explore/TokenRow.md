@@ -30,7 +30,7 @@ Defined in: [src/components/explore/TokenRow.tsx:104](https://github.com/wenakit
 
 > **TokenRowSkeleton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/TokenRow.tsx:504](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/TokenRow.tsx#L504)
+Defined in: [src/components/explore/TokenRow.tsx:505](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/TokenRow.tsx#L505)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [src/components/explore/TokenRow.tsx:504](https://github.com/wenakit
 
 > **TokenTableHeader**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/TokenRow.tsx:401](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/TokenRow.tsx#L401)
+Defined in: [src/components/explore/TokenRow.tsx:402](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/TokenRow.tsx#L402)
 
 #### Parameters
 

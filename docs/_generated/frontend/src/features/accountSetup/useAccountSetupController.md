@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L127)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L125)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:127](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L115)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L113)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:115](https:/
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:192](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L192)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L190)
 
 #### Parameters
 
@@ -520,11 +520,11 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:192](https:/
 
 ##### subAccountAddress
 
-> **subAccountAddress**: `` `0x${string}` `` \| `null` = `subAccount.subAccountAddress`
+> **subAccountAddress**: `null` = `null`
 
 ##### subAccountError
 
-> **subAccountError**: `Error` \| `null` = `subAccount.error`
+> **subAccountError**: `null` = `null`
 
 ##### subAccountReady
 
@@ -532,11 +532,11 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:192](https:/
 
 ##### subAccountSettingUp
 
-> **subAccountSettingUp**: `boolean` = `subAccount.isSettingUp`
+> **subAccountSettingUp**: `boolean` = `false`
 
 ##### subAccountStage
 
-> **subAccountStage**: [`SubAccountSetupStageEvent`](../../lib/wallet/subAccountSetup.md#subaccountsetupstageevent) \| `null` = `subAccount.lastStage`
+> **subAccountStage**: `null` = `null`
 
 ##### switchChainAsync
 
