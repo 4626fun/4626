@@ -12,7 +12,7 @@
 
 > **getV1ApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.v1.ts:126](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.v1.ts#L126)
+Defined in: [api/\_handlers/\_routes.v1.ts:127](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.v1.ts#L127)
 
 #### Parameters
 
