@@ -139,67 +139,121 @@ When a user corrects Hermit's Spanish, append a one-line entry to the
 Keep the section append-only — the agent re-reads the whole file each turn,
 so older entries stay in effect.
 
-## Dialect preference persistence
+## Dialect preference persistence (per-(room, sender))
 
-When a user sends a Spanish dialect signal (flag emoji or text hint), the
-host's `Spanish dialect:` line is now accompanied by a memory-persistence
-clause that instructs the agent to write the preference into workspace
-`MEMORY.md` before emitting the final strict JSON. On subsequent turns
-without an explicit signal, the agent reads `MEMORY.md` and applies the
-recorded dialect.
+> **Changed.** Per-user dialect preferences now live in the AlfaClub
+> control-plane database, **not** in the workspace `MEMORY.md` file.
+> See `docs/operations/alfaclub-hermit-personalization.md` for the
+> full architecture and recovery playbook. This section summarises
+> the user-visible contract.
+
+When a user sends a Spanish dialect signal (flag emoji or text hint),
+the AlfaClub bridge upserts a row into `alfaclub.user_preference`
+keyed by `(room_id, sender_address, 'hermit.spanish_dialect')`. On
+subsequent turns from the **same sender in the same room** the bridge
+loads that row and passes it into Hermit's prompt builder; turns from
+**other senders** are unaffected.
 
 ### Persistence semantics
 
 - **Explicit signal this turn (flag/hint)**: prompt contains
-  `Memory persistence (explicit signal):`. The agent uses its file edit
-  tool to update `MEMORY.md` so the bullet
-  `- Preferred Spanish dialect: <dialect> (set by flag/text hint)` exists
-  exactly once under
-  `## Preferred dialect` → `### Long-term preferences (operator-curated):`.
-  An existing `Preferred Spanish dialect:` bullet is **replaced**, never
-  duplicated. The most recent signal wins.
-- **No explicit signal**: prompt contains
-  `Memory persistence (no explicit signal):`. The agent reads `MEMORY.md`
-  first; if a `Preferred Spanish dialect:` bullet exists, it applies that
-  dialect for the turn. Otherwise it falls back to `neutral_latam`.
-- **Strict JSON contract is preserved**: the MEMORY.md update is a tool
-  action only. The final assistant message remains exactly the strict
-  JSON object the host requested — no prose, no narration of the file
-  edit, no markdown fences.
+  `Memory persistence (explicit signal):` with the active dialect
+  named. The control plane (Vercel, not Hermit) writes the row.
+  Hermit is told **NOT** to modify the shared workspace `MEMORY.md`
+  — the shared MEMORY.md would leak this user's choice to every
+  other sender in the room.
+- **Saved preference (no explicit signal)**: prompt contains
+  `Memory persistence (saved preference):` and the dialect from the
+  saved row. Hermit applies that dialect for the turn.
+- **No signal and no saved preference**: prompt contains
+  `Memory persistence: no per-user dialect signal this turn.`
+  Hermit defaults to `neutral_latam`.
+- **Strict JSON contract is preserved**: the control-plane upsert
+  happens server-side after the prompt is built; Hermit's output is
+  still exactly the strict JSON the host requested.
 
-### Limitation
+### Priority order
 
-The host (this repo) does not write to the agent workspace directly — the
-persistence is **instruction-level** (prompt directive + seed `SOUL.md` /
-`MEMORY.md` rule). It depends on the Pinata Hermit agent exposing a file
-edit tool over its workspace and following the directive. If the agent
-does not have a write tool, this gracefully degrades to the existing
-per-turn behavior: the dialect is applied for the current turn but the
-preference does not stick. Operators can still curate the bullet manually
-on the host (then restart Hermit) when needed.
+1. Explicit flag/text hint in the current user message → persists for
+   that sender, drives this turn's reply.
+2. Persisted user preference (`alfaclub.user_preference`) for
+   `(room_id, sender_address)`.
+3. Default → `neutral_latam`.
+
+Room-wide defaults are not currently configured. If you need one,
+plumb it through `userPreferences` in the bridge before invoking the
+deterministic executor — Hermit already honors that pathway.
+
+### Storage and operator queries
+
+Schema lives in two paired migrations (kept in lockstep):
+
+- `frontend/db/migrations/036_alfaclub_user_preferences.sql`
+- `supabase/migrations/20260501000000_alfaclub_user_preferences.sql`
+
+Inspect a single sender's prefs:
+
+```sql
+SELECT room_id, sender_address, preference_key, preference_value, updated_by, updated_at
+FROM alfaclub.user_preference
+WHERE sender_address = lower($1)
+ORDER BY room_id, preference_key;
+```
+
+Purge a sender (privacy / debug):
+
+```sql
+DELETE FROM alfaclub.user_preference WHERE sender_address = lower($1);
+```
+
+Purge a single (room, sender) tuple:
+
+```sql
+DELETE FROM alfaclub.user_preference
+WHERE room_id = $1 AND sender_address = lower($2);
+```
+
+Force-rotate a sender's dialect manually (operator override):
+
+```sql
+INSERT INTO alfaclub.user_preference (room_id, sender_address, preference_key, preference_value, updated_by)
+VALUES ($1, lower($2), 'hermit.spanish_dialect', $3, 'admin.api')
+ON CONFLICT (room_id, sender_address, preference_key) DO UPDATE
+SET preference_value = EXCLUDED.preference_value,
+    updated_by = EXCLUDED.updated_by,
+    updated_at = NOW();
+```
+
+Reverting persistence entirely (kill switch):
+
+```bash
+# On the Vercel project — disables both reads and writes from the bridge.
+ALFACLUB_USER_PREFERENCE_PERSIST_DISABLED=1
+```
+
+The bridge gracefully falls back to per-turn dialect detection when
+the table is empty, the DB is unreachable, or the kill switch is set.
 
 ### Smoke tests
 
-Run these in order against an AlfaChat dev room:
+Run these in order against an AlfaChat dev room with two distinct
+sender wallets:
 
-| Step | Prompt | Expected behavior |
-| --- | --- | --- |
-| 1 | `/hermit announce 🇲🇽 drop nuevo en 30 minutos` | Strict JSON, Mexican-flavor Spanish values. `MEMORY.md` "Preferred Spanish dialect:" bullet is `mexico`. |
-| 2 | `/hermit announce drop nuevo en 30 minutos` | No flag/hint. Reply uses Mexican-flavor Spanish (memory applied). |
-| 3 | `/hermit announce 🇪🇸 drop nuevo en 30 minutos` | Strict JSON, peninsular Spanish. `MEMORY.md` bullet now reads `spain` (replaced, not duplicated). |
-| 4 | `/hermit announce drop nuevo en 30 minutos` | No flag/hint. Reply uses peninsular Spanish (memory applied). |
-| 5 | `/hermit announce vault update` | English input. Reply in English; `MEMORY.md` not modified. |
+| Step | Sender | Prompt | Expected behavior |
+| --- | --- | --- | --- |
+| 1 | A | `/hermit announce 🇲🇽 drop nuevo en 30 minutos` | Strict JSON, Mexican-flavor Spanish. New row `(room, A, mexico)`. |
+| 2 | A | `/hermit announce drop nuevo en 30 minutos` | No flag. Reply still Mexican-flavor (saved preference applied). |
+| 3 | B | `/hermit announce drop nuevo en 30 minutos` | Sender B has no row; reply defaults to `neutral_latam`. **B is unaffected by A's flag.** |
+| 4 | A | `/hermit announce 🇪🇸 drop nuevo en 30 minutos` | Strict JSON, peninsular Spanish. Row `(room, A)` updated to `spain` (replaced, not duplicated). |
+| 5 | A | `/hermit announce vault update` | English input. Reply in English; row unchanged. |
 
-Verification checklist after each Spanish step:
+Verification checklist:
 
 - Final reply is strict JSON only — no prose, no markdown fences, no
-  mention of the MEMORY.md edit.
-- Inspect the agent workspace `MEMORY.md`: only one
-  `- Preferred Spanish dialect: <dialect>` bullet under
-  "Long-term preferences (operator-curated):"; older sections of the file
-  remain untouched.
-- For the no-flag steps (2, 4), confirm the dialect flavor matches the
-  memory-recorded value, not `neutral_latam`.
+  mention of MEMORY.md edits.
+- `alfaclub.user_preference` shows exactly one row per `(room, sender, hermit.spanish_dialect)`. Step 4 should mutate row A's `preference_value` and `updated_at`, not insert a duplicate.
+- The shared workspace `MEMORY.md` is **unchanged** across all five
+  steps. Per-user preferences must never land there.
 
 ## Out of scope
 

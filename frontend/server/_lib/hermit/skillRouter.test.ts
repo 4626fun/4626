@@ -436,63 +436,65 @@ describe('executeHermitCommand', () => {
     })
 
     describe('memory persistence directive', () => {
-      it('explicit flag emits a persistence-write clause that records the dialect into MEMORY.md', () => {
+      // Per-user dialect persistence now lives in the AlfaClub control-plane
+      // user_preference table (per (room, sender)). The shared workspace
+      // MEMORY.md must NOT be rewritten per turn — that would leak one user's
+      // dialect to every other user in the room.
+      it('explicit flag emits a clause that defers persistence to the control plane and forbids MEMORY.md writes', () => {
         const prompt = _hermitPromptBuildersForTests.buildHermit({
           mode: 'announce',
           userPrompt: '🇦🇷 drop nuevo en 30 minutos',
         })
         expect(prompt).toContain('Memory persistence (explicit signal)')
-        expect(prompt).toContain('use your file edit tool to update workspace MEMORY.md')
-        expect(prompt).toContain('## Preferred dialect')
-        expect(prompt).toContain('Long-term preferences (operator-curated):')
-        expect(prompt).toContain('- Preferred Spanish dialect: argentina (set by flag/text hint)')
-        // Replace, never duplicate
-        expect(prompt).toContain('replace its dialect value')
+        expect(prompt).toContain('"argentina"')
+        expect(prompt).toContain('control plane will save that preference for THIS sender only')
+        expect(prompt).toContain('MUST NOT modify workspace MEMORY.md')
       })
 
-      it('explicit text hint also emits a persistence-write clause with the matched dialect', () => {
+      it('explicit text hint behaves identically to a flag (defers to control plane)', () => {
         const prompt = _hermitPromptBuildersForTests.buildHermit({
           mode: 'copy',
           userPrompt: 'haz una línea mexicana para el vault drop',
         })
         expect(prompt).toContain('Memory persistence (explicit signal)')
-        expect(prompt).toContain('- Preferred Spanish dialect: mexico (set by flag/text hint)')
+        expect(prompt).toContain('"mexico"')
+        expect(prompt).toContain('MUST NOT modify workspace MEMORY.md')
       })
 
-      it('no signal emits a persistence-read clause that applies stored dialect', () => {
+      it('no signal: emits a no-write clause and tells Hermit to default to neutral_latam', () => {
         const prompt = _hermitPromptBuildersForTests.buildHermit({
           mode: 'announce',
           userPrompt: 'vault update incoming',
         })
-        expect(prompt).toContain('Memory persistence (no explicit signal)')
-        expect(prompt).toContain('FIRST read workspace MEMORY.md')
-        expect(prompt).toContain('Preferred Spanish dialect:')
+        expect(prompt).toContain('no per-user dialect signal this turn')
         expect(prompt).toContain('default to neutral_latam')
+        expect(prompt).toContain('Do NOT modify workspace MEMORY.md')
         expect(prompt).not.toContain('Memory persistence (explicit signal)')
       })
 
-      it('explicit flag overrides memory and instructs an update for the next turn', () => {
-        const directive = _hermitPromptBuildersForTests.buildLanguageDirective('spain')
-        // Explicit signal is what makes "this turn" override prior memory.
-        expect(directive).toContain('The user signaled the "spain" dialect')
-        // Update MEMORY.md so the next turn doesn't need a flag.
-        expect(directive).toContain('Memory persistence (explicit signal)')
-        expect(directive).toContain('- Preferred Spanish dialect: spain (set by flag/text hint)')
-        expect(directive).toContain('overrides any prior memory')
+      it('persisted-preference source: clause references the saved preference and forbids MEMORY.md writes', () => {
+        const directive = _hermitPromptBuildersForTests.buildLanguageDirective('spain', 'persisted')
+        expect(directive).toContain('saved preference is the "spain" dialect')
+        expect(directive).toContain('Memory persistence (saved preference)')
+        expect(directive).toContain('Do NOT modify workspace MEMORY.md')
       })
 
-      it('strict JSON output constraint is reinforced alongside the persistence directive', () => {
+      it('explicit signal directive identifies the user-supplied dialect for this turn', () => {
+        const directive = _hermitPromptBuildersForTests.buildLanguageDirective('spain', 'explicit')
+        expect(directive).toContain('The user signaled the "spain" dialect this turn')
+        expect(directive).toContain('Memory persistence (explicit signal)')
+        expect(directive).toContain('MUST NOT modify workspace MEMORY.md')
+      })
+
+      it('strict JSON output constraint is reinforced even with no MEMORY.md mention', () => {
         const prompt = _hermitPromptBuildersForTests.buildHermit({
           mode: 'announce',
           userPrompt: '🇲🇽 drop nuevo en 30 minutos',
         })
         // Schema preserved
         expect(prompt).toContain('{"line":"string","alt":["string","string"],"hashtags":["#tag"],"cta":"string"}')
-        // Strict JSON contract rule shipped with persistence
+        // Strict JSON contract rule
         expect(prompt).toContain('final assistant message MUST be ONLY the strict JSON object')
-        expect(prompt).toContain('any MEMORY.md update must happen as a tool call before the final output')
-        // Don't add prose alongside JSON
-        expect(prompt).toContain('do not mention it in your final JSON output')
       })
 
       it('persistence clause is embedded in /meme and /gmeow prompts too', () => {
@@ -503,12 +505,14 @@ describe('executeHermitCommand', () => {
           memeTags: ['laugh', 'cat'],
         })
         expect(memePrompt).toContain('Memory persistence (explicit signal)')
-        expect(memePrompt).toContain('- Preferred Spanish dialect: chile (set by flag/text hint)')
+        expect(memePrompt).toContain('"chile"')
+        expect(memePrompt).toContain('MUST NOT modify workspace MEMORY.md')
         expect(gmeowPrompt).toContain('Memory persistence (explicit signal)')
-        expect(gmeowPrompt).toContain('- Preferred Spanish dialect: peru (set by flag/text hint)')
+        expect(gmeowPrompt).toContain('"peru"')
+        expect(gmeowPrompt).toContain('MUST NOT modify workspace MEMORY.md')
       })
 
-      it('persistence clause helper returns the correct shape for every dialect', () => {
+      it('persistence clause helper covers every dialect across explicit/persisted/default sources', () => {
         const dialects = [
           'neutral_latam',
           'mexico',
@@ -521,14 +525,19 @@ describe('executeHermitCommand', () => {
           'spain',
         ] as const
         for (const dialect of dialects) {
-          const clause = _hermitPromptBuildersForTests.buildMemoryPersistenceClause(dialect)
-          expect(clause).toContain('Memory persistence (explicit signal)')
-          expect(clause).toContain(`- Preferred Spanish dialect: ${dialect} (set by flag/text hint)`)
-          expect(clause).toContain('replace its dialect value')
+          const explicit = _hermitPromptBuildersForTests.buildMemoryPersistenceClause(dialect, 'explicit')
+          expect(explicit).toContain('Memory persistence (explicit signal)')
+          expect(explicit).toContain(`"${dialect}"`)
+          expect(explicit).toContain('MUST NOT modify workspace MEMORY.md')
+
+          const persisted = _hermitPromptBuildersForTests.buildMemoryPersistenceClause(dialect, 'persisted')
+          expect(persisted).toContain('Memory persistence (saved preference)')
+          expect(persisted).toContain(`"${dialect}"`)
+          expect(persisted).toContain('Do NOT modify workspace MEMORY.md')
         }
-        const noSignal = _hermitPromptBuildersForTests.buildMemoryPersistenceClause(null)
-        expect(noSignal).toContain('Memory persistence (no explicit signal)')
-        expect(noSignal).not.toContain('use your file edit tool')
+        const noSignal = _hermitPromptBuildersForTests.buildMemoryPersistenceClause(null, 'default')
+        expect(noSignal).toContain('no per-user dialect signal')
+        expect(noSignal).toContain('Do NOT modify workspace MEMORY.md')
       })
     })
 

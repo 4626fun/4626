@@ -29,6 +29,97 @@ function resolveVaultRole(params: {
   })
 }
 
+/**
+ * Extract the AlfaClub room id from a deterministic-executor `chatId`
+ * (`alfaclub:<digits>`). Returns null for any other surface (Telegram,
+ * direct HTTP, etc.) — those callers do not have a room-scoped
+ * preference and Hermit falls back to its room-less defaults.
+ */
+function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | null {
+  const trimmed = String(chatId ?? '').trim()
+  if (!trimmed) return null
+  const match = /^alfaclub:(.+)$/i.exec(trimmed)
+  if (!match) return null
+  const roomId = match[1].trim()
+  if (!roomId || roomId.length > 128) return null
+  return roomId
+}
+
+type HermitRoomContext = {
+  roomId: string | null
+  userPreferences: { spanishDialect: string | null } | null
+  persistPreference:
+    | ((params: {
+        preferenceKey: 'hermit.spanish_dialect'
+        preferenceValue: string
+        updatedBy: string
+      }) => Promise<void>)
+    | null
+}
+
+/**
+ * Resolve per-(room, sender) Hermit preferences from the AlfaClub
+ * control-plane store, **best effort**. Any failure (no chat id, no
+ * room id, DB outage, dynamic-import error) returns a neutral context
+ * so Hermit falls back to its existing room-less behavior — the chat
+ * reply must always go out.
+ *
+ * Imports `userPreferenceStore` dynamically so the Hermit creative
+ * lane (`skillRouter`) does not pull AlfaClub control-plane code in.
+ */
+async function resolveHermitRoomContext(params: {
+  chatId: string | undefined
+  senderWallet: ExecuteCommandParams['senderWallet']
+}): Promise<HermitRoomContext> {
+  const roomId = parseAlfaClubRoomIdFromChatId(params.chatId)
+  if (!roomId) {
+    return { roomId: null, userPreferences: null, persistPreference: null }
+  }
+  let store: typeof import('../_lib/alfaclub/userPreferenceStore.js')
+  try {
+    store = await import('../_lib/alfaclub/userPreferenceStore.js')
+  } catch {
+    return { roomId, userPreferences: null, persistPreference: null }
+  }
+
+  let spanishDialect: string | null = null
+  try {
+    const record = await store.readUserPreference({
+      roomId,
+      senderAddress: params.senderWallet,
+      preferenceKey: 'hermit.spanish_dialect',
+    })
+    spanishDialect = record?.preferenceValue ?? null
+  } catch {
+    // Read is already best-effort inside the store, but guard again.
+    spanishDialect = null
+  }
+
+  const persistPreference: HermitRoomContext['persistPreference'] = async ({
+    preferenceKey,
+    preferenceValue,
+    updatedBy,
+  }) => {
+    try {
+      await store.upsertUserPreference({
+        roomId,
+        senderAddress: params.senderWallet,
+        preferenceKey,
+        preferenceValue,
+        updatedBy,
+      })
+    } catch {
+      // Best-effort: chat reply must still go out.
+    }
+  }
+
+  return {
+    roomId,
+    userPreferences: { spanishDialect },
+    persistPreference,
+  }
+}
+
 
 
 export async function executeCommand(params: ExecuteCommandParams): Promise<KeeprCommandResult> {
@@ -113,9 +204,20 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         if (!isHermitUserAllowed(params.senderWallet)) {
           return { ok: false, response: 'Hermit access denied.' }
         }
+        const hermitRoomContext = await resolveHermitRoomContext({
+          chatId: params.chatId,
+          senderWallet: params.senderWallet,
+        })
         const result = await executeHermitCommand({
           commandText: raw,
           senderAddress: params.senderWallet,
+          ...(hermitRoomContext.roomId ? { roomId: hermitRoomContext.roomId } : {}),
+          ...(hermitRoomContext.userPreferences
+            ? { userPreferences: hermitRoomContext.userPreferences }
+            : {}),
+          ...(hermitRoomContext.persistPreference
+            ? { persistPreference: hermitRoomContext.persistPreference }
+            : {}),
         })
         return {
           ok: true,

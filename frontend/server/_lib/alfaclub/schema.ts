@@ -295,6 +295,50 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   }
   await db.sql`CREATE INDEX IF NOT EXISTS radar_dispatch_snapshot_idx ON alfaclub.radar_dispatch(snapshot_ts DESC);`
 
+  // ── alfaclub.user_preference ──
+  // Per-(room, sender) chat personalization (e.g. Hermit Spanish dialect).
+  // Owned by the Vercel chat-bridge / Hermit lane. NEVER carries auth or
+  // session material — see migration 036 / 20260501000000 and
+  // [userPreferenceStore.ts](./userPreferenceStore.ts) for the boundary
+  // contract.
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS alfaclub.user_preference (
+      room_id           TEXT NOT NULL,
+      sender_address    TEXT NOT NULL,
+      preference_key    TEXT NOT NULL,
+      preference_value  TEXT,
+      updated_by        TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (room_id, sender_address, preference_key)
+    );
+  `
+  try {
+    await db.sql`ALTER TABLE alfaclub.user_preference ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies
+          WHERE schemaname = 'alfaclub'
+            AND tablename = 'user_preference'
+            AND policyname = 'user_preference_deny_all'
+        ) THEN
+          CREATE POLICY user_preference_deny_all
+            ON alfaclub.user_preference FOR ALL TO public USING (false) WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+  await db.sql`CREATE INDEX IF NOT EXISTS user_preference_sender_idx ON alfaclub.user_preference(sender_address);`
+
   // One-time safe migration from previous public table name.
   try {
     await db.sql`

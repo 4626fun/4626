@@ -18,7 +18,12 @@
  * here, stop — that belongs in the auth lane, not the creative lane.
  */
 import { pickRandomHermitMeme } from './memeStore.js'
-import type { HermitExecutionParams, HermitExecutionResult, HermitMediaAttachment } from './types.js'
+import type {
+  HermitExecutionParams,
+  HermitExecutionResult,
+  HermitMediaAttachment,
+  HermitUserPreferences,
+} from './types.js'
 import WebSocket from 'ws'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -389,7 +394,7 @@ async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> 
   }
 }
 
-type SpanishDialect =
+export type SpanishDialect =
   | 'neutral_latam'
   | 'mexico'
   | 'argentina'
@@ -399,6 +404,33 @@ type SpanishDialect =
   | 'venezuela'
   | 'caribbean'
   | 'spain'
+
+const SPANISH_DIALECT_VALUES: ReadonlySet<SpanishDialect> = new Set<SpanishDialect>([
+  'neutral_latam',
+  'mexico',
+  'argentina',
+  'colombia',
+  'chile',
+  'peru',
+  'venezuela',
+  'caribbean',
+  'spain',
+])
+
+/**
+ * Validate and narrow a string into a known SpanishDialect, or return
+ * null. Used to whitelist values coming back from the per-user
+ * preference store before they reach prompt-building.
+ */
+export function asSpanishDialect(value: unknown): SpanishDialect | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  // Accept legacy alias `puerto_rico` for `caribbean`.
+  if (normalized === 'puerto_rico') return 'caribbean'
+  return SPANISH_DIALECT_VALUES.has(normalized as SpanishDialect)
+    ? (normalized as SpanishDialect)
+    : null
+}
 
 const SPANISH_DIALECT_FLAG_MAP: Record<string, SpanishDialect> = {
   '🇲🇽': 'mexico',
@@ -463,39 +495,96 @@ function detectSpanishDialect(userInput: string): SpanishDialect | null {
   return null
 }
 
-function buildSpanishMemoryPersistenceClause(dialect: SpanishDialect | null): string {
-  if (dialect !== null) {
+/**
+ * Memory persistence clause.
+ *
+ * Per-user dialect persistence now lives in the AlfaClub control-plane
+ * preference store keyed by (room_id, sender_address) — not in the
+ * shared workspace MEMORY.md file (which would leak one user's dialect
+ * to every other user in the room).
+ *
+ * The clause therefore tells Hermit explicitly NOT to mutate MEMORY.md
+ * this turn (it has nothing to record there); the bridge persists the
+ * explicit signal via `persistPreference` after detecting it.
+ *
+ * `source` describes how the active dialect was selected so Hermit can
+ * weight regional flavor accordingly:
+ *   - 'explicit': flag/text hint in this user's message — strong signal.
+ *   - 'persisted': loaded from this user's saved preference.
+ *   - 'default': no signal, use neutral_latam.
+ */
+function buildSpanishMemoryPersistenceClause(
+  dialect: SpanishDialect | null,
+  source: 'explicit' | 'persisted' | 'default',
+): string {
+  if (source === 'explicit' && dialect !== null) {
     return [
-      `Memory persistence (explicit signal): the user just signaled the "${dialect}" Spanish dialect this turn (flag emoji or text hint). BEFORE producing the final JSON output, use your file edit tool to update workspace MEMORY.md so future turns honor it without a flag. Under the "## Preferred dialect" section, in the "Long-term preferences (operator-curated):" list, ensure exactly one bullet of the form:`,
-      `- Preferred Spanish dialect: ${dialect} (set by flag/text hint)`,
-      'If a "Preferred Spanish dialect:" bullet already exists, replace its dialect value with the new one. If none exists, append the bullet immediately under the "Long-term preferences (operator-curated):" header. Do not duplicate the bullet, do not reorder other entries, and do not rewrite unrelated sections. The explicit signal in this turn overrides any prior memory; the update is so the next turn can use the dialect without a flag. Perform the file edit as a tool action only — do not mention it in your final JSON output.',
+      `Memory persistence (explicit signal): the user just signaled the "${dialect}" Spanish dialect this turn (flag emoji or text hint). The control plane will save that preference for THIS sender only after this reply — you do not need to and MUST NOT modify workspace MEMORY.md (the shared MEMORY.md is room-wide and would leak this user's choice to everyone). Just produce the strict JSON output in the requested dialect.`,
+    ].join('\n')
+  }
+  if (source === 'persisted' && dialect !== null) {
+    return [
+      `Memory persistence (saved preference): this sender previously chose the "${dialect}" Spanish dialect; the control plane already loaded it for this turn. Apply the matching profile (≈80% clear Spanish / 20% regional flavor, never caricature). Do NOT modify workspace MEMORY.md — per-user preferences live in the AlfaClub control plane, not in the shared MEMORY.md file.`,
     ].join('\n')
   }
   return [
-    'Memory persistence (no explicit signal): if you are about to reply in Spanish, FIRST read workspace MEMORY.md. Under "## Preferred dialect" → "Long-term preferences (operator-curated):" look for a bullet "- Preferred Spanish dialect: <dialect>". If one is present and the dialect is one of neutral_latam, mexico, argentina, colombia, chile, peru, venezuela, caribbean, spain, treat that as the active dialect for this turn (apply the matching profile from SPANISH.md, ≈80% clear Spanish / 20% regional flavor, never caricature). If MEMORY.md is absent, unreadable, or has no such bullet, default to neutral_latam. Do not write to MEMORY.md this turn (no explicit signal to record).',
+    'Memory persistence: no per-user dialect signal this turn. If you are about to reply in Spanish, default to neutral_latam. Do NOT modify workspace MEMORY.md — per-user dialect preferences live in the AlfaClub control plane (per (room, sender)), not in the shared MEMORY.md file.',
   ].join('\n')
 }
 
-function buildHermitLanguageDirective(dialect: SpanishDialect | null): string {
+function buildHermitLanguageDirective(
+  dialect: SpanishDialect | null,
+  source: 'explicit' | 'persisted' | 'default' = dialect === null ? 'default' : 'explicit',
+): string {
   const effectiveDialect: SpanishDialect = dialect ?? 'neutral_latam'
   const profile = SPANISH_DIALECT_PROFILES[effectiveDialect]
-  const dialectExplicit = dialect !== null
-  const dialectClause = dialectExplicit
-    ? `The user signaled the "${effectiveDialect}" dialect (via flag emoji or text hint). When the language rule selects Spanish, write string values in that dialect. Profile: ${profile} Keep flavor subtle — about 80% clear Spanish, 20% regional flavor. Never lean into caricature or stereotypes.`
-    : `Default Spanish dialect is "neutral_latam" unless workspace MEMORY.md records a long-term preference (see persistence note below). Profile: ${profile}`
+  const dialectClause =
+    source === 'explicit' && dialect !== null
+      ? `The user signaled the "${effectiveDialect}" dialect this turn (via flag emoji or text hint). When the language rule selects Spanish, write string values in that dialect. Profile: ${profile} Keep flavor subtle — about 80% clear Spanish, 20% regional flavor. Never lean into caricature or stereotypes.`
+      : source === 'persisted' && dialect !== null
+        ? `This sender's saved preference is the "${effectiveDialect}" dialect. When the language rule selects Spanish, write string values in that dialect. Profile: ${profile} Keep flavor subtle — about 80% clear Spanish, 20% regional flavor. Never lean into caricature or stereotypes.`
+        : `Default Spanish dialect is "neutral_latam" — no signal this turn. Profile: ${profile}`
   return [
-    'Language: detect the language of the user input. If the user writes in Spanish or explicitly asks for output en español / in Spanish, set string values in natural Latin American Spanish (see workspace SPANISH.md and MEMORY.md for the style guide; keep crypto-native loanwords like vault, mint, drop, alpha, gm, gas untranslated; address the reader as tú; avoid Castilian forms unless the selected dialect is "spain"). Otherwise reply in English.',
+    'Language: detect the language of the user input. If the user writes in Spanish or explicitly asks for output en español / in Spanish, set string values in natural Latin American Spanish (see workspace SPANISH.md for the style guide; keep crypto-native loanwords like vault, mint, drop, alpha, gm, gas untranslated; address the reader as tú; avoid Castilian forms unless the selected dialect is "spain"). Otherwise reply in English.',
     `Spanish dialect: ${effectiveDialect}. ${dialectClause}`,
-    buildSpanishMemoryPersistenceClause(dialect),
-    'JSON keys always remain exactly as specified in this prompt — keys are English regardless of language. Hashtags stay as-is. Never wrap the JSON in markdown fences. The final assistant message MUST be ONLY the strict JSON object — any MEMORY.md update must happen as a tool call before the final output, never as prose alongside it.',
+    buildSpanishMemoryPersistenceClause(dialect, source),
+    'JSON keys always remain exactly as specified in this prompt — keys are English regardless of language. Hashtags stay as-is. Never wrap the JSON in markdown fences. The final assistant message MUST be ONLY the strict JSON object.',
   ].join('\n')
 }
 
-const HERMIT_LANGUAGE_DIRECTIVE = buildHermitLanguageDirective(null)
+const HERMIT_LANGUAGE_DIRECTIVE = buildHermitLanguageDirective(null, 'default')
+
+type DialectResolution = {
+  dialect: SpanishDialect | null
+  source: 'explicit' | 'persisted' | 'default'
+}
+
+/**
+ * Priority chain for the active dialect on a Hermit turn:
+ *   1. Explicit flag/text hint in the current user message — also
+ *      triggers a control-plane upsert so future turns honor it.
+ *   2. Persisted user preference from `userPreferences.spanishDialect`.
+ *   3. Default → null (caller treats as neutral_latam).
+ *
+ * Room-level defaults are intentionally NOT mixed in here — if a room
+ * default is ever needed, the bridge resolves it before calling Hermit
+ * and passes it through `userPreferences`.
+ */
+function resolveActiveDialect(params: {
+  userPrompt: string
+  userPreferences?: HermitUserPreferences | null
+}): DialectResolution {
+  const explicit = detectSpanishDialect(params.userPrompt)
+  if (explicit !== null) return { dialect: explicit, source: 'explicit' }
+  const persisted = asSpanishDialect(params.userPreferences?.spanishDialect ?? null)
+  if (persisted !== null) return { dialect: persisted, source: 'persisted' }
+  return { dialect: null, source: 'default' }
+}
 
 function buildPinataPromptForHermit(params: {
   mode: HermitDraftMode
   userPrompt: string
+  userPreferences?: HermitUserPreferences | null
 }): string {
   const modeInstruction =
     params.mode === 'announce'
@@ -505,14 +594,17 @@ function buildPinataPromptForHermit(params: {
         : params.mode === 'tone'
           ? 'Rewrite input copy into a sharper social tone while preserving meaning.'
           : 'Write concise room copy with social-native energy.'
-  const dialect = detectSpanishDialect(params.userPrompt)
+  const { dialect, source } = resolveActiveDialect({
+    userPrompt: params.userPrompt,
+    userPreferences: params.userPreferences,
+  })
   return [
     'You are Hermit, a crypto-native creative assistant for AlfaChat communities.',
     modeInstruction,
     'Output STRICT JSON only (no markdown):',
     '{"line":"string","alt":["string","string"],"hashtags":["#tag"],"cta":"string"}',
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
-    buildHermitLanguageDirective(dialect),
+    buildHermitLanguageDirective(dialect, source),
     `User input: ${params.userPrompt}`,
   ].join('\n')
 }
@@ -534,26 +626,37 @@ function buildHermitHelpReply(): string {
   ].join('\n')
 }
 
-function buildPinataPromptForHermitImage(userPrompt: string): string {
-  const dialect = detectSpanishDialect(userPrompt)
+function buildPinataPromptForHermitImage(
+  userPrompt: string,
+  userPreferences?: HermitUserPreferences | null,
+): string {
+  const { dialect, source } = resolveActiveDialect({ userPrompt, userPreferences })
   return [
     'You are Hermit, generating meme-ready image concepts for AlfaChat.',
     'Output STRICT JSON only:',
     '{"imagePrompt":"string","caption":"string","hashtags":["#tag"]}',
     'Rules: imagePrompt vivid and specific, caption <= 180 chars, hashtags 1-5, no markdown.',
-    buildHermitLanguageDirective(dialect),
+    buildHermitLanguageDirective(dialect, source),
     `User input: ${userPrompt || 'akita doge and a black cat in dark-luxury meme style'}`,
   ].join('\n')
 }
 
-function buildPinataPromptForGmeow(params: { userPrompt: string; memeCaption: string; memeTags: string[] }): string {
-  const dialect = detectSpanishDialect(params.userPrompt)
+function buildPinataPromptForGmeow(params: {
+  userPrompt: string
+  memeCaption: string
+  memeTags: string[]
+  userPreferences?: HermitUserPreferences | null
+}): string {
+  const { dialect, source } = resolveActiveDialect({
+    userPrompt: params.userPrompt,
+    userPreferences: params.userPreferences,
+  })
   return [
     'You are Hermit crafting one short meme line for AlfaChat.',
     'Output STRICT JSON only:',
     '{"line":"string"}',
     'Rules: line <= 160 chars, playful but clean, no markdown.',
-    buildHermitLanguageDirective(dialect),
+    buildHermitLanguageDirective(dialect, source),
     `Reference caption: ${params.memeCaption}`,
     `Reference tags: ${params.memeTags.join(', ') || 'meme'}`,
     `User input: ${params.userPrompt || 'gmeow'}`,
@@ -611,21 +714,63 @@ export const _hermitPromptBuildersForTests = {
   flagMap: SPANISH_DIALECT_FLAG_MAP,
 }
 
+/**
+ * Best-effort persistence of an explicit dialect signal for the active
+ * sender. Wraps the caller-supplied writer in try/catch so a write
+ * failure cannot bubble up and break the chat reply.
+ */
+async function persistExplicitDialectSignal(
+  params: HermitExecutionParams,
+  detectedFrom: string,
+  signalSource: 'flag' | 'text-hint',
+): Promise<void> {
+  if (!params.persistPreference) return
+  const dialect = detectSpanishDialect(detectedFrom)
+  if (dialect === null) return
+  try {
+    await params.persistPreference({
+      preferenceKey: 'hermit.spanish_dialect',
+      preferenceValue: dialect,
+      updatedBy: `hermit.${signalSource}`,
+    })
+  } catch {
+    // Non-fatal: chat reply must still go out.
+  }
+}
+
+function classifyExplicitSignal(userInput: string): 'flag' | 'text-hint' | null {
+  if (!userInput) return null
+  for (const flag of Object.keys(SPANISH_DIALECT_FLAG_MAP)) {
+    if (userInput.includes(flag)) return 'flag'
+  }
+  for (const { pattern } of SPANISH_DIALECT_TEXT_HINTS) {
+    if (pattern.test(userInput)) return 'text-hint'
+  }
+  return null
+}
+
 export async function executeHermitCommand(
   params: HermitExecutionParams,
 ): Promise<HermitExecutionResult> {
   const { command, args } = splitCommandAndArgs(params.commandText)
+  const userPreferences: HermitUserPreferences | null = params.userPreferences ?? null
+
   if (command === '/gmeow') {
     const meme = pickRandomHermitMeme(args || 'laugh')
     const attachment = inferPublicMediaAttachment(meme.url)
     const localReply = `${meme.caption}\n${meme.url}`
+    const explicitSignalSource = classifyExplicitSignal(args)
     const draft = await runPinataDraft(
       buildPinataPromptForGmeow({
         userPrompt: args,
         memeCaption: meme.caption,
         memeTags: meme.tags,
+        userPreferences,
       }),
     )
+    if (explicitSignalSource) {
+      await persistExplicitDialectSignal(params, args, explicitSignalSource)
+    }
     const parsed = draft?.text ? parseLooseJsonObject(draft.text) : null
     const draftedLine =
       asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
@@ -640,7 +785,11 @@ export async function executeHermitCommand(
   }
 
   if (command === '/meme') {
-    const draft = await runPinataDraft(buildPinataPromptForHermitImage(args))
+    const explicitSignalSource = classifyExplicitSignal(args)
+    const draft = await runPinataDraft(buildPinataPromptForHermitImage(args, userPreferences))
+    if (explicitSignalSource) {
+      await persistExplicitDialectSignal(params, args, explicitSignalSource)
+    }
     if (!draft?.text) {
       throw commandError(
         'Hermit meme path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
@@ -664,12 +813,17 @@ export async function executeHermitCommand(
       }
     }
     const { mode, prompt } = parseHermitDraftMode(args)
+    const explicitSignalSource = classifyExplicitSignal(prompt)
     const draft = await runPinataDraft(
       buildPinataPromptForHermit({
         mode,
         userPrompt: prompt,
+        userPreferences,
       }),
     )
+    if (explicitSignalSource) {
+      await persistExplicitDialectSignal(params, prompt, explicitSignalSource)
+    }
     if (!draft?.text) {
       throw commandError(
         'Hermit Pinata path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
