@@ -760,8 +760,8 @@ describe('runAlfaClubPrivyRefreshOnce health recording', () => {
   const now = () => NOW_MS
 
   it('records a refresh-success row with redacted metadata only', async () => {
-    const recordSuccess = vi.fn(async () => true)
-    const recordFailure = vi.fn(async () => true)
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
+    const recordFailure = vi.fn(async (_payload: Record<string, unknown>, _writer: string) => true)
     const newIdentityExp = NOW_MS / 1000 + 60 * 60
 
     const outcome = await runAlfaClubPrivyRefreshOnce({
@@ -798,7 +798,7 @@ describe('runAlfaClubPrivyRefreshOnce health recording', () => {
   })
 
   it('marks rotatedRefresh:false when Privy keeps the existing refresh token', async () => {
-    const recordSuccess = vi.fn(async () => true)
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
     await runAlfaClubPrivyRefreshOnce({
       readAccessToken: async () => 'at-old',
       readRefreshToken: async () => 'rt-old',
@@ -818,8 +818,8 @@ describe('runAlfaClubPrivyRefreshOnce health recording', () => {
   })
 
   it('records a missing_tokens failure row when bootstrap tokens absent', async () => {
-    const recordSuccess = vi.fn(async () => true)
-    const recordFailure = vi.fn(async () => true)
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
+    const recordFailure = vi.fn(async (_payload: Record<string, unknown>, _writer: string) => true)
     const outcome = await runAlfaClubPrivyRefreshOnce({
       readAccessToken: async () => null,
       readRefreshToken: async () => 'rt-old',
@@ -843,8 +843,8 @@ describe('runAlfaClubPrivyRefreshOnce health recording', () => {
   })
 
   it('records an error failure row when Privy refresh throws', async () => {
-    const recordSuccess = vi.fn(async () => true)
-    const recordFailure = vi.fn(async () => true)
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
+    const recordFailure = vi.fn(async (_payload: Record<string, unknown>, _writer: string) => true)
     const outcome = await runAlfaClubPrivyRefreshOnce({
       readAccessToken: async () => 'at-old',
       readRefreshToken: async () => 'rt-old',

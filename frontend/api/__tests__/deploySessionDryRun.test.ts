@@ -32,7 +32,7 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   getDbMock: vi.fn(),
-  getBytecodeMock: vi.fn(async () => '0x'),
+  getBytecodeMock: vi.fn(async (_args: { address: `0x${string}` }) => '0x'),
   readContractMock: vi.fn(async () => ({ amount: 1n })),
   callMock: vi.fn(async () => '0x'),
   requestMock: vi.fn(async () => null),

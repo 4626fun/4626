@@ -71,7 +71,7 @@ Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:120](https://github.com/wena
 
 ### RefundTickResult
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:361](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L361)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:382](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L382)
 
 Aggregate per-tick result. `scannedCount` is the number of orphan
 candidates returned by [findOrphanBurns](#findorphanburns); `refundedCount` is
@@ -85,7 +85,7 @@ idempotent-no-op rows). Any per-row error is captured in `errors`
 
 > **errors**: `object`[]
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:364](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L364)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L385)
 
 ###### message
 
@@ -99,13 +99,13 @@ Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:364](https://github.com/wena
 
 > **refundedCount**: `number`
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:363](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L363)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:384](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L384)
 
 ##### scannedCount
 
 > **scannedCount**: `number`
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:362](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L362)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:383](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L383)
 
 ## Type Aliases
 
@@ -168,14 +168,26 @@ Default TTL before an unclaimed burn becomes refundable. Design
 
 > **findOrphanBurns**(`db`, `args`): `Promise`\<[`OrphanBurnCandidate`](#orphanburncandidate)[]\>
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:244](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L244)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:256](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L256)
 
 Find AMOE phase-A debit rows in `points` that:
   1. are older than `ageSec` seconds (`created_at` < NOW() - ageSec),
   2. have NO `amoe_zk_submissions` row in state `settled` for the
      same `(signup_id, spend_ref_id)` (phase B never landed),
   3. have NO existing `amoe_entry_refund` row keyed by the same
-     `source_id` (refund hasn't run yet).
+     `source_id` (refund hasn't run yet),
+  4. HAVE a matching `amoe_burn_credits_intents` row written by the
+     `POST /api/v1/lottery/amoe/burn-credits` handler.
+
+Predicate (4) is the phase-A scope guard. Without it, legacy debits
+from the older `POST /api/v1/lottery/amoe/submit` endpoint — which
+also writes `source='amoe_entry_spend'` rows via
+`consumeAmoeCreditsForEntry` but never writes `amoe_zk_submissions`
+— would be misclassified as orphans and incorrectly refunded after
+`REFUND_AGE_EPOCHS`, effectively granting free / duplicated AMOE
+credits when `AMOE_REFUND_CRON_ENABLED=1` is turned on. The intents
+table is the explicit forward marker that scopes the cron to phase-A
+burns only. See docs/security/amoe-burn-then-submit-design.md §5.1.
 
 Returns at most `limit` candidates, oldest-first, so a backlog
 drains deterministically across ticks.
@@ -255,7 +267,7 @@ non-numeric values fall back to [DEFAULT\_REFUND\_AGE\_EPOCHS](#default_refund_a
 
 > **refundOrphanBurn**(`db`, `args`): `Promise`\<[`RefundInsertOutcome`](#refundinsertoutcome)\>
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:324](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L324)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L345)
 
 Insert a compensating `amoe_entry_refund` row for a single orphan
 burn. Idempotent: relies on the existing
@@ -311,7 +323,7 @@ Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:170](https://github.com/wena
 
 > **runBurnRefundTick**(`db`, `args`): `Promise`\<[`RefundTickResult`](#refundtickresult)\>
 
-Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:367](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L367)
+Defined in: [server/\_lib/lottery/amoeBurnRefund.ts:388](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeBurnRefund.ts#L388)
 
 #### Parameters
 

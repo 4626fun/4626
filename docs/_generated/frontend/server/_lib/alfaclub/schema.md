@@ -12,7 +12,7 @@
 
 > **\_resetAlfaClubSchemaCacheForTests**(): `void`
 
-Defined in: [server/\_lib/alfaclub/schema.ts:358](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L358)
+Defined in: [server/\_lib/alfaclub/schema.ts:402](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L402)
 
 Reset state cache — exposed for tests only.
 

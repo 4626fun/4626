@@ -398,6 +398,7 @@
 - [server/\_lib/alfaclub/radar](server/_lib/alfaclub/radar.md)
 - [server/\_lib/alfaclub/schema](server/_lib/alfaclub/schema.md)
 - [server/\_lib/alfaclub/scorecard](server/_lib/alfaclub/scorecard.md)
+- [server/\_lib/alfaclub/userPreferenceStore](server/_lib/alfaclub/userPreferenceStore.md)
 - [server/\_lib/alfaclub/vigilante](server/_lib/alfaclub/vigilante.md)
 - [server/\_lib/auction/auctionTokenDisplaySymbol](server/_lib/auction/auctionTokenDisplaySymbol.md)
 - [server/\_lib/auth/deployAuth](server/_lib/auth/deployAuth.md)

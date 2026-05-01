@@ -20,7 +20,7 @@ Defined in: [server/\_lib/hermit/types.ts:15](https://github.com/wenakita/4626/b
 
 > **HermitExecutionParams** = `object`
 
-Defined in: [server/\_lib/hermit/types.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L17)
+Defined in: [server/\_lib/hermit/types.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L43)
 
 #### Properties
 
@@ -28,13 +28,37 @@ Defined in: [server/\_lib/hermit/types.ts:17](https://github.com/wenakita/4626/b
 
 > **commandText**: `string`
 
-Defined in: [server/\_lib/hermit/types.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L18)
+Defined in: [server/\_lib/hermit/types.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L44)
+
+##### persistPreference?
+
+> `optional` **persistPreference**: [`HermitPreferenceWriter`](#hermitpreferencewriter) \| `null`
+
+Defined in: [server/\_lib/hermit/types.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L51)
+
+Best-effort writer for explicit signals. Optional.
+
+##### roomId?
+
+> `optional` **roomId**: `string`
+
+Defined in: [server/\_lib/hermit/types.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L47)
+
+AlfaClub room id (digits in prod). Undefined for non-room callers.
 
 ##### senderAddress
 
 > **senderAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/hermit/types.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L19)
+Defined in: [server/\_lib/hermit/types.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L45)
+
+##### userPreferences?
+
+> `optional` **userPreferences**: [`HermitUserPreferences`](#hermituserpreferences) \| `null`
+
+Defined in: [server/\_lib/hermit/types.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L49)
+
+Resolved user preferences for this (room, sender).
 
 ***
 
@@ -42,7 +66,7 @@ Defined in: [server/\_lib/hermit/types.ts:19](https://github.com/wenakita/4626/b
 
 > **HermitExecutionResult** = `object`
 
-Defined in: [server/\_lib/hermit/types.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L22)
+Defined in: [server/\_lib/hermit/types.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L54)
 
 #### Properties
 
@@ -50,37 +74,37 @@ Defined in: [server/\_lib/hermit/types.ts:22](https://github.com/wenakita/4626/b
 
 > `optional` **imagePrompt**: `string`
 
-Defined in: [server/\_lib/hermit/types.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L26)
+Defined in: [server/\_lib/hermit/types.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L58)
 
 ##### kind
 
 > **kind**: [`HermitCommandKind`](#hermitcommandkind)
 
-Defined in: [server/\_lib/hermit/types.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L23)
+Defined in: [server/\_lib/hermit/types.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L55)
 
 ##### mediaAttachments?
 
 > `optional` **mediaAttachments**: [`HermitMediaAttachment`](#hermitmediaattachment)[]
 
-Defined in: [server/\_lib/hermit/types.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L27)
+Defined in: [server/\_lib/hermit/types.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L59)
 
 ##### meme?
 
 > `optional` **meme**: [`HermitMeme`](#hermitmeme)
 
-Defined in: [server/\_lib/hermit/types.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L25)
+Defined in: [server/\_lib/hermit/types.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L57)
 
 ##### provider
 
 > **provider**: `"local"` \| `"pinata"`
 
-Defined in: [server/\_lib/hermit/types.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L28)
+Defined in: [server/\_lib/hermit/types.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L60)
 
 ##### reply
 
 > **reply**: `string`
 
-Defined in: [server/\_lib/hermit/types.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L24)
+Defined in: [server/\_lib/hermit/types.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L56)
 
 ***
 
@@ -149,3 +173,62 @@ Defined in: [server/\_lib/hermit/types.ts:5](https://github.com/wenakita/4626/bl
 > **url**: `string`
 
 Defined in: [server/\_lib/hermit/types.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L3)
+
+***
+
+### HermitPreferenceWriter()
+
+> **HermitPreferenceWriter** = (`params`) => `Promise`\<`void`\> \| `void`
+
+Defined in: [server/\_lib/hermit/types.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L37)
+
+Optional callback used by `executeHermitCommand` to persist a fresh
+explicit signal (flag emoji / text hint) for the active sender.
+
+Best-effort: returning false / throwing must not break the reply.
+Implementations live in the AlfaClub lane (Vercel control plane).
+
+#### Parameters
+
+##### params
+
+###### preferenceKey
+
+`"hermit.spanish_dialect"`
+
+###### preferenceValue
+
+`string`
+
+###### updatedBy
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\> \| `void`
+
+***
+
+### HermitUserPreferences
+
+> **HermitUserPreferences** = `object`
+
+Defined in: [server/\_lib/hermit/types.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L25)
+
+Per-user style preferences resolved from the AlfaClub control plane.
+
+Hermit (creative lane) does NOT read or write this directly — it is
+passed in by the chat-bridge or HTTP handler. This keeps the
+boundary tests on `skillRouter` happy: nothing in the Hermit lane
+imports `alfaclub/*Store` symbols.
+
+#### Properties
+
+##### spanishDialect?
+
+> `optional` **spanishDialect**: `string` \| `null`
+
+Defined in: [server/\_lib/hermit/types.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/hermit/types.ts#L27)
+
+Persisted Spanish dialect, if any. Trumped by an explicit signal.

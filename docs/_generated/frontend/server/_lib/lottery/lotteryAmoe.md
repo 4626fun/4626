@@ -10,7 +10,7 @@
 
 ### AmoeZKBuildInputs
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1237](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1237)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1322](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1322)
 
 #### Properties
 
@@ -18,7 +18,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1237](https://github.com/wenaki
 
 > **creatorCoin**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1241](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1241)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1326](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1326)
 
 The creator coin the entry is for. MUST equal pubInputs[1] when masked to uint160.
 
@@ -26,7 +26,7 @@ The creator coin the entry is for. MUST equal pubInputs[1] when masked to uint16
 
 > **epoch**: `number` \| `bigint`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1243](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1243)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1328](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1328)
 
 Lottery epoch. MUST equal pubInputs[3].
 
@@ -34,7 +34,7 @@ Lottery epoch. MUST equal pubInputs[3].
 
 > **lotteryAmoeRouter**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1257](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1257)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1342](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1342)
 
 Address of the deployed `LotteryAmoeRouter`.
 
@@ -42,7 +42,7 @@ Address of the deployed `LotteryAmoeRouter`.
 
 > **proof**: readonly (`string` \| `number` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1249)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1334](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1334)
 
 The 24-element PLONK proof emitted by
 `snarkjs zkey export solidityverifier`. Each element is a BN254 field
@@ -52,7 +52,7 @@ scalar in [0, Q).
 
 > **pubInputs**: readonly (`string` \| `number` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1255](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1255)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1340](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1340)
 
 The 8 PLONK public inputs in the slot layout pinned by
 `AMOE_PLONK_PUB_INPUT_SLOT`. Each element is a BN254 field scalar
@@ -62,7 +62,7 @@ in [0, Q).
 
 > **wallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1239](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1239)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1324](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1324)
 
 The buyer (already verified via signed message off-chain).
 
@@ -70,7 +70,7 @@ The buyer (already verified via signed message off-chain).
 
 ### AmoeZKBuildResult
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1260](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1260)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1345)
 
 #### Properties
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1260](https://github.com/wenaki
 
 > **callData**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1264](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1264)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1349](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1349)
 
 ABI-encoded calldata for `submitAmoeEntryZK`.
 
@@ -86,7 +86,7 @@ ABI-encoded calldata for `submitAmoeEntryZK`.
 
 > **estimatedWinChancePPM**: `number`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1268](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1268)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1353](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1353)
 
 UI win-chance preview, derived from pubInputs[5] (PPM).
 
@@ -94,7 +94,7 @@ UI win-chance preview, derived from pubInputs[5] (PPM).
 
 > **pointsBurnedAsUSD**: `string`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1266](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1266)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1351](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1351)
 
 USD-1e6 value the proof binds. Pulled from pubInputs[5] for convenience.
 
@@ -102,7 +102,7 @@ USD-1e6 value the proof binds. Pulled from pubInputs[5] for convenience.
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1262](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1262)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1347](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1347)
 
 Target address — the LotteryAmoeRouter.
 
@@ -112,7 +112,7 @@ Target address — the LotteryAmoeRouter.
 
 > **AmoeMessageFields** = `object`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:761](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L761)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:846](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L846)
 
 #### Properties
 
@@ -120,43 +120,43 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:761](https://github.com/wenakit
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:767](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L767)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:852](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L852)
 
 ##### creatorCoin
 
 > **creatorCoin**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:763](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L763)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:848](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L848)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:766](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L766)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:851](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L851)
 
 ##### issuedAt
 
 > **issuedAt**: `string`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:765](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L765)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:850](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L850)
 
 ##### lotteryManager
 
 > **lotteryManager**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:768](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L768)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:853](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L853)
 
 ##### nonce
 
 > **nonce**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:764](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L764)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:849](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L849)
 
 ##### wallet
 
 > **wallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:762](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L762)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:847](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L847)
 
 ## Variables
 
@@ -278,7 +278,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:48](https://github.com/wenakita
 
 > **buildAmoeEntryMessage**(`fields`): `string`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:771](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L771)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:856](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L856)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:771](https://github.com/wenakit
 
 > **buildAmoeEntryZKCall**(`inputs`): `Promise`\<[`AmoeZKBuildResult`](#amoezkbuildresult)\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1301](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1301)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1386](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1386)
 
 Build calldata for the PLONK ZK entry path
 (`LotteryAmoeRouter.submitAmoeEntryZK`).
@@ -345,7 +345,7 @@ AmoeBadRequestError if the proof or pubInputs arrays have the
 
 > **buildProcessAmoeEntryCall**(`params`): `Promise`\<\{ `callData`: `` `0x${string}` ``; `estimatedWinChancePPM`: `number`; `pointsBurned`: `number`; `pointsBurnedAsUSD`: `string`; `to`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1153)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1238](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1238)
 
 Build the calldata for a relayer-mode AMOE entry that targets PR 1's
 `CreatorLotteryManager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD)`.
@@ -402,7 +402,7 @@ The transaction calldata + target address for the relayer to send.
 
 > **claimDailyTwitterCheckin**(`params`): `Promise`\<\{ `awarded`: `boolean`; `awardedCredits`: `number`; `credits`: `number`; `creditsPerEntry`: `number`; `entriesAvailable`: `number`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:553](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L553)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:572](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L572)
 
 #### Parameters
 
@@ -420,9 +420,9 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:553](https://github.com/wenakit
 
 ### consumeAmoeCreditsForEntry()
 
-> **consumeAmoeCreditsForEntry**(`params`): `Promise`\<\{ `burnedAt`: `string`; `burnEpoch`: `string`; `consumed`: `number`; `creditsPerEntry`: `number`; `creditsRemaining`: `number`; `entriesAvailable`: `number`; `wallet`: `` `0x${string}` ``; \}\>
+> **consumeAmoeCreditsForEntry**(`params`): `Promise`\<\{ `burnedAt`: `string`; `burnEpoch`: `string`; `consumed`: `number`; `creditsPerEntry`: `number`; `creditsRemaining`: `number`; `entriesAvailable`: `number`; `signupId`: `number` \| `null`; `spendRefId`: `string`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:624](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L624)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:643](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L643)
 
 #### Parameters
 
@@ -442,7 +442,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:624](https://github.com/wenakit
 
 #### Returns
 
-`Promise`\<\{ `burnedAt`: `string`; `burnEpoch`: `string`; `consumed`: `number`; `creditsPerEntry`: `number`; `creditsRemaining`: `number`; `entriesAvailable`: `number`; `wallet`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `burnedAt`: `string`; `burnEpoch`: `string`; `consumed`: `number`; `creditsPerEntry`: `number`; `creditsRemaining`: `number`; `entriesAvailable`: `number`; `signupId`: `number` \| `null`; `spendRefId`: `string`; `wallet`: `` `0x${string}` ``; \}\>
 
 ***
 
@@ -450,7 +450,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:624](https://github.com/wenakit
 
 > **createAmoeAttestation**(`params`): `Promise`\<\{ `buyer`: `` `0x${string}` ``; `callData`: `` `0x${string}` ``; `creatorCoin`: `` `0x${string}` ``; `deadline`: `number`; `nonce`: `` `0x${string}` ``; `signature`: `` `0x${string}` ``; `to`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1028](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1028)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1113)
 
 #### Parameters
 
@@ -512,7 +512,7 @@ Formula (PR 1):  winChancePPM = swapValueUSD / 250_000, capped at
 
 > **getAmoeCreditSnapshot**(`params`): `Promise`\<\{ `credits`: `number`; `creditsPerEntry`: `number`; `entriesAvailable`: `number`; `nextEntryAtCredits`: `number`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:534](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L534)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:553](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L553)
 
 #### Parameters
 
@@ -532,7 +532,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:534](https://github.com/wenakit
 
 > **issueAmoeNonce**(`params`): `Promise`\<\{ `expiresAt`: `string`; `issuedAt`: `string`; `nonce`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:821](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L821)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:906](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L906)
 
 #### Parameters
 
@@ -556,7 +556,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:821](https://github.com/wenakit
 
 > **parseAmoeEntryMessage**(`message`): [`AmoeMessageFields`](#amoemessagefields) \| `null`
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:785](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L785)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:870](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L870)
 
 #### Parameters
 
@@ -597,7 +597,7 @@ consuming credits.
 
 > **verifyAmoeEntryProof**(`params`): `Promise`\<\{ `creatorCoin`: `` `0x${string}` ``; `expiresAt`: `string`; `nonce`: `` `0x${string}` ``; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:989](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L989)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:1074](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L1074)
 
 #### Parameters
 
@@ -629,7 +629,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoe.ts:989](https://github.com/wenakit
 
 > **verifyAmoeWalletSignature**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/lottery/lotteryAmoe.ts:871](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L871)
+Defined in: [server/\_lib/lottery/lotteryAmoe.ts:956](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoe.ts#L956)
 
 Verify a personal_sign / EIP-191 signature against a wallet, with
 EIP-1271 fallback for smart wallets (Coinbase Smart Wallet owner-index
