@@ -217,6 +217,10 @@ FROM alfaclub_runtime_secret
 WHERE secret_key LIKE 'chat_auth_health:%';
 
 -- Anomaly probe: any non-canonical writer in the auth slots?
+-- The app classifier (`evaluateWriterAnomaly`) lowercases `updated_by`
+-- before matching, so this query lower()s the column to mirror that
+-- behaviour. A mixed-case admin wallet stamp like `0xAB…` would
+-- otherwise be flagged here even though the app accepts it.
 SELECT secret_key, updated_by, updated_at
 FROM alfaclub_runtime_secret
 WHERE secret_key IN (
@@ -224,9 +228,14 @@ WHERE secret_key IN (
   'chat_privy_access_token',
   'chat_privy_refresh_token'
 )
-  AND updated_by NOT IN ('privy-token-refresher', 'admin.api', 'computer-token-restore')
-  -- Address-shaped admin writers are expected.
-  AND updated_by !~ '^0x[0-9a-f]{40}$';
+  AND lower(updated_by) NOT IN (
+    'privy-token-refresher',
+    'admin.api',
+    'computer-token-restore'
+  )
+  -- Address-shaped admin writers are expected. Match against the
+  -- lower()'d column so mixed-case wallet stamps are not flagged.
+  AND lower(updated_by) !~ '^0x[0-9a-f]{40}$';
 ```
 
 ## What is intentionally out of scope

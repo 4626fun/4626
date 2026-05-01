@@ -108,6 +108,19 @@ function runCli() {
   const wantCronRefresh = ARGS.flags.has('--call-cron-refresh')
   const wantBridgeRun = ARGS.flags.has('--call-bridge-run')
 
+  // Mutation-only flags. Both endpoints are POST handlers that
+  // perform work in production: chat-token-refresh forces a full
+  // Privy refresh and rewrites the runtime-secret rows;
+  // chat-bridge-run polls AlfaClub and may post replies. They are
+  // NOT safe to fire from a dry-run, despite earlier wording. Refuse
+  // them unless the caller has also opted in to --apply, before any
+  // network call is made.
+  if ((wantCronRefresh || wantBridgeRun) && !isApply) {
+    fatal(
+      '--call-cron-refresh / --call-bridge-run perform live mutations and require --apply. Re-run with --apply, or remove the call flags for a true dry-run.',
+    )
+  }
+
   const adminEndpoint = ARGS.named.get('--endpoint') ?? process.env.ALFACLUB_ADMIN_ENDPOINT ?? ''
   const adminBearer = ARGS.named.get('--admin-bearer') ?? process.env.ALFACLUB_ADMIN_BEARER ?? ''
   const cronSecret = ARGS.named.get('--cron-secret') ?? process.env.CRON_SECRET ?? ''
@@ -163,10 +176,8 @@ async function main(ctx) {
   if (!isApply) {
     console.log()
     console.log('Dry-run only. Re-run with --apply to POST the triplet to the admin endpoint.')
-    if (wantCronRefresh || wantBridgeRun) {
-      console.log('  (--call-cron-refresh / --call-bridge-run still honored on dry-run if endpoint env is set;')
-      console.log('   they only read state and never write, so they remain safe.)')
-    }
+    console.log('  --call-cron-refresh / --call-bridge-run are blocked without --apply because they')
+    console.log('  perform live mutations; the read-only chat-auth-health probe still runs below.')
   } else {
     console.log()
     console.log('APPLY mode — POSTing triplet to admin endpoint…')
@@ -372,8 +383,21 @@ function redact(input) {
   return out
 }
 
+/**
+ * Derive a sibling cron endpoint (`chat-token-refresh`, `chat-bridge-run`)
+ * from the admin chat-token endpoint by swapping the trailing path
+ * segment. Returns '' (not the original URL) when the admin endpoint
+ * does not end with `/chat-token` — falling back to the unchanged URL
+ * would silently POST cron payloads to whatever the admin endpoint
+ * actually is, including possibly mutating handlers.
+ *
+ * Callers treat '' as "no derived URL configured"; the upstream guard
+ * then refuses to make the call without an explicit
+ * `--refresh-endpoint=` / `--bridge-run-endpoint=` override.
+ */
 function deriveSiblingEndpoint(adminEndpoint, sibling) {
   if (!adminEndpoint) return ''
+  if (!/\/chat-token\/?$/.test(adminEndpoint)) return ''
   return adminEndpoint.replace(/\/chat-token\/?$/, `/${sibling}`)
 }
 
@@ -387,6 +411,14 @@ function parseArgs(argv) {
   const flags = new Set()
   const named = new Map()
   for (const arg of argv) {
+    // Single-dash short flags (currently only -h / -? for help) need to be
+    // recognised before the long-flag `--` check, otherwise `-h` would be
+    // pushed into positional and treated as a triplet path. Keep this list
+    // tight — every short flag must have an explicit long-form alias.
+    if (arg === '-h' || arg === '-?') {
+      flags.add('--help')
+      continue
+    }
     if (!arg.startsWith('--')) {
       positional.push(arg)
       continue
@@ -402,7 +434,7 @@ function parseArgs(argv) {
     positional,
     flags,
     named,
-    help: flags.has('--help') || flags.has('-h'),
+    help: flags.has('--help'),
   }
 }
 
@@ -413,15 +445,21 @@ Default mode is DRY-RUN — nothing is written, only redacted metadata is printe
 
 Flags:
   --apply                          POST the triplet to the admin endpoint.
-  --call-cron-refresh              After load (and apply if set), call chat-token-refresh.
-  --call-bridge-run                After refresh, call chat-bridge-run.
+                                   Also unlocks the live-mutation flags below.
+  --call-cron-refresh              POST chat-token-refresh after apply. Requires --apply.
+                                   Forces a full Privy refresh and rewrites the runtime-secret rows.
+  --call-bridge-run                POST chat-bridge-run after refresh. Requires --apply.
+                                   Polls AlfaClub and may post bridge replies into the room.
   --endpoint=<url>                 Admin endpoint URL (overrides ALFACLUB_ADMIN_ENDPOINT).
-  --refresh-endpoint=<url>         chat-token-refresh URL (default: derived from admin endpoint).
-  --bridge-run-endpoint=<url>      chat-bridge-run URL (default: derived from admin endpoint).
+  --refresh-endpoint=<url>         chat-token-refresh URL. Required if the admin endpoint does
+                                   not end with /chat-token (the auto-derivation only works for
+                                   that exact suffix).
+  --bridge-run-endpoint=<url>      chat-bridge-run URL. Same auto-derivation rule as above.
   --health-endpoint=<url>          chat-auth-health URL (overrides ALFACLUB_HEALTH_ENDPOINT).
+                                   Read-only; safe to set in dry-run.
   --admin-bearer=<token>           Admin bearer (overrides ALFACLUB_ADMIN_BEARER).
   --cron-secret=<secret>           Cron secret (overrides CRON_SECRET).
-  --help, -h                       This help.
+  --help, -h, -?                   This help.
 
 Env vars (preferred over flags for secrets):
   ALFACLUB_ADMIN_ENDPOINT, ALFACLUB_ADMIN_BEARER,
@@ -438,4 +476,6 @@ export const _testables = {
   validateTripletJson,
   describeJwt,
   describeOpaque,
+  parseArgs,
+  deriveSiblingEndpoint,
 }

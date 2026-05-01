@@ -6,12 +6,26 @@
  * the entrypoint and only runs main() in that case, so importing it is
  * side-effect-free for these tests).
  */
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 
 // @ts-expect-error -- .mjs script with no .d.ts; imported only for unit tests
 import { _testables } from '../../../scripts/alfaclub-restore-tokens.mjs'
 
-const { redact, isJwtShape, decodeJwtExp, validateTripletJson, describeJwt } = _testables as {
+const {
+  redact,
+  isJwtShape,
+  decodeJwtExp,
+  validateTripletJson,
+  describeJwt,
+  parseArgs,
+  deriveSiblingEndpoint,
+} = _testables as {
   redact: (input: string) => string
   isJwtShape: (value: string) => boolean
   decodeJwtExp: (jwt: string) => number | null
@@ -22,7 +36,18 @@ const { redact, isJwtShape, decodeJwtExp, validateTripletJson, describeJwt } = _
     | { ok: true; triplet: { identityToken: string; accessToken: string; refreshToken: string }; expiry: { identityExpMs: number; accessExpMs: number } }
     | { ok: false; error: string }
   describeJwt: (jwt: string) => string
+  parseArgs: (argv: string[]) => {
+    positional: string[]
+    flags: Set<string>
+    named: Map<string, string>
+    help: boolean
+  }
+  deriveSiblingEndpoint: (adminEndpoint: string, sibling: string) => string
 }
+
+const SCRIPT_PATH = fileURLToPath(
+  new URL('../../../scripts/alfaclub-restore-tokens.mjs', import.meta.url),
+)
 
 function jwtWithExp(expSeconds: number): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
@@ -186,5 +211,165 @@ describe('restore script — describeJwt()', () => {
     expect(desc).not.toContain(jwt)
     expect(desc).toContain('exp=')
     expect(desc).toContain('len=')
+  })
+})
+
+describe('restore script — parseArgs()', () => {
+  it('treats -h as a help flag (alias of --help)', () => {
+    const result = parseArgs(['-h'])
+    expect(result.help).toBe(true)
+    // -h must NOT leak into positional args; otherwise the CLI would
+    // treat it as a missing-file path and exit with file-not-found.
+    expect(result.positional).toEqual([])
+  })
+
+  it('treats -? as a help flag (alias of --help)', () => {
+    const result = parseArgs(['-?'])
+    expect(result.help).toBe(true)
+    expect(result.positional).toEqual([])
+  })
+
+  it('treats --help as a help flag', () => {
+    const result = parseArgs(['--help'])
+    expect(result.help).toBe(true)
+    expect(result.flags.has('--help')).toBe(true)
+  })
+
+  it('keeps positional args separate from short and long flags', () => {
+    const result = parseArgs(['triplet.json', '-h'])
+    expect(result.help).toBe(true)
+    expect(result.positional).toEqual(['triplet.json'])
+  })
+
+  it('still routes other dash-prefixed args (--apply, --foo=bar)', () => {
+    const result = parseArgs(['--apply', '--endpoint=https://x/api/v1/alfaclub/chat-token'])
+    expect(result.flags.has('--apply')).toBe(true)
+    expect(result.named.get('--endpoint')).toBe('https://x/api/v1/alfaclub/chat-token')
+    expect(result.help).toBe(false)
+  })
+})
+
+describe('restore script — deriveSiblingEndpoint()', () => {
+  it('swaps /chat-token for the requested sibling', () => {
+    const out = deriveSiblingEndpoint(
+      'https://example.com/api/v1/alfaclub/chat-token',
+      'chat-token-refresh',
+    )
+    expect(out).toBe('https://example.com/api/v1/alfaclub/chat-token-refresh')
+  })
+
+  it('handles a trailing slash on /chat-token/', () => {
+    const out = deriveSiblingEndpoint(
+      'https://example.com/api/v1/alfaclub/chat-token/',
+      'chat-bridge-run',
+    )
+    expect(out).toBe('https://example.com/api/v1/alfaclub/chat-bridge-run')
+  })
+
+  it('returns "" when the admin endpoint does not end with /chat-token', () => {
+    // Without this guard, a misconfigured ALFACLUB_ADMIN_ENDPOINT would
+    // pass through unchanged and the script would POST cron payloads to
+    // a completely different handler. Returning "" forces the upstream
+    // guard to refuse the call (or require an explicit override).
+    const out = deriveSiblingEndpoint(
+      'https://example.com/api/v1/alfaclub/whatever',
+      'chat-token-refresh',
+    )
+    expect(out).toBe('')
+  })
+
+  it('returns "" when admin endpoint is empty', () => {
+    expect(deriveSiblingEndpoint('', 'chat-token-refresh')).toBe('')
+  })
+
+  it('does not match URLs where /chat-token is not the final segment', () => {
+    expect(
+      deriveSiblingEndpoint(
+        'https://example.com/api/v1/alfaclub/chat-token-refresh',
+        'chat-token-refresh',
+      ),
+    ).toBe('')
+  })
+})
+
+describe('restore script — CLI guards (child-process integration)', () => {
+  // This block spawns the actual script with `node`. It does not need
+  // node_modules — the script has no runtime imports beyond node: builtins.
+  // It also does not make any real network calls because the guards run
+  // before fetch().
+
+  function makeTripletFile(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), 'alfaclub-restore-'))
+    const future = Math.floor(Date.now() / 1000) + 60 * 60
+    // Long opaque-shaped refresh token so the redactor strips it from any
+    // accidental output even if the test fails.
+    const triplet = {
+      identity_token: makeJwt(future),
+      privy_access_token: makeJwt(future),
+      refresh_token: 'r'.repeat(48),
+    }
+    const file = path.join(dir, 'triplet.json')
+    writeFileSync(file, JSON.stringify(triplet), 'utf8')
+    return file
+  }
+
+  function makeJwt(expSeconds: number): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url')
+    const payload = Buffer.from(JSON.stringify({ exp: expSeconds })).toString('base64url')
+    return `${header}.${payload}.signature_segment_xxxxx`
+  }
+
+  it('exits 0 and prints help on -h with no other args', () => {
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, '-h'], { encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toMatch(/Usage:/)
+    expect(result.stderr).toBe('')
+  })
+
+  it('exits non-zero when --call-cron-refresh is set without --apply', () => {
+    const file = makeTripletFile()
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT_PATH, file, '--call-cron-refresh'],
+      { encoding: 'utf8' },
+    )
+    expect(result.status).not.toBe(0)
+    // The guard must fire BEFORE we read the triplet, so the input
+    // summary header should not appear.
+    expect(result.stdout).not.toMatch(/triplet restore — input summary/i)
+    // Error message should be the one we added.
+    expect(result.stderr).toMatch(/--call-cron-refresh \/ --call-bridge-run perform live mutations/)
+    expect(result.stderr).toMatch(/require --apply/)
+  })
+
+  it('exits non-zero when --call-bridge-run is set without --apply', () => {
+    const file = makeTripletFile()
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT_PATH, file, '--call-bridge-run'],
+      { encoding: 'utf8' },
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/require --apply/)
+  })
+
+  it('exits non-zero when both call flags are set without --apply', () => {
+    const file = makeTripletFile()
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT_PATH, file, '--call-cron-refresh', '--call-bridge-run'],
+      { encoding: 'utf8' },
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toMatch(/require --apply/)
+  })
+
+  it('completes pure dry-run (no --apply, no call flags) successfully', () => {
+    const file = makeTripletFile()
+    const result = spawnSync(process.execPath, [SCRIPT_PATH, file], { encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toMatch(/triplet restore — input summary/i)
+    expect(result.stdout).toMatch(/mode\s*:\s*DRY-RUN/)
+    expect(result.stdout).toMatch(/Done\./)
   })
 })
