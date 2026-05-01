@@ -19,6 +19,17 @@ paths = [
   '''^deployment-vault-v3-final\.json$''',
 ]
 
+# NOTE on `cre/secrets.example.env`:
+# This is a distribution template with placeholder values. The historical
+# `generic-api-key` findings against it (26 in the full-history walk) are
+# silenced by the rule-scoped allowlist below — see the
+# `(^|/)[A-Za-z0-9_-]+\.example\.env$` entry under the `generic-api-key`
+# rule. We deliberately do NOT add this path to the global `[allowlist]`
+# above, because doing so would disable EVERY detector for this file —
+# including provider-specific ones (aws-access-token, github-pat,
+# stripe-access-token, private-key, etc.) — and create a credential blind
+# spot if a real cloud secret were ever committed under that path.
+
 # Rule-scoped allowlist for the `generic-api-key` heuristic.
 #
 # Background: L-21 (Linear 4626-369, Phase 6 SEV-607) flagged the
@@ -60,6 +71,10 @@ paths = [
   # env.example files are distribution templates, not secret stores.
   # Provider-specific detectors still scan them.
   '''(^|/)\.env\.example$''',
+  # Same posture for the alt naming convention used by `cre/`:
+  # `<name>.example.env` (placeholder values; comment-documented).
+  '''(^|/)secrets\.example\.env$''',
+  '''(^|/)[A-Za-z0-9_-]+\.example\.env$''',
   # Standalone HTML utility whose only config values are public token
   # addresses referenced from query params.
   '''^zora-enable/index\.html$''',
