@@ -40,6 +40,16 @@ const MAX_IDENTITY_LOOKUPS_IN_FLIGHT = 6
 let activeIdentityLookups = 0
 const identityLookupQueue: Array<() => void> = []
 
+function shouldResolveEnsNames(): boolean {
+  if (import.meta.env.VITE_IDENTITY_RESOLVE_ENS === 'true') return true
+  if (!IS_BROWSER) return false
+  try {
+    return window.localStorage.getItem('cv:identity:resolve-ens') === 'true'
+  } catch {
+    return false
+  }
+}
+
 function runIdentityLookupTask<T>(task: () => Promise<T>): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const launch = () => {
@@ -259,9 +269,10 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
   if (pending) return pending
 
   const promise = runIdentityLookupTask(async () => {
+    const resolveEns = shouldResolveEnsNames()
     const [lens, ensName, basenameProfile] = await Promise.all([
       fetchLensUser(address).catch(() => null),
-      ensClient.getEnsName({ address: address as `0x${string}` }).catch(() => null),
+      resolveEns ? ensClient.getEnsName({ address: address as `0x${string}` }).catch(() => null) : Promise.resolve(null),
       getBasenameProfile(address).catch(() => null),
     ])
 

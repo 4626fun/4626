@@ -20,7 +20,7 @@ import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
 import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
-import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { fetchEthosScoreForUserkey, getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
@@ -46,6 +46,12 @@ const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
 const CREATORS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
 const ETHOS_FILTER_VALUES = ['all', '1200', '1600', '1800'] as const
+const ETHOS_FILTER_OPTIONS = [
+  { label: 'All', value: 'all' },
+  { label: '1200+', value: '1200' },
+  { label: '1600+', value: '1600' },
+  { label: '1800+', value: '1800' },
+] as const satisfies ReadonlyArray<{ label: string; value: (typeof ETHOS_FILTER_VALUES)[number] }>
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
@@ -205,6 +211,12 @@ function getEthosFilterMinimum(value: string): number | null {
   if (value === 'all') return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+function getEthosFilterTone(value: (typeof ETHOS_FILTER_VALUES)[number]): string {
+  if (value === 'all') return 'border-white/12 bg-white/7 text-zinc-200'
+  const palette = getEthosScorePalette(Number(value))
+  return `${palette.borderClass} ${palette.bgClass} ${palette.textClass}`
 }
 
 function buildProfileIdentifierCandidates(query: string): string[] {
@@ -755,13 +767,9 @@ export function ExploreCreators() {
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] text-zinc-500">Ethos</span>
               <div className="flex h-8 items-center gap-0.5 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-                {[
-                  { label: 'All', value: 'all' },
-                  { label: '1200+', value: '1200' },
-                  { label: '1600+', value: '1600' },
-                  { label: '1800+', value: '1800' },
-                ].map((filter) => {
+                {ETHOS_FILTER_OPTIONS.map((filter) => {
                   const active = ethosFilter === filter.value
+                  const tone = getEthosFilterTone(filter.value)
                   return (
                     <button
                       key={filter.value}
@@ -769,7 +777,7 @@ export function ExploreCreators() {
                       onClick={() => setEthosFilter(filter.value as (typeof ETHOS_FILTER_VALUES)[number])}
                       className={`h-6 rounded-full border px-2 text-[10px] font-medium leading-none transition-all duration-200 ${
                         active
-                          ? 'border-blue-300/35 bg-blue-500/20 text-blue-100'
+                          ? tone
                           : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
                       }`}
                     >

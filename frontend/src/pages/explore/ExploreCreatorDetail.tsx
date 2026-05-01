@@ -458,17 +458,17 @@ export function ExploreCreatorDetail() {
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {/* Avatar & Name */}
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="relative h-14 w-14 shrink-0 sm:h-20 sm:w-20">
+              <div className="relative h-[76px] w-14 shrink-0 sm:h-[100px] sm:w-20">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt={displayName} className="h-full w-full rounded-xl object-cover sm:rounded-2xl" />
+                  <img src={avatarUrl} alt={displayName} className="h-14 w-14 rounded-xl object-cover sm:h-20 sm:w-20 sm:rounded-2xl" />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center rounded-xl bg-linear-to-br from-zinc-600 to-zinc-700 sm:rounded-2xl">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-linear-to-br from-zinc-600 to-zinc-700 sm:h-20 sm:w-20 sm:rounded-2xl">
                     <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
                   </div>
                 )}
                 <EthosAvatarScoreForUserkey
                   userkey={ethosSocialUserkey}
-                  className="absolute left-1/2 top-[calc(100%-6px)] -translate-x-1/2 scale-110"
+                  className="absolute bottom-0 left-1/2 -translate-x-1/2 scale-110"
                 />
               </div>
               <div className="flex-1 min-w-0">

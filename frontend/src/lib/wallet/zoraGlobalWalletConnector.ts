@@ -37,9 +37,9 @@
  *      `validateUserOp` on the CBSW.
  *
  * Bottom line: cross-app Connect mode is the wrong primitive for adding
- * 4626 as a CBSW owner. The right primitive is the Base Account SDK path
- * (sub-account derivation), which `useAccountSetupController.ts` already
- * implements via `useSubAccountSetup` and the `subAccount.canSetup` branch.
+ * 4626 as a CBSW owner. Account setup should reconnect through Base Account
+ * and use the canonical parent-CSW owner/signing flow in
+ * `useAccountSetupController.ts`.
  *
  * What this connector is still useful for
  * ---------------------------------------

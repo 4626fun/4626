@@ -45,6 +45,7 @@ function stabilizeScrollMeasurementRoots() {
 const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
   /Cannot set property ethereum of #<Window> which has only a getter/i,
+  /websocket error 1006/i,
   /MetaMask encountered an error setting the global Ethereum provider/i,
   /Failed to add embedded wallet connector:\s*Wallet proxy not initialized/i,
   /Cannot access '\$a' before initialization/i,
@@ -62,6 +63,7 @@ function hasExtensionOriginSignal(text: string): boolean {
     lower.includes('chrome-extension://') ||
     lower.includes('moz-extension://') ||
     lower.includes('evmask.js') ||
+    lower.includes('requestrelay.js') ||
     lower.includes('requestprovider.js') ||
     lower.includes('inpage.js')
   )
@@ -142,6 +144,7 @@ function isKnownExtensionWalletError(message: string, source: string): boolean {
     src.includes('chrome-extension://') ||
     src.includes('moz-extension://') ||
     src.includes('evmask.js') ||
+    src.includes('requestrelay.js') ||
     src.includes('requestprovider.js') ||
     src.includes('inpage.js') ||
     src.includes('formatters.js')

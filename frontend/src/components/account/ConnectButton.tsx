@@ -1,5 +1,5 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Tray } from '@coinbase/cds-web/overlays/tray/Tray'
@@ -245,6 +245,7 @@ export function ConnectButton({
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
+  const mountedRef = useRef(true)
   const optionsPanelClassName = 'absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1'
   const isPhoneViewport = useIsPhoneViewport()
   const trayPin = isPhoneViewport ? 'bottom' : 'right'
@@ -302,6 +303,22 @@ export function ConnectButton({
     setShowMenu(false)
     setShowOptions((current) => !current)
   }
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+  const closeMenuAfterTrayClose = useCallback(() => {
+    const close = () => {
+      if (mountedRef.current) setShowMenu(false)
+    }
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(close)
+      return
+    }
+    globalThis.setTimeout(close, 0)
+  }, [])
 
   if (buttonState === 'hydrating') {
     return (
@@ -360,7 +377,7 @@ export function ConnectButton({
             showHandleBar={isPhoneViewport}
             title="Account"
             accessibilityLabel="Account menu"
-            onCloseComplete={() => setShowMenu(false)}
+            onCloseComplete={closeMenuAfterTrayClose}
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >
@@ -478,7 +495,7 @@ export function ConnectButton({
             showHandleBar={isPhoneViewport}
             title="Account"
             accessibilityLabel="Account menu"
-            onCloseComplete={() => setShowMenu(false)}
+            onCloseComplete={closeMenuAfterTrayClose}
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >

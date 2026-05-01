@@ -6,16 +6,15 @@
  * linked Privy accounts, resolve canonical CSW candidates, and pick the
  * right Privy auth helper for Zora cross-app linking. The actual
  * wallet-readiness gate for user-initiated frontend execution is the
- * sub-account setup path in `useAccountSetupController.onEnable4626Signing`,
- * which creates the app-scoped sub-account via `wallet_addSubAccount` and
- * configures its signer to the Privy embedded EOA via `setToOwnerAccount()`.
+ * canonical parent CSW + Privy embedded-owner path in
+ * `useAccountSetupController.onEnable4626Signing`.
  * See `docs/4626-connection-methods.md` Section 2 and
  * `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
  *
  * Replaces the previous `ownerInstallMapping.ts` module. The legacy
  * `deriveOwnerInstallMappingStatus` state machine was removed because it
- * had no production callers — the controller routes sub-account-first,
- * and the legacy owner-install path is now server-side-only per
+ * had no production callers — the controller now routes through the
+ * canonical parent CSW signer path, while server automation follows
  * `.cursor/rules/csw-agent-lifecycle.mdc`.
  */
 

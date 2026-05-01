@@ -15,6 +15,7 @@ alwaysApply: false
 - After wallet/auth verification, remaining setup SHOULD run in backend or background tasks.
 - Joining the waitlist or linking an identity does not by itself make the account wallet-execution-ready; keep canonical-wallet gating aligned with `AGENTS.md` and `ERC-4337-Wallet-Invariants.mdc`.
 - Do not require standalone optional crypto actions during signup (for example: separate CSW proof, separate XMTP connect, manual wallet provisioning) unless explicitly product-critical.
+- Do not explicitly create or require a Base sub-account during waitlist onboarding. The default waitlist path should enable the canonical parent CSW + Privy embedded-owner signing model.
 - Prefer automatic progression: when required checks pass, auto-submit/join; keep only one manual fallback action for recovery.
 - Keep copy non-technical and reassuring (for example: "Setting up your account"), not protocol jargon.
 - Advanced diagnostics/proof UX MUST be feature-flagged and disabled by default.

@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/api/apiBase'
@@ -31,6 +32,15 @@ type EthosProfileSummary = EthosScoreValue & {
   }
 }
 
+export type EthosScorePalette = {
+  level: string
+  textClass: string
+  strongTextClass: string
+  borderClass: string
+  bgClass: string
+  ringClass: string
+}
+
 type PendingUserkeyScore = {
   resolve: (value: EthosScoreValue | null) => void
   reject: (error: Error) => void
@@ -41,6 +51,88 @@ const pendingUserkeyScores = new Map<string, PendingUserkeyScore[]>()
 let userkeyBatchTimer: ReturnType<typeof setTimeout> | null = null
 const ETHOS_MARK_SRC =
   'https://cdn.prod.website-files.com/6659e70ed26d2373ff8f8c3d/66a68f3c9c2b3076186315e6_ob-ow-framed-mark-sm.png'
+const ETHOS_LEVEL_PALETTES: Record<string, EthosScorePalette> = {
+  untrusted: {
+    level: 'Untrusted',
+    textClass: 'text-[#ff6b78]',
+    strongTextClass: 'text-[#dc3545]',
+    borderClass: 'border-[#dc3545]/45',
+    bgClass: 'bg-[#dc3545]/10',
+    ringClass: 'ring-[#dc3545]/35',
+  },
+  questionable: {
+    level: 'Questionable',
+    textClass: 'text-[#f0c044]',
+    strongTextClass: 'text-[#d6a411]',
+    borderClass: 'border-[#d6a411]/50',
+    bgClass: 'bg-[#d6a411]/12',
+    ringClass: 'ring-[#d6a411]/35',
+  },
+  neutral: {
+    level: 'Neutral',
+    textClass: 'text-[#d8d4c8]',
+    strongTextClass: 'text-[#c9c6bd]',
+    borderClass: 'border-[#c9c6bd]/45',
+    bgClass: 'bg-[#c9c6bd]/10',
+    ringClass: 'ring-[#c9c6bd]/30',
+  },
+  known: {
+    level: 'Known',
+    textClass: 'text-[#9fb2cf]',
+    strongTextClass: 'text-[#879bb8]',
+    borderClass: 'border-[#879bb8]/50',
+    bgClass: 'bg-[#879bb8]/12',
+    ringClass: 'ring-[#879bb8]/35',
+  },
+  established: {
+    level: 'Established',
+    textClass: 'text-[#6fb3ee]',
+    strongTextClass: 'text-[#4e94ca]',
+    borderClass: 'border-[#4e94ca]/50',
+    bgClass: 'bg-[#4e94ca]/12',
+    ringClass: 'ring-[#4e94ca]/35',
+  },
+  reputable: {
+    level: 'Reputable',
+    textClass: 'text-[#55a8f2]',
+    strongTextClass: 'text-[#2d8fde]',
+    borderClass: 'border-[#2d8fde]/55',
+    bgClass: 'bg-[#2d8fde]/12',
+    ringClass: 'ring-[#2d8fde]/35',
+  },
+  exemplary: {
+    level: 'Exemplary',
+    textClass: 'text-[#6bc684]',
+    strongTextClass: 'text-[#49a268]',
+    borderClass: 'border-[#49a268]/55',
+    bgClass: 'bg-[#49a268]/12',
+    ringClass: 'ring-[#49a268]/35',
+  },
+  distinguished: {
+    level: 'Distinguished',
+    textClass: 'text-[#38d06a]',
+    strongTextClass: 'text-[#16a34a]',
+    borderClass: 'border-[#16a34a]/55',
+    bgClass: 'bg-[#16a34a]/12',
+    ringClass: 'ring-[#16a34a]/35',
+  },
+  revered: {
+    level: 'Revered',
+    textClass: 'text-[#a990d6]',
+    strongTextClass: 'text-[#8064b1]',
+    borderClass: 'border-[#8064b1]/55',
+    bgClass: 'bg-[#8064b1]/12',
+    ringClass: 'ring-[#8064b1]/35',
+  },
+  renowned: {
+    level: 'Renowned',
+    textClass: 'text-[#9570d8]',
+    strongTextClass: 'text-[#7452ae]',
+    borderClass: 'border-[#7452ae]/55',
+    bgClass: 'bg-[#7452ae]/12',
+    ringClass: 'ring-[#7452ae]/35',
+  },
+}
 
 function isAddress(value: string | null | undefined): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -90,12 +182,34 @@ function formatVouchSummary(profile: EthosProfileSummary | null | undefined): st
   return `${count.toLocaleString()} voucher${count === 1 ? '' : 's'}`
 }
 
-function scoreTone(score: number | null | undefined): string {
+function normalizeEthosLevel(level: string | null | undefined): string | null {
+  const normalized = typeof level === 'string' ? level.trim().toLowerCase() : ''
+  return normalized && normalized in ETHOS_LEVEL_PALETTES ? normalized : null
+}
+
+function inferEthosLevelFromScore(score: number | null | undefined): string {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return 'neutral'
+  if (score < 800) return 'untrusted'
+  if (score < 1200) return 'questionable'
+  if (score < 1400) return 'neutral'
+  if (score < 1600) return 'known'
+  if (score < 1800) return 'established'
+  if (score < 2000) return 'reputable'
+  if (score < 2200) return 'exemplary'
+  if (score < 2400) return 'distinguished'
+  if (score < 2600) return 'revered'
+  return 'renowned'
+}
+
+export function getEthosScorePalette(score: number | null | undefined, level?: string | null): EthosScorePalette {
+  const key = normalizeEthosLevel(level) ?? inferEthosLevelFromScore(score)
+  return ETHOS_LEVEL_PALETTES[key] ?? ETHOS_LEVEL_PALETTES.neutral!
+}
+
+function scoreTone(score: number | null | undefined, level?: string | null): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return 'border-white/10 bg-white/[0.04] text-zinc-500'
-  if (score >= 1800) return 'border-emerald-300/25 bg-emerald-400/10 text-emerald-200'
-  if (score >= 1200) return 'border-brand-primary/25 bg-brand-primary/10 text-blue-200'
-  if (score >= 700) return 'border-amber-300/25 bg-amber-400/10 text-amber-200'
-  return 'border-white/10 bg-white/[0.04] text-zinc-400'
+  const palette = getEthosScorePalette(score, level)
+  return cn(palette.borderClass, palette.bgClass, palette.textClass)
 }
 
 async function fetchSingleEthosScore(query: string): Promise<EthosScoreValue | null> {
@@ -273,7 +387,7 @@ export function EthosScorePill({
     <span
       className={cn(
         'shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium tabular-nums',
-        scoreTone(score),
+        scoreTone(score, level),
         className,
       )}
       title={hasScore ? formatCredibilityScoreLabel(score, level) : 'No Ethos Credibility Score'}
@@ -301,11 +415,29 @@ export function EthosAvatarScoreBadge({
   const [hoverIntent, setHoverIntent] = useState(false)
   const [popoverPosition, setPopoverPosition] = useState<{ left: number; top: number } | null>(null)
   const badgeRef = useRef<HTMLSpanElement | null>(null)
+  const closeTimerRef = useRef<number | null>(null)
   const profile = useEthosProfileSummary(profileQuery, profileQueryKind, hoverIntent)
   const profileValue = profile.data ?? null
+
+  const clearCloseTimer = () => {
+    if (!closeTimerRef.current) return
+    window.clearTimeout(closeTimerRef.current)
+    closeTimerRef.current = null
+  }
+
+  useEffect(() => {
+    return () => {
+      if (!closeTimerRef.current) return
+      window.clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }, [])
+
   if (!hasScore) return null
+  const palette = getEthosScorePalette(score, level)
 
   const showPopoverNearBadge = () => {
+    clearCloseTimer()
     setHoverIntent(true)
     const rect = badgeRef.current?.getBoundingClientRect()
     if (!rect) return
@@ -316,37 +448,31 @@ export function EthosAvatarScoreBadge({
   }
 
   const showPopoverNearMouse = (point: { clientX: number; clientY: number }) => {
+    clearCloseTimer()
     setHoverIntent(true)
     setPopoverPosition(getPopoverPositionNearPoint(point))
   }
 
-  const hidePopover = () => {
-    setPopoverPosition(null)
+  const scheduleHidePopover = () => {
+    clearCloseTimer()
+    closeTimerRef.current = window.setTimeout(() => {
+      setPopoverPosition(null)
+      closeTimerRef.current = null
+    }, 160)
   }
 
-  return (
-    <span
-      ref={badgeRef}
-      className={cn(
-        'group/ethos pointer-events-auto relative inline-flex h-[16px] items-center gap-0.5 rounded-md border border-white/15 bg-[#07080a]/95 py-0 pl-1.5 pr-0.5 text-[9px] font-semibold leading-none text-white shadow-[0_1px_2px_rgba(0,0,0,0.55)]',
-        className,
-      )}
-      title={formatCredibilityScoreLabel(score, level)}
-      aria-label={formatCredibilityScoreLabel(score, level)}
-      onMouseEnter={showPopoverNearMouse}
-      onMouseMove={showPopoverNearMouse}
-      onMouseLeave={hidePopover}
-      onFocus={showPopoverNearBadge}
-      onBlur={hidePopover}
-      tabIndex={-1}
-    >
-      <span className="min-w-[1.6rem] text-center tabular-nums tracking-[-0.02em]">{formatScore(score)}</span>
-      <EthosMark />
-      {popoverPosition ? (
+  const popover = popoverPosition && typeof document !== 'undefined'
+    ? createPortal(
         <span
-          className="pointer-events-none fixed z-[9999] block w-[260px] overflow-hidden rounded-2xl border border-white/10 bg-[#050607] text-left text-white shadow-[0_18px_56px_-18px_rgba(0,0,0,0.95)] ring-1 ring-black/60"
+          className={cn(
+            'pointer-events-auto fixed z-[9999] block w-[260px] overflow-hidden rounded-2xl border bg-[#050607] text-left text-white shadow-[0_18px_56px_-18px_rgba(0,0,0,0.95)] ring-1',
+            palette.borderClass,
+            palette.ringClass,
+          )}
           style={{ left: popoverPosition.left, top: popoverPosition.top }}
           role="tooltip"
+          onMouseEnter={clearCloseTimer}
+          onMouseLeave={scheduleHidePopover}
         >
           <span className="block p-3">
             <span className="flex items-start gap-3">
@@ -378,18 +504,48 @@ export function EthosAvatarScoreBadge({
               <span className="block text-zinc-400">{formatVouchSummary(profileValue)}</span>
             </span>
             <span className="text-right">
-              <span className="block font-serif text-[30px] leading-none text-white">{formatScore(score)}</span>
-              <span className="mt-0.5 block text-[10px] font-semibold capitalize text-zinc-300">{level ?? 'Neutral'}</span>
+              <span className={cn('block font-serif text-[30px] leading-none', palette.textClass)}>{formatScore(score)}</span>
+              <span className={cn('mt-0.5 block text-[10px] font-semibold', palette.strongTextClass)}>{level ?? palette.level}</span>
             </span>
           </span>
           {profileValue?.profileUrl ? (
-            <span className="block border-t border-white/10 px-3 py-2 text-center text-[11px] font-semibold text-white">
+            <a
+              href={profileValue.profileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="block border-t border-white/10 px-3 py-2 text-center text-[11px] font-semibold text-white transition-colors hover:bg-white/8"
+            >
               View profile
-            </span>
+            </a>
           ) : null}
-        </span>
-      ) : null}
-    </span>
+        </span>,
+        document.body,
+      )
+    : null
+
+  return (
+    <>
+      <span
+        ref={badgeRef}
+        className={cn(
+          'group/ethos pointer-events-auto relative inline-flex h-[16px] items-center gap-0.5 rounded-md border bg-[#07080a]/95 py-0 pl-1.5 pr-0.5 text-[9px] font-semibold leading-none shadow-[0_1px_2px_rgba(0,0,0,0.55)]',
+          palette.borderClass,
+          palette.textClass,
+          className,
+        )}
+        title={formatCredibilityScoreLabel(score, level)}
+        aria-label={formatCredibilityScoreLabel(score, level)}
+        onMouseEnter={showPopoverNearMouse}
+        onMouseLeave={scheduleHidePopover}
+        onFocus={showPopoverNearBadge}
+        onBlur={scheduleHidePopover}
+        tabIndex={-1}
+      >
+        <span className="min-w-[1.6rem] text-center tabular-nums tracking-[-0.02em]">{formatScore(score)}</span>
+        <EthosMark />
+      </span>
+      {popover}
+    </>
   )
 }
 

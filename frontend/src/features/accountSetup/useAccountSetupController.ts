@@ -8,14 +8,12 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import { logger } from '@/lib/observability/logger'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import {
   type ApiEnvelope,
   type OnboardingBootstrapResponse,
@@ -209,10 +207,6 @@ export function useAccountSetupController(params: {
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
-
-  // Sub-account setup: creates a derived smart wallet whose signer is the
-  // Privy embedded EOA, avoiding parent-CSW owner install for user execution.
-  const subAccount = useSubAccountSetup()
 
   const privyAuthed = Boolean(privy?.authenticated)
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
@@ -550,7 +544,7 @@ export function useAccountSetupController(params: {
             'metamask',
           ],
           walletChainType: 'ethereum-only',
-          description: 'Connect via Base Account for sub-account signing, or connect one of the current owners of your Coinbase Smart Wallet on Base.',
+          description: 'Connect your Base Account or one of the current owners of your Coinbase Smart Wallet on Base.',
         }),
       ).catch((connectError: unknown) => {
         const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
@@ -1037,232 +1031,7 @@ export function useAccountSetupController(params: {
     setNotice(null)
     setOwnerDelegationFlags(null)
     try {
-      // ── Reconnect guard ──────────────────────────────────────────────
-      // The user's CSW is connected but the sub-account SDK is unavailable.
-      // This happens when the wallet was connected as 'coinbase_wallet'
-      // instead of 'base_account'.  The legacy addOwnerAddress path will
-      // hit the eGe "Self calls are not allowed" error, so short-circuit
-      // with an actionable message.
-      if (connectedCanonicalWalletSelected && !subAccount.canSetup) {
-        const walletType = subAccount.baseAccountWallet
-          ? String((subAccount.baseAccountWallet as any).walletClientType ?? 'unknown')
-          : 'none'
-        logger.warn('Sub-account SDK unavailable — wallet connected as wrong type', {
-          walletClientType: walletType,
-          hasEmbeddedWallet: Boolean(subAccount.embeddedWallet),
-          hasBaseAccountWallet: Boolean(subAccount.baseAccountWallet),
-        })
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          attempt: 1,
-          executionMode: 'subAccount',
-          signerAddress: subAccount.embeddedWallet?.address ?? null,
-          canonicalCswAddress,
-          code: 'base_account_reconnect_required',
-          message: `Wallet is connected as "${walletType}" — reconnect via Base Account to enable sub-account signing.`,
-        })
-        setError(
-          'Your smart wallet is connected via Coinbase Wallet instead of Base Account. ' +
-          'Disconnect and reconnect using "Base Account" to enable sub-account signing. ' +
-          'The legacy approval path is blocked for self-owned wallets.',
-        )
-        setAdvancedBusy(false)
-        return
-      }
-
-      // ── Sub-account path (preferred for self-auth mode) ──────────────
-      // When the connected wallet IS the CSW itself, the old addOwnerAddress
-      // flow is a self-call blocked by the CSW popup's eGe guard.  Instead,
-      // create a sub-account: a derived smart wallet where the Privy embedded
-      // wallet is the owner, allowing popup-free transaction signing via
-      // wallet_prepareCalls → owner.sign() → wallet_sendPreparedCalls.
-      if (connectedCanonicalWalletSelected && subAccount.canSetup) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'start',
-          attempt: 1,
-          executionMode: 'subAccount',
-          signerAddress: subAccount.embeddedWallet?.address ?? null,
-          canonicalCswAddress,
-        })
-
-        const result = await subAccount.setupSubAccount()
-
-        if (result?.subAccountAddress) {
-          // Guard: verify the sub-account was created under the correct
-          // parent wallet.  Users with multiple Coinbase wallets could end
-          // up with a sub-account derived from the wrong parent.
-          if (
-            result.parentAddress &&
-            canonicalCswAddress &&
-            result.parentAddress.toLowerCase() !== canonicalCswAddress.toLowerCase()
-          ) {
-            logger.warn('Sub-account parent mismatch — expected canonical CSW', {
-              expected: canonicalCswAddress,
-              actual: result.parentAddress,
-              subAccountAddress: result.subAccountAddress,
-            })
-            emitOwnerApprovalStageEvent({
-              runId: approvalRunId,
-              stage: 'preflight',
-              status: 'error',
-              executionMode: 'subAccount',
-              signerAddress: subAccount.embeddedWallet?.address ?? null,
-              canonicalCswAddress,
-              code: 'sub_account_parent_mismatch',
-              message: `Sub-account parent ${result.parentAddress} does not match canonical CSW ${canonicalCswAddress}.`,
-            })
-            setError('The connected Base Account returned a sub-account for a different smart wallet. Reconnect the canonical Base Account and retry.')
-            setAdvancedBusy(false)
-            return
-          } else {
-            emitOwnerApprovalStageEvent({
-              runId: approvalRunId,
-              stage: 'preflight',
-              status: 'success',
-              executionMode: 'subAccount',
-              signerAddress: subAccount.embeddedWallet?.address ?? null,
-              canonicalCswAddress,
-              code: result.created ? 'sub_account_created' : 'sub_account_existing',
-            })
-
-            // Notify backend about the sub-account address so it can be
-            // associated with this user's canonical account.
-            try {
-              const headers = await authHeaders()
-              const registerRes = await apiFetch('/api/onboarding/register-sub-account', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                  subAccountAddress: result.subAccountAddress,
-                  parentAddress: result.parentAddress,
-                }),
-              })
-              if (!registerRes.ok) {
-                const body = await registerRes.json().catch(() => null)
-                logger.warn('Sub-account backend registration returned non-OK', {
-                  status: registerRes.status,
-                  body,
-                })
-              }
-            } catch (registerErr) {
-              // Non-fatal: sub-account is on-chain regardless.  Backend can
-              // discover it later via the parent CSW.
-              logger.warn('Sub-account backend registration failed', { error: registerErr })
-            }
-
-            // ── Agent owner installation (batched into same ceremony) ──
-            // Provision the Privy-managed agent wallet and install it as
-            // a CSW owner so deploy-session/XMTP don't need a separate
-            // passkey ceremony later.
-            try {
-              const agentHeaders = await authHeaders()
-              const agentRes = await apiFetch('/api/onboarding/provision-agent-owner', {
-                method: 'POST',
-                headers: agentHeaders,
-              })
-              if (agentRes.ok) {
-                const agentJson = (await agentRes.json().catch(() => null)) as {
-                  success?: boolean
-                  data?: {
-                    alreadyOwner: boolean
-                    agentWalletAddress: string
-                    txRequest?: { chainId: number; to: string; data: string; value: string }
-                  }
-                } | null
-
-                if (agentJson?.success && agentJson.data && !agentJson.data.alreadyOwner && agentJson.data.txRequest) {
-                  // Send addOwnerAddress via the CSW provider — this triggers
-                  // a second passkey popup, but it's in the same session as the
-                  // sub-account creation so the user experiences them back-to-back.
-                  const cswProvider = await (async () => {
-                    const wallet = subAccount.baseAccountWallet as any
-                    if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
-                    if (typeof wallet?.getEthereumProvider === 'function') return wallet.getEthereumProvider()
-                    return null
-                  })()
-
-                  if (cswProvider && typeof cswProvider.request === 'function') {
-                    try {
-                      // Use eth_sendTransaction instead of wallet_sendCalls.
-                      // addOwnerAddress is a self-call (from === to === CSW) and
-                      // the Coinbase popup's eGe function blocks wallet_sendCalls
-                      // when target === sender ("Self calls are not allowed").
-                      // eth_sendTransaction uses the standard transaction approval
-                      // UI which does NOT have the self-call guard.
-                      await cswProvider.request({
-                        method: 'eth_sendTransaction',
-                        params: [{
-                          from: canonicalCswAddress,
-                          to: agentJson.data.txRequest.to,
-                          data: appendBuilderSuffixToHex(agentJson.data.txRequest.data as `0x${string}`, {
-                            chainId: agentJson.data.txRequest.chainId,
-                          }),
-                          value: '0x0',
-                        }],
-                      })
-                      logger.info('Agent wallet installed as CSW owner during account setup', {
-                        agentWalletAddress: agentJson.data.agentWalletAddress,
-                      })
-                    } catch (sendErr) {
-                      // Non-fatal: deploy-session will handle owner install on
-                      // first use if the user cancelled the popup here.
-                      logger.warn('Agent owner eth_sendTransaction failed during account setup', {
-                        error: sendErr instanceof Error ? sendErr.message : String(sendErr),
-                      })
-                    }
-                  }
-                } else if (agentJson?.success && agentJson.data?.alreadyOwner) {
-                  logger.info('Agent wallet already installed as CSW owner', {
-                    agentWalletAddress: agentJson.data.agentWalletAddress,
-                  })
-                }
-              }
-            } catch (agentErr) {
-              // Non-fatal: agent owner installation is an optimization.
-              // Deploy-session will handle this on first use if it fails here.
-              logger.warn('Agent owner provisioning failed during account setup', {
-                error: agentErr instanceof Error ? agentErr.message : String(agentErr),
-              })
-            }
-
-            setNotice(
-              result.created
-                ? '4626 sub-account created. Signing is enabled.'
-                : '4626 sub-account found. Signing is enabled.',
-            )
-            await loadMe({ showSpinner: false })
-            return
-          }
-        }
-
-        // Sub-account setup returned null (e.g. user cancelled Spend
-        // Permission popup).  Emit a generic failure event only if we
-        // haven't already emitted a more specific one (e.g. parent mismatch).
-        if (!result?.subAccountAddress) {
-          emitOwnerApprovalStageEvent({
-            runId: approvalRunId,
-            stage: 'preflight',
-            status: 'error',
-            executionMode: 'subAccount',
-            signerAddress: subAccount.embeddedWallet?.address ?? null,
-            canonicalCswAddress,
-            code: 'sub_account_setup_failed',
-            message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
-          })
-          logger.warn('Sub-account setup returned null; blocking legacy embedded-owner fallback for self-auth path', {
-            error: subAccount.error?.message,
-          })
-          setError(subAccount.error?.message ?? 'Sub-account setup did not complete. Reconnect with Base Account and retry.')
-          setAdvancedBusy(false)
-          return
-        }
-      }
-
-      // ── Legacy owner-approval path (fallback / non-self-auth) ───────
+      // ── Owner-approval path ─────────────────────────────────────────
       const ownerCheck = await checkEoaOwnershipOfCsw({
         publicClient,
         chainId: ownerSignerChainId,
@@ -1387,10 +1156,9 @@ export function useAccountSetupController(params: {
         canonicalCswAddress,
       })
       // In self-auth mode (CSW signing for itself), pass the Privy embedded
-      // EOA address so wallet_addSubAccount can register it as a sub-account
-      // key.  Previously this was null, which skipped the addSubAccount path
-      // and fell through to wallet_sendCalls (blocked by the popup's self-call
-      // check).  The preflight response always includes the Privy EOA address.
+      // EOA address so canonical4337 can install/confirm it as the sponsored
+      // smart-wallet signer. We do not create a sub-account during waitlist
+      // onboarding.
       const ownerAddressForTx = connectedCanonicalWalletSelected
         ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
         : ownerSignerAddress ?? null
@@ -1422,7 +1190,6 @@ export function useAccountSetupController(params: {
       setAdvancedBusy(false)
     }
   }, [
-    authHeaders,
     canonicalCswAddress,
     connectedCanonicalWalletSelected,
     emitOwnerApprovalStageEvent,
@@ -1433,7 +1200,6 @@ export function useAccountSetupController(params: {
     publicClient,
     runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
-    subAccount,
   ])
 
   const retryOwnerCheck = useCallback(async () => {
@@ -1544,15 +1310,8 @@ export function useAccountSetupController(params: {
               return looksEmbedded || hasProviderSurface
             }) ?? null)
           : null
-      const subAccountEmbeddedWalletCandidate =
-        preflightOwnerLookupAddress &&
-        subAccount.embeddedWallet &&
-        typeof (subAccount.embeddedWallet as any).address === 'string' &&
-        String((subAccount.embeddedWallet as any).address).toLowerCase() === preflightOwnerLookupAddress.toLowerCase()
-          ? subAccount.embeddedWallet
-          : null
       const embeddedOwnerWalletCandidate =
-        preflightOwnerLookupAddress ? (subAccountEmbeddedWalletCandidate ?? liveEmbeddedOwnerWalletCandidate) : null
+        preflightOwnerLookupAddress ? liveEmbeddedOwnerWalletCandidate : null
       if (preflightOwnerLookupAddress && !embeddedOwnerWalletCandidate) {
         throw new Error(
           `Embedded owner signer ${preflightOwnerLookupAddress} is not available in this session. ` +
@@ -1692,7 +1451,6 @@ export function useAccountSetupController(params: {
     runCustomOwnerGasPreflight,
     runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
-    subAccount.embeddedWallet,
   ])
 
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0
@@ -1714,12 +1472,9 @@ export function useAccountSetupController(params: {
       ownerSignerAddress &&
       (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
   )
-  const subAccountReady = connectedCanonicalWalletSelected && subAccount.canSetup
-  // True when the CSW itself is the connected wallet but the Base Account SDK
-  // isn't available — meaning the wallet was connected as 'coinbase_wallet'
-  // instead of 'base_account' and the sub-account path can't activate.
-  const needsBaseAccountReconnect = connectedCanonicalWalletSelected && !subAccount.canSetup
-  const ownerApprovalReady = subAccountReady || (connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet)
+  const subAccountReady = false
+  const needsBaseAccountReconnect = false
+  const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
   const ownerAuthorityState = useMemo(
     () =>
       deriveOwnerAuthorityState({
@@ -1748,97 +1503,50 @@ export function useAccountSetupController(params: {
     })
   }, [me])
   const ownerChecklist = useMemo<OwnerChecklistItem[]>(
-    () => needsBaseAccountReconnect
-      ? [
-          {
-            title: 'Smart Wallet detected',
-            description: `Wallet ${shortValue(canonicalCswAddress!)} is your CSW, but it was connected via Coinbase Wallet.`,
-            state: 'complete' as const,
-          },
-          {
-            title: 'Reconnect via Base Account',
-            description: 'Disconnect your wallet and reconnect using "Base Account" to enable sub-account signing. The current connection type does not support the sub-account SDK.',
-            state: 'active' as const,
-          },
-          {
-            title: 'Enable signing',
-            description: 'After reconnecting via Base Account, one click will create your sub-account.',
-            state: 'blocked' as const,
-          },
-        ]
-      : subAccountReady
-        ? [
-            {
-              title: 'Smart Wallet connected',
-              description: `Wallet ${shortValue(canonicalCswAddress!)} is your CSW.`,
-              state: 'complete' as const,
-            },
-            {
-              title: 'Sub-account ready',
-              description: 'A derived sub-account will handle 4626 signing without popup restrictions.',
-              state: 'complete' as const,
-            },
-            {
-              title: 'Enable signing',
-              description: subAccount.isSettingUp
-                ? 'Setting up sub-account…'
-                : subAccount.subAccountAddress
-                  ? `Sub-account ${shortValue(subAccount.subAccountAddress)} is active.`
-                  : 'One click to create your sub-account and enable signing.',
-              state: subAccount.subAccountAddress ? 'complete' as const : 'active' as const,
-            },
-          ]
-        : [
-            {
-              title: 'Connect owner',
-              description: ownerSignerAddress
-                ? `Wallet ${shortValue(ownerSignerAddress)} is connected.`
-                : 'Connect one of the current CSW owners.',
-              state: ownerSignerAddress ? 'complete' : 'active',
-            },
-            {
-              title: 'Verify authority',
-              description: ownerAuthorityState.hint,
-              state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
-            },
-            {
-              title: 'Approve on Base',
-              description: ownerApprovalReady
-                ? connectedCanonicalWalletSelected
-                  ? '4626 can now create the app-scoped sub-account for user signing.'
-                  : '4626 can now use one Base owner transaction for legacy signing access.'
-                : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-                  ? 'Wait for the signer client to finish hydrating, then approve.'
-                  : 'Approval unlocks after a current owner is connected and verified.',
-              state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
-            },
-          ],
+    () => [
+      {
+        title: 'Connect owner',
+        description: ownerSignerAddress
+          ? `Wallet ${shortValue(ownerSignerAddress)} is connected.`
+          : 'Connect one of the current CSW owners.',
+        state: ownerSignerAddress ? 'complete' : 'active',
+      },
+      {
+        title: 'Verify authority',
+        description: ownerAuthorityState.hint,
+        state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
+      },
+      {
+        title: 'Approve on Base',
+        description: ownerApprovalReady
+          ? connectedCanonicalWalletSelected
+            ? '4626 can now enable embedded signing for your smart wallet.'
+            : '4626 can now use one Base owner transaction for signing access.'
+          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+            ? 'Wait for the signer client to finish hydrating, then approve.'
+            : 'Approval unlocks after a current owner is connected and verified.',
+        state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
+      },
+    ],
     [
-      canonicalCswAddress,
       connectedCanonicalWalletSelected,
       connectedOwnerReady,
-      needsBaseAccountReconnect,
       ownerApprovalReady,
       ownerAuthorityState.hint,
       ownerSignerAddress,
       privySignerClientReady,
       signerClientReady,
-      subAccount.isSettingUp,
-      subAccount.subAccountAddress,
-      subAccountReady,
     ],
   )
   const ownerPrimaryCtaLabel = needsBaseAccountReconnect
     ? 'Reconnect via Base Account'
-    : subAccountReady
-        ? 'Enable 4626 via sub-account'
-        : ownerApprovalReady
-          ? 'Approve 4626 on this wallet'
-          : needsEmbeddedWallet
-            ? 'Provisioning embedded wallet…'
-            : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-              ? 'Finishing wallet session…'
-              : 'Owner approval required'
+    : ownerApprovalReady
+      ? 'Approve 4626 on this wallet'
+      : needsEmbeddedWallet
+        ? 'Provisioning embedded wallet…'
+        : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+          ? 'Finishing wallet session…'
+          : 'Owner approval required'
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1928,10 +1636,10 @@ export function useAccountSetupController(params: {
     setZoraStatus,
     signerClientReady,
     subAccountReady,
-    subAccountAddress: subAccount.subAccountAddress,
-    subAccountSettingUp: subAccount.isSettingUp,
-    subAccountError: subAccount.error,
-    subAccountStage: subAccount.lastStage,
+    subAccountAddress: null,
+    subAccountSettingUp: false,
+    subAccountError: null,
+    subAccountStage: null,
     switchChainAsync,
     telegramLaunchParamsAvailable,
     walletClient,

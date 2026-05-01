@@ -19,7 +19,7 @@ import {
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { EthosAvatarScoreBadge, EthosAvatarScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { EthosAvatarScoreBadge, EthosAvatarScoreForUserkey, getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { useZoraProfile } from '@/lib/zora/hooks'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
 
@@ -156,6 +156,7 @@ export function TokenRow({
       : '3% fee (Legacy - before June 2025)'
 
   const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
+  const ethosPalette = getEthosScorePalette(ethosScore?.score ?? null, ethosScore?.level ?? null)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
@@ -285,7 +286,7 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
         {/* Ethos */}
-        <span className="px-3 py-2 text-center text-zinc-300 tabular-nums">
+        <span className={`px-3 py-2 text-center tabular-nums ${ethosScore?.score != null ? ethosPalette.textClass : 'text-zinc-700'}`}>
           {ethosScore?.score != null ? ethosScore.score.toLocaleString(undefined, { useGrouping: false }) : '—'}
         </span>
 

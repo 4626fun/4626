@@ -15,6 +15,7 @@ function shouldSuppressEarlyDevNoise(args: unknown[]): boolean {
     joined.includes('unable to refresh tokens - token is missing or no longer valid') ||
     joined.includes('cannot redefine property: ethereum') ||
     joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    (joined.includes('websocket error 1006') && joined.includes('requestrelay.js')) ||
     joined.includes('accessing element.ref was removed in react 19') ||
     (joined.includes('failed to fetch dynamically imported module:') &&
       (joined.includes('chrome-extension://') || joined.includes('moz-extension://'))) ||

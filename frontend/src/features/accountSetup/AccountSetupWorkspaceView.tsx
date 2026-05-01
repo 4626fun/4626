@@ -170,7 +170,6 @@ export function AccountSetupWorkspaceView(props: {
     ownerPrimaryCtaLabel,
     providerCollision,
     readableCswOwners,
-    subAccountAddress,
     zoraCrossAppCount,
     zoraHandoffUrl,
     zoraLinked,
@@ -201,40 +200,16 @@ export function AccountSetupWorkspaceView(props: {
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const executionTrack = me.accountSignals.executionTrack
-  const executionTrackUsesSubAccount = executionTrack === 'sub-account' || executionTrack === 'migration-pending'
-  const persistedExecutionSubAccountCandidate =
-    executionTrackUsesSubAccount && me.accountSignals.baseSubAccount.registered
-      ? me.accountSignals.baseSubAccount.address
-      : null
-  const ownerAddressSet = new Set(
-    readableCswOwners
-      .map((owner) => (typeof owner.ownerAddress === 'string' ? owner.ownerAddress.toLowerCase() : null))
-      .filter((address): address is string => typeof address === 'string'),
-  )
-  const executionSubAccountAddress = (() => {
-    const candidate = subAccountAddress ?? persistedExecutionSubAccountCandidate ?? null
-    if (!candidate) return null
-    if (!isAddressLike(candidate)) return null
-    const normalized = candidate.toLowerCase()
-    if (canonicalCswAddress && normalized === canonicalCswAddress.toLowerCase()) return null
-    if (ownerAddressSet.has(normalized)) return null
-    return candidate
-  })()
   const signingStepComplete =
-    Boolean(subAccountAddress) ||
-    me.accountSignals.baseSubAccount.registered ||
     executionTrack === 'legacy-owner-install' ||
+    me.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
     /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
-  // CBSW address but cannot expose a transactional signer (verified
-  // empirically — see `zoraGlobalWalletConnector.ts`). For these users the
-  // ONLY working onboarding is to reconnect via the Base Account SDK and
-  // use sub-account derivation. Show this hint up front, before they pick
-  // a wallet, so they don't burn a connection attempt on Coinbase Wallet
-  // or an EOA wallet that has no chance of being on the owner list.
+  // CBSW address but cannot expose a transactional signer, so we steer users
+  // to Base Account before they burn a connection attempt on an unrelated EOA.
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
   const shouldHintBaseAccountForZora =
     zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect && !hasConnectedSigner
@@ -500,8 +475,7 @@ export function AccountSetupWorkspaceView(props: {
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
                         in the wallet connector. Your Zora smart wallet is passkey-controlled,
-                        so 4626 adds itself as a sub-account owner via Base Account&mdash;no
-                        EOA owner approval is required.
+                        so 4626 can approve embedded signing on the canonical smart wallet.
                       </div>
                     ) : null}
                     <div className="flex flex-wrap gap-2">
@@ -773,9 +747,9 @@ export function AccountSetupWorkspaceView(props: {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
-                    <div className="text-base font-medium text-white">Enable 4626 execution and deploy signing</div>
+                    <div className="text-base font-medium text-white">Enable 4626 smart-wallet signing</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Your canonical CSW stays primary. 4626 finalizes app sub-account execution for user actions and confirms one-time server signer approval for deploy and agent flows.
+                      Your canonical CSW stays primary. 4626 confirms embedded signing for sponsored user actions and one-time server signing for deploy and agent flows.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -870,45 +844,6 @@ export function AccountSetupWorkspaceView(props: {
                     ) : null}
                   </details>
                 </div>
-                <div className="mt-3 rounded-xl bg-white/[0.03] px-3 py-3 text-xs text-zinc-300 ring-1 ring-white/10">
-                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Execution sub-account</div>
-                  {executionSubAccountAddress ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(executionSubAccountAddress)}
-                        title={executionSubAccountAddress}
-                        className="font-mono text-sm text-zinc-100 hover:text-zinc-300 transition-colors"
-                      >
-                        {shortAddr(executionSubAccountAddress)}
-                      </button>
-                      <a
-                        href={`${BASESCAN_BASE}${executionSubAccountAddress}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="View on Basescan"
-                        className="text-zinc-500 hover:text-zinc-300 transition-colors"
-                      >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      </a>
-                      <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] text-brand-100 ring-1 ring-brand-primary/25">
-                        Active
-                      </span>
-                    </div>
-                  ) : executionTrack === 'legacy-owner-install' ? (
-                    <div className="mt-2 text-zinc-400">
-                      Legacy owner-install path is active. Sub-account execution is not registered for this account yet.
-                    </div>
-                  ) : executionTrackUsesSubAccount ? (
-                    <div className="mt-2 text-zinc-400">
-                      Execution track expects a sub-account, but the persisted address looks invalid for this CSW. Re-run 4626 setup to reprovision.
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-zinc-400">
-                      No sub-account registered yet. Finish Step 2 to provision app-scoped execution.
-                    </div>
-                  )}
-                </div>
                 {needsEmbeddedWallet ? (
                   <div className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-100 ring-1 ring-amber-400/20">
                     Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.
@@ -922,8 +857,8 @@ export function AccountSetupWorkspaceView(props: {
                     </div>
                     <p className="mt-1 text-zinc-300">
                       Your Zora Coinbase Smart Wallet is passkey-controlled. Connecting via
-                      Base Account lets 4626 complete sub-account setup for in-app execution
-                      and, when accepted, the separate <code>addOwnerAddress</code> approval used by deploy and agent server signing.
+                      Base Account lets 4626 approve embedded signing on the canonical smart wallet
+                      and, when accepted, the separate approval used by deploy and agent server signing.
                       Other wallet types (Coinbase Wallet, MetaMask, Rabby) can&rsquo;t bootstrap this for a Zora-provisioned wallet.
                     </p>
                   </div>
@@ -976,7 +911,7 @@ export function AccountSetupWorkspaceView(props: {
                   )}
                   <span className="max-w-xl text-xs leading-relaxed text-zinc-500">
                     {connectedOwnerReady
-                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits the one-time Base smart-wallet approval for deploy/agent server signing. Your app sub-account remains your day-to-day execution address.'
+                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits the one-time Base smart-wallet approval for embedded signing and deploy/agent server signing.'
                       : 'Connect a current CSW owner first, then approve 4626 signing for deploy/agent server flows.'}
                   </span>
                 </div>
@@ -1029,25 +964,10 @@ export function AccountSetupWorkspaceView(props: {
                     <span className="text-zinc-100">{zoraCrossAppCount}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-zinc-500">Execution sub-account</span>
-                    {executionSubAccountAddress ? (
-                      <button
-                        type="button"
-                        onClick={() => copyAddress(executionSubAccountAddress)}
-                        title={executionSubAccountAddress}
-                        className="font-mono text-zinc-100 hover:text-zinc-300 transition-colors"
-                      >
-                        {shortAddr(executionSubAccountAddress)}
-                      </button>
-                    ) : (
-                      <span className="text-zinc-400">
-                        {executionTrack === 'legacy-owner-install'
-                          ? 'Legacy owner path'
-                          : executionTrackUsesSubAccount
-                            ? 'Needs reprovision'
-                            : 'Not set'}
-                      </span>
-                    )}
+                    <span className="text-zinc-500">Signing path</span>
+                    <span className="text-zinc-100">
+                      {signingStepComplete ? 'Canonical CSW + embedded signer' : 'Pending approval'}
+                    </span>
                   </div>
                 </div>
               </div>

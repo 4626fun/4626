@@ -59,7 +59,7 @@ export function deriveOwnerAuthorityState(input: {
       phase: 'canonical_wallet',
       label: 'Canonical wallet',
       hint: `Same wallet detected: ${shortValue(input.connectedAddress)}`,
-      detail: 'This is the same Coinbase Smart Wallet detected from Zora/Base. 4626 will create an app-scoped sub-account for user signing.',
+      detail: 'This is the same Coinbase Smart Wallet detected from Zora/Base. 4626 will approve embedded signing on this canonical smart wallet.',
       badgeClass: 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200',
     }
   }

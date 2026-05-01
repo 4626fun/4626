@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useChainId, useConfig, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
@@ -44,6 +44,7 @@ import {
   toHex,
   toBytes,
 } from 'viem'
+import { getWalletClient } from '@wagmi/core'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
@@ -862,7 +863,7 @@ export function DeployVault() {
           <div className="vault-surface vault-hover-lift p-8 space-y-3">
             <div className="text-lg font-medium">Authentication not configured</div>
             <div className="text-sm text-zinc-400 leading-relaxed">
-              Deploy requires Privy authentication and canonical CSW context. Your app sub-account handles in-app execution; deploy signing uses your canonical CSW plus delegated server signer.
+              Deploy requires Privy authentication and canonical CSW context. User actions use your canonical CSW plus embedded signer; deploy signing uses your canonical CSW plus delegated server signer.
             </div>
             <div className="text-xs text-zinc-500 leading-relaxed">
               Set <span className="font-mono text-zinc-300">VITE_PRIVY_ENABLED=true</span> in environment variables.
@@ -7537,6 +7538,7 @@ function DeployVaultBatcher({
 
 function DeployVaultMain() {
   const { address, isConnected, connector } = useAccount()
+  const wagmiConfig = useConfig()
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const { data: walletClient } = useWalletClient({ chainId: base.id })
@@ -7697,16 +7699,17 @@ function DeployVaultMain() {
     return (
       isConnected ||
       !!privySmartWalletAddress ||
+      !!privyEmbeddedEoaAddress ||
       !!privyLinkedEoaAddress ||
       !!privyCrossAppEmbeddedEoaAddress ||
       !!privyCrossAppSmartWalletAddress
     )
-  }, [isConnected, privyCrossAppEmbeddedEoaAddress, privyCrossAppSmartWalletAddress, privyLinkedEoaAddress, privySmartWalletAddress])
+  }, [isConnected, privyCrossAppEmbeddedEoaAddress, privyCrossAppSmartWalletAddress, privyEmbeddedEoaAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   
   // Effective wallet address for display - prefer Privy smart wallet (set during waitlist), fallback to wagmi
   const effectiveWalletAddress = useMemo(() => {
-    return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress ?? privyCrossAppEmbeddedEoaAddress
-  }, [connectedWalletAddress, privyCrossAppEmbeddedEoaAddress, privyLinkedEoaAddress, privySmartWalletAddress])
+    return privySmartWalletAddress ?? connectedWalletAddress ?? privyLinkedEoaAddress ?? privyEmbeddedEoaAddress ?? privyCrossAppEmbeddedEoaAddress
+  }, [connectedWalletAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddress, privyLinkedEoaAddress, privySmartWalletAddress])
   const ownerCandidateAddresses = useMemo(() => {
     const raw = [
       connectedWalletAddress,
@@ -7741,23 +7744,22 @@ function DeployVaultMain() {
   const minFirstDepositTokens = useMemo(() => {
     // Deployment flow currently enforces an exact 50M creator-token first deposit.
     // Keep UI/runtime locked to that value so query/env overrides cannot drift and fail late.
-    const env = parsePositiveTokenAmount(
-      (import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '',
-    )
-    let requested: bigint | null = env
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search)
-      const query = parsePositiveTokenAmount(params.get('minFirstDepositTokens'))
-      requested = query ?? env
-    }
-    if (requested !== null && requested !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
-      logger.warn('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
-        requested: requested.toString(),
+    return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
+  }, [])
+  const requestedMinFirstDepositTokens = useMemo(() => {
+    const env = parsePositiveTokenAmount((import.meta.env.VITE_MIN_FIRST_DEPOSIT_TOKENS as string | undefined) ?? '')
+    if (typeof window === 'undefined') return env
+    const params = new URLSearchParams(window.location.search)
+    return parsePositiveTokenAmount(params.get('minFirstDepositTokens')) ?? env
+  }, [])
+  useEffect(() => {
+    if (requestedMinFirstDepositTokens !== null && requestedMinFirstDepositTokens !== DEFAULT_MIN_FIRST_DEPOSIT_TOKENS) {
+      logger.debug('[DeployVault] ignoring minFirstDepositTokens override; enforcing 50M policy', {
+        requested: requestedMinFirstDepositTokens.toString(),
         enforced: DEFAULT_MIN_FIRST_DEPOSIT_TOKENS.toString(),
       })
     }
-    return DEFAULT_MIN_FIRST_DEPOSIT_TOKENS
-  }, [])
+  }, [requestedMinFirstDepositTokens])
   const shareOftSaltOverride = useMemo(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SHARE_OFT_SALT_OVERRIDE as string | undefined)
     if (typeof window === 'undefined') return env
@@ -7841,9 +7843,35 @@ function DeployVaultMain() {
     }
   }, [login, logout, privyAuthenticated, privyReady])
 
-  const connectExternalSignerWallet = useCallback(() => {
+  const externalSignerConnectors = useMemo(() => {
+    const seen = new Set<string>()
+    const ordered = [
+      ...wagmiConnectors.filter((candidate) => {
+        const text = `${candidate.id ?? ''} ${candidate.name ?? ''}`.toLowerCase()
+        return text.includes('rabby') || text.includes('metamask') || text.includes('coinbase')
+      }),
+      ...wagmiConnectors,
+    ].sort((a, b) => {
+      const rank = (candidate: (typeof wagmiConnectors)[number]) => {
+        const text = `${candidate.id ?? ''} ${candidate.name ?? ''}`.toLowerCase()
+        if (text.includes('rabby')) return 0
+        if (text.includes('metamask')) return 1
+        if (text.includes('coinbase')) return 2
+        return 3
+      }
+      return rank(a) - rank(b)
+    })
+    return ordered.filter((candidate) => {
+      const key = `${candidate.id}:${candidate.name}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [wagmiConnectors])
+
+  const connectExternalSignerWallet = useCallback((requestedConnector?: (typeof wagmiConnectors)[number]) => {
     if (externalWalletConnectBusy) return
-    const preferred = selectPreferredWalletConnector(wagmiConnectors)
+    const preferred = requestedConnector ?? selectPreferredWalletConnector(wagmiConnectors)
     setExternalWalletConnectError(null)
     if (!preferred) {
       setExternalWalletConnectError(
@@ -7852,22 +7880,81 @@ function DeployVaultMain() {
       return
     }
 
-    setExternalWalletConnectBusy(true)
-    void wagmiConnectAsync({ connector: preferred })
-      .catch((connectError: unknown) => {
-        const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
-        const lower = message.toLowerCase()
-        const rejected = lower.includes('reject') || lower.includes('denied') || lower.includes('cancel')
-        setExternalWalletConnectError(
-          rejected
-            ? 'Wallet connection was cancelled. Try again when you are ready.'
-            : message || 'Failed to connect external wallet.',
+    const waitForWalletClient = async (selectedConnector: typeof preferred, connectedAccount?: Address | null) => {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const resolvedWalletClient =
+          (await getWalletClient(wagmiConfig, {
+            chainId: base.id,
+            connector: selectedConnector,
+            account: connectedAccount ?? undefined,
+          }).catch(() => null)) ??
+          walletClient ??
+          (await getWalletClient(wagmiConfig, { chainId: base.id }).catch(() => null))
+        if (resolvedWalletClient) return resolvedWalletClient
+        await new Promise((resolve) => setTimeout(resolve, 250))
+      }
+      return null
+    }
+
+    const verifyExistingConnection = async (requireWalletClient: boolean, connectedAccount?: Address | null) => {
+      const provider = await (preferred as any)?.getProvider?.().catch?.(() => null)
+      if (provider?.request) {
+        await ensureProviderOnBase({ provider, label: 'external wallet' })
+      } else {
+        await ensureBaseChain('external wallet')
+      }
+      const resolvedWalletClient = await waitForWalletClient(preferred, connectedAccount)
+      if (requireWalletClient && !resolvedWalletClient) {
+        throw new Error(
+          'External wallet connected, but the signer did not become available. Open Rabby/MetaMask, unlock it, approve site access for localhost, switch to Base, then retry.',
         )
-      })
-      .finally(() => {
+      }
+    }
+
+    setExternalWalletConnectBusy(true)
+    void (async () => {
+      try {
+        if (isConnected && address && connector?.id === preferred.id) {
+          await verifyExistingConnection(true)
+          setExternalWalletConnectError(null)
+          return
+        }
+
+        let alreadyConnected = false
+        let connectedAccount: Address | null = null
+        try {
+          const result = await wagmiConnectAsync({ connector: preferred, chainId: base.id })
+          connectedAccount = result.accounts[0] ?? null
+        } catch (connectError: unknown) {
+          const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+          const lower = message.toLowerCase()
+          if (!lower.includes('already connected')) {
+            const rejected = lower.includes('reject') || lower.includes('denied') || lower.includes('cancel')
+            setExternalWalletConnectError(
+              rejected
+                ? 'Wallet connection was cancelled. Try again when you are ready.'
+                : message || 'Failed to connect external wallet.',
+            )
+            return
+          }
+          alreadyConnected = true
+        }
+
+        if (alreadyConnected) {
+          const accounts = await preferred.getAccounts().catch(() => [])
+          connectedAccount = accounts[0] ?? connectedAccount
+        }
+
+        await verifyExistingConnection(true, connectedAccount)
+        setExternalWalletConnectError(null)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error ?? '')
+        setExternalWalletConnectError(message || 'External wallet is connected, but could not be prepared for signing.')
+      } finally {
         setExternalWalletConnectBusy(false)
-      })
-  }, [externalWalletConnectBusy, wagmiConnectAsync, wagmiConnectors])
+      }
+    })()
+  }, [address, connector?.id, ensureBaseChain, externalWalletConnectBusy, isConnected, wagmiConfig, wagmiConnectAsync, wagmiConnectors, walletClient])
 
   useEffect(() => {
     if (isConnected) setExternalWalletConnectError(null)
@@ -7907,7 +7994,7 @@ function DeployVaultMain() {
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['shareOftSaltOverride', 'debug', 'token']) {
+    for (const key of ['shareOftSaltOverride', 'debug', 'token', 'minFirstDepositTokens']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -9030,6 +9117,7 @@ function DeployVaultMain() {
   const smartWalletCapabilityReady = strictNoEoaEnforced
     ? strictNoEoaEligibility
     : isCoinbaseWalletDirect ||
+      privyEmbeddedOwnerReady ||
       connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
@@ -9260,15 +9348,31 @@ function DeployVaultMain() {
                     <div className="text-[10px] text-amber-200/60 mt-0.5">
                       Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer.
                     </div>
-                    <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={externalWalletConnectBusy}
-                        onClick={connectExternalSignerWallet}
-                      >
-                        {externalWalletConnectBusy ? 'Connecting…' : 'Connect external wallet'}
-                      </button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {externalSignerConnectors.slice(0, 3).map((externalConnector) => {
+                        const label = String(externalConnector.name || externalConnector.id || 'Wallet')
+                        return (
+                          <button
+                            key={`${externalConnector.id}:${externalConnector.name}`}
+                            type="button"
+                            className="btn-secondary"
+                            disabled={externalWalletConnectBusy}
+                            onClick={() => connectExternalSignerWallet(externalConnector)}
+                          >
+                            {externalWalletConnectBusy ? 'Connecting…' : `Connect ${label}`}
+                          </button>
+                        )
+                      })}
+                      {externalSignerConnectors.length === 0 ? (
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={externalWalletConnectBusy}
+                          onClick={() => connectExternalSignerWallet()}
+                        >
+                          {externalWalletConnectBusy ? 'Connecting…' : 'Connect external wallet'}
+                        </button>
+                      ) : null}
                     </div>
                     {externalWalletConnectError ? (
                       <div className="mt-2 text-[11px] text-red-300/90" role="alert">
@@ -9289,7 +9393,7 @@ function DeployVaultMain() {
                 <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
                 <div className="text-[11px] text-purple-200/75 leading-relaxed">
                   Before deploy, approve your app Privy wallet once as an owner of your canonical Coinbase Smart Wallet (EIP-1271).
-                  This enables deploy-session and agent server signing. Your app sub-account remains your in-app execution wallet.
+                  This enables deploy-session and agent server signing. Sponsored user actions continue through your canonical smart wallet.
                 </div>
                 <div className="text-[11px] text-zinc-300/90">
                   Canonical wallet: <span className="font-mono">{shortAddress(canonicalIdentityAddress as Address)}</span>
@@ -9580,7 +9684,7 @@ function DeployVaultMain() {
                 >
                   Sign in to Deploy
                 </button>
-              ) : !privySmartWalletAddress && !privyLinkedEoaAddress && !isConnected ? (
+              ) : !hasWallet ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300/80">Connect your wallet to continue</div>
                   <button

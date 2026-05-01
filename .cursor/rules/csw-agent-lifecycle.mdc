@@ -46,9 +46,10 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 - File: `frontend/server/_lib/privyWalletApi.ts`
 - Env: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
 
-### 3. Owner Delegation (batched during account setup)
-- During account setup, after `wallet_addSubAccount` creates the sub-account, the client calls `POST /api/onboarding/provision-agent-owner` to provision the agent wallet and receive `addOwnerAddress` calldata.
-- The client sends `addOwnerAddress(privyWalletAddress)` via `eth_sendTransaction` from the CSW provider — this is a passkey popup immediately following the sub-account creation popup.
+### 3. Owner Delegation (account setup / first-use)
+- Waitlist account setup must not explicitly create a Base sub-account. User-initiated sponsored frontend execution defaults to the canonical parent CSW + Privy embedded-owner path.
+- When deploy/agent server signing is needed, the client calls `POST /api/onboarding/provision-agent-owner` to provision the agent wallet and receive `addOwnerAddress` calldata.
+- The client sends `addOwnerAddress(privyWalletAddress)` via `eth_sendTransaction` from the CSW provider when the connected owner can approve it.
 - **Must use `eth_sendTransaction`, not `wallet_sendCalls`**: `addOwnerAddress` is a self-call (`from === to === CSW`) and the Coinbase popup's `eGe` function blocks `wallet_sendCalls` for self-calls. `eth_sendTransaction` uses the standard approval UI which has no self-call guard.
 - This adds the Privy wallet as an owner in the CSW's MultiOwnable contract.
 - The owner index is determined by querying `CSW.ownerAtIndex(i)` at execution time.
