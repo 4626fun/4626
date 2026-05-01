@@ -12,109 +12,207 @@
 
 > **DeploySessionRecord** = `object`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L28)
+Defined in: [server/\_lib/deploy/deploySessions.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L33)
 
 #### Properties
+
+##### artifacts
+
+> **artifacts**: `Record`\<`string`, `unknown`\>
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L56)
+
+##### attemptCount
+
+> **attemptCount**: `number`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L50)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L38)
+Defined in: [server/\_lib/deploy/deploySessions.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L43)
+
+##### currentStage
+
+> **currentStage**: [`DeploySessionStep`](#deploysessionstep)
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L49)
 
 ##### deployToken
 
 > **deployToken**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L34)
+Defined in: [server/\_lib/deploy/deploySessions.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L39)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L37)
+Defined in: [server/\_lib/deploy/deploySessions.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L42)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L29)
+Defined in: [server/\_lib/deploy/deploySessions.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L34)
 
 ##### lastError
 
 > **lastError**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L40)
+Defined in: [server/\_lib/deploy/deploySessions.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L45)
+
+##### lastFailureCode
+
+> **lastFailureCode**: `string` \| `null`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L54)
+
+##### lastFailureStage
+
+> **lastFailureStage**: `string` \| `null`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L55)
 
 ##### lastTxHash
 
 > **lastTxHash**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L42)
+Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L47)
 
 ##### lastUserOpHash
 
 > **lastUserOpHash**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L41)
+Defined in: [server/\_lib/deploy/deploySessions.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L46)
+
+##### lockExpiresAt
+
+> **lockExpiresAt**: `string` \| `null`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L53)
+
+##### lockOwner
+
+> **lockOwner**: `string` \| `null`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L52)
+
+##### nextRunAfter
+
+> **nextRunAfter**: `string` \| `null`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L51)
 
 ##### payload
 
 > **payload**: `any`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L35)
+Defined in: [server/\_lib/deploy/deploySessions.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L40)
 
 ##### sessionAddress
 
 > **sessionAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L31)
+Defined in: [server/\_lib/deploy/deploySessions.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L36)
 
 ##### sessionSigner
 
 > **sessionSigner**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L33)
+Defined in: [server/\_lib/deploy/deploySessions.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L38)
 
 ##### smartWallet
 
 > **smartWallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L32)
+Defined in: [server/\_lib/deploy/deploySessions.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L37)
+
+##### state
+
+> **state**: [`DeploySessionState`](#deploysessionstate)
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L48)
 
 ##### step
 
 > **step**: [`DeploySessionStep`](#deploysessionstep)
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L36)
+Defined in: [server/\_lib/deploy/deploySessions.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L41)
 
 ##### tokenHash
 
 > **tokenHash**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L30)
+Defined in: [server/\_lib/deploy/deploySessions.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L35)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L39)
+Defined in: [server/\_lib/deploy/deploySessions.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L44)
+
+***
+
+### DeploySessionState
+
+> **DeploySessionState** = `"pending"` \| `"running"` \| `"completed"` \| `"failed"` \| `"cancelled"`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L31)
 
 ***
 
 ### DeploySessionStep
 
-> **DeploySessionStep** = `"created"` \| `"phase1_sent"` \| `"phase1_confirmed"` \| `"phase1_finalize_sent"` \| `"phase1_finalize_confirmed"` \| `"phase2_core_sent"` \| `"phase2_core_confirmed"` \| `"phase2_sent"` \| `"phase2_confirmed"` \| `"ovault_mesh_sent"` \| `"ovault_mesh_confirmed"` \| `"phase3_sent"` \| `"phase3_confirmed"` \| `"phase4_sent"` \| `"phase4_confirmed"` \| `"cleanup_sent"` \| `"cancelled"` \| `"completed"` \| `"failed"`
+> **DeploySessionStep** = `"created"` \| `"phase1_sent"` \| `"phase1_confirmed"` \| `"phase1_finalize_sent"` \| `"phase1_finalize_confirmed"` \| `"phase2_core_sent"` \| `"phase2_core_confirmed"` \| `"phase2_finalize_sent"` \| `"phase2_finalize_confirmed"` \| `"phase2_sent"` \| `"phase2_confirmed"` \| `"ovault_mesh_sent"` \| `"ovault_mesh_confirmed"` \| `"phase3_sent"` \| `"phase3_confirmed"` \| `"phase4_sent"` \| `"phase4_confirmed"` \| `"cleanup_sent"` \| `"cancelled"` \| `"completed"` \| `"failed"`
 
 Defined in: [server/\_lib/deploy/deploySessions.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L7)
 
 ## Functions
 
+### claimDeploySessionLease()
+
+> **claimDeploySessionLease**(`params`): `Promise`\<`boolean`\>
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:635](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L635)
+
+#### Parameters
+
+##### params
+
+###### expectedStep?
+
+[`DeploySessionStep`](#deploysessionstep)
+
+###### id
+
+`string`
+
+###### leaseMs
+
+`number`
+
+###### now?
+
+`Date`
+
+###### workerId
+
+`string`
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+***
+
 ### ensureDeploySessionsSchema()
 
 > **ensureDeploySessionsSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L47)
+Defined in: [server/\_lib/deploy/deploySessions.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L71)
 
 #### Returns
 
@@ -126,7 +224,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenaki
 
 > **getActiveDeploySessionForSender**(`params`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:217](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L217)
+Defined in: [server/\_lib/deploy/deploySessions.ts:332](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L332)
 
 #### Parameters
 
@@ -164,7 +262,7 @@ Intended for cleanup-only flows (removing the temporary owner).
 
 > **getDeploySessionById**(`id`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L199)
+Defined in: [server/\_lib/deploy/deploySessions.ts:314](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L314)
 
 #### Parameters
 
@@ -182,7 +280,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:199](https://github.com/wenak
 
 > **getDeploySessionByTokenHash**(`tokenHash`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L208)
+Defined in: [server/\_lib/deploy/deploySessions.ts:323](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L323)
 
 #### Parameters
 
@@ -200,7 +298,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:208](https://github.com/wenak
 
 > **hashDeployToken**(`token`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L127)
+Defined in: [server/\_lib/deploy/deploySessions.ts:236](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L236)
 
 #### Parameters
 
@@ -218,7 +316,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:127](https://github.com/wenak
 
 > **insertDeploySession**(`params`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord)\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L137)
+Defined in: [server/\_lib/deploy/deploySessions.ts:246](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L246)
 
 #### Parameters
 
@@ -262,11 +360,53 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:137](https://github.com/wenak
 
 ***
 
+### isDeploySessionTerminal()
+
+> **isDeploySessionTerminal**(`step`): `boolean`
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:607](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L607)
+
+#### Parameters
+
+##### step
+
+[`DeploySessionStep`](#deploysessionstep)
+
+#### Returns
+
+`boolean`
+
+***
+
+### listRunnableDeploySessions()
+
+> **listRunnableDeploySessions**(`params?`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord)[]\>
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:611](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L611)
+
+#### Parameters
+
+##### params?
+
+###### limit?
+
+`number`
+
+###### now?
+
+`Date`
+
+#### Returns
+
+`Promise`\<[`DeploySessionRecord`](#deploysessionrecord)[]\>
+
+***
+
 ### randomDeployToken()
 
 > **randomDeployToken**(): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L123)
+Defined in: [server/\_lib/deploy/deploySessions.ts:232](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L232)
 
 #### Returns
 
@@ -278,7 +418,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:123](https://github.com/wenak
 
 > **randomId**(`prefix`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L119)
+Defined in: [server/\_lib/deploy/deploySessions.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L228)
 
 #### Parameters
 
@@ -292,11 +432,35 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:119](https://github.com/wenak
 
 ***
 
+### releaseDeploySessionLease()
+
+> **releaseDeploySessionLease**(`params`): `Promise`\<`void`\>
+
+Defined in: [server/\_lib/deploy/deploySessions.ts:667](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L667)
+
+#### Parameters
+
+##### params
+
+###### id
+
+`string`
+
+###### workerId
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### signDeployToken()
 
 > **signDeployToken**(`token`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L131)
+Defined in: [server/\_lib/deploy/deploySessions.ts:240](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L240)
 
 #### Parameters
 
@@ -314,11 +478,23 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:131](https://github.com/wenak
 
 > **transitionDeploySession**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L327)
+Defined in: [server/\_lib/deploy/deploySessions.ts:503](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L503)
 
 #### Parameters
 
 ##### params
+
+###### artifactsPatch?
+
+`Record`\<`string`, `unknown`\>
+
+###### attemptCount?
+
+`number` \| `null`
+
+###### currentStage?
+
+[`DeploySessionStep`](#deploysessionstep)
 
 ###### fromStep
 
@@ -332,6 +508,14 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenak
 
 `string` \| `null`
 
+###### lastFailureCode?
+
+`string` \| `null`
+
+###### lastFailureStage?
+
+`string` \| `null`
+
 ###### lastTxHash?
 
 `string` \| `null`
@@ -340,9 +524,25 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenak
 
 `string` \| `null`
 
+###### lockExpiresAt?
+
+`Date` \| `null`
+
+###### lockOwner?
+
+`string` \| `null`
+
+###### nextRunAfter?
+
+`Date` \| `null`
+
 ###### payloadPatch?
 
 `any`
+
+###### state?
+
+[`DeploySessionState`](#deploysessionstate)
 
 ###### toStep
 
@@ -358,17 +558,37 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenak
 
 > **updateDeploySession**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L282)
+Defined in: [server/\_lib/deploy/deploySessions.ts:397](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L397)
 
 #### Parameters
 
 ##### params
+
+###### artifactsPatch?
+
+`Record`\<`string`, `unknown`\>
+
+###### attemptCount?
+
+`number` \| `null`
+
+###### currentStage?
+
+[`DeploySessionStep`](#deploysessionstep)
 
 ###### id
 
 `string`
 
 ###### lastError?
+
+`string` \| `null`
+
+###### lastFailureCode?
+
+`string` \| `null`
+
+###### lastFailureStage?
 
 `string` \| `null`
 
@@ -380,9 +600,25 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:282](https://github.com/wenak
 
 `string` \| `null`
 
+###### lockExpiresAt?
+
+`Date` \| `null`
+
+###### lockOwner?
+
+`string` \| `null`
+
+###### nextRunAfter?
+
+`Date` \| `null`
+
 ###### payloadPatch?
 
 `any`
+
+###### state?
+
+[`DeploySessionState`](#deploysessionstate)
 
 ###### step?
 

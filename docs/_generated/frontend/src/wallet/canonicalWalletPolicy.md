@@ -18,17 +18,17 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:3](https://github.com/wenakita/
 
 ### TARGET\_ALLOWED\_OWNER\_EOA\_ADDRESSES
 
-> `const` **TARGET\_ALLOWED\_OWNER\_EOA\_ADDRESSES**: readonly \[`"0xb05cf01231cf2ff99499682e64d3780d57c80fdd"`, `"0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3"`, `"0xd1780fc23f810b52d8cf277e54842dd8803c9361"`, `"0xceca13f2686ed061c57620ecdf67e1b8c0f285e9"`\]
+> `const` **TARGET\_ALLOWED\_OWNER\_EOA\_ADDRESSES**: readonly \[`"0xb05cf01231cf2ff99499682e64d3780d57c80fdd"`, `"0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3"`, `"0xd1780fc23f810b52d8cf277e54842dd8803c9361"`, `"0xceca13f2686ed061c57620ecdf67e1b8c0f285e9"`, `"0x858c01556ec5a8531fa4118d595430ac7fd0baf0"`\]
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L8)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L17)
 
 ***
 
 ### TARGET\_CANONICAL\_CSW\_ADDRESS
 
-> `const` **TARGET\_CANONICAL\_CSW\_ADDRESS**: `"0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef"`
+> `const` **TARGET\_CANONICAL\_CSW\_ADDRESS**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L5)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L14)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:5](https://github.com/wenakita/
 
 > **hasContractBytecode**(`value`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L64)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L76)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:64](https://github.com/wenakita
 
 > **isAllowedCanonicalSigner**(`value`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L38)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L50)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:38](https://github.com/wenakita
 
 > **isAllowedOwnerEoa**(`value`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L32)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L44)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:32](https://github.com/wenakita
 
 > **isEoaAddressByCode**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L70)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:82](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L82)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:70](https://github.com/wenakita
 
 > **isTargetCanonicalCsw**(`value`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L28)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L40)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:28](https://github.com/wenakita
 
 > **normalizePolicyAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L23)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L35)
 
 #### Parameters
 
@@ -150,7 +150,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:23](https://github.com/wenakita
 
 > **resolvePolicyCanonicalAddress**(`params`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L54)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L66)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [src/wallet/canonicalWalletPolicy.ts:54](https://github.com/wenakita
 
 > **shouldApplyCanonicalEnforcement**(`params`): `boolean`
 
-Defined in: [src/wallet/canonicalWalletPolicy.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L42)
+Defined in: [src/wallet/canonicalWalletPolicy.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/canonicalWalletPolicy.ts#L54)
 
 #### Parameters
 

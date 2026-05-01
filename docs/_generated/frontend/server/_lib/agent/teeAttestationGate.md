@@ -82,7 +82,7 @@ Defined in: [server/\_lib/agent/teeAttestationGate.ts:15](https://github.com/wen
 
 > **assertTeeAttestationOrThrow**(`context?`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/agent/teeAttestationGate.ts:253](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/teeAttestationGate.ts#L253)
+Defined in: [server/\_lib/agent/teeAttestationGate.ts:252](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/teeAttestationGate.ts#L252)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/agent/teeAttestationGate.ts:253](https://github.com/we
 
 > **getTeeAttestationStatus**(): `Promise`\<[`TeeAttestationStatus`](#teeattestationstatus)\>
 
-Defined in: [server/\_lib/agent/teeAttestationGate.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/teeAttestationGate.ts#L177)
+Defined in: [server/\_lib/agent/teeAttestationGate.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/teeAttestationGate.ts#L176)
 
 #### Returns
 

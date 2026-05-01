@@ -48,7 +48,7 @@ Defined in: [src/wallet/accountContext/resolveActiveAccount.ts:3](https://github
 
 ##### activeAccountType
 
-> **activeAccountType**: `"UNKNOWN"` \| `"EOA"` \| `"SMART_WALLET"`
+> **activeAccountType**: `"EOA"` \| `"SMART_WALLET"` \| `"UNKNOWN"`
 
 ##### canUseSmartWalletMode
 

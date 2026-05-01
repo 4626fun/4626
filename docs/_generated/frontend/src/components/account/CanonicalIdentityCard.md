@@ -59,9 +59,9 @@ See `docs/design/identity-surface-spec.md` for the full design rationale.
 
 Defined in: [src/components/account/CanonicalIdentityCard.tsx:122](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CanonicalIdentityCard.tsx#L122)
 
-Dropdown body content — three rows (canonical / active signer / embedded)
-with per-row copy buttons. Rendered inside the existing DropdownLayer
-that ConnectButton owns.
+Dropdown body content — canonical smart wallet first, then signer lanes.
+The app-scoped sub-account is intentionally not surfaced here unless a
+future route actively uses it as the transaction sender.
 
 #### Parameters
 

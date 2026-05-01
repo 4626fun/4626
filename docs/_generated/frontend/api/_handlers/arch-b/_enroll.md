@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/arch-b/\_enroll.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_enroll.ts#L81)
+Defined in: [api/\_handlers/arch-b/\_enroll.ts:86](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_enroll.ts#L86)
 
 #### Parameters
 

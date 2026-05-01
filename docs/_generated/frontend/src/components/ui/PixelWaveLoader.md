@@ -46,7 +46,7 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:18](https://github.com/wenaki
 
 ##### name?
 
-> `optional` **name**: [`PixelWavePreset`](#pixelwavepreset) \| `string` & `object`
+> `optional` **name**: `string` & `object` \| [`PixelWavePreset`](#pixelwavepreset)
 
 Defined in: [src/components/ui/PixelWaveLoader.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/PixelWaveLoader.tsx#L13)
 

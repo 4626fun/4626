@@ -130,7 +130,7 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:12](https://github.com/wen
 
 > **buildUserOpErrorDebug**(`params`): [`UserOpErrorDebug`](#useroperrordebug)
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L133)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:134](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L134)
 
 #### Parameters
 

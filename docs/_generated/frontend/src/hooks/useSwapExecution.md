@@ -8,11 +8,59 @@
 
 ## Functions
 
+### deriveSwapExecutionReadiness()
+
+> **deriveSwapExecutionReadiness**(`params`): `boolean`
+
+Defined in: [src/hooks/useSwapExecution.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L193)
+
+#### Parameters
+
+##### params
+
+###### canonicalAddress?
+
+`string` \| `null`
+
+###### canonicalPolicyApplies?
+
+`boolean`
+
+###### cdpCanonicalOnlyMode?
+
+`boolean`
+
+###### executionAddress?
+
+`string` \| `null`
+
+###### executionMode
+
+`"canonical"` \| `"eoa"`
+
+###### executionTrack?
+
+[`UserExecutionTrack`](../lib/tx/txRouter.md#userexecutiontrack) \| `null`
+
+###### quoteReady
+
+`boolean`
+
+###### signerAddress?
+
+`string` \| `null`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### evaluateCanonicalSubmitSession()
 
 > **evaluateCanonicalSubmitSession**(`input`): `CanonicalSubmitSessionResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L219)
+Defined in: [src/hooks/useSwapExecution.ts:258](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L258)
 
 #### Parameters
 
@@ -30,7 +78,7 @@ Defined in: [src/hooks/useSwapExecution.ts:219](https://github.com/wenakita/4626
 
 > **evaluateSwapSessionGate**(`input`): `SwapSessionGateResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:166](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L166)
+Defined in: [src/hooks/useSwapExecution.ts:169](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L169)
 
 #### Parameters
 
@@ -48,7 +96,7 @@ Defined in: [src/hooks/useSwapExecution.ts:166](https://github.com/wenakita/4626
 
 > **resolveCanonicalSubmitSession**(`input`, `ensureCanonicalSession?`): `Promise`\<`CanonicalSubmitSessionResult`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:133](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L133)
+Defined in: [src/hooks/useSwapExecution.ts:136](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L136)
 
 #### Parameters
 
@@ -66,11 +114,39 @@ Defined in: [src/hooks/useSwapExecution.ts:133](https://github.com/wenakita/4626
 
 ***
 
+### shouldDisablePermit2ForSwap()
+
+> **shouldDisablePermit2ForSwap**(`params`): `boolean`
+
+Defined in: [src/hooks/useSwapExecution.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L216)
+
+#### Parameters
+
+##### params
+
+###### canonicalAddress?
+
+`string` \| `null`
+
+###### executionAddress?
+
+`string` \| `null`
+
+###### executionMode
+
+`"canonical"` \| `"eoa"`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### useSwapExecution()
 
 > **useSwapExecution**(`params`): `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L312)
+Defined in: [src/hooks/useSwapExecution.ts:379](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L379)
 
 #### Parameters
 
@@ -123,6 +199,14 @@ Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626
 ###### executionReady
 
 `boolean`
+
+###### executionTrack?
+
+[`UserExecutionTrack`](../lib/tx/txRouter.md#userexecutiontrack) \| `null`
+
+###### expectedSessionAddress?
+
+`string` \| `null`
 
 ###### hasSession?
 
@@ -214,7 +298,7 @@ Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626
 
 ##### confirmIntent
 
-> **confirmIntent**: `"approval"` \| `"swap"` \| `"order"` \| `null`
+> **confirmIntent**: `"swap"` \| `"approval"` \| `"order"` \| `null`
 
 ##### diagnosticsBusy
 
@@ -284,7 +368,7 @@ Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626
 
 ###### intent
 
-`"approval"` | `"swap"` | `"order"`
+`"swap"` | `"approval"` | `"order"`
 
 ###### Returns
 
@@ -317,6 +401,10 @@ Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626
 ##### quoteIsStale
 
 > **quoteIsStale**: `boolean`
+
+##### quoteReady
+
+> **quoteReady**: `boolean`
 
 ##### quoteUpdatedAt
 

@@ -20,41 +20,101 @@ Defined in: [src/lib/deploy/sessionClient.ts:14](https://github.com/wenakita/462
 
 #### Properties
 
+##### attemptCount?
+
+> `optional` **attemptCount**: `number`
+
+Defined in: [src/lib/deploy/sessionClient.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L19)
+
+##### currentStage?
+
+> `optional` **currentStage**: `string`
+
+Defined in: [src/lib/deploy/sessionClient.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L17)
+
+##### id?
+
+> `optional` **id**: `string`
+
+Defined in: [src/lib/deploy/sessionClient.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L15)
+
 ##### lastError?
 
 > `optional` **lastError**: `string` \| `null`
 
-Defined in: [src/lib/deploy/sessionClient.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L18)
+Defined in: [src/lib/deploy/sessionClient.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L23)
+
+##### lastFailureCode?
+
+> `optional` **lastFailureCode**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L24)
+
+##### lastFailureStage?
+
+> `optional` **lastFailureStage**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L25)
 
 ##### lastTxHash?
 
 > `optional` **lastTxHash**: `string` \| `null`
 
-Defined in: [src/lib/deploy/sessionClient.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L16)
+Defined in: [src/lib/deploy/sessionClient.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L21)
 
 ##### lastUserOpHash?
 
 > `optional` **lastUserOpHash**: `string` \| `null`
 
-Defined in: [src/lib/deploy/sessionClient.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L17)
+Defined in: [src/lib/deploy/sessionClient.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L22)
+
+##### lockExpiresAt?
+
+> `optional` **lockExpiresAt**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L27)
+
+##### lockOwner?
+
+> `optional` **lockOwner**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L26)
+
+##### nextAction?
+
+> `optional` **nextAction**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L30)
+
+##### nextRunAfter?
+
+> `optional` **nextRunAfter**: `string` \| `null`
+
+Defined in: [src/lib/deploy/sessionClient.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L20)
 
 ##### sessionOwner?
 
 > `optional` **sessionOwner**: `string` \| `null`
 
-Defined in: [src/lib/deploy/sessionClient.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L20)
+Defined in: [src/lib/deploy/sessionClient.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L29)
 
 ##### sessionSignerAddress?
 
 > `optional` **sessionSignerAddress**: `string` \| `null`
 
-Defined in: [src/lib/deploy/sessionClient.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L19)
+Defined in: [src/lib/deploy/sessionClient.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L28)
+
+##### state?
+
+> `optional` **state**: `"pending"` \| `"running"` \| `"completed"` \| `"failed"` \| `"cancelled"` \| `string`
+
+Defined in: [src/lib/deploy/sessionClient.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L16)
 
 ##### step?
 
 > `optional` **step**: `string`
 
-Defined in: [src/lib/deploy/sessionClient.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L15)
+Defined in: [src/lib/deploy/sessionClient.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L18)
 
 ***
 
@@ -104,7 +164,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:6](https://github.com/wenakita/4626
 
 > **postDeploySessionRequestWithAuthRetry**\<`T`\>(`params`): `Promise`\<[`ApiEnvelope`](../api/apiEnvelope.md#apienvelope)\<`T`\>\>
 
-Defined in: [src/lib/deploy/sessionClient.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L33)
+Defined in: [src/lib/deploy/sessionClient.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L43)
 
 #### Type Parameters
 
@@ -154,7 +214,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:33](https://github.com/wenakita/462
 
 > **resumeAndPollDeploySession**(`params`): `Promise`\<[`DeploySessionStatusData`](#deploysessionstatusdata)\>
 
-Defined in: [src/lib/deploy/sessionClient.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L64)
+Defined in: [src/lib/deploy/sessionClient.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L74)
 
 #### Parameters
 
@@ -218,7 +278,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:64](https://github.com/wenakita/462
 
 > **shouldRetryDeploySessionAuth**(`message`): `boolean`
 
-Defined in: [src/lib/deploy/sessionClient.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L24)
+Defined in: [src/lib/deploy/sessionClient.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L34)
 
 #### Parameters
 

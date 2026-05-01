@@ -72,7 +72,7 @@ refusal — we do not allow the action until we can verify.
 
 Defined in: [server/commands/families/keepr.ts:687](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L687)
 
-Shown when a non-admin group member invokes a setup command (/link, /linked,
+Shown when a non-admin group member invokes a setup command (/link, /status,
 /unlink, /keepr). The command is still available to group owners and admins,
 and to all users in private DMs with the bot.
 

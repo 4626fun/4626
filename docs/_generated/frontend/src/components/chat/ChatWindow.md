@@ -12,7 +12,7 @@
 
 > **ChatWindow**(`__namedParameters`): `Element`
 
-Defined in: [src/components/chat/ChatWindow.tsx:150](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWindow.tsx#L150)
+Defined in: [src/components/chat/ChatWindow.tsx:151](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWindow.tsx#L151)
 
 #### Parameters
 

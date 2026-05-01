@@ -10,7 +10,7 @@
 
 ### CommandFamily
 
-> **CommandFamily** = `"start"` \| `"help"` \| `"keepr"` \| `"id"` \| `"whois"` \| `"link"` \| `"linked"` \| `"unlink"` \| `"zora"` \| `"deploy"` \| `"vaultdeploy"` \| `"join"` \| `"rooms"` \| `"eligibility"` \| `"wallet"` \| `"alfaclub"` \| `"vaults"` \| `"auctions"` \| `"mybids"` \| `"buy"` \| `"sell"` \| `"bid"` \| `"twitter"` \| `"ai"` \| `"coin"` \| `"send"`
+> **CommandFamily** = `"start"` \| `"help"` \| `"keepr"` \| `"id"` \| `"whois"` \| `"link"` \| `"status"` \| `"unlink"` \| `"zora"` \| `"deploy"` \| `"vaultdeploy"` \| `"join"` \| `"rooms"` \| `"eligibility"` \| `"wallet"` \| `"alfaclub"` \| `"vaults"` \| `"auctions"` \| `"mybids"` \| `"buy"` \| `"sell"` \| `"bid"` \| `"twitter"` \| `"ai"` \| `"coin"` \| `"send"` \| `"hermit"`
 
 Defined in: [server/commands/registry.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L8)
 
@@ -50,7 +50,7 @@ Defined in: [server/commands/registry.ts:5](https://github.com/wenakita/4626/blo
 
 > `const` **TELEGRAM\_COMMAND\_HEADS**: `string`[] = `telegramCommandHeads`
 
-Defined in: [server/commands/registry.ts:275](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L275)
+Defined in: [server/commands/registry.ts:277](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L277)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [server/commands/registry.ts:275](https://github.com/wenakita/4626/b
 
 > `const` **TELEGRAM\_COMMAND\_HEADS\_PATTERN**: `string`
 
-Defined in: [server/commands/registry.ts:276](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L276)
+Defined in: [server/commands/registry.ts:278](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L278)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [server/commands/registry.ts:276](https://github.com/wenakita/4626/b
 
 > `const` **TELEGRAM\_NATIVE\_COMMAND\_HEADS**: `string`[] = `telegramNativeHeads`
 
-Defined in: [server/commands/registry.ts:274](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L274)
+Defined in: [server/commands/registry.ts:276](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L276)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [server/commands/registry.ts:274](https://github.com/wenakita/4626/b
 
 > **buildTelegramBotCommands**(`scope`): [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
 
-Defined in: [server/commands/registry.ts:265](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L265)
+Defined in: [server/commands/registry.ts:267](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L267)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [server/commands/registry.ts:265](https://github.com/wenakita/4626/b
 
 > **getCommandFamily**(`rawText`): [`CommandFamily`](#commandfamily) \| `null`
 
-Defined in: [server/commands/registry.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L228)
+Defined in: [server/commands/registry.ts:230](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L230)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [server/commands/registry.ts:228](https://github.com/wenakita/4626/b
 
 > **getCommandHead**(`rawText`): `string`
 
-Defined in: [server/commands/registry.ts:219](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L219)
+Defined in: [server/commands/registry.ts:221](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L221)
 
 #### Parameters
 
@@ -128,7 +128,7 @@ Defined in: [server/commands/registry.ts:219](https://github.com/wenakita/4626/b
 
 > **isKnownTelegramCommandHead**(`head`): `boolean`
 
-Defined in: [server/commands/registry.ts:261](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L261)
+Defined in: [server/commands/registry.ts:263](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L263)
 
 #### Parameters
 
@@ -146,7 +146,7 @@ Defined in: [server/commands/registry.ts:261](https://github.com/wenakita/4626/b
 
 > **matchesAnyCommandFamily**(`rawText`, `families`): `boolean`
 
-Defined in: [server/commands/registry.ts:236](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L236)
+Defined in: [server/commands/registry.ts:238](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L238)
 
 #### Parameters
 
@@ -168,7 +168,7 @@ readonly [`CommandFamily`](#commandfamily)[]
 
 > **matchesCommandFamily**(`rawText`, `family`): `boolean`
 
-Defined in: [server/commands/registry.ts:232](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L232)
+Defined in: [server/commands/registry.ts:234](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L234)
 
 #### Parameters
 
@@ -190,7 +190,7 @@ Defined in: [server/commands/registry.ts:232](https://github.com/wenakita/4626/b
 
 > **requiresGroupAdminForFamily**(`family`): `boolean`
 
-Defined in: [server/commands/registry.ts:257](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L257)
+Defined in: [server/commands/registry.ts:259](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L259)
 
 #### Parameters
 
@@ -208,7 +208,7 @@ Defined in: [server/commands/registry.ts:257](https://github.com/wenakita/4626/b
 
 > **resolveCommandDefinition**(`rawText`): `ResolvedCommandDefinition` \| `null`
 
-Defined in: [server/commands/registry.ts:223](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L223)
+Defined in: [server/commands/registry.ts:225](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L225)
 
 #### Parameters
 

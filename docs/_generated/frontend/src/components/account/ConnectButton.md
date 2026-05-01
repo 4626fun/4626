@@ -12,7 +12,7 @@
 
 > **ConnectButton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/ConnectButton.tsx:237](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L237)
+Defined in: [src/components/account/ConnectButton.tsx:235](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L235)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/components/account/ConnectButton.tsx:237](https://github.com/we
 
 > **deriveConnectButtonState**(`input`): `"hydrating"` \| `"connected-wallet"` \| `"session-restored"` \| `"signed-out"`
 
-Defined in: [src/components/account/ConnectButton.tsx:23](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L23)
+Defined in: [src/components/account/ConnectButton.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L25)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [src/components/account/ConnectButton.tsx:23](https://github.com/wen
 
 > **deriveWalletIdentityPresentation**(`input`): `WalletIdentityPresentation`
 
-Defined in: [src/components/account/ConnectButton.tsx:143](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L143)
+Defined in: [src/components/account/ConnectButton.tsx:141](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L141)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [src/components/account/ConnectButton.tsx:143](https://github.com/we
 
 > **shouldAllowExternalWalletButtons**(`input`): `boolean`
 
-Defined in: [src/components/account/ConnectButton.tsx:40](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L40)
+Defined in: [src/components/account/ConnectButton.tsx:42](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L42)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [src/components/account/ConnectButton.tsx:40](https://github.com/wen
 
 > **shouldResolveConnectIdentity**(`input`): `boolean`
 
-Defined in: [src/components/account/ConnectButton.tsx:53](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L53)
+Defined in: [src/components/account/ConnectButton.tsx:55](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/ConnectButton.tsx#L55)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AdvancedDisclosure**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/YourIdentityHero.tsx:282](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/YourIdentityHero.tsx#L282)
+Defined in: [src/components/account/YourIdentityHero.tsx:306](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/YourIdentityHero.tsx#L306)
 
 Advanced / developer-mode disclosure wrapper for everything that
 used to live at the top of `/accounts`. Keeps the page scannable
@@ -48,7 +48,7 @@ by default; click the summary to expand.
 
 > **SignersSection**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/YourIdentityHero.tsx:175](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/YourIdentityHero.tsx#L175)
+Defined in: [src/components/account/YourIdentityHero.tsx:199](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/YourIdentityHero.tsx#L199)
 
 `/accounts` two-column "Signers" section.
 

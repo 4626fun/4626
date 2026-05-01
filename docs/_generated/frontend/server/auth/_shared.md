@@ -46,7 +46,7 @@ Defined in: [server/auth/\_shared.ts:7](https://github.com/wenakita/4626/blob/ma
 
 > **ParsedSiwe** = `object`
 
-Defined in: [server/auth/\_shared.ts:575](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L575)
+Defined in: [server/auth/\_shared.ts:642](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L642)
 
 #### Properties
 
@@ -54,37 +54,37 @@ Defined in: [server/auth/\_shared.ts:575](https://github.com/wenakita/4626/blob/
 
 > **address**: `string`
 
-Defined in: [server/auth/\_shared.ts:577](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L577)
+Defined in: [server/auth/\_shared.ts:644](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L644)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [server/auth/\_shared.ts:579](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L579)
+Defined in: [server/auth/\_shared.ts:646](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L646)
 
 ##### domain
 
 > **domain**: `string`
 
-Defined in: [server/auth/\_shared.ts:576](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L576)
+Defined in: [server/auth/\_shared.ts:643](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L643)
 
 ##### issuedAt
 
 > **issuedAt**: `string`
 
-Defined in: [server/auth/\_shared.ts:581](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L581)
+Defined in: [server/auth/\_shared.ts:648](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L648)
 
 ##### nonce
 
 > **nonce**: `string`
 
-Defined in: [server/auth/\_shared.ts:580](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L580)
+Defined in: [server/auth/\_shared.ts:647](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L647)
 
 ##### uri
 
 > **uri**: `string`
 
-Defined in: [server/auth/\_shared.ts:578](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L578)
+Defined in: [server/auth/\_shared.ts:645](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L645)
 
 ## Variables
 
@@ -108,7 +108,7 @@ Defined in: [server/auth/\_shared.ts:10](https://github.com/wenakita/4626/blob/m
 
 > **clearCookie**(`req`, `res`, `name`): `void`
 
-Defined in: [server/auth/\_shared.ts:381](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L381)
+Defined in: [server/auth/\_shared.ts:442](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L442)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [server/auth/\_shared.ts:51](https://github.com/wenakita/4626/blob/m
 
 > **enforceCookieSessionTrustedOrigin**(`req`, `res`): `boolean`
 
-Defined in: [server/auth/\_shared.ts:271](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L271)
+Defined in: [server/auth/\_shared.ts:274](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L274)
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: [server/auth/\_shared.ts:24](https://github.com/wenakita/4626/blob/m
 
 > **handleOptions**(`req`, `res`): `boolean`
 
-Defined in: [server/auth/\_shared.ts:312](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L312)
+Defined in: [server/auth/\_shared.ts:315](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L315)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [server/auth/\_shared.ts:312](https://github.com/wenakita/4626/blob/
 
 > **hostMatchesDomain**(`host`, `domain`): `boolean`
 
-Defined in: [server/auth/\_shared.ts:614](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L614)
+Defined in: [server/auth/\_shared.ts:681](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L681)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [server/auth/\_shared.ts:614](https://github.com/wenakita/4626/blob/
 
 > **makeNonce**(): `string`
 
-Defined in: [server/auth/\_shared.ts:429](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L429)
+Defined in: [server/auth/\_shared.ts:496](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L496)
 
 #### Returns
 
@@ -252,7 +252,7 @@ Defined in: [server/auth/\_shared.ts:429](https://github.com/wenakita/4626/blob/
 
 > **makeNonceToken**(`params`): `string`
 
-Defined in: [server/auth/\_shared.ts:524](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L524)
+Defined in: [server/auth/\_shared.ts:591](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L591)
 
 A signed nonce token used when cookies are blocked (embedded contexts).
 This mirrors the cookie nonce but is passed back explicitly by the client.
@@ -283,7 +283,7 @@ This mirrors the cookie nonce but is passed back explicitly by the client.
 
 > **makeSessionToken**(`params`): `string`
 
-Defined in: [server/auth/\_shared.ts:465](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L465)
+Defined in: [server/auth/\_shared.ts:532](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L532)
 
 #### Parameters
 
@@ -307,7 +307,7 @@ Defined in: [server/auth/\_shared.ts:465](https://github.com/wenakita/4626/blob/
 
 > **parseCookies**(`req`): `Record`\<`string`, `string`\>
 
-Defined in: [server/auth/\_shared.ts:321](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L321)
+Defined in: [server/auth/\_shared.ts:324](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L324)
 
 #### Parameters
 
@@ -325,7 +325,7 @@ Defined in: [server/auth/\_shared.ts:321](https://github.com/wenakita/4626/blob/
 
 > **parseSiweMessage**(`message`): [`ParsedSiwe`](#parsedsiwe) \| `null`
 
-Defined in: [server/auth/\_shared.ts:584](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L584)
+Defined in: [server/auth/\_shared.ts:651](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L651)
 
 #### Parameters
 
@@ -343,7 +343,7 @@ Defined in: [server/auth/\_shared.ts:584](https://github.com/wenakita/4626/blob/
 
 > **readBoundedJsonObjectBody**\<`T`\>(`req`, `opts`): `Promise`\<`T` \| `null`\>
 
-Defined in: [server/auth/\_shared.ts:407](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L407)
+Defined in: [server/auth/\_shared.ts:474](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L474)
 
 #### Type Parameters
 
@@ -373,7 +373,7 @@ Defined in: [server/auth/\_shared.ts:407](https://github.com/wenakita/4626/blob/
 
 > **readJsonBody**\<`T`\>(`req`, `opts`): `Promise`\<`T` \| `null`\>
 
-Defined in: [server/auth/\_shared.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L385)
+Defined in: [server/auth/\_shared.ts:452](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L452)
 
 #### Type Parameters
 
@@ -403,7 +403,7 @@ Defined in: [server/auth/\_shared.ts:385](https://github.com/wenakita/4626/blob/
 
 > **readNonceToken**(`token`, `opts?`): \{ `nonce`: `string`; \} \| `null`
 
-Defined in: [server/auth/\_shared.ts:537](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L537)
+Defined in: [server/auth/\_shared.ts:604](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L604)
 
 #### Parameters
 
@@ -445,7 +445,7 @@ Defined in: [server/auth/\_shared.ts:251](https://github.com/wenakita/4626/blob/
 
 > **readSessionToken**(`token`): \{ `address`: `string`; \} \| `null`
 
-Defined in: [server/auth/\_shared.ts:477](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L477)
+Defined in: [server/auth/\_shared.ts:544](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L544)
 
 #### Parameters
 
@@ -463,7 +463,7 @@ Defined in: [server/auth/\_shared.ts:477](https://github.com/wenakita/4626/blob/
 
 > **setCookie**(`req`, `res`, `name`, `value`, `opts`): `void`
 
-Defined in: [server/auth/\_shared.ts:364](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L364)
+Defined in: [server/auth/\_shared.ts:427](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L427)
 
 #### Parameters
 
@@ -569,7 +569,7 @@ Defined in: [server/auth/\_shared.ts:43](https://github.com/wenakita/4626/blob/m
 
 > **verifySiweSignature**(`params`): `Promise`\<\{ `address`: `string`; \} \| `null`\>
 
-Defined in: [server/auth/\_shared.ts:623](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L623)
+Defined in: [server/auth/\_shared.ts:690](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_shared.ts#L690)
 
 #### Parameters
 

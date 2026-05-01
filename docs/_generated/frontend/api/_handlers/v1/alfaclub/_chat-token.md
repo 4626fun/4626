@@ -2,9 +2,9 @@
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/deploy/session/\_status
+[4626-app](../../../../index.md) / api/\_handlers/v1/alfaclub/\_chat-token
 
-# api/\_handlers/deploy/session/\_status
+# api/\_handlers/v1/alfaclub/\_chat-token
 
 ## Functions
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_status.ts:2570](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_status.ts#L2570)
+Defined in: [api/\_handlers/v1/alfaclub/\_chat-token.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/alfaclub/_chat-token.ts#L73)
 
 #### Parameters
 

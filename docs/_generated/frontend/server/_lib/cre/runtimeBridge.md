@@ -10,7 +10,7 @@
 
 ### RuntimeNonceStoreUnavailableError
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L99)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L98)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:99](https://github.com/wenakita/4
 
 > **new RuntimeNonceStoreUnavailableError**(`message`): [`RuntimeNonceStoreUnavailableError`](#runtimenoncestoreunavailableerror)
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L100)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L99)
 
 ###### Parameters
 
@@ -286,9 +286,9 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:54](https://github.com/wenakita/4
 
 ### authenticateRuntimeRequest()
 
-> **authenticateRuntimeRequest**(`req`, `body`, `options`): `Promise`\<[`RuntimeAuthResult`](#runtimeauthresult)\>
+> **authenticateRuntimeRequest**(`req`, `body`): `Promise`\<[`RuntimeAuthResult`](#runtimeauthresult)\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:212](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L212)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:239](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L239)
 
 #### Parameters
 
@@ -300,10 +300,6 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:212](https://github.com/wenakita/
 
 `unknown`
 
-##### options
-
-`RuntimeAuthOptions` = `{}`
-
 #### Returns
 
 `Promise`\<[`RuntimeAuthResult`](#runtimeauthresult)\>
@@ -314,7 +310,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:212](https://github.com/wenakita/
 
 > **executeCreHttpTrigger**(`input`): `Promise`\<\{ `gatewayUrl`: `string`; `ok`: `boolean`; `requestId`: `string`; `response`: `unknown`; `statusCode`: `number`; \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:465](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L465)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:497](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L497)
 
 #### Parameters
 
@@ -332,7 +328,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:465](https://github.com/wenakita/
 
 > **listRuntimeRecords**(`params`): `Promise`\<[`RuntimeRecord`](#runtimerecord)[]\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:333](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L333)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:365](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L365)
 
 #### Parameters
 
@@ -360,7 +356,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:333](https://github.com/wenakita/
 
 > **maybeEnqueueRuntimeAction**(`input`): `Promise`\<`number`\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L426)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:458](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L458)
 
 #### Parameters
 
@@ -378,7 +374,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:426](https://github.com/wenakita/
 
 > **storeRuntimeDecision**(`input`): `Promise`\<\{ `decision`: [`RuntimeDecision`](#runtimedecision); `inserted`: `boolean`; \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:381](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L381)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:413](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L413)
 
 #### Parameters
 
@@ -396,7 +392,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:381](https://github.com/wenakita/
 
 > **storeRuntimeRecord**(`input`): `Promise`\<\{ `inserted`: `boolean`; `record`: [`RuntimeRecord`](#runtimerecord); \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:286](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L286)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:318](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L318)
 
 #### Parameters
 

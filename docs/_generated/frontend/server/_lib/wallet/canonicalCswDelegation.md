@@ -12,7 +12,7 @@
 
 > **BootstrapDelegationState** = `object`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L37)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L38)
 
 #### Properties
 
@@ -20,49 +20,49 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:37](https://github.co
 
 > **baseSubAccount**: [`BaseSubAccountSummary`](executionTrack.md#basesubaccountsummary)
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L44)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L45)
 
 ##### canonicalCswAddress
 
 > **canonicalCswAddress**: `string`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L41)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L42)
 
 ##### chainId
 
 > **chainId**: `8453`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L38)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L39)
 
 ##### executionTrack
 
 > **executionTrack**: [`ExecutionTrack`](executionTrack.md#executiontrack)
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L45)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L46)
 
 ##### privyEmbeddedEoaAddress
 
 > **privyEmbeddedEoaAddress**: `string`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L42)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L43)
 
 ##### privyIsOwner
 
 > **privyIsOwner**: `boolean`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L43)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L44)
 
 ##### privyUserId
 
 > **privyUserId**: `string`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L40)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L41)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L39)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L40)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:39](https://github.co
 
 > **bootstrapCanonicalDelegationState**(`params`): `Promise`\<[`BootstrapDelegationState`](#bootstrapdelegationstate)\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:539](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L539)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:626](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L626)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:539](https://github.c
 
 > **confirmOwnerState**(`params`): `Promise`\<\{ `canonicalCswAddress`: `string`; `confirmationState`: `"owner_confirmed"` \| `"pending_tx"` \| `"owner_not_found_yet"` \| `"tx_failed"`; `isOwner`: `boolean`; `ownerAddress`: `string`; \}\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:624](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L624)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:718](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L718)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:624](https://github.c
 
 > **extractDelegationFlags**(`error`): `object`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:707](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L707)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:801](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L801)
 
 #### Parameters
 
@@ -156,11 +156,23 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:707](https://github.c
 
 ***
 
+### getBaseRpcUrls()
+
+> **getBaseRpcUrls**(): `string`[]
+
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:134](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L134)
+
+#### Returns
+
+`string`[]
+
+***
+
 ### getPrivyEmbeddedEOA()
 
 > **getPrivyEmbeddedEOA**(`params`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:461](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L461)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:548](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L548)
 
 #### Parameters
 
@@ -188,7 +200,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:461](https://github.c
 
 > **getPrivyUserIdFromRequest**(`req`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:356](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L356)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L426)
 
 #### Parameters
 
@@ -206,7 +218,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:356](https://github.c
 
 > **loadCanonicalDelegationState**(`params`): `Promise`\<`PersistedDelegationState` \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:530](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L530)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:617](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L617)
 
 #### Parameters
 
@@ -230,7 +242,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:530](https://github.c
 
 > **resolveCanonicalCsw**(`params`): `Promise`\<\{ `canonicalCswAddress`: `string`; `canonicalSource`: `string`; `profileId`: `number`; \}\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:376](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L376)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L446)
 
 #### Parameters
 
@@ -258,7 +270,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:376](https://github.c
 
 > **resolveConfirmOwnerCanonicalCsw**(`params`): `string`
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L446)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:533](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L533)
 
 #### Parameters
 
@@ -282,7 +294,7 @@ Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:446](https://github.c
 
 > **verifyPrivyRequest**(`req`): `Promise`\<`PrivyRequestContext`\>
 
-Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:361](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L361)
+Defined in: [server/\_lib/wallet/canonicalCswDelegation.ts:431](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalCswDelegation.ts#L431)
 
 #### Parameters
 

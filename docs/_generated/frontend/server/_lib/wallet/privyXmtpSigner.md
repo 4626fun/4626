@@ -110,7 +110,7 @@ Defined in: [server/\_lib/wallet/privyXmtpSigner.ts:59](https://github.com/wenak
 
 > **createEoaSignerFromKey**(`privateKey`): `Promise`\<[`XmtpSigner`](#xmtpsigner)\>
 
-Defined in: [server/\_lib/wallet/privyXmtpSigner.ts:249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyXmtpSigner.ts#L249)
+Defined in: [server/\_lib/wallet/privyXmtpSigner.ts:251](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyXmtpSigner.ts#L251)
 
 Create an XMTP EOA signer from a raw private key.
 Fallback for agents that don't have a CSW.

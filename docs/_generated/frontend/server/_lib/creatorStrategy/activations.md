@@ -12,7 +12,7 @@
 
 > **CreatorStrategyFeatureDto** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:354](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L354)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:366](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L366)
 
 Public-safe DTO for the API `/api/creator/strategy/activations` endpoint.
 Hides internal IDs and keeps bigints as strings.
@@ -23,79 +23,79 @@ Hides internal IDs and keeps bigints as strings.
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:366](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L366)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:378](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L378)
 
 ##### creatorToken
 
 > **creatorToken**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:355](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L355)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:367](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L367)
 
 ##### failedAt
 
 > **failedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:362](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L362)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:374](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L374)
 
 ##### failureReason
 
 > **failureReason**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:364](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L364)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:376](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L376)
 
 ##### featureKey
 
 > **featureKey**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:356](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L356)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:368](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L368)
 
 ##### paymentTxHash
 
 > **paymentTxHash**: `Hex` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:359](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L359)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:371](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L371)
 
 ##### paymentVerifiedAt
 
 > **paymentVerifiedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:360](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L360)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:372](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L372)
 
 ##### priceUsdcPaid
 
 > **priceUsdcPaid**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:358](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L358)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:370](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L370)
 
 ##### provisionedAt
 
 > **provisionedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:361](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L361)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:373](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L373)
 
 ##### provisionerRef
 
 > **provisionerRef**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:365](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L365)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:377](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L377)
 
 ##### refundedAt
 
 > **refundedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:363](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L363)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:375](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L375)
 
 ##### status
 
 > **status**: [`CreatorStrategyFeatureStatus`](#creatorstrategyfeaturestatus)
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:357](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L357)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:369](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L369)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:367](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L367)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:379](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L379)
 
 ***
 
@@ -223,7 +223,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:16](https://github.com/
 
 > **FinalizeStripeCheckoutInput** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L159)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:171](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L171)
 
 #### Properties
 
@@ -231,37 +231,37 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:159](https://github.com
 
 > **paymentVerifiedAt**: `Date`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L165)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L177)
 
 ##### priceUsdcPaid
 
 > **priceUsdcPaid**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L161)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:173](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L173)
 
 ##### stripeChargeId
 
 > **stripeChargeId**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L164)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L176)
 
 ##### stripeCheckoutSessionId
 
 > **stripeCheckoutSessionId**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L160)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L172)
 
 ##### stripePaymentIntentId
 
 > **stripePaymentIntentId**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L163)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L175)
 
 ##### walletAddress
 
 > **walletAddress**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:162](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L162)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:174](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L174)
 
 ***
 
@@ -269,7 +269,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:162](https://github.com
 
 > **FinalizeStripeCheckoutResult** = \{ `ok`: `true`; `row`: [`CreatorStrategyFeatureRow`](#creatorstrategyfeaturerow); \} \| \{ `message`: `string`; `ok`: `false`; `reason`: `"session_not_found"` \| `"db_error"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L168)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:180](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L180)
 
 ***
 
@@ -277,7 +277,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:168](https://github.com
 
 > **InsertActivationInput** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L119)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L131)
 
 #### Properties
 
@@ -285,55 +285,55 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:119](https://github.com
 
 > **creatorToken**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L120)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L132)
 
 ##### featureKey
 
 > **featureKey**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L121)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L133)
 
 ##### metadata?
 
 > `optional` **metadata**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L128)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L140)
 
 ##### paymentFrom
 
 > **paymentFrom**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L124)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:136](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L136)
 
 ##### paymentTo
 
 > **paymentTo**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L125)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L137)
 
 ##### paymentTxHash
 
 > **paymentTxHash**: `Hex`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L123)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:135](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L135)
 
 ##### paymentVerifiedAt
 
 > **paymentVerifiedAt**: `Date`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L126)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L138)
 
 ##### priceUsdcPaid
 
 > **priceUsdcPaid**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L122)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:134](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L134)
 
 ##### status
 
 > **status**: `Extract`\<[`CreatorStrategyFeatureStatus`](#creatorstrategyfeaturestatus), `"pending"`\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L127)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:139](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L139)
 
 ***
 
@@ -341,7 +341,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:127](https://github.com
 
 > **InsertActivationResult** = \{ `ok`: `true`; `row`: [`CreatorStrategyFeatureRow`](#creatorstrategyfeaturerow); \} \| \{ `message`: `string`; `ok`: `false`; `reason`: `"live_activation_exists"` \| `"payment_already_used"` \| `"db_error"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L131)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L143)
 
 ***
 
@@ -349,7 +349,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:131](https://github.com
 
 > **InsertStripeCheckoutRowInput** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:142](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L142)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:154](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L154)
 
 #### Properties
 
@@ -357,37 +357,37 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:142](https://github.com
 
 > **creatorToken**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L143)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L155)
 
 ##### featureKey
 
 > **featureKey**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L144)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:156](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L156)
 
 ##### metadata?
 
 > `optional` **metadata**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L148)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L160)
 
 ##### priceUsdcExpected
 
 > **priceUsdcExpected**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L145)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L157)
 
 ##### stripeCheckoutSessionId
 
 > **stripeCheckoutSessionId**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:147](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L147)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L159)
 
 ##### walletAddress
 
 > **walletAddress**: `Address`
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L146)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L158)
 
 ***
 
@@ -395,7 +395,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:146](https://github.com
 
 > **InsertStripeCheckoutRowResult** = \{ `ok`: `true`; `row`: [`CreatorStrategyFeatureRow`](#creatorstrategyfeaturerow); \} \| \{ `message`: `string`; `ok`: `false`; `reason`: `"live_activation_exists"` \| `"db_error"`; \}
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:151](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L151)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L163)
 
 ## Functions
 
@@ -403,7 +403,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:151](https://github.com
 
 > **finalizeStripeCheckoutActivation**(`db`, `input`): `Promise`\<[`FinalizeStripeCheckoutResult`](#finalizestripecheckoutresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L249)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:261](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L261)
 
 Webhook handler — fills in Stripe payment metadata + the actual
 amount paid after `checkout.session.completed`. Idempotent: running
@@ -429,11 +429,22 @@ it twice for the same session leaves the row in the same state.
 
 > **hasLiveActivationForFeature**(`db`, `params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L101)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L112)
 
-True when the creator has a live entitlement row for the feature.
-We treat both `pending` and `active` as entitled because payment
-verification is authoritative and provisioning can lag.
+True when the creator has a live, PAID entitlement row for the feature.
+
+FIX: M-02 / 4626-408 — previously this function treated any row whose status
+was `pending` or `active` as entitled. A `pending` row is inserted the moment
+a Stripe checkout session (or x402 attempt) is created — BEFORE the payment
+has cleared and `payment_verified_at` has been set by the webhook. That
+window (typically several seconds, but unbounded if the user abandons the
+flow) granted feature access for free.
+
+We now additionally require `payment_verified_at IS NOT NULL` so only rows
+whose payment has been verified server-side (stripe webhook or x402 settle)
+count as entitled. `active` rows written by the webhook always set
+`payment_verified_at` (see upsertActivationFromStripeWebhook below), so this
+tightens the gate without changing the happy path.
 
 #### Parameters
 
@@ -461,7 +472,7 @@ verification is authoritative and provisioning can lag.
 
 > **insertPendingActivation**(`db`, `input`): `Promise`\<[`InsertActivationResult`](#insertactivationresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:295](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L295)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:307](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L307)
 
 Insert a new `pending` activation row. Unique constraints on
 (creator_token, feature_key) and payment_tx_hash are enforced at the
@@ -488,7 +499,7 @@ for the API handler.
 
 > **insertStripeCheckoutActivation**(`db`, `input`): `Promise`\<[`InsertStripeCheckoutRowResult`](#insertstripecheckoutrowresult)\>
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L199)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:211](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L211)
 
 Insert a `pending` row for a Stripe Checkout Session BEFORE the user
 has paid. The row is created so that when the Stripe webhook fires
@@ -545,7 +556,7 @@ Defined in: [server/\_lib/creatorStrategy/activations.ts:79](https://github.com/
 
 > **toCreatorStrategyFeatureDto**(`row`): [`CreatorStrategyFeatureDto`](#creatorstrategyfeaturedto)
 
-Defined in: [server/\_lib/creatorStrategy/activations.ts:370](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L370)
+Defined in: [server/\_lib/creatorStrategy/activations.ts:382](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/activations.ts#L382)
 
 #### Parameters
 

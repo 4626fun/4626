@@ -12,7 +12,7 @@
 
 > **VaultDeployContracts** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:269](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L269)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:270](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L270)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:269](https:
 
 > **ccaStrategy**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:275](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L275)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:276](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L276)
 
 ##### creatorToken
 
 > **creatorToken**: `Address`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:270](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L270)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:271](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L271)
 
 ##### gaugeController
 
 > **gaugeController**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:274](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L274)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:275](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L275)
 
 ##### oracle
 
 > **oracle**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:276](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L276)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:277](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L277)
 
 ##### shareOFT
 
 > **shareOFT**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:273](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L273)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:274](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L274)
 
 ##### vault
 
 > **vault**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:271](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L271)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:272](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L272)
 
 ##### wrapper
 
 > **wrapper**: `Address` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:272](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L272)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:273](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L273)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:272](https:
 
 > **VaultDeployStartRequest** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:279](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L279)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:280](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L280)
 
 #### Properties
 
@@ -72,61 +72,61 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:279](https:
 
 > **autoContinue**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:289](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L289)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:290](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L290)
 
 ##### creatorToken
 
 > **creatorToken**: `Address`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:281](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L281)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:282](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L282)
 
 ##### ownerAddress
 
 > **ownerAddress**: `Address`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:282](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L282)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:283](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L283)
 
 ##### phase1Calls
 
 > **phase1Calls**: `SessionCall`[]
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:283](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L283)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:284](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L284)
 
 ##### phase2CoreCalls
 
 > **phase2CoreCalls**: `SessionCall`[]
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:284](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L284)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:285](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L285)
 
 ##### phase2FinalizeCalls
 
 > **phase2FinalizeCalls**: `SessionCall`[]
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:285](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L285)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:286](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L286)
 
 ##### phase3Calls
 
 > **phase3Calls**: `SessionCall`[]
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:286](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L286)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:287](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L287)
 
 ##### phase4Calls
 
 > **phase4Calls**: `SessionCall`[]
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:287](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L287)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:288](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L288)
 
 ##### smartWallet
 
 > **smartWallet**: `Address`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:280](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L280)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:281](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L281)
 
 ##### version
 
 > **version**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:288](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L288)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:289](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L289)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:288](https:
 
 > **VaultDeployStartResult** = \{ `data`: `StartPayload`; `ok`: `true`; `status`: `number`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:303](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L303)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:304](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L304)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:303](https:
 
 > **VaultDeployStatusResult** = \{ `data`: `StatusPayload`; `ok`: `true`; `status`: `number`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:326](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L326)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:327](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L327)
 
 ## Functions
 
@@ -150,7 +150,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:326](https:
 
 > **buildAkitaVaultDeployStartRequest**(`params`): `Promise`\<[`VaultDeployStartRequest`](#vaultdeploystartrequest)\>
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:724](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L724)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:725](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L725)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:724](https:
 
 > **buildVaultDeployPreviewReplyMarkup**(`token`): `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:706](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L706)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:707](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L707)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:706](https:
 
 > **fetchVaultDeployStatusFromTelegram**(`params`): `Promise`\<[`VaultDeployStatusResult`](#vaultdeploystatusresult)\>
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:950](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L950)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:951](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L951)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:950](https:
 
 > **formatVaultDeployPreviewText**(`params`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:688](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L688)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:689](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L689)
 
 #### Parameters
 
@@ -248,7 +248,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:688](https:
 
 > **formatVaultDeployTokenFailure**(`reason`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:717](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L717)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:718](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L718)
 
 #### Parameters
 
@@ -266,7 +266,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:717](https:
 
 > **startAkitaVaultDeployFromTelegram**(`params`): `Promise`\<[`VaultDeployStartResult`](#vaultdeploystartresult)\>
 
-Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:897](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L897)
+Defined in: [api/\_handlers/telegram/webhook/services/vaultDeploy.ts:898](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/vaultDeploy.ts#L898)
 
 #### Parameters
 

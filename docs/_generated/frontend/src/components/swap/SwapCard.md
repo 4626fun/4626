@@ -12,7 +12,7 @@
 
 > **SwapCard**(`props`): `Element`
 
-Defined in: [src/components/swap/SwapCard.tsx:57](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/SwapCard.tsx#L57)
+Defined in: [src/components/swap/SwapCard.tsx:61](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/SwapCard.tsx#L61)
 
 #### Parameters
 

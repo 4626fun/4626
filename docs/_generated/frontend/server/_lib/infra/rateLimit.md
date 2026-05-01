@@ -769,9 +769,22 @@ Returns whether the request is allowed and remaining quota.
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:203](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L203)
+Defined in: [server/\_lib/infra/rateLimit.ts:216](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L216)
 
 Helper to get client IP from request headers.
+
+FIX: M-10 / 4626-421 — this project is fronted by Vercel, not Cloudflare.
+The `cf-connecting-ip` header is therefore NOT set by our own edge. On a
+Vercel-only surface, any caller can attach an arbitrary `cf-connecting-ip`
+value to the request and we would previously trust it. That allows rate-limit
+bypass by spoofing unique "client IPs" per request, and also corrupts
+downstream audit trails.
+
+We now trust ONLY Vercel-issued headers (`x-vercel-forwarded-for` and, as a
+conservative fallback, `x-real-ip` / `x-forwarded-for`). `cf-connecting-ip`
+is intentionally no longer consulted. If this deployment is ever moved
+behind Cloudflare in front of Vercel, re-introduce it only under a
+feature flag that asserts Cloudflare is the true edge.
 
 #### Parameters
 
@@ -791,7 +804,7 @@ Helper to get client IP from request headers.
 
 > **rateLimitKey**(...`parts`): `string`
 
-Defined in: [server/\_lib/infra/rateLimit.ts:233](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L233)
+Defined in: [server/\_lib/infra/rateLimit.ts:248](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/rateLimit.ts#L248)
 
 Build a rate limit key from components.
 

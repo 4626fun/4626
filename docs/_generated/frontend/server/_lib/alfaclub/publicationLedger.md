@@ -12,7 +12,7 @@
 
 > **MetricsSnapshotRow** = `object`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:384](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L384)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L385)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:384](https://github.com/
 
 > **creatorAddress**: `Address`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:386](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L386)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:387](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L387)
 
 ##### hlAccountValueUsd
 
 > **hlAccountValueUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:391](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L391)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:392](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L392)
 
 ##### pnl30dUsd
 
 > **pnl30dUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:390](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L390)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:391](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L391)
 
 ##### rank
 
 > **rank**: `number`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:393](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L393)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:394](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L394)
 
 ##### score
 
 > **score**: `number`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:392](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L392)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:393](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L393)
 
 ##### snapshotTs
 
 > **snapshotTs**: `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L385)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:386](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L386)
 
 ##### stakedSupply
 
 > **stakedSupply**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:389](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L389)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:390](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L390)
 
 ##### tokenId
 
 > **tokenId**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:387](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L387)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:388](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L388)
 
 ##### totalSupply
 
 > **totalSupply**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:388](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L388)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:389](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L389)
 
 ***
 
@@ -212,7 +212,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:32](https://github.com/w
 
 > **abandonQueuedFeedback**(`publicationKey`, `finalError`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:358](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L358)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:359](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L359)
 
 Permanently abandon a queued row. Flips `kind` to `'erc8004-failed'` so
 subsequent drain ticks skip it.
@@ -336,7 +336,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:99](https://github.com/w
 
 > **insertMetricsSnapshot**(`rows`): `Promise`\<`number`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:396](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L396)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:397](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L397)
 
 #### Parameters
 
@@ -354,7 +354,7 @@ readonly [`MetricsSnapshotRow`](#metricssnapshotrow)[]
 
 > **listQueuedFeedback**(`limit`): `Promise`\<[`PublicationRecord`](#publicationrecord)[]\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:300](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L300)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:301](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L301)
 
 List ERC-8004 rows queued for autonomous submission. FIFO, excludes rows
 that have already been submitted, abandoned, or that failed a selector
@@ -430,7 +430,7 @@ so re-running the cron within the same window is idempotent.
 
 > **markSubmissionAttemptFailed**(`publicationKey`, `err`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:333](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L333)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:334](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L334)
 
 Record a failed submission attempt without advancing the row past
 `erc8004-queued`. The drain loop uses `submission_attempts` to decide

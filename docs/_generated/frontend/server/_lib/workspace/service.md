@@ -12,7 +12,7 @@
 
 > **WorkspaceActivityItem** = `object`
 
-Defined in: [server/\_lib/workspace/service.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L122)
+Defined in: [server/\_lib/workspace/service.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L124)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/workspace/service.ts:122](https://github.com/wenakita/
 
 > **actorAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:129](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L129)
+Defined in: [server/\_lib/workspace/service.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L131)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:130](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L130)
+Defined in: [server/\_lib/workspace/service.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L132)
 
 ##### description
 
 > **description**: `string` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L127)
+Defined in: [server/\_lib/workspace/service.ts:129](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L129)
 
 ##### eventType
 
 > **eventType**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L125)
+Defined in: [server/\_lib/workspace/service.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L127)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L123)
+Defined in: [server/\_lib/workspace/service.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L125)
 
 ##### payload
 
 > **payload**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/workspace/service.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L131)
+Defined in: [server/\_lib/workspace/service.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L133)
 
 ##### severity
 
 > **severity**: [`WorkspaceSeverity`](repository.md#workspaceseverity)
 
-Defined in: [server/\_lib/workspace/service.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L128)
+Defined in: [server/\_lib/workspace/service.ts:130](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L130)
 
 ##### source
 
 > **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"cre"`
 
-Defined in: [server/\_lib/workspace/service.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L124)
+Defined in: [server/\_lib/workspace/service.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L126)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L126)
+Defined in: [server/\_lib/workspace/service.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L128)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/workspace/service.ts:126](https://github.com/wenakita/
 
 > **WorkspaceMonitoringResponse** = `object`
 
-Defined in: [server/\_lib/workspace/service.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L102)
+Defined in: [server/\_lib/workspace/service.ts:104](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L104)
 
 #### Properties
 
@@ -84,37 +84,37 @@ Defined in: [server/\_lib/workspace/service.ts:102](https://github.com/wenakita/
 
 > **alerts**: [`WorkspaceAlertEvent`](repository.md#workspacealertevent)[]
 
-Defined in: [server/\_lib/workspace/service.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L110)
+Defined in: [server/\_lib/workspace/service.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L112)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L119)
+Defined in: [server/\_lib/workspace/service.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L121)
 
 ##### incidents
 
 > **incidents**: [`WorkspaceActivityEvent`](repository.md#workspaceactivityevent)[]
 
-Defined in: [server/\_lib/workspace/service.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L111)
+Defined in: [server/\_lib/workspace/service.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L113)
 
 ##### latestSnapshotId
 
 > **latestSnapshotId**: `number` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L118)
+Defined in: [server/\_lib/workspace/service.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L120)
 
 ##### sections
 
 > **sections**: `CheckSection`[]
 
-Defined in: [server/\_lib/workspace/service.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L103)
+Defined in: [server/\_lib/workspace/service.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L105)
 
 ##### summary
 
 > **summary**: `object`
 
-Defined in: [server/\_lib/workspace/service.ts:104](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L104)
+Defined in: [server/\_lib/workspace/service.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L106)
 
 ###### fail
 
@@ -136,7 +136,7 @@ Defined in: [server/\_lib/workspace/service.ts:104](https://github.com/wenakita/
 
 > **trend**: `object`[]
 
-Defined in: [server/\_lib/workspace/service.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L112)
+Defined in: [server/\_lib/workspace/service.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L114)
 
 ###### fail
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/workspace/service.ts:112](https://github.com/wenakita/
 
 > **WorkspaceRoomsResponse** = `object`
 
-Defined in: [server/\_lib/workspace/service.ts:134](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L134)
+Defined in: [server/\_lib/workspace/service.ts:136](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L136)
 
 #### Properties
 
@@ -168,13 +168,13 @@ Defined in: [server/\_lib/workspace/service.ts:134](https://github.com/wenakita/
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L152)
+Defined in: [server/\_lib/workspace/service.ts:154](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L154)
 
 ##### telegram
 
 > **telegram**: `object`
 
-Defined in: [server/\_lib/workspace/service.ts:135](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L135)
+Defined in: [server/\_lib/workspace/service.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L137)
 
 ###### chatId
 
@@ -212,7 +212,7 @@ Defined in: [server/\_lib/workspace/service.ts:135](https://github.com/wenakita/
 
 > **xmtp**: `object`
 
-Defined in: [server/\_lib/workspace/service.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L145)
+Defined in: [server/\_lib/workspace/service.ts:147](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L147)
 
 ###### agentAddress
 
@@ -240,7 +240,7 @@ Defined in: [server/\_lib/workspace/service.ts:145](https://github.com/wenakita/
 
 > **WorkspaceSettingsResponse** = `object`
 
-Defined in: [server/\_lib/workspace/service.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L161)
+Defined in: [server/\_lib/workspace/service.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L163)
 
 #### Properties
 
@@ -248,7 +248,7 @@ Defined in: [server/\_lib/workspace/service.ts:161](https://github.com/wenakita/
 
 > **automation**: `object`
 
-Defined in: [server/\_lib/workspace/service.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L165)
+Defined in: [server/\_lib/workspace/service.ts:167](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L167)
 
 ###### enabled
 
@@ -262,25 +262,25 @@ Defined in: [server/\_lib/workspace/service.ts:165](https://github.com/wenakita/
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:169](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L169)
+Defined in: [server/\_lib/workspace/service.ts:171](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L171)
 
 ##### notificationPreferences
 
 > **notificationPreferences**: `ReturnType`\<*typeof* [`listNotificationPreferences`](repository.md#listnotificationpreferences)\> *extends* `Promise`\<infer T\> ? `T` : `never`
 
-Defined in: [server/\_lib/workspace/service.ts:162](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L162)
+Defined in: [server/\_lib/workspace/service.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L164)
 
 ##### strategyTargets
 
 > **strategyTargets**: [`WorkspaceStrategyTarget`](repository.md#workspacestrategytarget)[]
 
-Defined in: [server/\_lib/workspace/service.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L163)
+Defined in: [server/\_lib/workspace/service.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L165)
 
 ##### thresholds
 
 > **thresholds**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/workspace/service.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L164)
+Defined in: [server/\_lib/workspace/service.ts:166](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L166)
 
 ***
 
@@ -296,13 +296,13 @@ Defined in: [server/\_lib/workspace/service.ts:87](https://github.com/wenakita/4
 
 > **asset**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L95)
+Defined in: [server/\_lib/workspace/service.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L97)
 
 ##### availableActions
 
 > **availableActions**: `string`[]
 
-Defined in: [server/\_lib/workspace/service.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L99)
+Defined in: [server/\_lib/workspace/service.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L101)
 
 ##### currentWeightRaw
 
@@ -326,25 +326,33 @@ Defined in: [server/\_lib/workspace/service.ts:89](https://github.com/wenakita/4
 
 > **lastRebalanceAt**: `string` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L98)
+Defined in: [server/\_lib/workspace/service.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L100)
 
 ##### liquidityHint
 
 > **liquidityHint**: `string` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L96)
+Defined in: [server/\_lib/workspace/service.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L98)
+
+##### maxAssetsCap
+
+> **maxAssetsCap**: `string` \| `null`
+
+Defined in: [server/\_lib/workspace/service.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L95)
+
+Operator-intended on-chain cap mirror; uint256 as decimal string, or null.
 
 ##### owner
 
 > **owner**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L94)
+Defined in: [server/\_lib/workspace/service.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L96)
 
 ##### performanceHint
 
 > **performanceHint**: `string` \| `null`
 
-Defined in: [server/\_lib/workspace/service.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L97)
+Defined in: [server/\_lib/workspace/service.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L99)
 
 ##### status
 
@@ -542,7 +550,7 @@ Defined in: [server/\_lib/workspace/service.ts:44](https://github.com/wenakita/4
 
 > **WorkspaceTasksResponse** = `object`
 
-Defined in: [server/\_lib/workspace/service.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L155)
+Defined in: [server/\_lib/workspace/service.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L157)
 
 #### Properties
 
@@ -550,19 +558,19 @@ Defined in: [server/\_lib/workspace/service.ts:155](https://github.com/wenakita/
 
 > **approvals**: `ReturnType`\<*typeof* [`listApprovalRequests`](repository.md#listapprovalrequests)\> *extends* `Promise`\<infer T\> ? `T` : `never`
 
-Defined in: [server/\_lib/workspace/service.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L157)
+Defined in: [server/\_lib/workspace/service.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L159)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/workspace/service.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L158)
+Defined in: [server/\_lib/workspace/service.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L160)
 
 ##### tasks
 
 > **tasks**: [`WorkspaceTaskItem`](repository.md#workspacetaskitem)[]
 
-Defined in: [server/\_lib/workspace/service.ts:156](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L156)
+Defined in: [server/\_lib/workspace/service.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L158)
 
 ## Functions
 
@@ -570,7 +578,7 @@ Defined in: [server/\_lib/workspace/service.ts:156](https://github.com/wenakita/
 
 > **appendWorkspaceActionActivity**(`params`): `Promise`\<[`WorkspaceActivityEvent`](repository.md#workspaceactivityevent)\>
 
-Defined in: [server/\_lib/workspace/service.ts:760](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L760)
+Defined in: [server/\_lib/workspace/service.ts:763](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L763)
 
 #### Parameters
 
@@ -630,7 +638,7 @@ Defined in: [server/\_lib/workspace/service.ts:760](https://github.com/wenakita/
 
 > **resolveWorkspaceActivity**(`params`): `Promise`\<\{ `activity`: [`WorkspaceActivityItem`](#workspaceactivityitem)[]; `generatedAt`: `string`; \}\>
 
-Defined in: [server/\_lib/workspace/service.ts:633](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L633)
+Defined in: [server/\_lib/workspace/service.ts:636](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L636)
 
 #### Parameters
 
@@ -658,7 +666,7 @@ Defined in: [server/\_lib/workspace/service.ts:633](https://github.com/wenakita/
 
 > **resolveWorkspaceMonitoring**(`params`): `Promise`\<[`WorkspaceMonitoringResponse`](#workspacemonitoringresponse)\>
 
-Defined in: [server/\_lib/workspace/service.ts:588](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L588)
+Defined in: [server/\_lib/workspace/service.ts:591](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L591)
 
 #### Parameters
 
@@ -682,7 +690,7 @@ Defined in: [server/\_lib/workspace/service.ts:588](https://github.com/wenakita/
 
 > **resolveWorkspaceRooms**(`params`): `Promise`\<[`WorkspaceRoomsResponse`](#workspaceroomsresponse)\>
 
-Defined in: [server/\_lib/workspace/service.ts:670](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L670)
+Defined in: [server/\_lib/workspace/service.ts:673](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L673)
 
 #### Parameters
 
@@ -702,7 +710,7 @@ Defined in: [server/\_lib/workspace/service.ts:670](https://github.com/wenakita/
 
 > **resolveWorkspaceSettings**(`params`): `Promise`\<[`WorkspaceSettingsResponse`](#workspacesettingsresponse)\>
 
-Defined in: [server/\_lib/workspace/service.ts:729](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L729)
+Defined in: [server/\_lib/workspace/service.ts:732](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L732)
 
 #### Parameters
 
@@ -726,7 +734,7 @@ Defined in: [server/\_lib/workspace/service.ts:729](https://github.com/wenakita/
 
 > **resolveWorkspaceStrategies**(`params`): `Promise`\<\{ `generatedAt`: `string`; `strategies`: [`WorkspaceStrategyRow`](#workspacestrategyrow)[]; \}\>
 
-Defined in: [server/\_lib/workspace/service.ts:529](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L529)
+Defined in: [server/\_lib/workspace/service.ts:531](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L531)
 
 #### Parameters
 
@@ -750,7 +758,7 @@ Defined in: [server/\_lib/workspace/service.ts:529](https://github.com/wenakita/
 
 > **resolveWorkspaceSummary**(`params`): `Promise`\<[`WorkspaceSummaryResponse`](#workspacesummaryresponse)\>
 
-Defined in: [server/\_lib/workspace/service.ts:453](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L453)
+Defined in: [server/\_lib/workspace/service.ts:455](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L455)
 
 #### Parameters
 
@@ -774,7 +782,7 @@ Defined in: [server/\_lib/workspace/service.ts:453](https://github.com/wenakita/
 
 > **resolveWorkspaceTasks**(`params`): `Promise`\<[`WorkspaceTasksResponse`](#workspacetasksresponse)\>
 
-Defined in: [server/\_lib/workspace/service.ts:712](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L712)
+Defined in: [server/\_lib/workspace/service.ts:715](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L715)
 
 #### Parameters
 

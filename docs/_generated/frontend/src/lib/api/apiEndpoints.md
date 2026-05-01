@@ -44,6 +44,14 @@ Defined in: [src/lib/api/apiEndpoints.ts:1](https://github.com/wenakita/4626/blo
 
 > `readonly` **price**: `"/api/cdp/swap/price"` = `'/api/cdp/swap/price'`
 
+##### chat
+
+> `readonly` **chat**: `object`
+
+###### chat.hermit
+
+> `readonly` **hermit**: `"/api/v1/chat/hermit"` = `'/api/v1/chat/hermit'`
+
 ##### creator
 
 > `readonly` **creator**: `object`

@@ -12,7 +12,7 @@
 
 > **Waitlist**(): `Element`
 
-Defined in: [src/pages/Waitlist.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Waitlist.tsx#L13)
+Defined in: [src/pages/Waitlist.tsx:44](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Waitlist.tsx#L44)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **AlfaClubHolding** = `object`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L69)
+Defined in: [server/\_lib/wallet/alfaclub.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L73)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:69](https://github.com/wenakita/462
 
 > **balance**: `bigint`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L73)
+Defined in: [server/\_lib/wallet/alfaclub.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L77)
 
 Current ERC-1155 balance of the queried address for this tokenId.
 
@@ -28,7 +28,7 @@ Current ERC-1155 balance of the queried address for this tokenId.
 
 > **creator**: `Address`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L75)
+Defined in: [server/\_lib/wallet/alfaclub.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L79)
 
 Creator address resolved via creatorByTokenId(tokenId).
 
@@ -36,7 +36,7 @@ Creator address resolved via creatorByTokenId(tokenId).
 
 > **tokenId**: `bigint`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L71)
+Defined in: [server/\_lib/wallet/alfaclub.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L75)
 
 FriendKey tokenId (one per room/creator).
 
@@ -46,7 +46,7 @@ FriendKey tokenId (one per room/creator).
 
 > **AlfaClubHoldingsResult** = `object`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L78)
+Defined in: [server/\_lib/wallet/alfaclub.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L82)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:78](https://github.com/wenakita/462
 
 > **address**: `Address`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L79)
+Defined in: [server/\_lib/wallet/alfaclub.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L83)
 
 ##### holdings
 
 > **holdings**: [`AlfaClubHolding`](#alfaclubholding)[]
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L80)
+Defined in: [server/\_lib/wallet/alfaclub.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L84)
 
 ##### isCreator
 
 > **isCreator**: `boolean`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L82)
+Defined in: [server/\_lib/wallet/alfaclub.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L86)
 
 True if the queried address is the creator of at least one held key.
 
@@ -74,7 +74,7 @@ True if the queried address is the creator of at least one held key.
 
 > **isHolder**: `boolean`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L84)
+Defined in: [server/\_lib/wallet/alfaclub.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L88)
 
 True if the queried address holds any AlfaClub keys at all.
 
@@ -84,7 +84,7 @@ True if the queried address holds any AlfaClub keys at all.
 
 > **AlfaClubPublicClientLike** = `object`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L88)
+Defined in: [server/\_lib/wallet/alfaclub.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L92)
 
 Narrow viem-like interface so call sites can inject mock clients in tests.
 
@@ -94,7 +94,7 @@ Narrow viem-like interface so call sites can inject mock clients in tests.
 
 > **getLogs**: (`args`) => `Promise`\<`ReadonlyArray`\<`unknown`\>\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L89)
+Defined in: [server/\_lib/wallet/alfaclub.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L93)
 
 ###### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:89](https://github.com/wenakita/462
 
 > `optional` **multicall**: (`args`) => `Promise`\<`ReadonlyArray`\<`unknown`\>\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L91)
+Defined in: [server/\_lib/wallet/alfaclub.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L95)
 
 ###### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:91](https://github.com/wenakita/462
 
 > **readContract**: (`args`) => `Promise`\<`unknown`\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L90)
+Defined in: [server/\_lib/wallet/alfaclub.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L94)
 
 ###### Parameters
 
@@ -178,7 +178,7 @@ Lowercased set of the three core AlfaClub contract addresses.
 
 ### FRIEND\_KEY\_ABI
 
-> `const` **FRIEND\_KEY\_ABI**: readonly \[\{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}\]
+> `const` **FRIEND\_KEY\_ABI**: readonly \[\{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}, \{ \}\]
 
 Defined in: [server/\_lib/wallet/alfaclub.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L48)
 
@@ -199,7 +199,7 @@ Defined in: [server/\_lib/wallet/alfaclub.ts:42](https://github.com/wenakita/462
 
 > **\_resetAlfaClubPublicClientForTests**(): `void`
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:376](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L376)
+Defined in: [server/\_lib/wallet/alfaclub.ts:378](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L378)
 
 Reset the cached client. Exposed for tests.
 
@@ -213,7 +213,7 @@ Reset the cached client. Exposed for tests.
 
 > **getAlfaClubCreatorTokenId**(`creator`, `client`, `opts?`): `Promise`\<`bigint` \| `null`\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:324](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L324)
+Defined in: [server/\_lib/wallet/alfaclub.ts:326](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L326)
 
 Reverse lookup: find the FriendKey tokenId a creator initially received.
 
@@ -252,7 +252,7 @@ Returns null if no mint event is found for the address.
 
 > **getAlfaClubHoldings**(`address`, `client`, `opts?`): `Promise`\<[`AlfaClubHoldingsResult`](#alfaclubholdingsresult)\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:230](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L230)
+Defined in: [server/\_lib/wallet/alfaclub.ts:232](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L232)
 
 Resolve current AlfaClub FriendKey holdings for `address`.
 
@@ -294,7 +294,7 @@ Returns an empty result on any RPC error (fail-open; labeling is optional).
 
 > **getAlfaClubPublicClient**(): `Promise`\<[`AlfaClubPublicClientLike`](#alfaclubpublicclientlike)\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:360](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L360)
+Defined in: [server/\_lib/wallet/alfaclub.ts:362](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L362)
 
 Build (or reuse) a viem PublicClient pinned to Base for AlfaClub reads.
 Resolution order: BASE_LOGS_RPC_URL > BASE_RPC_URL > public.
@@ -309,7 +309,7 @@ Resolution order: BASE_LOGS_RPC_URL > BASE_RPC_URL > public.
 
 > **scanAddressTransferredTokenIds**(`address`, `client`, `opts?`): `Promise`\<`bigint`[]\>
 
-Defined in: [server/\_lib/wallet/alfaclub.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L148)
+Defined in: [server/\_lib/wallet/alfaclub.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/alfaclub.ts#L152)
 
 Return the set of distinct FriendKey tokenIds an address has ever received.
 

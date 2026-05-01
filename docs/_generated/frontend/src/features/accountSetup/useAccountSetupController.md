@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L126)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L127)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:126](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L114)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L115)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:114](https:/
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:191](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L191)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:192](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L192)
 
 #### Parameters
 
@@ -165,6 +165,14 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:191](https:/
 ##### customOwnerGasPreflight
 
 > **customOwnerGasPreflight**: `OwnerInstallGasPreflight` \| `null`
+
+##### customOwnerPreparedAddress
+
+> **customOwnerPreparedAddress**: `string` \| `null`
+
+##### customOwnerPreparedTxRequest
+
+> **customOwnerPreparedTxRequest**: [`PreparedOwnerTxRequest`](../../lib/wallet/onboardingWallet.md#preparedownertxrequest) \| `null`
 
 ##### ensureEmbeddedWallet()
 

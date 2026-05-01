@@ -12,7 +12,7 @@
 
 > **selectMetadataSourceUri**(`params`): `string` \| `null`
 
-Defined in: [src/hooks/useTokenMetadata.ts:128](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L128)
+Defined in: [src/hooks/useTokenMetadata.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L125)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/hooks/useTokenMetadata.ts:128](https://github.com/wenakita/4626
 
 > **useTokenImage**(`tokenAddress`): `object`
 
-Defined in: [src/hooks/useTokenMetadata.ts:280](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L280)
+Defined in: [src/hooks/useTokenMetadata.ts:277](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L277)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/hooks/useTokenMetadata.ts:280](https://github.com/wenakita/4626
 
 > **useTokenMetadata**(`tokenAddress`): `object`
 
-Defined in: [src/hooks/useTokenMetadata.ts:138](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L138)
+Defined in: [src/hooks/useTokenMetadata.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenMetadata.ts#L135)
 
 #### Parameters
 

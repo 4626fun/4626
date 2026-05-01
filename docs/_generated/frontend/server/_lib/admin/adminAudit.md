@@ -38,7 +38,7 @@ Defined in: [server/\_lib/admin/adminAudit.ts:11](https://github.com/wenakita/46
 
 > **logAdminAction**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/admin/adminAudit.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/admin/adminAudit.ts#L101)
+Defined in: [server/\_lib/admin/adminAudit.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/admin/adminAudit.ts#L100)
 
 #### Parameters
 

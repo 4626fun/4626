@@ -38,6 +38,10 @@ Defined in: [src/components/workspace/WorkspaceRoomsTab.tsx:8](https://github.co
 
 (`payload`) => `void`
 
+###### onVaultChatPolicyUpdate
+
+(`payload`) => `void`
+
 ###### onXmtpPing
 
 () => `void`

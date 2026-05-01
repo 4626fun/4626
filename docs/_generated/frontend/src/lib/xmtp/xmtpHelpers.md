@@ -54,7 +54,7 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:120](https://github.com/wenakita/4626/b
 
 > **buildNotRegisteredDmMessage**(`params`): `string`
 
-Defined in: [src/lib/xmtp/xmtpHelpers.ts:240](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L240)
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:254](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L254)
 
 #### Parameters
 
@@ -335,6 +335,38 @@ Defined in: [src/lib/xmtp/xmtpHelpers.ts:180](https://github.com/wenakita/4626/b
 #### Returns
 
 `boolean` \| `null`
+
+***
+
+### shouldFallbackToOriginalXmtpRecipient()
+
+> **shouldFallbackToOriginalXmtpRecipient**(`params`): `boolean`
+
+Defined in: [src/lib/xmtp/xmtpHelpers.ts:236](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/xmtpHelpers.ts#L236)
+
+#### Parameters
+
+##### params
+
+###### canonicalizedFromAddress
+
+`` `0x${string}` `` \| `null`
+
+###### originalCanMessage
+
+`boolean` \| `null`
+
+###### peerAddress
+
+`` `0x${string}` ``
+
+###### peerCanMessage
+
+`boolean` \| `null`
+
+#### Returns
+
+`boolean`
 
 ***
 

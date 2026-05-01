@@ -12,7 +12,7 @@
 
 > **X402PaymentGateResult** = \{ `network`: `X402Network`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `status`: `"missing"`; \} \| \{ `invalidReason`: `string`; `network`: `X402Network`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `settlement?`: `SettleResponse`; `status`: `"invalid"`; `verification?`: `VerifyResponse`; \} \| \{ `network`: `X402Network`; `payer`: `string` \| `null`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `settlement`: `SettleResponse`; `status`: `"paid"`; `verification`: `VerifyResponse`; \}
 
-Defined in: [server/\_lib/payments/x402Service.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L51)
+Defined in: [server/\_lib/payments/x402Service.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L52)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:51](https://github.com/wenakit
 
 > **X402PaymentRequirementConfig** = `object`
 
-Defined in: [server/\_lib/payments/x402Service.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L41)
+Defined in: [server/\_lib/payments/x402Service.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L42)
 
 #### Properties
 
@@ -28,43 +28,43 @@ Defined in: [server/\_lib/payments/x402Service.ts:41](https://github.com/wenakit
 
 > **description**: `string`
 
-Defined in: [server/\_lib/payments/x402Service.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L44)
+Defined in: [server/\_lib/payments/x402Service.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L45)
 
 ##### extra?
 
 > `optional` **extra**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/payments/x402Service.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L47)
+Defined in: [server/\_lib/payments/x402Service.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L48)
 
 ##### mimeType?
 
 > `optional` **mimeType**: `string`
 
-Defined in: [server/\_lib/payments/x402Service.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L45)
+Defined in: [server/\_lib/payments/x402Service.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L46)
 
 ##### outputSchema?
 
 > `optional` **outputSchema**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/payments/x402Service.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L46)
+Defined in: [server/\_lib/payments/x402Service.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L47)
 
 ##### priceUsd?
 
 > `optional` **priceUsd**: `number` \| `string`
 
-Defined in: [server/\_lib/payments/x402Service.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L48)
+Defined in: [server/\_lib/payments/x402Service.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L49)
 
 ##### req
 
 > **req**: `VercelRequest`
 
-Defined in: [server/\_lib/payments/x402Service.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L42)
+Defined in: [server/\_lib/payments/x402Service.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L43)
 
 ##### resourcePath
 
 > **resourcePath**: `string`
 
-Defined in: [server/\_lib/payments/x402Service.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L43)
+Defined in: [server/\_lib/payments/x402Service.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L44)
 
 ## Functions
 
@@ -72,7 +72,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:43](https://github.com/wenakit
 
 > **buildX402PaymentRequirements**(`config`): `object`
 
-Defined in: [server/\_lib/payments/x402Service.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L198)
+Defined in: [server/\_lib/payments/x402Service.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L199)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:198](https://github.com/wenaki
 
 > **evaluateX402Payment**(`req`, `config`): `Promise`\<[`X402PaymentGateResult`](#x402paymentgateresult)\>
 
-Defined in: [server/\_lib/payments/x402Service.ts:227](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L227)
+Defined in: [server/\_lib/payments/x402Service.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L228)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:227](https://github.com/wenaki
 
 > **sendPaymentRequiredResponse**(`req`, `res`, `params`): `VercelResponse`
 
-Defined in: [server/\_lib/payments/x402Service.ts:292](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L292)
+Defined in: [server/\_lib/payments/x402Service.ts:293](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L293)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:292](https://github.com/wenaki
 
 > **setSettlementResponseHeaders**(`res`, `settlement`): `void`
 
-Defined in: [server/\_lib/payments/x402Service.ts:285](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L285)
+Defined in: [server/\_lib/payments/x402Service.ts:286](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L286)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [server/\_lib/payments/x402Service.ts:285](https://github.com/wenaki
 
 > **setX402CorsHeaders**(`res`): `void`
 
-Defined in: [server/\_lib/payments/x402Service.ts:193](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L193)
+Defined in: [server/\_lib/payments/x402Service.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payments/x402Service.ts#L194)
 
 #### Parameters
 

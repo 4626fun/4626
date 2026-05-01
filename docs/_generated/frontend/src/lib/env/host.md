@@ -20,9 +20,25 @@ Defined in: [src/lib/env/host.ts:1](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **APP\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L62)
+Defined in: [src/lib/env/host.ts:176](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L176)
 
 Canonical app domain origin (post-acceptance).
+
+***
+
+### CONFIGURED\_APP\_ORIGIN
+
+> `const` **CONFIGURED\_APP\_ORIGIN**: `string`
+
+Defined in: [src/lib/env/host.ts:137](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L137)
+
+***
+
+### CONFIGURED\_MARKETING\_ORIGIN
+
+> `const` **CONFIGURED\_MARKETING\_ORIGIN**: `string`
+
+Defined in: [src/lib/env/host.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L134)
 
 ***
 
@@ -30,7 +46,7 @@ Canonical app domain origin (post-acceptance).
 
 > `const` **MARKETING\_ORIGIN**: `string`
 
-Defined in: [src/lib/env/host.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L58)
+Defined in: [src/lib/env/host.ts:173](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L173)
 
 Canonical marketing/waitlist domain origin.
 
@@ -40,7 +56,7 @@ Canonical marketing/waitlist domain origin.
 
 > `const` **WAITLIST\_REFERRAL\_BASE\_URL**: `string`
 
-Defined in: [src/lib/env/host.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L69)
+Defined in: [src/lib/env/host.ts:182](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L182)
 
 Optional explicit base URL for waitlist referral links.
 When set, waitlist share links are built from this origin instead of MARKETING_ORIGIN.
@@ -51,7 +67,7 @@ When set, waitlist share links are built from this origin instead of MARKETING_O
 
 > **getAppBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L106)
+Defined in: [src/lib/env/host.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L219)
 
 Base URL for the app (explore, deploy, vault, admin).
 
@@ -68,7 +84,7 @@ When on app domain, returns current origin.
 
 > **getHostMode**(): [`HostMode`](#hostmode)
 
-Defined in: [src/lib/env/host.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L92)
+Defined in: [src/lib/env/host.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L205)
 
 Host mode detection.
 
@@ -85,7 +101,7 @@ Host mode detection.
 
 > **getMarketingBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L118)
+Defined in: [src/lib/env/host.ts:240](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L240)
 
 Base URL for the marketing/waitlist site.
 
@@ -102,7 +118,7 @@ When on app domain, returns 4626.fun.
 
 > **getWaitlistReferralBaseUrl**(): `string`
 
-Defined in: [src/lib/env/host.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L127)
+Defined in: [src/lib/env/host.ts:249](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L249)
 
 Base URL used for user-facing waitlist referral links.
 
@@ -116,7 +132,7 @@ Base URL used for user-facing waitlist referral links.
 
 > **isCurrentWindowUrl**(`target`): `boolean`
 
-Defined in: [src/lib/env/host.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L40)
+Defined in: [src/lib/env/host.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L117)
 
 #### Parameters
 
@@ -130,11 +146,47 @@ Defined in: [src/lib/env/host.ts:40](https://github.com/wenakita/4626/blob/main/
 
 ***
 
+### resolveAuthRedirectOrigin()
+
+> **resolveAuthRedirectOrigin**(`input`): `string`
+
+Defined in: [src/lib/env/host.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L97)
+
+#### Parameters
+
+##### input
+
+`AuthRedirectOriginResolutionInput`
+
+#### Returns
+
+`string`
+
+***
+
+### resolveDisallowedLoopbackRedirectUrl()
+
+> **resolveDisallowedLoopbackRedirectUrl**(`input`): `string` \| `null`
+
+Defined in: [src/lib/env/host.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L77)
+
+#### Parameters
+
+##### input
+
+`LoopbackRedirectResolutionInput`
+
+#### Returns
+
+`string` \| `null`
+
+***
+
 ### resolveLoopbackOriginForCurrentWindow()
 
 > **resolveLoopbackOriginForCurrentWindow**(`input`): `string`
 
-Defined in: [src/lib/env/host.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L18)
+Defined in: [src/lib/env/host.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L48)
 
 Keep local dev redirects on the active loopback origin when only the port is stale.
 This avoids cross-origin bounces like localhost:5173 -> localhost:5174 when only one
@@ -145,6 +197,28 @@ Vite server is running.
 ##### input
 
 `LoopbackOriginResolutionInput`
+
+#### Returns
+
+`string`
+
+***
+
+### resolveMarketingToAppBaseUrl()
+
+> **resolveMarketingToAppBaseUrl**(`input`): `string`
+
+Defined in: [src/lib/env/host.ts:145](https://github.com/wenakita/4626/blob/main/frontend/src/lib/env/host.ts#L145)
+
+When rendering the marketing host, never route users to loopback app origins.
+This protects against accidentally shipping VITE_APP_ORIGIN=localhost in a
+public build while preserving local-dev behavior.
+
+#### Parameters
+
+##### input
+
+`MarketingToAppBaseUrlResolutionInput`
 
 #### Returns
 

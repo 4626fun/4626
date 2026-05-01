@@ -80,6 +80,22 @@ True when the server confirms the profile is authed but no
 completed Zora / Base App setup). The card uses this to prompt
 setup instead of leaving an empty CSW row.
 
+##### executionSubAccountAddress
+
+> **executionSubAccountAddress**: `Address` \| `null`
+
+Defined in: [src/hooks/useCanonicalIdentity.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L83)
+
+Optional app-scoped execution sub-account, hidden unless a route actively uses it.
+
+##### executionTrack
+
+> **executionTrack**: `"sub-account"` \| `"legacy-owner-install"` \| `"migration-pending"` \| `"none-yet"` \| `null`
+
+Defined in: [src/hooks/useCanonicalIdentity.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L85)
+
+Server-derived execution track classification.
+
 ##### externalEoaAddress
 
 > **externalEoaAddress**: `Address` \| `null`
@@ -132,7 +148,7 @@ Privy-provisioned embedded EOA, if Privy is authed.
 
 > **useCanonicalIdentity**(): [`CanonicalIdentity`](#canonicalidentity)
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L159)
+Defined in: [src/hooks/useCanonicalIdentity.ts:163](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L163)
 
 #### Returns
 

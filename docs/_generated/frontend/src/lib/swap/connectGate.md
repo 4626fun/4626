@@ -152,3 +152,21 @@ Defined in: [src/lib/swap/connectGate.ts:105](https://github.com/wenakita/4626/b
 #### Returns
 
 [`SwapConnectGateResult`](#swapconnectgateresult)
+
+***
+
+### isConnectorAlreadyConnectedError()
+
+> **isConnectorAlreadyConnectedError**(`error`): `boolean`
+
+Defined in: [src/lib/swap/connectGate.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/connectGate.ts#L119)
+
+#### Parameters
+
+##### error
+
+`unknown`
+
+#### Returns
+
+`boolean`

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_cswEntry.ts:159](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_cswEntry.ts#L159)
+Defined in: [api/\_handlers/zora/\_cswEntry.ts:167](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_cswEntry.ts#L167)
 
 #### Parameters
 

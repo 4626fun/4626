@@ -12,7 +12,7 @@
 
 > `const` **AKITA**: `object`
 
-Defined in: [src/config/contracts.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L100)
+Defined in: [src/config/contracts.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L118)
 
 #### Type Declaration
 
@@ -66,7 +66,7 @@ Defined in: [src/config/contracts.ts:100](https://github.com/wenakita/4626/blob/
 
 > `const` **CONTRACTS**: `object`
 
-Defined in: [src/config/contracts.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L23)
+Defined in: [src/config/contracts.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L41)
 
 #### Type Declaration
 
@@ -85,6 +85,10 @@ Defined in: [src/config/contracts.ts:23](https://github.com/wenakita/4626/blob/m
 ##### ajnaPositionManager
 
 > `readonly` **ajnaPositionManager**: `` `0x${string}` ``
+
+##### alfaCreatorKeyLpFactory
+
+> `readonly` **alfaCreatorKeyLpFactory**: `` `0x${string}` ``
 
 ##### bribesFactory
 
@@ -212,7 +216,7 @@ Defined in: [src/config/contracts.ts:23](https://github.com/wenakita/4626/blob/m
 
 > `const` **ERC4626**: `object`
 
-Defined in: [src/config/contracts.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L117)
+Defined in: [src/config/contracts.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/config/contracts.ts#L135)
 
 #### Type Declaration
 

@@ -129,7 +129,7 @@ the row manually).
 
 > **listManualProvisioningFeatures**(): `object`[]
 
-Defined in: [server/\_lib/creatorStrategy/provisioner.ts:165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/provisioner.ts#L165)
+Defined in: [server/\_lib/creatorStrategy/provisioner.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/provisioner.ts#L164)
 
 Helper exposed for tests + the operator dashboard — returns the list
 of features whose provisioning is still entirely manual (so operators

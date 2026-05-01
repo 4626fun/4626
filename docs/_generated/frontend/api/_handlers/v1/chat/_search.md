@@ -2,9 +2,9 @@
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/deploy/session/\_start
+[4626-app](../../../../index.md) / api/\_handlers/v1/chat/\_search
 
-# api/\_handlers/deploy/session/\_start
+# api/\_handlers/v1/chat/\_search
 
 ## Functions
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_start.ts:115](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_start.ts#L115)
+Defined in: [api/\_handlers/v1/chat/\_search.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/chat/_search.ts#L26)
 
 #### Parameters
 

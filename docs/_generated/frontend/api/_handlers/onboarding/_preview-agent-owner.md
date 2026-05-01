@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/onboarding/\_preview-agent-owner.ts:188](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/onboarding/_preview-agent-owner.ts#L188)
+Defined in: [api/\_handlers/onboarding/\_preview-agent-owner.ts:193](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/onboarding/_preview-agent-owner.ts#L193)
 
 #### Parameters
 

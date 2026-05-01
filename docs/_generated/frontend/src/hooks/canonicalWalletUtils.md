@@ -36,6 +36,10 @@ Defined in: [src/hooks/canonicalWalletUtils.ts:7](https://github.com/wenakita/46
 
 > `optional` **isCanonicalSmartWallet**: `boolean`
 
+###### isExecutionSubAccount?
+
+> `optional` **isExecutionSubAccount**: `boolean`
+
 ###### provider?
 
 > `optional` **provider**: `string` \| `null`
@@ -66,7 +70,7 @@ Defined in: [src/hooks/canonicalWalletUtils.ts:5](https://github.com/wenakita/46
 
 > **pickCanonicalSmartWalletAddress**(`row`): `string` \| `null`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L20)
+Defined in: [src/hooks/canonicalWalletUtils.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L21)
 
 #### Parameters
 

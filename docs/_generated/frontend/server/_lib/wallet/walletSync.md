@@ -156,7 +156,7 @@ Defined in: [server/\_lib/wallet/walletSync.ts:257](https://github.com/wenakita/
 
 > **syncUserWallets**(`db`, `privyUser`): `Promise`\<[`SyncUserWalletsResult`](#syncuserwalletsresult)\>
 
-Defined in: [server/\_lib/wallet/walletSync.ts:806](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L806)
+Defined in: [server/\_lib/wallet/walletSync.ts:851](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletSync.ts#L851)
 
 #### Parameters
 

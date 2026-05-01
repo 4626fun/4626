@@ -12,10 +12,10 @@
 
 > **ChatWidget**(`props`): `Element`
 
-Defined in: [src/components/chat/ChatWidget.tsx:602](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWidget.tsx#L602)
+Defined in: [src/components/chat/ChatWidget.tsx:665](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/ChatWidget.tsx#L665)
 
-Self-contained chat widget — wraps itself in the XMTP provider.
-Drop this into any layout to get the full chat experience.
+Chat widget dock. The app layout owns the XMTP provider so directory pages,
+the availability rail, and the dock all share one client.
 
 #### Parameters
 

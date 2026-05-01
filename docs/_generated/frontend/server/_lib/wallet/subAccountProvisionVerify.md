@@ -12,7 +12,7 @@
 
 > **SubAccountVerifyErr** = `object`
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L75)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L76)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:75](https://github
 
 > **code**: [`SubAccountVerifyErrCode`](#subaccountverifyerrcode-1)
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L77)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L78)
 
 ##### message?
 
 > `optional` **message**: `string`
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L78)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L79)
 
 ##### ok
 
 > **ok**: `false`
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L76)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L77)
 
 ***
 
 ### SubAccountVerifyErrCode
 
-> **SubAccountVerifyErrCode** = `"invalid_hash"` \| `"invalid_signature"` \| `"signer_not_owner"` \| `"invalid_spender"` \| `"invalid_caps"` \| `"invalid_token"` \| `"invalid_window"` \| `"permission_not_yet_active"` \| `"permission_expired"` \| `"signature_verification_failed"`
+> **SubAccountVerifyErrCode** = `"invalid_hash"` \| `"invalid_signature"` \| `"signer_not_owner"` \| `"invalid_parent_account"` \| `"invalid_spender"` \| `"invalid_caps"` \| `"invalid_token"` \| `"invalid_window"` \| `"permission_not_yet_active"` \| `"permission_expired"` \| `"signature_verification_failed"`
 
 Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L63)
 
@@ -152,7 +152,7 @@ Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:30](https://github
 
 > **checkPrivyDelegation**(`args`): `Promise`\<\{ `present`: `true`; \} \| \{ `actualSigners`: `string`[]; `present`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:243](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L243)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:301](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L301)
 
 Verify Privy delegation: the owner EOA's Privy wallet must include the
 Architecture B signer quorum in its `additional_signers`. Returns `missing`
@@ -181,7 +181,7 @@ or warn-and-continue (admin endpoint).
 
 > **getBasePublicClient**(): `object`
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L81)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L82)
 
 #### Returns
 
@@ -189,11 +189,53 @@ Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:81](https://github
 
 ***
 
+### hasContractBytecode()
+
+> **hasContractBytecode**(`bytecode`): `boolean`
+
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L87)
+
+#### Parameters
+
+##### bytecode
+
+`` `0x${string}` `` | `null` | `undefined`
+
+#### Returns
+
+`boolean`
+
+***
+
+### isContractAddressByBytecode()
+
+> **isContractAddressByBytecode**(`args`): `Promise`\<`boolean`\>
+
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L91)
+
+#### Parameters
+
+##### args
+
+###### address
+
+`` `0x${string}` ``
+
+###### publicClient
+
+\{ \}
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+***
+
 ### verifyParentCswSignature()
 
-> **verifyParentCswSignature**(`args`): `Promise`\<\{ `ok`: `true`; \} \| \{ `code`: `"invalid_signature"` \| `"signer_not_owner"` \| `"signature_verification_failed"`; `message?`: `string`; `ok`: `false`; \}\>
+> **verifyParentCswSignature**(`args`): `Promise`\<\{ `ok`: `true`; \} \| \{ `code`: `"invalid_signature"` \| `"signer_not_owner"` \| `"invalid_parent_account"` \| `"signature_verification_failed"`; `message?`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L97)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L110)
 
 Confirm the supplied signature was produced by an authorized signer of the
 parent CSW over the given EIP-712 permission payload.
@@ -231,7 +273,7 @@ Either path is sufficient; we try EOA first because it is cheap.
 
 #### Returns
 
-`Promise`\<\{ `ok`: `true`; \} \| \{ `code`: `"invalid_signature"` \| `"signer_not_owner"` \| `"signature_verification_failed"`; `message?`: `string`; `ok`: `false`; \}\>
+`Promise`\<\{ `ok`: `true`; \} \| \{ `code`: `"invalid_signature"` \| `"signer_not_owner"` \| `"invalid_parent_account"` \| `"signature_verification_failed"`; `message?`: `string`; `ok`: `false`; \}\>
 
 ***
 
@@ -239,7 +281,7 @@ Either path is sufficient; we try EOA first because it is cheap.
 
 > **verifySubAccountProvision**(`args`): `Promise`\<[`SubAccountVerifyOk`](#subaccountverifyok) \| [`SubAccountVerifyErr`](#subaccountverifyerr)\>
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L175)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:233](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L233)
 
 Full verification pipeline (hash match, signature, spender correctness, caps,
 expiry). Returns a typed ok/err result; callers handle HTTP mapping.

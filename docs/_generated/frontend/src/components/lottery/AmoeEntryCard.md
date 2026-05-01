@@ -12,7 +12,7 @@
 
 > **AmoeEntryCard**(`props`): `Element`
 
-Defined in: [src/components/lottery/AmoeEntryCard.tsx:67](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L67)
+Defined in: [src/components/lottery/AmoeEntryCard.tsx:99](https://github.com/wenakita/4626/blob/main/frontend/src/components/lottery/AmoeEntryCard.tsx#L99)
 
 #### Parameters
 

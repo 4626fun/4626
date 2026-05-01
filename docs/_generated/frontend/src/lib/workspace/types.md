@@ -12,7 +12,7 @@
 
 > **WorkspaceActionResult** = `object`
 
-Defined in: [src/lib/workspace/types.ts:269](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L269)
+Defined in: [src/lib/workspace/types.ts:278](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L278)
 
 #### Indexable
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/workspace/types.ts:269](https://github.com/wenakita/4626/bl
 
 > **action**: `string`
 
-Defined in: [src/lib/workspace/types.ts:270](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L270)
+Defined in: [src/lib/workspace/types.ts:279](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L279)
 
 ***
 
@@ -32,7 +32,7 @@ Defined in: [src/lib/workspace/types.ts:270](https://github.com/wenakita/4626/bl
 
 > **WorkspaceActivityEvent** = `object`
 
-Defined in: [src/lib/workspace/types.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L109)
+Defined in: [src/lib/workspace/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L116)
 
 #### Properties
 
@@ -40,79 +40,79 @@ Defined in: [src/lib/workspace/types.ts:109](https://github.com/wenakita/4626/bl
 
 > **actorAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L113)
+Defined in: [src/lib/workspace/types.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L120)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L122)
+Defined in: [src/lib/workspace/types.ts:129](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L129)
 
 ##### description
 
 > **description**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L116)
+Defined in: [src/lib/workspace/types.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L123)
 
 ##### eventType
 
 > **eventType**: `string`
 
-Defined in: [src/lib/workspace/types.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L112)
+Defined in: [src/lib/workspace/types.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L119)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [src/lib/workspace/types.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L110)
+Defined in: [src/lib/workspace/types.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L117)
 
 ##### payload
 
 > **payload**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L118)
+Defined in: [src/lib/workspace/types.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L125)
 
 ##### relatedAlertId
 
 > **relatedAlertId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L121)
+Defined in: [src/lib/workspace/types.ts:128](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L128)
 
 ##### relatedApprovalId
 
 > **relatedApprovalId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L120)
+Defined in: [src/lib/workspace/types.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L127)
 
 ##### relatedTaskId
 
 > **relatedTaskId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L119)
+Defined in: [src/lib/workspace/types.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L126)
 
 ##### severity
 
 > **severity**: [`WorkspaceSeverity`](#workspaceseverity)
 
-Defined in: [src/lib/workspace/types.ts:117](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L117)
+Defined in: [src/lib/workspace/types.ts:124](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L124)
 
 ##### source
 
 > **source**: `string`
 
-Defined in: [src/lib/workspace/types.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L114)
+Defined in: [src/lib/workspace/types.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L121)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/workspace/types.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L115)
+Defined in: [src/lib/workspace/types.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L122)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L111)
+Defined in: [src/lib/workspace/types.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L118)
 
 ***
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/workspace/types.ts:111](https://github.com/wenakita/4626/bl
 
 > **WorkspaceActivityItem** = `object`
 
-Defined in: [src/lib/workspace/types.ts:146](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L146)
+Defined in: [src/lib/workspace/types.ts:153](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L153)
 
 #### Properties
 
@@ -128,55 +128,55 @@ Defined in: [src/lib/workspace/types.ts:146](https://github.com/wenakita/4626/bl
 
 > **actorAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:153](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L153)
+Defined in: [src/lib/workspace/types.ts:160](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L160)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L154)
+Defined in: [src/lib/workspace/types.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L161)
 
 ##### description
 
 > **description**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L151)
+Defined in: [src/lib/workspace/types.ts:158](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L158)
 
 ##### eventType
 
 > **eventType**: `string`
 
-Defined in: [src/lib/workspace/types.ts:149](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L149)
+Defined in: [src/lib/workspace/types.ts:156](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L156)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/workspace/types.ts:147](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L147)
+Defined in: [src/lib/workspace/types.ts:154](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L154)
 
 ##### payload
 
 > **payload**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L155)
+Defined in: [src/lib/workspace/types.ts:162](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L162)
 
 ##### severity
 
 > **severity**: [`WorkspaceSeverity`](#workspaceseverity)
 
-Defined in: [src/lib/workspace/types.ts:152](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L152)
+Defined in: [src/lib/workspace/types.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L159)
 
 ##### source
 
 > **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"cre"`
 
-Defined in: [src/lib/workspace/types.ts:148](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L148)
+Defined in: [src/lib/workspace/types.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L155)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/workspace/types.ts:150](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L150)
+Defined in: [src/lib/workspace/types.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L157)
 
 ***
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/workspace/types.ts:150](https://github.com/wenakita/4626/bl
 
 > **WorkspaceActivityResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:158](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L158)
+Defined in: [src/lib/workspace/types.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L165)
 
 #### Properties
 
@@ -192,19 +192,19 @@ Defined in: [src/lib/workspace/types.ts:158](https://github.com/wenakita/4626/bl
 
 > **activity**: [`WorkspaceActivityItem`](#workspaceactivityitem)[]
 
-Defined in: [src/lib/workspace/types.ts:159](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L159)
+Defined in: [src/lib/workspace/types.ts:166](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L166)
 
 ##### actorRole
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L161)
+Defined in: [src/lib/workspace/types.ts:168](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L168)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:160](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L160)
+Defined in: [src/lib/workspace/types.ts:167](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L167)
 
 ***
 
@@ -212,7 +212,7 @@ Defined in: [src/lib/workspace/types.ts:160](https://github.com/wenakita/4626/bl
 
 > **WorkspaceAlertEvent** = `object`
 
-Defined in: [src/lib/workspace/types.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L88)
+Defined in: [src/lib/workspace/types.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L95)
 
 #### Properties
 
@@ -220,109 +220,109 @@ Defined in: [src/lib/workspace/types.ts:88](https://github.com/wenakita/4626/blo
 
 > **acknowledgedAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:102](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L102)
+Defined in: [src/lib/workspace/types.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L109)
 
 ##### acknowledgedBy
 
 > **acknowledgedBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L101)
+Defined in: [src/lib/workspace/types.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L108)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L105)
+Defined in: [src/lib/workspace/types.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L112)
 
 ##### createdBy
 
 > **createdBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L100)
+Defined in: [src/lib/workspace/types.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L107)
 
 ##### dedupeKey
 
 > **dedupeKey**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L98)
+Defined in: [src/lib/workspace/types.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L105)
 
 ##### details
 
 > **details**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L96)
+Defined in: [src/lib/workspace/types.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L103)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [src/lib/workspace/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L89)
+Defined in: [src/lib/workspace/types.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L96)
 
 ##### kind
 
 > **kind**: `string`
 
-Defined in: [src/lib/workspace/types.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L93)
+Defined in: [src/lib/workspace/types.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L100)
 
 ##### message
 
 > **message**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L95)
+Defined in: [src/lib/workspace/types.ts:102](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L102)
 
 ##### relatedTaskId
 
 > **relatedTaskId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L99)
+Defined in: [src/lib/workspace/types.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L106)
 
 ##### resolvedAt
 
 > **resolvedAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L104)
+Defined in: [src/lib/workspace/types.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L111)
 
 ##### resolvedBy
 
 > **resolvedBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L103)
+Defined in: [src/lib/workspace/types.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L110)
 
 ##### severity
 
 > **severity**: [`WorkspaceSeverity`](#workspaceseverity)
 
-Defined in: [src/lib/workspace/types.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L92)
+Defined in: [src/lib/workspace/types.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L99)
 
 ##### source
 
 > **source**: `string`
 
-Defined in: [src/lib/workspace/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L91)
+Defined in: [src/lib/workspace/types.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L98)
 
 ##### status
 
 > **status**: `string`
 
-Defined in: [src/lib/workspace/types.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L97)
+Defined in: [src/lib/workspace/types.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L104)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/workspace/types.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L94)
+Defined in: [src/lib/workspace/types.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L101)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L106)
+Defined in: [src/lib/workspace/types.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L113)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L90)
+Defined in: [src/lib/workspace/types.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L97)
 
 ***
 
@@ -330,7 +330,7 @@ Defined in: [src/lib/workspace/types.ts:90](https://github.com/wenakita/4626/blo
 
 > **WorkspaceApprovalRequest** = `object`
 
-Defined in: [src/lib/workspace/types.ts:209](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L209)
+Defined in: [src/lib/workspace/types.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L216)
 
 #### Properties
 
@@ -338,97 +338,97 @@ Defined in: [src/lib/workspace/types.ts:209](https://github.com/wenakita/4626/bl
 
 > **actionType**: `string`
 
-Defined in: [src/lib/workspace/types.ts:212](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L212)
+Defined in: [src/lib/workspace/types.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L219)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:224](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L224)
+Defined in: [src/lib/workspace/types.ts:231](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L231)
 
 ##### deadlineAt
 
 > **deadlineAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L219)
+Defined in: [src/lib/workspace/types.ts:226](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L226)
 
 ##### decidedAt
 
 > **decidedAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:221](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L221)
+Defined in: [src/lib/workspace/types.ts:228](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L228)
 
 ##### decidedBy
 
 > **decidedBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:220](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L220)
+Defined in: [src/lib/workspace/types.ts:227](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L227)
 
 ##### decisionReason
 
 > **decisionReason**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:222](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L222)
+Defined in: [src/lib/workspace/types.ts:229](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L229)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [src/lib/workspace/types.ts:210](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L210)
+Defined in: [src/lib/workspace/types.ts:217](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L217)
 
 ##### linkedTaskId
 
 > **linkedTaskId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:223](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L223)
+Defined in: [src/lib/workspace/types.ts:230](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L230)
 
 ##### payload
 
 > **payload**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:213](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L213)
+Defined in: [src/lib/workspace/types.ts:220](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L220)
 
 ##### requestedBy
 
 > **requestedBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:217](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L217)
+Defined in: [src/lib/workspace/types.ts:224](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L224)
 
 ##### severity
 
 > **severity**: `string`
 
-Defined in: [src/lib/workspace/types.ts:215](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L215)
+Defined in: [src/lib/workspace/types.ts:222](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L222)
 
 ##### signerAddress
 
 > **signerAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:218](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L218)
+Defined in: [src/lib/workspace/types.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L225)
 
 ##### source
 
 > **source**: `string`
 
-Defined in: [src/lib/workspace/types.ts:214](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L214)
+Defined in: [src/lib/workspace/types.ts:221](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L221)
 
 ##### status
 
 > **status**: `string`
 
-Defined in: [src/lib/workspace/types.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L216)
+Defined in: [src/lib/workspace/types.ts:223](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L223)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L225)
+Defined in: [src/lib/workspace/types.ts:232](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L232)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:211](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L211)
+Defined in: [src/lib/workspace/types.ts:218](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L218)
 
 ***
 
@@ -436,7 +436,7 @@ Defined in: [src/lib/workspace/types.ts:211](https://github.com/wenakita/4626/bl
 
 > **WorkspaceCheck** = `object`
 
-Defined in: [src/lib/workspace/types.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L73)
+Defined in: [src/lib/workspace/types.ts:80](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L80)
 
 #### Properties
 
@@ -444,31 +444,31 @@ Defined in: [src/lib/workspace/types.ts:73](https://github.com/wenakita/4626/blo
 
 > `optional` **details**: `string`
 
-Defined in: [src/lib/workspace/types.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L77)
+Defined in: [src/lib/workspace/types.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L84)
 
 ##### href?
 
 > `optional` **href**: `string`
 
-Defined in: [src/lib/workspace/types.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L78)
+Defined in: [src/lib/workspace/types.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L85)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/workspace/types.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L74)
+Defined in: [src/lib/workspace/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L81)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [src/lib/workspace/types.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L75)
+Defined in: [src/lib/workspace/types.ts:82](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L82)
 
 ##### status
 
 > **status**: [`WorkspaceCheckStatus`](#workspacecheckstatus-1)
 
-Defined in: [src/lib/workspace/types.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L76)
+Defined in: [src/lib/workspace/types.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L83)
 
 ***
 
@@ -476,7 +476,7 @@ Defined in: [src/lib/workspace/types.ts:76](https://github.com/wenakita/4626/blo
 
 > **WorkspaceCheckSection** = `object`
 
-Defined in: [src/lib/workspace/types.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L81)
+Defined in: [src/lib/workspace/types.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L88)
 
 #### Properties
 
@@ -484,25 +484,25 @@ Defined in: [src/lib/workspace/types.ts:81](https://github.com/wenakita/4626/blo
 
 > **checks**: [`WorkspaceCheck`](#workspacecheck)[]
 
-Defined in: [src/lib/workspace/types.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L85)
+Defined in: [src/lib/workspace/types.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L92)
 
 ##### description?
 
 > `optional` **description**: `string`
 
-Defined in: [src/lib/workspace/types.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L84)
+Defined in: [src/lib/workspace/types.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L91)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/workspace/types.ts:82](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L82)
+Defined in: [src/lib/workspace/types.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L89)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/workspace/types.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L83)
+Defined in: [src/lib/workspace/types.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L90)
 
 ***
 
@@ -510,7 +510,7 @@ Defined in: [src/lib/workspace/types.ts:83](https://github.com/wenakita/4626/blo
 
 > **WorkspaceCheckStatus** = `"pass"` \| `"fail"` \| `"warn"` \| `"info"`
 
-Defined in: [src/lib/workspace/types.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L71)
+Defined in: [src/lib/workspace/types.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L78)
 
 ***
 
@@ -518,7 +518,7 @@ Defined in: [src/lib/workspace/types.ts:71](https://github.com/wenakita/4626/blo
 
 > **WorkspaceMonitoringResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L125)
+Defined in: [src/lib/workspace/types.ts:132](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L132)
 
 #### Properties
 
@@ -526,43 +526,43 @@ Defined in: [src/lib/workspace/types.ts:125](https://github.com/wenakita/4626/bl
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:143](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L143)
+Defined in: [src/lib/workspace/types.ts:150](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L150)
 
 ##### alerts
 
 > **alerts**: [`WorkspaceAlertEvent`](#workspacealertevent)[]
 
-Defined in: [src/lib/workspace/types.ts:133](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L133)
+Defined in: [src/lib/workspace/types.ts:140](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L140)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:142](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L142)
+Defined in: [src/lib/workspace/types.ts:149](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L149)
 
 ##### incidents
 
 > **incidents**: [`WorkspaceActivityEvent`](#workspaceactivityevent)[]
 
-Defined in: [src/lib/workspace/types.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L134)
+Defined in: [src/lib/workspace/types.ts:141](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L141)
 
 ##### latestSnapshotId
 
 > **latestSnapshotId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:141](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L141)
+Defined in: [src/lib/workspace/types.ts:148](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L148)
 
 ##### sections
 
 > **sections**: [`WorkspaceCheckSection`](#workspacechecksection)[]
 
-Defined in: [src/lib/workspace/types.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L126)
+Defined in: [src/lib/workspace/types.ts:133](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L133)
 
 ##### summary
 
 > **summary**: `object`
 
-Defined in: [src/lib/workspace/types.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L127)
+Defined in: [src/lib/workspace/types.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L134)
 
 ###### fail
 
@@ -584,7 +584,7 @@ Defined in: [src/lib/workspace/types.ts:127](https://github.com/wenakita/4626/bl
 
 > **trend**: `object`[]
 
-Defined in: [src/lib/workspace/types.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L135)
+Defined in: [src/lib/workspace/types.ts:142](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L142)
 
 ###### fail
 
@@ -608,7 +608,7 @@ Defined in: [src/lib/workspace/types.ts:135](https://github.com/wenakita/4626/bl
 
 > **WorkspaceNotificationPreference** = `object`
 
-Defined in: [src/lib/workspace/types.ts:235](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L235)
+Defined in: [src/lib/workspace/types.ts:242](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L242)
 
 #### Properties
 
@@ -616,55 +616,55 @@ Defined in: [src/lib/workspace/types.ts:235](https://github.com/wenakita/4626/bl
 
 > **channels**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:242](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L242)
+Defined in: [src/lib/workspace/types.ts:249](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L249)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:243](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L243)
+Defined in: [src/lib/workspace/types.ts:250](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L250)
 
 ##### emailEnabled
 
 > **emailEnabled**: `boolean`
 
-Defined in: [src/lib/workspace/types.ts:240](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L240)
+Defined in: [src/lib/workspace/types.ts:247](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L247)
 
 ##### minSeverity
 
 > **minSeverity**: `string`
 
-Defined in: [src/lib/workspace/types.ts:241](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L241)
+Defined in: [src/lib/workspace/types.ts:248](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L248)
 
 ##### principalAddress
 
 > **principalAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:237](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L237)
+Defined in: [src/lib/workspace/types.ts:244](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L244)
 
 ##### telegramEnabled
 
 > **telegramEnabled**: `boolean`
 
-Defined in: [src/lib/workspace/types.ts:238](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L238)
+Defined in: [src/lib/workspace/types.ts:245](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L245)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:244](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L244)
+Defined in: [src/lib/workspace/types.ts:251](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L251)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:236](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L236)
+Defined in: [src/lib/workspace/types.ts:243](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L243)
 
 ##### xmtpEnabled
 
 > **xmtpEnabled**: `boolean`
 
-Defined in: [src/lib/workspace/types.ts:239](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L239)
+Defined in: [src/lib/workspace/types.ts:246](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L246)
 
 ***
 
@@ -680,7 +680,7 @@ Defined in: [src/lib/workspace/types.ts:1](https://github.com/wenakita/4626/blob
 
 > **WorkspaceRoomsResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:164](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L164)
+Defined in: [src/lib/workspace/types.ts:171](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L171)
 
 #### Properties
 
@@ -688,19 +688,19 @@ Defined in: [src/lib/workspace/types.ts:164](https://github.com/wenakita/4626/bl
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:183](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L183)
+Defined in: [src/lib/workspace/types.ts:190](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L190)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:182](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L182)
+Defined in: [src/lib/workspace/types.ts:189](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L189)
 
 ##### telegram
 
 > **telegram**: `object`
 
-Defined in: [src/lib/workspace/types.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L165)
+Defined in: [src/lib/workspace/types.ts:172](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L172)
 
 ###### chatId
 
@@ -738,7 +738,7 @@ Defined in: [src/lib/workspace/types.ts:165](https://github.com/wenakita/4626/bl
 
 > **xmtp**: `object`
 
-Defined in: [src/lib/workspace/types.ts:175](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L175)
+Defined in: [src/lib/workspace/types.ts:182](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L182)
 
 ###### agentAddress
 
@@ -766,7 +766,7 @@ Defined in: [src/lib/workspace/types.ts:175](https://github.com/wenakita/4626/bl
 
 > **WorkspaceSettingsResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:247](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L247)
+Defined in: [src/lib/workspace/types.ts:254](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L254)
 
 #### Properties
 
@@ -774,13 +774,13 @@ Defined in: [src/lib/workspace/types.ts:247](https://github.com/wenakita/4626/bl
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:266](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L266)
+Defined in: [src/lib/workspace/types.ts:275](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L275)
 
 ##### automation
 
 > **automation**: `object`
 
-Defined in: [src/lib/workspace/types.ts:261](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L261)
+Defined in: [src/lib/workspace/types.ts:270](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L270)
 
 ###### enabled
 
@@ -794,23 +794,29 @@ Defined in: [src/lib/workspace/types.ts:261](https://github.com/wenakita/4626/bl
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:265](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L265)
+Defined in: [src/lib/workspace/types.ts:274](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L274)
 
 ##### notificationPreferences
 
 > **notificationPreferences**: [`WorkspaceNotificationPreference`](#workspacenotificationpreference)[]
 
-Defined in: [src/lib/workspace/types.ts:248](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L248)
+Defined in: [src/lib/workspace/types.ts:255](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L255)
 
 ##### strategyTargets
 
 > **strategyTargets**: `object`[]
 
-Defined in: [src/lib/workspace/types.ts:249](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L249)
+Defined in: [src/lib/workspace/types.ts:256](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L256)
 
 ###### createdAt
 
 > **createdAt**: `string`
+
+###### maxAssetsCap
+
+> **maxAssetsCap**: `string` \| `null`
+
+Mirror of on-chain `strategyMaxAssets[strategy]`. uint256 as string; null = unset.
 
 ###### notes
 
@@ -848,7 +854,7 @@ Defined in: [src/lib/workspace/types.ts:249](https://github.com/wenakita/4626/bl
 
 > **thresholds**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:260](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L260)
+Defined in: [src/lib/workspace/types.ts:269](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L269)
 
 ***
 
@@ -864,7 +870,7 @@ Defined in: [src/lib/workspace/types.ts:3](https://github.com/wenakita/4626/blob
 
 > **WorkspaceStrategiesResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L65)
+Defined in: [src/lib/workspace/types.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L72)
 
 #### Properties
 
@@ -872,19 +878,19 @@ Defined in: [src/lib/workspace/types.ts:65](https://github.com/wenakita/4626/blo
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L68)
+Defined in: [src/lib/workspace/types.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L75)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L67)
+Defined in: [src/lib/workspace/types.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L74)
 
 ##### strategies
 
 > **strategies**: [`WorkspaceStrategyRow`](#workspacestrategyrow)[]
 
-Defined in: [src/lib/workspace/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L66)
+Defined in: [src/lib/workspace/types.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L73)
 
 ***
 
@@ -900,13 +906,13 @@ Defined in: [src/lib/workspace/types.ts:50](https://github.com/wenakita/4626/blo
 
 > **asset**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L58)
+Defined in: [src/lib/workspace/types.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L65)
 
 ##### availableActions
 
 > **availableActions**: `string`[]
 
-Defined in: [src/lib/workspace/types.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L62)
+Defined in: [src/lib/workspace/types.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L69)
 
 ##### currentWeightRaw
 
@@ -930,25 +936,36 @@ Defined in: [src/lib/workspace/types.ts:52](https://github.com/wenakita/4626/blo
 
 > **lastRebalanceAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L61)
+Defined in: [src/lib/workspace/types.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L68)
 
 ##### liquidityHint
 
 > **liquidityHint**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L59)
+Defined in: [src/lib/workspace/types.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L66)
+
+##### maxAssetsCap
+
+> **maxAssetsCap**: `string` \| `null`
+
+Defined in: [src/lib/workspace/types.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L63)
+
+Operator-intended on-chain cap (`strategyMaxAssets[strategy]`) as a
+decimal uint256 string. `null` = no cap configured in Supabase yet.
+The on-chain value is authoritative — this is the operator-side mirror
+surfaced by the admin UI for drift detection.
 
 ##### owner
 
 > **owner**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L57)
+Defined in: [src/lib/workspace/types.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L64)
 
 ##### performanceHint
 
 > **performanceHint**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L60)
+Defined in: [src/lib/workspace/types.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L67)
 
 ##### status
 
@@ -1152,7 +1169,7 @@ Defined in: [src/lib/workspace/types.ts:6](https://github.com/wenakita/4626/blob
 
 > **WorkspaceTabId** = `"overview"` \| `"strategies"` \| `"monitoring"` \| `"activity"` \| `"rooms"` \| `"tasks"` \| `"settings"`
 
-Defined in: [src/lib/workspace/types.ts:274](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L274)
+Defined in: [src/lib/workspace/types.ts:283](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L283)
 
 ***
 
@@ -1160,7 +1177,7 @@ Defined in: [src/lib/workspace/types.ts:274](https://github.com/wenakita/4626/bl
 
 > **WorkspaceTaskItem** = `object`
 
-Defined in: [src/lib/workspace/types.ts:186](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L186)
+Defined in: [src/lib/workspace/types.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L193)
 
 #### Properties
 
@@ -1168,121 +1185,121 @@ Defined in: [src/lib/workspace/types.ts:186](https://github.com/wenakita/4626/bl
 
 > **actionPayload**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/workspace/types.ts:195](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L195)
+Defined in: [src/lib/workspace/types.ts:202](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L202)
 
 ##### actionType
 
 > **actionType**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L194)
+Defined in: [src/lib/workspace/types.ts:201](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L201)
 
 ##### assigneeWallet
 
 > **assigneeWallet**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:200](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L200)
+Defined in: [src/lib/workspace/types.ts:207](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L207)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L205)
+Defined in: [src/lib/workspace/types.ts:212](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L212)
 
 ##### createdBy
 
 > **createdBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:203](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L203)
+Defined in: [src/lib/workspace/types.ts:210](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L210)
 
 ##### description
 
 > **description**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:190](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L190)
+Defined in: [src/lib/workspace/types.ts:197](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L197)
 
 ##### dueAt
 
 > **dueAt**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:201](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L201)
+Defined in: [src/lib/workspace/types.ts:208](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L208)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [src/lib/workspace/types.ts:187](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L187)
+Defined in: [src/lib/workspace/types.ts:194](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L194)
 
 ##### relatedAlertId
 
 > **relatedAlertId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:196](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L196)
+Defined in: [src/lib/workspace/types.ts:203](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L203)
 
 ##### relatedApprovalId
 
 > **relatedApprovalId**: `number` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:197](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L197)
+Defined in: [src/lib/workspace/types.ts:204](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L204)
 
 ##### roomRef
 
 > **roomRef**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:198](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L198)
+Defined in: [src/lib/workspace/types.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L205)
 
 ##### severity
 
 > **severity**: [`WorkspaceSeverity`](#workspaceseverity)
 
-Defined in: [src/lib/workspace/types.ts:192](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L192)
+Defined in: [src/lib/workspace/types.ts:199](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L199)
 
 ##### snoozedUntil
 
 > **snoozedUntil**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:202](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L202)
+Defined in: [src/lib/workspace/types.ts:209](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L209)
 
 ##### source
 
 > **source**: `string`
 
-Defined in: [src/lib/workspace/types.ts:191](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L191)
+Defined in: [src/lib/workspace/types.ts:198](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L198)
 
 ##### status
 
 > **status**: `string`
 
-Defined in: [src/lib/workspace/types.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L193)
+Defined in: [src/lib/workspace/types.ts:200](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L200)
 
 ##### threadRef
 
 > **threadRef**: `string` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:199](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L199)
+Defined in: [src/lib/workspace/types.ts:206](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L206)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/workspace/types.ts:189](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L189)
+Defined in: [src/lib/workspace/types.ts:196](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L196)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:206](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L206)
+Defined in: [src/lib/workspace/types.ts:213](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L213)
 
 ##### updatedBy
 
 > **updatedBy**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/workspace/types.ts:204](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L204)
+Defined in: [src/lib/workspace/types.ts:211](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L211)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/workspace/types.ts:188](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L188)
+Defined in: [src/lib/workspace/types.ts:195](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L195)
 
 ***
 
@@ -1290,7 +1307,7 @@ Defined in: [src/lib/workspace/types.ts:188](https://github.com/wenakita/4626/bl
 
 > **WorkspaceTasksResponse** = `object`
 
-Defined in: [src/lib/workspace/types.ts:228](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L228)
+Defined in: [src/lib/workspace/types.ts:235](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L235)
 
 #### Properties
 
@@ -1298,22 +1315,22 @@ Defined in: [src/lib/workspace/types.ts:228](https://github.com/wenakita/4626/bl
 
 > **actorRole**: [`WorkspaceRole`](#workspacerole)
 
-Defined in: [src/lib/workspace/types.ts:232](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L232)
+Defined in: [src/lib/workspace/types.ts:239](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L239)
 
 ##### approvals
 
 > **approvals**: [`WorkspaceApprovalRequest`](#workspaceapprovalrequest)[]
 
-Defined in: [src/lib/workspace/types.ts:230](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L230)
+Defined in: [src/lib/workspace/types.ts:237](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L237)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [src/lib/workspace/types.ts:231](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L231)
+Defined in: [src/lib/workspace/types.ts:238](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L238)
 
 ##### tasks
 
 > **tasks**: [`WorkspaceTaskItem`](#workspacetaskitem)[]
 
-Defined in: [src/lib/workspace/types.ts:229](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L229)
+Defined in: [src/lib/workspace/types.ts:236](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L236)

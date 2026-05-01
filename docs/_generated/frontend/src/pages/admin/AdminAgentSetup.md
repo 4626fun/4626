@@ -24,7 +24,7 @@ Defined in: [src/pages/admin/AdminAgentSetup.tsx:289](https://github.com/wenakit
 
 > **selectAjnaAutomationViewState**(`input`): `object`
 
-Defined in: [src/pages/admin/AdminAgentSetup.tsx:199](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminAgentSetup.tsx#L199)
+Defined in: [src/pages/admin/AdminAgentSetup.tsx:200](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminAgentSetup.tsx#L200)
 
 #### Parameters
 

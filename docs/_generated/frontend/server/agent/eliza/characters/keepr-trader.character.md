@@ -12,7 +12,7 @@
 
 > `const` **keeprTraderCharacter**: `object`
 
-Defined in: [server/agent/eliza/characters/keepr-trader.character.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/characters/keepr-trader.character.ts#L1)
+Defined in: [server/agent/eliza/characters/keepr-trader.character.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/characters/keepr-trader.character.ts#L3)
 
 #### Type Declaration
 
@@ -30,7 +30,7 @@ Defined in: [server/agent/eliza/characters/keepr-trader.character.ts:1](https://
 
 ##### id
 
-> **id**: `string` = `'0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'`
+> **id**: `"0xab6d5c10b03300326cd7fab7267ae192842967b5"` = `TARGET_CANONICAL_CSW_ADDRESS`
 
 ##### name
 

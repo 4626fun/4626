@@ -12,7 +12,7 @@
 
 > **CreatorStrategyFeatureDefinition** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L112)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L113)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:112](https://github.com/wen
 
 > **description**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L120)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L121)
 
 Longer explanation of what the feature does and what provisioning entails.
 
@@ -28,7 +28,7 @@ Longer explanation of what the feature does and what provisioning entails.
 
 > **displayName**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L116)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:117](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L117)
 
 Human-readable name (UI).
 
@@ -36,7 +36,7 @@ Human-readable name (UI).
 
 > **estimatedActivationWindow**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L128)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:129](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L129)
 
 Estimated time from payment to activation (free-form, for UI copy).
 
@@ -44,7 +44,7 @@ Estimated time from payment to activation (free-form, for UI copy).
 
 > **key**: [`CreatorStrategyFeatureKey`](#creatorstrategyfeaturekey)
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L114)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L115)
 
 Stable machine-readable identifier.
 
@@ -52,7 +52,7 @@ Stable machine-readable identifier.
 
 > **priceUsdc**: `bigint`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L122)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L123)
 
 Price in USDC base units (6 decimals).
 
@@ -60,7 +60,7 @@ Price in USDC base units (6 decimals).
 
 > **provisionerTag**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L124)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L125)
 
 Operator-side tag mapping this feature to its runbook / automation.
 
@@ -68,7 +68,7 @@ Operator-side tag mapping this feature to its runbook / automation.
 
 > **requires**: readonly `string`[]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L126)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L127)
 
 Structured list of prerequisites surfaced to the creator before they pay.
 
@@ -76,7 +76,7 @@ Structured list of prerequisites surfaced to the creator before they pay.
 
 > **tagline**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L118)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L119)
 
 One-sentence description (UI).
 
@@ -86,7 +86,7 @@ One-sentence description (UI).
 
 > **CreatorStrategyFeatureDto** = `object`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:396](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L396)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:414](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L414)
 
 Public-safe serialization for the `/api/creator/strategy/features`
 endpoint. Converts `priceUsdc` to a string to avoid bigint JSON issues
@@ -98,61 +98,61 @@ on clients.
 
 > **description**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:400](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L400)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:418](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L418)
 
 ##### displayName
 
 > **displayName**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:398](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L398)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:416](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L416)
 
 ##### estimatedActivationWindow
 
 > **estimatedActivationWindow**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:405](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L405)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:423](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L423)
 
 ##### key
 
 > **key**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:397](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L397)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:415](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L415)
 
 ##### priceUsdc
 
 > **priceUsdc**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:401](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L401)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:419](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L419)
 
 ##### priceUsdcDisplay
 
 > **priceUsdcDisplay**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:402](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L402)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:420](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L420)
 
 ##### provisionerTag
 
 > **provisionerTag**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:403](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L403)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:421](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L421)
 
 ##### requires
 
 > **requires**: readonly `string`[]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:404](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L404)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:422](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L422)
 
 ##### tagline
 
 > **tagline**: `string`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:399](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L399)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:417](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L417)
 
 ***
 
 ### CreatorStrategyFeatureKey
 
-> **CreatorStrategyFeatureKey** = `"charm_active_lp"` \| `"ajna_sleeve"` \| `"solana_bridge_strategy"` \| `"solana_meteora_alpha_vault"` \| `` `deploy_vanity_vault_prefix_len_${DeployVanityLength}` `` \| `` `deploy_vanity_share_suffix_len_${DeployVanityLength}` ``
+> **CreatorStrategyFeatureKey** = `"charm_active_lp"` \| `"ajna_sleeve"` \| `"solana_bridge_strategy"` \| `"solana_ovault_mesh"` \| `"solana_meteora_alpha_vault"` \| `` `deploy_vanity_vault_prefix_len_${DeployVanityLength}` `` \| `` `deploy_vanity_share_suffix_len_${DeployVanityLength}` ``
 
 Defined in: [server/\_lib/creatorStrategy/catalog.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L36)
 
@@ -195,7 +195,7 @@ When adding a feature:
 
 > **DeployVanityFeatureKind** = `"vaultPrefix"` \| `"shareSuffix"`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L46)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L47)
 
 ***
 
@@ -203,7 +203,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:46](https://github.com/wena
 
 > **DeployVanityLength** = *typeof* [`DEPLOY_VANITY_ALLOWED_LENGTHS`](#deploy_vanity_allowed_lengths)\[`number`\]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L45)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L46)
 
 ## Variables
 
@@ -211,7 +211,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:45](https://github.com/wena
 
 > `const` **CREATOR\_STRATEGY\_FEATURE\_CATALOG**: `Record`\<[`CreatorStrategyFeatureKey`](#creatorstrategyfeaturekey), [`CreatorStrategyFeatureDefinition`](#creatorstrategyfeaturedefinition)\>
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L137)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L138)
 
 ***
 
@@ -219,7 +219,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:137](https://github.com/wen
 
 > `const` **DEFAULT\_CREATOR\_STRATEGY\_PRICE\_USDC**: `bigint` = `100_000_000n`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:135](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L135)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:136](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L136)
 
 The default USDC price for a premium feature. Individual features can
 override but keeping them uniform at $100 is the initial product rule.
@@ -230,7 +230,7 @@ override but keeping them uniform at $100 is the initial product rule.
 
 > `const` **DEPLOY\_GATING\_FEATURE\_KEYS**: `object`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L56)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L57)
 
 Feature keys that gate a strategy's inclusion at deploy time. These
 map 1:1 to a `Phase3Params.*WeightBps` field: if the creator has no
@@ -259,7 +259,7 @@ weight-0-skip contract patch to be live; see
 
 > `const` **DEPLOY\_VANITY\_ALLOWED\_LENGTHS**: readonly \[`1`, `2`, `3`, `4`, `5`\]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L44)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L45)
 
 ***
 
@@ -267,7 +267,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:44](https://github.com/wena
 
 > `const` **DEPLOY\_VANITY\_FEATURE\_KEYS\_BY\_KIND\_AND\_LENGTH**: `object`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L67)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L68)
 
 Paid vanity feature keys used by deploy session validation.
 These do not affect Phase-3 strategy weights; they gate vanity
@@ -329,7 +329,7 @@ address customization only.
 
 > `const` **DEPLOY\_VANITY\_PRICE\_USDC\_BY\_LENGTH**: `object`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L84)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L85)
 
 #### Type Declaration
 
@@ -359,7 +359,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:84](https://github.com/wena
 
 > **getCreatorStrategyFeature**(`key`): [`CreatorStrategyFeatureDefinition`](#creatorstrategyfeaturedefinition) \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:380](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L380)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:398](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L398)
 
 Returns a catalog entry, or `null` if the key is not in the catalog.
 Keep nullable so API handlers can fail with a clean 400 instead of
@@ -381,7 +381,7 @@ throwing on unknown keys.
 
 > **getDeployVanityFeatureKey**(`params`): [`CreatorStrategyFeatureKey`](#creatorstrategyfeaturekey) \| `null`
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L92)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L93)
 
 #### Parameters
 
@@ -405,7 +405,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:92](https://github.com/wena
 
 > **listCreatorStrategyFeatures**(): [`CreatorStrategyFeatureDefinition`](#creatorstrategyfeaturedefinition)[]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:387](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L387)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:405](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L405)
 
 #### Returns
 
@@ -417,7 +417,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:387](https://github.com/wen
 
 > **listDeployVanityFeatureKeysAtOrAbove**(`params`): [`CreatorStrategyFeatureKey`](#creatorstrategyfeaturekey)[]
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L101)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L102)
 
 #### Parameters
 
@@ -441,7 +441,7 @@ Defined in: [server/\_lib/creatorStrategy/catalog.ts:101](https://github.com/wen
 
 > **toCreatorStrategyFeatureDto**(`feature`): [`CreatorStrategyFeatureDto`](#creatorstrategyfeaturedto)
 
-Defined in: [server/\_lib/creatorStrategy/catalog.ts:408](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L408)
+Defined in: [server/\_lib/creatorStrategy/catalog.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorStrategy/catalog.ts#L426)
 
 #### Parameters
 

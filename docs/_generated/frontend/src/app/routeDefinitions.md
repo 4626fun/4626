@@ -12,7 +12,7 @@
 
 > **PathRouteDef** = `object`
 
-Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
+Defined in: [src/app/routeDefinitions.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L52)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/b
 
 > **element**: `ReactNode`
 
-Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
+Defined in: [src/app/routeDefinitions.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L52)
 
 ##### path
 
 > **path**: `string`
 
-Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
+Defined in: [src/app/routeDefinitions.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L52)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/b
 
 > `const` **ACCOUNT\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L89)
+Defined in: [src/app/routeDefinitions.tsx:91](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L91)
 
 `/accounts` is the identity + execution-scope surface (canonical CSW,
 signers, sub-account state, advanced owner recovery).
@@ -58,7 +58,7 @@ EOA isn't on the parent CSW owner list.
 
 > `const` **ADMIN\_CHILD\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:175](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L175)
+Defined in: [src/app/routeDefinitions.tsx:189](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L189)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [src/app/routeDefinitions.tsx:175](https://github.com/wenakita/4626/
 
 > `const` **APP\_ACCEPTED\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:131](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L131)
+Defined in: [src/app/routeDefinitions.tsx:137](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L137)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [src/app/routeDefinitions.tsx:131](https://github.com/wenakita/4626/
 
 > `const` **EXPLORE\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:108](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L108)
+Defined in: [src/app/routeDefinitions.tsx:114](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L114)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/app/routeDefinitions.tsx:108](https://github.com/wenakita/4626/
 
 > `const` **MARKETING\_ONLY\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:65](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L65)
+Defined in: [src/app/routeDefinitions.tsx:67](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L67)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [src/app/routeDefinitions.tsx:65](https://github.com/wenakita/4626/b
 
 > **renderPathRoutes**(`routes`, `transformElement?`): `Element`[]
 
-Defined in: [src/app/routeDefinitions.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L52)
+Defined in: [src/app/routeDefinitions.tsx:54](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L54)
 
 #### Parameters
 

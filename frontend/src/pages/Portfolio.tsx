@@ -539,7 +539,9 @@ export function Portfolio() {
   }, [holdings])
 
   const profile = portfolioQuery.data?.profile ?? null
-  const wallets = portfolioQuery.data?.wallets ?? []
+  // Wrap in useMemo so the empty-array fallback doesn't produce a fresh
+  // reference each render and break the downstream useMemo deps below.
+  const wallets = useMemo(() => portfolioQuery.data?.wallets ?? [], [portfolioQuery.data?.wallets])
   const onchainIdentity = portfolioQuery.data?.onchainIdentity ?? null
   const profileFields = profile?.profileFields ?? {}
 
