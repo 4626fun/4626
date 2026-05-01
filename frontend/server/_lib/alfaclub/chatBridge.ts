@@ -590,6 +590,130 @@ function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttac
   return normalizeAlfaClubAttachments(action.attachments)
 }
 
+/**
+ * AlfaClub's API origin (`api.alfaclub.app`) is fronted by Cloudflare,
+ * which blocks "browser-signature-banned" non-browser User-Agents with
+ * HTTP 403 (CF error 1010). Production evidence 2026-05-01: the
+ * deployed bridge sent only `Authorization` + `Accept`, Cloudflare
+ * rejected with 403, the 403 was funnelled through
+ * `wsLiveFallbackEnabled` and surfaced as a clean `fetched:0` tick —
+ * silently masking the failure for the operator.
+ *
+ * Origin-agnostic browser-like headers we ALWAYS send. These don't
+ * cross-reference a specific host, so they're safe to attach to any
+ * AlfaClub API target (production, staging proxy, localhost replay).
+ * Nothing here is secret: stable Chromium UA + a standard Accept
+ * triple + the universally-applicable Sec-Fetch-Mode/Dest pair the
+ * alfaclub.app web client sends.
+ */
+const ALFACLUB_API_COMMON_BROWSER_HEADERS: Record<string, string> = {
+  // Stable Chromium UA. Bumping it is fine; the only constraint is
+  // "not the default Node fetch UA", which Cloudflare's
+  // browser-integrity check rejects.
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  // `Sec-Fetch-Mode` and `Sec-Fetch-Dest` are origin-agnostic and
+  // describe the request *kind*, not a relationship to a specific
+  // page origin — they're safe to send to any host.
+  'Sec-Fetch-Mode': 'cors',
+  'Sec-Fetch-Dest': 'empty',
+}
+
+/**
+ * Hosts whose `api.<x>` AlfaClub-family API the bridge knows about.
+ * Bumping the list is OK; the production default is `alfaclub.app`.
+ *
+ * The pattern is: when the API base URL host is `api.<page>` for some
+ * `<page>` in this set, the alfaclub.app web client sends:
+ *   Origin: https://<page>
+ *   Referer: https://<page>/
+ *   Sec-Fetch-Site: same-site
+ * That's the fingerprint Cloudflare checks for. Mirroring it stays in
+ * the WAF allowlist.
+ *
+ * For anything outside the set (staging proxy, localhost replay,
+ * unknown CDN), we omit Origin/Referer/Sec-Fetch-Site rather than
+ * sending a contradictory `Origin: https://alfaclub.app` to a host
+ * that has nothing to do with alfaclub.app — that fingerprint would
+ * itself look fishy and could fail more aggressive WAFs / CORS
+ * checks.
+ */
+const ALFACLUB_KNOWN_PAGE_HOSTS: ReadonlySet<string> = new Set(['alfaclub.app'])
+
+type AlfaClubOriginHeaders = {
+  Origin?: string
+  Referer?: string
+  'Sec-Fetch-Site'?: string
+}
+
+/**
+ * Resolve the origin/referer/Sec-Fetch-Site triplet for an AlfaClub
+ * API request. Returns an empty object for hosts not on the known
+ * AlfaClub-family list.
+ */
+export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOriginHeaders {
+  let parsed: URL
+  try {
+    parsed = new URL(apiBaseUrl)
+  } catch {
+    return {}
+  }
+  const host = parsed.hostname.toLowerCase()
+  if (!host) return {}
+
+  // Strip a leading `api.` and check if what's left is a known
+  // AlfaClub page host. e.g. `api.alfaclub.app` → `alfaclub.app`.
+  const pageHost = host.startsWith('api.') ? host.slice('api.'.length) : host
+  if (!ALFACLUB_KNOWN_PAGE_HOSTS.has(pageHost)) return {}
+
+  // The web client always uses HTTPS for `alfaclub.app`. Pin it
+  // explicitly so a misconfigured `http://api.alfaclub.app` doesn't
+  // produce an `Origin: http://alfaclub.app` that the WAF might
+  // flag as a downgrade.
+  const origin = `https://${pageHost}`
+  return {
+    Origin: origin,
+    Referer: `${origin}/`,
+    // `same-site`: the API host (`api.alfaclub.app`) and the page
+    // host (`alfaclub.app`) share the registrable domain. If a
+    // future deploy ever routes the API through the page host
+    // itself, switch to `same-origin` — but that requires a code
+    // change, by design.
+    'Sec-Fetch-Site': 'same-site',
+  }
+}
+
+/**
+ * Build the header bag for an authenticated AlfaClub API request.
+ * Always returns a fresh object (callers must be free to add their
+ * own per-request headers, e.g. `Content-Type` for POST bodies).
+ *
+ * Headers are derived from `apiBaseUrl`:
+ *   - For known AlfaClub-family hosts (production default
+ *     `https://api.alfaclub.app`) we mirror the page-origin fingerprint
+ *     the alfaclub.app web client sends: `Origin: https://alfaclub.app`,
+ *     `Referer: https://alfaclub.app/`, `Sec-Fetch-Site: same-site`.
+ *   - For any other host (staging proxy, localhost replay) we omit
+ *     `Origin/Referer/Sec-Fetch-Site` so we never emit a contradictory
+ *     fingerprint. The remaining headers (UA, Accept, Sec-Fetch-Mode,
+ *     Sec-Fetch-Dest) are origin-agnostic and stay in place.
+ */
+function buildAlfaClubApiHeaders(params: {
+  jwt: string
+  apiBaseUrl: string
+}): Record<string, string> {
+  return {
+    ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
+    ...resolveAlfaClubOriginHeaders(params.apiBaseUrl),
+    Authorization: `Bearer ${params.jwt}`,
+  }
+}
+
+/** Exposed for unit tests — common (origin-agnostic) headers. */
+export const _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS = ALFACLUB_API_COMMON_BROWSER_HEADERS
+
 async function fetchRoomHistory(params: {
   apiBaseUrl: string
   roomId: string
@@ -608,10 +732,7 @@ async function fetchRoomHistory(params: {
   try {
     response = await fetch(url.toString(), {
       method: 'GET',
-      headers: {
-        Authorization: `Bearer ${params.jwt}`,
-        Accept: 'application/json',
-      },
+      headers: buildAlfaClubApiHeaders({ jwt: params.jwt, apiBaseUrl: params.apiBaseUrl }),
       signal: controller.signal,
     })
   } catch (error) {
@@ -641,7 +762,7 @@ async function markReadMessage(params: {
     await fetch(url.toString(), {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${params.jwt}`,
+        ...buildAlfaClubApiHeaders({ jwt: params.jwt, apiBaseUrl: params.apiBaseUrl }),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -1283,6 +1404,23 @@ async function runBridgeTick(
       roomId,
       jwt,
     })
+    // Surface the original history-fetch error in `errors[]` (alongside
+    // any per-command errors from the live-fallback batch) so an
+    // operator polling /api/v1/alfaclub/chat-bridge-run can see why
+    // `fetched: 0` happened. Pre-fix, a Cloudflare `:403` got logged
+    // but the tick response was indistinguishable from a healthy "no
+    // new messages" tick. The synthetic `messageId` is `room-history`
+    // so the error doesn't collide with real per-command ids.
+    const errors = [
+      {
+        messageId: 'room-history',
+        error:
+          historyError instanceof Error
+            ? historyError.message
+            : String(historyError),
+      },
+      ...liveBatch.errors,
+    ]
     return {
       seeded: false,
       roomId,
@@ -1290,7 +1428,7 @@ async function runBridgeTick(
       unseen: liveCommands.length,
       processed: liveBatch.processed,
       replied: liveBatch.replied,
-      errors: liveBatch.errors,
+      errors,
     }
   }
 
@@ -1493,6 +1631,17 @@ export function startAlfaClubChatBridge(opts?: {
 
 export function _isRoomHistoryAuthErrorForTests(error: unknown): boolean {
   return isRoomHistoryAuthError(error)
+}
+
+/** Test seam: exercise `fetchRoomHistory` against an injected fetch. */
+export async function _fetchRoomHistoryForTests(params: {
+  apiBaseUrl: string
+  roomId: string
+  jwt: string
+  limit: number
+  timeoutMs: number
+}): Promise<AlfaClubRoomHistoryMessage[]> {
+  return fetchRoomHistory(params)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {

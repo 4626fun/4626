@@ -1,13 +1,17 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from './helpers'
+
 import {
+  _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS,
+  _fetchRoomHistoryForTests,
   _isRoomHistoryAuthErrorForTests,
   _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
   extractAlfaClubWsMessagesForTest,
   readAlfaClubChatBridgeFlags,
+  resolveAlfaClubOriginHeaders,
 } from '../../server/_lib/alfaclub/chatBridge.ts'
 
 describe('readAlfaClubChatBridgeFlags', () => {
@@ -438,5 +442,354 @@ describe('shouldSuppressDeterministicReply', () => {
   it('does NOT suppress empty / whitespace-only / non-string-y inputs', () => {
     expect(_shouldSuppressDeterministicReplyForTests('')).toBe(false)
     expect(_shouldSuppressDeterministicReplyForTests('   ')).toBe(false)
+  })
+})
+
+// AlfaClub's API origin is fronted by Cloudflare's browser-integrity
+// check. A fetch that uses Node's default User-Agent (or only sends
+// Authorization + Accept) is rejected with HTTP 403 / CF error 1010
+// `browser_signature_banned`. The bridge sends a small, fixed bag of
+// browser-like headers — these tests pin that contract.
+describe('fetchRoomHistory — Cloudflare-friendly request shape', () => {
+  type CapturedRequest = {
+    url: string
+    method: string
+    headers: Record<string, string>
+  }
+
+  function installFetchSpy(opts: {
+    status: number
+    body?: unknown
+    captured: CapturedRequest[]
+  }) {
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    const stub = vi.fn(async (input: unknown, init?: { method?: string; headers?: Record<string, string> }) => {
+      const url = typeof input === 'string' ? input : String(input)
+      const headers = (init?.headers ?? {}) as Record<string, string>
+      opts.captured.push({
+        url,
+        method: init?.method ?? 'GET',
+        headers,
+      })
+      const bodyText =
+        typeof opts.body === 'string'
+          ? opts.body
+          : JSON.stringify(opts.body ?? { messages: [] })
+      return new Response(bodyText, {
+        status: opts.status,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    ;(globalThis as { fetch?: typeof fetch }).fetch = stub as unknown as typeof fetch
+    return () => {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('sends User-Agent / Accept / Origin / Referer / Sec-Fetch-* alongside Authorization Bearer', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    expect(captured).toHaveLength(1)
+    const headers = captured[0]?.headers ?? {}
+    // Authorization remains the only credential.
+    expect(headers.Authorization).toBe('Bearer fake-jwt-redacted')
+    // Browser-fingerprint headers — the Cloudflare WAF check.
+    expect(headers['User-Agent']).toMatch(/Mozilla\/5\.0/)
+    expect(headers['User-Agent']).not.toMatch(/node-fetch|undici|axios/i)
+    expect(headers.Accept).toContain('application/json')
+    expect(headers.Origin).toBe('https://alfaclub.app')
+    expect(headers.Referer).toBe('https://alfaclub.app/')
+    expect(headers['Sec-Fetch-Site']).toBe('same-site')
+    expect(headers['Sec-Fetch-Mode']).toBe('cors')
+    expect(headers['Sec-Fetch-Dest']).toBe('empty')
+  })
+
+  it('hits the documented endpoint shape (path + query params)', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    const url = new URL(captured[0]?.url ?? '')
+    expect(url.origin + url.pathname).toBe(
+      'https://api.alfaclub.app/api/websocket/room_history_paginate',
+    )
+    expect(url.searchParams.get('roomId')).toBe('1043')
+    expect(url.searchParams.get('limit')).toBe('20')
+    expect(url.searchParams.get('forward')).toBe('false')
+    expect(captured[0]?.method).toBe('GET')
+  })
+
+  it('THROWS on HTTP 403 (Cloudflare 1010) — does NOT silently coerce to fetched:0', async () => {
+    // Production regression 2026-05-01: a Cloudflare browser-signature
+    // ban returned 403, the bridge funnelled it through wsLiveFallback
+    // and reported `fetched: 0` with NO `errors[]` entry. The fetch
+    // helper must surface the failure so the caller (runBridgeTick)
+    // can record it.
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({
+      status: 403,
+      body: '<html>Cloudflare Error 1010: browser_signature_banned</html>',
+      captured,
+    })
+    try {
+      await expect(
+        _fetchRoomHistoryForTests({
+          apiBaseUrl: 'https://api.alfaclub.app',
+          roomId: '1043',
+          jwt: 'fake-jwt-redacted',
+          limit: 20,
+          timeoutMs: 5_000,
+        }),
+      ).rejects.toThrow('room_history_failed:403')
+    } finally {
+      restore()
+    }
+    expect(captured).toHaveLength(1)
+  })
+
+  it('THROWS on HTTP 401 (auth) and HTTP 5xx (server) too', async () => {
+    for (const status of [401, 500, 502, 503]) {
+      const captured: CapturedRequest[] = []
+      const restore = installFetchSpy({ status, body: 'nope', captured })
+      try {
+        await expect(
+          _fetchRoomHistoryForTests({
+            apiBaseUrl: 'https://api.alfaclub.app',
+            roomId: '1043',
+            jwt: 'fake-jwt-redacted',
+            limit: 20,
+            timeoutMs: 5_000,
+          }),
+        ).rejects.toThrow(`room_history_failed:${status}`)
+      } finally {
+        restore()
+      }
+    }
+  })
+
+  it('returns parsed messages on HTTP 200 with the expected body shape', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({
+      status: 200,
+      body: {
+        messages: [
+          { id: 'a', date: 1700000000000, sender: '0xa', text: '/gmeow' },
+          { id: 'b', date: 1700000010000, sender: '0xb', text: '/hermit setup' },
+        ],
+        nextCursor: null,
+        prevCursor: null,
+      },
+      captured,
+    })
+    try {
+      const result = await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+      expect(result).toHaveLength(2)
+      expect(result[0]?.id).toBe('a')
+    } finally {
+      restore()
+    }
+  })
+
+  it('exports the common (origin-agnostic) browser-headers map with no secrets and a stable key set', () => {
+    // Regression guard so a future refactor doesn't accidentally drop
+    // any of the origin-agnostic headers. Origin / Referer /
+    // Sec-Fetch-Site are NOT in this map — they're derived per-call
+    // from `apiBaseUrl` by `resolveAlfaClubOriginHeaders`. See the
+    // separate "origin-aware headers" describe block below.
+    const keys = Object.keys(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS).sort()
+    expect(keys).toEqual([
+      'Accept',
+      'Accept-Language',
+      'Sec-Fetch-Dest',
+      'Sec-Fetch-Mode',
+      'User-Agent',
+    ])
+    // No `Authorization`/`Cookie`/etc. baked in — those are
+    // per-request only. No host-cross-referencing headers either —
+    // those are derived from `apiBaseUrl`.
+    expect(keys).not.toContain('Authorization')
+    expect(keys).not.toContain('Cookie')
+    expect(keys).not.toContain('Set-Cookie')
+    expect(keys).not.toContain('Origin')
+    expect(keys).not.toContain('Referer')
+    expect(keys).not.toContain('Sec-Fetch-Site')
+    // Sanity: no token-shaped substring in any value.
+    for (const value of Object.values(_ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS)) {
+      expect(value).not.toMatch(/eyJ[A-Za-z0-9_-]{6,}/)
+      expect(value).not.toMatch(/Bearer\s/i)
+    }
+  })
+})
+
+describe('fetchRoomHistory — origin-aware headers (PR #491 Codex review)', () => {
+  type CapturedRequest = {
+    url: string
+    method: string
+    headers: Record<string, string>
+  }
+
+  function installFetchSpy(opts: {
+    status: number
+    body?: unknown
+    captured: CapturedRequest[]
+  }) {
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    const stub = vi.fn(async (input: unknown, init?: { method?: string; headers?: Record<string, string> }) => {
+      const url = typeof input === 'string' ? input : String(input)
+      const headers = (init?.headers ?? {}) as Record<string, string>
+      opts.captured.push({
+        url,
+        method: init?.method ?? 'GET',
+        headers,
+      })
+      const bodyText =
+        typeof opts.body === 'string'
+          ? opts.body
+          : JSON.stringify(opts.body ?? { messages: [] })
+      return new Response(bodyText, {
+        status: opts.status,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+    ;(globalThis as { fetch?: typeof fetch }).fetch = stub as unknown as typeof fetch
+    return () => {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('default production base (https://api.alfaclub.app) preserves Origin/Referer/Sec-Fetch-Site', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+    const headers = captured[0]?.headers ?? {}
+    expect(headers.Origin).toBe('https://alfaclub.app')
+    expect(headers.Referer).toBe('https://alfaclub.app/')
+    expect(headers['Sec-Fetch-Site']).toBe('same-site')
+  })
+
+  it('staging non-AlfaClub base (https://staging-api.example.test) OMITS Origin/Referer/Sec-Fetch-Site', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://staging-api.example.test',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+    const headers = captured[0]?.headers ?? {}
+    expect(headers.Origin).toBeUndefined()
+    expect(headers.Referer).toBeUndefined()
+    expect(headers['Sec-Fetch-Site']).toBeUndefined()
+    // Common headers are still present — those don't cross-reference
+    // a specific origin.
+    expect(headers['User-Agent']).toMatch(/Mozilla\/5\.0/)
+    expect(headers.Accept).toContain('application/json')
+    expect(headers['Sec-Fetch-Mode']).toBe('cors')
+    expect(headers['Sec-Fetch-Dest']).toBe('empty')
+    expect(headers.Authorization).toBe('Bearer fake-jwt-redacted')
+  })
+
+  it('local replay base (http://localhost:3000) OMITS Origin/Referer/Sec-Fetch-Site', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'http://localhost:3000',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+    const headers = captured[0]?.headers ?? {}
+    expect(headers.Origin).toBeUndefined()
+    expect(headers.Referer).toBeUndefined()
+    expect(headers['Sec-Fetch-Site']).toBeUndefined()
+  })
+
+  it('alfaclub-family page host (https://alfaclub.app) keeps the page-origin fingerprint', async () => {
+    // Defensive: if a future deploy ever routes the API directly
+    // through the page host (no `api.` prefix), we still want the
+    // browser-fingerprint headers attached. The known-host check
+    // strips `api.` if present and falls through otherwise.
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy({ status: 200, body: { messages: [] }, captured })
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+    const headers = captured[0]?.headers ?? {}
+    expect(headers.Origin).toBe('https://alfaclub.app')
+    expect(headers.Referer).toBe('https://alfaclub.app/')
+    expect(headers['Sec-Fetch-Site']).toBe('same-site')
+  })
+
+  it('a malformed apiBaseUrl OMITS the origin triplet (and does not throw)', async () => {
+    // The fetch helper still tries to use the URL — `new URL('not a url',
+    // ...)` will throw inside fetch — but the header-derivation step
+    // must not crash before that. We assert this via the unit
+    // `resolveAlfaClubOriginHeaders` call below.
+    expect(resolveAlfaClubOriginHeaders('not a url')).toEqual({})
+    expect(resolveAlfaClubOriginHeaders('')).toEqual({})
   })
 })
