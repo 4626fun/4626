@@ -65,8 +65,17 @@ import {
   markSettled,
   type AmoeReplayProofBlob,
 } from '../../../../server/_lib/lottery/amoeReplayStore.js'
-import { AmoeLedgerSnapshotPgReader } from '../../../../server/_lib/lottery/amoeLedgerSnapshotReader.js'
+import {
+  AmoeBurnRowMissingError,
+  AmoeLedgerSnapshotPgReader,
+  AmoeSnapshotNotYetConfirmedError,
+  type AmoeLedgerSnapshotReader,
+} from '../../../../server/_lib/lottery/amoeLedgerSnapshotReader.js'
 import { getDb } from '../../../../server/_lib/db/postgres.js'
+import {
+  AMOE_EPOCH_GENESIS_SECONDS,
+  AMOE_EPOCH_LENGTH_SECONDS,
+} from '../../../../server/_lib/lottery/amoeWitness.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -358,6 +367,50 @@ async function relayAmoeEntryZkTransaction(params: {
 export interface AmoeSubmitZkHandlerHooks {
   orchestrate?: typeof orchestrateAmoeSubmitZk
   relay?: typeof relayAmoeEntryZkTransaction
+  /**
+   * Test seam for the burn-then-submit reader pre-flight (PR 6b).
+   * When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the handler calls
+   * `reader.readSnapshotForBurn` BEFORE `insertPending`. Tests
+   * inject a stub here so they don't need a live `db.sql` shape.
+   *
+   * When omitted in production, the handler builds a real
+   * `AmoeLedgerSnapshotPgReader` against the configured Postgres pool.
+   */
+  ledgerSnapshotReader?: AmoeLedgerSnapshotReader
+}
+
+/**
+ * Compute the unix timestamp at which a burn that landed in `epoch`
+ * becomes eligible for phase B submission. Equals the START of
+ * `epoch + 1`. Used to populate the `Retry-After` header on a 425
+ * response so clients can back off until the publisher's next tick
+ * has a chance to confirm the snapshot.
+ *
+ * Mirrors the helper in `_amoeBurnCredits.ts` — inlined to avoid a
+ * cross-handler import (the burn-credits handler should not be a
+ * dependency of submit-zk).
+ */
+function computeEligibleSubmitAfterUnixSec(burnEpoch: bigint): bigint {
+  return AMOE_EPOCH_GENESIS_SECONDS + (burnEpoch + 1n) * AMOE_EPOCH_LENGTH_SECONDS
+}
+
+/**
+ * Feature flag — fail closed by default. When `=1`, the handler
+ * REQUIRES that phase A (`/api/v1/lottery/amoe/burn-credits`) ran
+ * first: it pre-flights `readSnapshotForBurn`, skips the
+ * `getAmoeCreditSnapshot` pre-flight, passes the reader to
+ * orchestrate unconditionally (ignoring the legacy
+ * `AMOE_ZK_SNAPSHOT_READER_ENABLED` dial), and skips the trailing
+ * `consumeAmoeCreditsForEntry` debit (already done in phase A).
+ *
+ * When unset, behavior is byte-for-byte identical to the legacy
+ * single-call flow — the trailing debit, the credit pre-flight, and
+ * the `AMOE_ZK_SNAPSHOT_READER_ENABLED` reader dial all stay live.
+ * This lets ops flip the flag staged across environments without a
+ * code rollback.
+ */
+function isBurnThenSubmitRequired(): boolean {
+  return process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED === '1'
 }
 
 let __testHooks: AmoeSubmitZkHandlerHooks = {}
@@ -571,13 +624,117 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     // ----------------------------------------------------------------
-    // 5. Pre-flight balance gate (matches legacy handler — we relay
-    //    first, debit second, but reject under-collateralized entries
-    //    BEFORE doing the expensive prove + on-chain work).
+    // 5. Pre-flight balance gate (legacy single-call flow only).
+    //
+    //    When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the burn already
+    //    happened in phase A (`/api/v1/lottery/amoe/burn-credits`) —
+    //    the credit balance check there is the authoritative gate,
+    //    and the burn row is now persisted in `points`. Re-checking
+    //    here would either be redundant (correct) or, worse, race
+    //    against an unrelated AMOE spend that landed between phase A
+    //    and phase B and report a stale `insufficient_amoe_credits`
+    //    even though the phase A spend is already locked in.
+    //
+    //    The reader pre-flight below catches the only failure mode
+    //    that matters here: "phase A never ran for this spendRefId"
+    //    (→ 409 amoe_burn_not_found).
     // ----------------------------------------------------------------
-    const snapshot = await getAmoeCreditSnapshot({ wallet })
-    if (snapshot.credits < pointsBurned) {
-      throw new AmoeInsufficientCreditsError()
+    if (!isBurnThenSubmitRequired()) {
+      const snapshot = await getAmoeCreditSnapshot({ wallet })
+      if (snapshot.credits < pointsBurned) {
+        throw new AmoeInsufficientCreditsError()
+      }
+    }
+
+    // ----------------------------------------------------------------
+    // 5b. Burn-then-submit reader pre-flight (PR 6b).
+    //
+    //    When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the L1 burn row for
+    //    `(signupId, spendRefId)` was written by phase A and the
+    //    publisher cron has either (a) already confirmed the snapshot
+    //    that contains it (state 3 in `amoe_points_burn_ledger_snapshots`)
+    //    or (b) not yet caught up. Pre-flighting the reader here —
+    //    BEFORE `insertPending` — lets us short-circuit the latter
+    //    case with a typed 425 instead of inserting a `pending` row,
+    //    proving (which the orchestrator would then refuse against
+    //    the dev/staging stub when the reader misses), and writing a
+    //    `prove_failed` audit entry for what is really just a "come
+    //    back after the next epoch boundary" condition.
+    //
+    //    Three outcomes:
+    //      • OK — store the reader on a local var; passed unchanged
+    //        into `orchestrate()` below. The orchestrator's internal
+    //        `readSnapshotForBurn` call hits the same row a second
+    //        time — acceptable cost (one indexed lookup) for keeping
+    //        the witness-build path the canonical path.
+    //      • `AmoeBurnRowMissingError` → 409 `amoe_burn_not_found`
+    //        with a `hint` to call phase A first.
+    //      • `AmoeSnapshotNotYetConfirmedError` → 425 `Too Early`
+    //        with `Retry-After` set from the burn epoch boundary +
+    //        one publisher tick (~15 min, per the `*/15 * * * *`
+    //        cron schedule in `vercel.json`).
+    //
+    //    The reader is injectable via `__testHooks.ledgerSnapshotReader`
+    //    so handler tests can stub the three outcomes without a live
+    //    `db.sql` shape.
+    // ----------------------------------------------------------------
+    let burnThenSubmitReader: AmoeLedgerSnapshotReader | undefined
+    if (isBurnThenSubmitRequired()) {
+      const injected = __testHooks.ledgerSnapshotReader
+      if (injected) {
+        burnThenSubmitReader = injected
+      } else {
+        const db = await getDb()
+        if (!db) {
+          // No DB → reader can't function. Behaves like "snapshot not
+          // confirmed" from the client's perspective, which is the
+          // safest interpretation: fail closed, retry later. Should
+          // only happen in misconfigured environments.
+          return res.status(503).json({
+            success: false,
+            error: 'amoe_ledger_snapshot_unavailable',
+          })
+        }
+        burnThenSubmitReader = new AmoeLedgerSnapshotPgReader(db)
+      }
+      try {
+        await burnThenSubmitReader.readSnapshotForBurn({
+          signupId: BigInt(profileId),
+          spendRefId,
+        })
+      } catch (e) {
+        if (e instanceof AmoeBurnRowMissingError) {
+          return res.status(409).json({
+            success: false,
+            error: 'amoe_burn_not_found',
+            hint: 'call POST /api/v1/lottery/amoe/burn-credits first to debit credits and create the burn row, then retry submit-zk after the next epoch boundary',
+          })
+        }
+        if (e instanceof AmoeSnapshotNotYetConfirmedError) {
+          // Compute when the publisher could plausibly have caught up.
+          // Use `currentEpoch` rather than `epoch` (computed below from
+          // `Date.now()`) since they're equivalent at this point in the
+          // handler — we haven't called `insertPending` yet.
+          const nowSec = BigInt(Math.floor(Date.now() / 1000))
+          const currentEpoch = computeAmoeEpoch(nowSec)
+          const eligibleAtUnixSec = computeEligibleSubmitAfterUnixSec(currentEpoch)
+          // The publisher cron is `*/15 * * * *`, so add a 15-min
+          // buffer past the boundary; clients should poll on this
+          // cadence rather than spinning faster.
+          const retryAfterSeconds = Math.max(
+            60,
+            Number(eligibleAtUnixSec - nowSec) + 15 * 60,
+          )
+          res.setHeader('Retry-After', String(retryAfterSeconds))
+          return res.status(425).json({
+            success: false,
+            error: 'amoe_snapshot_not_yet_confirmed',
+            hint: 'phase A burn not yet confirmed at the L2 publisher; retry after the next epoch boundary plus one publisher tick (~15min)',
+            eligibleSubmitAfterUnixSec: Number(eligibleAtUnixSec),
+          })
+        }
+        throw e
+      }
     }
 
     // ----------------------------------------------------------------
@@ -614,24 +771,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const { wasmPath, zkeyPath } = defaultAmoeZkAssetPaths()
 
-    // PR 5b: production points-burn half of the witness can read from the
-    // published ledger snapshot via `AmoeLedgerSnapshotPgReader`. The
-    // wiring is gated on `AMOE_ZK_SNAPSHOT_READER_ENABLED` (default OFF)
-    // because the current submit handler ordering credits the AMOE entry
-    // (which produces the L1 burn row) AFTER orchestrate() — so a fresh
-    // submission has no `(signup_id, spend_ref_id)` row yet and the
-    // reader would always throw `amoe_ledger_snapshot_unavailable`.
+    // Resolve the points-burn ledger reader for `orchestrate()`.
     //
-    // A future PR will split burn-then-submit into two API calls so the
-    // ledger snapshot for `(signup_id, spend_ref_id)` is durably
-    // confirmed at epoch N-1 before the prover runs. Once that lands,
-    // flip `AMOE_ZK_SNAPSHOT_READER_ENABLED=1` to enable the reader path.
-    // Until then, the orchestrator falls back to the stub snapshot.
+    // Two paths:
+    //
+    //   • Burn-then-submit (`AMOE_BURN_THEN_SUBMIT_REQUIRED=1`):
+    //     the reader was already constructed and exercised by the
+    //     pre-flight in step 5b above. Re-use it so we don't pay
+    //     for two pool checkouts. Skipped when `__testHooks.orchestrate`
+    //     is set (the orchestrate stub doesn't touch the reader).
+    //
+    //   • Legacy single-call flow (flag unset):
+    //     keep the PR 5b dial — the reader is only wired in when
+    //     `AMOE_ZK_SNAPSHOT_READER_ENABLED=1`. In this mode, the L1
+    //     burn row only gets written at the END of this handler
+    //     (step 9 below), so the reader will throw
+    //     `amoe_ledger_snapshot_unavailable` for fresh submissions.
+    //     The dial exists so the reader can be exercised against
+    //     replayed/idempotent submissions on staging without breaking
+    //     fresh ones. Default OFF.
     //
     // Test hooks override `orchestrate`, so they bypass this entirely.
-    let ledgerSnapshotReader: AmoeLedgerSnapshotPgReader | undefined
-    if (
+    let ledgerSnapshotReader: AmoeLedgerSnapshotReader | undefined
+    if (burnThenSubmitReader) {
+      ledgerSnapshotReader = burnThenSubmitReader
+    } else if (
       !__testHooks.orchestrate &&
+      !isBurnThenSubmitRequired() &&
       process.env.AMOE_ZK_SNAPSHOT_READER_ENABLED === '1'
     ) {
       const db = await getDb()
@@ -787,11 +953,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // with the same client-supplied `spendRefId` still dedupes.
     const refId = spendRefId
 
-    const creditSpend = await consumeAmoeCreditsForEntry({
-      wallet,
-      requiredCredits: pointsBurned,
-      refId,
-    })
+    // -------------------------------------------------------------------
+    // Trailing credit debit.
+    //
+    // Legacy mode (flag off): submit-zk owns the burn — call
+    // `consumeAmoeCreditsForEntry` here and surface the resulting
+    // balance fields in the response, byte-identical to pre-PR-6b.
+    //
+    // Flag-on mode (`AMOE_BURN_THEN_SUBMIT_REQUIRED=1`): phase A
+    // (`/amoe/burn-credits`) already wrote the L1 burn row. Doing it
+    // again here would either be a no-op (idempotent ON CONFLICT) or
+    // — worse — write a fresh row under a different `spendRefId` and
+    // double-debit. Skip the call entirely and re-read the current
+    // balance via `getAmoeCreditSnapshot` so the response shape stays
+    // stable for the frontend (`creditsConsumed: 0` because THIS
+    // handler did not consume — phase A already returned the
+    // consumption count to the client).
+    // -------------------------------------------------------------------
+    let creditsConsumed: number
+    let creditsRemaining: number
+    let creditsPerEntry: number
+    let entriesAvailable: number
+    if (!isBurnThenSubmitRequired()) {
+      const creditSpend = await consumeAmoeCreditsForEntry({
+        wallet,
+        requiredCredits: pointsBurned,
+        refId,
+      })
+      creditsConsumed = creditSpend.consumed
+      creditsRemaining = creditSpend.creditsRemaining
+      creditsPerEntry = creditSpend.creditsPerEntry
+      entriesAvailable = creditSpend.entriesAvailable
+    } else {
+      const balance = await getAmoeCreditSnapshot({ wallet })
+      creditsConsumed = 0
+      creditsRemaining = balance.credits
+      creditsPerEntry = balance.creditsPerEntry
+      entriesAvailable = balance.entriesAvailable
+    }
 
     return res.status(200).json({
       success: true,
@@ -802,10 +1001,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         pointsBurned,
         pointsBurnedAsUSD: result.pointsBurnedAsUSD.toString(),
         estimatedWinChancePPM: result.call.estimatedWinChancePPM,
-        creditsConsumed: creditSpend.consumed,
-        creditsRemaining: creditSpend.creditsRemaining,
-        creditsPerEntry: creditSpend.creditsPerEntry,
-        entriesAvailable: creditSpend.entriesAvailable,
+        creditsConsumed,
+        creditsRemaining,
+        creditsPerEntry,
+        entriesAvailable,
         proofMode: 'plonk',
         epoch: result.epoch.toString(),
       },

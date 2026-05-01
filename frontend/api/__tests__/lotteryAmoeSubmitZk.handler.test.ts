@@ -1202,3 +1202,241 @@ describe('rate limiting', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// PR 6b — burn-then-submit phase B (AMOE_BURN_THEN_SUBMIT_REQUIRED=1)
+// ---------------------------------------------------------------------------
+//
+// Behavior under flag-on:
+//   * Skips `getAmoeCreditSnapshot` pre-flight (phase A is authoritative).
+//   * Pre-flights `readSnapshotForBurn` BEFORE `insertPending` and maps:
+//       — `AmoeBurnRowMissingError`           → 409 `amoe_burn_not_found`
+//       — `AmoeSnapshotNotYetConfirmedError`  → 425 `amoe_snapshot_not_yet_confirmed`
+//                                                with `Retry-After` header
+//                                                + `eligibleSubmitAfterUnixSec` body
+//       — db missing                          → 503 `amoe_ledger_snapshot_unavailable`
+//   * Skips trailing `consumeAmoeCreditsForEntry` (phase A debited).
+//     Re-fetches `getAmoeCreditSnapshot` post-relay so the response
+//     payload still carries `creditsRemaining`/`creditsPerEntry`/
+//     `entriesAvailable`; `creditsConsumed` is 0 (this handler did not
+//     consume — phase A returned the consumption count to the client).
+
+function setBurnThenSubmitEnv(): () => void {
+  const prior = process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED
+  process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED = '1'
+  return () => {
+    if (prior === undefined) delete process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED
+    else process.env.AMOE_BURN_THEN_SUBMIT_REQUIRED = prior
+  }
+}
+
+describe('PR 6b — burn-then-submit pre-flight reader', () => {
+  it('returns 409 amoe_burn_not_found when reader throws AmoeBurnRowMissingError', async () => {
+    const restoreSubmit = setEnabledEnv()
+    const restoreBurnFlag = setBurnThenSubmitEnv()
+    try {
+      const { AmoeBurnRowMissingError } = await import(
+        '../../server/_lib/lottery/amoeLedgerSnapshotReader'
+      )
+      const readSnapshotForBurn = vi.fn(
+        async (_args: { signupId: bigint; spendRefId: string }) => {
+          throw new AmoeBurnRowMissingError()
+        },
+      )
+      __setAmoeSubmitZkHandlerHooksForTest({
+        ledgerSnapshotReader: { readSnapshotForBurn } as any,
+      })
+
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({ method: 'POST', body: validBody() })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('amoe_burn_not_found')
+      expect(typeof res.body?.hint).toBe('string')
+      // The pre-flight runs BEFORE `insertPending` and BEFORE the trailing
+      // debit, so neither should fire on this error.
+      expect(insertPendingMock).not.toHaveBeenCalled()
+      expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+      // Reader was called with the parsed signupId (from profileId mock
+      // = PROFILE_ID = 42) and the body's spendRefId.
+      expect(readSnapshotForBurn).toHaveBeenCalledTimes(1)
+      expect(readSnapshotForBurn.mock.calls[0]?.[0]).toEqual({
+        signupId: BigInt(PROFILE_ID),
+        spendRefId: 'idem-2026-04-29-aaaa',
+      })
+    } finally {
+      restoreBurnFlag()
+      restoreSubmit()
+    }
+  })
+
+  it('returns 425 amoe_snapshot_not_yet_confirmed with Retry-After when reader throws AmoeSnapshotNotYetConfirmedError', async () => {
+    const restoreSubmit = setEnabledEnv()
+    const restoreBurnFlag = setBurnThenSubmitEnv()
+    try {
+      const { AmoeSnapshotNotYetConfirmedError } = await import(
+        '../../server/_lib/lottery/amoeLedgerSnapshotReader'
+      )
+      const readSnapshotForBurn = vi.fn(
+        async (_args: { signupId: bigint; spendRefId: string }) => {
+          throw new AmoeSnapshotNotYetConfirmedError()
+        },
+      )
+      __setAmoeSubmitZkHandlerHooksForTest({
+        ledgerSnapshotReader: { readSnapshotForBurn } as any,
+      })
+
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({ method: 'POST', body: validBody() })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(425)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('amoe_snapshot_not_yet_confirmed')
+      expect(typeof res.body?.eligibleSubmitAfterUnixSec).toBe('number')
+      // `Retry-After` is set in seconds and is at least 60 (handler
+      // floors at one minute even if the boundary is closer). The
+      // mock res normalizes header names to lowercase.
+      const retryAfter = res.getHeader('Retry-After')
+      expect(typeof retryAfter).toBe('string')
+      expect(Number(retryAfter)).toBeGreaterThanOrEqual(60)
+      expect(insertPendingMock).not.toHaveBeenCalled()
+      expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+    } finally {
+      restoreBurnFlag()
+      restoreSubmit()
+    }
+  })
+
+  it('returns 503 amoe_ledger_snapshot_unavailable when no reader injected and DB is unconfigured', async () => {
+    const restoreSubmit = setEnabledEnv()
+    const restoreBurnFlag = setBurnThenSubmitEnv()
+    // Defensive: ensure no Postgres URL is leaking from CI env so
+    // `getDb()` resolves to null and the handler hits the 503 branch.
+    const priorDbUrl = process.env.DATABASE_URL
+    const priorPgUrl = process.env.POSTGRES_URL
+    const priorPgUrlNp = process.env.POSTGRES_URL_NON_POOLING
+    delete process.env.DATABASE_URL
+    delete process.env.POSTGRES_URL
+    delete process.env.POSTGRES_URL_NON_POOLING
+    try {
+      // No `ledgerSnapshotReader` injection — forces the handler to
+      // fall through to the `getDb()` branch.
+      __setAmoeSubmitZkHandlerHooksForTest({})
+
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({ method: 'POST', body: validBody() })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('amoe_ledger_snapshot_unavailable')
+      expect(insertPendingMock).not.toHaveBeenCalled()
+      expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+    } finally {
+      if (priorDbUrl !== undefined) process.env.DATABASE_URL = priorDbUrl
+      if (priorPgUrl !== undefined) process.env.POSTGRES_URL = priorPgUrl
+      if (priorPgUrlNp !== undefined) process.env.POSTGRES_URL_NON_POOLING = priorPgUrlNp
+      restoreBurnFlag()
+      restoreSubmit()
+    }
+  })
+})
+
+describe('PR 6b — burn-then-submit happy path', () => {
+  it('returns 200 without calling consumeAmoeCreditsForEntry; re-fetches credit snapshot for response shape', async () => {
+    const restoreSubmit = setEnabledEnv()
+    const restoreBurnFlag = setBurnThenSubmitEnv()
+    try {
+      // Reader resolves — burn row exists and snapshot is confirmed.
+      // Return shape mirrors the orchestrator's expectations; the
+      // handler itself only awaits the call (it doesn't introspect the
+      // result), so the body can stay minimal.
+      const readSnapshotForBurn = vi.fn(
+        async (_args: { signupId: bigint; spendRefId: string }) => ({
+          burn: {
+            signupId: BigInt(PROFILE_ID),
+            spendRefId: 'idem-2026-04-29-aaaa',
+            burnedAt: '2026-04-29T00:00:00.000Z',
+            burnEpoch: 7,
+            amount: 250,
+          },
+        }),
+      )
+      const orchestrate = vi.fn(async () => ({
+        call: {
+          to: '0x000000000000000000000000000000000000abcd' as `0x${string}`,
+          callData: '0xdeadbeef' as `0x${string}`,
+          pointsBurnedAsUSD: '250000000',
+          estimatedWinChancePPM: 1000,
+        },
+        proof: {
+          proof: Array.from({ length: 24 }, () => 1n),
+          pubInputs: Array.from({ length: 8 }, () => 1n),
+        },
+        epoch: 7n,
+        pointsBurnedAsUSD: 250_000_000n,
+        twitterCreditNullifier: 0xdeadbeefcafe1234567890abcdefn,
+      }))
+      const relay = vi.fn(async () => FIXTURE_TX as `0x${string}`)
+
+      // The post-relay balance read replaces the trailing debit's
+      // payload contribution. Returns the wallet's current credit
+      // state — the burn already happened in phase A so credits are
+      // already debited; the snapshot reflects the post-burn balance.
+      getAmoeCreditSnapshotMock.mockResolvedValueOnce({
+        wallet: CANONICAL_WALLET,
+        credits: 750,
+        creditsPerEntry: 100,
+        entriesAvailable: 7,
+        nextEntryAtCredits: 800,
+      })
+
+      __setAmoeSubmitZkHandlerHooksForTest({
+        orchestrate: orchestrate as any,
+        relay: relay as any,
+        ledgerSnapshotReader: { readSnapshotForBurn } as any,
+      })
+
+      const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmitZk')
+      const req = createMockReq({ method: 'POST', body: validBody() })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.proofMode).toBe('plonk')
+      expect(res.body?.data?.txHash).toBe(FIXTURE_TX)
+      expect(res.body?.data?.pointsBurned).toBe(250)
+      // Phase B no longer consumes — `creditsConsumed` is 0.
+      expect(res.body?.data?.creditsConsumed).toBe(0)
+      // Balance fields populated from the post-relay snapshot read.
+      expect(res.body?.data?.creditsRemaining).toBe(750)
+      expect(res.body?.data?.creditsPerEntry).toBe(100)
+      expect(res.body?.data?.entriesAvailable).toBe(7)
+
+      // Critical invariant for PR 6b: trailing debit is gated OFF.
+      // Phase A already wrote the burn row; calling it again here
+      // would either no-op (idempotent) or double-debit under a
+      // mismatched refId. Either way: not allowed.
+      expect(consumeAmoeCreditsForEntryMock).not.toHaveBeenCalled()
+      // Pre-flight reader was called once.
+      expect(readSnapshotForBurn).toHaveBeenCalledTimes(1)
+      // Orchestrator was called and the reader was passed through.
+      expect(orchestrate).toHaveBeenCalledTimes(1)
+      const orchestrateOpts = (orchestrate.mock.calls[0] as unknown[])[1] as Record<
+        string,
+        unknown
+      >
+      expect(orchestrateOpts.ledgerSnapshotReader).toBeDefined()
+    } finally {
+      restoreBurnFlag()
+      restoreSubmit()
+    }
+  })
+})
