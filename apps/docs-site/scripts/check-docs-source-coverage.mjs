@@ -51,6 +51,8 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'sso.md',
   // ZK tooling engineering readme.
   'tools/zk/README.md',
+  // Hermit (Pinata) agent persona/seed files — runtime-loaded prompts, not public docs.
+  'frontend/server/_lib/hermit/seed/**',
 ];
 
 function gitLines(args) {

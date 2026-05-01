@@ -26,6 +26,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  getDb,
 } from '../../../../packages/server-core/src/index.js'
 
 import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
@@ -71,7 +72,6 @@ import {
   AmoeSnapshotNotYetConfirmedError,
   type AmoeLedgerSnapshotReader,
 } from '../../../../server/_lib/lottery/amoeLedgerSnapshotReader.js'
-import { getDb } from '../../../../server/_lib/db/postgres.js'
 import {
   AMOE_EPOCH_GENESIS_SECONDS,
   AMOE_EPOCH_LENGTH_SECONDS,
