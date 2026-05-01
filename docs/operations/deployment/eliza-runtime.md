@@ -87,6 +87,9 @@ Keep the deployment split clean:
 
 ## AlfaClub control path (Vercel cron is canonical)
 
+For the full operational architecture (Vercel ↔ Supabase ↔ Railway ↔ Pinata),
+see [`docs/operations/alfaclub-creative-architecture.md`](../alfaclub-creative-architecture.md).
+
 The AlfaClub chat bridge and Privy token refresher run as **Vercel crons**:
 
 - `POST /api/v1/alfaclub/chat-bridge-run` — bridge tick (CRON_SECRET-gated).

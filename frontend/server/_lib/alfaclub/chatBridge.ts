@@ -1,5 +1,5 @@
 /**
- * AlfaClub Room Chat Bridge
+ * AlfaClub Room Chat Bridge — control plane.
  *
  * Bridges AlfaClub in-app room commands into Keepr's deterministic command
  * executor and posts responses back through AlfaClub's websocket transport.
@@ -8,6 +8,24 @@
  * - Read history: GET /api/websocket/room_history_paginate?roomId=...&limit=...&forward=false
  * - Mark read:   POST /api/websocket/update_read_msg
  * - Send text:   WS frame {"type":"message","value":{"room":"<id>","text":"...","attachments":[]}}
+ *
+ * ## Module boundary (read this before adding imports)
+ *
+ * This file is the AlfaClub control plane. It owns:
+ *   - room history polling + websocket ingest,
+ *   - read-receipt + outbound send,
+ *   - reading the active chat JWT from `chatTokenStore`,
+ *   - dispatching matched slash commands into the deterministic executor.
+ *
+ * It does NOT own:
+ *   - creative reply generation (`/hermit`, `/meme`, `/gmeow`) — those are
+ *     delegated to the Hermit / Pinata creative lane (`hermit/skillRouter.ts`)
+ *     via the deterministic executor's `hermit` family branch. The Pinata
+ *     agent itself runs out-of-process; only its API endpoint + bearer
+ *     are wired here through `HERMIT_PINATA_*` env.
+ *   - Privy session-token rotation — that is the canonical Vercel cron at
+ *     `/api/v1/alfaclub/chat-token-refresh`. The bridge reads the rotated
+ *     `chat_jwt` row but does not write it.
  */
 
 import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'

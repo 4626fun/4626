@@ -40,27 +40,41 @@ and `/gmeow`.
 
 ## Deploying the seed files to the Pinata host
 
-The Pinata-side agent reads files from `/home/node/clawd/workspace/`. When
-the agent is bootstrapped or re-deployed:
+The Pinata-side agent reads files from `/home/node/clawd/workspace/`. This
+repo has no automated deploy hook to that workspace — seed sync is manual.
+Use the helper script:
 
-1. Copy these four files from this repo into the agent workspace:
+```sh
+# Print where each file maps on the Pinata side
+bash frontend/scripts/hermit-seed-sync.sh list
 
-   ```
-   frontend/server/_lib/hermit/seed/SOUL.md     ->  /home/node/clawd/workspace/SOUL.md
-   frontend/server/_lib/hermit/seed/USER.md     ->  /home/node/clawd/workspace/USER.md
-   frontend/server/_lib/hermit/seed/MEMORY.md   ->  /home/node/clawd/workspace/MEMORY.md
-   frontend/server/_lib/hermit/seed/SPANISH.md  ->  /home/node/clawd/workspace/SPANISH.md
-   ```
+# Verify all four files are present + non-empty (suitable for CI)
+bash frontend/scripts/hermit-seed-sync.sh verify-local
 
-2. Confirm `MEMORY.md` exists. The current Pinata transcript shows
+# Show byte size + sha256 of each — paste into the PR description so a
+# reviewer can confirm exactly what is about to be shipped to Pinata.
+bash frontend/scripts/hermit-seed-sync.sh diff-local
+
+# Stage seeds into a directory or tarball for upload to the Pinata UI
+bash frontend/scripts/hermit-seed-sync.sh bundle /tmp/hermit-seed/
+bash frontend/scripts/hermit-seed-sync.sh tar    /tmp/hermit-seed.tar.gz
+```
+
+When the agent is bootstrapped or re-deployed:
+
+1. Run `bundle` or `tar` on a clean checkout of `main`.
+2. Copy each file into `/home/node/clawd/workspace/` on the Pinata host
+   (filenames stay as `SOUL.md`, `USER.md`, `MEMORY.md`, `SPANISH.md`).
+3. Confirm `MEMORY.md` exists. The current Pinata transcript shows
    `MEMORY.md` ENOENT errors — seeding the file once silences them
    permanently. Subsequent corrections should be appended, not rewritten.
-
-3. **Restart Hermit** on Pinata after the workspace is updated so the agent
+4. **Restart Hermit** on Pinata after the workspace is updated so the agent
    re-reads `SOUL.md` and friends. Without a restart, only newly-spawned
    sessions will see the new files.
 
-No env-var or secret rotation is required.
+No env-var or secret rotation is required. Architecture / which host owns
+what is described in
+[`docs/operations/alfaclub-creative-architecture.md`](alfaclub-creative-architecture.md).
 
 ## Verifying after deploy
 
@@ -189,7 +203,8 @@ Verification checklist after each Spanish step:
 
 ## Out of scope
 
-- AlfaClub JWT, session, or auth wiring.
+- AlfaClub JWT, session, or auth wiring. (Owned by Vercel cron — see
+  [`alfaclub-creative-architecture.md`](alfaclub-creative-architecture.md).)
 - Railway / Vercel deployment configs.
 - Production secret rotation.
 - `/gmeow` meme catalogue itself (still served from `memeStore.ts`).

@@ -1,3 +1,22 @@
+/**
+ * Hermit / Pinata creative lane — strict architectural boundary.
+ *
+ * This module owns ONLY creative generation (`/hermit`, `/meme`, `/gmeow`)
+ * by delegating to the Pinata-hosted Open Claw / Hermit agent. It must not:
+ *
+ *   - read or write `alfaclub_runtime_secret` rows (auth state),
+ *   - call `chatTokenStore` helpers,
+ *   - start or trigger the Privy token refresher.
+ *
+ * AlfaClub authentication / Privy session refresh is owned by Vercel cron
+ * (`/api/v1/alfaclub/chat-token-refresh` → `runAlfaClubPrivyRefreshOnce`)
+ * and persisted in Supabase (`alfaclub_runtime_secret`). The chat bridge
+ * (`alfaclub/chatBridge.ts`) reads those rows on every tick. Routing into
+ * this module happens after the bridge has already authenticated.
+ *
+ * If you find yourself adding an import from `../alfaclub/chatTokenStore.js`
+ * here, stop — that belongs in the auth lane, not the creative lane.
+ */
 import { pickRandomHermitMeme } from './memeStore.js'
 import type { HermitExecutionParams, HermitExecutionResult, HermitMediaAttachment } from './types.js'
 import WebSocket from 'ws'
@@ -13,6 +32,15 @@ type PinataGatewayEvent =
   | { type: 'res'; id?: string; ok?: boolean; payload?: Record<string, unknown>; error?: Record<string, unknown> }
 
 const PINATA_GATEWAY_RPC_TIMEOUT_MS = 30_000
+const PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT = 30_000
+
+function readPinataHttpTimeoutMs(): number {
+  const raw = asTrimmed(process.env.HERMIT_PINATA_HTTP_TIMEOUT_MS)
+  if (!raw) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return PINATA_HTTP_FALLBACK_TIMEOUT_MS_DEFAULT
+  return Math.min(Math.max(Math.floor(parsed), 1_000), 120_000)
+}
 
 type HermitDraftMode = 'copy' | 'announce' | 'quest' | 'tone'
 
@@ -324,14 +352,28 @@ async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> 
     return viaGateway?.text ? viaGateway : null
   }
 
-  const res = await fetch(cfg.endpoint, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${cfg.bearer}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prompt }),
-  })
+  // HTTP fallback path. Bound by `HERMIT_PINATA_HTTP_TIMEOUT_MS` so a hung
+  // creative backend cannot stall the AlfaClub chat-bridge tick or leave a
+  // /hermit serverless invocation running until Vercel kills it. On timeout
+  // or any non-2xx, returns null and the caller surfaces a fallback reply.
+  const controller = new AbortController()
+  const timeoutHandle = setTimeout(() => controller.abort(), readPinataHttpTimeoutMs())
+  let res: Response
+  try {
+    res = await fetch(cfg.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${cfg.bearer}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt }),
+      signal: controller.signal,
+    })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
   if (!res.ok) return null
 
   try {

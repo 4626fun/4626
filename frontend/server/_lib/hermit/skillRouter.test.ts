@@ -561,4 +561,59 @@ describe('executeHermitCommand', () => {
       expect(result.reply).not.toContain('```')
     })
   })
+
+  describe('Pinata HTTP fallback timeout', () => {
+    it('passes an AbortSignal when calling the Pinata HTTP endpoint', async () => {
+      restoreEnv = applyEnv({
+        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+        HERMIT_PINATA_HTTP_TIMEOUT_MS: '5000',
+      })
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ text: 'ok' }),
+      } as Response)
+
+      await executeHermitCommand({
+        commandText: '/hermit copy gm',
+        senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+      expect(init?.signal).toBeInstanceOf(AbortSignal)
+    })
+
+    it('falls back gracefully when the HTTP endpoint throws (network/timeout)', async () => {
+      restoreEnv = applyEnv({
+        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      })
+      fetchMock.mockRejectedValueOnce(new Error('network down'))
+
+      await expect(
+        executeHermitCommand({
+          commandText: '/hermit copy gm',
+          senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        }),
+      ).rejects.toThrow('Hermit Pinata path unavailable')
+    })
+
+    it('/gmeow degrades to local meme when the HTTP endpoint throws', async () => {
+      restoreEnv = applyEnv({
+        HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+        HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+      })
+      fetchMock.mockRejectedValueOnce(new Error('network down'))
+
+      const result = await executeHermitCommand({
+        commandText: '/gmeow laugh',
+        senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      })
+
+      expect(result.kind).toBe('gmeow')
+      expect(result.provider).toBe('local')
+      expect(result.reply).toContain('cat laugh')
+    })
+  })
 })
