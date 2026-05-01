@@ -37,6 +37,24 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      manager_address:
+        description: |
+          (Optional) Manager address to probe for the AMOE selector
+          surface. When set, the `manager-amoe-surface-guard` job runs
+          tools/ci/check_manager_amoe_surface.sh against this address
+          and asserts setAuthorizedAmoeRelayer / authorizedAmoeRelayer
+          / processAmoeEntry are all present in deployed bytecode.
+          Use before flipping any AMOE flag in a deploy script.
+        required: false
+        default: ''
+      manager_rpc:
+        description: |
+          (Optional) JSON-RPC endpoint to query. Defaults to Base
+          mainnet (https://mainnet.base.org). Override for testnet
+          or a private endpoint.
+        required: false
+        default: 'https://mainnet.base.org'
 
 permissions:
   contents: read
@@ -51,6 +69,27 @@ jobs:
       - name: Run patch guard
         run: tools/ci/check_amoe_plonk_patch.sh
 
+  manager-amoe-surface-guard:
+    name: Manager AMOE selector-surface guard
+    # Runs only when invoked manually with a manager address. This is a
+    # pre-deploy verification tool — it asserts that a candidate
+    # CreatorLotteryManager address actually carries the three AMOE
+    # selectors (setAuthorizedAmoeRelayer, authorizedAmoeRelayer,
+    # processAmoeEntry) in its deployed bytecode. v1.8.x managers
+    # predate PR #395 and silently lack these selectors; routing AMOE
+    # entries to such a manager produces a deadlock that is invisible
+    # until the first AMOE submission in production.
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.manager_address != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Probe manager AMOE selector surface
+        run: |
+          tools/ci/check_manager_amoe_surface.sh \
+            "${{ github.event.inputs.manager_address }}" \
+            "${{ github.event.inputs.manager_rpc }}"
+
   amoe-plonk-tests:
     name: AmoePlonkVerifier regression tests
     runs-on: ubuntu-latest
@@ -63,7 +102,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
-          version: nightly
+          version: v1.7.0
 
       - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 

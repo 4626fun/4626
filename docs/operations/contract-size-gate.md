@@ -108,6 +108,63 @@ actual compiled size is comfortably under 24 KiB, we defer the split
 to avoid adding scope to the audit-remediation PR. The split will
 happen in Sprint 3 if the size gate fails in CI.
 
+## Manager warn-guard (added v1.10.0 safety-net)
+
+Alongside the EIP-170 hard gate, CI runs a **warn-only** size guard
+specifically for `CreatorLotteryManager.sol`. The script lives at
+`tools/ci/check_manager_size_warn.sh` and is invoked from the
+`build` job in `.github/workflows/test.yml` (with
+`continue-on-error: true`, so it never blocks a merge).
+
+The warn threshold is **24,500 bytes** — exactly **76 bytes** below
+the EIP-170 cap. Rationale:
+
+- The manager has historically lived within ~10–100 bytes of the cap
+  (audit run 2026-04-25 / M-01 saw 24,512 B; the foundry `v1.7.0`
+  toolchain on main currently produces 24,568 B — only **8 bytes**
+  of margin).
+- The hard gate only triggers AFTER overflow, by which point a
+  deploy is already impossible without reverting or splitting the
+  offending PR.
+- 76 B of advance warning is enough to plan a module extraction
+  (the AdminModule pattern from PR #395 is precedent) before the
+  next deploy goes red.
+
+The warn-guard never blocks. It prints a yellow `[WARN]` line into
+the job log and exits 0. The hard gate (`forge build --sizes`)
+remains the sole enforcer.
+
+## Manager AMOE selector-surface guard (added v1.10.0 safety-net)
+
+A companion script — `tools/ci/check_manager_amoe_surface.sh` —
+guards a different failure mode that is **not** about size. Given a
+deployed manager address and an RPC endpoint, it asserts that the
+three AMOE selectors are all present in the deployed runtime
+bytecode:
+
+- `0x565551e4` — `setAuthorizedAmoeRelayer(address,bool)`
+- `0x3d5fec31` — `authorizedAmoeRelayer(address)`
+- `0x17e184b3` — `processAmoeEntry((address,bytes32,bytes32,uint256,uint256))`
+
+v1.8.x managers (e.g. v1.8.3 mainnet at
+`0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`) predate PR #395 and
+lack all three selectors. Pointing the AMOE router at such a
+manager produces a silent deadlock: the router calls
+`processAmoeEntry(...)`, the manager has no handler at that 4-byte
+selector, and the EVM reverts (or falls through to fallback) with
+no actionable error. This guard is the cheap pre-flight check that
+catches the wiring mistake **before** the deploy script flips any
+AMOE flag.
+
+It is wired into `.github/workflows/zk-pipeline-guards.yml` as a
+`workflow_dispatch` job (`manager-amoe-surface-guard`). Inputs:
+
+- `manager_address` — the candidate manager 0x address
+- `manager_rpc` — RPC endpoint (default `https://mainnet.base.org`)
+
+Intended use: run it as the last pre-broadcast checklist item for
+any release that re-wires the AMOE router.
+
 ## References
 
 - EIP-170: https://eips.ethereum.org/EIPS/eip-170
