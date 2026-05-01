@@ -77,6 +77,10 @@ type WriterAnomaly = { isAnomalous: boolean; reason: string | null; writer: stri
 type LastSuccess = {
   at: string
   identityTokenExp: string
+  /** New in the access-token-cliff hardening — optional for older rows. */
+  accessTokenExp?: string | null
+  /** New derived field — minutes from "now" until access-token exp. */
+  minutesUntilAccessExpiry?: number | null
   writer: string
   rotatedRefresh: boolean
   writerAnomaly: WriterAnomaly
@@ -404,6 +408,139 @@ describe('evaluateHealthSnapshot — alert matrix', () => {
       expect(result.ok).toBe(false)
       if (!result.ok) expect(result.reason).toBe('refresh_failed_low_expiry')
     })
+
+    it('also fires when errorCode carries a Privy subcode (privy_refresh_failed:400:missing_or_invalid_token)', () => {
+      // Hardening PR after incident 2026-05-01: the classifier may
+      // append a Privy response code as a third segment. The
+      // wake-oncall match must accept both the legacy bare shape and
+      // the subcoded shape so we keep paging on a credential cliff.
+      const snapshot = healthySnapshot()
+      snapshot.liveChatJwt.minutesUntilExpiry = 25
+      snapshot.lastFailure = {
+        at: '2026-05-01T11:00:00.000Z',
+        status: 'error',
+        errorCode: 'privy_refresh_failed:400:missing_or_invalid_token',
+        detail: '',
+      } as unknown as null
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('refresh_failed_low_expiry')
+    })
+
+    it('also fires for privy_refresh_failed:400:invalid_refresh_token', () => {
+      const snapshot = healthySnapshot()
+      snapshot.liveChatJwt.minutesUntilExpiry = 25
+      snapshot.lastFailure = {
+        at: '2026-05-01T11:00:00.000Z',
+        status: 'error',
+        errorCode: 'privy_refresh_failed:400:invalid_refresh_token',
+        detail: '',
+      } as unknown as null
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('refresh_failed_low_expiry')
+    })
+  })
+
+  // Hardening after incident 2026-05-01: page when the Privy access
+  // token (the bearer the refresher sends to Privy) is near expiry,
+  // even when the live identity token still looks fresh. The
+  // refresher records that exp on lastSuccess.accessTokenExp; the
+  // server-side snapshot derives lastSuccess.minutesUntilAccessExpiry.
+  describe('access_token_expiring_soon — Privy access-token cliff guard', () => {
+    function withAccessExpiry(snapshot: Snapshot, mins: number | null): Snapshot {
+      return {
+        ...snapshot,
+        lastSuccess: {
+          ...snapshot.lastSuccess,
+          minutesUntilAccessExpiry: mins,
+        },
+      }
+    }
+
+    it('fails when minutesUntilAccessExpiry < 20 even with a comfortable identity token', () => {
+      const snapshot = withAccessExpiry(healthySnapshot(), 5)
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('access_token_expiring_soon')
+    })
+
+    it('passes when minutesUntilAccessExpiry equals threshold', () => {
+      const snapshot = withAccessExpiry(healthySnapshot(), 20)
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(true)
+    })
+
+    it('respects custom minExpiryMinutes for access-token expiry too', () => {
+      const snapshot = withAccessExpiry(healthySnapshot(), 25)
+      const result = evaluateHealthSnapshot(
+        { httpStatus: 200, successFlag: true, snapshot },
+        { minExpiryMinutes: 30 },
+      )
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('access_token_expiring_soon')
+    })
+
+    it('null minutesUntilAccessExpiry stays green (older rows pre-date the field)', () => {
+      const snapshot = withAccessExpiry(healthySnapshot(), null)
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      // Strictly: not failing on missing field. Identity-token freshness
+      // and other guards still drive their own alerts.
+      expect(result.ok).toBe(true)
+    })
+
+    it('a negative minutesUntilAccessExpiry (already expired) fails', () => {
+      const snapshot = withAccessExpiry(healthySnapshot(), -10)
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('access_token_expiring_soon')
+    })
+
+    it('refresh_failed_low_expiry takes precedence over access_token_expiring_soon when both apply', () => {
+      // Both conditions are bad-news: a 400 from Privy AND the access
+      // token is already near expiry. The 400 is the louder signal
+      // (almost certainly the cause of the access cliff), so the
+      // monitor should keep its existing wake-oncall reason.
+      const snapshot = withAccessExpiry(healthySnapshot(), 5)
+      snapshot.liveChatJwt.minutesUntilExpiry = 25
+      snapshot.lastFailure = {
+        at: '2026-05-01T11:00:00.000Z',
+        status: 'error',
+        errorCode: 'privy_refresh_failed:400:missing_or_invalid_token',
+        detail: '',
+      } as unknown as null
+      const result = evaluateHealthSnapshot({
+        httpStatus: 200,
+        successFlag: true,
+        snapshot,
+      })
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.reason).toBe('refresh_failed_low_expiry')
+    })
   })
 })
 
@@ -412,10 +549,19 @@ describe('summarizeSnapshot — sanitized output', () => {
     const out = summarizeSnapshot(healthySnapshot())
     expect(out.split('\n')).toHaveLength(1)
     expect(out).toContain('minutesUntilExpiry=60')
+    // New: Privy access-token cliff guard surfaces alongside identity exp.
+    expect(out).toContain('minutesUntilAccessExpiry=null')
     expect(out).toContain('writer=privy-token-refresher')
     expect(out).toContain('anomaly=ok')
     expect(out).toContain('lastSuccess.at=2026-05-01T11:55:00.000Z')
     expect(out).toContain('lastFailure.at=null')
+  })
+
+  it('renders the access-token-exp number when lastSuccess.minutesUntilAccessExpiry is set', () => {
+    const snapshot = healthySnapshot()
+    snapshot.lastSuccess = { ...snapshot.lastSuccess, minutesUntilAccessExpiry: 42 }
+    const out = summarizeSnapshot(snapshot)
+    expect(out).toContain('minutesUntilAccessExpiry=42')
   })
 
   it('encodes anomalous writer with reason', () => {

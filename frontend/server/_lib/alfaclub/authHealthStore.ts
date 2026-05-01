@@ -138,6 +138,19 @@ export function redactTokenMaterial(input: string): string {
 export type RefreshSuccessPayload = {
   at: string
   identityTokenExp: string | null
+  /**
+   * ISO timestamp when the Privy ACCESS token (the bearer the refresher
+   * sends to `https://auth.privy.io/api/v1/sessions`) expires. The
+   * access token has its own ~1h TTL and can age out independently of
+   * the identity token when Privy returns `privy_access_token: null`
+   * for one or more refresh cycles. Surfacing this lets monitors alert
+   * before a Privy 400 `missing_or_invalid_token` cliff (see incident
+   * 2026-05-01).
+   *
+   * `null` when the bundle's access token has no decodable `exp`
+   * claim (defensive — Privy access tokens are JWTs in practice).
+   */
+  accessTokenExp: string | null
   writer: string
   rotatedRefresh: boolean
 }
@@ -153,15 +166,44 @@ export type RefreshFailurePayload = {
 export function buildRefreshSuccessPayload(params: {
   at: string
   identityTokenExpIso: string | null
+  accessTokenExpIso?: string | null
   writer: string
   rotatedRefresh: boolean
 }): RefreshSuccessPayload {
   return {
     at: params.at,
     identityTokenExp: params.identityTokenExpIso,
+    accessTokenExp: params.accessTokenExpIso ?? null,
     writer: params.writer,
     rotatedRefresh: params.rotatedRefresh,
   }
+}
+
+/**
+ * Privy 4xx response codes the refresher is willing to fold into its
+ * error code. Keep this list short and explicit — anything else is
+ * dropped to avoid surfacing untrusted upstream strings on what is
+ * effectively a public-ish error code field.
+ */
+const PRIVY_RECOGNISED_SUBCODES: ReadonlySet<string> = new Set([
+  // Bearer (access token) rejected. The 2026-05-01 incident.
+  'missing_or_invalid_token',
+  // Refresh token revoked / rotated out / never seen.
+  'invalid_refresh_token',
+  // Documented-but-rare for completeness.
+  'invalid_credentials',
+])
+
+function extractPrivyResponseSubcode(tail: string): string | null {
+  if (!tail) return null
+  // The tail is typically the raw JSON body Privy returned, possibly
+  // truncated. We don't `JSON.parse` because the body has been
+  // through `slice(0, 200)` and may be a fragment; a regex is
+  // sufficient and avoids the parse-failure branch.
+  const match = /"code"\s*:\s*"([a-z0-9_]+)"/i.exec(tail)
+  if (!match) return null
+  const candidate = match[1].toLowerCase()
+  return PRIVY_RECOGNISED_SUBCODES.has(candidate) ? candidate : null
 }
 
 /**
@@ -169,6 +211,11 @@ export function buildRefreshSuccessPayload(params: {
  * is safe to persist and surface from the health endpoint. Preserves the
  * fingerprintable `privy_refresh_failed:<status>` prefix when present and
  * truncates everything else through `redactTokenMaterial`.
+ *
+ * When the Privy response body includes a recognised `code` (e.g.
+ * `missing_or_invalid_token`, `invalid_refresh_token`), it is appended
+ * to the error code as a third segment so monitors can distinguish
+ * bearer-vs-refresh rejection without parsing the detail string.
  */
 export function classifyRefreshError(
   rawError: string,
@@ -178,9 +225,27 @@ export function classifyRefreshError(
 
   const privyMatch = /^privy_refresh_failed:([^:]+)/.exec(message)
   if (privyMatch) {
+    const status = privyMatch[1]
     const tail = message.split(':').slice(2).join(':')
+    // Privy 4xx bodies often carry a structured `code` in the JSON
+    // payload (`{"error":"…","code":"missing_or_invalid_token"}`).
+    // Surfacing it on the errorCode lets monitors and operators
+    // distinguish bearer rejection (`missing_or_invalid_token` =
+    // expired/invalid access token) from refresh-token rejection
+    // (`invalid_refresh_token` = revoked/rotated-out refresh token)
+    // without parsing `detail` by hand. We only honor a small allow-
+    // list of codes Privy is documented to emit; anything else falls
+    // back to the bare `privy_refresh_failed:<status>` shape so we
+    // never expose untrusted strings on the public-ish error code.
+    const subcode = extractPrivyResponseSubcode(tail)
+    if (subcode) {
+      return {
+        errorCode: `privy_refresh_failed:${status}:${subcode}`,
+        detail: redactTokenMaterial(tail).slice(0, 200),
+      }
+    }
     return {
-      errorCode: `privy_refresh_failed:${privyMatch[1]}`,
+      errorCode: `privy_refresh_failed:${status}`,
       detail: redactTokenMaterial(tail).slice(0, 200),
     }
   }
@@ -305,7 +370,19 @@ export async function recordRefreshFailure(
 }
 
 export type AlfaClubAuthHealthSnapshot = {
-  lastSuccess: (RefreshSuccessPayload & { writerAnomaly: WriterAnomaly }) | null
+  lastSuccess:
+    | (RefreshSuccessPayload & {
+        writerAnomaly: WriterAnomaly
+        /**
+         * Convenience: minutes from "now" until the access token's
+         * exp. Null when accessTokenExp is unknown. Negative when the
+         * access token has already expired. Monitors should treat
+         * `minutesUntilAccessExpiry < 20` the same as
+         * `minutesUntilExpiry < 20` on the live identity token.
+         */
+        minutesUntilAccessExpiry: number | null
+      })
+    | null
   lastFailure: (RefreshFailurePayload & { writer: string | null }) | null
   /**
    * Snapshot of the chat_jwt row's writer + expiry, so the health endpoint
@@ -354,7 +431,16 @@ export async function readAuthHealthSnapshot(params?: {
   const lastFailurePayload = safeParse<RefreshFailurePayload>(failureRow?.secret_value)
 
   const lastSuccess = lastSuccessPayload
-    ? { ...lastSuccessPayload, writerAnomaly: evaluateWriterAnomaly(lastSuccessPayload.writer) }
+    ? {
+        ...lastSuccessPayload,
+        writerAnomaly: evaluateWriterAnomaly(lastSuccessPayload.writer),
+        minutesUntilAccessExpiry: (() => {
+          const iso = lastSuccessPayload.accessTokenExp ?? null
+          if (!iso) return null
+          const ms = Date.parse(iso)
+          return Number.isFinite(ms) ? Math.floor((ms - now()) / 60_000) : null
+        })(),
+      }
     : null
 
   const lastFailure = lastFailurePayload

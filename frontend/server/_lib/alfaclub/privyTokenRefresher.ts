@@ -426,13 +426,38 @@ export async function runAlfaClubPrivyRefreshOnce(
   }
 
   if (!opts.force) {
-    // We base "is a refresh due?" on the IDENTITY token's exp, not the access
-    // token's. Both are minted simultaneously and share the same 1h TTL in
-    // practice, but the identity token is the one that governs our bridge's
-    // user-visible 401 cliff.
-    const expMs = decodeTokenExpMs(identityToken)
-    if (expMs !== null) {
-      const msUntilExpiry = expMs - now()
+    // "Is a refresh due?" is gated on the IDENTITY token first.
+    //
+    // Identity is the credential the AlfaClub bridge actually consumes
+    // on every tick — if it cannot be decoded (missing, corrupt, or
+    // not a JWT shape), the bridge is already serving on something
+    // it can't validate, and self-healing means refreshing immediately.
+    // The access-token-cliff hardening below is an additional gate on
+    // top of the identity gate, NOT a replacement for it.
+    //
+    // Decision matrix:
+    //   identity exp decodable?
+    //     no  → force refresh (skip the gate entirely; missing/corrupt
+    //           identity is what we're refreshing for).
+    //     yes → take MIN(identityExp, accessExp) when access is also
+    //           decodable; otherwise fall back to identityExp alone
+    //           (pre-#486 behaviour for opaque access tokens).
+    //
+    // The MIN-of-two case is the access-token cliff hardening from
+    // PR #486: Privy can return `privy_access_token: null` for one or
+    // more cycles ("we kept the existing credential alive"), in which
+    // case the access token's own ~1h clock keeps ticking even when
+    // identity is rotating every cycle. If we only gated on identity,
+    // the next refresh tick that lands inside identity's near-expiry
+    // window could find the access token already expired and Privy
+    // would reject the bearer with HTTP 400 `missing_or_invalid_token`
+    // (incident 2026-05-01).
+    const identityExpMs = decodeTokenExpMs(identityToken)
+    if (identityExpMs !== null) {
+      const accessExpMs = decodeTokenExpMs(accessToken)
+      const minExpMs =
+        accessExpMs !== null ? Math.min(identityExpMs, accessExpMs) : identityExpMs
+      const msUntilExpiry = minExpMs - now()
       if (msUntilExpiry > resolved.nearExpiryWindowMs) {
         return { status: 'not_due', msUntilDue: msUntilExpiry - resolved.nearExpiryWindowMs }
       }
@@ -449,14 +474,18 @@ export async function runAlfaClubPrivyRefreshOnce(
       refreshToken: refreshToken as string,
     })
     const newExp = decodeTokenExpMs(bundle.identityToken)
+    const newAccessExp = decodeTokenExpMs(bundle.accessToken)
     log.info('[alfaclub-refresher] identity token refreshed', {
       newIdentityExp: newExp ? new Date(newExp).toISOString() : null,
+      newAccessExp: newAccessExp ? new Date(newAccessExp).toISOString() : null,
       rotated: bundle.refreshToken !== refreshToken,
+      rotatedAccess: bundle.accessToken !== accessToken,
     })
     await recordSuccess(
       buildRefreshSuccessPayload({
         at: new Date(now()).toISOString(),
         identityTokenExpIso: newExp ? new Date(newExp).toISOString() : null,
+        accessTokenExpIso: newAccessExp ? new Date(newAccessExp).toISOString() : null,
         writer: 'privy-token-refresher',
         rotatedRefresh: bundle.refreshToken !== refreshToken,
       }),

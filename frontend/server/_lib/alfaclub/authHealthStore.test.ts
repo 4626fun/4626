@@ -121,6 +121,59 @@ describe('classifyRefreshError', () => {
     expect(result.detail).toContain('random network glitch')
   })
 
+  describe('Privy 4xx subcode extraction', () => {
+    it('extracts missing_or_invalid_token (bearer rejected — incident 2026-05-01)', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:400:{"error":"Invalid auth token","code":"missing_or_invalid_token"}',
+      )
+      expect(result.errorCode).toBe(
+        'privy_refresh_failed:400:missing_or_invalid_token',
+      )
+      expect(result.detail).toContain('Invalid auth token')
+    })
+
+    it('extracts invalid_refresh_token (refresh-token revocation)', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:400:{"error":"Refresh token rotated out","code":"invalid_refresh_token"}',
+      )
+      expect(result.errorCode).toBe(
+        'privy_refresh_failed:400:invalid_refresh_token',
+      )
+    })
+
+    it('preserves bare prefix when Privy body has no recognised code', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:400:{"error":"Invalid auth token"}',
+      )
+      expect(result.errorCode).toBe('privy_refresh_failed:400')
+    })
+
+    it('drops unrecognised code values to avoid surfacing untrusted strings', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:400:{"code":"shenanigans"}',
+      )
+      expect(result.errorCode).toBe('privy_refresh_failed:400')
+    })
+
+    it('handles non-400 statuses with subcodes too (defensive)', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:401:{"error":"x","code":"missing_or_invalid_token"}',
+      )
+      expect(result.errorCode).toBe(
+        'privy_refresh_failed:401:missing_or_invalid_token',
+      )
+    })
+
+    it('matches the JSON code regardless of whitespace and case', () => {
+      const result = classifyRefreshError(
+        'privy_refresh_failed:400:{"code"   :   "Missing_Or_Invalid_Token"}',
+      )
+      expect(result.errorCode).toBe(
+        'privy_refresh_failed:400:missing_or_invalid_token',
+      )
+    })
+  })
+
   it('treats empty/whitespace input as unknown with empty detail', () => {
     expect(classifyRefreshError('').errorCode).toBe('unknown')
     expect(classifyRefreshError('').detail).toBe('')
@@ -136,19 +189,33 @@ describe('classifyRefreshError', () => {
 })
 
 describe('buildRefreshSuccessPayload / buildRefreshFailurePayload', () => {
-  it('success payload carries timestamp, exp, writer, rotation flag', () => {
+  it('success payload carries timestamp, identity exp, access exp, writer, rotation flag', () => {
     const out = buildRefreshSuccessPayload({
       at: '2026-05-01T12:00:00.000Z',
       identityTokenExpIso: '2026-05-01T13:00:00.000Z',
+      accessTokenExpIso: '2026-05-01T13:00:00.000Z',
       writer: 'privy-token-refresher',
       rotatedRefresh: true,
     })
     expect(out).toEqual({
       at: '2026-05-01T12:00:00.000Z',
       identityTokenExp: '2026-05-01T13:00:00.000Z',
+      accessTokenExp: '2026-05-01T13:00:00.000Z',
       writer: 'privy-token-refresher',
       rotatedRefresh: true,
     })
+  })
+
+  it('success payload defaults accessTokenExp to null when caller omits it', () => {
+    // Backwards-compat for any caller that still uses the pre-cliff
+    // signature; the field is optional in `buildRefreshSuccessPayload`.
+    const out = buildRefreshSuccessPayload({
+      at: '2026-05-01T12:00:00.000Z',
+      identityTokenExpIso: '2026-05-01T13:00:00.000Z',
+      writer: 'privy-token-refresher',
+      rotatedRefresh: false,
+    })
+    expect(out.accessTokenExp).toBeNull()
   })
 
   it('failure payload classifies error code', () => {

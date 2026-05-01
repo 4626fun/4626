@@ -251,8 +251,15 @@ export async function fetchHealth(params) {
  *   - response_not_success          JSON did not include success:true.
  *   - missing_live_chat_jwt         data.liveChatJwt is missing/null.
  *   - expiring_soon                 minutesUntilExpiry < threshold.
- *   - refresh_failed_low_expiry     lastFailure.errorCode === 'privy_refresh_failed:400'
- *                                   AND minutesUntilExpiry < 30. The runbook's
+ *   - access_token_expiring_soon    lastSuccess.minutesUntilAccessExpiry < threshold.
+ *                                   The Privy access token (bearer the refresher
+ *                                   sends) has its own ~1h TTL that ages
+ *                                   independently when Privy returns
+ *                                   `privy_access_token: null` across cycles.
+ *                                   Hardening PR after incident 2026-05-01.
+ *   - refresh_failed_low_expiry     lastFailure.errorCode starts with
+ *                                   'privy_refresh_failed:400' AND
+ *                                   minutesUntilExpiry < 30. The runbook's
  *                                   "wake oncall" condition: a 400 from Privy means
  *                                   the refresh tokens may be revoked and a fresh
  *                                   triplet is needed before expiry. Fires even when
@@ -261,6 +268,8 @@ export async function fetchHealth(params) {
  *                                   alone misses the case where one good refresh
  *                                   landed after the 400 but the underlying
  *                                   credential rot will recur on the next attempt.
+ *                                   Matches subcoded variants too (e.g.
+ *                                   ':missing_or_invalid_token', ':invalid_refresh_token').
  *   - writer_anomaly                liveChatJwt.writerAnomaly.isAnomalous.
  *   - missing_last_success          data.lastSuccess missing/null.
  *   - failure_after_success         lastFailure.at newer than lastSuccess.at.
@@ -307,11 +316,19 @@ export function evaluateHealthSnapshot(probe, opts = {}) {
   // will fail again — so we must page before mins falls below the
   // generic <20m threshold. Checked before `expiring_soon` so the more
   // specific reason wins when both apply.
+  //
+  // The errorCode shape was tightened in the access-token-cliff
+  // hardening PR: when Privy's response body carries a recognised
+  // `code`, the classifier appends it as a third segment
+  // (e.g. `privy_refresh_failed:400:missing_or_invalid_token`). Match
+  // by `startsWith('privy_refresh_failed:400')` so both the legacy
+  // (no subcode) and new (subcode) shapes trigger the alert.
   const lastFailure = snapshot.lastFailure
   if (
     lastFailure &&
     typeof lastFailure === 'object' &&
-    lastFailure.errorCode === 'privy_refresh_failed:400' &&
+    typeof lastFailure.errorCode === 'string' &&
+    lastFailure.errorCode.startsWith('privy_refresh_failed:400') &&
     mins < refreshFailedLowExpiryMinutes
   ) {
     return { ok: false, reason: 'refresh_failed_low_expiry' }
@@ -321,11 +338,27 @@ export function evaluateHealthSnapshot(probe, opts = {}) {
     return { ok: false, reason: 'expiring_soon' }
   }
 
+  // Access-token cliff guard. Privy may keep `privy_access_token: null`
+  // across multiple refresh cycles, in which case the bearer the
+  // refresher sends to Privy ages independently of the identity token
+  // and eventually crosses its own ~1h TTL. We surface that risk via
+  // `lastSuccess.minutesUntilAccessExpiry`. Page on the same
+  // `<minExpiryMinutes>` threshold as the identity-token case.
+  // Null is acceptable here (older lastSuccess rows pre-date the field
+  // and we can't fail closed without false-positiving against
+  // historical data); a real cliff produces a finite negative number.
+  const lastSuccess = snapshot.lastSuccess
+  if (lastSuccess && typeof lastSuccess === 'object') {
+    const accMins = lastSuccess.minutesUntilAccessExpiry
+    if (typeof accMins === 'number' && accMins < minExpiryMinutes) {
+      return { ok: false, reason: 'access_token_expiring_soon' }
+    }
+  }
+
   if (live.writerAnomaly && live.writerAnomaly.isAnomalous === true) {
     return { ok: false, reason: 'writer_anomaly' }
   }
 
-  const lastSuccess = snapshot.lastSuccess
   if (!lastSuccess || typeof lastSuccess !== 'object' || !lastSuccess.at) {
     return { ok: false, reason: 'missing_last_success' }
   }
@@ -367,11 +400,16 @@ export function summarizeSnapshot(snapshot) {
     : 'ok'
   const minutes =
     typeof live?.minutesUntilExpiry === 'number' ? String(live.minutesUntilExpiry) : 'null'
+  const accessMinutes =
+    typeof lastSuccess?.minutesUntilAccessExpiry === 'number'
+      ? String(lastSuccess.minutesUntilAccessExpiry)
+      : 'null'
   const successAt = String(lastSuccess?.at ?? 'null')
   const failureAt = String(lastFailure?.at ?? 'null')
 
   return [
     `minutesUntilExpiry=${minutes}`,
+    `minutesUntilAccessExpiry=${accessMinutes}`,
     `writer=${redact(writer).slice(0, 60)}`,
     `anomaly=${redact(anomaly).slice(0, 60)}`,
     `lastSuccess.at=${successAt}`,

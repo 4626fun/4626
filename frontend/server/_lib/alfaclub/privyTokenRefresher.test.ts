@@ -887,4 +887,327 @@ describe('runAlfaClubPrivyRefreshOnce health recording', () => {
     // Refresh outcome must be unaffected.
     expect(outcome.status).toBe('refreshed')
   })
+
+  it('records accessTokenExp on the success payload alongside identityTokenExp', async () => {
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
+    const newIdentityExp = NOW_MS / 1000 + 60 * 60
+    const newAccessExp = NOW_MS / 1000 + 60 * 60
+
+    await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: jwtWithExp(newAccessExp),
+        identityToken: jwtWithExp(newIdentityExp),
+        refreshToken: 'rt-new',
+      }),
+      writeBundle: async () => {},
+      recordSuccess,
+      recordFailure: async () => true,
+      log: silentLog(),
+      now,
+    })
+
+    expect(recordSuccess.mock.calls[0]?.[0]).toMatchObject({
+      identityTokenExp: new Date(newIdentityExp * 1000).toISOString(),
+      accessTokenExp: new Date(newAccessExp * 1000).toISOString(),
+    })
+  })
+
+  it('records accessTokenExp:null when Privy returns a non-JWT access token (defensive)', async () => {
+    const recordSuccess = vi.fn(async (_payload: Record<string, unknown>) => true)
+    await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-not-a-jwt',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+      writeBundle: async () => {},
+      recordSuccess,
+      recordFailure: async () => true,
+      log: silentLog(),
+      now,
+    })
+    expect(recordSuccess.mock.calls[0]?.[0]?.accessTokenExp).toBeNull()
+  })
+})
+
+describe('runAlfaClubPrivyRefreshOnce — access-token cliff (incident 2026-05-01)', () => {
+  // Production incident root cause: Privy returned `privy_access_token: null`
+  // for one or more refresh cycles. The refresher kept the inbound access
+  // token verbatim and rotated only identity. The next tick (at the
+  // identity-token's near-expiry window) found the access token already
+  // past its own ~1h TTL → Privy rejected the bearer with
+  // HTTP 400 missing_or_invalid_token.
+  //
+  // The hardening: take MIN(identityExp, accessExp) when deciding "is a
+  // refresh due?". These tests pin that behaviour.
+  const NOW_MS = 1_800_000_000_000
+  const now = () => NOW_MS
+
+  it('forces a refresh when access token is near expiry even if identity token is comfortable', async () => {
+    const refresh = vi.fn(
+      async (): Promise<PrivyRefreshBundle> => ({
+        accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60), // fresh
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+    )
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      // Identity has 50 min left — well outside the 20 min near-expiry window.
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+      // Access token has only 5 min left — INSIDE the window.
+      readAccessToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      readRefreshToken: async () => 'rt-old',
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not skip when access token has already expired (negative msUntilExpiry)', async () => {
+    const refresh = vi.fn(
+      async (): Promise<PrivyRefreshBundle> => ({
+        accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+    )
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+      // Access expired 5 min ago — Privy will reject the bearer.
+      // The refresh-due gate must NOT skip and let the bridge cliff.
+      readAccessToken: async () => jwtWithExp(NOW_MS / 1000 - 5 * 60),
+      readRefreshToken: async () => 'rt-old',
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('still skips when both identity AND access have ample lifetime', async () => {
+    const refresh = vi.fn(async () => ({
+      accessToken: 'never',
+      identityToken: 'never',
+      refreshToken: 'never',
+    }))
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+      readAccessToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+      readRefreshToken: async () => 'rt-old',
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+    expect(outcome.status).toBe('not_due')
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('multi-pass simulation: after several non-rotated cycles the access cliff drives refresh', async () => {
+    // Walk through what happens when Privy keeps returning
+    // `privy_access_token: null` for several cycles. Each cycle keeps
+    // identity rotating but leaves the access token untouched. Once
+    // the access token's own clock crosses the near-expiry window,
+    // the next tick MUST go to Privy rather than skipping as `not_due`.
+
+    // Cycle 1: tokens are fresh. The only inputs that matter are the
+    // exps; we use the same JWT for both access and identity, both
+    // valid for 60 min.
+    const accessTokenJwt = jwtWithExp(NOW_MS / 1000 + 60 * 60)
+    let identityJwt = jwtWithExp(NOW_MS / 1000 + 60 * 60)
+
+    // Privy stub: rotates identity each call but returns the same
+    // access (i.e. caller will keep the inbound) by handing the
+    // bundle back with `accessToken === inbound`. We only run the
+    // gate path here, so the stub is just a passthrough that bumps
+    // identity exp.
+    const refresh = vi.fn(
+      async (params: { accessToken: string; refreshToken: string }) => ({
+        accessToken: params.accessToken, // unrotated
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: params.refreshToken,
+      }),
+    )
+
+    // Tick at +25 min relative to the original mint. Identity rotated
+    // every cycle, so identity is still 60 min out from now. Access
+    // is now 35 min from its original exp — outside the 20 min window
+    // — so we expect not_due.
+    let nowMs = NOW_MS + 25 * 60 * 1000
+    const t1 = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => accessTokenJwt,
+      readRefreshToken: async () => 'rt',
+      readIdentityToken: async () => identityJwt,
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now: () => nowMs,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+    expect(t1.status).toBe('not_due')
+
+    // Tick at +45 min from original mint. Access is now 15 min from
+    // its original exp — INSIDE the 20 min window. Identity is still
+    // fresh (rotated last call). The cliff guard MUST force refresh
+    // here even though identity says we have plenty of time.
+    nowMs = NOW_MS + 45 * 60 * 1000
+    identityJwt = jwtWithExp(nowMs / 1000 + 60 * 60) // fresh identity
+    const t2 = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => accessTokenJwt,
+      readRefreshToken: async () => 'rt',
+      readIdentityToken: async () => identityJwt,
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now: () => nowMs,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+    expect(t2.status).toBe('refreshed')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls through to refresh when neither identity nor access has a decodable exp', async () => {
+    // Defensive: rather than running on stale credentials silently,
+    // a non-decodable identity AND access pair forces a Privy hit.
+    const refresh = vi.fn(async () => ({
+      accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+      identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+      refreshToken: 'rt-new',
+    }))
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'not-a-jwt',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => 'not-a-jwt',
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+    expect(outcome.status).toBe('refreshed')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets identity drive the decision when access token has no decodable exp', async () => {
+    // Backwards-compat for setups where access token is opaque.
+    const refresh = vi.fn(async () => ({
+      accessToken: 'never-called',
+      identityToken: 'never',
+      refreshToken: 'never',
+    }))
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-opaque',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+      refresh,
+      writeBundle: async () => {},
+      log: silentLog(),
+      now,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    })
+    expect(outcome.status).toBe('not_due')
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  // Review feedback on PR #486: a non-decodable identity token must
+  // always force a refresh. Identity is the credential the AlfaClub
+  // bridge actually consumes on every tick; if we can't decode it,
+  // the bridge is already serving on something it can't validate, and
+  // self-healing means refreshing immediately. The access-token
+  // hardening is an ADDITIONAL gate on top of the identity gate, not
+  // a replacement.
+  describe('identity-first invariant (PR #486 review)', () => {
+    it('forces a refresh when identity token has no decodable exp, regardless of access freshness', async () => {
+      const refresh = vi.fn(async () => ({
+        accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }))
+      // Access has 50 min left — well outside the near-expiry window.
+      // Pre-fix, the gate would have skipped here because the access
+      // dimension said "we have time"; identity was treated as "no
+      // information". After the fix, a non-decodable identity always
+      // forces refresh.
+      const outcome = await runAlfaClubPrivyRefreshOnce({
+        readAccessToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+        readRefreshToken: async () => 'rt-old',
+        readIdentityToken: async () => 'not-a-jwt',
+        refresh,
+        writeBundle: async () => {},
+        log: silentLog(),
+        now,
+        nearExpiryWindowMs: 20 * 60 * 1000,
+      })
+      expect(outcome.status).toBe('refreshed')
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('forces a refresh when identity is empty string (corrupt) and access is fresh', async () => {
+      const refresh = vi.fn(async () => ({
+        accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }))
+      const outcome = await runAlfaClubPrivyRefreshOnce({
+        readAccessToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+        readRefreshToken: async () => 'rt-old',
+        readIdentityToken: async () => '',
+        refresh,
+        writeBundle: async () => {},
+        log: silentLog(),
+        now,
+        nearExpiryWindowMs: 20 * 60 * 1000,
+      })
+      expect(outcome.status).toBe('refreshed')
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+
+    it('forces a refresh when identity has no exp claim but access does', async () => {
+      // JWT shape but no `exp` payload — `decodeTokenExpMs` returns
+      // null. Same identity-first contract: refresh now, do not lean
+      // on the access dimension to skip.
+      const noExpJwt = (() => {
+        const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
+          'base64url',
+        )
+        const payload = Buffer.from(JSON.stringify({ sub: 'no-exp' })).toString('base64url')
+        return `${header}.${payload}.sig`
+      })()
+      const refresh = vi.fn(async () => ({
+        accessToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }))
+      const outcome = await runAlfaClubPrivyRefreshOnce({
+        readAccessToken: async () => jwtWithExp(NOW_MS / 1000 + 50 * 60),
+        readRefreshToken: async () => 'rt-old',
+        readIdentityToken: async () => noExpJwt,
+        refresh,
+        writeBundle: async () => {},
+        log: silentLog(),
+        now,
+        nearExpiryWindowMs: 20 * 60 * 1000,
+      })
+      expect(outcome.status).toBe('refreshed')
+      expect(refresh).toHaveBeenCalledTimes(1)
+    })
+  })
 })

@@ -96,15 +96,41 @@ shared `CRON_SECRET`.
 | --- | --- |
 | `liveChatJwt.minutesUntilExpiry < 20` | Page — refresh probably stalled. |
 | `liveChatJwt.minutesUntilExpiry < 5` | Wake oncall. |
+| `lastSuccess.minutesUntilAccessExpiry < 20` | Page — Privy access-token cliff (added after incident 2026-05-01; the bearer the refresher sends to Privy has its own ~1h TTL that ages independently when Privy returns `privy_access_token: null`). |
 | `liveChatJwt.writerAnomaly.isAnomalous === true` | Page — a non-canonical writer overwrote the slot. |
 | `lastFailure.at > lastSuccess.at` (newer failure than success) | Page. |
-| `lastFailure.errorCode === "privy_refresh_failed:400"` AND `liveChatJwt.minutesUntilExpiry < 30` | Wake oncall — refresh tokens may be revoked, fresh triplet needed. |
+| `lastFailure.errorCode` starts with `"privy_refresh_failed:400"` AND `liveChatJwt.minutesUntilExpiry < 30` | Wake oncall — refresh tokens may be revoked, fresh triplet needed. Matches subcoded variants too (`:missing_or_invalid_token` ⇒ bearer rejected; `:invalid_refresh_token` ⇒ refresh-token revoked). |
 | `lastFailure.errorCode === "token_persistence_failed"` | Investigate RLS / role grants on `alfaclub_runtime_secret`. |
 
 The endpoint never returns the raw `chat_jwt`; only the
 `expires_at` / `updated_by` metadata is included. The
 `writerAnomaly.writer` field is lowercased and may be a 0x-prefixed
 admin wallet — that is by design (admin endpoint stamps it).
+
+### Why the access-token cliff is its own row
+
+The refresher hits Privy's `POST /api/v1/sessions` with two credentials:
+
+- `Authorization: Bearer ${accessToken}` — the **access token** from
+  `chat_privy_access_token`.
+- body `{ refresh_token: ${refreshToken} }` — the refresh token from
+  `chat_privy_refresh_token`.
+
+Privy returns `privy_access_token: null` ("we kept the existing
+credential alive") on a non-trivial fraction of calls. When that
+happens, the refresher reuses the inbound access token verbatim and
+only rotates identity. The **access token's own ~1h TTL keeps
+ticking**: after a few cycles the bearer ages out even though
+identity has been rotated every cycle. The next call to Privy then
+fails with HTTP 400 and `code: missing_or_invalid_token` (the bearer
+is the credential being rejected, not the refresh token).
+
+The refresher's "is a refresh due?" gate now uses
+`MIN(identityTokenExp, accessTokenExp)` so an aging access token
+triggers a refresh before it crosses its own cliff. The
+`lastSuccess.accessTokenExp` row captures the exp on every successful
+pass, and the snapshot's `lastSuccess.minutesUntilAccessExpiry` is
+the alert signal monitors should page on.
 
 ### Health row internals
 
@@ -113,8 +139,8 @@ the refresher writes after each pass:
 
 | Row | Meaning | Written by |
 | --- | --- | --- |
-| `chat_auth_health:last_success` | `{ at, identityTokenExp, writer, rotatedRefresh }` JSON. | `privy-token-refresher` after a successful refresh. |
-| `chat_auth_health:last_failure` | `{ at, status, errorCode, detail }` JSON. `errorCode` is one of `privy_refresh_failed:<status>`, `token_persistence_failed`, `refresher_disabled`, or `unknown`. `detail` is short and redacted (no token material). | `privy-token-refresher` on `error` or `missing_tokens` outcomes. |
+| `chat_auth_health:last_success` | `{ at, identityTokenExp, accessTokenExp, writer, rotatedRefresh }` JSON. `accessTokenExp` is the Privy access token's exp (when it can be decoded); the snapshot endpoint also derives `minutesUntilAccessExpiry` so monitors can alert on the access-token cliff before it bites. | `privy-token-refresher` after a successful refresh. |
+| `chat_auth_health:last_failure` | `{ at, status, errorCode, detail }` JSON. `errorCode` is one of `privy_refresh_failed:<status>[:<subcode>]`, `token_persistence_failed`, `refresher_disabled`, or `unknown`. When Privy's response body carries a recognised `code` (`missing_or_invalid_token`, `invalid_refresh_token`, `invalid_credentials`), it is appended as the third segment so monitors can distinguish bearer-rejection from refresh-token-revocation. `detail` is short and redacted (no token material). | `privy-token-refresher` on `error` or `missing_tokens` outcomes. |
 
 The rows live in the same table as the tokens (RLS deny-all already
 enforced), so no schema migration was required for this PR. A future
@@ -176,18 +202,19 @@ API on failure). The script's stderr line is structured for grep so
 those downstream consumers can route on `<reason>`:
 
 ```
-alfaclub-auth-health: FAIL <reason> minutesUntilExpiry=<n> writer=<…> anomaly=<…> lastSuccess.at=<…> lastFailure.at=<…>
+alfaclub-auth-health: FAIL <reason> minutesUntilExpiry=<n> minutesUntilAccessExpiry=<n> writer=<…> anomaly=<…> lastSuccess.at=<…> lastFailure.at=<…>
 ```
 
 `<reason>` is one of: `http_status_<code>`, `response_not_success`,
 `missing_data`, `missing_live_chat_jwt`, `expiring_soon`,
-`refresh_failed_low_expiry`, `writer_anomaly`, `missing_last_success`,
-`failure_after_success`, `fetch_error`. The thresholds match the
+`access_token_expiring_soon`, `refresh_failed_low_expiry`,
+`writer_anomaly`, `missing_last_success`, `failure_after_success`,
+`fetch_error`. The thresholds match the
 [Recommended monitoring thresholds](#recommended-monitoring-thresholds)
-table above; `expiring_soon` defaults to 20 minutes (override via
-`ALFACLUB_HEALTH_MIN_EXPIRY_MINUTES`) and the wake-oncall
-`refresh_failed_low_expiry` defaults to 30 minutes (override via
-`ALFACLUB_HEALTH_REFRESH_FAILED_LOW_EXPIRY_MINUTES`).
+table above; `expiring_soon` and `access_token_expiring_soon`
+default to 20 minutes (override via `ALFACLUB_HEALTH_MIN_EXPIRY_MINUTES`)
+and the wake-oncall `refresh_failed_low_expiry` defaults to 30
+minutes (override via `ALFACLUB_HEALTH_REFRESH_FAILED_LOW_EXPIRY_MINUTES`).
 
 ### Running the monitor locally
 
