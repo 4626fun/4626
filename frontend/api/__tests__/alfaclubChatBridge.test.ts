@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { applyEnv } from './helpers'
 import {
   _isRoomHistoryAuthErrorForTests,
+  _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
   extractAlfaClubWsMessagesForTest,
@@ -391,5 +392,51 @@ describe('isRoomHistoryAuthError', () => {
   it('handles non-Error values', () => {
     expect(_isRoomHistoryAuthErrorForTests('room_history_failed:403')).toBe(true)
     expect(_isRoomHistoryAuthErrorForTests(null)).toBe(false)
+  })
+})
+
+// Defense-in-depth filter added after a 2026-05-01 incident: a stale
+// build of this bridge running in parallel with the canonical Vercel
+// cron emitted "Hermit access denied." into AlfaClub room 1043 as a
+// `keepr4626bot` reply. Under current main, PR #467's
+// `isAlfaClubChatId` short-circuit prevents that string from ever
+// being produced for an AlfaClub chatId; this filter is a leaf-level
+// belt-and-suspenders so the user never sees it even when the
+// surrounding stack is misconfigured.
+describe('shouldSuppressDeterministicReply', () => {
+  it('suppresses the canonical "Hermit access denied." string', () => {
+    expect(_shouldSuppressDeterministicReplyForTests('Hermit access denied.')).toBe(true)
+  })
+
+  it('also suppresses the no-period variant (defensive)', () => {
+    expect(_shouldSuppressDeterministicReplyForTests('Hermit access denied')).toBe(true)
+  })
+
+  it('is case-insensitive and trims whitespace', () => {
+    expect(_shouldSuppressDeterministicReplyForTests('  HERMIT ACCESS DENIED.  ')).toBe(true)
+    expect(_shouldSuppressDeterministicReplyForTests('hermit access denied.')).toBe(true)
+  })
+
+  it('does NOT suppress unrelated bridge replies', () => {
+    expect(_shouldSuppressDeterministicReplyForTests('No response generated.')).toBe(false)
+    expect(_shouldSuppressDeterministicReplyForTests('gmeow')).toBe(false)
+    expect(_shouldSuppressDeterministicReplyForTests('Hermit drafts room-ready copy.')).toBe(false)
+    expect(_shouldSuppressDeterministicReplyForTests('Want me to remember your style?')).toBe(false)
+  })
+
+  it('does NOT suppress a Hermit reply that merely *mentions* "access denied" inside a longer message', () => {
+    // Boundary: only the EXACT trimmed/lower string is suppressed.
+    // A future Hermit creative reply that quotes the phrase in a
+    // sentence should still go through.
+    expect(
+      _shouldSuppressDeterministicReplyForTests(
+        'Hermit access denied is the historical bug we fixed in PR #467.',
+      ),
+    ).toBe(false)
+  })
+
+  it('does NOT suppress empty / whitespace-only / non-string-y inputs', () => {
+    expect(_shouldSuppressDeterministicReplyForTests('')).toBe(false)
+    expect(_shouldSuppressDeterministicReplyForTests('   ')).toBe(false)
   })
 })

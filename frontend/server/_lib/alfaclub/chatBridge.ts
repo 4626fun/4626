@@ -333,6 +333,40 @@ function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boo
   return rawText.trim().toLowerCase() === 'gmeow'
 }
 
+/**
+ * Outbound reply texts the bridge MUST NOT send back into an AlfaClub
+ * room. Today's only entry is the deterministic-executor's
+ * `'Hermit access denied.'` access-denied string from
+ * `frontend/server/commands/execute.ts`. Under current main, that
+ * string cannot reach this code path for an AlfaClub chatId — the
+ * `isAlfaClubChatId` short-circuit added in PR #467 prevents it. We
+ * still match defensively because a stale build of this bridge
+ * (Railway image pre-#467) running against the same room reaches
+ * this code path with the deny string in `responseText` and posts it
+ * back as a `keepr4626bot` reply. Suppressing here means the user
+ * never sees a misleading "Hermit access denied." even when the
+ * surrounding stack is misconfigured — the canonical Vercel-cron
+ * bridge keeps serving normally on its next tick.
+ *
+ * Match is exact-trim + lowercase to be tolerant of upstream
+ * formatting drift (e.g. trailing whitespace, casing). The list is
+ * intentionally tiny; broader heuristics belong in the executor,
+ * not this leaf.
+ */
+const SUPPRESSED_BRIDGE_REPLY_TEXTS: ReadonlySet<string> = new Set([
+  'hermit access denied.',
+  'hermit access denied',
+])
+
+function shouldSuppressDeterministicReply(responseText: string): boolean {
+  const normalized = responseText.trim().toLowerCase()
+  if (!normalized) return false
+  return SUPPRESSED_BRIDGE_REPLY_TEXTS.has(normalized)
+}
+
+/** Exposed for unit tests. */
+export const _shouldSuppressDeterministicReplyForTests = shouldSuppressDeterministicReply
+
 export function collectAlfaClubCommandMessages(params: {
   messages: AlfaClubRoomHistoryMessage[]
   seenMessageIds: ReadonlySet<string>
@@ -1091,6 +1125,28 @@ async function executeCommandBatch(params: {
       })
       const responseText = String(result.responseText ?? '').trim()
       if (!responseText) continue
+      // Defense-in-depth: under PR #467 a slash command from any room
+      // sender cannot land in the deterministic executor's
+      // `isHermitUserAllowed` deny branch (the AlfaClub-chatId
+      // short-circuit gates the family). But if a stale build of
+      // this bridge runs against room 1043 (Railway picked up an
+      // old image after PR #467 merged on Vercel), or a future
+      // refactor re-tightens the gate, the deny string can leak
+      // into chat as a `keepr4626bot` reply. Drop it here so the
+      // user never sees it — the bridge will simply not respond,
+      // and the Vercel-canonical bridge keeps serving normally.
+      if (shouldSuppressDeterministicReply(responseText)) {
+        logger.warn('[alfaclub-chat] suppressed_deterministic_reply', {
+          roomId: params.roomId,
+          messageId: command.id,
+          sender: command.sender,
+          // The reply text is a fixed catalog string in this branch,
+          // safe to log; we do NOT log the original command body to
+          // keep the log surface tight.
+          replyHead: responseText.slice(0, 64),
+        })
+        continue
+      }
       const attachments = extractAlfaClubActionAttachments(result.action)
       await sendRoomMessageViaWebSocket({
         websocketUrl: params.flags.websocketUrl,

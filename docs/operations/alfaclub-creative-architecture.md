@@ -64,6 +64,20 @@ relays. **Does not** run the AlfaClub Privy refresher in-process: the
 that flag, a Railway redeploy cannot race the Vercel cron for the `chat_jwt`
 slot. Bridge polling is independently gated by `ALFACLUB_CHAT_BRIDGE_ENABLED`.
 
+> **Operational invariant — leave both AlfaClub flags UNSET on
+> Railway.** The Vercel cron is canonical. If Railway also has
+> `ALFACLUB_CHAT_BRIDGE_ENABLED=true`, two bridges poll the same room
+> in parallel and both attempt to reply through the same
+> `keepr4626bot` identity. When the Railway image is older than
+> Vercel (a stale redeploy), the Railway bridge can post replies
+> from a code path Vercel has since fixed — for example a 2026-05-01
+> incident where a stale Railway pre-#467 build emitted "Hermit
+> access denied." into AlfaClub room 1043 in response to a normal
+> `/gmeow` from a non-allowlisted sender. The Vercel bridge served
+> the same command correctly on the same tick. Resolution: unset
+> `ALFACLUB_CHAT_BRIDGE_ENABLED` on Railway and let Vercel be the
+> only writer.
+
 Recovery, drift symptoms, and operator playbook live in
 [`docs/operations/deployment/eliza-runtime.md` § "AlfaClub control path"](deployment/eliza-runtime.md).
 
