@@ -176,6 +176,7 @@ const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const UNIVERSAL_CREATE2_FACTORY = addr('4e59b44847b379578588920cA78FbF26c0B4956C')
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  '0x004684670d284ef607e1b2424fcf8ccbda8ef828',
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
   '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
@@ -5067,7 +5068,8 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
         )
       })()
-      const supportsSplitPhase1WithSalt = supportsSplitPhase1WithSaltSelectors
+      const supportsSplitPhase1WithSalt =
+        supportsSplitPhase1WithSaltSelectors && !splitPhase1SaltOverrideDisabled
       if (strictNoEoaEnforced) {
         const requiresShareSaltOverride = Boolean(expectedShareOftSaltOverride)
         const saltOverrideRequiredButUnavailable =
@@ -5177,6 +5179,9 @@ function DeployVaultBatcher({
           const coreDone = vaultDeployed && wrapperDeployed
           let saltEnabled = supportsSplitPhase1WithSalt
           let shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
+          if (splitPhase1SaltOverrideDisabled && supportsSplitPhase1NoSalt) {
+            saltEnabled = false
+          }
           if (splitPhase1SaltOverrideDisabled && shareOftSaltOverride !== ZERO_BYTES32) {
             logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; forcing zero override for split phase1 calls', {
               batcher: batcherAddress,
