@@ -1,10 +1,10 @@
 {
-  "release": "v1.10.0",
+  "release": "v1.10.1",
   "generatedAt": "2026-05-01T16:20:22Z",
   "chain": "base",
   "chainId": 8453,
   "git": {
-    "branch": "release/v1.10.0-prep",
+    "branch": "release/v1.10.1-prep",
     "commit": "0fbae166b2628dde86c7d2dff7d0e11636ecdeb3"
   },
   "toolchain": {
@@ -14,7 +14,7 @@
     "viaIR": true
   },
   "hashMethod": "cast keccak over forge inspect <path>:<name> deployedBytecode; local forge v1.7.0 rejects the deployedBytecodeHash inspect field named in the runbook.",
-  "scopeNote": "Pre-broadcast manifest for the fresh v1.10.0 Base release proof set: phase-1 shared/deterministic infra plus CreatorLotteryManager, phase-2 AMOE verifier/router, and the two core seeded creator-stack bytecodes most exposed to last-minute swaps.",
+  "scopeNote": "Pre-broadcast manifest for the fresh v1.10.1 Base release proof set: phase-1 shared/deterministic infra plus CreatorLotteryManager, phase-2 AMOE verifier/router, and the two core seeded creator-stack bytecodes most exposed to last-minute swaps.",
   "contracts": [
     {
       "name": "CreatorRegistry",

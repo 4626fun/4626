@@ -1,9 +1,11 @@
-# v1.10.0 Base mainnet redeploy — full stack with AMOE wiring
+# v1.10.1 Base mainnet redeploy — full stack with AMOE wiring
 
 ## 0. Context (read before doing anything)
 
-You are running the **first `.0` mainnet release** of the wenakita/4626
-protocol. The on-chain situation today is:
+You are running the **v1.10.1 restart** of the wenakita/4626 Base mainnet
+redeploy. The earlier v1.10.0 packet was abandoned before a completed
+broadcast, so v1.10.1 is the new release target for this run. The on-chain
+situation today is:
 
 - **Two managers exist on Base mainnet, both predate PR #395.** The
   v1.8.3 canonical manager `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`
@@ -34,11 +36,12 @@ protocol. The on-chain situation today is:
   Privy CSW EOA `0x6C0E…f9b3`** and never received production
   wiring. They remain abandoned.
 
-What we are doing in v1.10.0 (decisions already locked in):
+What we are doing in v1.10.1 (decisions already locked in):
 
-- **Strict semver, first `.0` of the line.** We deliberately skip v1.9.3 /
-  v1.9.4 / v1.10.1. Note this in `releases/index.md` so the convention
-  shift is documented.
+- **Strict semver restart.** v1.10.0 was the intended first `.0` of the line,
+  but this clean restart advances the observable redeploy packet to v1.10.1
+  instead of reusing the abandoned tag. Note this in `releases/index.md` so
+  the convention and restart are documented.
 - **Full stack redeploy** — all 17 production contracts +
   `AmoePlonkVerifier` + `LotteryAmoeRouter` + a fresh
   `CreatorLotteryManager` built from current `main` HEAD (which
@@ -57,12 +60,12 @@ What we are doing in v1.10.0 (decisions already locked in):
 - **The existing replacement router / verifier / both pre-#395
   managers / abandoned router are all orphaned.** We do NOT migrate
   or reconfigure any of them. Cold storage only. The full orphan
-  list (5 addresses) goes into the v1.10.0 release notes with a
+  list (5 addresses) goes into the v1.10.1 release notes with a
   `# DO NOT WIRE` stamp on each.
 - **Sole approver model.** You (the user) accept risk on the unaudited
   PR #395–#400 deltas; no separate sign-off required.
 
-What we are **not** doing in v1.10.0:
+What we are **not** doing in v1.10.1:
 
 - Flipping any `AMOE_*_ENABLED` Vercel flag.
 - Calling `manager.setAuthorizedAmoeRelayer(<router>)`. That is the
@@ -87,7 +90,7 @@ not improvise.
   `--reset-author` on amend.
 - **Stage exclusion** — every `git add` in this session must use:
   `git add -A -- frontend/ supabase/ docs/ script/ contracts/ tools/ ':!lib/liquidity-launcher'`
-  (the submodule has dirty drift unrelated to v1.10.0).
+  (the submodule has dirty drift unrelated to v1.10.1).
 - **Never modify `contracts/utilities/lottery/CreatorLotteryManager.sol`.**
   If the size warn-guard fires above 24,500 B, stop and escalate — do
   not delete code to fit.
@@ -119,7 +122,7 @@ Stop and confirm each of these. Print the result of every check.
 6. **Manager size warn-guard passes locally:**
    `tools/ci/check_manager_size_warn.sh` — must report `[ok]` or
    `[WARN]` and exit 0. If it exits 1 the manager is over the EIP-170
-   cap and v1.10.0 cannot deploy.
+   cap and v1.10.1 cannot deploy.
 7. **AmoePlonkVerifier patch guard passes locally:**
    `tools/ci/check_amoe_plonk_patch.sh` — must exit 0.
 8. **Build clean:** `forge clean && forge build --skip test --sizes`.
@@ -147,8 +150,8 @@ later diff against deployed bytecode to prove no last-minute swap.
    - deployedBytecode hash (`forge inspect <path>:<name> deployedBytecodeHash`)
    - runtime size in bytes
 3. Write the result to
-   `docs/operations/deployment/releases/v1.10.0-bytecode-manifest.json`.
-4. Commit on a fresh branch `release/v1.10.0-prep` (do not push yet).
+   `docs/operations/deployment/releases/v1.10.1-bytecode-manifest.json`.
+4. Commit on a fresh branch `release/v1.10.1-prep` (do not push yet).
 
 ### CHECKPOINT 1 — manifest review
 Show me the JSON. Wait for "go".
@@ -157,7 +160,7 @@ Show me the JSON. Wait for "go".
 
 ## 4. Pre-broadcast checklist doc (release-packet item 2)
 
-Create `docs/operations/deployment/releases/v1.10.0-pre-broadcast-checklist.md`
+Create `docs/operations/deployment/releases/v1.10.1-pre-broadcast-checklist.md`
 modelled on `v1.8.1-pre-broadcast-checklist.md`. It must enumerate, in
 order, every step in this prompt that mutates on-chain or production
 state, with a check box per item, plus:
@@ -183,10 +186,10 @@ state, with a check box per item, plus:
 - a documented **baseline negative test** entry: the same script
   must be run against BOTH `0xd593…1357` and `0x3F7AfD…b0C3` and
   exit 1 with all 3 selectors reported missing. This goes into the
-  release notes as proof that the v1.10.0 manager is the only Base-
+  release notes as proof that the v1.10.1 manager is the only Base-
   mainnet manager carrying the AMOE surface.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 2 — checklist review
 Show me the rendered markdown. Wait for "go".
@@ -204,11 +207,11 @@ no skip-vanity branch.
    sequential `0x01..0x11`, whichever the existing salt-resolver
    already supports — read the script first; do NOT add new salt
    logic).
-3. Bump default `DEPLOYMENT_EPOCH_TAG` to `v1.10.0`.
+3. Bump default `DEPLOYMENT_EPOCH_TAG` to `v1.10.1`.
 4. Document the flag in a fresh top-of-file comment block; do not
    change semantics of the existing 2-step `infra-then-phased` flow.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 3 — script diff review
 Show me `git diff script/deploy-base-full-release.sh`. Wait for "go".
@@ -217,7 +220,7 @@ Show me `git diff script/deploy-base-full-release.sh`. Wait for "go".
 
 ## 6. Release-notes skeleton (release-packet item 4)
 
-Create `docs/operations/deployment/releases/v1.10.0-mainnet.md`. Sections
+Create `docs/operations/deployment/releases/v1.10.1-mainnet.md`. Sections
 (content to be filled in post-broadcast — leave placeholders):
 
 - Why a `.0` first-of-line (link to convention note in
@@ -236,7 +239,7 @@ Create `docs/operations/deployment/releases/v1.10.0-mainnet.md`. Sections
   - v1.8.3 canonical manager `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`
     (pre-PR #395; AMOE selectors absent)
   - replacement-router target manager `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3`
-    (pre-PR #395; AMOE selectors absent — root cause that v1.10.0 fixes)
+    (pre-PR #395; AMOE selectors absent — root cause that v1.10.1 fixes)
   - replacement router `0xC618Dde25F0085F3b2BC3a48ba806F8Fc9a93759`
     (Safe-wired correctly, but its target manager has no AMOE handler)
   - replacement verifier `0xA39A71a388816d657300EFffF1857F938AEF65D1`
@@ -248,7 +251,7 @@ Create `docs/operations/deployment/releases/v1.10.0-mainnet.md`. Sections
   is the same pre-#395 defect, observed from the call side).
 - Post-broadcast checklist link (created in step 13).
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 4 — release notes skeleton review
 Show me the rendered markdown. Wait for "go".
@@ -257,11 +260,11 @@ Show me the rendered markdown. Wait for "go".
 
 ## 7. Convention note on `releases/index.md` (release-packet item 5)
 
-Add a one-paragraph note explaining: starting v1.10.0, releases that
-introduce a new minor line ship as `vX.Y.0` (not `vX.Y.1`). Reference
-this prompt and the v1.10.0 entry.
+Add a one-paragraph note explaining: v1.10.1 is a clean restart of the
+abandoned v1.10.0 redeploy packet, while future new minor lines should still
+ship as `vX.Y.0` (not `vX.Y.1`). Reference this prompt and the v1.10.1 entry.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 5 — index.md diff review
 
@@ -270,17 +273,17 @@ Commit to `release/v1.10.0-prep`.
 ## 8. Cursor prompt + rollout-plan rev (release-packet items 6 & 7)
 
 1. Update `cursor-deploy-prompt-amoe.md` to **rev 5** with a header
-   note: "v1.10.0 supersedes the v1.9.x rollout in this doc; for the
-   redeploy itself follow `cursor-deploy-prompt-v1.10.0.md`. This doc
-   continues to govern the §0 → §3.0.5 AMOE rollout AFTER v1.10.0
+   note: "v1.10.1 supersedes the v1.9.x rollout in this doc; for the
+   redeploy itself follow `cursor-deploy-prompt-v1.10.1.md`. This doc
+   continues to govern the §0 → §3.0.5 AMOE rollout AFTER v1.10.1
    broadcasts."
 2. Update `docs/operations/deployment/amoe-flag-rollout-plan.md` to
-   **rev 5** with a §0.0 inserted: "Pre-condition: v1.10.0 broadcast
+   **rev 5** with a §0.0 inserted: "Pre-condition: v1.10.1 broadcast
    complete, addresses recorded in
-   `releases/v1.10.0-mainnet.md`, AMOE selector-surface guard green
+   `releases/v1.10.1-mainnet.md`, AMOE selector-surface guard green
    on the new manager."
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 6 — both diffs review
 
@@ -288,10 +291,10 @@ Commit to `release/v1.10.0-prep`.
 
 ## 9. Release-prep PR (release-packet item 8)
 
-Push `release/v1.10.0-prep` and open a PR to `main` with all six
+Push `release/v1.10.1-prep` and open a PR to `main` with all six
 commits from steps 3–8.
 
-PR title: `release(v1.10.0): pre-broadcast packet — manifest, checklist,
+PR title: `release(v1.10.1): pre-broadcast packet — manifest, checklist,
 skip-vanity, release notes, prompt + rollout rev`
 
 PR body: enumerate each commit, link to checkpoint approvals,
@@ -325,9 +328,9 @@ Pre-conditions:
 Run, exactly:
 
 ```bash
-DEPLOYMENT_EPOCH_TAG=v1.10.0 \
+DEPLOYMENT_EPOCH_TAG=v1.10.1 \
 BASE_FULL_RELEASE_SKIP_VANITY=1 \
-bash script/deploy-base-full-release.sh 2>&1 | tee /tmp/v1.10.0-broadcast.log
+bash script/deploy-base-full-release.sh 2>&1 | tee /tmp/v1.10.1-broadcast.log
 ```
 
 Watch for:
@@ -359,7 +362,7 @@ Agent verifies on chain:
    managers):** run the same script against both legacy managers
    that are being orphaned. Both MUST exit 1 with all 3 selectors
    reported missing. Capture both outputs verbatim — they go into
-   the post-broadcast evidence doc as proof that v1.10.0 is the
+   the post-broadcast evidence doc as proof that v1.10.1 is the
    first Base-mainnet manager carrying the AMOE surface.
    - `tools/ci/check_manager_amoe_surface.sh 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357 $BASE_RPC_URL`
    - `tools/ci/check_manager_amoe_surface.sh 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3 $BASE_RPC_URL`
@@ -379,7 +382,7 @@ forge script script/DeployLotteryAmoeRouter.s.sol:DeployLotteryAmoeRouter \
   --rpc-url $BASE_RPC_URL \
   --broadcast \
   --verify \
-  -vvvv 2>&1 | tee /tmp/v1.10.0-amoe-broadcast.log
+  -vvvv 2>&1 | tee /tmp/v1.10.1-amoe-broadcast.log
 ```
 
 The script deploys `AmoePlonkVerifier` and `LotteryAmoeRouter`,
@@ -454,7 +457,7 @@ Use `cast code <addr>` → `keccak256` and diff against the manifest's
 `deployedBytecodeHash`.
 
 Write the result to
-`docs/operations/deployment/releases/v1.10.0-bytecode-manifest-verified.md`
+`docs/operations/deployment/releases/v1.10.1-bytecode-manifest-verified.md`
 with one row per contract: address, expected hash, on-chain hash,
 match (yes/no).
 
@@ -468,22 +471,22 @@ what we built.
 ## 14. Evidence doc + addresses.md update (release-packet item 9 part 2)
 
 1. Update `docs/reference/addresses.md` and
-   `apps/docs-site/docs/reference/addresses.md` with the v1.10.0
+   `apps/docs-site/docs/reference/addresses.md` with the v1.10.1
    addresses. Mark v1.8.3 manager and v1.9.x replacement router as
-   `# orphaned, do not use` with link to v1.10.0 release notes.
-2. Append a "v1.10.0 broadcast 2026-05-XX" section to
+   `# orphaned, do not use` with link to v1.10.1 release notes.
+2. Append a "v1.10.1 broadcast 2026-05-XX" section to
    `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md`
    with the broadcast log path, the manifest verification result,
    and the post-broadcast `cast call` outputs from steps 11–12.
 3. Fill in the placeholder sections of
-   `releases/v1.10.0-mainnet.md` (created in step 6).
+   `releases/v1.10.1-mainnet.md` (created in step 6).
 4. Run the manager AMOE selector-surface guard one more time as a
    sanity check (you can also dispatch the
    `Manager AMOE selector-surface guard` workflow in
    `zk-pipeline-guards.yml` with the new manager address — that
    provides a CI-side audit trail).
 
-Commit on `release/v1.10.0-broadcast-evidence`.
+Commit on `release/v1.10.1-broadcast-evidence`.
 
 ### CHECKPOINT 12 — evidence + addresses review
 
@@ -491,10 +494,10 @@ Commit on `release/v1.10.0-broadcast-evidence`.
 
 ## 15. Follow-up PR (release-packet item 9 part 3)
 
-Push `release/v1.10.0-broadcast-evidence` and open a PR to main.
+Push `release/v1.10.1-broadcast-evidence` and open a PR to main.
 
 PR title:
-`release(v1.10.0): broadcast evidence — addresses, manifest verification, evidence doc`
+`release(v1.10.1): broadcast evidence — addresses, manifest verification, evidence doc`
 
 PR body must include:
 - Broadcast tx hashes (manager creation, 17 infra, verifier, router,
@@ -520,7 +523,7 @@ Out of scope for this prompt — covered separately:
 - Sweepstakes counsel sign-off on legal text.
 
 `cursor-deploy-prompt-amoe.md` rev 5 (updated in step 8) governs
-those steps, with `cursor-deploy-prompt-v1.10.0.md` (this file) as
+those steps, with `cursor-deploy-prompt-v1.10.1.md` (this file) as
 the upstream pre-condition.
 
 ---

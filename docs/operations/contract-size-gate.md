@@ -108,7 +108,7 @@ actual compiled size is comfortably under 24 KiB, we defer the split
 to avoid adding scope to the audit-remediation PR. The split will
 happen in Sprint 3 if the size gate fails in CI.
 
-## Manager warn-guard (added v1.10.0 safety-net)
+## Manager warn-guard (added v1.10.1 safety-net)
 
 Alongside the EIP-170 hard gate, CI runs a **warn-only** size guard
 specifically for `CreatorLotteryManager.sol`. The script lives at
@@ -134,7 +134,7 @@ The warn-guard never blocks. It prints a yellow `[WARN]` line into
 the job log and exits 0. The hard gate (`forge build --sizes`)
 remains the sole enforcer.
 
-## Manager AMOE selector-surface guard (added v1.10.0 safety-net)
+## Manager AMOE selector-surface guard (added v1.10.1 safety-net)
 
 A companion script — `tools/ci/check_manager_amoe_surface.sh` —
 guards a different failure mode that is **not** about size. Given a

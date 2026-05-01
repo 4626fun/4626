@@ -11,7 +11,7 @@
 #   handler at that 4-byte selector -> EVM falls through to the
 #   fallback or reverts with no data, depending on the build.
 #
-#   This script protects v1.10.0 (and any future release that wires
+#   This script protects v1.10.1 (and any future release that wires
 #   the AMOE router to a manager) by asserting that the manager
 #   address actually carries the three required AMOE entrypoints in
 #   its deployed bytecode BEFORE the deploy script flips any flags.
@@ -79,7 +79,7 @@ info() { printf '\033[36m[..]\033[0m   %s\n' "$*"; }
 
 command -v curl >/dev/null 2>&1 || { echo "curl not on PATH" >&2; exit 2; }
 
-# AMOE selectors required for v1.10.0+ manager.
+# AMOE selectors required for the v1.10.1+ manager.
 #   0x565551e4  setAuthorizedAmoeRelayer(address,bool)
 #   0x3d5fec31  authorizedAmoeRelayer(address)
 #   0x17e184b3  processAmoeEntry((address,bytes32,bytes32,uint256,uint256))
@@ -140,7 +140,7 @@ if (( ${#MISSING[@]} > 0 )); then
     printf '  - %s\n' "$m" >&2
   done
   printf '\nthis manager predates the AMOE wiring (PR #395). do NOT wire it as\n' >&2
-  printf 'the router target for v1.10.0; redeploy the manager from current main.\n' >&2
+  printf 'the router target for v1.10.1; redeploy the manager from current main.\n' >&2
   exit 1
 fi
 

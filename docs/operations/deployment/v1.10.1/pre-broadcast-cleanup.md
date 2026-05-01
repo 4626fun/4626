@@ -1,14 +1,14 @@
-# Cursor / GPT-5.5 hygiene-sweep prompt — v1.10.0 pre-broadcast cleanup
+# Cursor / GPT-5.5 hygiene-sweep prompt — v1.10.1 pre-broadcast cleanup
 
 **How to use this:** paste the body below as a single message in Cursor with
 GPT-5.5. The agent has shell + repo access. This prompt runs **before**
-`cursor-deploy-prompt-v1.10.0.md` step 9 (the prep-PR open) — its outputs
-go into the same `release/v1.10.0-prep` branch.
+`cursor-deploy-prompt-v1.10.1.md` step 9 (the prep-PR open) — its outputs
+go into the same `release/v1.10.1-prep` branch.
 
 This prompt does **not** touch on-chain state. It produces three things:
 
 1. A clean codebase / docs / deployments tree with no stray references
-   to addresses that v1.10.0 will orphan.
+   to addresses that v1.10.1 will orphan.
 2. A reusable CI guard `tools/ci/check_no_orphan_addresses.sh` that
    keeps it that way.
 3. A new doc `docs/operations/deployment/orphan-registry.md` that
@@ -21,7 +21,7 @@ If anything below contradicts your understanding, **stop and ask**.
 
 ## Context
 
-Five Base-mainnet addresses are about to be orphaned by v1.10.0:
+Five Base-mainnet addresses are about to be orphaned by v1.10.1:
 
 | Address | What it is | Why orphaned |
 |---|---|---|
@@ -33,15 +33,15 @@ Five Base-mainnet addresses are about to be orphaned by v1.10.0:
 | `0xd9bDFf55A886bADb011A12c447D72D174fD15964` | v1.9.0 abandoned verifier | Companion to the abandoned router |
 
 Note: the last entry is also part of this sweep even though it didn't
-appear on the v1.10.0 redeploy decision sheet. It's referenced from
+appear on the v1.10.1 redeploy decision sheet. It's referenced from
 `amoe-deploy-evidence-2026-05-01.md` and qualifies as orphaned.
 
-Goal of this session: when v1.10.0 broadcasts, no doc, no config, no
+Goal of this session: when v1.10.1 broadcasts, no doc, no config, no
 deployments JSON, no Vercel env, no Supabase row, and no CI workflow
 should be silently pointing at one of the six addresses above. The
 *only* places they should appear in the repo after this sweep:
 
-- `docs/operations/deployment/releases/v1.10.0-mainnet.md` — release
+- `docs/operations/deployment/releases/v1.10.1-mainnet.md` — release
   notes orphan list
 - `docs/operations/deployment/releases/v1.8.3-mainnet.md` — historical
   packet, references its own contemporaneous addresses
@@ -53,10 +53,10 @@ should be silently pointing at one of the six addresses above. The
   baseline-negative-test address (intentional, do not remove)
 - `tools/ci/check_no_orphan_addresses.sh` — the new guard, contains
   the orphan list itself
-- this prompt and `cursor-deploy-prompt-v1.10.0.md`
+- this prompt and `cursor-deploy-prompt-v1.10.1.md`
 
 Anything else that grep finds is stale and must be either removed,
-replaced with a v1.10.0 placeholder, or annotated with an `# orphaned`
+replaced with a v1.10.1 placeholder, or annotated with an `# orphaned`
 comment + link to the orphan registry.
 
 ---
@@ -74,17 +74,17 @@ comment + link to the orphan registry.
   and any *active* config.
 - Do NOT modify `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md`
   itself. It is the broadcast evidence and must remain immutable.
-  Instead, the v1.10.0 release notes will reference it.
-- This sweep runs against `release/v1.10.0-prep` (the branch created
-  by the main v1.10.0 prompt's step 3). Do not create a separate
+  Instead, the v1.10.1 release notes will reference it.
+- This sweep runs against `release/v1.10.1-prep` (the branch created
+  by the main v1.10.1 prompt's step 3). Do not create a separate
   branch.
 
 ---
 
 ## 1. Pre-flight
 
-1. `git rev-parse --abbrev-ref HEAD` → must be `release/v1.10.0-prep`
-   (the branch created by `cursor-deploy-prompt-v1.10.0.md` step 3).
+1. `git rev-parse --abbrev-ref HEAD` → must be `release/v1.10.1-prep`
+   (the branch created by `cursor-deploy-prompt-v1.10.1.md` step 3).
    If the prep branch does not exist yet, **stop** — run that prompt
    first up to and including its CHECKPOINT 1 (manifest), then come
    back here.
@@ -144,8 +144,8 @@ For each file in the grep output, classify it into exactly one of:
     in a "previous deployments" historical section
 
 - **ACTIVE_NEEDS_UPDATE** — currently pointed at an orphan address as
-  if it were live. Must be replaced with a v1.10.0 placeholder
-  (`<v1.10.0 manager TBD post-broadcast>` or similar) OR deleted if
+  if it were live. Must be replaced with a v1.10.1 placeholder
+  (`<v1.10.1 manager TBD post-broadcast>` or similar) OR deleted if
   the entry is no longer needed. Likely candidates:
   - `docs/reference/addresses.md` (if `0xd593…1357` is listed under
     "Current Live")
@@ -160,7 +160,7 @@ For each file in the grep output, classify it into exactly one of:
   - `docs/guides/deploy-vault.md` and `apps/docs-site/docs/guides/deploy-vault.md`
     (if the example wiring uses an orphan address as the canonical
     target)
-  - `docs/operations/contract-size-gate.md` — the v1.10.0 safety-net
+  - `docs/operations/contract-size-gate.md` — the v1.10.1 safety-net
     PR added a reference to `0xd593…1357` in the AMOE-surface guard
     section. Verify it's correctly contextualised as a baseline
     negative-test reference (acceptable) rather than as the
@@ -174,9 +174,9 @@ For each file in the grep output, classify it into exactly one of:
 - **TEST_TARGET** — guard scripts that pin the v1.8.3 epoch:
   - `test/v183-release-target-guard.sh` — this asserts v1.8.3
     addresses are present and pre-v1.8.2 ones are absent. After
-    v1.10.0, this script becomes HISTORICAL — do NOT update it as
+    v1.10.1, this script becomes HISTORICAL — do NOT update it as
     part of this sweep. Mark it for deletion / rename in the
-    post-broadcast follow-up PR (item B from the v1.10.0 plan).
+    post-broadcast follow-up PR (item B from the v1.10.1 plan).
 
 For each ACTIVE_NEEDS_UPDATE file, propose the diff. Print all
 proposed diffs as a single block.
@@ -193,7 +193,7 @@ that grep flagged:
 2. `git grep -l "$(basename "$file" .json)"` — find all importers.
 3. If any importer is in `frontend/` or `server/` or `script/`,
    classify as **NEEDS_RUNTIME_UPDATE** and stop touching it from
-   this sweep. The fresh v1.10.0 deploy will overwrite the JSON
+   this sweep. The fresh v1.10.1 deploy will overwrite the JSON
    anyway during step 14 of the main prompt, and the importers will
    pick up the new address automatically. Add to the "deferred to
    broadcast step" list.
@@ -232,8 +232,8 @@ pointing at orphan addresses:
 - `BASE_RPC_URL` → not address-specific, leave alone
 - `AMOE_LEDGER_PUBLISHER_PRIVATE_KEY` → key, not address; leave alone
 - `AMOE_LEDGER_PUBLISHER_SMART_WALLET` → likely an off-chain CSW
-  address; verify it's still the operative one for v1.10.0 (it
-  probably is — the publishers don't change in v1.10.0)
+  address; verify it's still the operative one for v1.10.1 (it
+  probably is — the publishers don't change in v1.10.1)
 
 ### 3a. List
 
@@ -253,7 +253,7 @@ classify as:
   Will be overwritten in step 14 of the main prompt. Add to a list
   printed at the end of CHECKPOINT 3.
 - **CARRY_FORWARD** — points at an off-chain identity (publisher
-  EOAs, smart wallets) that v1.10.0 keeps. No action.
+  EOAs, smart wallets) that v1.10.1 keeps. No action.
 - **UNRELATED** — not touched by AMOE / lottery wiring. No action.
 
 Note: `vercel env list` does not print values for sensitive vars by
@@ -268,12 +268,12 @@ Updating `LOTTERY_AMOE_ROUTER` etc. happens in step 14 of the main
 prompt, AFTER broadcast. This sweep just produces the inventory and
 the diff plan. Save the plan as a doc:
 
-`docs/operations/deployment/releases/v1.10.0-vercel-env-plan.md` —
-contains, for each ORPHAN_REF var, the current value, the v1.10.0
+`docs/operations/deployment/releases/v1.10.1-vercel-env-plan.md` —
+contains, for each ORPHAN_REF var, the current value, the v1.10.1
 target placeholder (`<TBD post-broadcast>`), and the `vercel env rm`
 + `vercel env add` commands to run during step 14.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 3 — Vercel env inventory + plan review
 
@@ -317,7 +317,7 @@ stores the original casing).
 Same scheme as Vercel:
 
 - **ORPHAN_REF** — row(s) point at an orphan address. Plan an UPDATE.
-- **CARRY_FORWARD** — points at off-chain identity that v1.10.0 keeps.
+- **CARRY_FORWARD** — points at off-chain identity that v1.10.1 keeps.
 - **UNRELATED**.
 
 ### 4c. Do NOT modify Supabase in this session
@@ -325,11 +325,11 @@ Same scheme as Vercel:
 Same rule as Vercel — the actual updates happen during step 14 of
 the main prompt. This sweep produces the plan:
 
-`docs/operations/deployment/releases/v1.10.0-supabase-update-plan.md`
-— contains, per ORPHAN_REF row, the current value, the v1.10.0 target
+`docs/operations/deployment/releases/v1.10.1-supabase-update-plan.md`
+— contains, per ORPHAN_REF row, the current value, the v1.10.1 target
 placeholder, and the SQL to run during step 14.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 4 — Supabase inventory + plan review
 
@@ -416,7 +416,7 @@ go at the top; never edit existing entries.
 | Address | 0x… 20-byte checksummed |
 | Kind | router / verifier / manager / infra |
 | Deployed by release | e.g. v1.8.3, v1.9.0 |
-| Orphaned by release | e.g. v1.10.0 |
+| Orphaned by release | e.g. v1.10.1 |
 | Reason | One-sentence why |
 | Owner at orphan time | EOA / Safe / contract |
 | Cleanup actions taken | basescan label / ownership renounced / balance swept / none |
@@ -425,7 +425,7 @@ go at the top; never edit existing entries.
 
 ## Entries
 
-### Orphaned by v1.10.0 (2026-05-XX)
+### Orphaned by v1.10.1 (2026-05-XX)
 
 (one row per address from the 6 in section 0 of this prompt)
 ```
@@ -433,9 +433,9 @@ go at the top; never edit existing entries.
 Fill in the 6 entries from the table at the top of this prompt.
 Cleanup-actions and cleanup-date columns: leave as `pending — see
 post-broadcast follow-up PR` for now. Those get filled in by the
-post-v1.10.0 prompt B.
+post-v1.10.1 prompt B.
 
-Commit to `release/v1.10.0-prep`.
+Commit to `release/v1.10.1-prep`.
 
 ### CHECKPOINT 7 — orphan registry review
 
@@ -443,15 +443,15 @@ Commit to `release/v1.10.0-prep`.
 
 ## 8. Hand-off
 
-After CHECKPOINT 7, this sweep is done. The `release/v1.10.0-prep`
+After CHECKPOINT 7, this sweep is done. The `release/v1.10.1-prep`
 branch now contains, in addition to whatever the main prompt put on
 it:
 
 - Active doc / config / deployments edits removing orphan refs
   (section 2)
-- `docs/operations/deployment/releases/v1.10.0-vercel-env-plan.md`
+- `docs/operations/deployment/releases/v1.10.1-vercel-env-plan.md`
   (section 3)
-- `docs/operations/deployment/releases/v1.10.0-supabase-update-plan.md`
+- `docs/operations/deployment/releases/v1.10.1-supabase-update-plan.md`
   (section 4)
 - `tools/ci/check_no_orphan_addresses.sh` + workflow (section 6)
 - `docs/operations/deployment/orphan-registry.md` (section 7)
