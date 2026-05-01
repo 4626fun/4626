@@ -45,6 +45,25 @@ function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | nul
   return roomId
 }
 
+/**
+ * `/hermit`, `/meme`, `/gmeow` are open to any room user when invoked
+ * through the AlfaClub bridge (`chatId = 'alfaclub:<roomId>'`). Other
+ * surfaces (Telegram, direct HTTP, etc.) keep the
+ * `HERMIT_ALLOWED_USERS` allowlist gate so an unrelated caller cannot
+ * reach Hermit through, e.g., the deterministic Telegram executor.
+ *
+ * Bridge-side gates that still apply on the AlfaClub path:
+ *   - strict `/`-prefix command parsing in `chatBridge.ts`
+ *   - `BARE_GMEOW_TRUSTED_SENDERS` (Manito9v9 only) for bare `gmeow`
+ *   - self-reply skip (`selfAddress` + canonical CSW fallback)
+ *   - `seenMessageIds` dedupe ledger
+ *   - `HERMIT_ALLOWED_ROOM_IDS` / owner-holdings room gate (when
+ *     enforced by callers that pass `roomId`).
+ */
+function isAlfaClubChatId(chatId: string | undefined): boolean {
+  return parseAlfaClubRoomIdFromChatId(chatId) !== null
+}
+
 type HermitRoomContext = {
   roomId: string | null
   userPreferences: { spanishDialect: string | null } | null
@@ -201,7 +220,7 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           senderWallet: params.senderWallet,
         })
       case 'hermit': {
-        if (!isHermitUserAllowed(params.senderWallet)) {
+        if (!isAlfaClubChatId(params.chatId) && !isHermitUserAllowed(params.senderWallet)) {
           return { ok: false, response: 'Hermit access denied.' }
         }
         const hermitRoomContext = await resolveHermitRoomContext({

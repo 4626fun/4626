@@ -232,5 +232,10 @@ This PR does not run any production migration itself. After merge:
   the runtime no longer asks Hermit to write to `MEMORY.md` per turn,
   but the file itself is still the room-wide style seed and is
   expected to exist on the Pinata host.
-- Slash command access (`/hermit`, `/meme`, `/gmeow` remain public;
-  bare `gmeow` remains Manito9v9-only). No change to that policy.
+- Slash command access. On the AlfaClub bridge (`chatId = alfaclub:<room>`)
+  `/hermit`, `/meme`, and `/gmeow` are open to any room user — the
+  deterministic executor skips the `HERMIT_ALLOWED_USERS` allowlist on
+  this surface. Non-AlfaClub surfaces (direct HTTP at
+  `/api/v1/chat/hermit`, Telegram) still consult the allowlist. Bare
+  `gmeow` (no `/`) remains sender-locked to Manito9v9 via
+  `BARE_GMEOW_TRUSTED_SENDERS` in `chatBridge.ts` regardless of surface.

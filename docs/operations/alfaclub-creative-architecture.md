@@ -14,7 +14,7 @@ same state**.
 | AlfaClub auth state (`alfaclub_runtime_secret`) | Supabase (storage) | RLS deny-all |
 | Privy session-token rotation | Vercel cron — `/api/v1/alfaclub/chat-token-refresh` | `CRON_SECRET` |
 | Chat bridge tick (poll → command → reply) | Vercel cron — `/api/v1/alfaclub/chat-bridge-run` | `CRON_SECRET` + `ALFACLUB_CHAT_BRIDGE_ENABLED` |
-| `/hermit`, `/meme`, `/gmeow` creative replies | Pinata-hosted Open Claw (Hermit) agent | `HERMIT_ALLOWED_USERS`, `HERMIT_PINATA_*` |
+| `/hermit`, `/meme`, `/gmeow` creative replies | Pinata-hosted Open Claw (Hermit) agent | Open to any AlfaClub room user (bridge-side gates only). `HERMIT_ALLOWED_USERS` still gates non-AlfaClub surfaces (direct HTTP, Telegram). `HERMIT_PINATA_*` for Pinata transport. |
 | Eliza / XMTP / Telegram / Twitter / Discord runtimes | Railway long-lived agent | `AGENT_RUNTIME_ROLE=primary` |
 | Hermit persona / memory / Spanish style guide | Pinata workspace `/home/node/clawd/workspace/` | manual seed sync (see below) |
 
@@ -90,7 +90,7 @@ by code (the Hermit module never imports `chatTokenStore` /
 | `HERMIT_PINATA_GATEWAY_BASE`  | No  | `https://4626.fun` | Public base for `/ipfs/<cid>` links served from saved memes. |
 | `HERMIT_PINATA_HTTP_TIMEOUT_MS` | No | `30000` | HTTP fallback timeout for the creative call. Clamped to `[1000, 120000]`. |
 | `HERMIT_OWNER_ADDRESS`        | No  | — | Wallet allowed to save / delete Hermit memes. |
-| `HERMIT_ALLOWED_USERS`        | No  | — | Comma-separated wallet allowlist for `/hermit`, `/meme`, `/gmeow`. |
+| `HERMIT_ALLOWED_USERS`        | No  | — | Comma-separated wallet allowlist for `/hermit`, `/meme`, `/gmeow` on **non-AlfaClub** surfaces (direct HTTP at `/api/v1/chat/hermit`, Telegram). On the AlfaClub bridge (chatId `alfaclub:<room>`) the slash commands are open to any room user; this allowlist is not consulted there. Bare `gmeow` is independently sender-locked to Manito9v9 and ignores this allowlist. |
 | `HERMIT_ALLOWED_ROOM_IDS`     | No  | derived from owner's AlfaClub holdings | Explicit room allowlist override. |
 
 Failure modes:

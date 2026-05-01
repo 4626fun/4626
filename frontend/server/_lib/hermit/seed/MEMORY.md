@@ -4,6 +4,16 @@ Append-only running notes. The host seeds this file at deploy time so reads
 never ENOENT. Add entries as bullets under the right section. Do not rewrite
 or reorder existing entries.
 
+> **Per-user dialect preferences do NOT live here.** They live in the
+> AlfaClub control-plane database (`alfaclub.user_preference`, keyed by
+> `(room_id, sender_address, 'hermit.spanish_dialect')`). The host writes
+> them server-side after each turn and re-reads them on the next turn.
+> Hermit must **never** edit this file to record a per-user dialect — the
+> file is shared across every sender in the room and a per-user write here
+> would leak that user's preference to everyone else.
+> See `docs/operations/alfaclub-hermit-personalization.md` for the full
+> contract.
+
 ## Spanish — learnings & corrections
 
 These are the rules for replying in Spanish. Apply them whenever the user
@@ -24,62 +34,43 @@ writes Spanish or asks for output `en español`. Cross-reference with
   "¡¡¡Reclámalo ahora!!!".
 - Never machine-translate proper nouns (AlfaChat, AlfaClub, 4626, Hermit).
 
-## Preferred dialect
+## Preferred dialect — read-only signal from the host
 
-The host detects a Spanish dialect from each incoming message (flag emoji or
-text hint such as 🇲🇽 / `mexicano`, 🇦🇷 / `argentino`, 🇨🇴 / `colombiano`,
-🇨🇱 / `chileno`, 🇵🇪 / `peruano`, 🇻🇪 / `venezolano`, 🇵🇷 / `puertorriqueño` /
-`caribeño`, 🇪🇸 / `castellano` / `español de España`, 🌎 or 🇺🇳 /
-`neutral latam`). When detected, the prompt includes a `Spanish dialect:`
-line — follow that dialect with subtle flavor (≈80% clear Spanish, 20%
-regional). When no dialect is signaled, default to `neutral_latam` **unless
-this file records a long-term preference (see below)**.
+The host detects a Spanish dialect from each incoming message (flag emoji
+or text hint such as 🇲🇽 / `mexicano`, 🇦🇷 / `argentino`, 🇨🇴 / `colombiano`,
+🇨🇱 / `chileno`, 🇵🇪 / `peruano`, 🇻🇪 / `venezolano`, 🇵🇷 / `puertorriqueño`
+/ `caribeño`, 🇪🇸 / `castellano` / `español de España`, 🌎 or 🇺🇳 /
+`neutral latam`).
 
-### Persistence rule (turn-by-turn)
+When the host has a dialect to apply (either explicit signal this turn or
+a saved preference for this `(room, sender)` from `alfaclub.user_preference`),
+the prompt includes a `Spanish dialect:` line — follow that dialect with
+subtle flavor (≈80% clear Spanish, 20% regional). When no dialect is
+signaled, default to `neutral_latam`.
 
-When the host prompt includes an **explicit** dialect signal (flag emoji or
-text hint), the prompt also instructs you to update this file before
-producing the final JSON. Use your file edit tool to ensure the
-"Long-term preferences (operator-curated)" list contains exactly one
-bullet of the form:
+### What Hermit must NOT do
 
-```
-- Preferred Spanish dialect: <dialect> (set by flag/text hint)
-```
+- **Do not** edit MEMORY.md to record `Preferred Spanish dialect: <dialect>`
+  per turn. That used to be the persistence path; it is gone. Persistence
+  now happens in the AlfaClub control-plane DB, server-side, not in this
+  file.
+- **Do not** treat any `Preferred Spanish dialect:` bullet that may have
+  been left here by older deployments as authoritative. The host's
+  `Spanish dialect:` prompt line is the single source of truth.
 
-Where `<dialect>` is one of:
-`neutral_latam`, `mexico`, `argentina`, `colombia`, `chile`, `peru`,
-`venezuela`, `caribbean`, `spain`.
-
-If a `Preferred Spanish dialect:` bullet already exists, **replace** its
-value (do not append a duplicate). The most recently signaled dialect wins.
-
-When the host prompt does **not** include an explicit dialect signal and
-you are replying in Spanish, read the bullet above and apply that dialect.
-If the bullet is missing or unrecognized, fall back to `neutral_latam`.
-
-The explicit signal in the current turn overrides whatever this file
-records — and updates this file for the next turn.
-
-Do not mention the file edit in your final JSON output. The user only sees
-strict JSON; the MEMORY.md write happens as a tool call.
-
-### Long-term preferences (operator-curated):
-
-- (Add entries here, e.g. `wallet 0xabc... → argentina`.)
-
-Examples (illustrative — replace as the live preference changes):
-
-```
-- Preferred Spanish dialect: mexico (set by 🇲🇽)
-- Preferred Spanish dialect: argentina (set by 🇦🇷)
-- Preferred Spanish dialect: spain (set by 🇪🇸)
-```
+The host's prompt also contains a `Memory persistence` line. It is
+informational only — it tells Hermit which branch of persistence the
+control plane is taking (`explicit signal`, `saved preference`, or
+`no per-user dialect signal this turn.`) so the prose stays consistent
+across turns. Hermit does **not** need to act on it; the control plane
+has already done the write.
 
 ## User-taught corrections
 
-When the user corrects your Spanish, append a one-line entry here with the
-date in `YYYY-MM-DD` format and what changed. Example:
+When the user corrects Hermit's Spanish, append a one-line entry here with
+the date in `YYYY-MM-DD` format and what changed. These are global style
+corrections, not per-user data — they are safe to keep in this shared
+file. Example:
 
 - `2026-04-29` — user prefers "alpha" over "ventaja"; keep "alpha"
   untranslated.

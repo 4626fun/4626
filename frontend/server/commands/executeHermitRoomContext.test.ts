@@ -176,8 +176,11 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
   })
 
-  it('Hermit access gate denies non-allowlisted senders before any preference work', async () => {
-    isHermitUserAllowedMock.mockReturnValueOnce(false)
+  it('AlfaClub chatId allows non-allowlisted senders (open access for room users)', async () => {
+    // Force isHermitUserAllowed → false to prove the AlfaClub branch
+    // is what authorizes the call, not the allowlist.
+    isHermitUserAllowedMock.mockReturnValue(false)
+    readUserPreferenceMock.mockResolvedValueOnce(null)
 
     const { executeCommand } = await import('./execute.ts')
     const result = await executeCommand({
@@ -188,9 +191,44 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       userId: ALICE,
     })
 
+    expect(result.ok).toBe(true)
+    expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
+    isHermitUserAllowedMock.mockReturnValue(true)
+  })
+
+  it('non-alfaclub surfaces still enforce HERMIT_ALLOWED_USERS', async () => {
+    isHermitUserAllowedMock.mockReturnValue(false)
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/hermit announce vault update',
+      chatId: 'telegram:room-1',
+      userId: ALICE,
+    })
+
     expect(result.ok).toBe(false)
+    expect(result.response).toBe('Hermit access denied.')
     expect(readUserPreferenceMock).not.toHaveBeenCalled()
     expect(executeHermitCommandMock).not.toHaveBeenCalled()
+    isHermitUserAllowedMock.mockReturnValue(true)
+  })
+
+  it('non-alfaclub surfaces with allowlisted sender still execute', async () => {
+    isHermitUserAllowedMock.mockReturnValue(true)
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/hermit announce vault update',
+      chatId: 'telegram:room-1',
+      userId: ALICE,
+    })
+
+    expect(result.ok).toBe(true)
+    expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects malformed alfaclub chatIds (room id too long) and treats them as non-room', async () => {

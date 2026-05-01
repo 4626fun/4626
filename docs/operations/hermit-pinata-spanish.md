@@ -14,7 +14,7 @@ cron, or production secret changes.
 | --- | --- | --- |
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/SOUL.md`](../../frontend/server/_lib/hermit/seed/SOUL.md) | Identity, voice, hard rules, language rule. |
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/USER.md`](../../frontend/server/_lib/hermit/seed/USER.md) | Per-user/room context placeholder. |
-| Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/MEMORY.md`](../../frontend/server/_lib/hermit/seed/MEMORY.md) | Append-only learnings; Spanish corrections live here. |
+| Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/MEMORY.md`](../../frontend/server/_lib/hermit/seed/MEMORY.md) | Append-only **global** style learnings (room-wide vocabulary corrections). Per-`(room, sender)` dialect preferences live in the AlfaClub control-plane DB (`alfaclub.user_preference`), not here. |
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/SPANISH.md`](../../frontend/server/_lib/hermit/seed/SPANISH.md) | Spanish style guide. |
 | Host prompt builder | [`frontend/server/_lib/hermit/skillRouter.ts`](../../frontend/server/_lib/hermit/skillRouter.ts) | `buildPinataPromptForHermit / Image / Gmeow` now embed a language directive. |
 
@@ -31,8 +31,9 @@ tells the agent to:
 5. Keep crypto-native loanwords (vault, mint, drop, alpha, gm, gas) untranslated.
 6. Hashtags stay as-is.
 7. Never wrap JSON in markdown fences.
-8. Persist or apply a long-term Spanish dialect preference via
-   `MEMORY.md` (see "Dialect preference persistence" below).
+8. Apply the active Spanish dialect when the host prompt provides one
+   (the host pulls it from the AlfaClub control-plane DB — Hermit does
+   not persist it itself; see "Dialect preference persistence" below).
 
 The directive is shared across all three strict-JSON prompt shapes so
 behaviour stays consistent for `/hermit copy|announce|quest|tone`, `/meme`,
