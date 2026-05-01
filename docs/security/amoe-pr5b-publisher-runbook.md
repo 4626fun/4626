@@ -312,8 +312,97 @@ A re-review of the publisher's operating parameters is required when ANY of the 
 
 ---
 
+## Sibling cron — orphan-burn refund (PR 6c)
+
+A second cron, `_amoeBurnRefundCron.ts`, ships alongside the publisher in PR 6c. It is unrelated to ledger publication — included here only so on-call has a single reference for both AMOE crons.
+
+**Path:** `GET /api/v1/lottery/amoe/burn-refund-cron`
+**Schedule:** `*/15 * * * *` (same cadence as the publisher).
+**Purpose:** writes a compensating `+pointsBurned` row for any phase-A debit that has been orphaned (no `amoe_zk_submissions.state='settled'` for the same `spend_ref_id`) for more than `REFUND_AGE_EPOCHS` (default 7).
+
+### Feature flags & tunables
+
+| Env var | Default | Purpose |
+|---|---|---|
+| `AMOE_ZK_SUBMIT_ENABLED` | unset | Top-level enable for the ZK path. Missing → 503 `zk_path_disabled`. |
+| `AMOE_REFUND_CRON_ENABLED` | unset | Per-cron enable. Missing → 503 `refund_cron_disabled`. |
+| `AMOE_REFUND_AGE_EPOCHS` | `7` | Refund TTL in epochs (1 epoch = 86,400 s). |
+| `AMOE_REFUND_MAX_PER_TICK` | `50` | Cap on refunds emitted per tick — backlog drains across ticks. |
+| `CRON_SECRET` | (req'd) | Same secret used by the publisher cron. |
+
+### Per-tick response shape
+
+```json
+{
+  "ok": true,
+  "tick": "refunded" | "no_orphans",
+  "scannedCount": <int>,
+  "refundedCount": <int>,
+  "ageSec": <int>,
+  "limit": <int>,
+  "errors": [{"pointsId": "<id>", "message": "<truncated>"}]   // optional, only when present
+}
+```
+
+* `tick: 'no_orphans'` — no work this round. Healthy steady state.
+* `tick: 'refunded'` — one or more compensations written. Always informational; idempotent.
+* `tick: 'errored'` (HTTP 500) — the entire tick threw before scanning. Investigate; the next tick will retry.
+* Per-row errors flow through `errors` and DO NOT abort the tick.
+
+### Production enable sequence
+
+1. Confirm migration `035_amoe_entry_refund_source.sql` is applied (`points_amoe_eligible_balance` view's CASE includes `WHEN source = 'amoe_entry_refund' THEN amount`).
+2. Set `AMOE_REFUND_CRON_ENABLED=1` in Vercel → Production env.
+3. Re-deploy.
+4. Watch the next 4 ticks (= 1 hour) in Vercel Logs:
+   * Most should be `tick: 'no_orphans'` if the publisher cron and frontend phase-B flow are healthy.
+   * Any `tick: 'refunded'` with a non-zero `refundedCount` is informational, not a fault.
+   * Any `tick: 'errored'` page on-call.
+
+### SQL probes (operator)
+
+```sql
+-- Recent refunds emitted by this cron.
+SELECT signup_id, source_id AS spend_ref_id, amount, created_at
+FROM points
+WHERE source = 'amoe_entry_refund'
+  AND created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC
+LIMIT 50;
+
+-- Orphan candidates the next tick would refund (count only).
+SELECT COUNT(*)
+FROM points p
+WHERE p.source = 'amoe_entry_spend'
+  AND p.amount < 0
+  AND p.created_at < NOW() - (INTERVAL '1 second' * 86400 * 7)
+  AND NOT EXISTS (
+    SELECT 1 FROM amoe_zk_submissions s
+    WHERE s.signup_id = p.signup_id AND s.spend_ref_id = p.source_id AND s.state = 'settled'
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM points r
+    WHERE r.signup_id = p.signup_id AND r.source = 'amoe_entry_refund' AND r.source_id = p.source_id
+  );
+
+-- Sanity: refund-source rows MUST never appear in the L1 ledger.
+SELECT COUNT(*) FROM amoe_points_burn_ledger
+WHERE source_points_id IN (
+  SELECT id FROM points WHERE source = 'amoe_entry_refund'
+);  -- expected: 0
+```
+
+The last probe enforces the security invariant: refund rows have `amount > 0` and the projector filters `amount < 0`, so any non-zero count indicates a projector regression and should page immediately.
+
+### Kill switch
+
+Unset `AMOE_REFUND_CRON_ENABLED` (or set to anything other than `'1'`) and re-deploy. Subsequent ticks return `503 { error: 'refund_cron_disabled' }`. Already-emitted refund rows remain in `points` (idempotency).
+
+---
+
 ## Change log
 
 | Date | Change |
 |---|---|
 | 2026-04-30 | Initial runbook, shipping with PR 5b (#450) follow-up. |
+| 2026-04-30 | Added orphan-burn refund cron (PR 6c) section. |

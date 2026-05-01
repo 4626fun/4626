@@ -325,6 +325,7 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
           SUM(
             CASE
               WHEN source = 'amoe_entry_spend'    THEN amount
+              WHEN source = 'amoe_entry_refund'   THEN amount
               WHEN source = 'amoe_twitter_daily'  THEN amount * 1.00
               WHEN source = 'amoe_checkin'        THEN amount * 1.00
               WHEN source = 'waitlist_signup'     THEN amount * 1.00

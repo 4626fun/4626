@@ -162,23 +162,26 @@ If we add it, it ships in a new migration `frontend/db/migrations/035_amoe_zk_su
 
 The new failure mode is: **phase A succeeded, phase B never called or never succeeded**. Three options, ranked:
 
-**Option 1 (recommended): "burns expire after N epochs and refund automatically".**
+**Option 1 (chosen — shipped in PR 6c): "burns expire after N epochs and refund automatically".**
 
-- Add a `expired_at` column to `amoe_points_burn_ledger` defaulting to `burnEpoch + REFUND_AGE_EPOCHS` (e.g. 7 days = 7 epochs).
-- A new lightweight cron (or extend `amoe-publish-cron`) walks `amoe_points_burn_ledger` rows that:
-  - have no matching `amoe_zk_submissions` row in state `settled`, AND
-  - are past their `expired_at`.
-- For each, write a compensating `+pointsBurned` row in `points` with `source='amoe_entry_refund'`, `source_id=spendRefId`. Same partial unique → idempotent refund.
+- A new lightweight cron `_amoeBurnRefundCron.ts` walks `points` rows directly with `source='amoe_entry_spend' AND amount<0` that:
+  - have NO matching `amoe_zk_submissions` row in state `settled`, AND
+  - have NO existing `amoe_entry_refund` row (so re-running the cron is a no-op), AND
+  - are older than `REFUND_AGE_EPOCHS` (default 7 epochs ≈ 7 days; tunable via `AMOE_REFUND_AGE_EPOCHS`).
+- For each match, the cron INSERTs a compensating `+pointsBurned` row in `points` with `source='amoe_entry_refund'` and `source_id=spendRefId`. Idempotency is provided by the existing `points_unique_source_full` UNIQUE index — `ON CONFLICT DO NOTHING` makes a second-pass a no-op.
+- Refund rows do NOT enter the on-chain ledger root — the L0 → L1 projector (`amoeLedgerProjector.ts:316-317`) filters `amount < 0`, so positive refunds cannot retroactively forge a Merkle leaf.
+- Migration `035_amoe_entry_refund_source.sql` (mirrored to `supabase/migrations/20260430190000_amoe_entry_refund_source.sql`) adds an `amoe_entry_refund` arm to the `points_amoe_eligible_balance` view's CASE so the compensation actually restores the user's eligible balance.
+- Implementation chose to scan `points` (L0) directly rather than `amoe_points_burn_ledger` (L1) so the cron remains correct even when the publisher cron is paused, mis-deployed, or behind. We did NOT add an `expired_at` column on L1 — the TTL is computed at query time from `points.created_at`, which is simpler and avoids a destructive migration.
 
 **Option 2: "explicit refund endpoint".**
 
-Client-driven `POST /api/v1/lottery/amoe/burn-credits/refund { spendRefId }`. Same atomicity properties. Simpler to ship; worse UX (browser-closed users never recover).
+Client-driven `POST /api/v1/lottery/amoe/burn-credits/refund { spendRefId }`. Same atomicity properties. Simpler to ship; worse UX (browser-closed users never recover). NOT shipped — option 1 covers this case automatically.
 
 **Option 3: "no refunds — burns are sunk cost".**
 
 Cleanest infra; harshest UX. Rejected.
 
-**Decision needed:** option 1 or 2. Default to option 1 unless ops pushes back on the extra cron.
+**Decision (resolved):** option 1 (auto-refund cron, 7 epochs, default off via `AMOE_REFUND_CRON_ENABLED`). Ops opts in by setting the flag once the publisher cron is healthy on prod.
 
 ---
 
@@ -316,7 +319,7 @@ If we ship option 1 from §5.1. New cron at the same cadence as `_amoePublishCro
 2. Land code as **two PRs**:
    - **PR 6a**: `_amoeBurnCredits.ts` + reader error split + tests. No changes to `_amoeSubmitZk.ts`. Ships dormant — endpoint live, nobody calls it. Frontend can start integrating.
    - **PR 6b**: modify `_amoeSubmitZk.ts` to require the reader; remove `AMOE_ZK_SNAPSHOT_READER_ENABLED` flag; require frontend to be on the new flow first. Behind a new env flag `AMOE_BURN_THEN_SUBMIT_REQUIRED=1` for staged rollout.
-3. Optional **PR 6c**: refund cron (option 1 from §5.1).
+3. **PR 6c (shipped)**: refund cron (option 1 from §5.1) — default off via `AMOE_REFUND_CRON_ENABLED`.
 4. Ops flips `AMOE_BURN_THEN_SUBMIT_REQUIRED=1` on staging, runs end-to-end, then prod.
 5. Once stable, delete `amoeLedgerSnapshotStub.ts` (this is the explicit retirement criterion from PR 5b's §73 design table).
 
@@ -324,7 +327,7 @@ If we ship option 1 from §5.1. New cron at the same cadence as `_amoePublishCro
 
 ## 10. Open questions for review
 
-1. **Refund policy** — option 1 (auto-refund cron, 7 epochs) vs option 2 (explicit refund endpoint) vs option 3 (no refund). Default: option 1.
+1. **Refund policy** — option 1 (auto-refund cron, 7 epochs) vs option 2 (explicit refund endpoint) vs option 3 (no refund). **Resolved: option 1, shipped in PR 6c.**
 2. **Frontend coordination** — who owns the web2-side state machine for the 24h gap? Web team or wallet team?
 3. **Single-PR vs split PR (6a/6b)** — the split lets us decouple endpoint deployment from the breaking change. Recommend the split.
 4. **Migration 035 (`burn_completed_at`)** — ship or skip? §4.2 recommends skip.

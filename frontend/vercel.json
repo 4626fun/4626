@@ -67,6 +67,10 @@
     {
       "path": "/api/v1/lottery/amoe/publish-cron",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/v1/lottery/amoe/burn-refund-cron",
+      "schedule": "*/15 * * * *"
     }
   ],
   "routes": [
