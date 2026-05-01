@@ -1,0 +1,180 @@
+{
+  "release": "v1.10.0",
+  "generatedAt": "2026-05-01T16:20:22Z",
+  "chain": "base",
+  "chainId": 8453,
+  "git": {
+    "branch": "release/v1.10.0-prep",
+    "commit": "0fbae166b2628dde86c7d2dff7d0e11636ecdeb3"
+  },
+  "toolchain": {
+    "forgeVersion": "forge Version: 1.6.0-v1.7.0\nCommit SHA: f83bad912a9dba7bf0371def1e70bb1896048356\nBuild Timestamp: 2026-04-28T14:07:10.568929921Z (1777385230)\nBuild Profile: dist",
+    "solc": "0.8.30",
+    "optimizerRuns": 200,
+    "viaIR": true
+  },
+  "hashMethod": "cast keccak over forge inspect <path>:<name> deployedBytecode; local forge v1.7.0 rejects the deployedBytecodeHash inspect field named in the runbook.",
+  "scopeNote": "Pre-broadcast manifest for the fresh v1.10.0 Base release proof set: phase-1 shared/deterministic infra plus CreatorLotteryManager, phase-2 AMOE verifier/router, and the two core seeded creator-stack bytecodes most exposed to last-minute swaps.",
+  "contracts": [
+    {
+      "name": "CreatorRegistry",
+      "contractPath": "contracts/core/CreatorRegistry.sol",
+      "forgeTarget": "contracts/core/CreatorRegistry.sol:CreatorRegistry",
+      "scope": "phase1_shared_global_infra",
+      "deployedBytecodeHash": "0x36a6e78615e8602c4e5e9e9e7c8b6ff6311a9b77b76a1e3afb96750fb1fe7a9a",
+      "runtimeSizeBytes": 21050
+    },
+    {
+      "name": "CreatorOVaultFactory",
+      "contractPath": "contracts/factories/CreatorOVaultFactory.sol",
+      "forgeTarget": "contracts/factories/CreatorOVaultFactory.sol:CreatorOVaultFactory",
+      "scope": "phase1_shared_global_infra",
+      "deployedBytecodeHash": "0x5dcaa73e9d88ad176c1d49430e0f19a2399251ff673b68bdb82bdb403f697162",
+      "runtimeSizeBytes": 4396
+    },
+    {
+      "name": "VaultActivationBatcher",
+      "contractPath": "contracts/helpers/batchers/VaultActivationBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/VaultActivationBatcher.sol:VaultActivationBatcher",
+      "scope": "phase1_shared_global_infra",
+      "deployedBytecodeHash": "0x97c59959f975084fc11245c5432b24e4dd6181ff9cf5dc3cb28e1896bedbc960",
+      "runtimeSizeBytes": 7781
+    },
+    {
+      "name": "CreatorLotteryManager",
+      "contractPath": "contracts/utilities/lottery/CreatorLotteryManager.sol",
+      "forgeTarget": "contracts/utilities/lottery/CreatorLotteryManager.sol:CreatorLotteryManager",
+      "scope": "phase1_shared_global_manager",
+      "deployedBytecodeHash": "0xa9985dc862a5c86f8c869a15b80dcea5587da0d4d1a23ea347774eac9a98f49f",
+      "runtimeSizeBytes": 24568
+    },
+    {
+      "name": "CreatorVRFConsumerV2_5",
+      "contractPath": "contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol",
+      "forgeTarget": "contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol:CreatorVRFConsumerV2_5",
+      "scope": "phase1_shared_global_infra",
+      "deployedBytecodeHash": "0xb6cacef5d245f2308662c17596e25226b5d3566c115c346d41a3ef80fc2a3a18",
+      "runtimeSizeBytes": 20745
+    },
+    {
+      "name": "SolanaBridgeAdapter",
+      "contractPath": "contracts/utilities/bridge/SolanaBridgeAdapter.sol",
+      "forgeTarget": "contracts/utilities/bridge/SolanaBridgeAdapter.sol:SolanaBridgeAdapter",
+      "scope": "phase1_shared_global_infra",
+      "deployedBytecodeHash": "0xac0c0e7f43a39e8503fc4e300a705fe9e7958c56b6d58c57500fa4f825cb5ae2",
+      "runtimeSizeBytes": 14656
+    },
+    {
+      "name": "UniversalBytecodeStoreV2",
+      "contractPath": "contracts/helpers/infra/UniversalBytecodeStoreV2.sol",
+      "forgeTarget": "contracts/helpers/infra/UniversalBytecodeStoreV2.sol:UniversalBytecodeStoreV2",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0xe98726c830c70092a49ee1ab78aa004b79e0132efd43f71dca76f91c2f567c2b",
+      "runtimeSizeBytes": 1576
+    },
+    {
+      "name": "UniversalCreate2DeployerFromStore",
+      "contractPath": "contracts/factories/UniversalCreate2DeployerFromStore.sol",
+      "forgeTarget": "contracts/factories/UniversalCreate2DeployerFromStore.sol:UniversalCreate2DeployerFromStore",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0xdd6672526dcfdb6f5abda9ab7fdad9501ec359d22b503cf438450eb1e4a7de45",
+      "runtimeSizeBytes": 1444
+    },
+    {
+      "name": "CreatorOVaultCoreModule",
+      "contractPath": "contracts/vault/modules/CreatorOVaultCoreModule.sol",
+      "forgeTarget": "contracts/vault/modules/CreatorOVaultCoreModule.sol:CreatorOVaultCoreModule",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0xfa6060166484858634c34664c91072bd34c9a1277e83d60f3f2734af3385cd44",
+      "runtimeSizeBytes": 10073
+    },
+    {
+      "name": "CreatorOVaultStrategiesModule",
+      "contractPath": "contracts/vault/modules/CreatorOVaultStrategiesModule.sol",
+      "forgeTarget": "contracts/vault/modules/CreatorOVaultStrategiesModule.sol:CreatorOVaultStrategiesModule",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0x03a2d45b1be4639ffdc57926265fd170f35970a33e99c8d5e3be05973f6c121f",
+      "runtimeSizeBytes": 9367
+    },
+    {
+      "name": "CreatorOVaultAdminModule",
+      "contractPath": "contracts/vault/modules/CreatorOVaultAdminModule.sol",
+      "forgeTarget": "contracts/vault/modules/CreatorOVaultAdminModule.sol:CreatorOVaultAdminModule",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0x48614c7d58ea078a2b08f1769f2c625d9febffde3c4d51df8827c7062c65fdd7",
+      "runtimeSizeBytes": 7019
+    },
+    {
+      "name": "DeploymentBatcher",
+      "contractPath": "contracts/helpers/batchers/DeploymentBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcher",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0x5c58a8f1dfe348cec46d41892174deb177131ad1a56e8af487d8ba2e31c393ce",
+      "runtimeSizeBytes": 23845
+    },
+    {
+      "name": "DeploymentBatcherPhase3Helper",
+      "contractPath": "contracts/helpers/batchers/DeploymentBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase3Helper",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0xd015c7ebdc880863d05b84b8ef3da09cbce833b91ef4d98a1938865e238d6176",
+      "runtimeSizeBytes": 6854
+    },
+    {
+      "name": "DeploymentBatcherPhase2Module",
+      "contractPath": "contracts/helpers/batchers/DeploymentBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0x801c93bd2073f06172caf428c3399c15fcc1f299bd1ae68ab446a82cea7c928f",
+      "runtimeSizeBytes": 8308
+    },
+    {
+      "name": "DeploymentBatcherUniV4Helper",
+      "contractPath": "contracts/helpers/batchers/DeploymentBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherUniV4Helper",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0xde35f93355193637f491e481eb4657f5633a9395408ddbb6fd3ae5dfb5dc78d3",
+      "runtimeSizeBytes": 4050
+    },
+    {
+      "name": "DeploymentBatcherUtilsHelper",
+      "contractPath": "contracts/helpers/batchers/DeploymentBatcher.sol",
+      "forgeTarget": "contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherUtilsHelper",
+      "scope": "phase1_deterministic_infra",
+      "deployedBytecodeHash": "0x05d41efe6053ac2efb121237d1c4d312ffbf5603f7de6d3bfade36e610ebdf8c",
+      "runtimeSizeBytes": 1801
+    },
+    {
+      "name": "CreatorOVault",
+      "contractPath": "contracts/vault/CreatorOVault.sol",
+      "forgeTarget": "contracts/vault/CreatorOVault.sol:CreatorOVault",
+      "scope": "seeded_creator_stack_bytecode",
+      "deployedBytecodeHash": "0xdba189e5af97d0f69d60d0d483ef717983e1830675bc0dd478dfc178e7c6c0e0",
+      "runtimeSizeBytes": 16460
+    },
+    {
+      "name": "CreatorShareOFT",
+      "contractPath": "contracts/utilities/messaging/CreatorShareOFT.sol",
+      "forgeTarget": "contracts/utilities/messaging/CreatorShareOFT.sol:CreatorShareOFT",
+      "scope": "seeded_creator_stack_bytecode",
+      "deployedBytecodeHash": "0x9b51210f48ddbb2c9809d1cfa2e58da3792ae9eaabf0d1feb556e331dae25fd2",
+      "runtimeSizeBytes": 23524
+    },
+    {
+      "name": "AmoePlonkVerifier",
+      "contractPath": "contracts/utilities/lottery/zk/AmoePlonkVerifier.sol",
+      "forgeTarget": "contracts/utilities/lottery/zk/AmoePlonkVerifier.sol:AmoePlonkVerifier",
+      "scope": "phase2_amoe",
+      "deployedBytecodeHash": "0x7e9795bf40ebe3e423a4e2df9923252ec372f70382fb96fbf318d350a0a101b3",
+      "runtimeSizeBytes": 6322
+    },
+    {
+      "name": "LotteryAmoeRouter",
+      "contractPath": "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol",
+      "forgeTarget": "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol:LotteryAmoeRouter",
+      "scope": "phase2_amoe",
+      "deployedBytecodeHash": "0x40dd8d20ce8b2475d344b31d8762a4f1f912387cc89df2ea0dce77df38c05aa4",
+      "runtimeSizeBytes": 3846
+    }
+  ]
+}

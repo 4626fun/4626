@@ -4,7 +4,12 @@ This page tracks notable production and deployment changes for 4626.
 
 ## Latest
 
+- [v1.10.0 mainnet](/operations/deployment/releases/v1.10.0-mainnet) — pre-broadcast packet
 - [v1.8.3 mainnet](/operations/deployment/releases/v1.8.3-mainnet)
+
+## Release numbering convention
+
+Starting with the v1.10.0 redeploy packet, releases that introduce a new minor line ship as `vX.Y.0`, not `vX.Y.1`. The v1.10.0 runbook (`docs/operations/deployment/v1.10.0/deployment-instructions.md`) records this as the first application of the convention, and the v1.10.0 release entry is the canonical reference for that line.
 
 ## Recent releases
 

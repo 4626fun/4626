@@ -1,6 +1,6 @@
 # AMOE Production Flag Rollout Plan
 
-> **Status:** Draft, awaiting owner sign-off.
+> **Status:** Rev 5 draft, awaiting owner sign-off.
 > **Author:** generated 2026-05-01.
 > **Scope:** orchestrates the staged enablement of all five `AMOE_*_ENABLED`
 > feature flags now that the AMOE migration backlog is fully applied to
@@ -13,6 +13,15 @@
 > shared across them.
 
 ---
+
+## 0.0 v1.10.0 Redeploy Pre-Condition
+
+Pre-condition: v1.10.0 broadcast complete, addresses recorded in
+`docs/operations/deployment/releases/v1.10.0-mainnet.md`, AMOE
+selector-surface guard green on the new manager.
+
+Do not resume the AMOE rollout from this document while the v1.10.0 redeploy
+packet is still pre-broadcast or while the selector-surface guard is unproven.
 
 ## 0. Inventory
 
@@ -442,6 +451,7 @@ If ANY invariant probe trips:
 Print this and check off as you go.
 
 ```text
+[ ] §0.0  v1.10.0 broadcast complete + addresses recorded + guard green
 [ ] §2.1  Migrations applied (verify SQL)               — already done
 [ ] §2.2  Vercel env vars provisioned                   — owner action
 [ ] §2.3  On-chain allowlist call landed                — governance action
@@ -476,3 +486,4 @@ Total wall-clock from phase 1 to phase 4 complete: ~3.5 days minimum
 |---|---|
 | 2026-05-01 | Initial draft after the AMOE migration backlog was applied to prod. Sequenced all five flags with cross-flag dependency map, per-phase exit criteria, and SQL probes. |
 | 2026-05-01 (rev 2) | Corrected after PR-#477 review (codex + cubic). (1) Re-verified handler-source gating: `ZK_SUBMIT` is the master gate on three of four cron handlers (`publish`, `burn-refund`, `retry`), so it MUST lead the rollout — original draft inverted phases 2 and 3 and would have caused stuck-funds. (2) Cron cadences corrected to `*/15` (publish + burn-refund) and `*/5` (retry) to match `frontend/vercel.json`; soak-window tick counts fixed (was off by 15x). (3) Added the `retry-cron` to the inventory; previously omitted. (4) "One flag per deploy" rule kept, with Phase 1's `ZK_SUBMIT + REFUND_CRON` pairing called out as the documented exception (with reasoning) instead of being an unflagged contradiction. |
+| 2026-05-01 (rev 5) | Added the v1.10.0 redeploy pre-condition: broadcast complete, addresses recorded in `releases/v1.10.0-mainnet.md`, and AMOE selector-surface guard green on the new manager before this rollout resumes. |

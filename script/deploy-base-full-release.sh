@@ -1,8 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Base full release wrapper.
+#
+# BASE_FULL_RELEASE_SKIP_VANITY=1 skips vanity salt grinding for the
+# deterministic phased infra step by passing generic zero-byte CREATE2 salts
+# through deploy-infra-v2.sh's existing raw INFRA_*_SALT inputs. The release
+# still runs the same two-step flow: fresh shared/global infra first, then the
+# deterministic phased deployer + bytecode store.
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+
+ZERO_BYTES32="0x0000000000000000000000000000000000000000000000000000000000000000"
 
 load_env_file() {
   local path="$1"
@@ -72,20 +82,32 @@ if [ -z "${ETHERSCAN_API_KEY:-}" ]; then
   echo "Warning: ETHERSCAN_API_KEY (or BASESCAN_API_KEY) not set; --verify may fail."
 fi
 
-: "${DEPLOYMENT_EPOCH_TAG:=v1.9.2}"
+: "${DEPLOYMENT_EPOCH_TAG:=v1.10.0}"
+: "${BASE_FULL_RELEASE_SKIP_VANITY:=0}"
 : "${BASE_SHARED_GLOBAL_OUTPUT_PATH:=${ROOT_DIR}/tmp/base-${DEPLOYMENT_EPOCH_TAG}-shared-global.json}"
 HANDOFF_ENV_PATH="${BASE_RELEASE_HANDOFF_ENV_PATH:-$(mktemp "${TMPDIR:-/tmp}/4626-base-full-release-${DEPLOYMENT_EPOCH_TAG}-XXXXXX.env")}"
 LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/4626-base-full-release-logs-XXXXXX")"
-export DEPLOYMENT_EPOCH_TAG BASE_SHARED_GLOBAL_OUTPUT_PATH HANDOFF_ENV_PATH
+export DEPLOYMENT_EPOCH_TAG BASE_FULL_RELEASE_SKIP_VANITY BASE_SHARED_GLOBAL_OUTPUT_PATH HANDOFF_ENV_PATH
+
+if [ "$BASE_FULL_RELEASE_SKIP_VANITY" = "1" ]; then
+  export INFRA_STORE_SALT="$ZERO_BYTES32"
+  export INFRA_DEPLOYER_FROM_STORE_SALT="$ZERO_BYTES32"
+  export INFRA_VAULT_CORE_MODULE_SALT="$ZERO_BYTES32"
+  export INFRA_VAULT_STRATEGIES_MODULE_SALT="$ZERO_BYTES32"
+  export INFRA_VAULT_ADMIN_MODULE_SALT="$ZERO_BYTES32"
+  export INFRA_DEPLOYMENT_BATCHER_SALT="$ZERO_BYTES32"
+fi
 
 mkdir -p "$(dirname "$BASE_SHARED_GLOBAL_OUTPUT_PATH")" "$(dirname "$HANDOFF_ENV_PATH")"
 
 cat > "$HANDOFF_ENV_PATH" <<EOF
 DEPLOYMENT_EPOCH_TAG=${DEPLOYMENT_EPOCH_TAG}
+BASE_FULL_RELEASE_SKIP_VANITY=${BASE_FULL_RELEASE_SKIP_VANITY}
 BASE_SHARED_GLOBAL_OUTPUT_PATH=${BASE_SHARED_GLOBAL_OUTPUT_PATH}
 EOF
 
 echo "Starting Base ${DEPLOYMENT_EPOCH_TAG} full release rollout..."
+echo "Skip vanity salts: ${BASE_FULL_RELEASE_SKIP_VANITY}"
 echo "Shared/global artifact: ${BASE_SHARED_GLOBAL_OUTPUT_PATH}"
 echo "Handoff env: ${HANDOFF_ENV_PATH}"
 echo "Logs dir: ${LOG_DIR}"
