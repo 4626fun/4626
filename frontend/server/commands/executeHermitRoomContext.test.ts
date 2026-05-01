@@ -279,4 +279,69 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     const call = (executeHermitCommandMock.mock.calls[0]?.[0] as HermitCallShape) as { roomId?: string }
     expect(call.roomId).toBeUndefined()
   })
+
+  // Regression guard for a user-reported "Hermit access denied." in
+  // AlfaClub room 1043 from sender 0x64c3…94e9. PR #467 opened
+  // /hermit, /meme, /gmeow to all room senders on the AlfaClub bridge;
+  // this test pins the exact (room, sender, slash-command) tuple so a
+  // future refactor that re-tightens the gate fails CI.
+  describe('AlfaClub room 1043 — non-allowlisted slash commands stay open', () => {
+    const ROOM_1043_SENDER = '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9'
+    const ROOM_1043_CHAT_ID = 'alfaclub:1043'
+
+    it.each([
+      ['/hermit setup'],
+      ['/hermit prefs'],
+      ['/hermit lang 🇲🇽'],
+      ['/hermit announce vault update'],
+      ['/meme akita'],
+      ['/gmeow'],
+    ])('does not deny %s for a non-allowlisted room-1043 sender', async (text) => {
+      isHermitUserAllowedMock.mockReturnValue(false)
+      listUserPreferencesMock.mockResolvedValueOnce([])
+
+      const { executeCommand } = await import('./execute.ts')
+      const result = await executeCommand({
+        groupId: 'tg-room',
+        senderWallet: ROOM_1043_SENDER,
+        text,
+        chatId: ROOM_1043_CHAT_ID,
+        userId: ROOM_1043_SENDER,
+      })
+
+      expect(result.ok).toBe(true)
+      expect(result.response).not.toBe('Hermit access denied.')
+      isHermitUserAllowedMock.mockReturnValue(true)
+    })
+
+    it('routes the message through the AlfaClub branch so persistPreference / listPreferences / clearPreferences are wired', async () => {
+      isHermitUserAllowedMock.mockReturnValue(false)
+      listUserPreferencesMock.mockResolvedValueOnce([])
+
+      const { executeCommand } = await import('./execute.ts')
+      await executeCommand({
+        groupId: 'tg-room',
+        senderWallet: ROOM_1043_SENDER,
+        text: '/hermit setup',
+        chatId: ROOM_1043_CHAT_ID,
+        userId: ROOM_1043_SENDER,
+      })
+
+      // Confirm the AlfaClub-room context made it through to Hermit
+      // — proves the gate did NOT deny and the resolver injected the
+      // preference callbacks.
+      expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
+      const call = (executeHermitCommandMock.mock.calls[0]?.[0] as HermitCallShape) as {
+        roomId?: string
+        persistPreference?: unknown
+        listPreferences?: unknown
+        clearPreferences?: unknown
+      }
+      expect(call.roomId).toBe('1043')
+      expect(typeof call.persistPreference).toBe('function')
+      expect(typeof call.listPreferences).toBe('function')
+      expect(typeof call.clearPreferences).toBe('function')
+      isHermitUserAllowedMock.mockReturnValue(true)
+    })
+  })
 })
