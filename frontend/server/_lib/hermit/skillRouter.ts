@@ -116,6 +116,76 @@ function asStringArray(value: unknown, max = 6): string[] {
   )
 }
 
+/**
+ * Resolve a recognised image extension for an HTTPS URL by checking
+ * the path's tail segment first, and — when the path itself has no
+ * recognised suffix — the `?filename=` query parameter. The query
+ * fallback covers gateway URLs such as
+ * `https://4626.fun/ipfs/<cid>?filename=catlaugh.gif`, where the path
+ * is just the CID and the readable name lives in the query string.
+ *
+ * Validation is deliberately narrow:
+ *   - HTTPS only (caller pre-checks).
+ *   - Allowed extensions: gif, jpg, jpeg, png, webp.
+ *   - The `filename` query value must itself end in one of those
+ *     extensions; we never trust the value beyond inferring the
+ *     extension. Anything else (e.g. `?filename=evil.html` or a stray
+ *     attribute) yields `null`.
+ *
+ * Returns the canonical extension (lowercase, no dot) plus a clean
+ * filename when one can be derived from path or query, or `null`
+ * when the URL is not a recognised inline-image candidate.
+ */
+type InferredImageExtension = 'gif' | 'jpg' | 'jpeg' | 'png' | 'webp'
+const RECOGNISED_IMAGE_EXTS: ReadonlySet<InferredImageExtension> = new Set([
+  'gif',
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+])
+
+function pickImageExtension(name: string): InferredImageExtension | null {
+  const dot = name.lastIndexOf('.')
+  if (dot < 0 || dot === name.length - 1) return null
+  const ext = name.slice(dot + 1)
+  return RECOGNISED_IMAGE_EXTS.has(ext as InferredImageExtension)
+    ? (ext as InferredImageExtension)
+    : null
+}
+
+function resolveImageNameAndExt(
+  pathname: string,
+  hintedFilename: string,
+): { filename: string; extension: InferredImageExtension } | null {
+  // Try the path's tail segment first — that's the primary case for
+  // direct CDN URLs like `…/cat.gif` or `…/photo.jpg`.
+  const pathTail = pathname.split('/').filter(Boolean).pop() ?? ''
+  const pathExt = pickImageExtension(pathTail)
+  if (pathExt) {
+    return { filename: pathTail, extension: pathExt }
+  }
+  // Fall back to the `?filename=` hint for gateway-style URLs where the
+  // path is just an opaque CID. Still require the hint itself to end in
+  // a recognised image extension — we never trust the query value
+  // beyond extension inference.
+  if (hintedFilename) {
+    const hintedExt = pickImageExtension(hintedFilename)
+    if (hintedExt) {
+      return { filename: hintedFilename, extension: hintedExt }
+    }
+  }
+  return null
+}
+
+const IMAGE_EXTENSION_MIME_TYPE: Record<InferredImageExtension, string> = {
+  gif: 'image/gif',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+}
+
 function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
   const trimmed = url.trim()
   if (!/^https:\/\//i.test(trimmed)) return null
@@ -131,36 +201,27 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
     return null
   }
 
-  const filename = hintedFilename || pathname.split('/').filter(Boolean).pop()
-  const mediaName = filename || pathname
-  if (hostname === 'media.tenor.com' && mediaName.endsWith('.gif')) {
+  const resolved = resolveImageNameAndExt(pathname, hintedFilename)
+  if (!resolved) return null
+  const { filename, extension } = resolved
+
+  // Tenor's `media.tenor.com` GIFs are a known special case in
+  // production: the AlfaClub client renders them with `type:
+  // 'tenor-gif'` and no `mime_type`. Preserve that exact shape so the
+  // existing client-side renderer keeps working unchanged.
+  if (hostname === 'media.tenor.com' && extension === 'gif') {
     return { url: trimmed, type: 'tenor-gif' }
   }
-  if (mediaName.endsWith('.jpg') || mediaName.endsWith('.jpeg')) {
-    return {
-      url: trimmed,
-      type: 'photo',
-      ...(filename ? { filename } : {}),
-      mime_type: 'image/jpeg',
-    }
+
+  // For every other recognised image extension — including non-Tenor
+  // GIFs — emit the generic `photo` shape with an explicit MIME type.
+  // AlfaClub renders these inline based on `type` + `mime_type`.
+  return {
+    url: trimmed,
+    type: 'photo',
+    ...(filename ? { filename } : {}),
+    mime_type: IMAGE_EXTENSION_MIME_TYPE[extension],
   }
-  if (mediaName.endsWith('.png')) {
-    return {
-      url: trimmed,
-      type: 'photo',
-      ...(filename ? { filename } : {}),
-      mime_type: 'image/png',
-    }
-  }
-  if (mediaName.endsWith('.webp')) {
-    return {
-      url: trimmed,
-      type: 'photo',
-      ...(filename ? { filename } : {}),
-      mime_type: 'image/webp',
-    }
-  }
-  return null
 }
 
 function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
@@ -722,6 +783,7 @@ export const _hermitPromptBuildersForTests = {
   buildLanguageDirective: buildHermitLanguageDirective,
   buildMemoryPersistenceClause: buildSpanishMemoryPersistenceClause,
   flagMap: SPANISH_DIALECT_FLAG_MAP,
+  inferPublicMediaAttachment,
 }
 
 /**

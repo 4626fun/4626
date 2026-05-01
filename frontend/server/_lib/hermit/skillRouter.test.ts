@@ -87,7 +87,18 @@ describe('executeHermitCommand', () => {
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
     expect(result.reply).toContain('https://4626.fun/ipfs/')
-    expect(result.mediaAttachments).toBeUndefined()
+    // After widening `inferPublicMediaAttachment` to read the
+    // `?filename=` hint and to recognise generic GIFs, the catlaugh
+    // ipfs fixture now produces an inline media attachment so the
+    // AlfaClub client renders it as an image rather than a hyperlink.
+    expect(result.mediaAttachments).toEqual([
+      {
+        url: expect.stringContaining('catlaugh.gif'),
+        type: 'photo',
+        filename: 'catlaugh.gif',
+        mime_type: 'image/gif',
+      },
+    ])
   })
 
   it('returns the bundled cat laugh meme for /gmeow laugh', async () => {
@@ -99,7 +110,14 @@ describe('executeHermitCommand', () => {
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
     expect(result.reply).toContain('https://4626.fun/ipfs/')
-    expect(result.mediaAttachments).toBeUndefined()
+    expect(result.mediaAttachments).toEqual([
+      {
+        url: expect.stringContaining('catlaugh.gif'),
+        type: 'photo',
+        filename: 'catlaugh.gif',
+        mime_type: 'image/gif',
+      },
+    ])
   })
 
   it('uses pinata provider for /gmeow when pinata draft env is configured', async () => {
