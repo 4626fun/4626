@@ -22,6 +22,7 @@ import type {
   HermitExecutionParams,
   HermitExecutionResult,
   HermitMediaAttachment,
+  HermitPreferenceLister,
   HermitUserPreferences,
 } from './types.js'
 import WebSocket from 'ws'
@@ -598,6 +599,8 @@ function buildPinataPromptForHermit(params: {
     userPrompt: params.userPrompt,
     userPreferences: params.userPreferences,
   })
+  const tone = asHermitTone(params.userPreferences?.tone ?? null)
+  const toneClause = buildHermitToneClause(tone)
   return [
     'You are Hermit, a crypto-native creative assistant for AlfaChat communities.',
     modeInstruction,
@@ -605,6 +608,7 @@ function buildPinataPromptForHermit(params: {
     '{"line":"string","alt":["string","string"],"hashtags":["#tag"],"cta":"string"}',
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
     buildHermitLanguageDirective(dialect, source),
+    ...(toneClause ? [toneClause] : []),
     `User input: ${params.userPrompt}`,
   ].join('\n')
 }
@@ -631,12 +635,15 @@ function buildPinataPromptForHermitImage(
   userPreferences?: HermitUserPreferences | null,
 ): string {
   const { dialect, source } = resolveActiveDialect({ userPrompt, userPreferences })
+  const tone = asHermitTone(userPreferences?.tone ?? null)
+  const toneClause = buildHermitToneClause(tone)
   return [
     'You are Hermit, generating meme-ready image concepts for AlfaChat.',
     'Output STRICT JSON only:',
     '{"imagePrompt":"string","caption":"string","hashtags":["#tag"]}',
     'Rules: imagePrompt vivid and specific, caption <= 180 chars, hashtags 1-5, no markdown.',
     buildHermitLanguageDirective(dialect, source),
+    ...(toneClause ? [toneClause] : []),
     `User input: ${userPrompt || 'akita doge and a black cat in dark-luxury meme style'}`,
   ].join('\n')
 }
@@ -651,12 +658,15 @@ function buildPinataPromptForGmeow(params: {
     userPrompt: params.userPrompt,
     userPreferences: params.userPreferences,
   })
+  const tone = asHermitTone(params.userPreferences?.tone ?? null)
+  const toneClause = buildHermitToneClause(tone)
   return [
     'You are Hermit crafting one short meme line for AlfaChat.',
     'Output STRICT JSON only:',
     '{"line":"string"}',
     'Rules: line <= 160 chars, playful but clean, no markdown.',
     buildHermitLanguageDirective(dialect, source),
+    ...(toneClause ? [toneClause] : []),
     `Reference caption: ${params.memeCaption}`,
     `Reference tags: ${params.memeTags.join(', ') || 'meme'}`,
     `User input: ${params.userPrompt || 'gmeow'}`,
@@ -749,6 +759,290 @@ function classifyExplicitSignal(userInput: string): 'flag' | 'text-hint' | null 
   return null
 }
 
+// ── Hermit setup / personalization ──
+//
+// Per-user, per-room style preferences live in
+// `alfaclub.user_preference` (see PR #465). The creative lane never
+// imports the store directly — `executeHermitCommand` calls the
+// caller-supplied `persistPreference` / `listPreferences` /
+// `clearPreferences` callbacks injected by `frontend/server/commands/
+// execute.ts`.
+
+export const HERMIT_TONES = [
+  'clean',
+  'degen',
+  'pro',
+  'poetic',
+  'spanglish',
+  'chaotic',
+  'concise',
+] as const
+export type HermitTone = (typeof HERMIT_TONES)[number]
+const HERMIT_TONE_VALUES = new Set<string>(HERMIT_TONES)
+
+export function asHermitTone(value: unknown): HermitTone | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  return HERMIT_TONE_VALUES.has(normalized) ? (normalized as HermitTone) : null
+}
+
+const HERMIT_TONE_PROFILES: Record<HermitTone, string> = {
+  clean: 'Clean tone: clear, professional, no slang, no caps spam.',
+  degen:
+    'Degen tone: crypto-native, irreverent, terse. Loanwords like gm, alpha, ape, ngmi are fine; never fabricate stats; no financial advice.',
+  pro: 'Pro tone: measured, informational, executive-summary register; no slang, no exclamation spam.',
+  poetic:
+    'Poetic tone: imagistic, rhythmic phrasing; one striking image per line; still respect length and JSON constraints.',
+  spanglish:
+    'Spanglish tone: natural code-switch between English and casual Latin American Spanish; only when it sounds natural — do not force it.',
+  chaotic:
+    'Chaotic tone: high energy, abrupt cuts, occasional all-lowercase; still respect word count and JSON constraints; no vulgarity.',
+  concise:
+    'Concise tone: shortest line that lands; cut filler; no exclamation spam.',
+}
+
+function buildHermitToneClause(tone: HermitTone | null): string {
+  if (!tone) return ''
+  return `Tone: ${HERMIT_TONE_PROFILES[tone]}`
+}
+
+const HERMIT_SETUP_SUBCOMMANDS = new Set([
+  'setup',
+  'prefs',
+  'reset',
+  'lang',
+  'tone',
+])
+
+function isFlagOnlyInput(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  for (const flag of Object.keys(SPANISH_DIALECT_FLAG_MAP)) {
+    if (trimmed === flag) return true
+  }
+  return false
+}
+
+function buildHermitSetupReply(): string {
+  return [
+    'Hermit setup',
+    '',
+    "Set your style once and Hermit will remember it for this room.",
+    '',
+    'Language / dialect (also accepts a bare flag in any /hermit, /meme, /gmeow message):',
+    '- 🇲🇽 Mexican Spanish — `/hermit lang 🇲🇽`',
+    '- 🇦🇷 Rioplatense / Argentina — `/hermit lang 🇦🇷`',
+    '- 🇨🇴 Colombian — `/hermit lang 🇨🇴`',
+    '- 🇨🇱 Chilean — `/hermit lang 🇨🇱`',
+    '- 🇵🇪 Peruvian — `/hermit lang 🇵🇪`',
+    '- 🇻🇪 Venezuelan — `/hermit lang 🇻🇪`',
+    '- 🇵🇷 Puerto Rican / Caribbean — `/hermit lang 🇵🇷`',
+    '- 🇪🇸 European Spanish — `/hermit lang 🇪🇸`',
+    '- 🌎 / 🇺🇳 Neutral Latin American — `/hermit lang 🌎`',
+    '',
+    'Tone — `/hermit tone <name>` where name is one of:',
+    `  ${HERMIT_TONES.join(', ')}`,
+    '',
+    'Useful commands:',
+    '- `/hermit prefs` — show what Hermit currently remembers for you',
+    '- `/hermit reset` — clear your Hermit preferences for this room',
+    '- `/hermit copy|announce|quest|tone <text>` — draft copy',
+    '- `/meme <prompt>` — image meme prompt',
+    '- `/gmeow [vibe]` — saved meme + Hermit one-liner',
+  ].join('\n')
+}
+
+function formatHermitPrefLabel(key: string): string {
+  switch (key) {
+    case 'hermit.spanish_dialect':
+      return 'Spanish dialect'
+    case 'hermit.tone':
+      return 'Tone'
+    case 'hermit.onboarded':
+      return 'Onboarded'
+    default:
+      return key
+  }
+}
+
+async function buildHermitPrefsReply(params: HermitExecutionParams): Promise<string> {
+  const lister = params.listPreferences
+  if (!lister) {
+    return [
+      'Hermit prefs are not available on this surface.',
+      'Personalization is only persisted inside an AlfaClub room.',
+    ].join('\n')
+  }
+  let entries: Awaited<ReturnType<HermitPreferenceLister>> = []
+  try {
+    entries = await lister()
+  } catch {
+    entries = []
+  }
+  const interesting = entries.filter((entry) => entry.preferenceKey.startsWith('hermit.'))
+  if (interesting.length === 0) {
+    return [
+      'Hermit has no saved preferences for you in this room yet.',
+      'Set one with `/hermit lang <flag>` or `/hermit tone <name>` — see `/hermit setup`.',
+    ].join('\n')
+  }
+  const lines = ['Your Hermit preferences in this room:']
+  for (const entry of interesting) {
+    const label = formatHermitPrefLabel(entry.preferenceKey)
+    const value = entry.preferenceValue ? entry.preferenceValue : '(unset)'
+    lines.push(`- ${label}: ${value}`)
+  }
+  lines.push('')
+  lines.push('Change with `/hermit lang <flag>` / `/hermit tone <name>`. Clear with `/hermit reset`.')
+  return lines.join('\n')
+}
+
+async function handleHermitSetupSubcommand(
+  params: HermitExecutionParams,
+  subcommand: string,
+  args: string,
+): Promise<HermitExecutionResult | null> {
+  if (subcommand === 'setup') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: buildHermitSetupReply(),
+    }
+  }
+
+  if (subcommand === 'prefs') {
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: await buildHermitPrefsReply(params),
+    }
+  }
+
+  if (subcommand === 'reset') {
+    let cleared = false
+    if (params.clearPreferences) {
+      try {
+        cleared = await params.clearPreferences()
+      } catch {
+        cleared = false
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: cleared
+        ? 'Hermit preferences cleared for this room. `/hermit setup` to start over.'
+        : 'Could not clear preferences right now (storage unavailable). Try again in a moment.',
+    }
+  }
+
+  if (subcommand === 'lang') {
+    const dialect = detectSpanishDialect(args) ?? asSpanishDialect(args)
+    if (!dialect) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          'Unknown language. Use a flag or one of the supported dialect names.',
+          'Try `/hermit lang 🇲🇽` or see `/hermit setup`.',
+        ].join('\n'),
+      }
+    }
+    let saved = false
+    if (params.persistPreference) {
+      try {
+        await params.persistPreference({
+          preferenceKey: 'hermit.spanish_dialect',
+          preferenceValue: dialect,
+          updatedBy: 'hermit.lang',
+        })
+        saved = true
+      } catch {
+        saved = false
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: saved
+        ? `Hermit will favor "${dialect}" Spanish for you in this room. Use \`/hermit prefs\` to confirm.`
+        : `Selected "${dialect}" Spanish for this turn, but storage is unavailable so it won't persist yet.`,
+    }
+  }
+
+  if (subcommand === 'tone') {
+    const tone = asHermitTone(args)
+    if (!tone) {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: [
+          `Unknown tone. Use one of: ${HERMIT_TONES.join(', ')}.`,
+          'See `/hermit setup` for examples.',
+        ].join('\n'),
+      }
+    }
+    let saved = false
+    if (params.persistPreference) {
+      try {
+        await params.persistPreference({
+          preferenceKey: 'hermit.tone',
+          preferenceValue: tone,
+          updatedBy: 'hermit.tone',
+        })
+        saved = true
+      } catch {
+        saved = false
+      }
+    }
+    return {
+      kind: 'hermit',
+      provider: 'local',
+      reply: saved
+        ? `Hermit tone set to "${tone}" for this room. Use \`/hermit prefs\` to confirm.`
+        : `Selected tone "${tone}" for this turn, but storage is unavailable so it won't persist yet.`,
+    }
+  }
+
+  return null
+}
+
+const HERMIT_ONBOARDING_NUDGE =
+  '— Want me to remember your style? Reply with a flag for Spanish dialect, or use `/hermit setup`.'
+
+function shouldShowOnboardingNudge(params: HermitExecutionParams): boolean {
+  if (!params.persistPreference) return false
+  if (!params.roomId) return false
+  const onboardedAt = params.userPreferences?.onboardedAt ?? null
+  return !(typeof onboardedAt === 'string' && onboardedAt.trim().length > 0)
+}
+
+async function markHermitOnboarded(params: HermitExecutionParams): Promise<void> {
+  if (!params.persistPreference) return
+  try {
+    await params.persistPreference({
+      preferenceKey: 'hermit.onboarded',
+      preferenceValue: new Date().toISOString(),
+      updatedBy: 'hermit.onboarding',
+    })
+  } catch {
+    // Best-effort: nudge will fire again on the next turn if this fails.
+  }
+}
+
+async function withOnboardingNudge(
+  params: HermitExecutionParams,
+  result: HermitExecutionResult,
+): Promise<HermitExecutionResult> {
+  if (!shouldShowOnboardingNudge(params)) return result
+  if (!result.reply || !result.reply.trim()) return result
+  await markHermitOnboarded(params)
+  return {
+    ...result,
+    reply: `${result.reply}\n\n${HERMIT_ONBOARDING_NUDGE}`,
+  }
+}
+
 export async function executeHermitCommand(
   params: HermitExecutionParams,
 ): Promise<HermitExecutionResult> {
@@ -775,13 +1069,14 @@ export async function executeHermitCommand(
     const draftedLine =
       asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
     const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
-    return {
+    const result: HermitExecutionResult = {
       kind: 'gmeow',
       provider: draftedLine ? 'pinata' : 'local',
       meme,
       reply,
       ...(attachment ? { mediaAttachments: [attachment] } : {}),
     }
+    return await withOnboardingNudge(params, result)
   }
 
   if (command === '/meme') {
@@ -796,12 +1091,13 @@ export async function executeHermitCommand(
       )
     }
     const image = formatHermitImageResult(draft.text)
-    return {
+    const result: HermitExecutionResult = {
       kind: 'meme',
       provider: 'pinata',
       imagePrompt: image.imagePrompt,
       reply: image.reply,
     }
+    return await withOnboardingNudge(params, result)
   }
 
   if (command === '/hermit') {
@@ -812,6 +1108,52 @@ export async function executeHermitCommand(
         reply: buildHermitHelpReply(),
       }
     }
+
+    // Setup / personalization subcommands run locally — no Pinata
+    // call, no onboarding nudge (the user is explicitly in setup
+    // mode already, so the nudge would be redundant). They are
+    // routed BEFORE parseHermitDraftMode so the words `setup`,
+    // `prefs`, `reset`, `lang`, `tone` are interpreted as
+    // subcommands rather than draft modes.
+    //
+    // Note: there is an existing `/hermit tone <message>` draft mode
+    // that rewrites a multi-word message in a sharper social tone.
+    // Disambiguate on argument shape, not on tone-name validity:
+    //   - `/hermit tone <single-token>` → personalization path. A
+    //     recognised name persists; an unrecognised single token
+    //     returns local "Unknown tone" guidance instead of falling
+    //     through to a Pinata call.
+    //   - `/hermit tone <multi-word message>` → existing draft/rewrite
+    //     path so power users keep `/hermit tone make this clearer…`
+    //     etc. (these always contain whitespace).
+    // A bare `/hermit tone` with no args is ambiguous; we route it
+    // through the personalization handler, which prints the "Unknown
+    // tone. Use one of: …" hint — much friendlier than firing off an
+    // empty rewrite.
+    const firstSpace = args.indexOf(' ')
+    const subToken = (firstSpace === -1 ? args : args.slice(0, firstSpace))
+      .trim()
+      .toLowerCase()
+    const subArgs = firstSpace === -1 ? '' : args.slice(firstSpace + 1).trim()
+    if (HERMIT_SETUP_SUBCOMMANDS.has(subToken)) {
+      if (subToken === 'tone') {
+        const looksLikeSingleTonePick = !subArgs || /^[A-Za-z_-]+$/.test(subArgs)
+        if (looksLikeSingleTonePick) {
+          const handled = await handleHermitSetupSubcommand(params, subToken, subArgs)
+          if (handled) return handled
+        }
+        // Multi-word args (whitespace, punctuation): fall through
+        // to the existing tone draft path.
+      } else {
+        const handled = await handleHermitSetupSubcommand(params, subToken, subArgs)
+        if (handled) return handled
+      }
+    } else if (isFlagOnlyInput(args)) {
+      // Bare flag-only message in /hermit — treat as `/hermit lang <flag>`.
+      const handled = await handleHermitSetupSubcommand(params, 'lang', args)
+      if (handled) return handled
+    }
+
     const { mode, prompt } = parseHermitDraftMode(args)
     const explicitSignalSource = classifyExplicitSignal(prompt)
     const draft = await runPinataDraft(
@@ -829,11 +1171,12 @@ export async function executeHermitCommand(
         'Hermit Pinata path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
       )
     }
-    return {
+    const result: HermitExecutionResult = {
       kind: 'hermit',
       provider: 'pinata',
       reply: formatHermitReplyFromDraft(draft.text),
     }
+    return await withOnboardingNudge(params, result)
   }
 
   throw commandError(

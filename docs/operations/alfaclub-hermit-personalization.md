@@ -200,10 +200,48 @@ checked on every call.
 
 - `hermit.flag` — sender posted a flag emoji that this turn matched.
 - `hermit.text-hint` — sender posted a text hint that this turn matched.
+- `hermit.lang` — sender ran `/hermit lang <flag>` or replied with a bare flag.
+- `hermit.tone` — sender ran `/hermit tone <name>`.
+- `hermit.onboarding` — one-time `hermit.onboarded` row written when the
+  setup nudge was first appended to a creative reply.
 - `admin.api` — operator wrote the row via the SQL override above.
 
 If a row's `updated_by` is anything else, it was written by an
 unexpected lane and worth investigating.
+
+## Setup / personalization commands
+
+A user's first valid creative reply (`/hermit`, `/meme`, `/gmeow`) in
+an AlfaClub room appends a one-time nudge:
+
+> Want me to remember your style? Reply with a flag for Spanish dialect, or use `/hermit setup`.
+
+That nudge is recorded in `alfaclub.user_preference` as
+`(room_id, sender_address, 'hermit.onboarded')` so it shows exactly
+once per (room, sender) and never on `/hermit setup|prefs|reset|lang|tone`
+replies (the user is already in setup mode).
+
+Subcommands (all run locally — no Pinata call):
+
+| Command | Effect |
+|---|---|
+| `/hermit setup` | Show the language / dialect / tone menu. |
+| `/hermit prefs` | Show the user's stored Hermit preferences for this room. Empty-state message when none. |
+| `/hermit reset` | Bulk-clear all `hermit.*` rows for the user in this room (including `hermit.onboarded`). |
+| `/hermit lang <flag-or-name>` | Set Spanish dialect. Accepts a flag (`🇲🇽 🇦🇷 🇨🇴 🇨🇱 🇵🇪 🇻🇪 🇵🇷 🇪🇸 🌎 🇺🇳`), a text hint (`mexicano`, `argentino`, …), or a canonical token (`neutral_latam`, `spain`, …). |
+| `/hermit tone <name>` | Set tone. One of: `clean`, `degen`, `pro`, `poetic`, `spanglish`, `chaotic`, `concise`. |
+| Bare flag inside `/hermit` | Treated as `/hermit lang <flag>` (e.g. `/hermit 🇪🇸`). |
+
+Notes:
+
+- A multi-word arg to `/hermit tone` (e.g. `/hermit tone make this clearer: ship tonight`) still hits the existing **draft-mode** path that rewrites copy with a sharper social tone. Only single-token recognised tones land in personalization.
+- Tone preference is read on every `/hermit`, `/meme`, `/gmeow` and added to the Pinata prompt as a single `Tone: …` line below the language directive. Unknown tone values in the table are ignored (whitelist).
+- Hermit creative-lane code never imports the preference store directly. The setup commands work via callbacks (`persistPreference`, `listPreferences`, `clearPreferences`) injected by `frontend/server/commands/execute.ts`. Architecture-boundary tests still enforce that.
+- All persistence is best-effort: a DB outage produces a "won't persist yet" / "storage unavailable" message instead of breaking the chat reply.
+
+### Reset semantics
+
+`/hermit reset` calls `clearUserPreferences({ keyPrefix: 'hermit.' })`, which deletes every row keyed by the user's wallet in the current room whose `preference_key` starts with `hermit.`. It does NOT touch other namespaces (e.g. future `keepr.*` keys). After a reset, the next creative reply will nudge again.
 
 ## Manual production migration / deploy steps
 

@@ -48,7 +48,9 @@ describe('executeHermitCommand — per-user personalization', () => {
       commandText: '/hermit announce 🇲🇽 drop nuevo en 30 minutos',
       senderAddress: ALICE,
       roomId: ROOM,
-      userPreferences: null,
+      // Mark already-onboarded so we isolate the dialect-write
+      // assertion from the new one-time onboarding-nudge write.
+      userPreferences: { onboardedAt: '2026-05-01T00:00:00Z' },
       persistPreference,
     })
 
@@ -77,17 +79,25 @@ describe('executeHermitCommand — per-user personalization', () => {
     })
   })
 
-  it('absence of any signal does NOT touch persistPreference', async () => {
+  it('absence of any signal does NOT touch persistPreference (other than the one-time onboarding nudge)', async () => {
     const persistPreference = vi.fn(async () => {})
 
     await executeHermitCommand({
       commandText: '/hermit announce vault update incoming',
       senderAddress: ALICE,
       roomId: ROOM,
+      // Mark already-onboarded so the one-time nudge does not fire.
+      userPreferences: { onboardedAt: '2026-05-01T00:00:00Z' },
       persistPreference,
     })
 
-    expect(persistPreference).not.toHaveBeenCalled()
+    // No dialect/tone preference write.
+    const dialectOrToneWrites = persistPreference.mock.calls.filter((call) =>
+      ['hermit.spanish_dialect', 'hermit.tone'].includes(
+        (call[0] as { preferenceKey: string }).preferenceKey,
+      ),
+    )
+    expect(dialectOrToneWrites).toHaveLength(0)
   })
 
   it('saved preference (no explicit signal) selects that dialect for the prompt', () => {
@@ -136,6 +146,7 @@ describe('executeHermitCommand — per-user personalization', () => {
       commandText: '/hermit announce 🇲🇽 drop nuevo',
       senderAddress: ALICE,
       roomId: ROOM,
+      userPreferences: { onboardedAt: '2026-05-01T00:00:00Z' },
       persistPreference: alicePersist,
     })
 
@@ -143,7 +154,9 @@ describe('executeHermitCommand — per-user personalization', () => {
       commandText: '/hermit announce vault update',
       senderAddress: BOB,
       roomId: ROOM,
-      userPreferences: null,
+      // Mark Bob already-onboarded too so the assertion is about
+      // dialect leakage, not the one-time onboarding nudge.
+      userPreferences: { onboardedAt: '2026-05-01T00:00:00Z' },
       persistPreference: bobPersist,
     })
 
@@ -187,6 +200,7 @@ describe('executeHermitCommand — per-user personalization', () => {
       commandText: '/hermit announce 🇲🇽 drop nuevo',
       senderAddress: ALICE,
       roomId: ROOM,
+      userPreferences: { onboardedAt: '2026-05-01T00:00:00Z' },
       persistPreference,
     })
 

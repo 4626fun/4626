@@ -10,12 +10,20 @@ type HermitCallShape = {
   commandText: string
   senderAddress: string
   roomId?: string
-  userPreferences?: { spanishDialect: string | null } | null
+  userPreferences?: {
+    spanishDialect: string | null
+    tone?: string | null
+    onboardedAt?: string | null
+  } | null
   persistPreference?: (params: {
-    preferenceKey: 'hermit.spanish_dialect'
+    preferenceKey: 'hermit.spanish_dialect' | 'hermit.tone' | 'hermit.onboarded'
     preferenceValue: string
     updatedBy: string
   }) => Promise<void>
+  listPreferences?: () => Promise<
+    Array<{ preferenceKey: string; preferenceValue: string | null; updatedAt: string | null }>
+  >
+  clearPreferences?: () => Promise<boolean>
 }
 
 const isHermitUserAllowedMock = vi.fn(() => true)
@@ -26,6 +34,15 @@ const executeHermitCommandMock = vi.fn(async (_params: HermitCallShape) => ({
 }))
 const readUserPreferenceMock = vi.fn()
 const upsertUserPreferenceMock = vi.fn(async () => true)
+const listUserPreferencesMock = vi.fn(async () => [] as Array<{
+  roomId: string
+  senderAddress: string
+  preferenceKey: string
+  preferenceValue: string | null
+  updatedBy: string | null
+  updatedAt: string
+}>)
+const clearUserPreferencesMock = vi.fn(async () => true)
 
 vi.mock('../_lib/hermit/policy.js', () => ({
   isHermitUserAllowed: isHermitUserAllowedMock,
@@ -38,6 +55,8 @@ vi.mock('../_lib/hermit/skillRouter.js', () => ({
 vi.mock('../_lib/alfaclub/userPreferenceStore.js', () => ({
   readUserPreference: readUserPreferenceMock,
   upsertUserPreference: upsertUserPreferenceMock,
+  listUserPreferences: listUserPreferencesMock,
+  clearUserPreferences: clearUserPreferencesMock,
 }))
 
 // Stub out unrelated families so we don't pull in DB/keepr code.
@@ -59,6 +78,10 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     readUserPreferenceMock.mockReset()
     upsertUserPreferenceMock.mockReset()
     upsertUserPreferenceMock.mockResolvedValue(true)
+    listUserPreferencesMock.mockReset()
+    listUserPreferencesMock.mockResolvedValue([])
+    clearUserPreferencesMock.mockReset()
+    clearUserPreferencesMock.mockResolvedValue(true)
     executeHermitCommandMock.mockReset()
     executeHermitCommandMock.mockResolvedValue({
       kind: 'hermit',
@@ -67,15 +90,17 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     })
   })
 
-  it('passes saved preference + roomId + persistPreference to Hermit when chatId is an alfaclub: room', async () => {
-    readUserPreferenceMock.mockResolvedValueOnce({
-      roomId: '12345',
-      senderAddress: ALICE,
-      preferenceKey: 'hermit.spanish_dialect',
-      preferenceValue: 'argentina',
-      updatedBy: 'hermit.flag',
-      updatedAt: '2026-05-01T00:00:00Z',
-    })
+  it('passes saved preferences + roomId + persistPreference + listPreferences + clearPreferences to Hermit when chatId is an alfaclub: room', async () => {
+    listUserPreferencesMock.mockResolvedValueOnce([
+      {
+        roomId: '12345',
+        senderAddress: ALICE,
+        preferenceKey: 'hermit.spanish_dialect',
+        preferenceValue: 'argentina',
+        updatedBy: 'hermit.flag',
+        updatedAt: '2026-05-01T00:00:00Z',
+      },
+    ])
 
     const { executeCommand } = await import('./execute.ts')
     await executeCommand({
@@ -86,20 +111,28 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       userId: ALICE,
     })
 
-    expect(readUserPreferenceMock).toHaveBeenCalledWith({
+    expect(listUserPreferencesMock).toHaveBeenCalledWith({
       roomId: '12345',
       senderAddress: ALICE,
-      preferenceKey: 'hermit.spanish_dialect',
+      keyPrefix: 'hermit.',
     })
     expect(executeHermitCommandMock).toHaveBeenCalledTimes(1)
     const call = (executeHermitCommandMock.mock.calls[0]?.[0] as HermitCallShape) as {
       roomId?: string
-      userPreferences?: { spanishDialect: string | null } | null
+      userPreferences?: { spanishDialect: string | null; tone?: string | null; onboardedAt?: string | null } | null
       persistPreference?: unknown
+      listPreferences?: unknown
+      clearPreferences?: unknown
     }
     expect(call.roomId).toBe('12345')
-    expect(call.userPreferences).toEqual({ spanishDialect: 'argentina' })
+    expect(call.userPreferences).toEqual({
+      spanishDialect: 'argentina',
+      tone: null,
+      onboardedAt: null,
+    })
     expect(typeof call.persistPreference).toBe('function')
+    expect(typeof call.listPreferences).toBe('function')
+    expect(typeof call.clearPreferences).toBe('function')
   })
 
   it('the persistPreference closure delegates to upsertUserPreference with the right keys', async () => {
@@ -149,7 +182,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       userId: ALICE,
     })
 
-    expect(readUserPreferenceMock).not.toHaveBeenCalled()
+    expect(listUserPreferencesMock).not.toHaveBeenCalled()
     const call = (executeHermitCommandMock.mock.calls[0]?.[0] as HermitCallShape) as {
       roomId?: string
       userPreferences?: unknown
@@ -161,7 +194,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
   })
 
   it('a DB read failure does not break the chat reply (Hermit is still invoked)', async () => {
-    readUserPreferenceMock.mockRejectedValueOnce(new Error('db down'))
+    listUserPreferencesMock.mockRejectedValueOnce(new Error('db down'))
 
     const { executeCommand } = await import('./execute.ts')
     const result = await executeCommand({
@@ -180,7 +213,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     // Force isHermitUserAllowed → false to prove the AlfaClub branch
     // is what authorizes the call, not the allowlist.
     isHermitUserAllowedMock.mockReturnValue(false)
-    readUserPreferenceMock.mockResolvedValueOnce(null)
+    listUserPreferencesMock.mockResolvedValueOnce([])
 
     const { executeCommand } = await import('./execute.ts')
     const result = await executeCommand({
@@ -210,7 +243,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
 
     expect(result.ok).toBe(false)
     expect(result.response).toBe('Hermit access denied.')
-    expect(readUserPreferenceMock).not.toHaveBeenCalled()
+    expect(listUserPreferencesMock).not.toHaveBeenCalled()
     expect(executeHermitCommandMock).not.toHaveBeenCalled()
     isHermitUserAllowedMock.mockReturnValue(true)
   })
@@ -242,7 +275,7 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
       userId: ALICE,
     })
 
-    expect(readUserPreferenceMock).not.toHaveBeenCalled()
+    expect(listUserPreferencesMock).not.toHaveBeenCalled()
     const call = (executeHermitCommandMock.mock.calls[0]?.[0] as HermitCallShape) as { roomId?: string }
     expect(call.roomId).toBeUndefined()
   })

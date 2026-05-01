@@ -218,6 +218,134 @@ export async function upsertUserPreference(params: {
 }
 
 /**
+ * List preferences for a (room, sender). Optional `keyPrefix` filter
+ * (e.g. `'hermit.'`) — when present, only keys matching the prefix
+ * are returned. Returns an empty array on any failure mode (DB
+ * unavailable, query error, persistence disabled).
+ */
+export async function listUserPreferences(params: {
+  roomId: string
+  senderAddress: string
+  keyPrefix?: string | null
+}): Promise<AlfaClubUserPreferenceRecord[]> {
+  if (isPersistenceDisabled()) return []
+  const roomId = normalizeRoomId(params.roomId)
+  const senderAddress = normalizeSenderAddress(params.senderAddress)
+  if (!roomId || !senderAddress) return []
+  // Validate prefix the same way as a key (forbids spaces/quoting), but
+  // allow trailing dot — that's literally the prefix shape.
+  let likeFilter: string | null = null
+  if (typeof params.keyPrefix === 'string' && params.keyPrefix.trim().length > 0) {
+    const trimmed = params.keyPrefix.trim()
+    if (
+      trimmed.length > PREFERENCE_KEY_MAX_LENGTH ||
+      !/^[a-zA-Z0-9._-]+$/.test(trimmed)
+    ) {
+      return []
+    }
+    // Postgres LIKE: escape % and _ to neutralize wildcard injection
+    // through the prefix. The character class above already forbids
+    // them, but belt + suspenders.
+    const escaped = trimmed.replace(/[%_]/g, '\\$&')
+    likeFilter = `${escaped}%`
+  }
+
+  const db = await getDb()
+  if (!db) return []
+  try {
+    await ensureAlfaClubVigilanteSchema()
+    const result = likeFilter
+      ? await db.sql`
+          SELECT room_id,
+                 sender_address,
+                 preference_key,
+                 preference_value,
+                 updated_by,
+                 updated_at::text AS updated_at
+          FROM alfaclub.user_preference
+          WHERE room_id = ${roomId}
+            AND sender_address = ${senderAddress}
+            AND preference_key LIKE ${likeFilter}
+          ORDER BY preference_key ASC;
+        `
+      : await db.sql`
+          SELECT room_id,
+                 sender_address,
+                 preference_key,
+                 preference_value,
+                 updated_by,
+                 updated_at::text AS updated_at
+          FROM alfaclub.user_preference
+          WHERE room_id = ${roomId}
+            AND sender_address = ${senderAddress}
+          ORDER BY preference_key ASC;
+        `
+    const rows = (result.rows ?? []) as PreferenceRow[]
+    return rows.map(rowToRecord)
+  } catch (err) {
+    logger.warn('[alfaclub-user-preference] list failed', {
+      ...describeDbError(err),
+    })
+    return []
+  }
+}
+
+/**
+ * Bulk-delete preferences for a (room, sender) under an optional key
+ * prefix (e.g. `'hermit.'` clears all Hermit personalization but
+ * leaves any future Keepr preferences alone). Returns `true` on
+ * success regardless of how many rows existed.
+ */
+export async function clearUserPreferences(params: {
+  roomId: string
+  senderAddress: string
+  keyPrefix?: string | null
+}): Promise<boolean> {
+  if (isPersistenceDisabled()) return false
+  const roomId = normalizeRoomId(params.roomId)
+  const senderAddress = normalizeSenderAddress(params.senderAddress)
+  if (!roomId || !senderAddress) return false
+  let likeFilter: string | null = null
+  if (typeof params.keyPrefix === 'string' && params.keyPrefix.trim().length > 0) {
+    const trimmed = params.keyPrefix.trim()
+    if (
+      trimmed.length > PREFERENCE_KEY_MAX_LENGTH ||
+      !/^[a-zA-Z0-9._-]+$/.test(trimmed)
+    ) {
+      return false
+    }
+    const escaped = trimmed.replace(/[%_]/g, '\\$&')
+    likeFilter = `${escaped}%`
+  }
+
+  const db = await getDb()
+  if (!db) return false
+  try {
+    await ensureAlfaClubVigilanteSchema()
+    if (likeFilter) {
+      await db.sql`
+        DELETE FROM alfaclub.user_preference
+        WHERE room_id = ${roomId}
+          AND sender_address = ${senderAddress}
+          AND preference_key LIKE ${likeFilter};
+      `
+    } else {
+      await db.sql`
+        DELETE FROM alfaclub.user_preference
+        WHERE room_id = ${roomId}
+          AND sender_address = ${senderAddress};
+      `
+    }
+    return true
+  } catch (err) {
+    logger.warn('[alfaclub-user-preference] clear failed', {
+      ...describeDbError(err),
+    })
+    return false
+  }
+}
+
+/**
  * Delete a preference. Idempotent. Returns `true` on success
  * (regardless of whether a row existed) and `false` on DB error.
  */

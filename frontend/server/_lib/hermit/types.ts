@@ -25,20 +25,60 @@ export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme'
 export type HermitUserPreferences = {
   /** Persisted Spanish dialect, if any. Trumped by an explicit signal. */
   spanishDialect?: string | null
+  /** Persisted tone preference (e.g. `clean`, `degen`, `pro`, …). */
+  tone?: string | null
+  /**
+   * ISO timestamp of when the per-(room, sender) onboarding nudge was
+   * last shown. Presence (any non-empty value) means "do not nudge
+   * again". Absence means "nudge on next valid creative reply".
+   */
+  onboardedAt?: string | null
 }
 
 /**
+ * Persistable Hermit preference keys. The AlfaClub control-plane
+ * store accepts any `hermit.*` namespaced key generically, but the
+ * type union below is the source of truth for which keys the
+ * creative lane is allowed to write through `persistPreference`.
+ */
+export type HermitPreferenceKey =
+  | 'hermit.spanish_dialect'
+  | 'hermit.tone'
+  | 'hermit.onboarded'
+
+/**
  * Optional callback used by `executeHermitCommand` to persist a fresh
- * explicit signal (flag emoji / text hint) for the active sender.
+ * explicit signal (flag emoji / text hint), an explicit `/hermit
+ * lang` / `/hermit tone` selection, or the one-time onboarding flag.
  *
  * Best-effort: returning false / throwing must not break the reply.
  * Implementations live in the AlfaClub lane (Vercel control plane).
  */
 export type HermitPreferenceWriter = (params: {
-  preferenceKey: 'hermit.spanish_dialect'
+  preferenceKey: HermitPreferenceKey
   preferenceValue: string
   updatedBy: string
 }) => Promise<void> | void
+
+/**
+ * Optional read-back of every Hermit preference for the current
+ * (room, sender). Used by `/hermit prefs` to render a snapshot.
+ * Returns an empty array when persistence is unavailable.
+ */
+export type HermitPreferenceLister = () => Promise<
+  Array<{
+    preferenceKey: string
+    preferenceValue: string | null
+    updatedAt: string | null
+  }>
+>
+
+/**
+ * Optional bulk-clear used by `/hermit reset`. Clears every Hermit
+ * preference (`hermit.*` prefix) for the current (room, sender).
+ * Best-effort: returns true on success, false on DB unavailable.
+ */
+export type HermitPreferenceClearer = () => Promise<boolean>
 
 export type HermitExecutionParams = {
   commandText: string
@@ -49,6 +89,10 @@ export type HermitExecutionParams = {
   userPreferences?: HermitUserPreferences | null
   /** Best-effort writer for explicit signals. Optional. */
   persistPreference?: HermitPreferenceWriter | null
+  /** Best-effort lister for `/hermit prefs`. Optional. */
+  listPreferences?: HermitPreferenceLister | null
+  /** Best-effort bulk-clear for `/hermit reset`. Optional. */
+  clearPreferences?: HermitPreferenceClearer | null
 }
 
 export type HermitExecutionResult = {

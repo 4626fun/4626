@@ -66,14 +66,30 @@ function isAlfaClubChatId(chatId: string | undefined): boolean {
 
 type HermitRoomContext = {
   roomId: string | null
-  userPreferences: { spanishDialect: string | null } | null
+  userPreferences:
+    | {
+        spanishDialect: string | null
+        tone?: string | null
+        onboardedAt?: string | null
+      }
+    | null
   persistPreference:
     | ((params: {
-        preferenceKey: 'hermit.spanish_dialect'
+        preferenceKey: 'hermit.spanish_dialect' | 'hermit.tone' | 'hermit.onboarded'
         preferenceValue: string
         updatedBy: string
       }) => Promise<void>)
     | null
+  listPreferences:
+    | (() => Promise<
+        Array<{
+          preferenceKey: string
+          preferenceValue: string | null
+          updatedAt: string | null
+        }>
+      >)
+    | null
+  clearPreferences: (() => Promise<boolean>) | null
 }
 
 /**
@@ -92,27 +108,46 @@ async function resolveHermitRoomContext(params: {
 }): Promise<HermitRoomContext> {
   const roomId = parseAlfaClubRoomIdFromChatId(params.chatId)
   if (!roomId) {
-    return { roomId: null, userPreferences: null, persistPreference: null }
+    return {
+      roomId: null,
+      userPreferences: null,
+      persistPreference: null,
+      listPreferences: null,
+      clearPreferences: null,
+    }
   }
   let store: typeof import('../_lib/alfaclub/userPreferenceStore.js')
   try {
     store = await import('../_lib/alfaclub/userPreferenceStore.js')
   } catch {
-    return { roomId, userPreferences: null, persistPreference: null }
+    return {
+      roomId,
+      userPreferences: null,
+      persistPreference: null,
+      listPreferences: null,
+      clearPreferences: null,
+    }
   }
 
-  let spanishDialect: string | null = null
+  // Pull every persisted Hermit preference for this (room, sender) in
+  // a single round-trip. The empty-array fallback inside the store
+  // means we treat a DB outage as "no preferences" and Hermit falls
+  // back to its existing room-less behavior.
+  let preferenceRows: Awaited<ReturnType<typeof store.listUserPreferences>> = []
   try {
-    const record = await store.readUserPreference({
+    preferenceRows = await store.listUserPreferences({
       roomId,
       senderAddress: params.senderWallet,
-      preferenceKey: 'hermit.spanish_dialect',
+      keyPrefix: 'hermit.',
     })
-    spanishDialect = record?.preferenceValue ?? null
   } catch {
-    // Read is already best-effort inside the store, but guard again.
-    spanishDialect = null
+    preferenceRows = []
   }
+  const valueOf = (key: string): string | null =>
+    preferenceRows.find((row) => row.preferenceKey === key)?.preferenceValue ?? null
+  const spanishDialect = valueOf('hermit.spanish_dialect')
+  const tone = valueOf('hermit.tone')
+  const onboardedAt = valueOf('hermit.onboarded')
 
   const persistPreference: HermitRoomContext['persistPreference'] = async ({
     preferenceKey,
@@ -132,10 +167,41 @@ async function resolveHermitRoomContext(params: {
     }
   }
 
+  const listPreferences: HermitRoomContext['listPreferences'] = async () => {
+    try {
+      const rows = await store.listUserPreferences({
+        roomId,
+        senderAddress: params.senderWallet,
+        keyPrefix: 'hermit.',
+      })
+      return rows.map((row) => ({
+        preferenceKey: row.preferenceKey,
+        preferenceValue: row.preferenceValue,
+        updatedAt: row.updatedAt ?? null,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  const clearPreferences: HermitRoomContext['clearPreferences'] = async () => {
+    try {
+      return await store.clearUserPreferences({
+        roomId,
+        senderAddress: params.senderWallet,
+        keyPrefix: 'hermit.',
+      })
+    } catch {
+      return false
+    }
+  }
+
   return {
     roomId,
-    userPreferences: { spanishDialect },
+    userPreferences: { spanishDialect, tone, onboardedAt },
     persistPreference,
+    listPreferences,
+    clearPreferences,
   }
 }
 
@@ -236,6 +302,12 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
             : {}),
           ...(hermitRoomContext.persistPreference
             ? { persistPreference: hermitRoomContext.persistPreference }
+            : {}),
+          ...(hermitRoomContext.listPreferences
+            ? { listPreferences: hermitRoomContext.listPreferences }
+            : {}),
+          ...(hermitRoomContext.clearPreferences
+            ? { clearPreferences: hermitRoomContext.clearPreferences }
             : {}),
         })
         return {
