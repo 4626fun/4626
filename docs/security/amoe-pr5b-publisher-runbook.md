@@ -13,10 +13,149 @@ This document is intentionally narrow. For protocol-level context (why the proje
 3. **Never manually write to `amoe_publisher_runs` to "fix" a stuck epoch.** The lifecycle is monotonic and the partial-unique index on `(epoch) WHERE finished_at IS NULL` is the only correctness gate. The supported recovery is: mark the in-flight row `errored` + set `finished_at = NOW()`, then let the next cron tick re-claim. Never roll a phase backwards.
 4. **Never "rebroadcast" an epoch's root by hand.** The router has a one-shot guard (`PointsLedgerEpochAlreadyPublished`) — a duplicate call will revert and waste gas, and the audit trail will look like an unauthorized publisher attempt. If a confirmed snapshot exists for the epoch, the work is done.
 5. **Never modify migration `034_amoe_publisher_runs.sql` or the Supabase mirror once they have shipped to a database.** Any schema change ships as a new forward-only migration.
+6. **Never flip `AMOE_BURN_CREDITS_ENABLED=1`, `AMOE_ZK_SUBMIT_ENABLED=1`, `AMOE_LEDGER_PUBLISHER_ENABLED=1`, or `AMOE_REFUND_CRON_ENABLED=1` while the AMOE migration backlog is unapplied.** The handlers query tables that do not yet exist in production (verified 2026-04-30 against project `qajpnuvqlcfseghnldkl`: zero `points` rows with `source LIKE 'amoe_%'`, and `amoe_zk_submissions` / `amoe_publisher_runs` / `amoe_burn_credits_intents` tables all missing). Run [Step 0.5](#step-05--migration-backlog-audit-required-before-any-amoe-flag-flip) FIRST and confirm a clean apply before any flag flip in any environment.
 
 ---
 
 ## Pre-flight (one-time, in order)
+
+### Step 0.5 — Migration backlog audit (REQUIRED before any AMOE flag flip)
+
+As of 2026-04-30 the production Supabase project (`qajpnuvqlcfseghnldkl`) is at migration `20260423025327_v_zora_profiles_enriched`. **Nine migrations have shipped to `main` but are not yet applied.** Five of those are AMOE-critical and gate every AMOE feature flag; the remaining four are unrelated workstreams interleaved into the same window.
+
+**Audit invariant:** `select COUNT(*) from public.points where source like 'amoe_%'` returns `0`. There has never been a phase-A burn in production. There is nothing to backfill — only forward-only migrations to apply.
+
+#### Apply order (must be respected)
+
+Migrations carry implicit dependencies that the timestamp ordering does not always make obvious. Apply in this exact order:
+
+| # | Supabase filename | Frontend mirror | Introduced by | Owner workstream | Hard dependency |
+|---|---|---|---|---|---|
+| 1 | `20260423193000_deploy_sessions_v2_schema.sql` | (Supabase-only) | [#375](https://github.com/wenakita/4626/pull/375) (security audit remediation) | Deploy sessions | None. Alters existing `deploys` table. |
+| 2 | `20260427180000_amoe_eligible_points_view.sql` | (Supabase-only — see note below) | [#394](https://github.com/wenakita/4626/pull/394) (`fix(amoe): bifurcate points balance for AMOE eligibility (compliance)`) | **AMOE** — sweepstakes-law allowlist | None. Creates `points_amoe_eligible_balance` view. |
+| 3 | `20260429000001_add_max_assets_cap.sql` | `032_workspace_strategy_targets_max_assets_cap.sql` | [#443](https://github.com/wenakita/4626/pull/443) (`feat(vault): governance-enforced strategyMaxAssets cap`) | Vault governance | None. Adds nullable column. The supabase-side filename was renamed from `20260429000000_…` to `20260429000001_…` on 2026-04-30 to break a same-prefix collision with file 4 (`amoe_zk_submissions`); SQL contents are byte-unchanged. |
+| 4 | `20260429000000_amoe_zk_submissions.sql` | `032_amoe_zk_submissions.sql` | [#444](https://github.com/wenakita/4626/pull/444) (`feat(amoe): add ZK replay store`) | **AMOE** — PR 4 ZK replay | None. Creates `amoe_zk_submissions` table. |
+| 5 | `20260429010000_amoe_points_burn_ledger.sql` | `033_amoe_points_burn_ledger.sql` | [#445](https://github.com/wenakita/4626/pull/445) (`feat(amoe): PR 5a — points-burn ledger SoT`) | **AMOE** — PR 5a | None. Creates `amoe_points_burn_ledger` + `amoe_points_burn_ledger_snapshots`. |
+| 6 | `20260429020000_amoe_publisher_runs.sql` | `034_amoe_publisher_runs.sql` | [#451](https://github.com/wenakita/4626/pull/451) (`feat(amoe): land PR 5b — publisher cron + handler swap on main`) | **AMOE** — PR 5b | **Requires #4** — (a) trailing index `amoe_zk_submissions_signup_spend_nullifier_idx` references `amoe_zk_submissions(signup_id, spend_ref_id)`, AND (b) `ALTER TABLE amoe_zk_submissions ADD COLUMN twitter_credit_nullifier_hex` adds a forward-compat column. The filename undersells the scope; this migration touches two tables. |
+| 7 | `20260430023000_ethos_chat_presence_and_vault_chat.sql` | (Supabase-only) | commit `1f8deaf` (`feat(chat): implement chat availability and vault chat policies`, **direct push to main, no PR**) | Chat / Ethos | None. Creates four chat tables. |
+| 8 | `20260430190000_amoe_entry_refund_source.sql` | `035_amoe_entry_refund_source.sql` | [#461](https://github.com/wenakita/4626/pull/461) (`feat(amoe): PR 6c — refund cron for orphan phase-A burns`) + hotfix [#464](https://github.com/wenakita/4626/pull/464) | **AMOE** — PR 6c | **Requires #2** — `CREATE OR REPLACE VIEW public.points_amoe_eligible_balance` overwrites a view that #2 introduces. |
+| 9 | `20260501000000_alfaclub_user_preferences.sql` | `036_alfaclub_user_preferences.sql` | [#465](https://github.com/wenakita/4626/pull/465) (`feat(alfaclub): per-(room, sender) Hermit personalization`) | AlfaClub | None. Creates `alfaclub` schema + `user_preference` table. |
+
+**Notes:**
+- The frontend `db/migrations/` mirror is **only populated for AMOE migrations**, because only AMOE has runtime bootstrap code (e.g. `ensureAmoeReplayStoreSchema`, `ensureAmoeSchema`) that re-asserts the schema on cold start in dev / preview environments. Supabase-only migrations do not need a frontend mirror; the Supabase prod / branch apply is authoritative.
+- The frontend mirror has a numbering collision: `032_amoe_zk_submissions.sql` and `032_workspace_strategy_targets_max_assets_cap.sql` both use prefix `032`. They affect disjoint tables and the bootstrap loaders read by exact filename, so this is harmless. Do **not** rename them post-merge — a new file would re-bootstrap the table on cold start and could re-trigger DDL.
+- AMOE migrations (#2, #4, #5, #6, #8) are the only items that gate AMOE flag flips. The non-AMOE migrations (#1, #3, #7, #9) can be applied independently by their respective owners and do not need to block this runbook.
+- Migration #6 has a comment claiming it is "byte-for-byte identical" to its frontend mirror; verify with `diff` before apply (see Verification step below).
+
+#### Pre-apply verification
+
+From the workspace checkout of `main`:
+
+```bash
+cd /path/to/wenakita4626
+
+# 1. Confirm every introducing commit is reachable from main.
+git fetch origin main
+for SHA in 163eaa0 d0e9d39 352465d fc83c60 bc63e13 a409faa 1f8deaf 525cb0f 283a7e6; do
+  git merge-base --is-ancestor "$SHA" origin/main \
+    && echo "$SHA: ON main" \
+    || echo "$SHA: NOT on main — STOP"
+done
+
+# 2. Confirm the AMOE Supabase / frontend mirrors are byte-identical for the
+#    files that claim parity. Any diff is a docs-drift bug that must be
+#    resolved BEFORE apply.
+for PAIR in \
+  "frontend/db/migrations/032_amoe_zk_submissions.sql                supabase/migrations/20260429000000_amoe_zk_submissions.sql" \
+  "frontend/db/migrations/033_amoe_points_burn_ledger.sql            supabase/migrations/20260429010000_amoe_points_burn_ledger.sql" \
+  "frontend/db/migrations/034_amoe_publisher_runs.sql                supabase/migrations/20260429020000_amoe_publisher_runs.sql" \
+  "frontend/db/migrations/035_amoe_entry_refund_source.sql           supabase/migrations/20260430190000_amoe_entry_refund_source.sql"; do
+  pair=( $PAIR )
+  if diff -q "${pair[0]}" "${pair[1]}" > /dev/null; then
+    echo "OK    ${pair[0]} ≡ ${pair[1]}"
+  else
+    echo "DRIFT ${pair[0]} ≠ ${pair[1]} — STOP"
+  fi
+done
+```
+
+#### Apply procedure (Supabase prod)
+
+Apply each migration as its own discrete `apply_migration` call so that a failure does not roll back unrelated work. The Supabase MCP `apply_migration` tool takes only `name` (snake_case) and `query`; the recorded `supabase_migrations.schema_migrations.version` is generated from the apply timestamp. The CLI tooling (`supabase db push`/`db diff`/`db pull`) instead derives `version` from the leading 14 digits of the filename, so the apply path you choose determines whether `version == filename-prefix`. Keep them in sync to avoid breaking future CLI diffs.
+
+```
+# Recommended sequence (run one at a time; verify after each).
+# Pseudocode — substitute the literal MCP call signature (name, query) or
+# `supabase migration up` invocation as appropriate for your apply path.
+apply_migration(name="deploy_sessions_v2_schema",          query=<file 1 contents>)   # version 20260423193000
+apply_migration(name="amoe_eligible_points_view",          query=<file 2 contents>)   # version 20260427180000
+apply_migration(name="add_max_assets_cap",                 query=<file 3 contents>)   # version 20260429000001 (post-rename)
+apply_migration(name="amoe_zk_submissions",                query=<file 4 contents>)   # version 20260429000000
+apply_migration(name="amoe_points_burn_ledger",            query=<file 5 contents>)   # version 20260429010000
+apply_migration(name="amoe_publisher_runs",                query=<file 6 contents>)   # version 20260429020000
+apply_migration(name="ethos_chat_presence_and_vault_chat", query=<file 7 contents>)   # version 20260430023000
+apply_migration(name="amoe_entry_refund_source",           query=<file 8 contents>)   # version 20260430190000
+apply_migration(name="alfaclub_user_preferences",          query=<file 9 contents>)   # version 20260501000000
+```
+
+**Filename-prefix invariant (Codex follow-up on PR #473).** Every `supabase/migrations/*.sql` file MUST have a unique 14-digit timestamp prefix that exactly matches the row this migration writes into `supabase_migrations.schema_migrations.version`. The prior version of this runbook attempted to fix a same-prefix collision (`20260429000000_add_max_assets_cap.sql` and `20260429000000_amoe_zk_submissions.sql`) by hand-bumping the recorded `version` at apply time. That advice was wrong on two axes: (1) the Supabase MCP `apply_migration` tool does not accept a `version` parameter (it auto-generates from apply time), and (2) any divergence between filename prefix and recorded version permanently desyncs `supabase db push`/`db diff`/`db pull`. The correct fix is to give every file a unique prefix BEFORE applying. Done on 2026-04-30 via `git mv supabase/migrations/20260429000000_add_max_assets_cap.sql supabase/migrations/20260429000001_add_max_assets_cap.sql`; SQL contents byte-unchanged. Both files remain forward-only and idempotent (`IF NOT EXISTS`).
+
+#### Post-apply verification
+
+After all nine migrations apply cleanly:
+
+```sql
+-- A. AMOE schema is fully present.
+SELECT table_name FROM information_schema.tables
+ WHERE table_schema = 'public'
+   AND table_name IN (
+     'amoe_zk_submissions',
+     'amoe_points_burn_ledger',
+     'amoe_points_burn_ledger_snapshots',
+     'amoe_publisher_runs',
+     'amoe_burn_credits_intents'
+   )
+ ORDER BY table_name;
+-- Must return exactly 5 rows.
+
+-- B. Eligibility view exists with the refund arm.
+SELECT pg_get_viewdef('public.points_amoe_eligible_balance'::regclass, true)
+        ~ 'amoe_entry_refund' AS has_refund_arm;
+-- Must return TRUE.
+
+-- C. Publisher single-instance lock is active.
+SELECT indexname FROM pg_indexes
+ WHERE tablename = 'amoe_publisher_runs'
+   AND indexname = 'amoe_publisher_runs_epoch_in_flight_idx';
+-- Must return one row.
+
+-- D. Refund cron's scope guard predicate is wired (intents table empty is expected and correct).
+SELECT COUNT(*) AS intents_rows,
+       (SELECT COUNT(*) FROM public.points
+         WHERE source = 'amoe_entry_spend' AND amount < 0) AS phase_a_burns_total
+  FROM public.amoe_burn_credits_intents;
+-- intents_rows = 0 expected on first apply; phase_a_burns_total = 0 expected (no AMOE traffic yet).
+```
+
+If any of A–C fails, do not proceed to flag-flip. If D returns `phase_a_burns_total > intents_rows` at any future audit, that means a phase-A burn happened without an intent marker — STOP and re-read §5.1.2 of [`amoe-burn-then-submit-design.md`](./amoe-burn-then-submit-design.md); the atomic CTE must have been bypassed.
+
+#### Rollback posture
+
+These migrations are forward-only by design (the `IF NOT EXISTS` guards make re-apply safe; there is no DOWN migration). If the apply must be undone, it is a hand-rolled `DROP TABLE ... CASCADE` in reverse-dependency order. The supported recovery for an apply that breaks something downstream is:
+
+1. Leave the schema in place.
+2. Keep the relevant `*_ENABLED` flag unset (the AMOE handlers all return 503 when their flag is unset, so the new tables stay quiescent).
+3. Ship a forward-only fix migration that adjusts the schema in-place.
+
+#### What this audit does NOT do
+
+- It does not apply any migration. The `apply_migration` calls above are templates for ops; the ops operator runs them.
+- It does not provision Vercel env vars (Step 2 covers `AMOE_LEDGER_PUBLISHER_*`; the burn-credits and refund-cron flags are listed in their respective sections of this runbook).
+- It does not change the on-chain allowlist (Step 3).
+- It does not flip any feature flag (Step 5 / production enable).
+- It does not address the four non-AMOE migrations' rollout. Those are owned by their respective workstreams and should be coordinated with the listed PR authors.
+
+---
 
 ### Step 0 — Confirm prerequisites already merged
 
@@ -55,6 +194,8 @@ The `AMOE_SIGNUP_SALT` env var must already be provisioned (PR 5a prerequisite).
 ### Step 1 — Apply the migration
 
 > **Prerequisite:** PR #451 must be merged to `main` first — the migration files referenced below are introduced by that PR. Re-run Step 0 if unsure.
+
+> **See also Step 0.5 above:** `034_amoe_publisher_runs.sql` is one of nine unapplied migrations as of 2026-04-30, and it has a hard dependency on `032_amoe_zk_submissions.sql` (it adds an index over and a column to that table). The Step 0.5 audit is the canonical reference for the full apply order; this Step 1 only covers the publisher-cron-specific verification that ops must run after the publisher_runs migration lands.
 
 Run [`frontend/db/migrations/034_amoe_publisher_runs.sql`](../../frontend/db/migrations/034_amoe_publisher_runs.sql) on **both** databases:
 
@@ -433,3 +574,5 @@ Unset `AMOE_REFUND_CRON_ENABLED` (or set to anything other than `'1'`) and re-de
 | 2026-04-30 | Added orphan-burn refund cron (PR 6c) section. |
 | 2026-04-30 | PR 6c P1 fix — documented `amoe_burn_credits_intents` phase-A scope guard. |
 | 2026-04-30 | PR 6c P1 v2 — documented atomic intent insert (Codex follow-up on #464); intent row now written inside debit CTE, eliminating post-debit race window. |
+| 2026-04-30 | Added Step 0.5 (Migration backlog audit) and hard rule #6. Audit verified prod Supabase is at `20260423025327_v_zora_profiles_enriched` with zero `points` rows from AMOE sources — no backfill needed, only forward-only migrations to apply. |
+| 2026-04-30 | PR #473 Codex follow-up — broke the same-prefix collision by renaming `20260429000000_add_max_assets_cap.sql` → `20260429000001_add_max_assets_cap.sql`, restoring the filename-prefix == `schema_migrations.version` invariant. Replaced the prior "bump version at apply time" advice (which was wrong: MCP `apply_migration` has no `version` arg and the divergence would have broken `supabase db push`/`db diff`/`db pull`). |
