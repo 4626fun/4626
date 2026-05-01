@@ -73,6 +73,12 @@ import {
   upsertAlfaClubPrivyAccessToken,
   upsertAlfaClubPrivyRefreshToken,
 } from './chatTokenStore.js'
+import {
+  buildRefreshFailurePayload,
+  buildRefreshSuccessPayload,
+  recordRefreshFailure,
+  recordRefreshSuccess,
+} from './authHealthStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -241,6 +247,16 @@ export interface AlfaClubRefresherDependencies {
   now?: () => number
   /** Override the near-expiry window — tests. */
   nearExpiryWindowMs?: number
+  /**
+   * Health-row writers. Default to the live store; tests inject no-ops or
+   * spies. Health writes are best-effort and never throw out of the
+   * refresher — failure to persist health does NOT change refresh outcome.
+   */
+  recordSuccess?: (payload: import('./authHealthStore.js').RefreshSuccessPayload) => Promise<boolean>
+  recordFailure?: (
+    payload: import('./authHealthStore.js').RefreshFailurePayload,
+    writer: string,
+  ) => Promise<boolean>
 }
 
 function envFallbackReader(envKey: string): () => Promise<string | null> {
@@ -347,6 +363,8 @@ function resolveDeps(
     (async (params) => refreshPrivySession(params))
   const log = deps.log ?? logger
   const now = deps.now ?? Date.now
+  const recordSuccess = deps.recordSuccess ?? recordRefreshSuccess
+  const recordFailure = deps.recordFailure ?? recordRefreshFailure
   return {
     readAccessToken,
     readRefreshToken,
@@ -356,6 +374,8 @@ function resolveDeps(
     log,
     now,
     nearExpiryWindowMs: deps.nearExpiryWindowMs ?? NEAR_EXPIRY_WINDOW_MS,
+    recordSuccess,
+    recordFailure,
   }
 }
 
@@ -370,7 +390,17 @@ export async function runAlfaClubPrivyRefreshOnce(
   opts: { force?: boolean } = {},
 ): Promise<AlfaClubRefresherOutcome> {
   const resolved = resolveDeps(deps)
-  const { readAccessToken, readRefreshToken, readIdentityToken, writeBundle, refresh, log, now } = resolved
+  const {
+    readAccessToken,
+    readRefreshToken,
+    readIdentityToken,
+    writeBundle,
+    refresh,
+    log,
+    now,
+    recordSuccess,
+    recordFailure,
+  } = resolved
 
   const [accessToken, refreshToken, identityToken] = await Promise.all([
     readAccessToken(),
@@ -383,6 +413,15 @@ export async function runAlfaClubPrivyRefreshOnce(
   if (!refreshToken) missing.push('ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN')
   if (missing.length > 0) {
     log.warn('[alfaclub-refresher] missing bootstrap tokens; skipping', { missing })
+    // Persist health row best-effort — never throws.
+    await recordFailure(
+      buildRefreshFailurePayload({
+        at: new Date(now()).toISOString(),
+        status: 'missing_tokens',
+        rawError: `missing:${missing.join(',')}`,
+      }),
+      'privy-token-refresher',
+    ).catch(() => false)
     return { status: 'missing_tokens', missing }
   }
 
@@ -414,10 +453,26 @@ export async function runAlfaClubPrivyRefreshOnce(
       newIdentityExp: newExp ? new Date(newExp).toISOString() : null,
       rotated: bundle.refreshToken !== refreshToken,
     })
+    await recordSuccess(
+      buildRefreshSuccessPayload({
+        at: new Date(now()).toISOString(),
+        identityTokenExpIso: newExp ? new Date(newExp).toISOString() : null,
+        writer: 'privy-token-refresher',
+        rotatedRefresh: bundle.refreshToken !== refreshToken,
+      }),
+    ).catch(() => false)
     return { status: 'refreshed', identityTokenExp: newExp }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     log.warn('[alfaclub-refresher] refresh failed', { error: message })
+    await recordFailure(
+      buildRefreshFailurePayload({
+        at: new Date(now()).toISOString(),
+        status: 'error',
+        rawError: message,
+      }),
+      'privy-token-refresher',
+    ).catch(() => false)
     return { status: 'error', error: message }
   }
 }

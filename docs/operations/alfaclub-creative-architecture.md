@@ -20,7 +20,10 @@ same state**.
 
 **No single host owns both AlfaClub auth and creative.** That separation is
 what stops the `privy_refresh_failed:400 missing_or_invalid_token` flap that
-appears when two writers race the `chat_jwt` slot in Supabase.
+appears when two writers race the `chat_jwt` slot in Supabase. The
+single-writer invariant, anomaly detection, the redacted health endpoint,
+and the operator restore script are documented in
+[`docs/operations/alfaclub-auth-hardening.md`](./alfaclub-auth-hardening.md).
 
 ## Components
 

@@ -754,3 +754,137 @@ describe('startAlfaClubPrivyTokenRefresher env gate', () => {
     handle2.stop()
   })
 })
+
+describe('runAlfaClubPrivyRefreshOnce health recording', () => {
+  const NOW_MS = 1_800_000_000_000
+  const now = () => NOW_MS
+
+  it('records a refresh-success row with redacted metadata only', async () => {
+    const recordSuccess = vi.fn(async () => true)
+    const recordFailure = vi.fn(async () => true)
+    const newIdentityExp = NOW_MS / 1000 + 60 * 60
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(newIdentityExp),
+        refreshToken: 'rt-new',
+      }),
+      writeBundle: async () => {},
+      recordSuccess,
+      recordFailure,
+      log: silentLog(),
+      now,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(recordSuccess).toHaveBeenCalledTimes(1)
+    expect(recordFailure).not.toHaveBeenCalled()
+
+    const arg = recordSuccess.mock.calls[0]?.[0]
+    expect(arg).toMatchObject({
+      writer: 'privy-token-refresher',
+      rotatedRefresh: true,
+      identityTokenExp: new Date(newIdentityExp * 1000).toISOString(),
+    })
+    // Crucially: the payload carries only metadata, never the JWT itself.
+    const serialized = JSON.stringify(arg)
+    expect(serialized).not.toContain('at-new')
+    expect(serialized).not.toContain('rt-new')
+    expect(serialized).not.toMatch(/eyJhbGc/i) // any JWT fragment
+  })
+
+  it('marks rotatedRefresh:false when Privy keeps the existing refresh token', async () => {
+    const recordSuccess = vi.fn(async () => true)
+    await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-old', // unrotated
+      }),
+      writeBundle: async () => {},
+      recordSuccess,
+      recordFailure: async () => true,
+      log: silentLog(),
+      now,
+    })
+    expect(recordSuccess.mock.calls[0]?.[0]?.rotatedRefresh).toBe(false)
+  })
+
+  it('records a missing_tokens failure row when bootstrap tokens absent', async () => {
+    const recordSuccess = vi.fn(async () => true)
+    const recordFailure = vi.fn(async () => true)
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => null,
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => null,
+      refresh: async () => { throw new Error('should not be called') },
+      writeBundle: async () => { throw new Error('should not be called') },
+      recordSuccess,
+      recordFailure,
+      log: silentLog(),
+      now,
+    })
+    expect(outcome.status).toBe('missing_tokens')
+    expect(recordFailure).toHaveBeenCalledTimes(1)
+    expect(recordSuccess).not.toHaveBeenCalled()
+    const [payload, writer] = recordFailure.mock.calls[0] ?? []
+    expect(payload).toMatchObject({
+      status: 'missing_tokens',
+      errorCode: 'unknown',
+    })
+    expect(writer).toBe('privy-token-refresher')
+  })
+
+  it('records an error failure row when Privy refresh throws', async () => {
+    const recordSuccess = vi.fn(async () => true)
+    const recordFailure = vi.fn(async () => true)
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => {
+        throw new Error('privy_refresh_failed:400:{"error":"Invalid auth token"}')
+      },
+      writeBundle: async () => {},
+      recordSuccess,
+      recordFailure,
+      log: silentLog(),
+      now,
+    })
+    expect(outcome.status).toBe('error')
+    expect(recordSuccess).not.toHaveBeenCalled()
+    expect(recordFailure).toHaveBeenCalledTimes(1)
+    const [payload] = recordFailure.mock.calls[0] ?? []
+    expect(payload).toMatchObject({
+      status: 'error',
+      errorCode: 'privy_refresh_failed:400',
+    })
+  })
+
+  it('refresh succeeds even when health-row writers throw (best-effort)', async () => {
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+      writeBundle: async () => {},
+      recordSuccess: async () => { throw new Error('health-store-down') },
+      recordFailure: async () => { throw new Error('health-store-down') },
+      log: silentLog(),
+      now,
+    })
+    // Refresh outcome must be unaffected.
+    expect(outcome.status).toBe('refreshed')
+  })
+})
