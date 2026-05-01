@@ -1,0 +1,64 @@
+name: AlfaClub Preflight (manual)
+
+# Manual-only preflight for the AlfaClub LP launcher.
+#
+# Purpose: provide a safe remote `forge build` + focused `forge test` run for
+# `test/alfaclub/**` so contributors whose local machines cannot compile (e.g.
+# WSL OOM / SIGKILL on heavy compilation) can validate AlfaClub changes before
+# proposing a deployment.
+#
+# Safety:
+# - workflow_dispatch only — never runs on push/PR automatically
+# - no secrets, no RPC URLs, no private keys
+# - no `forge script` and no `--broadcast`; build + tests only
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to preflight (branch, tag, or SHA). Defaults to the ref the workflow was dispatched on.'
+        required: false
+        default: ''
+
+env:
+  FOUNDRY_PROFILE: ci
+
+jobs:
+  alfaclub-preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Guard forbidden tracked secrets/key files
+        run: bash scripts/check-forbidden-tracked-files.sh
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: nightly
+
+      - name: Forge build
+        run: forge build
+
+      - name: Forge test (test/alfaclub/**)
+        run: forge test --match-path "test/alfaclub/**" -vvv
