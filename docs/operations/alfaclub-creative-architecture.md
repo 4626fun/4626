@@ -107,6 +107,48 @@ Failure modes:
   remediation is to rotate `HERMIT_PINATA_BEARER_TOKEN`. Hermit never tries
   to "refresh" a Pinata token — there is no shared auth state for it.
 
+#### `/meme` inline-image contract
+
+`/meme` returns a strict-JSON copywriter result by default
+(`{ imagePrompt, caption, hashtags }`) — that's the historical
+behaviour and still the default surface.
+
+If the creative provider (today: Pinata; tomorrow: any provider behind
+the same HTTP/WSS contract) opts in to surfacing a real image, it MAY
+include any of the following fields in its JSON response:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `imageUrl` | string (HTTPS) | Preferred. Public URL ending in `.gif | .jpg | .jpeg | .png | .webp`. |
+| `image_url` | string (HTTPS) | Snake-case alias of `imageUrl`. |
+| `url` | string (HTTPS) | Last-resort top-level URL. |
+| `attachments[]` | array | First entry wins; entries may be a string URL or `{ url \| imageUrl \| image_url }`. |
+| `media[]`, `images[]` | array | Same shape as `attachments[]`. |
+
+The bridge runs every candidate URL through
+[`inferPublicMediaAttachment`](../../frontend/server/_lib/hermit/skillRouter.ts)
+(see PR #481). Anything that does not pass — `http://`, `data:`,
+malformed URLs, non-image extensions like `.svg` / `.html`, or a
+`?filename=` value with a non-image extension — is dropped silently
+and the reply falls back to the existing prompt/caption/hashtags
+text (no error, no caller-visible change).
+
+Provider URL contract:
+
+- HTTPS only.
+- Path tail must end in one of `.gif | .jpg | .jpeg | .png | .webp`,
+  OR the URL must carry a `?filename=<name>.<ext>` query parameter
+  carrying one of those extensions (covers IPFS gateway URLs).
+- No tokens / signatures / temporary URLs that the AlfaClub client
+  cannot fetch publicly.
+- Never invent a URL: if the provider has no real image to surface,
+  omit the field (or set it to `null`).
+
+When a valid attachment is produced, AlfaClub's room renders it
+inline. The validated URL is also appended to the textual reply so
+clients that don't render attachments still surface a clickable
+link.
+
 ### 5. Hermit workspace seeds — manual sync
 
 The four seed files are content-only and live in this repo:

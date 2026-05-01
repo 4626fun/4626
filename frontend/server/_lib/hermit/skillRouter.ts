@@ -701,8 +701,9 @@ function buildPinataPromptForHermitImage(
   return [
     'You are Hermit, generating meme-ready image concepts for AlfaChat.',
     'Output STRICT JSON only:',
-    '{"imagePrompt":"string","caption":"string","hashtags":["#tag"]}',
+    '{"imagePrompt":"string","caption":"string","hashtags":["#tag"],"imageUrl":"string|null"}',
     'Rules: imagePrompt vivid and specific, caption <= 180 chars, hashtags 1-5, no markdown.',
+    'imageUrl is OPTIONAL. Set it ONLY when you can return a public HTTPS URL ending in .gif, .jpg, .jpeg, .png, or .webp (or an HTTPS gateway URL with `?filename=<name>.<ext>` carrying one of those extensions). Otherwise set it to null. Never invent a URL; never return a non-image URL.',
     buildHermitLanguageDirective(dialect, source),
     ...(toneClause ? [toneClause] : []),
     `User input: ${userPrompt || 'akita doge and a black cat in dark-luxury meme style'}`,
@@ -752,11 +753,51 @@ function formatHermitReplyFromDraft(rawText: string): string {
   return chunks.join('\n').trim() || rawText.trim()
 }
 
-function formatHermitImageResult(rawText: string): { imagePrompt: string; reply: string } {
+/**
+ * Walks a parsed Pinata image-mode response and returns the first
+ * URL-shaped value worth attempting to attach. Looked-at fields, in
+ * order:
+ *   - top-level: `imageUrl`, `image_url`, `url`
+ *   - first entry of any of: `attachments`, `media`, `images`
+ *     (each entry may itself be a string URL or an object with one of
+ *     the URL fields above).
+ * Non-string and empty values are skipped silently. The caller is
+ * responsible for validating the URL through `inferPublicMediaAttachment`
+ * — this function never trusts the value beyond extracting it.
+ */
+function pickCandidateImageUrl(parsed: Record<string, unknown>): string | null {
+  const direct = asString(parsed.imageUrl) || asString(parsed.image_url) || asString(parsed.url)
+  if (direct) return direct
+
+  const arrayKeys: ReadonlyArray<keyof typeof parsed> = ['attachments', 'media', 'images']
+  for (const key of arrayKeys) {
+    const value = parsed[key as string]
+    if (!Array.isArray(value)) continue
+    for (const entry of value) {
+      if (typeof entry === 'string') {
+        const trimmed = entry.trim()
+        if (trimmed) return trimmed
+        continue
+      }
+      if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+        const obj = entry as Record<string, unknown>
+        const nested = asString(obj.url) || asString(obj.imageUrl) || asString(obj.image_url)
+        if (nested) return nested
+      }
+    }
+  }
+  return null
+}
+
+function formatHermitImageResult(rawText: string): {
+  imagePrompt: string
+  reply: string
+  mediaAttachments: HermitMediaAttachment[]
+} {
   const parsed = parseLooseJsonObject(rawText)
   if (!parsed) {
     const fallback = rawText.trim()
-    return { imagePrompt: fallback, reply: fallback }
+    return { imagePrompt: fallback, reply: fallback, mediaAttachments: [] }
   }
   const imagePrompt = asString(parsed.imagePrompt)
   const caption = asString(parsed.caption)
@@ -766,8 +807,34 @@ function formatHermitImageResult(rawText: string): { imagePrompt: string; reply:
   if (imagePrompt) replyParts.push(`Prompt: ${imagePrompt}`)
   if (caption) replyParts.push(`Caption: ${caption}`)
   if (hashtags.length > 0) replyParts.push(hashtags.join(' '))
+
+  // Best-effort image attachment. The creative provider MAY return a
+  // public HTTPS URL via any of the documented field names; we run
+  // each candidate through the PR-#481 validator and attach only the
+  // first match. Anything else (http://, data:, .svg, .html, malformed
+  // URLs, no field at all) is dropped silently and we fall back to
+  // the existing text-only reply — no error, no caller-visible
+  // change.
+  const mediaAttachments: HermitMediaAttachment[] = []
+  const candidate = pickCandidateImageUrl(parsed)
+  if (candidate) {
+    const validated = inferPublicMediaAttachment(candidate)
+    if (validated) {
+      mediaAttachments.push(validated)
+      // Append the URL to the textual reply so clients that don't
+      // render attachments still surface a clickable link. Only do
+      // this when the URL passed validation — we never echo a
+      // rejected/non-image URL.
+      replyParts.push(validated.url)
+    }
+  }
+
   const reply = replyParts.join('\n').trim() || rawText.trim()
-  return { imagePrompt: imagePrompt || rawText.trim(), reply }
+  return {
+    imagePrompt: imagePrompt || rawText.trim(),
+    reply,
+    mediaAttachments,
+  }
 }
 
 function commandError(message: string): Error {
@@ -784,6 +851,8 @@ export const _hermitPromptBuildersForTests = {
   buildMemoryPersistenceClause: buildSpanishMemoryPersistenceClause,
   flagMap: SPANISH_DIALECT_FLAG_MAP,
   inferPublicMediaAttachment,
+  formatHermitImageResult,
+  pickCandidateImageUrl,
 }
 
 /**
@@ -1158,6 +1227,9 @@ export async function executeHermitCommand(
       provider: 'pinata',
       imagePrompt: image.imagePrompt,
       reply: image.reply,
+      ...(image.mediaAttachments.length > 0
+        ? { mediaAttachments: image.mediaAttachments }
+        : {}),
     }
     return await withOnboardingNudge(params, result)
   }
