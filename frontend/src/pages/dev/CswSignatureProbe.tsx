@@ -140,6 +140,11 @@ type ProbeResult = {
   // branch, so we preserve the unknown state explicitly.
   localReplaySafeMatchesOnchain: boolean | null
   recoveredAgainstOnchainReplaySafe: Address | null
+  // Live on-chain snapshot of ownerAtIndex(parsedOwnerIndex), read at probe
+  // time — not from cached state. This avoids stale or empty `parsedOwnerAddress`
+  // when the owner-slot panel hasn't been loaded for the current CSW.
+  parsedOwnerAddressOnchain: Address | null
+  parsedOwnerRawBytesOnchain: Hex | null
   targetOwnerIndex: number
   targetOwnerAddress: Address | null
   directMatchesTarget: boolean
@@ -643,6 +648,34 @@ export function CswSignatureProbe() {
       const parsedOwnerIndexMatchesTarget =
         parsedSignature.ownerIndex !== null && parsedSignature.ownerIndex === targetOwnerIndex
 
+      // Authoritative: read ownerAtIndex(parsedOwnerIndex) on-chain at probe
+      // time so we always have the live snapshot, regardless of whether the
+      // user clicked 'load owner slots' beforehand.
+      let parsedOwnerRawBytesOnchain: Hex | null = null
+      let parsedOwnerAddressOnchain: Address | null = null
+      if (parsedSignature.ownerIndex !== null) {
+        try {
+          parsedOwnerRawBytesOnchain = (await publicClient.readContract({
+            address: normalizedCswAddress,
+            abi: CSW_OWNER_ABI,
+            functionName: 'ownerAtIndex',
+            args: [BigInt(parsedSignature.ownerIndex)],
+          })) as Hex
+          // Reuse decodeOwnerSlot so we get the same isAddress + zero-address
+          // validation as the rest of this file. Sparse/deleted slots, passkey
+          // payloads, and other non-address 32-byte values will correctly
+          // surface ownerAddress=null instead of a synthetic 0x... value.
+          if (parsedOwnerRawBytesOnchain) {
+            parsedOwnerAddressOnchain = decodeOwnerSlot(
+              parsedSignature.ownerIndex,
+              parsedOwnerRawBytesOnchain,
+            ).ownerAddress
+          }
+        } catch {
+          // CSW may revert if the index is out of range; surface as null.
+        }
+      }
+
       setProbeResult({
         method,
         signature,
@@ -661,6 +694,8 @@ export function CswSignatureProbe() {
         onchainReplaySafeHash,
         localReplaySafeMatchesOnchain,
         recoveredAgainstOnchainReplaySafe,
+        parsedOwnerAddressOnchain,
+        parsedOwnerRawBytesOnchain,
         targetOwnerIndex,
         targetOwnerAddress,
         directMatchesTarget,
@@ -1229,6 +1264,8 @@ export function CswSignatureProbe() {
             }
           />
           <KeyValue label="recoveredAgainstOnchainReplaySafe(hash=replaySafeHash[onchain])" value={probeResult.recoveredAgainstOnchainReplaySafe ?? '—'} />
+          <KeyValue label="parsedOwnerAddress(onchain at probe time)" value={probeResult.parsedOwnerAddressOnchain ?? '— (not an EOA / read failed)'} />
+          <KeyValue label="parsedOwnerRawBytes(onchain at probe time)" value={probeResult.parsedOwnerRawBytesOnchain ?? '—'} />
           <KeyValue label="directMatchesTarget" value={String(probeResult.directMatchesTarget)} />
           <KeyValue label="prefixedMatchesTarget" value={String(probeResult.prefixedMatchesTarget)} />
           <KeyValue label="signatureData(raw return)" value={probeResult.signature} />
