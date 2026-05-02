@@ -43,6 +43,22 @@ const CSW_OWNER_ABI = [
   },
 ] as const
 
+const ERC1271_ABI = [
+  {
+    type: 'function',
+    name: 'isValidSignature',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'hash', type: 'bytes32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ type: 'bytes4' }],
+  },
+] as const
+
+// EIP-1271 magic value: bytes4(keccak256("isValidSignature(bytes32,bytes)"))
+const ERC1271_MAGIC_VALUE: Hex = '0x1626ba7e'
+
 const CSW_OWNER_MUTATION_ABI = [
   {
     type: 'function',
@@ -110,6 +126,9 @@ type ProbeResult = {
   directMatchesTarget: boolean
   prefixedMatchesTarget: boolean
   wrappedSignature: Hex
+  signedHash: Hex
+  erc1271MagicValue: Hex | null
+  erc1271Verified: boolean
 }
 
 type StepState = { kind: 'idle' | 'pending' | 'ok' | 'err'; label: string; detail?: string }
@@ -442,6 +461,10 @@ export function CswSignatureProbe() {
       setSignState({ kind: 'err', label: 'invalid owner index' })
       return
     }
+    if (!publicClient) {
+      setSignState({ kind: 'err', label: 'public client unavailable' })
+      return
+    }
     const request = (walletClient as any).request as
       | ((args: { method: string; params?: unknown[] }) => Promise<Hex>)
       | undefined
@@ -450,6 +473,11 @@ export function CswSignatureProbe() {
       return
     }
 
+    // Hash we ASK the wallet to sign. For Base App CSW sessions the popup
+    // applies its own replaySafeHash wrap internally, so we MUST give it the
+    // raw challenge hash, not the pre-wrapped replaySafeHash. We still compute
+    // replaySafeHash locally for diagnostic comparison.
+    const signedHash = challengeHash
     const replaySafeHash = buildReplaySafeHash({
       smartWallet: normalizedCswAddress,
       userOpHash: challengeHash,
@@ -462,14 +490,16 @@ export function CswSignatureProbe() {
       if (method === 'eth_sign') {
         signature = await request!({
           method: 'eth_sign',
-          params: [connectedAddress, replaySafeHash],
+          params: [connectedAddress, signedHash],
         })
       } else if (method === 'personal_sign') {
         signature = await request!({
           method: 'personal_sign',
-          params: [replaySafeHash, connectedAddress],
+          params: [signedHash, connectedAddress],
         })
       } else {
+        // For typed_data we sign the CoinbaseSmartWalletMessage envelope, which
+        // is what offchain ERC-1271 verifiers expect. The popup will not double-wrap.
         const typedDataPayload = {
           domain: {
             name: 'Coinbase Smart Wallet',
@@ -503,13 +533,36 @@ export function CswSignatureProbe() {
 
       const parsedSignature = parseWalletSignature(signature)
       const recoverableSignature = parsedSignature.ecdsaSignature
+      // Try recovery against multiple candidate hashes — useful as a diagnostic
+      // for raw-ECDSA EOA signatures, but meaningless for WebAuthn/passkey wrappers.
       const recoveredDirect = recoverableSignature
-        ? await recoverAddress({ hash: replaySafeHash, signature: recoverableSignature }).catch(() => null)
+        ? await recoverAddress({ hash: signedHash, signature: recoverableSignature }).catch(() => null)
         : null
-      const prefixedHash = hashMessage({ raw: replaySafeHash })
+      const prefixedHash = hashMessage({ raw: signedHash })
       const recoveredPrefixed = recoverableSignature
         ? await recoverAddress({ hash: prefixedHash, signature: recoverableSignature }).catch(() => null)
         : null
+
+      // Authoritative verification: ask the CSW itself via ERC-1271.
+      // The signature we send must be the FULL wrapped signature returned by the
+      // wallet (not just the inner ecdsa bytes). The hash argument is the raw
+      // challenge hash; the contract’s ERC-1271 implementation applies
+      // replaySafeHash internally before verifying.
+      let erc1271MagicValue: Hex | null = null
+      let erc1271Verified = false
+      try {
+        const result = await publicClient.readContract({
+          address: normalizedCswAddress,
+          abi: ERC1271_ABI,
+          functionName: 'isValidSignature',
+          args: [challengeHash, signature],
+        }) as Hex
+        erc1271MagicValue = result
+        erc1271Verified = result.toLowerCase() === ERC1271_MAGIC_VALUE
+      } catch {
+        // CSW reverts on invalid sig (per Coinbase impl); keep verified=false.
+      }
+
       const wrappedSignature = recoverableSignature
         ? encodeAbiParameters(
             [{ type: 'uint256' }, { type: 'bytes' }],
@@ -539,6 +592,7 @@ export function CswSignatureProbe() {
         parsedOwnerIndexMatchesTarget,
         parsedSignatureData: parsedSignature.signatureData,
         ecdsaSignatureForRecovery: recoverableSignature,
+        signedHash,
         replaySafeHash,
         recoveredDirect,
         recoveredPrefixed,
@@ -546,22 +600,24 @@ export function CswSignatureProbe() {
         targetOwnerAddress,
         directMatchesTarget,
         prefixedMatchesTarget,
+        erc1271MagicValue,
+        erc1271Verified,
         wrappedSignature: wrappedSignature ?? ('0x' as Hex),
       })
       setSignState({
-        kind: 'ok',
-        label: `${method} signature captured`,
+        kind: erc1271Verified ? 'ok' : 'err',
+        label: `${method} signature ${erc1271Verified ? 'verified' : 'captured (NOT verified)'}`,
         detail: (() => {
+          if (erc1271Verified) {
+            return 'CSW.isValidSignature returned the EIP-1271 magic value — the bundler will accept this signature shape.'
+          }
+          if (parsedSignature.kind === 'raw-ecdsa' && (directMatchesTarget || prefixedMatchesTarget)) {
+            return 'Raw ECDSA recovers to selected owner, but CSW.isValidSignature did not return the magic value. Wrap as SignatureWrapper(ownerIndex, r||s||v) and resubmit.'
+          }
           if (parsedOwnerIndexMatchesTarget) {
-            return `Signature wrapper owner index matches target (${targetOwnerIndex}).`
+            return `Wrapper owner index matches target (${targetOwnerIndex}) but onchain ERC-1271 check failed.`
           }
-          if (parsedSignature.ownerIndex !== null) {
-            return `Signature wrapper owner index=${parsedSignature.ownerIndex}; target=${targetOwnerIndex}.`
-          }
-          if (directMatchesTarget || prefixedMatchesTarget) {
-            return 'Recovered signer matches selected owner index.'
-          }
-          return 'Recovered signer does not match selected owner index.'
+          return 'CSW.isValidSignature did not return the magic value. Inspect signedHash and the parsed wrapper below.'
         })(),
       })
     } catch (error) {
@@ -579,11 +635,23 @@ export function CswSignatureProbe() {
       setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
       return
     }
-    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+    // Hard self-auth gate: this probe drives `_submitOwnerViaPreparedCalls`,
+    // which always calls `personal_sign(hash, sender)` with `sender === CSW`.
+    // That shape is only accepted by the Base App popup when the connected
+    // account IS the CSW (self-auth session, owner[0]=passkey signing the
+    // self-call). For non-self-auth connectors (an EOA owner session) the
+    // signing address would have to be the connected EOA, not the CSW —
+    // that path is handled by `sendPreparedOwnerTx` in the account-setup
+    // controller, not by this probe.
+    const isSelfAuthSession =
+      connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+    if (!isSelfAuthSession) {
       setPreparedCallsState({
         kind: 'err',
-        label: 'self-auth session required',
-        detail: 'Connected signer must equal CSW address for this prepared-calls lane.',
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail:
+          `This probe targets the Base-App passkey self-auth lane. Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}. ` +
+          'Reconnect via Base App so the wagmi connector exposes the CSW, or use the standard owner-install flow for EOA-owner sessions.',
       })
       return
     }
@@ -621,6 +689,7 @@ export function CswSignatureProbe() {
       const appendEvent = (row: string) => {
         setPreparedCallEventLog((prev) => [...prev, row].slice(-10))
       }
+      appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
       const runAttempt = async (params: { paymasterUrl: string | null; attemptLabel: string }) => {
         appendEvent(`attempt:${params.attemptLabel}`)
         return await _submitOwnerViaPreparedCalls({
@@ -815,8 +884,13 @@ export function CswSignatureProbe() {
         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500">4626 · dev probe</div>
         <h1 className="text-2xl font-medium">CSW owner signature probe</h1>
         <p className="text-zinc-400">
-          Loads CSW owner slots, computes replaySafeHash for a test hash, and checks whether Base App signatures
-          recover to the selected owner index. This probe does not send transactions.
+          Loads CSW owner slots and verifies whether Base App signatures pass the CSW’s onchain
+          ERC-1271 check (the same check the bundler runs). The probe signs the raw challenge
+          hash — Base App applies replaySafeHash internally — and then calls
+          isValidSignature(challengeHash, signature) on the CSW. erc1271Verified=true means
+          the bundler will accept this signature shape; the recovery rows are diagnostics for
+          raw-ECDSA EOA signers only and may be meaningless for passkey/WebAuthn wrappers.
+          This probe does not send transactions.
         </p>
       </header>
 
@@ -1058,7 +1132,10 @@ export function CswSignatureProbe() {
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">probe result</div>
           <KeyValue label="method" value={probeResult.method} />
           <KeyValue label="parsedSignatureKind" value={probeResult.parsedSignatureKind} />
-          <KeyValue label="replaySafeHash" value={probeResult.replaySafeHash} />
+          <KeyValue label="signedHash (passed to wallet)" value={probeResult.signedHash} />
+          <KeyValue label="replaySafeHash (computed locally)" value={probeResult.replaySafeHash} />
+          <KeyValue label="erc1271MagicValue (returned by CSW)" value={probeResult.erc1271MagicValue ?? '— (call reverted)'} />
+          <KeyValue label="erc1271Verified" value={String(probeResult.erc1271Verified)} />
           <KeyValue label="targetOwnerIndex" value={String(probeResult.targetOwnerIndex)} />
           <KeyValue label="targetOwnerAddress" value={probeResult.targetOwnerAddress ?? '—'} />
           <KeyValue label="parsedOwnerIndex" value={probeResult.parsedOwnerIndex !== null ? String(probeResult.parsedOwnerIndex) : '—'} />
@@ -1066,8 +1143,8 @@ export function CswSignatureProbe() {
           <KeyValue label="parsedOwnerIndexMatchesTarget" value={String(probeResult.parsedOwnerIndexMatchesTarget)} />
           <KeyValue label="parsedSignatureData" value={probeResult.parsedSignatureData ?? '—'} />
           <KeyValue label="ecdsaSignatureForRecovery" value={probeResult.ecdsaSignatureForRecovery ?? '—'} />
-          <KeyValue label="recoveredDirect(hash=replaySafeHash)" value={probeResult.recoveredDirect ?? '—'} />
-          <KeyValue label="recoveredPrefixed(hash=EIP191(replaySafeHash))" value={probeResult.recoveredPrefixed ?? '—'} />
+          <KeyValue label="recoveredDirect(hash=signedHash)" value={probeResult.recoveredDirect ?? '—'} />
+          <KeyValue label="recoveredPrefixed(hash=EIP191(signedHash))" value={probeResult.recoveredPrefixed ?? '—'} />
           <KeyValue label="directMatchesTarget" value={String(probeResult.directMatchesTarget)} />
           <KeyValue label="prefixedMatchesTarget" value={String(probeResult.prefixedMatchesTarget)} />
           <KeyValue label="signatureData(raw return)" value={probeResult.signature} />

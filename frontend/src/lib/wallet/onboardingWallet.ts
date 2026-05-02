@@ -627,20 +627,20 @@ export async function _submitOwnerViaPreparedCalls(params: {
     throw new Error('wallet_prepareCalls did not return a userOp.')
   }
 
-  // The hash from wallet_prepareCalls is double-hex-encoded per the CSW SDK.
-  // It comes back as a hex-encoded string of the hex hash.
-  let hashToSign = prepareResult.signatureRequest.hash as `0x${string}`
-  // If the hash looks like a hex-encoded hex string, decode one layer.
-  // The SDK does: hexToString(hash) to unwrap. We check if decoding the hex
-  // bytes yields a string starting with '0x'.
-  try {
-    const decoded = hexToStringInner(hashToSign)
-    if (decoded.startsWith('0x') && decoded.length === 66) {
-      hashToSign = decoded as `0x${string}`
-    }
-  } catch { /* use as-is */ }
+  // The hash from wallet_prepareCalls is double-hex-encoded per the CSW SDK
+  // (createSubAccountSigner.ts uses viem's hexToString to unwrap one layer).
+  // We mirror that: if the bytes UTF-8-decode to a `0x...` string of length 66,
+  // it's the double-encoded shape and we decode it; otherwise we pass through.
+  // This is idempotent — applying it to an already-unwrapped hash is a no-op.
+  const hashToSign = unwrapDoubleHexEncodedHash(
+    prepareResult.signatureRequest.hash as `0x${string}`,
+  )
 
-  // Step 2: personal_sign → goes to popup (no eGe check), passkey signs
+  // Step 2: personal_sign → goes to popup. For Base App CSW sessions the popup
+  // signs with whichever credential is bound to the session (passkey for owner[0],
+  // or an EOA for an embedded-wallet owner). The popup wraps the result for ERC-1271
+  // verification, so we MUST pass it through to wallet_sendPreparedCalls without
+  // assuming it's a raw 65-byte ECDSA signature.
   const signature = await params.walletRequest({
     method: 'personal_sign',
     params: [hashToSign, params.sender],
@@ -651,6 +651,19 @@ export async function _submitOwnerViaPreparedCalls(params: {
   }
 
   // Step 3: wallet_sendPreparedCalls → goes to Coinbase RPC (default case)
+  //
+  // Signature `type` selection mirrors createSubAccountSigner.ts in the CB SDK:
+  // a hex string is treated as `secp256k1` (raw EOA r||s||v), anything else as
+  // `webauthn`. Critically, a 65-byte hex blob is the ONLY EOA shape — anything
+  // longer that's still hex (e.g. an ERC-1271 SignatureWrapper produced by the
+  // popup for a passkey owner) must NOT be sent as `secp256k1`, or the bundler
+  // tries to ecrecover and returns -32507. In that case we let the bundler
+  // verify the wrapper via ERC-1271 by sending it as a pre-wrapped signature.
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.sender,
+    signature,
+  })
+
   const sendResult = await params.walletRequest({
     method: 'wallet_sendPreparedCalls',
     params: [{
@@ -658,13 +671,7 @@ export async function _submitOwnerViaPreparedCalls(params: {
       type: prepareResult.type ?? 'user-operation-v06',
       data: prepareResult.userOp,
       chainId: prepareResult.chainId ?? chainIdHex,
-      signature: {
-        type: 'secp256k1' as const,
-        data: {
-          address: params.sender,
-          signature,
-        },
-      },
+      signature: signaturePayload,
     }],
   }) as unknown
 
@@ -729,14 +736,73 @@ export async function _submitOwnerViaPreparedCalls(params: {
   throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
-// Decode hex-encoded bytes to a UTF-8 string (for double-hex-encoded hashes)
-function hexToStringInner(hex: string): string {
+// Decode hex-encoded bytes to a UTF-8 string (used to unwrap the
+// double-hex-encoded `signatureRequest.hash` returned by wallet_prepareCalls).
+// Mirrors viem's hexToString, which is what the Coinbase Wallet SDK uses
+// (see createSubAccountSigner.ts).
+function hexBytesToUtf8(hex: string): string {
   const stripped = hex.startsWith('0x') ? hex.slice(2) : hex
+  if (stripped.length % 2 !== 0) throw new Error('odd-length hex')
   const bytes = new Uint8Array(stripped.length / 2)
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(stripped.substring(i * 2, i * 2 + 2), 16)
   }
-  return new TextDecoder().decode(bytes)
+  return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+}
+
+// Idempotently unwrap the double-hex-encoded hash returned by wallet_prepareCalls.
+// If the bytes UTF-8-decode to a `0x...` string of length 66, that is the
+// outer encoding and we return the inner hex string. Otherwise we return the
+// original value untouched. Safe to call on an already-unwrapped hash.
+export function unwrapDoubleHexEncodedHash(hash: `0x${string}`): `0x${string}` {
+  try {
+    const decoded = hexBytesToUtf8(hash)
+    if (
+      decoded.length === 66 &&
+      (decoded.startsWith('0x') || decoded.startsWith('0X')) &&
+      /^0x[0-9a-fA-F]{64}$/.test(decoded)
+    ) {
+      return decoded.toLowerCase() as `0x${string}`
+    }
+  } catch { /* not double-encoded; fall through */ }
+  return hash
+}
+
+// Decide which `signature` payload shape to send to wallet_sendPreparedCalls
+// based on the bytes returned by personal_sign. The CB SDK's
+// createSubAccountSigner.ts uses the same heuristic: hex => secp256k1, anything
+// else => webauthn.
+//
+// The non-obvious case is that the Base App popup, for a CSW session backed by
+// a passkey, returns a hex-prefixed string that is NOT a 65-byte EOA signature
+// — it is an ERC-1271 SignatureWrapper produced by the wallet for the active
+// owner. Sending that as `type: 'secp256k1'` causes the bundler to ecrecover
+// against the wrong shape and reject with -32507. In that case we omit the
+// `secp256k1` framing and pass the wrapped signature through verbatim, which
+// matches what the bundler’s ERC-1271 verification path expects.
+export function buildSendPreparedCallsSignaturePayload(input: {
+  sender: `0x${string}`
+  signature: `0x${string}`
+}): unknown {
+  const sigBytes = (input.signature.length - 2) / 2
+  // 65 bytes is the only valid raw-ECDSA shape.
+  if (sigBytes === 65) {
+    return {
+      type: 'secp256k1' as const,
+      data: { address: input.sender, signature: input.signature },
+    }
+  }
+  // Otherwise treat it as an ERC-1271-style wrapped signature produced by the
+  // popup. Newer Base App / CB SDK builds accept this shape directly.
+  return {
+    type: 'webauthn' as const,
+    data: {
+      // The popup already produced the SignatureWrapper bytes; we forward them.
+      signature: input.signature,
+      // Address is included as a hint for verifiers that key off of the signer.
+      address: input.sender,
+    },
+  }
 }
 
 export async function sendPreparedOwnerTx(params: {
