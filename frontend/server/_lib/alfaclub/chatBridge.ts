@@ -33,8 +33,15 @@ import { matchesAnyCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
+import {
+  recordBridgeAuthFailure,
+  recordBridgeHistorySuccess,
+  recordBridgeSocketBackoff,
+  recordBridgeSuppressedSocketAttempt,
+} from './authHealthStore.js'
 import { upsertAlfaClubIngestMessages } from './chatIngestStore.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
+import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -52,6 +59,10 @@ const MAX_HISTORY_LIMIT = 100
 const MAX_SEEN_MESSAGE_IDS = 4_000
 const MAX_LIVE_COMMAND_QUEUE = 200
 const MAX_TELEGRAM_MESSAGE_CHARS = 3500
+const BAD_JWT_TTL_MS = 30_000
+const SOCKET_BACKOFF_INITIAL_MS = 1_000
+const SOCKET_BACKOFF_CAP_MS = 60_000
+const LOG_ROLLUP_WINDOW_MS = 60_000
 
 type AlfaClubRoomHistoryMessage = {
   id?: string
@@ -1159,6 +1170,30 @@ let bridgeState: BridgeState = {
   liveSocketRoomId: null,
 }
 
+type RollupTimer = ReturnType<typeof setTimeout> | null
+
+const bridgeAuthState = {
+  lastBadJwt: null as string | null,
+  lastBadJwtAt: 0,
+  lastBadJwtWarnAt: Number.NEGATIVE_INFINITY,
+  badJwtTtlMs: BAD_JWT_TTL_MS,
+  socketBackoffMs: 0,
+  socketBackoffUntil: 0,
+  authFailRepeats: 0,
+  authFailFirstAt: 0,
+  authFailLastLoggedAt: Number.NEGATIVE_INFINITY,
+  authFailFlushTimer: null as RollupTimer,
+  authFailRoomId: null as string | null,
+  authFailJwtSource: null as BridgeJwtSource | null,
+  authFailLastError: null as string | null,
+  wsErrorRepeats: 0,
+  wsErrorFirstAt: 0,
+  wsErrorLastLoggedAt: Number.NEGATIVE_INFINITY,
+  wsErrorFlushTimer: null as RollupTimer,
+  wsErrorRoomId: null as string | null,
+  wsErrorLastMessage: null as string | null,
+}
+
 function isFutureIsoTimestamp(value: string | null | undefined): boolean {
   if (!value || !value.trim()) return true
   const ts = Date.parse(value)
@@ -1211,6 +1246,189 @@ function isRoomHistoryAuthError(error: unknown): boolean {
     message.startsWith('room_history_failed:401:') ||
     message.startsWith('room_history_failed:403:')
   )
+}
+
+function isKnownBadJwt(jwt: string, now = Date.now()): boolean {
+  return (
+    Boolean(bridgeAuthState.lastBadJwt) &&
+    bridgeAuthState.lastBadJwt === jwt &&
+    now - bridgeAuthState.lastBadJwtAt <= bridgeAuthState.badJwtTtlMs
+  )
+}
+
+function rememberBadJwt(jwt: string, now = Date.now()): void {
+  bridgeAuthState.lastBadJwt = jwt
+  bridgeAuthState.lastBadJwtAt = now
+}
+
+function clearBadJwt(): void {
+  bridgeAuthState.lastBadJwt = null
+  bridgeAuthState.lastBadJwtAt = 0
+}
+
+function applySocketBackoff(now = Date.now()): void {
+  bridgeAuthState.socketBackoffMs =
+    bridgeAuthState.socketBackoffMs > 0
+      ? Math.min(bridgeAuthState.socketBackoffMs * 2, SOCKET_BACKOFF_CAP_MS)
+      : SOCKET_BACKOFF_INITIAL_MS
+  bridgeAuthState.socketBackoffUntil = now + bridgeAuthState.socketBackoffMs
+  recordBridgeSocketBackoff(bridgeAuthState.socketBackoffMs)
+}
+
+function resetSocketBackoff(): void {
+  bridgeAuthState.socketBackoffMs = 0
+  bridgeAuthState.socketBackoffUntil = 0
+  recordBridgeSocketBackoff(0)
+}
+
+function noteSuppressedSocketAttempt(): void {
+  recordBridgeSuppressedSocketAttempt()
+}
+
+function flushAuthFailRollup(): void {
+  // Fires at windowStart + LOG_ROLLUP_WINDOW_MS. We only emit a summary
+  // line when there were additional events after the initial one — the
+  // initial event already produced a `repeats: 1` log line at the top of
+  // the window. Mutating that earlier payload would be a no-op (the
+  // logger has already serialized it), so we emit a *new* line here that
+  // carries the true accumulated count.
+  const repeats = bridgeAuthState.authFailRepeats
+  bridgeAuthState.authFailFlushTimer = null
+  if (repeats > 1) {
+    logger.warn('[alfaclub-chat] room_history_auth_failed:ws_live_fallback:rollup', {
+      roomId: bridgeAuthState.authFailRoomId,
+      jwtSource: bridgeAuthState.authFailJwtSource,
+      repeats,
+      windowStartedAt: bridgeAuthState.authFailFirstAt
+        ? new Date(bridgeAuthState.authFailFirstAt).toISOString()
+        : null,
+      lastError: bridgeAuthState.authFailLastError,
+    })
+  }
+  bridgeAuthState.authFailRepeats = 0
+  bridgeAuthState.authFailFirstAt = 0
+  bridgeAuthState.authFailLastLoggedAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.authFailRoomId = null
+  bridgeAuthState.authFailJwtSource = null
+  bridgeAuthState.authFailLastError = null
+}
+
+function warnRoomHistoryAuthFallback(params: {
+  roomId: string
+  jwtSource: BridgeJwtSource
+  error: unknown
+  now?: number
+}): void {
+  const now = params.now ?? Date.now()
+  const errorMessage =
+    params.error instanceof Error ? params.error.message : String(params.error)
+
+  if (
+    bridgeAuthState.authFailRepeats > 0 &&
+    now - bridgeAuthState.authFailFirstAt <= LOG_ROLLUP_WINDOW_MS
+  ) {
+    // Inside an active window — accumulate, do NOT mutate the
+    // already-serialized first payload. The flush timer set on the first
+    // event will emit a single summary line carrying the final count.
+    bridgeAuthState.authFailRepeats += 1
+    bridgeAuthState.authFailLastError = errorMessage
+    return
+  }
+
+  // First event of a new window. Log immediately with `repeats: 1` and
+  // schedule a one-shot flush.
+  bridgeAuthState.authFailFirstAt = now
+  bridgeAuthState.authFailRepeats = 1
+  bridgeAuthState.authFailRoomId = params.roomId
+  bridgeAuthState.authFailJwtSource = params.jwtSource
+  bridgeAuthState.authFailLastError = errorMessage
+
+  logger.warn('[alfaclub-chat] room_history_auth_failed:ws_live_fallback', {
+    roomId: params.roomId,
+    jwtSource: params.jwtSource,
+    repeats: 1,
+    windowStartedAt: new Date(now).toISOString(),
+    error: errorMessage,
+  })
+  bridgeAuthState.authFailLastLoggedAt = now
+
+  if (bridgeAuthState.authFailFlushTimer) {
+    clearTimeout(bridgeAuthState.authFailFlushTimer)
+  }
+  const timer = setTimeout(flushAuthFailRollup, LOG_ROLLUP_WINDOW_MS)
+  if (typeof (timer as { unref?: () => void }).unref === 'function') {
+    ;(timer as { unref: () => void }).unref()
+  }
+  bridgeAuthState.authFailFlushTimer = timer
+}
+
+function flushWsErrorRollup(): void {
+  const repeats = bridgeAuthState.wsErrorRepeats
+  bridgeAuthState.wsErrorFlushTimer = null
+  if (repeats > 1) {
+    logger.warn('[alfaclub-chat] ws_error:rollup', {
+      roomId: bridgeAuthState.wsErrorRoomId,
+      repeats,
+      windowStartedAt: bridgeAuthState.wsErrorFirstAt
+        ? new Date(bridgeAuthState.wsErrorFirstAt).toISOString()
+        : null,
+      lastMessage: bridgeAuthState.wsErrorLastMessage,
+    })
+  }
+  bridgeAuthState.wsErrorRepeats = 0
+  bridgeAuthState.wsErrorFirstAt = 0
+  bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.wsErrorRoomId = null
+  bridgeAuthState.wsErrorLastMessage = null
+}
+
+function warnWsError(params: { roomId: string; message: string; now?: number }): void {
+  const now = params.now ?? Date.now()
+  const truncated = params.message.slice(0, 180)
+
+  if (
+    bridgeAuthState.wsErrorRepeats > 0 &&
+    now - bridgeAuthState.wsErrorFirstAt <= LOG_ROLLUP_WINDOW_MS
+  ) {
+    bridgeAuthState.wsErrorRepeats += 1
+    bridgeAuthState.wsErrorLastMessage = truncated
+    return
+  }
+
+  bridgeAuthState.wsErrorFirstAt = now
+  bridgeAuthState.wsErrorRepeats = 1
+  bridgeAuthState.wsErrorRoomId = params.roomId
+  bridgeAuthState.wsErrorLastMessage = truncated
+
+  logger.warn('[alfaclub-chat] ws_error', {
+    roomId: params.roomId,
+    repeats: 1,
+    windowStartedAt: new Date(now).toISOString(),
+    message: truncated,
+  })
+  bridgeAuthState.wsErrorLastLoggedAt = now
+
+  if (bridgeAuthState.wsErrorFlushTimer) {
+    clearTimeout(bridgeAuthState.wsErrorFlushTimer)
+  }
+  const timer = setTimeout(flushWsErrorRollup, LOG_ROLLUP_WINDOW_MS)
+  if (typeof (timer as { unref?: () => void }).unref === 'function') {
+    ;(timer as { unref: () => void }).unref()
+  }
+  bridgeAuthState.wsErrorFlushTimer = timer
+}
+
+function resetAuthFailureRollup(): void {
+  if (bridgeAuthState.authFailFlushTimer) {
+    clearTimeout(bridgeAuthState.authFailFlushTimer)
+    bridgeAuthState.authFailFlushTimer = null
+  }
+  bridgeAuthState.authFailRepeats = 0
+  bridgeAuthState.authFailFirstAt = 0
+  bridgeAuthState.authFailLastLoggedAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.authFailRoomId = null
+  bridgeAuthState.authFailJwtSource = null
+  bridgeAuthState.authFailLastError = null
 }
 
 function rememberSeenMessageId(id: string): void {
@@ -1398,6 +1616,30 @@ function ensureLiveCommandSocket(params: {
   jwt: string
   flags: AlfaClubChatBridgeFlags
 }): void {
+  const now = Date.now()
+  if (isKnownBadJwt(params.jwt, now)) {
+    if (bridgeState.liveSocketJwt === params.jwt) {
+      closeLiveSocket()
+    }
+    noteSuppressedSocketAttempt()
+    if (
+      bridgeAuthState.lastBadJwtWarnAt === Number.NEGATIVE_INFINITY ||
+      now - bridgeAuthState.lastBadJwtWarnAt > LOG_ROLLUP_WINDOW_MS
+    ) {
+      logger.warn('[alfaclub-chat] ws_connect_suppressed:known_bad_jwt', {
+        roomId: params.roomId,
+        badJwtAgeMs: now - bridgeAuthState.lastBadJwtAt,
+      })
+      bridgeAuthState.lastBadJwtWarnAt = now
+    }
+    return
+  }
+
+  if (bridgeAuthState.socketBackoffUntil > now) {
+    noteSuppressedSocketAttempt()
+    return
+  }
+
   if (
     bridgeState.liveSocket &&
     bridgeState.liveSocketJwt === params.jwt &&
@@ -1424,6 +1666,7 @@ function ensureLiveCommandSocket(params: {
   bridgeState.liveSocketRoomId = params.roomId
 
   const onOpen = (): void => {
+    resetSocketBackoff()
     logger.info('[alfaclub-chat] ws_open', {
       roomId: params.roomId,
       ingestAllRooms: params.flags.wsIngestAllRoomsEnabled,
@@ -1475,6 +1718,7 @@ function ensureLiveCommandSocket(params: {
   }
 
   const onClose = (event?: any): void => {
+    applySocketBackoff()
     logger.warn('[alfaclub-chat] ws_close', {
       roomId: params.roomId,
       code: typeof event?.code === 'number' ? event.code : null,
@@ -1487,7 +1731,8 @@ function ensureLiveCommandSocket(params: {
   }
 
   const onError = (event?: any): void => {
-    logger.warn('[alfaclub-chat] ws_error', {
+    applySocketBackoff()
+    warnWsError({
       roomId: params.roomId,
       message: String(event?.message ?? event?.error?.message ?? event ?? 'unknown').slice(0, 180),
     })
@@ -1592,16 +1837,15 @@ async function runBridgeTick(
   const explicitIngestJwt = (flags.ingestJwt ?? '').trim() || null
   const ingestJwt = explicitIngestJwt || commandJwt
 
-  if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
-    ensureLiveCommandSocket({
-      websocketUrl: flags.websocketUrl,
-      roomId,
-      jwt: ingestJwt,
-      flags,
-    })
-  }
-
   if (!commandJwt) {
+    if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+      ensureLiveCommandSocket({
+        websocketUrl: flags.websocketUrl,
+        roomId,
+        jwt: ingestJwt,
+        flags,
+      })
+    }
     return {
       seeded: false,
       roomId,
@@ -1613,6 +1857,7 @@ async function runBridgeTick(
     }
   }
   let jwt = commandJwt
+  let historyErrorJwt = commandJwt
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
   let historyError: unknown = null
   try {
@@ -1640,6 +1885,7 @@ async function runBridgeTick(
         error: error instanceof Error ? error.message : String(error),
       })
       try {
+        historyErrorJwt = fallbackJwt as string
         fetchedMessages = await fetchRoomHistory({
           apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
           fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
@@ -1666,9 +1912,16 @@ async function runBridgeTick(
       })
       throw historyError
     }
-    logger.warn('[alfaclub-chat] room_history_auth_failed:ws_live_fallback', {
+
+    const now = Date.now()
+    rememberBadJwt(historyErrorJwt, now)
+    recordBridgeAuthFailure(new Date(now).toISOString())
+    bridgeState.liveFallbackActive = true
+    void requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+    warnRoomHistoryAuthFallback({
       roomId,
       jwtSource: resolvedCommandJwt.source,
+      now,
       error: historyError instanceof Error ? historyError.message : String(historyError),
     })
 
@@ -1719,6 +1972,19 @@ async function runBridgeTick(
 
   if (!fetchedMessages) {
     throw new Error('room_history_failed:unknown')
+  }
+
+  clearBadJwt()
+  resetAuthFailureRollup()
+  recordBridgeHistorySuccess()
+
+  if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+    ensureLiveCommandSocket({
+      websocketUrl: flags.websocketUrl,
+      roomId,
+      jwt: ingestJwt,
+      flags,
+    })
   }
 
   // History read succeeded, so pause live fallback mode if it was enabled.
@@ -1956,4 +2222,48 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
     liveSocketJwt: null,
     liveSocketRoomId: null,
   }
+  bridgeAuthState.lastBadJwt = null
+  bridgeAuthState.lastBadJwtAt = 0
+  bridgeAuthState.lastBadJwtWarnAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.badJwtTtlMs = BAD_JWT_TTL_MS
+  bridgeAuthState.socketBackoffMs = 0
+  bridgeAuthState.socketBackoffUntil = 0
+  if (bridgeAuthState.authFailFlushTimer) {
+    clearTimeout(bridgeAuthState.authFailFlushTimer)
+    bridgeAuthState.authFailFlushTimer = null
+  }
+  bridgeAuthState.authFailRepeats = 0
+  bridgeAuthState.authFailFirstAt = 0
+  bridgeAuthState.authFailLastLoggedAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.authFailRoomId = null
+  bridgeAuthState.authFailJwtSource = null
+  bridgeAuthState.authFailLastError = null
+  if (bridgeAuthState.wsErrorFlushTimer) {
+    clearTimeout(bridgeAuthState.wsErrorFlushTimer)
+    bridgeAuthState.wsErrorFlushTimer = null
+  }
+  bridgeAuthState.wsErrorRepeats = 0
+  bridgeAuthState.wsErrorFirstAt = 0
+  bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.wsErrorRoomId = null
+  bridgeAuthState.wsErrorLastMessage = null
+}
+
+export function _runAlfaClubChatBridgeTickForTests(
+  flags: AlfaClubChatBridgeFlags,
+): Promise<AlfaClubChatBridgeTickResult> {
+  return runBridgeTick(flags)
+}
+
+export function _ensureLiveCommandSocketForTests(params: {
+  websocketUrl: string
+  roomId: string
+  jwt: string
+  flags: AlfaClubChatBridgeFlags
+}): void {
+  ensureLiveCommandSocket(params)
+}
+
+export function _getBridgeAuthStateForTests(): typeof bridgeAuthState {
+  return { ...bridgeAuthState }
 }

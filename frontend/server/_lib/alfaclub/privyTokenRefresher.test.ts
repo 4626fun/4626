@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  _resetImmediatePrivyRefreshForTests,
   refreshPrivySession,
+  requestImmediatePrivyRefresh,
   runAlfaClubPrivyRefreshOnce,
   startAlfaClubPrivyTokenRefresher,
   type PrivyRefreshBundle,
@@ -1209,5 +1211,90 @@ describe('runAlfaClubPrivyRefreshOnce — access-token cliff (incident 2026-05-0
       expect(outcome.status).toBe('refreshed')
       expect(refresh).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+describe('requestImmediatePrivyRefresh', () => {
+  const realFetch = globalThis.fetch
+  const envKeys = [
+    'ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN',
+    'ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN',
+    'ALFACLUB_CHAT_JWT',
+  ] as const
+  let priorEnv: Record<string, string | undefined>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-02T15:00:00.000Z'))
+    priorEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]))
+    process.env.ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN = 'at-old'
+    process.env.ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN = 'rt-old'
+    process.env.ALFACLUB_CHAT_JWT = 'id-old'
+    upsertAccessMock.mockReset()
+    upsertRefreshMock.mockReset()
+    upsertChatMock.mockReset()
+    upsertChatMock.mockResolvedValue({ hasToken: true })
+    _resetImmediatePrivyRefreshForTests()
+  })
+
+  afterEach(() => {
+    globalThis.fetch = realFetch
+    for (const key of envKeys) {
+      if (priorEnv[key] === undefined) delete process.env[key]
+      else process.env[key] = priorEnv[key]
+    }
+    _resetImmediatePrivyRefreshForTests()
+    vi.useRealTimers()
+  })
+
+  it('is idempotent while a refresh is in flight', async () => {
+    let resolveFetch: (response: Response) => void = () => {}
+    const fetchPromise = new Promise<Response>((resolve) => {
+      resolveFetch = resolve
+    })
+    globalThis.fetch = vi.fn(() => fetchPromise) as unknown as typeof fetch
+
+    const first = requestImmediatePrivyRefresh('bridge_auth_fail')
+    const second = requestImmediatePrivyRefresh('bridge_auth_fail')
+    const third = requestImmediatePrivyRefresh('manual')
+
+    expect(first).toBe(second)
+    expect(second).toBe(third)
+    for (let i = 0; i < 10; i += 1) {
+      await Promise.resolve()
+    }
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
+
+    resolveFetch(
+      new Response(
+        JSON.stringify({
+          privy_access_token: 'at-new',
+          identity_token: 'id-new',
+          refresh_token: 'rt-new',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    )
+
+    await expect(first).resolves.toMatchObject({ status: 'refreshed' })
+  })
+
+  it('throttles a second kick within five seconds after completion', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          privy_access_token: 'at-new',
+          identity_token: 'id-new',
+          refresh_token: 'rt-new',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      ),
+    ) as unknown as typeof fetch
+
+    await expect(requestImmediatePrivyRefresh('bridge_auth_fail')).resolves.toMatchObject({
+      status: 'refreshed',
+    })
+    await expect(requestImmediatePrivyRefresh('manual')).resolves.toEqual({ kind: 'throttled' })
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
   })
 })

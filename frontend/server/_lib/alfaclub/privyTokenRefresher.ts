@@ -385,6 +385,10 @@ export type AlfaClubRefresherOutcome =
   | { status: 'missing_tokens'; missing: string[] }
   | { status: 'error'; error: string }
 
+let immediateRefreshInFlight: Promise<AlfaClubRefresherOutcome> | null = null
+let lastImmediateRefreshKickAt = Number.NEGATIVE_INFINITY
+const MIN_IMMEDIATE_REFRESH_KICK_INTERVAL_MS = 5_000
+
 export async function runAlfaClubPrivyRefreshOnce(
   deps: AlfaClubRefresherDependencies = {},
   opts: { force?: boolean } = {},
@@ -506,6 +510,23 @@ export async function runAlfaClubPrivyRefreshOnce(
   }
 }
 
+export function requestImmediatePrivyRefresh(
+  reason: 'bridge_auth_fail' | 'manual' = 'manual',
+): Promise<AlfaClubRefresherOutcome | { kind: 'throttled' }> {
+  const now = Date.now()
+  if (immediateRefreshInFlight) return immediateRefreshInFlight
+  if (now - lastImmediateRefreshKickAt < MIN_IMMEDIATE_REFRESH_KICK_INTERVAL_MS) {
+    return Promise.resolve({ kind: 'throttled' })
+  }
+
+  lastImmediateRefreshKickAt = now
+  logger.info('[alfaclub-refresher] immediate refresh requested', { reason })
+  immediateRefreshInFlight = runAlfaClubPrivyRefreshOnce({}, { force: true }).finally(() => {
+    immediateRefreshInFlight = null
+  })
+  return immediateRefreshInFlight
+}
+
 export interface AlfaClubRefresherHandle {
   stop: () => void
   runNow: () => Promise<AlfaClubRefresherOutcome>
@@ -615,4 +636,9 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
     runNow,
     started: true,
   }
+}
+
+export function _resetImmediatePrivyRefreshForTests(): void {
+  immediateRefreshInFlight = null
+  lastImmediateRefreshKickAt = Number.NEGATIVE_INFINITY
 }

@@ -45,6 +45,33 @@ import { extractJwtExpiryIso } from './chatTokenStore.js'
 
 const HEALTH_KEY_LAST_SUCCESS = 'chat_auth_health:last_success' as const
 const HEALTH_KEY_LAST_FAILURE = 'chat_auth_health:last_failure' as const
+const HEALTH_KEY_BRIDGE = 'chat_auth_health:bridge' as const
+const BRIDGE_WRITER = 'alfaclub-chat-bridge'
+
+export type AlfaClubBridgeAuthHealthSnapshot = {
+  lastAuthFailAt: string | null
+  consecutiveAuthFailures: number
+  suppressedSocketAttempts: number
+  socketBackoffMs: number
+}
+
+/**
+ * In-memory fast-path cache. The source of truth for the bridge counters
+ * lives in the shared `chat_auth_health:bridge` row in
+ * `alfaclub_runtime_secret` so the API handler can read them when it runs
+ * in a different process/runtime than the bridge tick (the common
+ * production setup on Vercel — see Codex review on PR #504). Writes go to
+ * the durable row first; this cache is updated locally too so subsequent
+ * in-process reads reflect the latest state without an extra round-trip.
+ */
+const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
+  lastAuthFailAt: null,
+  consecutiveAuthFailures: 0,
+  suppressedSocketAttempts: 0,
+  socketBackoffMs: 0,
+}
+
+let bridgeStorageWarnLogged = false
 
 /**
  * Writer names that the auth path is allowed to produce. Anything else is
@@ -287,8 +314,13 @@ type HealthRow = {
   updated_by: string | null
 }
 
+type HealthRowKey =
+  | typeof HEALTH_KEY_LAST_SUCCESS
+  | typeof HEALTH_KEY_LAST_FAILURE
+  | typeof HEALTH_KEY_BRIDGE
+
 async function readHealthRow(
-  key: typeof HEALTH_KEY_LAST_SUCCESS | typeof HEALTH_KEY_LAST_FAILURE,
+  key: HealthRowKey,
 ): Promise<HealthRow | null> {
   const db = await getDb()
   if (!db) return null
@@ -310,7 +342,7 @@ async function readHealthRow(
 }
 
 async function writeHealthRow(
-  key: typeof HEALTH_KEY_LAST_SUCCESS | typeof HEALTH_KEY_LAST_FAILURE,
+  key: HealthRowKey,
   payloadJson: string,
   writer: string,
 ): Promise<boolean> {
@@ -369,6 +401,86 @@ export async function recordRefreshFailure(
   return writeHealthRow(HEALTH_KEY_LAST_FAILURE, json, writer)
 }
 
+function persistBridgeSnapshot(): Promise<boolean> {
+  // Snapshot the current cache and write it to the shared row. Writers
+  // call this fire-and-forget; the bridge must keep ticking even when
+  // shared storage is unreachable. Errors are swallowed by writeHealthRow
+  // (warn-logged) and surface as a `false` return.
+  const json = JSON.stringify(bridgeAuthHealth)
+  return writeHealthRow(HEALTH_KEY_BRIDGE, json, BRIDGE_WRITER).catch(() => false)
+}
+
+export function recordBridgeAuthFailure(at = new Date().toISOString()): void {
+  bridgeAuthHealth.lastAuthFailAt = at
+  bridgeAuthHealth.consecutiveAuthFailures += 1
+  void persistBridgeSnapshot()
+}
+
+export function recordBridgeHistorySuccess(): void {
+  bridgeAuthHealth.consecutiveAuthFailures = 0
+  void persistBridgeSnapshot()
+}
+
+export function recordBridgeSuppressedSocketAttempt(): void {
+  bridgeAuthHealth.suppressedSocketAttempts += 1
+  void persistBridgeSnapshot()
+}
+
+export function recordBridgeSocketBackoff(socketBackoffMs: number): void {
+  bridgeAuthHealth.socketBackoffMs = Math.max(0, Math.floor(socketBackoffMs))
+  void persistBridgeSnapshot()
+}
+
+/**
+ * Synchronous, in-memory snapshot. Used by the bridge itself (same
+ * process as the writes) and by tests. Cross-process readers should use
+ * `readBridgeAuthHealthSnapshotFromStorage`.
+ */
+export function readBridgeAuthHealthSnapshot(): AlfaClubBridgeAuthHealthSnapshot {
+  return { ...bridgeAuthHealth }
+}
+
+function isAlfaClubBridgeAuthHealthSnapshot(
+  value: unknown,
+): value is AlfaClubBridgeAuthHealthSnapshot {
+  if (!value || typeof value !== 'object') return false
+  const v = value as Record<string, unknown>
+  return (
+    (v.lastAuthFailAt === null || typeof v.lastAuthFailAt === 'string') &&
+    typeof v.consecutiveAuthFailures === 'number' &&
+    typeof v.suppressedSocketAttempts === 'number' &&
+    typeof v.socketBackoffMs === 'number'
+  )
+}
+
+/**
+ * Cross-process read path. Loads the bridge counters from the shared
+ * `chat_auth_health:bridge` row. When shared storage is not reachable
+ * (no DB binding, transient outage), falls back to the in-memory cache
+ * and warn-logs once per process so the failure is observable without
+ * spamming the log.
+ */
+export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClubBridgeAuthHealthSnapshot> {
+  const row = await readHealthRow(HEALTH_KEY_BRIDGE)
+  const parsed = safeParse<unknown>(row?.secret_value)
+  if (isAlfaClubBridgeAuthHealthSnapshot(parsed)) {
+    return {
+      lastAuthFailAt: parsed.lastAuthFailAt,
+      consecutiveAuthFailures: Math.max(0, Math.floor(parsed.consecutiveAuthFailures)),
+      suppressedSocketAttempts: Math.max(0, Math.floor(parsed.suppressedSocketAttempts)),
+      socketBackoffMs: Math.max(0, Math.floor(parsed.socketBackoffMs)),
+    }
+  }
+  if (!bridgeStorageWarnLogged) {
+    bridgeStorageWarnLogged = true
+    logger.warn(
+      '[alfaclub-auth-health] bridge health row unavailable; falling back to in-memory snapshot',
+      { key: HEALTH_KEY_BRIDGE },
+    )
+  }
+  return { ...bridgeAuthHealth }
+}
+
 export type AlfaClubAuthHealthSnapshot = {
   lastSuccess:
     | (RefreshSuccessPayload & {
@@ -396,6 +508,7 @@ export type AlfaClubAuthHealthSnapshot = {
     minutesUntilExpiry: number | null
     updatedAt: string | null
   } | null
+  bridge: AlfaClubBridgeAuthHealthSnapshot
 }
 
 function safeParse<T>(json: string | null | undefined): T | null {
@@ -422,9 +535,10 @@ export async function readAuthHealthSnapshot(params?: {
   now?: () => number
 }): Promise<AlfaClubAuthHealthSnapshot> {
   const now = params?.now ?? Date.now
-  const [successRow, failureRow] = await Promise.all([
+  const [successRow, failureRow, bridgeSnapshot] = await Promise.all([
     readHealthRow(HEALTH_KEY_LAST_SUCCESS),
     readHealthRow(HEALTH_KEY_LAST_FAILURE),
+    readBridgeAuthHealthSnapshotFromStorage(),
   ])
 
   const lastSuccessPayload = safeParse<RefreshSuccessPayload>(successRow?.secret_value)
@@ -468,11 +582,21 @@ export async function readAuthHealthSnapshot(params?: {
     lastSuccess,
     lastFailure,
     liveChatJwt: liveSnapshot,
+    bridge: bridgeSnapshot,
   }
+}
+
+export function _resetBridgeAuthHealthForTests(): void {
+  bridgeAuthHealth.lastAuthFailAt = null
+  bridgeAuthHealth.consecutiveAuthFailures = 0
+  bridgeAuthHealth.suppressedSocketAttempts = 0
+  bridgeAuthHealth.socketBackoffMs = 0
+  bridgeStorageWarnLogged = false
 }
 
 /** For tests only — health row keys. */
 export const _HEALTH_KEYS_FOR_TESTS = {
   LAST_SUCCESS: HEALTH_KEY_LAST_SUCCESS,
   LAST_FAILURE: HEALTH_KEY_LAST_FAILURE,
+  BRIDGE: HEALTH_KEY_BRIDGE,
 }
