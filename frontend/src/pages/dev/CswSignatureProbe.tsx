@@ -121,6 +121,8 @@ type ProbeResult = {
   replaySafeHash: Hex
   recoveredDirect: Address | null
   recoveredPrefixed: Address | null
+  recoveredAgainstReplaySafe: Address | null
+  recoveredAgainstPrefixedReplaySafe: Address | null
   targetOwnerIndex: number
   targetOwnerAddress: Address | null
   directMatchesTarget: boolean
@@ -542,6 +544,17 @@ export function CswSignatureProbe() {
       const recoveredPrefixed = recoverableSignature
         ? await recoverAddress({ hash: prefixedHash, signature: recoverableSignature }).catch(() => null)
         : null
+      // Extra diagnostic recoveries: some wallets/connectors apply replaySafeHash
+      // before signing (esp. for EOA owners through the CSW connector). If the
+      // wallet pre-wrapped the hash, recovery against `replaySafeHash` (or its
+      // EIP-191 prefixed form) will land on the actual signer.
+      const recoveredAgainstReplaySafe = recoverableSignature
+        ? await recoverAddress({ hash: replaySafeHash, signature: recoverableSignature }).catch(() => null)
+        : null
+      const prefixedReplaySafeHash = hashMessage({ raw: replaySafeHash })
+      const recoveredAgainstPrefixedReplaySafe = recoverableSignature
+        ? await recoverAddress({ hash: prefixedReplaySafeHash, signature: recoverableSignature }).catch(() => null)
+        : null
 
       // Authoritative verification: ask the CSW itself via ERC-1271.
       // The signature we send must be the FULL wrapped signature returned by the
@@ -596,6 +609,8 @@ export function CswSignatureProbe() {
         replaySafeHash,
         recoveredDirect,
         recoveredPrefixed,
+        recoveredAgainstReplaySafe,
+        recoveredAgainstPrefixedReplaySafe,
         targetOwnerIndex,
         targetOwnerAddress,
         directMatchesTarget,
@@ -1145,6 +1160,8 @@ export function CswSignatureProbe() {
           <KeyValue label="ecdsaSignatureForRecovery" value={probeResult.ecdsaSignatureForRecovery ?? '—'} />
           <KeyValue label="recoveredDirect(hash=signedHash)" value={probeResult.recoveredDirect ?? '—'} />
           <KeyValue label="recoveredPrefixed(hash=EIP191(signedHash))" value={probeResult.recoveredPrefixed ?? '—'} />
+          <KeyValue label="recoveredAgainstReplaySafe(hash=replaySafeHash)" value={probeResult.recoveredAgainstReplaySafe ?? '—'} />
+          <KeyValue label="recoveredAgainstPrefixedReplaySafe(hash=EIP191(replaySafeHash))" value={probeResult.recoveredAgainstPrefixedReplaySafe ?? '—'} />
           <KeyValue label="directMatchesTarget" value={String(probeResult.directMatchesTarget)} />
           <KeyValue label="prefixedMatchesTarget" value={String(probeResult.prefixedMatchesTarget)} />
           <KeyValue label="signatureData(raw return)" value={probeResult.signature} />

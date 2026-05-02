@@ -589,24 +589,27 @@ export async function _submitOwnerViaPreparedCalls(params: {
     canonicalCswAddress: params.canonicalCswAddress,
   })
 
-  // Step 1: wallet_prepareCalls → goes to Coinbase RPC (default case in SCWSigner)
-  const prepareCallsPayload: Record<string, unknown> = {
-    from: params.sender,
-    chainId: chainIdHex,
-    calls: [{ to: params.to, data: params.data, value: '0x0' }],
-    capabilities: {} as Record<string, unknown>,
-  }
-  // Inject paymaster capability if available
+  // Step 1: wallet_prepareCalls → goes to Coinbase RPC (default case in SCWSigner).
+  // Shape mirrors the Coinbase Wallet SDK exactly:
+  //   { version: '1.0', from, chainId, calls, capabilities }
+  // (see cb-sdk/packages/wallet-sdk/src/sign/scw/utils/createSubAccountSigner.ts).
+  // Capability for paymaster is `paymasterService: { url }` only — no top-level
+  // `paymasterUrl` and no per-chainId nested keys; non-standard keys have caused
+  // bundler JSON parser errors ("invalid character 'x' after top-level value").
+  const capabilities: Record<string, unknown> = {}
   if (params.paymasterUrl) {
     const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
       'https://api.developer.coinbase.com/',
       'https://api.cdp.coinbase.com/',
     )
-    ;(prepareCallsPayload.capabilities as Record<string, unknown>).paymasterUrl = paymasterUrlStr
-    ;(prepareCallsPayload.capabilities as Record<string, unknown>).paymasterService = {
-      url: paymasterUrlStr,
-      [chainIdHex]: { url: paymasterUrlStr },
-    }
+    capabilities.paymasterService = { url: paymasterUrlStr }
+  }
+  const prepareCallsPayload: Record<string, unknown> = {
+    version: '1.0',
+    from: params.sender,
+    chainId: chainIdHex,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    capabilities,
   }
 
   const prepareResult = await params.walletRequest({
