@@ -358,6 +358,87 @@ export function CswSignatureProbe() {
   const targetOwnerAddress = useMemo(() => {
     return ownerSlots.find((slot) => slot.index === targetOwnerIndex)?.ownerAddress ?? null
   }, [ownerSlots, targetOwnerIndex])
+
+  // Single-glance verdict: does ANY recovered address match an on-chain owner?
+  // Tri-state: 'green' = match, 'yellow' = unknown (no on-chain snapshot or no
+  // recoverable signature), 'red' = recovery succeeded but nothing matched.
+  // The yellow state preserves the #496 tri-state principle: a missing
+  // owner-snapshot is NOT the same as a confirmed mismatch.
+  const verdict = useMemo<{
+    state: 'green' | 'yellow' | 'red'
+    label: string
+    detail: string
+    matchedOwnerIndex: number | null
+    matchedHashLabel: string | null
+  } | null>(() => {
+    if (!probeResult) return null
+    const candidates: Array<{ label: string; address: Address | null }> = [
+      { label: 'recoveredDirect(userOpHash)', address: probeResult.recoveredDirect },
+      { label: 'recoveredAgainstOnchainReplaySafe', address: probeResult.recoveredAgainstOnchainReplaySafe },
+      { label: 'recoveredAgainstReplaySafe(local)', address: probeResult.recoveredAgainstReplaySafe },
+      { label: 'recoveredPrefixed(EIP191(userOpHash))', address: probeResult.recoveredPrefixed },
+      { label: 'recoveredAgainstPrefixedReplaySafe', address: probeResult.recoveredAgainstPrefixedReplaySafe },
+    ]
+    const onchainOwnerAddresses = ownerSlots
+      .filter((slot) => slot.ownerType === 'eoa' && slot.ownerAddress)
+      .map((slot) => ({ index: slot.index, address: slot.ownerAddress as Address }))
+    const haveOwnerSnapshot =
+      probeResult.parsedOwnerAddressOnchain !== null || onchainOwnerAddresses.length > 0
+    if (!haveOwnerSnapshot) {
+      return {
+        state: 'yellow',
+        label: '⚠️ Unknown — could not read on-chain owner snapshot',
+        detail:
+          'Click "load owner slots" or re-run the probe — this CSW may be non-standard, or the RPC call reverted.',
+        matchedOwnerIndex: null,
+        matchedHashLabel: null,
+      }
+    }
+    const haveAnyRecovery = candidates.some((c) => c.address !== null)
+    if (!haveAnyRecovery) {
+      return {
+        state: 'yellow',
+        label: '⚠️ Unknown — no recoverable signature',
+        detail: 'Recovery returned null for every candidate hash (likely a malformed or wrapped signature).',
+        matchedOwnerIndex: null,
+        matchedHashLabel: null,
+      }
+    }
+    const parsedOwnerLower =
+      probeResult.parsedOwnerAddressOnchain?.toLowerCase() ?? null
+    for (const candidate of candidates) {
+      if (!candidate.address) continue
+      const lower = candidate.address.toLowerCase()
+      if (parsedOwnerLower && lower === parsedOwnerLower) {
+        return {
+          state: 'green',
+          label: `✅ Wallet key matches owner[${probeResult.parsedOwnerIndex}] (${probeResult.parsedOwnerAddressOnchain})`,
+          detail: `Match path: ${candidate.label}.`,
+          matchedOwnerIndex: probeResult.parsedOwnerIndex,
+          matchedHashLabel: candidate.label,
+        }
+      }
+      const ownerHit = onchainOwnerAddresses.find((o) => o.address.toLowerCase() === lower)
+      if (ownerHit) {
+        return {
+          state: 'green',
+          label: `✅ Wallet key matches owner[${ownerHit.index}] (${ownerHit.address})`,
+          detail: `Match path: ${candidate.label}. Note: parsedOwnerIndex was ${probeResult.parsedOwnerIndex}; consider re-running with target=${ownerHit.index}.`,
+          matchedOwnerIndex: ownerHit.index,
+          matchedHashLabel: candidate.label,
+        }
+      }
+    }
+    return {
+      state: 'red',
+      label: '❌ Wallet key does NOT match any on-chain owner',
+      detail:
+        'All recoveries succeeded but recovered to addresses that are not in the CSW owner array. ' +
+        'Base App may be signing with a substituted sub-account key — see the side-by-side block below.',
+      matchedOwnerIndex: null,
+      matchedHashLabel: null,
+    }
+  }, [probeResult, ownerSlots])
   const parsedOwnerIndexSuggestion = useMemo(() => {
     if (!probeResult) return null
     if (probeResult.parsedOwnerIndex === null) return null
@@ -1234,6 +1315,87 @@ export function CswSignatureProbe() {
         )}
       </section>
 
+      {probeResult && verdict ? (
+        <section
+          className={`space-y-2 rounded border p-4 ${
+            verdict.state === 'green'
+              ? 'border-emerald-500/40 bg-emerald-500/10'
+              : verdict.state === 'yellow'
+                ? 'border-amber-500/40 bg-amber-500/10'
+                : 'border-rose-500/40 bg-rose-500/10'
+          }`}
+        >
+          <div
+            className={`font-mono text-[11px] uppercase tracking-wide ${
+              verdict.state === 'green'
+                ? 'text-emerald-300'
+                : verdict.state === 'yellow'
+                  ? 'text-amber-200'
+                  : 'text-rose-300'
+            }`}
+          >
+            owner-key verdict
+          </div>
+          <div
+            className={`font-mono text-sm ${
+              verdict.state === 'green'
+                ? 'text-emerald-100'
+                : verdict.state === 'yellow'
+                  ? 'text-amber-100'
+                  : 'text-rose-100'
+            }`}
+          >
+            {verdict.label}
+          </div>
+          <div className="font-mono text-[11px] text-zinc-300">{verdict.detail}</div>
+        </section>
+      ) : null}
+
+      {probeResult ? (
+        <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+            recovered vs on-chain owners (side-by-side)
+          </div>
+          <div className="space-y-1">
+            <RecoveredVsOwnerRow
+              label="recoveredDirect(userOpHash)"
+              recovered={probeResult.recoveredDirect}
+              ownerSlots={ownerSlots}
+              parsedOwnerIndex={probeResult.parsedOwnerIndex}
+              parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+            />
+            <RecoveredVsOwnerRow
+              label="recoveredAgainstOnchainReplaySafe"
+              recovered={probeResult.recoveredAgainstOnchainReplaySafe}
+              ownerSlots={ownerSlots}
+              parsedOwnerIndex={probeResult.parsedOwnerIndex}
+              parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+            />
+            <RecoveredVsOwnerRow
+              label="recoveredAgainstReplaySafe(local)"
+              recovered={probeResult.recoveredAgainstReplaySafe}
+              ownerSlots={ownerSlots}
+              parsedOwnerIndex={probeResult.parsedOwnerIndex}
+              parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+            />
+            <RecoveredVsOwnerRow
+              label="recoveredPrefixed(EIP191(userOpHash))"
+              recovered={probeResult.recoveredPrefixed}
+              ownerSlots={ownerSlots}
+              parsedOwnerIndex={probeResult.parsedOwnerIndex}
+              parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+            />
+            <RecoveredVsOwnerRow
+              label="recoveredAgainstPrefixedReplaySafe"
+              recovered={probeResult.recoveredAgainstPrefixedReplaySafe}
+              ownerSlots={ownerSlots}
+              parsedOwnerIndex={probeResult.parsedOwnerIndex}
+              parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+            />
+          </div>
+        </section>
+      ) : null}
+
       {probeResult ? (
         <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">probe result</div>
@@ -1295,6 +1457,59 @@ function StatusRow(props: { title: string; state: StepState }) {
       {props.state.detail ? (
         <pre className="whitespace-pre-wrap break-all font-mono text-[10px] text-zinc-500">{props.state.detail}</pre>
       ) : null}
+    </div>
+  )
+}
+
+function RecoveredVsOwnerRow(props: {
+  label: string
+  recovered: Address | null
+  ownerSlots: OwnerSlot[]
+  parsedOwnerIndex: number | null
+  parsedOwnerAddress: Address | null
+}) {
+  const recoveredLower = props.recovered?.toLowerCase() ?? null
+  const matchedSlot = recoveredLower
+    ? props.ownerSlots.find((slot) => slot.ownerAddress?.toLowerCase() === recoveredLower) ?? null
+    : null
+  const compareTarget =
+    props.parsedOwnerAddress ??
+    (props.parsedOwnerIndex !== null
+      ? props.ownerSlots.find((slot) => slot.index === props.parsedOwnerIndex)?.ownerAddress ?? null
+      : null)
+  const matchesParsedOwner =
+    recoveredLower !== null && compareTarget !== null && recoveredLower === compareTarget.toLowerCase()
+  const ringColor = matchedSlot
+    ? 'border-emerald-500/50'
+    : props.recovered === null
+      ? 'border-zinc-800'
+      : 'border-rose-500/40'
+  return (
+    <div className={`rounded border ${ringColor} bg-black/40 p-2`}>
+      <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">{props.label}</div>
+      <div className="grid gap-1 md:grid-cols-2">
+        <div>
+          <div className="font-mono text-[10px] text-zinc-500">recovered</div>
+          <div className="break-all font-mono text-[11px] text-zinc-200">{props.recovered ?? '— (no recovery)'}</div>
+        </div>
+        <div>
+          <div className="font-mono text-[10px] text-zinc-500">
+            owner snapshot (parsedOwnerIndex={props.parsedOwnerIndex !== null ? String(props.parsedOwnerIndex) : '—'})
+          </div>
+          <div className="break-all font-mono text-[11px] text-zinc-200">{compareTarget ?? '— (not loaded)'}</div>
+        </div>
+      </div>
+      <div className="mt-1 font-mono text-[10px]">
+        {matchedSlot ? (
+          <span className="text-emerald-300">✓ matches owner[{matchedSlot.index}]</span>
+        ) : matchesParsedOwner ? (
+          <span className="text-emerald-300">✓ matches parsed owner</span>
+        ) : props.recovered === null ? (
+          <span className="text-zinc-500">— no recovery for this hash</span>
+        ) : (
+          <span className="text-rose-300">✗ does not match any on-chain owner</span>
+        )}
+      </div>
     </div>
   )
 }

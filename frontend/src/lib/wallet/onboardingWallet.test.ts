@@ -13,7 +13,14 @@ vi.mock('@/lib/aa/coinbaseErc4337', () => ({
   sendCoinbaseSmartWalletUserOperation: sendCoinbaseSmartWalletUserOperationMock,
 }))
 
-import { sendPreparedOwnerTx } from './onboardingWallet'
+import { encodeAbiParameters, hashMessage, keccak256, toHex } from 'viem'
+import { generatePrivateKey, privateKeyToAccount, sign as viemSign } from 'viem/accounts'
+
+import {
+  _submitOwnerViaPreparedCallsWithEoaOwner,
+  preflightOwnerKeyMismatch,
+  sendPreparedOwnerTx,
+} from './onboardingWallet'
 
 const CANONICAL_CSW = '0x1111111111111111111111111111111111111111' as const
 const OWNER_EOA = '0x2222222222222222222222222222222222222222' as const
@@ -941,5 +948,210 @@ describe('sendPreparedOwnerTx', () => {
     ).rejects.toThrow('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
 
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+})
+
+// ── Helpers for the mismatch-guard / EOA-lane tests ───────────────────
+function encodeOwnerAtIndexResult(ownerAddress: `0x${string}`): `0x${string}` {
+  // ownerAtIndex returns `bytes`. The bytes payload is an ABI-encoded
+  // address (32 bytes, left-padded). Wrap that in the `bytes` ABI envelope.
+  const ownerBytes = encodeAbiParameters([{ type: 'address' }], [ownerAddress])
+  return encodeAbiParameters([{ type: 'bytes' }], [ownerBytes])
+}
+
+function wrapSignatureWithOwnerIndex(ownerIndex: number, ecdsa: `0x${string}`): `0x${string}` {
+  // SignatureWrapper(uint256 ownerIndex, bytes signatureData)
+  return encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'bytes' }],
+    [BigInt(ownerIndex), ecdsa],
+  )
+}
+
+async function ecdsaSignRaw(privateKey: `0x${string}`, hash: `0x${string}`): Promise<`0x${string}`> {
+  return (await viemSign({ hash, privateKey, to: 'hex' })) as `0x${string}`
+}
+
+async function ecdsaSignEip191(privateKey: `0x${string}`, hash: `0x${string}`): Promise<`0x${string}`> {
+  // Sign keccak256(\x19Ethereum Signed Message:\n32 || hash) — the digest a
+  // standards-compliant `personal_sign` signs over.
+  const eip191Digest = hashMessage({ raw: hash })
+  return (await viemSign({ hash: eip191Digest, privateKey, to: 'hex' })) as `0x${string}`
+}
+
+describe('preflightOwnerKeyMismatch (raw + EIP-191 dual recovery)', () => {
+  const HASH_TO_SIGN = keccak256(toHex('user-op-hash-fixture')) as `0x${string}`
+  const SENDER = '0xCfDDdfDdfdDdfddFdDdfDdFdDdfDDfDdfDdFdDdf' as `0x${string}`
+  const OWNER_INDEX = 0
+
+  function makeWalletRequestMock(ownerAddress: `0x${string}`) {
+    return vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_call') {
+        return encodeOwnerAtIndexResult(ownerAddress)
+      }
+      if (args.method === 'eth_getCode') {
+        return '0x' // EOA, no code
+      }
+      throw new Error(`unexpected RPC ${args.method}`)
+    })
+  }
+
+  it('passes when raw recovery matches the on-chain owner', async () => {
+    const pk = generatePrivateKey()
+    const account = privateKeyToAccount(pk)
+    const ecdsa = await ecdsaSignRaw(pk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(account.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+    })
+
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind === 'ok') {
+      expect(outcome.recoveredAddress.toLowerCase()).toBe(account.address.toLowerCase())
+      expect(outcome.recoveredRawAddress?.toLowerCase()).toBe(account.address.toLowerCase())
+    }
+  })
+
+  it('passes when only the EIP-191-prefixed recovery matches the on-chain owner', async () => {
+    const pk = generatePrivateKey()
+    const account = privateKeyToAccount(pk)
+    // The connector returned a personal_sign-style signature. Raw ecrecover
+    // over userOpHash will recover to a *different* address (the address
+    // that would have signed the raw hash with these r/s/v values), but
+    // EIP-191 recovery lands on the actual signer.
+    const ecdsa = await ecdsaSignEip191(pk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(account.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+    })
+
+    expect(outcome.kind).toBe('ok')
+    if (outcome.kind === 'ok') {
+      expect(outcome.recoveredEip191Address?.toLowerCase()).toBe(account.address.toLowerCase())
+    }
+  })
+
+  it('flags mismatch with both recovered addresses in the outcome when neither matches', async () => {
+    const signerPk = generatePrivateKey()
+    const wrongOwnerPk = generatePrivateKey()
+    const wrongOwnerAccount = privateKeyToAccount(wrongOwnerPk)
+    const ecdsa = await ecdsaSignRaw(signerPk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(wrongOwnerAccount.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+    })
+
+    expect(outcome.kind).toBe('mismatch')
+    if (outcome.kind === 'mismatch') {
+      expect(outcome.recoveredRawAddress).not.toBeNull()
+      expect(outcome.recoveredEip191Address).not.toBeNull()
+      expect(outcome.recoveredRawAddress?.toLowerCase()).not.toBe(wrongOwnerAccount.address.toLowerCase())
+      expect(outcome.recoveredEip191Address?.toLowerCase()).not.toBe(wrongOwnerAccount.address.toLowerCase())
+    }
+  })
+
+  it('returns unknown (does not throw) when the ECDSA bytes are completely malformed', async () => {
+    // 65 zero bytes — both recovery paths reject this signature.
+    const ecdsa = (`0x${'00'.repeat(65)}`) as `0x${string}`
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+    const ownerAddress = privateKeyToAccount(generatePrivateKey()).address as `0x${string}`
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(ownerAddress),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+    })
+
+    expect(outcome.kind).toBe('unknown')
+    if (outcome.kind === 'unknown') {
+      expect(outcome.reason).toMatch(/ecrecover failed/i)
+    }
+  })
+})
+
+describe('_submitOwnerViaPreparedCallsWithEoaOwner (split transports)', () => {
+  const SENDER = '0x4444444444444444444444444444444444444444' as `0x${string}`
+  const TARGET = '0x5555555555555555555555555555555555555555' as `0x${string}`
+  const RECEIPT_HASH = `0x${'b'.repeat(64)}` as `0x${string}`
+
+  it('routes wallet_prepareCalls + wallet_sendPreparedCalls to cswRequest and personal_sign to signerRequest', async () => {
+    const pk = generatePrivateKey()
+    const account = privateKeyToAccount(pk)
+    const eoaOwnerAddress = account.address as `0x${string}`
+    const userOpHash = keccak256(toHex('user-op-hash-eoa-lane')) as `0x${string}`
+    const rawSig = await ecdsaSignRaw(pk, userOpHash)
+
+    const cswRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: userOpHash },
+          userOp: { dummy: true },
+          capabilities: {},
+        }
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        return 'bundle-1'
+      }
+      if (args.method === 'wallet_getCallsStatus') {
+        return {
+          status: 200,
+          receipts: [{ transactionHash: RECEIPT_HASH }],
+        }
+      }
+      throw new Error(`unexpected csw RPC ${args.method}`)
+    })
+
+    const signerRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'personal_sign') {
+        return rawSig
+      }
+      throw new Error(`unexpected signer RPC ${args.method}`)
+    })
+
+    const result = await _submitOwnerViaPreparedCallsWithEoaOwner({
+      cswRequest,
+      signerRequest,
+      eoaOwnerAddress,
+      eoaOwnerIndex: 0,
+      chainId: 8453,
+      sender: SENDER,
+      to: TARGET,
+      data: '0xdeadbeef',
+      paymasterUrl: null,
+      approvalRunId: 'test-approval',
+      executionMode: 'canonicalSmartWallet',
+      canonicalCswAddress: SENDER,
+    })
+
+    expect(result).toBe(RECEIPT_HASH)
+
+    const cswMethods = cswRequest.mock.calls.map((c) => (c[0] as { method: string }).method)
+    expect(cswMethods).toContain('wallet_prepareCalls')
+    expect(cswMethods).toContain('wallet_sendPreparedCalls')
+    expect(cswMethods).toContain('wallet_getCallsStatus')
+    expect(cswMethods).not.toContain('personal_sign')
+
+    const signerMethods = signerRequest.mock.calls.map((c) => (c[0] as { method: string }).method)
+    expect(signerMethods).toEqual(['personal_sign'])
+    expect(signerRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'personal_sign',
+        params: [userOpHash, eoaOwnerAddress],
+      }),
+    )
   })
 })

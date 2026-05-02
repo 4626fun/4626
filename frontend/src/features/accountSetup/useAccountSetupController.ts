@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
-import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
@@ -26,6 +26,7 @@ import {
   deriveOwnerDelegationFlags,
   readApiError,
   sendPreparedOwnerTx as submitPreparedOwnerTx,
+  _submitOwnerViaPreparedCallsWithEoaOwner,
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
@@ -202,6 +203,7 @@ export function useAccountSetupController(params: {
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { address: connectedAddress, chainId } = useAccount()
+  const wagmiConnections = useConnections()
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
@@ -977,6 +979,137 @@ export function useAccountSetupController(params: {
     ],
   )
 
+  // ── EOA-owner submission lane ───────────────────────────────────────
+  // Surfaces three pieces of state for the UI to render the "Sign with
+  // on-chain EOA owner" path:
+  //   - `onchainEoaOwnerCandidates` — every EOA owner from cswOwnersState
+  //   - `connectedOnchainEoaOwner` — the candidate whose address matches the
+  //     connected wagmi account, or null if none match
+  //   - `submitOwnerInstallViaOnchainEoa(txRequest)` — runs the lane against
+  //     the matched EOA, recovering the signature locally before sending so a
+  //     substituted Base App key fails fast with a clear message instead of
+  //     a bundler revert.
+  const onchainEoaOwnerCandidates = useMemo(
+    () =>
+      cswOwnersState.owners
+        .filter((owner) => owner.isAddressOwner && owner.ownerAddress)
+        .map((owner) => ({
+          index: owner.index,
+          ownerAddress: getAddress(owner.ownerAddress as `0x${string}`) as `0x${string}`,
+        })),
+    [cswOwnersState.owners],
+  )
+  const connectedOnchainEoaOwner = useMemo(() => {
+    if (!connectedAddress) return null
+    const lower = connectedAddress.toLowerCase()
+    return onchainEoaOwnerCandidates.find((c) => c.ownerAddress.toLowerCase() === lower) ?? null
+  }, [connectedAddress, onchainEoaOwnerCandidates])
+
+  const submitOwnerInstallViaOnchainEoa = useCallback(
+    async (txRequest: PreparedOwnerTxRequest): Promise<`0x${string}`> => {
+      if (!canonicalCswAddress) {
+        throw new Error('No canonical Coinbase Smart Wallet selected.')
+      }
+      if (!connectedOnchainEoaOwner) {
+        const expected = onchainEoaOwnerCandidates.map((c) => c.ownerAddress).join(', ')
+        throw new Error(
+          expected
+            ? `Connect one of these on-chain EOA owners to use this lane: ${expected}.`
+            : 'No on-chain EOA owners are available on this Coinbase Smart Wallet.',
+        )
+      }
+      if (txRequest.to.toLowerCase() !== canonicalCswAddress.toLowerCase()) {
+        throw new Error('Prepared transaction target does not match the canonical Coinbase Smart Wallet.')
+      }
+
+      // Resolve two transports:
+      //   - signerRequest: the wagmi connection whose connected accounts
+      //     include the on-chain EOA owner — this is the only key that can
+      //     produce a valid `personal_sign` over the userOpHash.
+      //   - cswRequest: a Coinbase / Base App connector that implements the
+      //     `wallet_prepareCalls` / `wallet_sendPreparedCalls` Coinbase RPC
+      //     methods. If the EOA-owner connector is itself a Coinbase
+      //     connector (rare — only when the Coinbase wallet IS the EOA
+      //     owner), reuse the same provider.
+      const ownerLower = connectedOnchainEoaOwner.ownerAddress.toLowerCase()
+      const signerConnection = wagmiConnections.find((conn) =>
+        conn.accounts.some((acct) => String(acct).toLowerCase() === ownerLower),
+      )
+      if (!signerConnection) {
+        throw new Error(
+          `No connected wagmi account matches on-chain EOA owner ${connectedOnchainEoaOwner.ownerAddress}. ` +
+            'Connect that wallet directly and retry.',
+        )
+      }
+      const signerProvider = (await (signerConnection.connector as { getProvider?: () => Promise<unknown> })
+        .getProvider?.()) as { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null
+      if (!signerProvider || typeof signerProvider.request !== 'function') {
+        throw new Error('EOA-owner connector does not expose a request() surface for personal_sign.')
+      }
+      const signerRequest = async (args: { method: string; params?: unknown[] }) =>
+        await signerProvider.request!(args)
+
+      const isCoinbaseLikeConnector = (connectorId: unknown): boolean => {
+        const id = String(connectorId ?? '').toLowerCase()
+        return id === 'coinbasewalletsdk' || id === 'base-account' || id.includes('coinbase')
+      }
+      let cswRequest: typeof signerRequest = signerRequest
+      if (!isCoinbaseLikeConnector(signerConnection.connector?.id)) {
+        const coinbaseConnection = wagmiConnections.find((conn) =>
+          isCoinbaseLikeConnector(conn.connector?.id),
+        )
+        if (coinbaseConnection) {
+          const coinbaseProvider = (await (coinbaseConnection.connector as {
+            getProvider?: () => Promise<unknown>
+          }).getProvider?.()) as
+            | { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+            | null
+          if (coinbaseProvider && typeof coinbaseProvider.request === 'function') {
+            cswRequest = async (args: { method: string; params?: unknown[] }) =>
+              await coinbaseProvider.request!(args)
+          }
+        }
+        // If no Coinbase connector is present, the EOA connector remains as
+        // the cswRequest. This will fail-fast on `wallet_prepareCalls` with a
+        // clear "method not supported" error from the connector, surfacing
+        // the missing-Coinbase-provider state to the user.
+      }
+
+      if (chainId !== base.id && typeof switchChainAsync === 'function') {
+        await switchChainAsync({ chainId: base.id })
+      }
+      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+      const paymasterUrl =
+        (typeof paymasterEnv === 'string' && paymasterEnv.trim() ? paymasterEnv.trim() : null) ?? null
+      const runId = ++ownerApprovalRunIdRef.current
+      const approvalRunId = `eoa-owner-approval-${Date.now()}-${runId}`
+      return await _submitOwnerViaPreparedCallsWithEoaOwner({
+        cswRequest,
+        signerRequest,
+        eoaOwnerAddress: connectedOnchainEoaOwner.ownerAddress,
+        eoaOwnerIndex: connectedOnchainEoaOwner.index,
+        chainId: base.id,
+        sender: canonicalCswAddress as `0x${string}`,
+        to: txRequest.to,
+        data: txRequest.data,
+        paymasterUrl,
+        approvalRunId,
+        executionMode: 'canonicalSmartWallet',
+        canonicalCswAddress,
+        onStageEvent: emitOwnerApprovalStageEvent,
+      })
+    },
+    [
+      canonicalCswAddress,
+      chainId,
+      connectedOnchainEoaOwner,
+      emitOwnerApprovalStageEvent,
+      onchainEoaOwnerCandidates,
+      switchChainAsync,
+      wagmiConnections,
+    ],
+  )
+
   const runCustomOwnerGasPreflight = useCallback(
     async (input: {
       txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }
@@ -1626,6 +1759,9 @@ export function useAccountSetupController(params: {
     readableCswOwners,
     retryOwnerCheck,
     sendPreparedOwnerTx,
+    onchainEoaOwnerCandidates,
+    connectedOnchainEoaOwner,
+    submitOwnerInstallViaOnchainEoa,
     setAdvancedBusy,
     setBusyProvider,
     setConnectedOwnerState,

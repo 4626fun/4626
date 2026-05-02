@@ -3,7 +3,14 @@ import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { isAddress } from 'viem'
+import {
+  decodeAbiParameters,
+  encodeFunctionData,
+  getAddress,
+  isAddress,
+  recoverAddress,
+  recoverMessageAddress,
+} from 'viem'
 import { base } from 'viem/chains'
 export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
@@ -653,6 +660,44 @@ export async function _submitOwnerViaPreparedCalls(params: {
     throw new Error('personal_sign did not return a valid signature.')
   }
 
+  // ── Pre-flight mismatch guard ────────────────────────────────────────
+  // For EOA owners, the bundler runs ecrecover(userOpHash, sig) directly
+  // (CoinbaseSmartWallet.sol:191 – no replaySafeHash wrap on this path). If
+  // the wallet returned a key that doesn't recover to the parsed owner, the
+  // bundler will reject with -32507. We catch that here with a clear error
+  // pointing at the EOA-owner submission lane, instead of letting the
+  // failure surface as a cryptic bundler revert.
+  //
+  // Skip the check for code-bearing owners (passkey owners, smart-contract
+  // owners): those are verified via ERC-1271, which we cannot pre-flight
+  // statelessly. Surface as 'unknown — proceeding' on recovery failure so a
+  // malformed-sig error doesn't block legitimate WebAuthn flows.
+  try {
+    const guardOutcome = await preflightOwnerKeyMismatch({
+      walletRequest: params.walletRequest,
+      sender: params.sender,
+      hashToSign,
+      signature,
+    })
+    if (guardOutcome.kind === 'mismatch') {
+      const rawPart = guardOutcome.recoveredRawAddress ?? 'n/a'
+      const eip191Part = guardOutcome.recoveredEip191Address ?? 'n/a'
+      throw new Error(
+        `Signature does not match parsed owner [${guardOutcome.parsedOwnerIndex}] (${guardOutcome.parsedOwnerAddress}). ` +
+          `Recovered raw=${rawPart}, eip191=${eip191Part}. The connected wallet may be signing with a sub-account key ` +
+          `that is not on-chain. Try the EOA-owner submission lane (sendPreparedOwnerCallsWithEoaOwner).`,
+      )
+    }
+    // 'ok' (match), 'skipped_code_bearing', or 'unknown' all proceed.
+  } catch (guardError) {
+    // Re-throw the explicit mismatch error; suppress everything else so an
+    // unrelated failure in the guard never blocks a valid signature.
+    if (guardError instanceof Error && guardError.message.startsWith('Signature does not match parsed owner')) {
+      throw guardError
+    }
+    // Otherwise: tri-state-friendly — log debug, fall through.
+  }
+
   // Step 3: wallet_sendPreparedCalls → goes to Coinbase RPC (default case)
   //
   // Signature `type` selection mirrors createSubAccountSigner.ts in the CB SDK:
@@ -739,6 +784,215 @@ export async function _submitOwnerViaPreparedCalls(params: {
   throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
+// ── EOA-owner submission lane ─────────────────────────────────────────
+// Bypass the Base App popup by asking a connected EOA wallet that IS in the
+// CSW's on-chain owner array to sign the userOpHash directly. The bundler's
+// validateUserOp path runs ecrecover(userOpHash, sig) with no replaySafeHash
+// wrap (CoinbaseSmartWallet.sol:191), so we sign the raw hash and wrap it as
+// SignatureWrapper(ownerIndex, sig).
+//
+// Use this lane when:
+//   - The CSW has an EOA owner at some index N (decoded from ownerAtIndex(N))
+//   - The user can connect a wallet whose connected address === that EOA
+//   - You need to bypass the Base App popup (which substitutes a sub-account
+//     key not present in the CSW owner array — see the reconciliation doc).
+export async function _submitOwnerViaPreparedCallsWithEoaOwner(params: {
+  // Coinbase / Base App provider request fn. Routes the
+  // `wallet_prepareCalls` and `wallet_sendPreparedCalls` Coinbase-only RPC
+  // methods (and the status poll) through the CSW provider.
+  cswRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  // External EOA connector request fn. Routes `personal_sign` to the
+  // wallet whose connected address matches `eoaOwnerAddress` — the whole
+  // point of this lane is to bypass the Base App popup, which substitutes
+  // a sub-account key not present in the CSW owner array. If both
+  // transports happen to be the same provider (e.g. the on-chain EOA
+  // owner is the same wallet that's hosting the CSW), the caller can
+  // pass the same request fn for both.
+  signerRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  // The on-chain EOA owner address signing this userOp. Used as the
+  // `from` field for personal_sign and the recovery target for the
+  // mismatch guard.
+  eoaOwnerAddress: `0x${string}`
+  // Owner index inside the CSW.owners[] array for `eoaOwnerAddress`.
+  eoaOwnerIndex: number
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+  paymasterUrl: string | null
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  canonicalCswAddress: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<`0x${string}`> {
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'prepare_calls',
+    status: 'start',
+    executionMode: params.executionMode,
+    signerAddress: params.eoaOwnerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+  })
+
+  const capabilities: Record<string, unknown> = {}
+  if (params.paymasterUrl) {
+    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
+      'https://api.developer.coinbase.com/',
+      'https://api.cdp.coinbase.com/',
+    )
+    capabilities.paymasterService = { url: paymasterUrlStr }
+  }
+  const prepareCallsPayload: Record<string, unknown> = {
+    version: '1.0',
+    from: params.sender,
+    chainId: chainIdHex,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    capabilities,
+  }
+
+  const prepareResult = (await params.cswRequest({
+    method: 'wallet_prepareCalls',
+    params: [prepareCallsPayload],
+  })) as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+    capabilities?: Record<string, unknown>
+  } | null
+
+  if (!prepareResult?.signatureRequest?.hash) {
+    throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  }
+  if (!prepareResult.userOp) {
+    throw new Error('wallet_prepareCalls did not return a userOp.')
+  }
+
+  const userOpHash = unwrapDoubleHexEncodedHash(
+    prepareResult.signatureRequest.hash as `0x${string}`,
+  )
+
+  // Sign userOpHash with the connected EOA owner's connector. `from` MUST be
+  // the EOA address, not the CSW — this is the key difference vs the popup
+  // self-auth lane. The bundler does plain ecrecover(userOpHash, sig) on this
+  // path, so no replaySafeHash wrap is applied here either.
+  const rawSignature = (await params.signerRequest({
+    method: 'personal_sign',
+    params: [userOpHash, params.eoaOwnerAddress],
+  })) as `0x${string}`
+
+  if (!rawSignature || typeof rawSignature !== 'string' || !rawSignature.startsWith('0x')) {
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  if (hexByteLength(rawSignature) !== 65) {
+    throw new Error(
+      `EOA-owner submission expects a 65-byte ECDSA signature, got ${hexByteLength(rawSignature)} bytes.`,
+    )
+  }
+
+  // Recover for sanity. If recovery doesn't land on the connected EOA, the
+  // wallet is signing with a different key (e.g. Base App sub-account). Fail
+  // fast with a clear message so the user knows to try a different connector.
+  let recovered: `0x${string}`
+  try {
+    recovered = await recoverAddress({ hash: userOpHash, signature: rawSignature })
+  } catch (recoveryError) {
+    throw new Error(
+      `Could not recover signer from userOpHash signature: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+    )
+  }
+  if (recovered.toLowerCase() !== params.eoaOwnerAddress.toLowerCase()) {
+    throw new Error(
+      `EOA-owner signature recovered to ${recovered}, not the expected on-chain owner ${params.eoaOwnerAddress}. ` +
+        `The connected wallet may be signing with a substituted key. Connect ${params.eoaOwnerAddress} directly and retry.`,
+    )
+  }
+
+  // Wrap as ERC-1271 SignatureWrapper(ownerIndex, ecdsaSig) and frame as
+  // `secp256k1` so the bundler RPC routes it through ecrecover for this owner
+  // index.
+  const signaturePayload = {
+    type: 'secp256k1' as const,
+    data: {
+      address: params.eoaOwnerAddress,
+      signature: rawSignature,
+    },
+  }
+
+  const sendResult = (await params.cswRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [{
+      version: '1.0',
+      type: prepareResult.type ?? 'user-operation-v06',
+      data: prepareResult.userOp,
+      chainId: prepareResult.chainId ?? chainIdHex,
+      signature: signaturePayload,
+      // The CSW owner index for `eoaOwnerAddress`. Some bundler builds key
+      // off `ownerIndex` directly; passing it as a hint is harmless and
+      // matches the SignatureWrapper convention.
+      ownerIndex: params.eoaOwnerIndex,
+    }],
+  })) as unknown
+
+  const callsId =
+    typeof sendResult === 'string'
+      ? sendResult
+      : Array.isArray(sendResult) && typeof sendResult[0] === 'string'
+        ? sendResult[0]
+        : sendResult && typeof sendResult === 'object' && typeof (sendResult as { id?: unknown }).id === 'string'
+          ? String((sendResult as { id: string }).id)
+          : ''
+
+  if (!callsId) {
+    throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+  }
+
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < PREPARED_CALLS_STATUS_TIMEOUT_MS) {
+    const result = await params.cswRequest({ method: 'wallet_getCallsStatus', params: [callsId] })
+    const statusCode = Number((result as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((result as { receipts?: unknown[] } | null)?.receipts)
+      ? ((result as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    if (Number.isFinite(statusCode)) {
+      if (statusCode >= 200 && statusCode < 300) {
+        if (receiptHash) {
+          emitOwnerApprovalStage(params.onStageEvent, {
+            runId: params.approvalRunId,
+            stage: 'prepare_calls',
+            status: 'success',
+            executionMode: params.executionMode,
+            signerAddress: params.eoaOwnerAddress,
+            canonicalCswAddress: params.canonicalCswAddress,
+            txHash: receiptHash,
+          })
+          return receiptHash
+        }
+        throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
+      }
+      if (statusCode >= 300) throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+    }
+    await delay(PREPARED_CALLS_STATUS_POLL_MS)
+  }
+
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'prepare_calls',
+    status: 'error',
+    executionMode: params.executionMode,
+    signerAddress: params.eoaOwnerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+    code: 'prepared_calls_pending_timeout',
+    message: 'wallet_sendPreparedCalls status is still pending.',
+  })
+  throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
+}
+
 // Decode hex-encoded bytes to a UTF-8 string (used to unwrap the
 // double-hex-encoded `signatureRequest.hash` returned by wallet_prepareCalls).
 // Mirrors viem's hexToString, which is what the Coinbase Wallet SDK uses
@@ -805,6 +1059,246 @@ export function buildSendPreparedCallsSignaturePayload(input: {
       // Address is included as a hint for verifiers that key off of the signer.
       address: input.sender,
     },
+  }
+}
+
+// ── Pre-flight mismatch guard helpers ─────────────────────────────────
+// Tri-state-friendly: `ok` (recovered === owner), `mismatch` (recovered !== owner,
+// owner is an EOA), `skipped_code_bearing` (owner has code so we can't pre-flight
+// the bundler ecrecover path), `unknown` (recovery failed or owner snapshot
+// unavailable — caller should proceed without blocking).
+type PreflightOutcome =
+  | {
+      kind: 'ok'
+      parsedOwnerIndex: number
+      parsedOwnerAddress: `0x${string}`
+      recoveredAddress: `0x${string}`
+      recoveredRawAddress: `0x${string}` | null
+      recoveredEip191Address: `0x${string}` | null
+    }
+  | {
+      kind: 'mismatch'
+      parsedOwnerIndex: number
+      parsedOwnerAddress: `0x${string}`
+      recoveredAddress: `0x${string}`
+      recoveredRawAddress: `0x${string}` | null
+      recoveredEip191Address: `0x${string}` | null
+    }
+  | { kind: 'skipped_code_bearing'; parsedOwnerIndex: number | null; parsedOwnerAddress: `0x${string}` | null }
+  | { kind: 'unknown'; reason: string }
+
+const CSW_OWNER_AT_INDEX_ABI = [
+  {
+    type: 'function',
+    name: 'ownerAtIndex',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'bytes' }],
+  },
+] as const
+
+function hexByteLength(value: string): number {
+  if (typeof value !== 'string' || !value.startsWith('0x')) return 0
+  return Math.max(0, (value.length - 2) / 2)
+}
+
+// Parse an ERC-1271 SignatureWrapper-shaped payload (or a raw 65-byte ECDSA sig)
+// into an ownerIndex + inner ECDSA bytes. Mirrors the probe's parseWalletSignature
+// but returns only what the guard needs.
+function parseSignatureForRecovery(signature: `0x${string}`): {
+  ownerIndex: number | null
+  ecdsaSignature: `0x${string}` | null
+} {
+  if (hexByteLength(signature) === 65) {
+    return { ownerIndex: null, ecdsaSignature: signature }
+  }
+  const tryDecodeTuple = (value: `0x${string}`) => {
+    const [ownerIndexRaw, signatureData] = decodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      value,
+    )
+    const ownerIndex = Number(ownerIndexRaw)
+    const sigData = signatureData as `0x${string}`
+    return {
+      ownerIndex,
+      ecdsaSignature: hexByteLength(sigData) === 65 ? sigData : null,
+    }
+  }
+  try {
+    return tryDecodeTuple(signature)
+  } catch {
+    /* fall through */
+  }
+  try {
+    const [innerBytes] = decodeAbiParameters([{ type: 'bytes' }], signature)
+    return tryDecodeTuple(innerBytes as `0x${string}`)
+  } catch {
+    /* fall through */
+  }
+  // Single leading 0x20 ABI offset word seen with the Base App popup wrapper.
+  if (hexByteLength(signature) >= 96) {
+    const headWord = signature.slice(2, 66).toLowerCase()
+    if (headWord === '0000000000000000000000000000000000000000000000000000000000000020') {
+      try {
+        const stripped = (`0x${signature.slice(66)}`) as `0x${string}`
+        return tryDecodeTuple(stripped)
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  return { ownerIndex: null, ecdsaSignature: null }
+}
+
+function decodeOwnerBytesAsAddress(ownerBytes: `0x${string}`): `0x${string}` | null {
+  const len = hexByteLength(ownerBytes)
+  if (len !== 32) return null
+  try {
+    const [decoded] = decodeAbiParameters([{ type: 'address' }], ownerBytes)
+    const lower = String(decoded).toLowerCase()
+    if (!isAddress(lower) || lower === '0x0000000000000000000000000000000000000000') return null
+    return getAddress(lower) as `0x${string}`
+  } catch {
+    return null
+  }
+}
+
+export async function preflightOwnerKeyMismatch(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  sender: `0x${string}`
+  hashToSign: `0x${string}`
+  signature: `0x${string}`
+}): Promise<PreflightOutcome> {
+  const parsed = parseSignatureForRecovery(params.signature)
+  if (!parsed.ecdsaSignature) {
+    return { kind: 'unknown', reason: 'no recoverable 65-byte ecdsa component' }
+  }
+  // For a raw-ECDSA signature (no wrapper), the ownerIndex is unknown and we
+  // can't look up the owner without an extra RPC; let it through.
+  if (parsed.ownerIndex === null) {
+    return { kind: 'unknown', reason: 'raw 65-byte ecdsa with no parsed owner index' }
+  }
+
+  let ownerBytes: `0x${string}` | null = null
+  try {
+    const result = (await params.walletRequest({
+      method: 'eth_call',
+      params: [
+        {
+          to: params.sender,
+          data: encodeOwnerAtIndexCall(parsed.ownerIndex),
+        },
+        'latest',
+      ],
+    })) as string
+    if (typeof result === 'string' && result.startsWith('0x')) {
+      ownerBytes = decodeOwnerAtIndexResult(result as `0x${string}`)
+    }
+  } catch {
+    return { kind: 'unknown', reason: 'eth_call ownerAtIndex failed' }
+  }
+  if (!ownerBytes) {
+    return { kind: 'unknown', reason: 'ownerAtIndex returned no bytes' }
+  }
+  const ownerAddress = decodeOwnerBytesAsAddress(ownerBytes)
+  if (!ownerAddress) {
+    // 64-byte passkey or non-address slot → ERC-1271-only path, skip pre-flight.
+    return { kind: 'skipped_code_bearing', parsedOwnerIndex: parsed.ownerIndex, parsedOwnerAddress: null }
+  }
+
+  let codeAtOwner = '0x'
+  try {
+    const code = (await params.walletRequest({
+      method: 'eth_getCode',
+      params: [ownerAddress, 'latest'],
+    })) as string
+    if (typeof code === 'string') codeAtOwner = code
+  } catch {
+    return { kind: 'unknown', reason: 'eth_getCode failed' }
+  }
+  if (codeAtOwner !== '0x' && codeAtOwner !== '0x0') {
+    return {
+      kind: 'skipped_code_bearing',
+      parsedOwnerIndex: parsed.ownerIndex,
+      parsedOwnerAddress: ownerAddress,
+    }
+  }
+
+  // CSW EOA owner verification accepts BOTH raw ecrecover(hash, sig) AND
+  // ecrecover(toEthSignedMessageHash(hash), sig) — Solady's
+  // SignatureCheckerLib.isValidSignatureNowCalldata tries both, mirroring
+  // the dual-path note at coinbaseErc4337.ts:1889-1891. Connectors that
+  // return a standard `personal_sign` (EIP-191 prefixed) signature only
+  // recover correctly against the EIP-191-wrapped hash, so the guard must
+  // accept either match before declaring a mismatch.
+  let recoveredRaw: `0x${string}` | null = null
+  try {
+    recoveredRaw = await recoverAddress({ hash: params.hashToSign, signature: parsed.ecdsaSignature })
+  } catch {
+    /* fall through — still try EIP-191 path */
+  }
+  let recoveredEip191: `0x${string}` | null = null
+  try {
+    recoveredEip191 = await recoverMessageAddress({
+      message: { raw: params.hashToSign },
+      signature: parsed.ecdsaSignature,
+    })
+  } catch {
+    /* fall through — handled below */
+  }
+
+  if (!recoveredRaw && !recoveredEip191) {
+    // Both recoveries failed — malformed signature. Preserve tri-state:
+    // surface as 'unknown — proceeding' rather than blocking, so flows
+    // we can't pre-flight (e.g. WebAuthn) keep working.
+    return { kind: 'unknown', reason: 'ecrecover failed (raw and eip191)' }
+  }
+
+  const ownerLower = ownerAddress.toLowerCase()
+  if (recoveredRaw && recoveredRaw.toLowerCase() === ownerLower) {
+    return {
+      kind: 'ok',
+      parsedOwnerIndex: parsed.ownerIndex,
+      parsedOwnerAddress: ownerAddress,
+      recoveredAddress: recoveredRaw,
+      recoveredRawAddress: recoveredRaw,
+      recoveredEip191Address: recoveredEip191,
+    }
+  }
+  if (recoveredEip191 && recoveredEip191.toLowerCase() === ownerLower) {
+    return {
+      kind: 'ok',
+      parsedOwnerIndex: parsed.ownerIndex,
+      parsedOwnerAddress: ownerAddress,
+      recoveredAddress: recoveredEip191,
+      recoveredRawAddress: recoveredRaw,
+      recoveredEip191Address: recoveredEip191,
+    }
+  }
+  return {
+    kind: 'mismatch',
+    parsedOwnerIndex: parsed.ownerIndex,
+    parsedOwnerAddress: ownerAddress,
+    recoveredAddress: recoveredRaw ?? recoveredEip191 ?? ('0x' as `0x${string}`),
+    recoveredRawAddress: recoveredRaw,
+    recoveredEip191Address: recoveredEip191,
+  }
+}
+
+function encodeOwnerAtIndexCall(index: number): `0x${string}` {
+  return encodeFunctionData({
+    abi: CSW_OWNER_AT_INDEX_ABI,
+    functionName: 'ownerAtIndex',
+    args: [BigInt(index)],
+  })
+}
+
+function decodeOwnerAtIndexResult(result: `0x${string}`): `0x${string}` | null {
+  try {
+    const [bytes] = decodeAbiParameters([{ type: 'bytes' }], result)
+    return bytes as `0x${string}`
+  } catch {
+    return null
   }
 }
 
