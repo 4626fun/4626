@@ -585,6 +585,14 @@ export async function _submitOwnerViaPreparedCalls(params: {
   signerAddress: string | null
   canonicalCswAddress: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+  // Defaults to 'external_signer' (current behavior — strict mismatch throw).
+  // The probe page sets this to 'self_auth' when `connectedAddress === sender`,
+  // i.e. the Base App popup is the CSW signing for itself. In that mode the
+  // popup may return an ephemeral sub-account session key that does not
+  // ecrecover to any on-chain owner; the bundler still accepts it via
+  // Coinbase's sub-account / ERC-1271 path, so the local mismatch guard must
+  // not block submission. See `preflightOwnerKeyMismatch` for details.
+  sessionKind?: 'self_auth' | 'external_signer'
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}`
 
@@ -679,6 +687,7 @@ export async function _submitOwnerViaPreparedCalls(params: {
       sender: params.sender,
       hashToSign,
       signature,
+      sessionKind: params.sessionKind,
     })
     if (guardOutcome.kind === 'mismatch') {
       const rawPart = guardOutcome.recoveredRawAddress ?? 'n/a'
@@ -689,7 +698,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
           `that is not on-chain. Try the EOA-owner submission lane (sendPreparedOwnerCallsWithEoaOwner).`,
       )
     }
-    // 'ok' (match), 'skipped_code_bearing', or 'unknown' all proceed.
+    // 'ok' (match), 'skipped_code_bearing', 'skipped_webauthn',
+    // 'skipped_self_auth_session_key', or 'unknown' all proceed.
   } catch (guardError) {
     // Re-throw the explicit mismatch error; suppress everything else so an
     // unrelated failure in the guard never blocks a valid signature.
@@ -1087,6 +1097,22 @@ type PreflightOutcome =
     }
   | { kind: 'skipped_code_bearing'; parsedOwnerIndex: number | null; parsedOwnerAddress: `0x${string}` | null }
   | { kind: 'skipped_webauthn'; reason: string }
+  | {
+      // Self-auth Base App / CSW session: `sender === walletProvider`, so the
+      // popup may sign with an ephemeral session-key (sub-account) that is not
+      // present in the CSW owner array. The bundler validates that signature
+      // through Coinbase's sub-account / ERC-1271 path — local ecrecover
+      // against `ownerAtIndex(parsedOwnerIndex)` is inapplicable. We surface
+      // this as its own outcome (instead of `mismatch`) so the caller can
+      // proceed without throwing while still distinguishing it from a real
+      // EOA-owner mismatch in logs/telemetry.
+      kind: 'skipped_self_auth_session_key'
+      parsedOwnerIndex: number
+      parsedOwnerAddress: `0x${string}`
+      recoveredAddress: `0x${string}`
+      recoveredRawAddress: `0x${string}` | null
+      recoveredEip191Address: `0x${string}` | null
+    }
   | { kind: 'unknown'; reason: string }
 
 const CSW_OWNER_AT_INDEX_ABI = [
@@ -1170,6 +1196,15 @@ export async function preflightOwnerKeyMismatch(params: {
   sender: `0x${string}`
   hashToSign: `0x${string}`
   signature: `0x${string}`
+  // Optional. When set to 'self_auth' (Base App / CSW signing for itself,
+  // i.e. `sender === walletProvider`), an ECDSA mismatch against the parsed
+  // on-chain owner is downgraded from `mismatch` to
+  // `skipped_self_auth_session_key` because the popup may legitimately
+  // return an ephemeral sub-account session key that the bundler validates
+  // via Coinbase's sub-account path. Default ('external_signer') preserves
+  // strict mismatch-throws behavior for EOA-owner connectors that should be
+  // signing with an on-chain owner key.
+  sessionKind?: 'self_auth' | 'external_signer'
 }): Promise<PreflightOutcome> {
   // Recognize passkey signatures up front. The bundler routes WebAuthnAuth
   // payloads through CSW's `WebAuthn.verify` (FCL_Elliptic_ZZ ecZZ_mulmuladd_S_asm)
@@ -1286,6 +1321,34 @@ export async function preflightOwnerKeyMismatch(params: {
       parsedOwnerIndex: parsed.ownerIndex,
       parsedOwnerAddress: ownerAddress,
       recoveredAddress: recoveredEip191,
+      recoveredRawAddress: recoveredRaw,
+      recoveredEip191Address: recoveredEip191,
+    }
+  }
+  // Self-auth lane: the wallet provider IS the CSW (sender === connected
+  // address). The Base App popup is allowed to sign with an ephemeral
+  // sub-account session key that is not on-chain at the parsed owner index;
+  // the bundler still validates through Coinbase's sub-account path. Don't
+  // block submission — surface the recovered keys so callers (and the probe
+  // page) can still log/telemetry the substitution, but mark it as a skip
+  // rather than a hard mismatch.
+  if (params.sessionKind === 'self_auth') {
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug(
+        '[preflightOwnerKeyMismatch] self-auth session key substitution — bundler will validate via sub-account path',
+        {
+          parsedOwnerIndex: parsed.ownerIndex,
+          parsedOwnerAddress: ownerAddress,
+          recoveredRaw,
+          recoveredEip191,
+        },
+      )
+    }
+    return {
+      kind: 'skipped_self_auth_session_key',
+      parsedOwnerIndex: parsed.ownerIndex,
+      parsedOwnerAddress: ownerAddress,
+      recoveredAddress: recoveredRaw ?? recoveredEip191 ?? ('0x' as `0x${string}`),
       recoveredRawAddress: recoveredRaw,
       recoveredEip191Address: recoveredEip191,
     }

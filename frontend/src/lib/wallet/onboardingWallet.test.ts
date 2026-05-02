@@ -1132,6 +1132,80 @@ describe('preflightOwnerKeyMismatch (raw + EIP-191 dual recovery)', () => {
     }
     expect(walletRequest).not.toHaveBeenCalled()
   })
+
+  // Self-auth Base App / CSW session: the connected wallet provider IS the
+  // CSW itself, so the popup may legitimately return an ephemeral sub-account
+  // session-key ECDSA that does not ecrecover to the parsed on-chain owner.
+  // The bundler validates that signature via Coinbase's sub-account /
+  // ERC-1271 path; the local mismatch guard must not block submission.
+  it('downgrades a would-be ECDSA mismatch to skipped_self_auth_session_key when sessionKind=self_auth', async () => {
+    const signerPk = generatePrivateKey()
+    const onChainOwnerPk = generatePrivateKey()
+    const onChainOwnerAccount = privateKeyToAccount(onChainOwnerPk)
+    // Sign with `signerPk` but the on-chain owner is `onChainOwnerAccount` —
+    // ecrecover lands on a different address, the classic substitution shape.
+    const ecdsa = await ecdsaSignRaw(signerPk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(onChainOwnerAccount.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+      sessionKind: 'self_auth',
+    })
+
+    expect(outcome.kind).toBe('skipped_self_auth_session_key')
+    if (outcome.kind === 'skipped_self_auth_session_key') {
+      expect(outcome.parsedOwnerIndex).toBe(OWNER_INDEX)
+      expect(outcome.parsedOwnerAddress.toLowerCase()).toBe(
+        onChainOwnerAccount.address.toLowerCase(),
+      )
+      // Recovered keys are still surfaced for telemetry — they just don't
+      // match the on-chain owner.
+      expect(outcome.recoveredRawAddress).not.toBeNull()
+      expect(outcome.recoveredRawAddress?.toLowerCase()).not.toBe(
+        onChainOwnerAccount.address.toLowerCase(),
+      )
+    }
+  })
+
+  it('still flags a real mismatch when sessionKind=external_signer (default behavior)', async () => {
+    const signerPk = generatePrivateKey()
+    const onChainOwnerPk = generatePrivateKey()
+    const onChainOwnerAccount = privateKeyToAccount(onChainOwnerPk)
+    const ecdsa = await ecdsaSignRaw(signerPk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(onChainOwnerAccount.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+      sessionKind: 'external_signer',
+    })
+
+    expect(outcome.kind).toBe('mismatch')
+  })
+
+  it('still returns ok under sessionKind=self_auth when the signature legitimately matches the on-chain owner', async () => {
+    // Self-auth must NOT mask correct signatures — happy-path EOA owner
+    // installed at index 0 still recovers cleanly to the on-chain address.
+    const pk = generatePrivateKey()
+    const account = privateKeyToAccount(pk)
+    const ecdsa = await ecdsaSignRaw(pk, HASH_TO_SIGN)
+    const signature = wrapSignatureWithOwnerIndex(OWNER_INDEX, ecdsa)
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest: makeWalletRequestMock(account.address as `0x${string}`),
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature,
+      sessionKind: 'self_auth',
+    })
+
+    expect(outcome.kind).toBe('ok')
+  })
 })
 
 describe('_submitOwnerViaPreparedCallsWithEoaOwner (split transports)', () => {

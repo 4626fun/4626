@@ -1237,6 +1237,14 @@ export function CswSignatureProbe() {
           executionMode: 'canonicalSmartWallet',
           signerAddress: connectedAddress,
           canonicalCswAddress: normalizedCswAddress,
+          // Hard-gated above: this code path is only reachable when
+          // `connectedAddress === normalizedCswAddress`, i.e. the Base App
+          // popup is signing for the CSW itself. Pass `sessionKind: 'self_auth'`
+          // so the preflight guard downgrades sub-account session-key
+          // ECDSA mismatches to `skipped_self_auth_session_key` instead of
+          // throwing — the bundler validates those via Coinbase's
+          // sub-account / ERC-1271 path.
+          sessionKind: 'self_auth',
           onStageEvent: (event: OwnerApprovalStageEvent) => {
             const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
             appendEvent(row)
