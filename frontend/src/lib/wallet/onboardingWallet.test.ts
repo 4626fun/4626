@@ -1079,6 +1079,59 @@ describe('preflightOwnerKeyMismatch (raw + EIP-191 dual recovery)', () => {
       expect(outcome.reason).toMatch(/ecrecover failed/i)
     }
   })
+
+  it('skips ecrecover and returns skipped_webauthn for a passkey-shaped signature', async () => {
+    // Hand-craft a WebAuthnAuth tuple. The exact bytes don't matter — we only
+    // need detectSignatureShape to recognize it, so the guard short-circuits
+    // before calling eth_call / ecrecover. The walletRequest mock would throw
+    // on any unexpected RPC; verifying it's not called confirms the skip.
+    const authenticatorData = (`0x${'ab'.repeat(37)}`) as `0x${string}`
+    const clientDataJSON =
+      '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}'
+    const webauthnSignature = encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            { name: 'authenticatorData', type: 'bytes' },
+            { name: 'clientDataJSON', type: 'string' },
+            { name: 'challengeIndex', type: 'uint256' },
+            { name: 'typeIndex', type: 'uint256' },
+            { name: 'r', type: 'uint256' },
+            { name: 's', type: 'uint256' },
+          ],
+        },
+      ],
+      [
+        {
+          authenticatorData,
+          clientDataJSON,
+          challengeIndex: 23n,
+          typeIndex: 1n,
+          r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+          s: 0xfedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321n,
+        },
+      ],
+    )
+    // Throwing mock proves the guard doesn't try to look up an owner or run
+    // ecrecover — the webauthn-shape branch must short-circuit before any RPC.
+    const walletRequest = vi.fn(async () => {
+      throw new Error('walletRequest must not be called for webauthn shape')
+    })
+
+    const outcome = await preflightOwnerKeyMismatch({
+      walletRequest,
+      sender: SENDER,
+      hashToSign: HASH_TO_SIGN,
+      signature: webauthnSignature,
+    })
+
+    expect(outcome.kind).toBe('skipped_webauthn')
+    if (outcome.kind === 'skipped_webauthn') {
+      expect(outcome.reason).toMatch(/webauthn/i)
+    }
+    expect(walletRequest).not.toHaveBeenCalled()
+  })
 })
 
 describe('_submitOwnerViaPreparedCallsWithEoaOwner (split transports)', () => {

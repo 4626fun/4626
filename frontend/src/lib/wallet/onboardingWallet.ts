@@ -12,6 +12,7 @@ import {
   recoverMessageAddress,
 } from 'viem'
 import { base } from 'viem/chains'
+import { detectSignatureShape } from './signatureShape'
 export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export type OwnerDelegationFlags = {
@@ -1085,6 +1086,7 @@ type PreflightOutcome =
       recoveredEip191Address: `0x${string}` | null
     }
   | { kind: 'skipped_code_bearing'; parsedOwnerIndex: number | null; parsedOwnerAddress: `0x${string}` | null }
+  | { kind: 'skipped_webauthn'; reason: string }
   | { kind: 'unknown'; reason: string }
 
 const CSW_OWNER_AT_INDEX_ABI = [
@@ -1169,6 +1171,19 @@ export async function preflightOwnerKeyMismatch(params: {
   hashToSign: `0x${string}`
   signature: `0x${string}`
 }): Promise<PreflightOutcome> {
+  // Recognize passkey signatures up front. The bundler routes WebAuthnAuth
+  // payloads through CSW's `WebAuthn.verify` (FCL_Elliptic_ZZ ecZZ_mulmuladd_S_asm)
+  // rather than `ecrecover`, so any ecrecover-based pre-flight would garbage
+  // out. Skip the guard cleanly so a real passkey signature is never blocked
+  // on the way to the bundler. We cannot pre-flight WebAuthn statelessly.
+  const shape = detectSignatureShape(params.signature)
+  if (shape.kind === 'webauthn') {
+    if (typeof console !== 'undefined' && typeof console.debug === 'function') {
+      console.debug('[preflightOwnerKeyMismatch] passkey signature — skipping EOA recovery preflight')
+    }
+    return { kind: 'skipped_webauthn', reason: 'webauthn signature shape — bundler will verify via CSW.WebAuthn.verify' }
+  }
+
   const parsed = parseSignatureForRecovery(params.signature)
   if (!parsed.ecdsaSignature) {
     return { kind: 'unknown', reason: 'no recoverable 65-byte ecdsa component' }

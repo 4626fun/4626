@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAccount, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi'
 import {
   decodeAbiParameters,
@@ -18,6 +18,9 @@ import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { _submitOwnerViaPreparedCalls, type OwnerApprovalStageEvent } from '@/lib/wallet/onboardingWallet'
+import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
+import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
+import { computeProbeVerdict, hasUsableEcdsaRecovery } from '@/lib/wallet/probeVerdict'
 
 const CSW_OWNER_ABI = [
   {
@@ -153,6 +156,20 @@ type ProbeResult = {
   signedHash: Hex
   erc1271MagicValue: Hex | null
   erc1271Verified: boolean
+  // Coarse shape classifier — orthogonal to `parsedSignatureKind`. Drives the
+  // verdict banner: webauthn signatures are routed through CSW.WebAuthn.verify
+  // and ecrecover-based diagnostics below are inapplicable.
+  signatureShape: SignatureShape
+  signatureByteLength: number
+  // For webauthn shape only: pre-decoded view of the clientDataJSON.challenge
+  // field (base64url) plus a comparison to the signed hash and on-chain
+  // replaySafeHash. Null if the signature is not webauthn or decode failed.
+  webauthnChallenge: {
+    raw: string
+    decodedHex: Hex | null
+    matchesSignedHash: boolean
+    matchesOnchainReplaySafeHash: boolean | null
+  } | null
 }
 
 type StepState = { kind: 'idle' | 'pending' | 'ok' | 'err'; label: string; detail?: string }
@@ -316,6 +333,41 @@ function makeChallengeHash(): Hex {
   )
 }
 
+// Decode the base64url-encoded `challenge` field from a WebAuthn clientDataJSON
+// into hex bytes. Browsers (and the CSW tests) emit base64url *without* padding,
+// so we restore '=' before delegating to `atob`. Returns null if the input is
+// missing or not valid base64url.
+function base64UrlDecodeToHex(value: string): Hex | null {
+  if (!value) return null
+  try {
+    const padded = value.replace(/-/g, '+').replace(/_/g, '/')
+    const padding = padded.length % 4 === 0 ? '' : '='.repeat(4 - (padded.length % 4))
+    const binary = atob(padded + padding)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+    let hex = '0x'
+    for (const byte of bytes) hex += byte.toString(16).padStart(2, '0')
+    return hex as Hex
+  } catch {
+    return null
+  }
+}
+
+// Pull the `challenge` string out of a clientDataJSON blob. The field is a
+// base64url-encoded byte string of whatever the relying party gave the
+// authenticator — for a CSW WebAuthn signature, that's the userOpHash (or the
+// replaySafeHash, depending on which path the wallet exercised). Tolerant of
+// malformed JSON: returns null on any parse failure.
+function readWebauthnChallengeField(clientDataJSON: string): string | null {
+  try {
+    const parsed = JSON.parse(clientDataJSON) as { challenge?: unknown }
+    if (typeof parsed.challenge === 'string') return parsed.challenge
+    return null
+  } catch {
+    return null
+  }
+}
+
 export function CswSignatureProbe() {
   const { address: connectedAddress, chainId } = useAccount()
   const { connectAsync, connectors, isPending: isConnectPending } = useConnect()
@@ -348,6 +400,13 @@ export function CswSignatureProbe() {
   const [create2IsAuthorized, setCreate2IsAuthorized] = useState<boolean | null>(null)
   const [ownerSlots, setOwnerSlots] = useState<OwnerSlot[]>([])
   const [probeResult, setProbeResult] = useState<ProbeResult | null>(null)
+  // Cache of eth_getCode + eth_getTransactionCount results keyed by lowercased
+  // address. Populated lazily when the verdict turns red so that recovered
+  // candidates with no on-chain history can be flagged as Base App
+  // sub-account/session keys.
+  const [ephemeralSignals, setEphemeralSignals] = useState<Map<string, EphemeralKeySignal>>(
+    () => new Map(),
+  )
 
   const normalizedCswAddress = useMemo(() => {
     const raw = String(cswInput ?? '').trim()
@@ -364,81 +423,96 @@ export function CswSignatureProbe() {
   // recoverable signature), 'red' = recovery succeeded but nothing matched.
   // The yellow state preserves the #496 tri-state principle: a missing
   // owner-snapshot is NOT the same as a confirmed mismatch.
-  const verdict = useMemo<{
-    state: 'green' | 'yellow' | 'red'
-    label: string
-    detail: string
-    matchedOwnerIndex: number | null
-    matchedHashLabel: string | null
-  } | null>(() => {
+  const verdict = useMemo(() => {
     if (!probeResult) return null
-    const candidates: Array<{ label: string; address: Address | null }> = [
-      { label: 'recoveredDirect(userOpHash)', address: probeResult.recoveredDirect },
-      { label: 'recoveredAgainstOnchainReplaySafe', address: probeResult.recoveredAgainstOnchainReplaySafe },
-      { label: 'recoveredAgainstReplaySafe(local)', address: probeResult.recoveredAgainstReplaySafe },
-      { label: 'recoveredPrefixed(EIP191(userOpHash))', address: probeResult.recoveredPrefixed },
-      { label: 'recoveredAgainstPrefixedReplaySafe', address: probeResult.recoveredAgainstPrefixedReplaySafe },
-    ]
-    const onchainOwnerAddresses = ownerSlots
-      .filter((slot) => slot.ownerType === 'eoa' && slot.ownerAddress)
-      .map((slot) => ({ index: slot.index, address: slot.ownerAddress as Address }))
-    const haveOwnerSnapshot =
-      probeResult.parsedOwnerAddressOnchain !== null || onchainOwnerAddresses.length > 0
-    if (!haveOwnerSnapshot) {
-      return {
-        state: 'yellow',
-        label: '⚠️ Unknown — could not read on-chain owner snapshot',
-        detail:
-          'Click "load owner slots" or re-run the probe — this CSW may be non-standard, or the RPC call reverted.',
-        matchedOwnerIndex: null,
-        matchedHashLabel: null,
-      }
-    }
-    const haveAnyRecovery = candidates.some((c) => c.address !== null)
-    if (!haveAnyRecovery) {
-      return {
-        state: 'yellow',
-        label: '⚠️ Unknown — no recoverable signature',
-        detail: 'Recovery returned null for every candidate hash (likely a malformed or wrapped signature).',
-        matchedOwnerIndex: null,
-        matchedHashLabel: null,
-      }
-    }
-    const parsedOwnerLower =
-      probeResult.parsedOwnerAddressOnchain?.toLowerCase() ?? null
-    for (const candidate of candidates) {
-      if (!candidate.address) continue
-      const lower = candidate.address.toLowerCase()
-      if (parsedOwnerLower && lower === parsedOwnerLower) {
-        return {
-          state: 'green',
-          label: `✅ Wallet key matches owner[${probeResult.parsedOwnerIndex}] (${probeResult.parsedOwnerAddressOnchain})`,
-          detail: `Match path: ${candidate.label}.`,
-          matchedOwnerIndex: probeResult.parsedOwnerIndex,
-          matchedHashLabel: candidate.label,
-        }
-      }
-      const ownerHit = onchainOwnerAddresses.find((o) => o.address.toLowerCase() === lower)
-      if (ownerHit) {
-        return {
-          state: 'green',
-          label: `✅ Wallet key matches owner[${ownerHit.index}] (${ownerHit.address})`,
-          detail: `Match path: ${candidate.label}. Note: parsedOwnerIndex was ${probeResult.parsedOwnerIndex}; consider re-running with target=${ownerHit.index}.`,
-          matchedOwnerIndex: ownerHit.index,
-          matchedHashLabel: candidate.label,
-        }
-      }
-    }
-    return {
-      state: 'red',
-      label: '❌ Wallet key does NOT match any on-chain owner',
-      detail:
-        'All recoveries succeeded but recovered to addresses that are not in the CSW owner array. ' +
-        'Base App may be signing with a substituted sub-account key — see the side-by-side block below.',
-      matchedOwnerIndex: null,
-      matchedHashLabel: null,
-    }
+    return computeProbeVerdict(probeResult, ownerSlots)
   }, [probeResult, ownerSlots])
+
+  // True only when the verdict was reached via the unknown-shape-with-recovery
+  // path — i.e. a wrapped EOA signature whose outer bytes don't classify but
+  // whose inner ECDSA still recovers. Drives the explanatory note above the
+  // recovery table so users aren't surprised by a red/green verdict on an
+  // "unrecognized" shape.
+  const verdictUsedUnknownWithRecovery = useMemo(() => {
+    if (!probeResult) return false
+    if (probeResult.signatureShape.kind !== 'unknown') return false
+    return hasUsableEcdsaRecovery(probeResult)
+  }, [probeResult])
+
+  // Unique non-null recovered addresses across all five hash variants. Lower-
+  // cased so de-duping the side-by-side rows yields the same set the
+  // ephemeral-key heuristic operates on.
+  const uniqueRecoveredAddresses = useMemo<Address[]>(() => {
+    if (!probeResult) return []
+    const candidates = [
+      probeResult.recoveredDirect,
+      probeResult.recoveredAgainstOnchainReplaySafe,
+      probeResult.recoveredAgainstReplaySafe,
+      probeResult.recoveredPrefixed,
+      probeResult.recoveredAgainstPrefixedReplaySafe,
+    ]
+    const seen = new Set<string>()
+    const out: Address[] = []
+    for (const addr of candidates) {
+      if (!addr) continue
+      const lower = addr.toLowerCase()
+      if (seen.has(lower)) continue
+      seen.add(lower)
+      out.push(addr)
+    }
+    return out
+  }, [probeResult])
+
+  // When the verdict goes red, query eth_getCode + eth_getTransactionCount for
+  // each unique recovered candidate. Best-effort: failures fall through to a
+  // null signal that's rendered as "—" in the UI. Cache by lowercased address
+  // so reruns of the verdict memo don't refetch.
+  useEffect(() => {
+    if (!publicClient) return
+    if (verdict?.state !== 'red') return
+    if (uniqueRecoveredAddresses.length === 0) return
+    const toQuery = uniqueRecoveredAddresses.filter(
+      (addr) => !ephemeralSignals.has(addr.toLowerCase()),
+    )
+    if (toQuery.length === 0) return
+    let cancelled = false
+    void (async () => {
+      const results = await Promise.allSettled(
+        toQuery.map((addr) => checkEphemeralKey(publicClient, addr)),
+      )
+      if (cancelled) return
+      setEphemeralSignals((prev) => {
+        const next = new Map(prev)
+        for (let i = 0; i < toQuery.length; i++) {
+          const addr = toQuery[i]
+          const res = results[i]
+          if (!addr || !res) continue
+          if (res.status === 'fulfilled') {
+            next.set(addr.toLowerCase(), res.value)
+          } else {
+            next.set(addr.toLowerCase(), {
+              address: addr,
+              code: null,
+              txCount: null,
+              isEphemeralCandidate: false,
+            })
+          }
+        }
+        return next
+      })
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [publicClient, verdict?.state, uniqueRecoveredAddresses, ephemeralSignals])
+
+  const ephemeralCandidates = useMemo<EphemeralKeySignal[]>(() => {
+    if (verdict?.state !== 'red') return []
+    return uniqueRecoveredAddresses
+      .map((addr) => ephemeralSignals.get(addr.toLowerCase()) ?? null)
+      .filter((s): s is EphemeralKeySignal => s !== null && s.isEphemeralCandidate)
+  }, [verdict?.state, uniqueRecoveredAddresses, ephemeralSignals])
+
   const parsedOwnerIndexSuggestion = useMemo(() => {
     if (!probeResult) return null
     if (probeResult.parsedOwnerIndex === null) return null
@@ -518,6 +592,7 @@ export function CswSignatureProbe() {
 
     setOwnerReadState({ kind: 'pending', label: 'reading owner slots…' })
     setProbeResult(null)
+    setEphemeralSignals(new Map())
     try {
       const [ownerCountRaw, nextOwnerIndexRaw] = await Promise.all([
         publicClient.readContract({
@@ -595,6 +670,7 @@ export function CswSignatureProbe() {
 
     setSignState({ kind: 'pending', label: `awaiting ${method} signature…` })
     setProbeResult(null)
+    setEphemeralSignals(new Map())
     try {
       let signature: Hex
       if (method === 'eth_sign') {
@@ -643,6 +719,8 @@ export function CswSignatureProbe() {
 
       const parsedSignature = parseWalletSignature(signature)
       const recoverableSignature = parsedSignature.ecdsaSignature
+      const signatureShape = detectSignatureShape(signature)
+      const signatureByteLength = hexByteLength(signature)
       // Try recovery against multiple candidate hashes — useful as a diagnostic
       // for raw-ECDSA EOA signatures, but meaningless for WebAuthn/passkey wrappers.
       const recoveredDirect = recoverableSignature
@@ -757,6 +835,33 @@ export function CswSignatureProbe() {
         }
       }
 
+      // Build the webauthn-only challenge view: pull `challenge` from the
+      // clientDataJSON, base64url-decode it, and compare to the hash we asked
+      // the wallet to sign and the on-chain replaySafeHash. Either match is
+      // expected; which one depends on whether the wallet wrapped the digest
+      // before passing it to the authenticator.
+      let webauthnChallenge: ProbeResult['webauthnChallenge'] = null
+      if (signatureShape.kind === 'webauthn') {
+        const rawChallenge = readWebauthnChallengeField(signatureShape.clientDataJSON)
+        const decodedHex = rawChallenge ? base64UrlDecodeToHex(rawChallenge) : null
+        const matchesSignedHash = Boolean(
+          decodedHex && decodedHex.toLowerCase() === signedHash.toLowerCase(),
+        )
+        const matchesOnchainReplaySafeHash =
+          onchainReplaySafeHash === null
+            ? null
+            : Boolean(
+                decodedHex &&
+                  decodedHex.toLowerCase() === onchainReplaySafeHash.toLowerCase(),
+              )
+        webauthnChallenge = {
+          raw: rawChallenge ?? '',
+          decodedHex,
+          matchesSignedHash,
+          matchesOnchainReplaySafeHash,
+        }
+      }
+
       setProbeResult({
         method,
         signature,
@@ -784,6 +889,9 @@ export function CswSignatureProbe() {
         erc1271MagicValue,
         erc1271Verified,
         wrappedSignature: wrappedSignature ?? ('0x' as Hex),
+        signatureShape,
+        signatureByteLength,
+        webauthnChallenge,
       })
       setSignState({
         kind: erc1271Verified ? 'ok' : 'err',
@@ -1322,7 +1430,9 @@ export function CswSignatureProbe() {
               ? 'border-emerald-500/40 bg-emerald-500/10'
               : verdict.state === 'yellow'
                 ? 'border-amber-500/40 bg-amber-500/10'
-                : 'border-rose-500/40 bg-rose-500/10'
+                : verdict.state === 'blue'
+                  ? 'border-sky-500/40 bg-sky-500/10'
+                  : 'border-rose-500/40 bg-rose-500/10'
           }`}
         >
           <div
@@ -1331,7 +1441,9 @@ export function CswSignatureProbe() {
                 ? 'text-emerald-300'
                 : verdict.state === 'yellow'
                   ? 'text-amber-200'
-                  : 'text-rose-300'
+                  : verdict.state === 'blue'
+                    ? 'text-sky-300'
+                    : 'text-rose-300'
             }`}
           >
             owner-key verdict
@@ -1342,12 +1454,63 @@ export function CswSignatureProbe() {
                 ? 'text-emerald-100'
                 : verdict.state === 'yellow'
                   ? 'text-amber-100'
-                  : 'text-rose-100'
+                  : verdict.state === 'blue'
+                    ? 'text-sky-100'
+                    : 'text-rose-100'
             }`}
           >
             {verdict.label}
           </div>
           <div className="font-mono text-[11px] text-zinc-300">{verdict.detail}</div>
+          {verdict.state === 'red' && ephemeralCandidates.length > 0 ? (
+            <div className="font-mono text-[11px] text-rose-200">
+              Recovered key(s) have no on-chain history (no code, 0 transactions) — this is
+              consistent with a Base App session/sub-account key. Use the EOA-owner submission
+              lane to sign with one of the on-chain owner addresses instead. Suspect:{' '}
+              {ephemeralCandidates.map((s) => s.address).join(', ')}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {probeResult ? (
+        <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">signature shape</div>
+          <KeyValue
+            label="shape"
+            value={describeSignatureShape(probeResult.signatureShape, probeResult.signatureByteLength)}
+          />
+          {probeResult.signatureShape.kind === 'webauthn' && probeResult.webauthnChallenge ? (
+            <div className="space-y-1 rounded border border-sky-500/30 bg-sky-500/5 p-2">
+              <div className="font-mono text-[10px] uppercase tracking-wide text-sky-300">
+                passkey challenge view
+              </div>
+              <KeyValue
+                label="clientDataJSON"
+                value={prettyPrintJson(probeResult.signatureShape.clientDataJSON)}
+              />
+              <KeyValue
+                label="challenge (base64url)"
+                value={probeResult.webauthnChallenge.raw || '— (missing)'}
+              />
+              <KeyValue
+                label="challenge (decoded hex)"
+                value={probeResult.webauthnChallenge.decodedHex ?? '— (decode failed)'}
+              />
+              <KeyValue
+                label="challenge matches signed userOpHash?"
+                value={String(probeResult.webauthnChallenge.matchesSignedHash)}
+              />
+              <KeyValue
+                label="challenge matches on-chain replaySafeHash?"
+                value={
+                  probeResult.webauthnChallenge.matchesOnchainReplaySafeHash === null
+                    ? '— (on-chain lookup failed)'
+                    : String(probeResult.webauthnChallenge.matchesOnchainReplaySafeHash)
+                }
+              />
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -1356,6 +1519,11 @@ export function CswSignatureProbe() {
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
             recovered vs on-chain owners (side-by-side)
           </div>
+          {verdictUsedUnknownWithRecovery && probeResult.signatureShape.kind === 'unknown' ? (
+            <div className="font-mono text-[11px] text-zinc-400">
+              Note: signature wrapper format not auto-recognized ({probeResult.signatureShape.reason}); evaluating against extracted inner ECDSA.
+            </div>
+          ) : null}
           <div className="space-y-1">
             <RecoveredVsOwnerRow
               label="recoveredDirect(userOpHash)"
@@ -1363,6 +1531,7 @@ export function CswSignatureProbe() {
               ownerSlots={ownerSlots}
               parsedOwnerIndex={probeResult.parsedOwnerIndex}
               parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+              ephemeralSignals={ephemeralSignals}
             />
             <RecoveredVsOwnerRow
               label="recoveredAgainstOnchainReplaySafe"
@@ -1370,6 +1539,7 @@ export function CswSignatureProbe() {
               ownerSlots={ownerSlots}
               parsedOwnerIndex={probeResult.parsedOwnerIndex}
               parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+              ephemeralSignals={ephemeralSignals}
             />
             <RecoveredVsOwnerRow
               label="recoveredAgainstReplaySafe(local)"
@@ -1377,6 +1547,7 @@ export function CswSignatureProbe() {
               ownerSlots={ownerSlots}
               parsedOwnerIndex={probeResult.parsedOwnerIndex}
               parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+              ephemeralSignals={ephemeralSignals}
             />
             <RecoveredVsOwnerRow
               label="recoveredPrefixed(EIP191(userOpHash))"
@@ -1384,6 +1555,7 @@ export function CswSignatureProbe() {
               ownerSlots={ownerSlots}
               parsedOwnerIndex={probeResult.parsedOwnerIndex}
               parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+              ephemeralSignals={ephemeralSignals}
             />
             <RecoveredVsOwnerRow
               label="recoveredAgainstPrefixedReplaySafe"
@@ -1391,6 +1563,7 @@ export function CswSignatureProbe() {
               ownerSlots={ownerSlots}
               parsedOwnerIndex={probeResult.parsedOwnerIndex}
               parsedOwnerAddress={probeResult.parsedOwnerAddressOnchain}
+              ephemeralSignals={ephemeralSignals}
             />
           </div>
         </section>
@@ -1441,6 +1614,20 @@ export function CswSignatureProbe() {
   )
 }
 
+function describeSignatureShape(shape: SignatureShape, byteLength: number): string {
+  if (shape.kind === 'secp256k1') return `secp256k1 (${byteLength} bytes)`
+  if (shape.kind === 'webauthn') return `webauthn (${byteLength} bytes, decoded ok)`
+  return `unknown (${byteLength} bytes — ${shape.reason})`
+}
+
+function prettyPrintJson(value: string): string {
+  try {
+    return JSON.stringify(JSON.parse(value), null, 2)
+  } catch {
+    return value
+  }
+}
+
 function StatusRow(props: { title: string; state: StepState }) {
   const color =
     props.state.kind === 'ok'
@@ -1467,11 +1654,13 @@ function RecoveredVsOwnerRow(props: {
   ownerSlots: OwnerSlot[]
   parsedOwnerIndex: number | null
   parsedOwnerAddress: Address | null
+  ephemeralSignals: Map<string, EphemeralKeySignal>
 }) {
   const recoveredLower = props.recovered?.toLowerCase() ?? null
   const matchedSlot = recoveredLower
     ? props.ownerSlots.find((slot) => slot.ownerAddress?.toLowerCase() === recoveredLower) ?? null
     : null
+  const ephemeralSignal = recoveredLower ? props.ephemeralSignals.get(recoveredLower) ?? null : null
   const compareTarget =
     props.parsedOwnerAddress ??
     (props.parsedOwnerIndex !== null
@@ -1510,6 +1699,17 @@ function RecoveredVsOwnerRow(props: {
           <span className="text-rose-300">✗ does not match any on-chain owner</span>
         )}
       </div>
+      {ephemeralSignal ? (
+        <div
+          className={`mt-1 font-mono text-[10px] ${
+            ephemeralSignal.isEphemeralCandidate ? 'text-amber-300' : 'text-zinc-500'
+          }`}
+        >
+          code: {ephemeralSignal.code ?? '—'} / txCount:{' '}
+          {ephemeralSignal.txCount === null ? '—' : ephemeralSignal.txCount}
+          {ephemeralSignal.isEphemeralCandidate ? ' (ephemeral candidate)' : ''}
+        </div>
+      ) : null}
     </div>
   )
 }
