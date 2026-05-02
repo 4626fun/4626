@@ -21,6 +21,10 @@ import { _submitOwnerViaPreparedCalls, type OwnerApprovalStageEvent } from '@/li
 import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
 import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
 import { computeProbeVerdict, hasUsableEcdsaRecovery } from '@/lib/wallet/probeVerdict'
+import {
+  captureWalletSessionSnapshot,
+  type WalletSessionSnapshot,
+} from '@/lib/wallet/walletSessionSnapshot'
 
 const CSW_OWNER_ABI = [
   {
@@ -170,6 +174,11 @@ type ProbeResult = {
     matchesSignedHash: boolean
     matchesOnchainReplaySafeHash: boolean | null
   } | null
+  // Snapshot of what the wallet provider thought the connected session was
+  // at the moment the probe sign was issued. Surfaces Base App sub-account
+  // substitution before the popup even returns a signature. See
+  // walletSessionSnapshot.ts for the warningState semantics.
+  walletSession: WalletSessionSnapshot | null
 }
 
 type StepState = { kind: 'idle' | 'pending' | 'ok' | 'err'; label: string; detail?: string }
@@ -407,6 +416,11 @@ export function CswSignatureProbe() {
   const [ephemeralSignals, setEphemeralSignals] = useState<Map<string, EphemeralKeySignal>>(
     () => new Map(),
   )
+  // Live wallet-session snapshot. Refreshed on demand and on every probe sign.
+  // Independent of `probeResult` so the user can spot a sub-account session
+  // before they even click `probe personal_sign`.
+  const [walletSession, setWalletSession] = useState<WalletSessionSnapshot | null>(null)
+  const [walletSessionState, setWalletSessionState] = useState<StepState>(INITIAL_STEP)
 
   const normalizedCswAddress = useMemo(() => {
     const raw = String(cswInput ?? '').trim()
@@ -633,6 +647,34 @@ export function CswSignatureProbe() {
     }
   }
 
+  // Helper for the snapshot UI block + the per-probe walletSession capture.
+  // Reads via the wagmi walletClient request fn (same surface the probe uses
+  // to sign), so what we capture is exactly what the wallet about to be asked
+  // to sign sees.
+  async function refreshWalletSessionSnapshot(): Promise<WalletSessionSnapshot> {
+    setWalletSessionState({ kind: 'pending', label: 'reading wallet session…' })
+    const request = (walletClient as any)?.request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    const snapshot = await captureWalletSessionSnapshot({
+      request: request ?? null,
+      wagmiAddress: connectedAddress ?? null,
+      cswAddress: normalizedCswAddress,
+    })
+    setWalletSession(snapshot)
+    setWalletSessionState({
+      kind: snapshot.warningState === 'green' ? 'ok' : snapshot.warningState === 'amber' ? 'err' : 'pending',
+      label:
+        snapshot.warningState === 'green'
+          ? 'provider operating on CSW'
+          : snapshot.warningState === 'amber'
+            ? 'sub-account session detected'
+            : 'snapshot incomplete',
+      detail: snapshot.message,
+    })
+    return snapshot
+  }
+
   async function runProbe(method: 'eth_sign' | 'personal_sign' | 'typed_data') {
     if (!walletClient || !connectedAddress) {
       setSignState({ kind: 'err', label: 'connect wallet first' })
@@ -671,6 +713,15 @@ export function CswSignatureProbe() {
     setSignState({ kind: 'pending', label: `awaiting ${method} signature…` })
     setProbeResult(null)
     setEphemeralSignals(new Map())
+    // Capture the snapshot *before* the popup opens, so the JSON dump records
+    // exactly what the provider believed the session was at sign time. Best
+    // effort — failure here never blocks the probe.
+    let walletSessionForProbe: WalletSessionSnapshot | null = null
+    try {
+      walletSessionForProbe = await refreshWalletSessionSnapshot()
+    } catch {
+      walletSessionForProbe = null
+    }
     try {
       let signature: Hex
       if (method === 'eth_sign') {
@@ -892,6 +943,7 @@ export function CswSignatureProbe() {
         signatureShape,
         signatureByteLength,
         webauthnChallenge,
+        walletSession: walletSessionForProbe,
       })
       setSignState({
         kind: erc1271Verified ? 'ok' : 'err',
@@ -1299,8 +1351,63 @@ export function CswSignatureProbe() {
           >
             probe typed data
           </button>
+          <button
+            type="button"
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
+            onClick={() => { void refreshWalletSessionSnapshot() }}
+          >
+            snapshot wallet session
+          </button>
         </div>
       </section>
+
+      {walletSession ? (
+        <section
+          className={`space-y-2 rounded border p-4 ${
+            walletSession.warningState === 'green'
+              ? 'border-emerald-500/40 bg-emerald-500/10'
+              : walletSession.warningState === 'amber'
+                ? 'border-amber-500/40 bg-amber-500/10'
+                : 'border-yellow-500/40 bg-yellow-500/10'
+          }`}
+        >
+          <div
+            className={`font-mono text-[11px] uppercase tracking-wide ${
+              walletSession.warningState === 'green'
+                ? 'text-emerald-300'
+                : walletSession.warningState === 'amber'
+                  ? 'text-amber-200'
+                  : 'text-yellow-200'
+            }`}
+          >
+            wallet session snapshot
+          </div>
+          <div
+            className={`font-mono text-sm ${
+              walletSession.warningState === 'green'
+                ? 'text-emerald-100'
+                : walletSession.warningState === 'amber'
+                  ? 'text-amber-100'
+                  : 'text-yellow-100'
+            }`}
+          >
+            {walletSession.message}
+          </div>
+          <div className="grid gap-1 md:grid-cols-2">
+            <KeyValue label="eth_accounts[0]" value={walletSession.ethAccountsAddress ?? '— (read failed)'} />
+            <KeyValue label="useAccount().address (wagmi)" value={walletSession.wagmiAddress ?? '— (not connected)'} />
+            <KeyValue label="eth_chainId" value={walletSession.ethChainIdHex ?? '— (read failed)'} />
+            <KeyValue label="cswAddress (configured)" value={walletSession.cswAddress ?? '—'} />
+          </div>
+          {walletSession.walletCapabilities ? (
+            <KeyValue
+              label="wallet_getCapabilities"
+              value={JSON.stringify(walletSession.walletCapabilities, null, 2)}
+            />
+          ) : null}
+          <StatusRow title="snapshot status" state={walletSessionState} />
+        </section>
+      ) : null}
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
@@ -1607,6 +1714,14 @@ export function CswSignatureProbe() {
           <KeyValue
             label="wrappedSignature(abi.encode(targetIndex,ecdsaSig))"
             value={probeResult.wrappedSignature === '0x' ? '— (no recoverable 65-byte signature)' : probeResult.wrappedSignature}
+          />
+          <KeyValue
+            label="walletSession (snapshot at sign time)"
+            value={
+              probeResult.walletSession
+                ? JSON.stringify(probeResult.walletSession, null, 2)
+                : '— (snapshot unavailable)'
+            }
           />
         </section>
       ) : null}

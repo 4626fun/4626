@@ -5,6 +5,23 @@ when the user is signing inside Base App. Read this first when the probe at
 `/dev/csw-signature-probe` shows a red verdict, or when `wallet_sendPreparedCalls`
 returns a bundler `-32507` validation revert.
 
+## TL;DR
+
+For the canonical CSW at `0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef` on Base, the
+Base App popup signs with a **per-session sub-account key that is not in the CSW's
+on-chain owner array**. ERC-1271 and bundler validation both correctly reject it.
+There is no client-side fix.
+
+The path forward is the **EOA-owner submission lane** — connect a wallet whose
+address is one of the on-chain owners (`0x5E1a0AFa913aD95aA3762b18Ea9AdD73d31313cf`
+or `0xCf8D17Ce01B73637ef936fe7c47bA7100b820142`) and sign the userOpHash with
+that key. See [the EOA-owner submission lane](#eoa-owner-submission-lane) below
+and the step-by-step verification doc at
+`docs/csw-eoa-owner-lane-verification.md`.
+
+To confirm the case live, open `/dev/csw-signature-probe`. The "Wallet session
+snapshot" panel surfaces the substitution before the popup is even invoked.
+
 ## The two CSW signature paths
 
 CSW verifies signatures through **two distinct paths** with different hash
@@ -22,9 +39,18 @@ shape actually targets.
 
 ## Why Base App's popup signs with a substituted key
 
-Base App routes user requests through a "sub-account" pseudo-wallet that
+The Coinbase Wallet SDK (cb-sdk) launches CSW sessions in **sub-account mode**.
+See `createSubAccountSigner.ts` in cb-sdk: `eth_accounts` returns the sub-account
+address (not the parent CSW), and `personal_sign` is fulfilled by the
+sub-account's per-session key. That key is generated client-side, lives in the
+session, and **is never written to the CSW's on-chain owner array**. The
+substitution is invisible to the dapp unless you read `eth_accounts` directly off
+the connector's provider — which is exactly what the probe's
+[wallet session snapshot](#how-to-detect-the-substitution) does.
+
+Base App routes user requests through that sub-account pseudo-wallet, which
 delegates back to the canonical CSW for execution. When you call `personal_sign`
-inside Base App, the popup may return a signature produced by a key that is
+inside Base App, the popup returns a signature produced by a key that is
 **not in the CSW's on-chain owner array**. That key is part of the sub-account's
 session state, not the canonical wallet.
 
@@ -45,6 +71,40 @@ recoveries are:
 2. If the user must use Base App, the substituted key has to be added to the
    CSW owner array via `addOwnerAddress` first — see the existing owner-install
    flow in `useAccountSetupController.onAddRabbyCoOwner`.
+
+## How to detect the substitution
+
+Open `/dev/csw-signature-probe` in the failing context.
+
+1. **Wallet session snapshot panel.** Click *snapshot wallet session* (or run any
+   probe — the snapshot is captured automatically before each sign). The panel
+   reads `eth_accounts`, `eth_chainId`, and best-effort `wallet_getCapabilities`
+   directly off the connector's provider, then compares `eth_accounts[0]` to the
+   configured CSW. Tri-state:
+   - **Green** — `eth_accounts[0] === cswAddress`. The popup will sign as the CSW.
+   - **Amber** — `eth_accounts[0] !== cswAddress`. The provider is reporting a
+     sub-account address; the popup will sign with the sub-account's ephemeral
+     session key. **This is the smoking gun.**
+   - **Yellow** — at least one read failed (no provider, RPC error). The probe
+     can still run; reconnect and re-snapshot if you need the diagnostic.
+   The snapshot is also embedded in `probeResult.walletSession` for the JSON
+   dump at the bottom of the page, so it travels with bug reports.
+2. **Owner-key verdict turns red.** None of the five recovery rows lands on an
+   on-chain owner. See the verdict-row section below.
+3. **Ephemeral-candidate sub-line.** When the verdict is red, the probe queries
+   `eth_getCode` and `eth_getTransactionCount` for each unique recovered
+   address. Zero code AND zero transactions flags an ephemeral candidate —
+   consistent with a Base App session key that has never been used on-chain.
+4. **Submitter mismatch guard fires on any submission attempt** from the same
+   session, with the explicit text *"Signature does not match parsed owner [N]
+   (0x…). … Try the EOA-owner submission lane (sendPreparedOwnerCallsWithEoaOwner)."*
+   See the next section.
+
+For a passkey signature (WebAuthnAuth tuple), the guard logs *"passkey signature
+— skipping EOA recovery preflight"* and proceeds; ECDSA recovery is inapplicable
+on that path. The probe's signature-shape classifier (#500) labels the row
+`webauthn` and exposes a `passkey challenge view` that decodes the
+`clientDataJSON.challenge` and compares it against the signed hash.
 
 ## Mismatch guard in `onboardingWallet.ts`
 
@@ -164,3 +224,69 @@ owner. Workflow:
 This restores Base App as a usable signing lane for that specific user; it
 does not generalize across users. Each Base App session that exhibits the
 substitution behaviour will need its own owner-add transaction.
+
+**Chicken-and-egg caveat.** Base App sub-account session keys are *transient* —
+derived per session, not persisted across launches. Adding the current session's
+key as an owner only makes that single session usable; the next launch produces
+a different key and the on-chain entry is stale. The stable path is to add an
+EOA the user controls (a hardware wallet, MetaMask, Rabby, an embedded wallet)
+as an owner once, then use the EOA-owner submission lane for any future CSW
+mutation.
+
+## Operator runbook
+
+When a user reports "Base App signature is being rejected":
+
+1. Send them to `/dev/csw-signature-probe`.
+2. Paste the affected CSW into the address field, click *load owner slots*,
+   then *snapshot wallet session*.
+3. Read the snapshot block:
+   - Amber → confirmed sub-account substitution; jump to step 5.
+   - Green → Base App is operating on the CSW directly; the failure is
+     elsewhere. Run *probe personal_sign* and capture the JSON dump for triage.
+   - Yellow → reconnect Base App and re-snapshot.
+4. Run *probe personal_sign* anyway to capture the verdict row, recovery rows,
+   ephemeral-candidate signal, and the on-chain ERC-1271 result for the bug
+   report. The JSON dump at the bottom of the page (now including
+   `walletSession`) is copy-pasteable.
+5. Have the user connect one of the on-chain EOA owners (a hardware wallet or
+   any wagmi connector holding the owner key). The account-setup controller
+   detects the connected owner and exposes the EOA-owner submission lane.
+6. Run the EOA-owner submission. Expected end-state:
+
+   ```
+   probe verdict     : green ✓ matches owner[N]
+   submitter guard   : ok
+   bundler           : accepts
+   receipt           : 0x…
+   on-chain owners[] : unchanged (we are using an existing owner, not adding one)
+   ```
+
+For step-by-step instructions a user can follow on their own, see
+`docs/csw-eoa-owner-lane-verification.md`.
+
+## References
+
+- PR [#499](https://github.com/wenakita/4626/pull/499) — probe verdict row +
+  submitter mismatch guard + EOA-owner submission lane
+- PR [#500](https://github.com/wenakita/4626/pull/500) — probe shape recognizer
+  + ephemeral session-key heuristic
+- `frontend/src/pages/dev/CswSignatureProbe.tsx` — live probe UI
+- `frontend/src/lib/wallet/onboardingWallet.ts` — `_submitOwnerViaPreparedCalls`,
+  `_submitOwnerViaPreparedCallsWithEoaOwner`, `preflightOwnerKeyMismatch`
+- `frontend/src/lib/wallet/walletSessionSnapshot.ts` — wallet session snapshot
+  helper (reads `eth_accounts` / `eth_chainId` / `wallet_getCapabilities`)
+- `frontend/src/lib/wallet/ephemeralKeyHeuristic.ts` — ephemeral-candidate
+  detector (no code + zero txs)
+- `frontend/src/lib/wallet/signatureShape.ts` — secp256k1 / webauthn / unknown
+  shape classifier
+- `frontend/src/lib/wallet/probeVerdict.ts` — owner-key verdict tri-state
+- `frontend/src/features/accountSetup/useAccountSetupController.ts` — EOA-owner
+  lane wiring (`submitOwnerInstallViaOnchainEoa`,
+  `connectedOnchainEoaOwner`, `onchainEoaOwnerCandidates`)
+- cb-sdk: `packages/wallet-sdk/src/sign/scw/utils/createSubAccountSigner.ts` —
+  sub-account session key generation
+- Smart-wallet contract source: `CoinbaseSmartWallet.sol:191` (bundler path),
+  `ERC1271.sol:70` (off-chain path)
+- `docs/csw-eoa-owner-lane-verification.md` — step-by-step verification doc
+  for the EOA-owner lane
