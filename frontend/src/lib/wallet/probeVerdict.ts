@@ -55,8 +55,34 @@ export function computeProbeVerdict(
 ): ProbeVerdict {
   // Passkey signatures don't go through ecrecover. Surface the right path
   // and skip the recovery-table verdict entirely; the secp256k1 candidates
-  // would all garbage out if we tried to grade them.
+  // would all garbage out if we tried to grade them. When the wrapper's
+  // claimed `parsedOwnerIndex` does NOT point at a passkey owner, call that
+  // out explicitly: the wrapper hard-codes an EOA index but the inner bytes
+  // are a WebAuthnAuth tuple, so the real signer is the passkey owner — any
+  // ephemeral-key heuristic firing on the recovered junk addresses is a
+  // secondary hint and should not drive the verdict.
   if (probe.signatureShape.kind === 'webauthn') {
+    const passkeyOwners = ownerSlots
+      .filter((slot) => slot.ownerType === 'passkey')
+      .sort((a, b) => a.index - b.index)
+    const wrapperIndex = probe.parsedOwnerIndex
+    const wrapperPointsAtPasskey =
+      wrapperIndex !== null &&
+      passkeyOwners.some((slot) => slot.index === wrapperIndex)
+    const firstPasskey = passkeyOwners[0]
+    if (!wrapperPointsAtPasskey && firstPasskey) {
+      const inferredPasskeyIndex = firstPasskey.index
+      return {
+        state: 'blue',
+        label: 'ℹ️ Passkey signature detected — bundler routes through CSW.WebAuthn.verify',
+        detail:
+          `wrapper ownerIndex disagrees with signature shape — treating as passkey owner[${inferredPasskeyIndex}]. ` +
+          `Wrapper claimed ownerIndex=${wrapperIndex ?? '—'} (not a passkey slot); the inner bytes decode as a WebAuthnAuth tuple, ` +
+          'so ecrecover-based checks below are inapplicable. Any ephemeral-key hint on recovered candidates is meaningless here.',
+        matchedOwnerIndex: null,
+        matchedHashLabel: null,
+      }
+    }
     return {
       state: 'blue',
       label: 'ℹ️ Passkey signature detected — bundler routes through CSW.WebAuthn.verify',

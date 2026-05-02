@@ -22,6 +22,10 @@ import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatur
 import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
 import { computeProbeVerdict, hasUsableEcdsaRecovery } from '@/lib/wallet/probeVerdict'
 import {
+  inferOwnerIndexFromShape,
+  type InferOwnerSlot,
+} from '@/lib/wallet/inferOwnerIndexFromShape'
+import {
   captureWalletSessionSnapshot,
   type WalletSessionSnapshot,
 } from '@/lib/wallet/walletSessionSnapshot'
@@ -441,6 +445,105 @@ export function CswSignatureProbe() {
     if (!probeResult) return null
     return computeProbeVerdict(probeResult, ownerSlots)
   }, [probeResult, ownerSlots])
+
+  // Shape-inferred owner index. The wrapper's `parsedOwnerIndex` is unreliable
+  // (Base App hard-codes it to 2 for some flows even when the inner bytes are
+  // a WebAuthnAuth tuple), so the SHAPE of the inner signature is the source
+  // of truth. See lib/wallet/inferOwnerIndexFromShape.ts.
+  const inferredOwner = useMemo(() => {
+    if (!probeResult) return null
+    const ownersForInference: InferOwnerSlot[] = ownerSlots
+      .filter((slot) => slot.ownerType === 'eoa' || slot.ownerType === 'passkey')
+      .map((slot) => ({
+        index: slot.index,
+        kind: slot.ownerType as 'eoa' | 'passkey',
+        address: slot.ownerAddress ?? undefined,
+        pubkey: slot.ownerType === 'passkey' ? slot.ownerBytes : undefined,
+      }))
+    return inferOwnerIndexFromShape({
+      shape: probeResult.signatureShape.kind,
+      wrapperClaimedIndex: probeResult.parsedOwnerIndex,
+      owners: ownersForInference,
+      recoveredCandidates: {
+        raw: probeResult.recoveredDirect ?? undefined,
+        eip191: probeResult.recoveredPrefixed ?? undefined,
+      },
+    })
+  }, [probeResult, ownerSlots])
+
+  // When the inferred owner index disagrees with the wrapper's claim, re-run
+  // ERC-1271 against the inferred owner using the SAME on-chain
+  // `replaySafeHash` + `isValidSignature(0x1626ba7e)` path the probe already
+  // exercised, except with a SignatureWrapper that targets the inferred
+  // index. We don't introduce a new transport — `publicClient.readContract`
+  // is the existing path. Result is tri-state: 'valid' | 'invalid' | 'skipped'.
+  const [reverificationState, setReverificationState] = useState<{
+    state: 'valid' | 'invalid' | 'skipped' | 'pending'
+    detail: string
+  } | null>(null)
+  useEffect(() => {
+    if (!probeResult || !inferredOwner || !publicClient || !normalizedCswAddress) {
+      setReverificationState(null)
+      return
+    }
+    if (
+      inferredOwner.inferredIndex === null ||
+      inferredOwner.inferredIndex === probeResult.parsedOwnerIndex
+    ) {
+      setReverificationState(null)
+      return
+    }
+    // Only EOA owners can be re-wrapped client-side — for passkey inference
+    // we don't have the WebAuthnAuth bytes split out into a fresh wrapper, so
+    // the existing wallet-returned signature is the only thing we can verify
+    // and that already happened in the main probe path.
+    if (inferredOwner.inferredKind !== 'eoa') {
+      setReverificationState({
+        state: 'skipped',
+        detail:
+          'inferred owner is a passkey — the original wallet-returned signature is what gets verified; no client-side re-wrap is possible.',
+      })
+      return
+    }
+    if (!probeResult.ecdsaSignatureForRecovery) {
+      setReverificationState({
+        state: 'skipped',
+        detail: 'no inner 65-byte ECDSA signature to re-wrap.',
+      })
+      return
+    }
+    let cancelled = false
+    setReverificationState({ state: 'pending', detail: 're-verifying…' })
+    void (async () => {
+      try {
+        const rewrapped = encodeAbiParameters(
+          [{ type: 'uint256' }, { type: 'bytes' }],
+          [BigInt(inferredOwner.inferredIndex as number), probeResult.ecdsaSignatureForRecovery as Hex],
+        )
+        const result = (await publicClient.readContract({
+          address: normalizedCswAddress,
+          abi: ERC1271_ABI,
+          functionName: 'isValidSignature',
+          args: [probeResult.signedHash, rewrapped],
+        })) as Hex
+        if (cancelled) return
+        const ok = result.toLowerCase() === ERC1271_MAGIC_VALUE
+        setReverificationState({
+          state: ok ? 'valid' : 'invalid',
+          detail: `CSW.isValidSignature returned ${result} for SignatureWrapper(ownerIndex=${inferredOwner.inferredIndex}, innerEcdsa).`,
+        })
+      } catch (error) {
+        if (cancelled) return
+        setReverificationState({
+          state: 'invalid',
+          detail: `re-verification reverted: ${describeError(error)}`,
+        })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [probeResult, inferredOwner, publicClient, normalizedCswAddress])
 
   // True only when the verdict was reached via the unknown-shape-with-recovery
   // path — i.e. a wrapped EOA signature whose outer bytes don't classify but
@@ -1587,6 +1690,62 @@ export function CswSignatureProbe() {
             label="shape"
             value={describeSignatureShape(probeResult.signatureShape, probeResult.signatureByteLength)}
           />
+          <div
+            className={
+              probeResult.signatureByteLength > 256
+                ? 'rounded border border-amber-500/40 bg-amber-500/10 p-2 font-mono text-xs font-bold text-amber-100'
+                : 'font-mono text-xs'
+            }
+          >
+            <KeyValue
+              label="inner signature length (bytes)"
+              value={String(probeResult.signatureByteLength)}
+            />
+          </div>
+          {inferredOwner ? (
+            <div className="space-y-1 rounded border border-zinc-700 bg-zinc-900 p-2">
+              <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-400">
+                inferred owner index (from shape)
+              </div>
+              <KeyValue
+                label="inferredIndex (kind)"
+                value={
+                  inferredOwner.inferredIndex !== null
+                    ? `${inferredOwner.inferredIndex} (${inferredOwner.inferredKind ?? '—'})`
+                    : `— (${inferredOwner.inferredKind ?? 'unknown'})`
+                }
+              />
+              <KeyValue
+                label="wrapperClaimedIndex"
+                value={
+                  probeResult.parsedOwnerIndex !== null
+                    ? String(probeResult.parsedOwnerIndex)
+                    : '—'
+                }
+              />
+              <KeyValue
+                label="wrapperAgrees"
+                value={`${inferredOwner.wrapperAgrees ? '✅' : '⚠️'} ${String(inferredOwner.wrapperAgrees)}`}
+              />
+              <KeyValue label="reason" value={inferredOwner.reason} />
+              {reverificationState ? (
+                <div
+                  className={
+                    reverificationState.state === 'valid'
+                      ? 'rounded border border-emerald-500/40 bg-emerald-500/10 p-2'
+                      : reverificationState.state === 'invalid'
+                        ? 'rounded border border-rose-500/40 bg-rose-500/10 p-2'
+                        : 'rounded border border-zinc-700 bg-zinc-900 p-2'
+                  }
+                >
+                  <KeyValue
+                    label="re-verified vs inferred owner"
+                    value={`${reverificationState.state} — ${reverificationState.detail}`}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {probeResult.signatureShape.kind === 'webauthn' && probeResult.webauthnChallenge ? (
             <div className="space-y-1 rounded border border-sky-500/30 bg-sky-500/5 p-2">
               <div className="font-mono text-[10px] uppercase tracking-wide text-sky-300">

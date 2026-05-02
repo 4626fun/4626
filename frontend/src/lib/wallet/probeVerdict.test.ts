@@ -118,6 +118,34 @@ describe('computeProbeVerdict — non-regression for other shapes', () => {
     expect(verdict.state).toBe('blue')
   })
 
+  it('webauthn shape with EOA-claiming wrapper + passkey owner present → blue with shape-disagreement detail', () => {
+    // Live Base App fixture: wrapper hard-codes ownerIndex=2 (EOA) but the
+    // inner bytes are a WebAuthnAuth tuple, so the real signer is the passkey
+    // at owner[0]. Verdict reason must call this out, not the ephemeral key.
+    const verdict = computeProbeVerdict(
+      baseInput({
+        signatureShape: {
+          kind: 'webauthn',
+          authenticatorData: '0xabcd',
+          clientDataJSON: '{}',
+          r: 1n,
+          s: 2n,
+          challengeIndex: 0,
+          typeIndex: 0,
+        },
+        parsedOwnerIndex: 2,
+        recoveredDirect: STRANGER,
+      }),
+      [
+        { index: 0, ownerType: 'passkey', ownerAddress: null },
+        eoaOwner(2, OWNER_B),
+      ],
+    )
+    expect(verdict.state).toBe('blue')
+    expect(verdict.detail).toMatch(/wrapper ownerIndex disagrees with signature shape/i)
+    expect(verdict.detail).toMatch(/passkey owner\[0\]/i)
+  })
+
   it('secp256k1 shape with matching recovery → green', () => {
     const verdict = computeProbeVerdict(
       baseInput({
