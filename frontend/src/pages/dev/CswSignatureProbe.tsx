@@ -640,9 +640,55 @@ export function CswSignatureProbe() {
     if (probeResult.parsedOwnerIndex === targetOwnerIndex) return null
     return probeResult.parsedOwnerIndex
   }, [probeResult, targetOwnerIndex])
+  // The probe page deliberately bypasses `resolveCdpPaymasterUrl` here.
+  //
+  // In production, that helper rewrites the URL to our same-origin proxy
+  // (`https://app.4626.fun/api/paymaster`) to avoid embedding a CDP API key in
+  // the bundle. That's correct for the in-app account-setup flow (where our
+  // own backend forwards the request to CDP), but it BREAKS the Base App
+  // `wallet_prepareCalls` lane: Base App forwards the `paymasterService.url`
+  // capability directly to the bundler, which then POSTs to that URL
+  // server-side and parses the response as JSON. When the bundler hits our
+  // proxy and gets back HTML / a non-JSON-RPC payload, it errors with
+  //   "invalid argument 0: invalid character 'x' after top-level value"
+  // (observed in the probe's prepared-calls events log).
+  //
+  // The probe is a dev-only page — it's acceptable to expose the raw
+  // CDP paymaster URL from `VITE_CDP_PAYMASTER_URL` here so the bundler
+  // can fetch it directly. Production app paths continue to use the proxy.
   const paymasterUrlForPreparedCalls = useMemo(() => {
-    const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-    return resolveCdpPaymasterUrl(paymasterEnv) ?? null
+    const raw = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+    const trimmed = typeof raw === 'string' ? raw.trim() : ''
+    if (!trimmed) return null
+    // Only accept absolute URLs — if it's a relative path or unparsable, fall
+    // back to the resolver (which would produce the proxy URL) so we never
+    // ship a malformed string to the bundler.
+    try {
+      const parsed = new URL(trimmed)
+      // Reject non-https URLs outright — the bundler will refuse plaintext
+      // paymaster endpoints anyway, and rejecting here makes the intent of
+      // the allowlist explicit.
+      if (parsed.protocol !== 'https:') {
+        return resolveCdpPaymasterUrl(trimmed) ?? null
+      }
+      // Allowlist Coinbase CDP / developer hostnames using strict subdomain
+      // boundary checks. Naive `endsWith('coinbase.com')` would also match
+      // hostile lookalikes like `evilcoinbase.com` — a mistyped or poisoned
+      // `VITE_CDP_PAYMASTER_URL` would then ship a non-CDP URL (potentially
+      // including the project key in the path) straight to the bundler.
+      // Match either the bare host or any `*.<host>` subdomain.
+      const hostname = parsed.hostname.toLowerCase()
+      const isAllowedCoinbaseHost = (host: string): boolean => {
+        const allowed = ['coinbase.com', 'cdp.coinbase.com', 'developer.coinbase.com']
+        return allowed.some((allowedHost) => host === allowedHost || host.endsWith(`.${allowedHost}`))
+      }
+      if (isAllowedCoinbaseHost(hostname)) {
+        return parsed.toString()
+      }
+      return resolveCdpPaymasterUrl(trimmed) ?? null
+    } catch {
+      return resolveCdpPaymasterUrl(trimmed) ?? null
+    }
   }, [])
 
   const preferredConnector = useMemo(() => {
