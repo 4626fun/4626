@@ -23,7 +23,7 @@ Scope: current live Base infra addresses plus the canonical `v1.9.2` split Phase
 | `registry` | `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb` |
 | `creatorOVaultFactory` | `0xC7E919899Fd4C0C4f6f4269a63046107f85848bB` |
 | `vaultActivationBatcher` | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
-| `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
+| `lotteryManager` | `<v1.10.1 manager TBD post-broadcast>` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
 | `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
 | `bytecodeStore` | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |
@@ -46,7 +46,7 @@ From `frontend/src/config/contracts.defaults.ts`:
 | Key | Address |
 |---|---|
 | `registry` | `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb` |
-| `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
+| `lotteryManager` | `<v1.10.1 manager TBD post-broadcast>` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
 | `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
 | `universalBytecodeStore` | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |

@@ -51,7 +51,7 @@ contract VanitySharedGlobalCatalogTest is Test {
         assertEq(vm.parseJsonString(json, ".deferredTargets[3].contractName"), "CreatorVRFConsumerV2_5");
         assertEq(vm.parseJsonString(json, ".deferredTargets[4].contractName"), "SolanaBridgeAdapter");
         assertEq(vm.parseJsonAddress(json, ".deferredTargets[1].currentAddress"), 0x888506B92181c57A2fD06516FFFb6F375b7A4626);
-        assertEq(vm.parseJsonAddress(json, ".deferredTargets[2].currentAddress"), 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3);
+        assertEq(vm.parseJsonAddress(json, ".deferredTargets[2].currentAddress"), address(0));
 
         assertEq(vm.parseJsonString(json, ".namingTaxonomy[0].name"), "Factory");
         assertEq(vm.parseJsonString(json, ".namingTaxonomy[1].name"), "Deployer");
@@ -91,7 +91,7 @@ contract VanitySharedGlobalCatalogTest is Test {
         );
         assertEq(
             vm.parseJsonAddress(json, ".baseMainnetDefaults.lotteryManager"),
-            0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3
+            address(0)
         );
         assertEq(
             vm.parseJsonAddress(json, ".baseMainnetDefaults.ajnaFactory"),

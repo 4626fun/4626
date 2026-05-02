@@ -47,7 +47,7 @@ interface ICreatorGaugeControllerForRewards {
  *   PRIVATE_KEY=...
  *   OWNER=...                        (default: broadcaster)
  *   REGISTRY=0x...                    (default: Base registry)
- *   LOTTERY_MANAGER=0x...             (default: Base lottery manager)
+ *   LOTTERY_MANAGER=0x...             (required for v1.10.1+)
  *   PROTOCOL_TREASURY=0x...           (default: Base protocol treasury)
  *   WRAPPED_SHARE_OFT=0x...           (required)  ■4626 token to lock in ve4626
  *
@@ -59,7 +59,7 @@ interface ICreatorGaugeControllerForRewards {
  */
 contract DeployRewardsEcosystem is Script {
     address constant DEFAULT_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
-    address constant DEFAULT_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
+    address constant DEFAULT_LOTTERY_MANAGER = address(0);
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
 
     function run() external {
@@ -69,6 +69,7 @@ contract DeployRewardsEcosystem is Script {
         address owner = vm.envOr("OWNER", broadcaster);
         address registry = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
         address lotteryManager = vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER);
+        require(lotteryManager != address(0), "LOTTERY_MANAGER required for v1.10.1+");
         address protocolTreasury = vm.envOr("PROTOCOL_TREASURY", DEFAULT_PROTOCOL_TREASURY);
         address wrappedShareOFT = vm.envAddress("WRAPPED_SHARE_OFT");
 

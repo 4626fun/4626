@@ -1,0 +1,21 @@
+name: Orphan-address sweep
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  orphan-address-sweep:
+    name: Orphan-address sweep
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check for stale orphan address references
+        run: bash tools/ci/check_no_orphan_addresses.sh

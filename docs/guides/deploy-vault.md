@@ -61,7 +61,7 @@ Current live Base defaults use the split Phase-1 deployment batcher and its pair
 - Registry: `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb`
 - Deployment batcher: `0x004684670d284EF607E1B2424fcf8ccBda8ef828`
 - Deployment batcher auto-handoff alias: `0x004684670d284EF607E1B2424fcf8ccBda8ef828`
-- Creator lottery manager: `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`
+- Creator lottery manager: `<v1.10.1 manager TBD post-broadcast>`
 - Creator VRF consumer: `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47`
 - `UniversalBytecodeStoreV2`: `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5`
 - `UniversalCreate2DeployerFromStore`: `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd`

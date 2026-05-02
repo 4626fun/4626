@@ -31,8 +31,8 @@ contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
     address constant DEFAULT_CREATOR_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
 
-    // Base mainnet CreatorLotteryManager (hub)
-    address constant DEFAULT_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
+    // v1.10.1+ requires explicit lottery manager env when wiring the adapter.
+    address constant DEFAULT_LOTTERY_MANAGER = address(0);
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

@@ -53,8 +53,8 @@ contract DeployLotteryManagerCreate2V2 is Script {
     // Mined salt for the current initcode (re-mine if bytecode/args change).
     bytes32 constant SALT = 0x677c2dd18a357e3ccc1987d7bdf5dac0b82097a7f3713070bd67fa4c98a41412;
 
-    // Expected vanity address for this salt+initcode on Base.
-    address constant EXPECTED_ADDRESS = 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3;
+    // v1.10.1 orphaned the previous replacement-manager target; do not reuse.
+    address constant EXPECTED_ADDRESS = address(0);
 
     // Base mainnet canonical registry + owner (EOA that holds registry ownership).
     address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;

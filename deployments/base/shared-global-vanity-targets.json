@@ -21,7 +21,7 @@
     "taxHook": "0xca975B9dAF772C71161f3648437c3616E5Be0088",
     "chainlinkEthUsd": "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70",
     "vaultActivationBatcher": "0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB",
-    "lotteryManager": "0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3",
+    "lotteryManager": "0x0000000000000000000000000000000000000000",
     "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     "uniswapV3Factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
@@ -158,8 +158,8 @@
       "contractName": "CreatorLotteryManager",
       "deploymentKind": "stateful_global_service",
       "deploymentJsonPath": "deployments/base/contracts/services/lottery/CreatorLotteryManager.json",
-      "currentAddress": "0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3",
-      "reasonDeferred": "Maintains shared lottery configuration, authorization, sponsorship state, and cross-chain VRF routing."
+      "currentAddress": "0x0000000000000000000000000000000000000000",
+      "reasonDeferred": "v1.10.1 pre-broadcast sentinel; previous manager is orphaned and the replacement manager is TBD post-broadcast."
     },
     {
       "contractName": "CreatorVRFConsumerV2_5",

@@ -62,8 +62,8 @@ contract DeployTier1Upgrade is Script {
     /// @notice Canonical Permit2 on Base
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
-    /// @notice Old LotteryManager being replaced
-    address constant OLD_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
+    /// @notice v1.10.1+ must not reuse the orphaned v1.8.3 LotteryManager.
+    address constant OLD_LOTTERY_MANAGER = address(0);
 
     /// @notice Old VaultActivationBatcher being replaced
     address constant OLD_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;

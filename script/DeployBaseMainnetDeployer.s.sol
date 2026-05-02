@@ -80,7 +80,7 @@ contract DeployBaseMainnetDeployer is Script {
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
     address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;
-    address constant DEFAULT_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
+    address constant DEFAULT_LOTTERY_MANAGER = address(0);
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -155,6 +155,7 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.chainlinkEthUsd = vm.envOr("CHAINLINK_ETH_USD", DEFAULT_CHAINLINK_ETH_USD);
         cfg.vaultActivationBatcher = vm.envOr("VAULT_ACTIVATION_BATCHER", DEFAULT_VAULT_ACTIVATION_BATCHER);
         cfg.lotteryManager = vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER);
+        require(cfg.lotteryManager != address(0), "LOTTERY_MANAGER required for v1.10.1+");
         cfg.permit2 = vm.envOr("PERMIT2", DEFAULT_PERMIT2);
         cfg.usdc = vm.envOr("USDC", DEFAULT_USDC);
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
