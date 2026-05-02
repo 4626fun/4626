@@ -17,7 +17,11 @@ import {
 import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { _submitOwnerViaPreparedCalls, type OwnerApprovalStageEvent } from '@/lib/wallet/onboardingWallet'
+import {
+  _submitOwnerViaPreparedCalls,
+  unwrapDoubleHexEncodedHash,
+  type OwnerApprovalStageEvent,
+} from '@/lib/wallet/onboardingWallet'
 import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
 import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
 import { computeProbeVerdict, hasUsableEcdsaRecovery } from '@/lib/wallet/probeVerdict'
@@ -778,7 +782,9 @@ export function CswSignatureProbe() {
     return snapshot
   }
 
-  async function runProbe(method: 'eth_sign' | 'personal_sign' | 'typed_data') {
+  async function runProbe(
+    method: 'eth_sign' | 'personal_sign' | 'typed_data' | 'prepared_personal_sign',
+  ) {
     if (!walletClient || !connectedAddress) {
       setSignState({ kind: 'err', label: 'connect wallet first' })
       return
@@ -803,12 +809,30 @@ export function CswSignatureProbe() {
       return
     }
 
-    // Hash we ASK the wallet to sign. For Base App CSW sessions the popup
-    // applies its own replaySafeHash wrap internally, so we MUST give it the
-    // raw challenge hash, not the pre-wrapped replaySafeHash. We still compute
-    // replaySafeHash locally for diagnostic comparison.
-    const signedHash = challengeHash
-    const replaySafeHash = buildReplaySafeHash({
+    // The prepared-calls personal_sign lane requires self-auth (sender === CSW)
+    // because we ask the popup to sign the hash with `sender = CSW`. That shape
+    // is only accepted when the connected wallet is the CSW itself.
+    if (method === 'prepared_personal_sign') {
+      const isSelfAuthSession =
+        connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+      if (!isSelfAuthSession) {
+        setSignState({
+          kind: 'err',
+          label: 'connected wallet must be the CSW itself for the prepared-calls lane',
+          detail:
+            'This lane targets Base App\u2019s self-auth passkey signer. ' +
+            `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}. ` +
+            'Reconnect via Base App so the wagmi connector exposes the CSW.',
+        })
+        return
+      }
+    }
+
+    // For the regular probe lanes we ASK the wallet to sign the raw challenge
+    // hash. For the prepared-calls lane the hash we sign is the userOpHash that
+    // wallet_prepareCalls returns — we resolve it below before signing.
+    let signedHash: Hex = challengeHash
+    let replaySafeHash: Hex = buildReplaySafeHash({
       smartWallet: normalizedCswAddress,
       userOpHash: challengeHash,
     })
@@ -833,6 +857,55 @@ export function CswSignatureProbe() {
           params: [connectedAddress, signedHash],
         })
       } else if (method === 'personal_sign') {
+        signature = await request!({
+          method: 'personal_sign',
+          params: [signedHash, connectedAddress],
+        })
+      } else if (method === 'prepared_personal_sign') {
+        // Route through wallet_prepareCalls so Base App enters self-auth signing
+        // mode and dispatches the popup to the CSW’s passkey owner (owner[0])
+        // — instead of the sub-account/session key it falls back to for raw
+        // personal_sign(hash, sender=CSW). The call we ask the wallet to bundle
+        // is a no-op self-call (data='0x', value='0x0') so even if a user clicks
+        // through far enough to send it, nothing happens on chain. This probe
+        // does NOT call wallet_sendPreparedCalls; we sign-and-inspect only.
+        const capabilities: Record<string, unknown> = {}
+        if (paymasterUrlForPreparedCalls) {
+          const paymasterUrlStr = String(paymasterUrlForPreparedCalls)
+            .trim()
+            .replace(
+              'https://api.developer.coinbase.com/',
+              'https://api.cdp.coinbase.com/',
+            )
+          capabilities.paymasterService = { url: paymasterUrlStr }
+        }
+        const chainIdHex = `0x${base.id.toString(16)}`
+        const prepareResult = (await request!({
+          method: 'wallet_prepareCalls',
+          params: [
+            {
+              version: '1.0',
+              from: normalizedCswAddress,
+              chainId: chainIdHex,
+              calls: [
+                { to: normalizedCswAddress, data: '0x' as Hex, value: '0x0' },
+              ],
+              capabilities,
+            },
+          ],
+        })) as {
+          signatureRequest?: { hash?: string }
+        } | null
+        if (!prepareResult?.signatureRequest?.hash) {
+          throw new Error('wallet_prepareCalls did not return a signature request hash.')
+        }
+        signedHash = unwrapDoubleHexEncodedHash(
+          prepareResult.signatureRequest.hash as Hex,
+        )
+        replaySafeHash = buildReplaySafeHash({
+          smartWallet: normalizedCswAddress,
+          userOpHash: signedHash,
+        })
         signature = await request!({
           method: 'personal_sign',
           params: [signedHash, connectedAddress],
@@ -905,7 +978,12 @@ export function CswSignatureProbe() {
           address: normalizedCswAddress,
           abi: CSW_OWNER_ABI,
           functionName: 'replaySafeHash',
-          args: [challengeHash],
+          // For the prepared-calls lane signedHash is the userOpHash returned
+          // by wallet_prepareCalls, not the on-page challengeHash. We must ask
+          // the CSW for replaySafeHash(signedHash) so the recovery row below
+          // and the webauthn challenge check both line up with the bytes the
+          // wallet actually signed.
+          args: [signedHash],
         }) as Hex
       } catch {
         // CSW may not expose replaySafeHash if it's a non-standard fork; ignore.
@@ -923,8 +1001,10 @@ export function CswSignatureProbe() {
 
       // Authoritative verification: ask the CSW itself via ERC-1271.
       // The signature we send must be the FULL wrapped signature returned by the
-      // wallet (not just the inner ecdsa bytes). The hash argument is the raw
-      // challenge hash; the contract’s ERC-1271 implementation applies
+      // wallet (not just the inner ecdsa bytes). The hash argument is whichever
+      // hash the wallet was actually asked to sign — challengeHash for the
+      // direct lanes, or the userOpHash returned by wallet_prepareCalls for the
+      // prepared-calls lane. The contract’s ERC-1271 implementation applies
       // replaySafeHash internally before verifying.
       let erc1271MagicValue: Hex | null = null
       let erc1271Verified = false
@@ -933,7 +1013,7 @@ export function CswSignatureProbe() {
           address: normalizedCswAddress,
           abi: ERC1271_ABI,
           functionName: 'isValidSignature',
-          args: [challengeHash, signature],
+          args: [signedHash, signature],
         }) as Hex
         erc1271MagicValue = result
         erc1271Verified = result.toLowerCase() === ERC1271_MAGIC_VALUE
@@ -1053,7 +1133,17 @@ export function CswSignatureProbe() {
         label: `${method} signature ${erc1271Verified ? 'verified' : 'captured (NOT verified)'}`,
         detail: (() => {
           if (erc1271Verified) {
-            return 'CSW.isValidSignature returned the EIP-1271 magic value — the bundler will accept this signature shape.'
+            if (signatureShape.kind === 'webauthn') {
+              return 'CSW.isValidSignature returned the EIP-1271 magic value and the signature is a WebAuthnAuth tuple \u2014 owner[0] (passkey) signed via the popup.'
+            }
+            return 'CSW.isValidSignature returned the EIP-1271 magic value \u2014 the bundler will accept this signature shape.'
+          }
+          if (method === 'prepared_personal_sign' && signatureShape.kind !== 'webauthn') {
+            return (
+              'wallet_prepareCalls succeeded but the popup returned a non-WebAuthn signature \u2014 ' +
+              'Base App is still routing to a sub-account/session key instead of the passkey owner. ' +
+              'Disconnect, reconnect via Base App, and ensure the connected account IS the CSW.'
+            )
           }
           if (parsedSignature.kind === 'raw-ecdsa' && (directMatchesTarget || prefixedMatchesTarget)) {
             return 'Raw ECDSA recovers to selected owner, but CSW.isValidSignature did not return the magic value. Wrap as SignatureWrapper(ownerIndex, r||s||v) and resubmit.'
@@ -1343,6 +1433,17 @@ export function CswSignatureProbe() {
           imply the bundler will accept it (those are different paths). This probe
           does not send transactions.
         </p>
+        <p className="text-zinc-400">
+          For owners that are passkeys (e.g. owner[0] on a Coinbase Smart Wallet),
+          a raw personal_sign(hash, sender=CSW) request is silently routed by
+          Base App to a sub-account/session key — the popup never wakes the
+          passkey signer for an arbitrary off-chain hash. Use
+          <span className="font-mono text-emerald-300"> probe prepared-calls personal_sign </span>
+          to route the request through wallet_prepareCalls first; that puts the
+          popup into self-auth signing mode and dispatches the passkey owner.
+          The probe inspects the resulting signature shape (expect WebAuthnAuth)
+          and verifies it via on-chain isValidSignature without sending a tx.
+        </p>
       </header>
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
@@ -1453,6 +1554,14 @@ export function CswSignatureProbe() {
             onClick={() => runProbe('typed_data')}
           >
             probe typed data
+          </button>
+          <button
+            type="button"
+            className="rounded border border-emerald-500/60 px-3 py-1.5 text-xs text-emerald-200 hover:border-emerald-400"
+            onClick={() => runProbe('prepared_personal_sign')}
+            title="Routes through wallet_prepareCalls so Base App signs with the CSW\u2019s passkey owner instead of a sub-account session key. No transaction is sent."
+          >
+            probe prepared-calls personal_sign (passkey)
           </button>
           <button
             type="button"
