@@ -93,6 +93,46 @@ export type AlfaClubChatBridgeFlags = {
   jwt: string | null
   ingestJwt: string | null
   apiBaseUrl: string
+  /**
+   * Optional proxy origin for AlfaClub HTTP API calls
+   * (`/api/websocket/room_history_paginate` + `/api/websocket/update_read_msg`).
+   *
+   * Why this exists: AlfaClub's API origin is fronted by Cloudflare,
+   * which has been observed to 403 (CF error 1010) requests from
+   * Vercel's serverless egress IPs even with a fully-spec'd browser
+   * fingerprint (see PR #491 + this PR). When that happens, an
+   * operator can stand up a tiny relay (Cloudflare Worker, fly.io,
+   * Railway service that does NOT enable
+   * `ALFACLUB_CHAT_BRIDGE_ENABLED`, etc.) and point the Vercel
+   * bridge at it via `ALFACLUB_CHAT_API_PROXY_URL`.
+   *
+   * Contract for the proxy:
+   *   - Accept GET `/api/websocket/room_history_paginate?...` and
+   *     POST `/api/websocket/update_read_msg` at the same paths.
+   *   - Pass the request through unchanged (same query, same
+   *     Authorization header, same body, SAME `Origin`/`Referer`/
+   *     `Sec-Fetch-Site` headers) to `https://api.alfaclub.app`.
+   *   - Return the upstream response unchanged (status, headers,
+   *     JSON body).
+   *   - The proxy MUST NOT consume the AlfaClub command/reply path
+   *     (no posting back into the room). Vercel remains the
+   *     canonical command processor.
+   *
+   * Routing-vs-fingerprint contract: even when this proxy is set,
+   * the bridge keeps the upstream AlfaClub browser-fingerprint
+   * triplet (`Origin: https://alfaclub.app`, `Referer:
+   * https://alfaclub.app/`, `Sec-Fetch-Site: same-site`) on the
+   * outgoing request so the upstream Cloudflare WAF on
+   * `api.alfaclub.app` sees the same fingerprint it would on a
+   * direct call. The proxy's job is byte-faithful forwarding to
+   * the upstream — it MUST NOT strip, rewrite, or override the
+   * `Origin`/`Referer`/`Sec-Fetch-Site` headers (doing so would
+   * weaken the fingerprint and re-trigger the original 1010 ban).
+   *
+   * Set as `https://relay.example.com` (origin only). When unset,
+   * the bridge calls `apiBaseUrl` directly.
+   */
+  apiProxyUrl: string | null
   websocketUrl: string
   groupId: string
   pollIntervalMs: number
@@ -200,6 +240,87 @@ function normalizeApiBaseUrl(raw: string | undefined): string {
   }
 }
 
+/**
+ * Optional `ALFACLUB_CHAT_API_PROXY_URL` parser. Returns the proxy
+ * origin if set and valid, `null` otherwise. HTTPS-only — refusing
+ * to send the bot's `Authorization: Bearer <chat_jwt>` to a
+ * cleartext relay is a hard rule.
+ */
+function normalizeApiProxyUrl(raw: string | undefined): string | null {
+  const value = (raw ?? '').trim()
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:') return null
+    return `${url.origin}`
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Pick the URL the bridge should hit for an AlfaClub HTTP API call
+ * (the *routing* URL — where the request is actually sent).
+ *
+ * If the operator has configured `ALFACLUB_CHAT_API_PROXY_URL`, use
+ * it (proxy must implement the same paths and forward to AlfaClub
+ * — see the doc comment on `AlfaClubChatBridgeFlags.apiProxyUrl`).
+ * Otherwise fall back to `apiBaseUrl` (typically
+ * `https://api.alfaclub.app`).
+ *
+ * NOTE: The routing URL is intentionally distinct from the
+ * *fingerprint* base used to derive `Origin`/`Referer`/`Sec-Fetch-Site`
+ * — see `resolveAlfaClubFingerprintBaseUrl`. With a proxy in front of
+ * `https://api.alfaclub.app`, the request still represents itself as
+ * coming from the alfaclub.app web client; the proxy forwards
+ * unchanged, so the upstream Cloudflare WAF must see the same
+ * browser-fingerprint headers it would on a direct call.
+ *
+ * Exported for tests. Production callers always pass the full
+ * `flags` object.
+ */
+export function resolveAlfaClubApiCallBaseUrl(flags: {
+  apiBaseUrl: string
+  apiProxyUrl: string | null
+}): string {
+  return flags.apiProxyUrl ?? flags.apiBaseUrl
+}
+
+/**
+ * Pick the URL whose hostname determines the browser-fingerprint
+ * triplet (`Origin`/`Referer`/`Sec-Fetch-Site`) for an AlfaClub HTTP
+ * API call.
+ *
+ * Routing-vs-fingerprint separation: when
+ * `ALFACLUB_CHAT_API_PROXY_URL` is configured the bridge sends the
+ * HTTP request to the proxy (the routing URL), but the upstream
+ * Cloudflare WAF on `api.alfaclub.app` still inspects the
+ * `Origin`/`Referer`/`Sec-Fetch-Site` triplet. The proxy contract
+ * (see `AlfaClubChatBridgeFlags.apiProxyUrl`) is "forward unchanged"
+ * — so the fingerprint must be derived from the upstream AlfaClub
+ * API base, not from the proxy origin (which would yield `{}` for
+ * an unknown host and weaken the fingerprint).
+ *
+ * Resolution order:
+ *   - `apiBaseUrl` is always the canonical upstream AlfaClub base
+ *     (defaults to `https://api.alfaclub.app`); use it as the
+ *     fingerprint source.
+ *   - When the operator points the bridge at a custom non-AlfaClub
+ *     `apiBaseUrl` (staging API, localhost replay) with NO proxy,
+ *     `resolveAlfaClubOriginHeaders` will return `{}` for the
+ *     unknown host — preserving the safe behavior of not emitting
+ *     a contradictory `Origin: https://alfaclub.app` to a host that
+ *     has nothing to do with alfaclub.app.
+ *
+ * Exported for tests.
+ */
+export function resolveAlfaClubFingerprintBaseUrl(flags: {
+  apiBaseUrl: string
+  apiProxyUrl: string | null
+}): string {
+  return flags.apiBaseUrl
+}
+
 function normalizeWsUrl(raw: string | undefined): string {
   const value = (raw ?? '').trim() || DEFAULT_WS_URL
   try {
@@ -232,6 +353,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     jwt: (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null,
     ingestJwt: (process.env.ALFACLUB_CHAT_INGEST_JWT ?? '').trim() || null,
     apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
+    apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
     groupId: groupIdRaw || `alfaclub-room-${roomId ?? 'unknown'}`,
     pollIntervalMs: parsePositiveInt(
@@ -609,11 +731,26 @@ function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttac
 const ALFACLUB_API_COMMON_BROWSER_HEADERS: Record<string, string> = {
   // Stable Chromium UA. Bumping it is fine; the only constraint is
   // "not the default Node fetch UA", which Cloudflare's
-  // browser-integrity check rejects.
+  // browser-integrity check rejects. The major version below
+  // matches the `sec-ch-ua` declarations to avoid an inconsistent
+  // browser fingerprint.
   'User-Agent':
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   Accept: 'application/json, text/plain, */*',
   'Accept-Language': 'en-US,en;q=0.9',
+  // Most production fetches transparently negotiate gzip/deflate;
+  // omitting the header lets Cloudflare downgrade to identity, which
+  // is itself a small fingerprint signal. Match the alfaclub.app
+  // web client's negotiated set.
+  'Accept-Encoding': 'gzip, deflate, br',
+  // Client-Hints `sec-ch-ua` triple. Cloudflare's bot-management
+  // checks read these for the Chromium-major and platform fields and
+  // flag inconsistency between UA + sec-ch-ua as a bot signal. Pin
+  // them to match the UA's Chrome/124 + macOS triple above.
+  'sec-ch-ua':
+    '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  'sec-ch-ua-mobile': '?0',
+  'sec-ch-ua-platform': '"macOS"',
   // `Sec-Fetch-Mode` and `Sec-Fetch-Dest` are origin-agnostic and
   // describe the request *kind*, not a relationship to a specific
   // page origin — they're safe to send to any host.
@@ -690,23 +827,40 @@ export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOrigin
  * Always returns a fresh object (callers must be free to add their
  * own per-request headers, e.g. `Content-Type` for POST bodies).
  *
- * Headers are derived from `apiBaseUrl`:
- *   - For known AlfaClub-family hosts (production default
- *     `https://api.alfaclub.app`) we mirror the page-origin fingerprint
- *     the alfaclub.app web client sends: `Origin: https://alfaclub.app`,
- *     `Referer: https://alfaclub.app/`, `Sec-Fetch-Site: same-site`.
- *   - For any other host (staging proxy, localhost replay) we omit
- *     `Origin/Referer/Sec-Fetch-Site` so we never emit a contradictory
- *     fingerprint. The remaining headers (UA, Accept, Sec-Fetch-Mode,
- *     Sec-Fetch-Dest) are origin-agnostic and stay in place.
+ * The browser-fingerprint triplet (Origin/Referer/Sec-Fetch-Site) is
+ * derived from `fingerprintBaseUrl`, which is INTENTIONALLY decoupled
+ * from the routing URL the request is sent to:
+ *
+ *   - Direct call to the default AlfaClub API base
+ *     (`https://api.alfaclub.app`): fingerprint base = same =
+ *     emits `Origin: https://alfaclub.app` etc.
+ *   - Direct call to a custom non-AlfaClub base (staging API,
+ *     localhost replay): fingerprint base = same unknown host =
+ *     omits Origin/Referer/Sec-Fetch-Site (we never emit a
+ *     contradictory `Origin: https://alfaclub.app` to a host that
+ *     has nothing to do with alfaclub.app).
+ *   - Proxy routing
+ *     (`ALFACLUB_CHAT_API_PROXY_URL=https://relay.example.com`)
+ *     with the default upstream AlfaClub base: routing URL =
+ *     proxy, fingerprint base = `https://api.alfaclub.app`. The
+ *     proxy is documented to forward unchanged to
+ *     `api.alfaclub.app`, so the upstream Cloudflare WAF must see
+ *     the full browser fingerprint. Pre-fix, `buildAlfaClubApiHeaders`
+ *     derived the triplet from the proxy origin (an unknown host),
+ *     producing `{}` and weakening the fingerprint — defeating the
+ *     point of the proxy escape hatch.
+ *
+ * The remaining headers (UA, Accept, Accept-Encoding, sec-ch-ua*,
+ * Sec-Fetch-Mode, Sec-Fetch-Dest) are origin-agnostic and stay in
+ * place regardless of routing/fingerprint base.
  */
 function buildAlfaClubApiHeaders(params: {
   jwt: string
-  apiBaseUrl: string
+  fingerprintBaseUrl: string
 }): Record<string, string> {
   return {
     ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
-    ...resolveAlfaClubOriginHeaders(params.apiBaseUrl),
+    ...resolveAlfaClubOriginHeaders(params.fingerprintBaseUrl),
     Authorization: `Bearer ${params.jwt}`,
   }
 }
@@ -714,8 +868,107 @@ function buildAlfaClubApiHeaders(params: {
 /** Exposed for unit tests — common (origin-agnostic) headers. */
 export const _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS = ALFACLUB_API_COMMON_BROWSER_HEADERS
 
+/**
+ * Strip JWT-shaped substrings, Bearer headers, and long opaque
+ * base64url runs from a string before it gets logged or surfaced in
+ * `tick.errors[]`. Same shape as the auth-health-store redactor; we
+ * duplicate the small implementation here to keep the bridge module
+ * self-contained.
+ */
+function redactForDiagnostics(input: string): string {
+  if (!input) return ''
+  let out = String(input)
+  out = out.replace(
+    /\b([A-Za-z0-9_-]{8,})\.([A-Za-z0-9_-]{8,})\.([A-Za-z0-9_-]{8,})\b/g,
+    '<redacted-jwt>',
+  )
+  out = out.replace(/(Bearer\s+)[A-Za-z0-9._-]{16,}/gi, '$1<redacted>')
+  out = out.replace(/\b[A-Za-z0-9_-]{40,}\b/g, '<redacted-opaque>')
+  return out
+}
+
+/**
+ * Extract a tiny, sanitized diagnostic suffix from a non-2xx
+ * response. The suffix is appended to the `room_history_failed:<status>`
+ * error message so an operator polling
+ * `/api/v1/alfaclub/chat-bridge-run` sees enough to distinguish:
+ *
+ *   - Cloudflare browser-signature ban (HTML body, `cf-ray`, optional
+ *     `cf-cache-status`, `cf-mitigated`, `Cf-Error-Code: 1010`).
+ *   - AlfaClub structured JSON `{ "error": "...", "code": "..." }`.
+ *   - Bare HTML / unknown shape (capture only first 120 chars,
+ *     redacted, single-line).
+ *
+ * Always returns a short string ≤ 200 chars. Never includes the
+ * original Authorization header or any JWT material. Header values
+ * are length-bounded (cf-ray ids are ~16 chars).
+ */
+async function extractRoomHistoryErrorDetail(response: Response): Promise<string> {
+  const parts: string[] = []
+  // Cloudflare-mitigation headers, if present. cf-ray is the
+  // request-id Cloudflare attaches to every response and is the
+  // single most useful field for cross-checking with their dashboard.
+  const cfRay = response.headers.get('cf-ray')
+  if (cfRay) parts.push(`cf-ray=${cfRay.slice(0, 32)}`)
+  const cfMitigated = response.headers.get('cf-mitigated')
+  if (cfMitigated) parts.push(`cf-mitigated=${cfMitigated.slice(0, 24)}`)
+  const cfErrorCode = response.headers.get('cf-error-code')
+  if (cfErrorCode) parts.push(`cf-error-code=${cfErrorCode.slice(0, 8)}`)
+  const contentType = response.headers.get('content-type')
+  if (contentType) parts.push(`content-type=${contentType.split(';')[0]?.slice(0, 40) ?? ''}`)
+
+  let bodyText = ''
+  try {
+    bodyText = (await response.text()).trim()
+  } catch {
+    bodyText = ''
+  }
+
+  if (bodyText) {
+    // JSON-ish body: try to pluck `code` and `error`/`message` fields
+    // by regex (avoids parse-failure branches; the body may be
+    // truncated/garbled).
+    const codeMatch = /"code"\s*:\s*"([A-Za-z0-9_.-]{1,64})"/.exec(bodyText)
+    if (codeMatch?.[1]) parts.push(`code=${codeMatch[1]}`)
+    const errorMatch = /"error"\s*:\s*"([^"]{1,80})"/.exec(bodyText)
+    if (errorMatch?.[1]) {
+      parts.push(`error="${redactForDiagnostics(errorMatch[1]).slice(0, 80)}"`)
+    } else {
+      const messageMatch = /"message"\s*:\s*"([^"]{1,80})"/.exec(bodyText)
+      if (messageMatch?.[1]) {
+        parts.push(`message="${redactForDiagnostics(messageMatch[1]).slice(0, 80)}"`)
+      }
+    }
+
+    // Cloudflare-style HTML body: scan for the textual error code marker.
+    if (/Cloudflare/i.test(bodyText) || /cf-error-code/i.test(bodyText)) {
+      parts.push('cloudflare=true')
+      const htmlErrorCode = /Error\s*(\d{3,4})/i.exec(bodyText)
+      if (htmlErrorCode?.[1]) parts.push(`html-error-code=${htmlErrorCode[1]}`)
+    }
+
+    // Final fallback: short body excerpt (single-line, redacted).
+    if (parts.length === 0 || parts.every((p) => !p.startsWith('error=') && !p.startsWith('message='))) {
+      const oneLine = bodyText.replace(/\s+/g, ' ').slice(0, 120)
+      parts.push(`body="${redactForDiagnostics(oneLine).slice(0, 120)}"`)
+    }
+  }
+
+  return parts.join(' ').slice(0, 200)
+}
+
 async function fetchRoomHistory(params: {
+  /** URL the HTTP request is actually sent to (proxy or direct API base). */
   apiBaseUrl: string
+  /**
+   * URL whose hostname determines the browser-fingerprint triplet
+   * (Origin/Referer/Sec-Fetch-Site). When `apiBaseUrl` is a proxy
+   * origin (set via `ALFACLUB_CHAT_API_PROXY_URL`), pass the
+   * upstream AlfaClub API base here so the WAF on the upstream still
+   * sees a full browser fingerprint. Defaults to `apiBaseUrl` for
+   * callers that don't know about the proxy split.
+   */
+  fingerprintBaseUrl?: string
   roomId: string
   jwt: string
   limit: number
@@ -732,7 +985,10 @@ async function fetchRoomHistory(params: {
   try {
     response = await fetch(url.toString(), {
       method: 'GET',
-      headers: buildAlfaClubApiHeaders({ jwt: params.jwt, apiBaseUrl: params.apiBaseUrl }),
+      headers: buildAlfaClubApiHeaders({
+        jwt: params.jwt,
+        fingerprintBaseUrl: params.fingerprintBaseUrl ?? params.apiBaseUrl,
+      }),
       signal: controller.signal,
     })
   } catch (error) {
@@ -742,14 +998,27 @@ async function fetchRoomHistory(params: {
     clearTimeout(timeout)
   }
   if (!response.ok) {
-    throw new Error(`room_history_failed:${response.status}`)
+    // Capture sanitized detail (Cloudflare cf-ray, error code,
+    // structured JSON code/message) so the tick.errors[] entry
+    // tells the operator WHY the fetch was rejected — not just the
+    // bare HTTP status.
+    const detail = await extractRoomHistoryErrorDetail(response)
+    const suffix = detail ? `:${detail}` : ''
+    throw new Error(`room_history_failed:${response.status}${suffix}`)
   }
   const body = (await response.json()) as AlfaClubRoomHistoryResponse
   return Array.isArray(body.messages) ? body.messages : []
 }
 
 async function markReadMessage(params: {
+  /** URL the HTTP request is actually sent to (proxy or direct API base). */
   apiBaseUrl: string
+  /**
+   * URL whose hostname determines the browser-fingerprint triplet.
+   * Same routing-vs-fingerprint contract as `fetchRoomHistory`.
+   * Defaults to `apiBaseUrl`.
+   */
+  fingerprintBaseUrl?: string
   roomId: string
   jwt: string
   messageDate: number
@@ -762,7 +1031,10 @@ async function markReadMessage(params: {
     await fetch(url.toString(), {
       method: 'POST',
       headers: {
-        ...buildAlfaClubApiHeaders({ jwt: params.jwt, apiBaseUrl: params.apiBaseUrl }),
+        ...buildAlfaClubApiHeaders({
+          jwt: params.jwt,
+          fingerprintBaseUrl: params.fingerprintBaseUrl ?? params.apiBaseUrl,
+        }),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -927,8 +1199,18 @@ function isRoomHistoryAuthError(error: unknown): boolean {
   // for this room or has been revoked. Both indicate the JWT in use needs
   // to be rotated (DB → env fallback) or, failing that, that we should
   // drop into the websocket live-fallback path until a fresh refresh.
+  //
+  // Match by `startsWith(...)` so the new sanitized-detail suffix
+  // appended by `extractRoomHistoryErrorDetail` (e.g.
+  // `room_history_failed:403:cf-ray=...`) does NOT prevent the
+  // retry-on-env-jwt and WS-fallback paths from firing.
   const message = (error instanceof Error ? error.message : String(error)).trim()
-  return message === 'room_history_failed:401' || message === 'room_history_failed:403'
+  return (
+    message === 'room_history_failed:401' ||
+    message === 'room_history_failed:403' ||
+    message.startsWith('room_history_failed:401:') ||
+    message.startsWith('room_history_failed:403:')
+  )
 }
 
 function rememberSeenMessageId(id: string): void {
@@ -1279,7 +1561,8 @@ async function executeCommandBatch(params: {
       })
       replied += 1
       await markReadMessage({
-        apiBaseUrl: params.flags.apiBaseUrl,
+        apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+        fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
         roomId: params.roomId,
         jwt: params.jwt,
         messageDate: command.date,
@@ -1334,7 +1617,8 @@ async function runBridgeTick(
   let historyError: unknown = null
   try {
     fetchedMessages = await fetchRoomHistory({
-      apiBaseUrl: flags.apiBaseUrl,
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+      fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
       roomId,
       jwt,
       limit: flags.historyLimit,
@@ -1357,7 +1641,8 @@ async function runBridgeTick(
       })
       try {
         fetchedMessages = await fetchRoomHistory({
-          apiBaseUrl: flags.apiBaseUrl,
+          apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+          fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
           roomId,
           jwt: fallbackJwt as string,
           limit: flags.historyLimit,
@@ -1636,12 +1921,25 @@ export function _isRoomHistoryAuthErrorForTests(error: unknown): boolean {
 /** Test seam: exercise `fetchRoomHistory` against an injected fetch. */
 export async function _fetchRoomHistoryForTests(params: {
   apiBaseUrl: string
+  fingerprintBaseUrl?: string
   roomId: string
   jwt: string
   limit: number
   timeoutMs: number
 }): Promise<AlfaClubRoomHistoryMessage[]> {
   return fetchRoomHistory(params)
+}
+
+/** Test seam: exercise `markReadMessage` against an injected fetch. */
+export async function _markReadMessageForTests(params: {
+  apiBaseUrl: string
+  fingerprintBaseUrl?: string
+  roomId: string
+  jwt: string
+  messageDate: number
+  timeoutMs: number
+}): Promise<void> {
+  return markReadMessage(params)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {

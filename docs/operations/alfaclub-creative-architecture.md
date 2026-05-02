@@ -45,6 +45,40 @@ bridge alive:
 Both are gated by `CRON_SECRET`. See
 [`docs/operations/deployment/eliza-runtime.md` § "AlfaClub control path"](deployment/eliza-runtime.md).
 
+#### `room_history_paginate` — Cloudflare egress and the optional proxy
+
+`api.alfaclub.app` is fronted by Cloudflare. Cloudflare's
+browser-integrity check returns HTTP 403 + CF error 1010 for
+`Authorization` + naked-Node fetches. The bridge sends a Chromium
+fingerprint (`User-Agent` + `Accept`/`Accept-Encoding`/`Accept-Language`
++ `sec-ch-ua` triple + `Sec-Fetch-Mode`/`Dest` + Origin/Referer/
+Sec-Fetch-Site for AlfaClub-family hosts). For default
+`https://api.alfaclub.app` that is enough.
+
+When it isn't (Cloudflare WAF later starts IP-banning Vercel egress,
+or the operator is replaying from a sandbox that triggers different
+heuristics), set `ALFACLUB_CHAT_API_PROXY_URL` to a tiny relay you
+control. Contract:
+
+- HTTPS-only origin (cleartext is rejected by `normalizeApiProxyUrl`).
+- Accepts `GET /api/websocket/room_history_paginate?...` and
+  `POST /api/websocket/update_read_msg` at the same paths.
+- Forwards each request unchanged (same query, same `Authorization`
+  header, same body) to `https://api.alfaclub.app`.
+- Returns the upstream response unchanged (status, headers, JSON body).
+- The proxy MUST NOT consume the AlfaClub command/reply path
+  (no posting back into the room). Vercel remains the canonical
+  command processor.
+
+A 30-line Cloudflare Worker, a fly.io app, or a Railway service
+that does NOT enable `ALFACLUB_CHAT_BRIDGE_ENABLED` are all valid
+deployment shapes.
+
+When the proxy is set, the bridge calls it for both
+`fetchRoomHistory` and `markReadMessage`. Diagnostic surfaces are
+unchanged: a non-2xx response still lands in `tick.errors[]` with
+the sanitized cf-ray / code / error / html-error-code suffix.
+
 ### 2. Supabase — AlfaClub runtime token state
 
 `alfaclub_runtime_secret` rows (RLS deny-all) store:
