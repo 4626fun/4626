@@ -3,6 +3,7 @@ import { Route } from 'react-router-dom'
 
 import {
   AccountsPage,
+  AddOwnerPage,
   AdminAgentSetup,
   AdminCreatorAccess,
   AdminCreatorStrategyProvisioning,
@@ -94,6 +95,20 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     element: (
       <SmartWalletRoute>
         <AccountsPage />
+      </SmartWalletRoute>
+    ),
+  },
+  // `/add-owner` is a single-purpose surface that installs the user's Privy
+  // embedded EOA onto their canonical Coinbase Smart Wallet via the
+  // `prepare-add-privy-owner` lane. The address is resolved server-side from
+  // the user's authenticated Privy session — the user never has to obtain or
+  // paste an EOA address. Same passkey-via-prepareCalls submission lane that
+  // the waitlist setup uses for owner installs.
+  {
+    path: '/add-owner',
+    element: (
+      <SmartWalletRoute>
+        <AddOwnerPage />
       </SmartWalletRoute>
     ),
   },
