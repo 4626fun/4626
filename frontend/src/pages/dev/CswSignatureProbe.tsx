@@ -41,6 +41,16 @@ const CSW_OWNER_ABI = [
     inputs: [{ name: 'index', type: 'uint256' }],
     outputs: [{ type: 'bytes' }],
   },
+  // Authoritative: the contract's own replaySafeHash. We read this on-chain
+  // instead of trusting our local buildReplaySafeHash, in case domain params
+  // (name/version/chainId/verifyingContract) drift.
+  {
+    type: 'function',
+    name: 'replaySafeHash',
+    stateMutability: 'view',
+    inputs: [{ name: 'hash', type: 'bytes32' }],
+    outputs: [{ type: 'bytes32' }],
+  },
 ] as const
 
 const ERC1271_ABI = [
@@ -123,6 +133,13 @@ type ProbeResult = {
   recoveredPrefixed: Address | null
   recoveredAgainstReplaySafe: Address | null
   recoveredAgainstPrefixedReplaySafe: Address | null
+  onchainReplaySafeHash: Hex | null
+  // Tri-state: true — local matches on-chain; false — they differ;
+  // null — on-chain lookup failed (call reverted / RPC error). Treating a
+  // failed lookup as `false` would mislead diagnosis into a 'mismatch'
+  // branch, so we preserve the unknown state explicitly.
+  localReplaySafeMatchesOnchain: boolean | null
+  recoveredAgainstOnchainReplaySafe: Address | null
   targetOwnerIndex: number
   targetOwnerAddress: Address | null
   directMatchesTarget: boolean
@@ -560,6 +577,31 @@ export function CswSignatureProbe() {
       const recoveredAgainstPrefixedReplaySafe = recoverableSignature
         ? await recoverAddress({ hash: prefixedReplaySafeHash, signature: recoverableSignature }).catch(() => null)
         : null
+      // Authoritative on-chain replaySafeHash — read from the CSW itself so
+      // domain parameter drift in our local builder can't hide bugs. If this
+      // differs from the local one, the local builder is wrong. If it matches
+      // and recovery still fails, the wallet is signing something else entirely.
+      let onchainReplaySafeHash: Hex | null = null
+      try {
+        onchainReplaySafeHash = await publicClient.readContract({
+          address: normalizedCswAddress,
+          abi: CSW_OWNER_ABI,
+          functionName: 'replaySafeHash',
+          args: [challengeHash],
+        }) as Hex
+      } catch {
+        // CSW may not expose replaySafeHash if it's a non-standard fork; ignore.
+      }
+      // Preserve unknown state if on-chain lookup failed (e.g. non-standard
+      // CSW implementation or transient RPC error). null ≠ false here.
+      const localReplaySafeMatchesOnchain: boolean | null =
+        onchainReplaySafeHash === null
+          ? null
+          : onchainReplaySafeHash.toLowerCase() === replaySafeHash.toLowerCase()
+      const recoveredAgainstOnchainReplaySafe =
+        recoverableSignature && onchainReplaySafeHash
+          ? await recoverAddress({ hash: onchainReplaySafeHash, signature: recoverableSignature }).catch(() => null)
+          : null
 
       // Authoritative verification: ask the CSW itself via ERC-1271.
       // The signature we send must be the FULL wrapped signature returned by the
@@ -616,6 +658,9 @@ export function CswSignatureProbe() {
         recoveredPrefixed,
         recoveredAgainstReplaySafe,
         recoveredAgainstPrefixedReplaySafe,
+        onchainReplaySafeHash,
+        localReplaySafeMatchesOnchain,
+        recoveredAgainstOnchainReplaySafe,
         targetOwnerIndex,
         targetOwnerAddress,
         directMatchesTarget,
@@ -904,13 +949,20 @@ export function CswSignatureProbe() {
         <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-zinc-500">4626 · dev probe</div>
         <h1 className="text-2xl font-medium">CSW owner signature probe</h1>
         <p className="text-zinc-400">
-          Loads CSW owner slots and verifies whether Base App signatures pass the CSW’s onchain
-          ERC-1271 check (the same check the bundler runs). The probe signs the raw challenge
-          hash — Base App applies replaySafeHash internally — and then calls
-          isValidSignature(challengeHash, signature) on the CSW. erc1271Verified=true means
-          the bundler will accept this signature shape; the recovery rows are diagnostics for
-          raw-ECDSA EOA signers only and may be meaningless for passkey/WebAuthn wrappers.
-          This probe does not send transactions.
+          Loads CSW owner slots and probes Base App signatures against the CSW.
+          IMPORTANT: the CSW has TWO verification paths with DIFFERENT hash semantics.
+          (1) The bundler / validateUserOp path verifies the signature against the raw
+          userOpHash directly (no replaySafeHash wrap) — see CoinbaseSmartWallet.sol
+          line 191. (2) The off-chain ERC-1271 isValidSignature(hash, sig) path wraps
+          with replaySafeHash before verifying — see ERC1271.sol line 70. These two
+          paths cannot be satisfied by the same signature. This probe signs the raw
+          challenge hash and then calls isValidSignature(challengeHash, sig) on-chain
+          for an ERC-1271 check; recovery rows recover the inner ECDSA against several
+          candidate hashes (raw, EIP-191, local replaySafeHash, on-chain replaySafeHash)
+          to localize where the wallet diverges from expectation. erc1271Verified=true
+          means the off-chain ERC-1271 path accepts this shape; it does NOT directly
+          imply the bundler will accept it (those are different paths). This probe
+          does not send transactions.
         </p>
       </header>
 
@@ -1165,8 +1217,18 @@ export function CswSignatureProbe() {
           <KeyValue label="ecdsaSignatureForRecovery" value={probeResult.ecdsaSignatureForRecovery ?? '—'} />
           <KeyValue label="recoveredDirect(hash=signedHash)" value={probeResult.recoveredDirect ?? '—'} />
           <KeyValue label="recoveredPrefixed(hash=EIP191(signedHash))" value={probeResult.recoveredPrefixed ?? '—'} />
-          <KeyValue label="recoveredAgainstReplaySafe(hash=replaySafeHash)" value={probeResult.recoveredAgainstReplaySafe ?? '—'} />
-          <KeyValue label="recoveredAgainstPrefixedReplaySafe(hash=EIP191(replaySafeHash))" value={probeResult.recoveredAgainstPrefixedReplaySafe ?? '—'} />
+          <KeyValue label="recoveredAgainstReplaySafe(hash=replaySafeHash[local])" value={probeResult.recoveredAgainstReplaySafe ?? '—'} />
+          <KeyValue label="recoveredAgainstPrefixedReplaySafe(hash=EIP191(replaySafeHash[local]))" value={probeResult.recoveredAgainstPrefixedReplaySafe ?? '—'} />
+          <KeyValue label="replaySafeHash(onchain) — CSW.replaySafeHash(challengeHash)" value={probeResult.onchainReplaySafeHash ?? '— (call reverted)'} />
+          <KeyValue
+            label="localReplaySafeMatchesOnchain"
+            value={
+              probeResult.localReplaySafeMatchesOnchain === null
+                ? '— (on-chain lookup failed)'
+                : String(probeResult.localReplaySafeMatchesOnchain)
+            }
+          />
+          <KeyValue label="recoveredAgainstOnchainReplaySafe(hash=replaySafeHash[onchain])" value={probeResult.recoveredAgainstOnchainReplaySafe ?? '—'} />
           <KeyValue label="directMatchesTarget" value={String(probeResult.directMatchesTarget)} />
           <KeyValue label="prefixedMatchesTarget" value={String(probeResult.prefixedMatchesTarget)} />
           <KeyValue label="signatureData(raw return)" value={probeResult.signature} />
