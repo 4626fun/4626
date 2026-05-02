@@ -302,7 +302,12 @@ export function CswSignatureProbe() {
   const { data: walletClient } = useWalletClient()
 
   const [cswInput, setCswInput] = useState('0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef')
-  const [targetOwnerIndex, setTargetOwnerIndex] = useState(1)
+  // Default to owner[0] (passkey via Base App popup) — the canonical signer
+  // for the addOwnerAddress self-call lane. Recovery rows for non-passkey
+  // indices may be meaningless if the active wallet session doesn't actually
+  // hold that owner's key (the popup happily wraps a foreign signature into
+  // a SignatureWrapper that *claims* the requested ownerIndex).
+  const [targetOwnerIndex, setTargetOwnerIndex] = useState(0)
   const [challengeHash, setChallengeHash] = useState<Hex>(() => makeChallengeHash())
   const [ownerReadState, setOwnerReadState] = useState<StepState>(INITIAL_STEP)
   const [signState, setSignState] = useState<StepState>(INITIAL_STEP)
