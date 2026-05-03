@@ -10,8 +10,10 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import {
-  _submitOwnerViaReplayablePreparedCalls,
+  _submitOwnerViaDirectSendTx,
   _submitOwnerViaRelayExecute,
+  _submitOwnerViaReplayablePreparedCalls,
+  type DirectSendLaneTelemetry,
   type RelayLaneTelemetry,
   type ReplayableLaneTelemetry,
 } from '@/lib/wallet/onboardingWallet'
@@ -127,6 +129,20 @@ export function AddOwnerPage() {
   >([])
   const [relayError, setRelayError] = useState<string | null>(null)
   const [relayResponse, setRelayResponse] = useState<unknown>(null)
+
+  // ── Direct eth_sendTransaction lane (Base App webview-native) ──────────
+  // Bypasses wallet_prepareCalls / keys.coinbase.com popups entirely. The
+  // CSW signs for itself via Base App's NATIVE eth_sendTransaction handler,
+  // which is the same handler that produced the Mar 9 tx (0x801b9d4b…).
+  // This is the only lane that works inside the Base App in-app browser,
+  // because webviews can't open the popup window the Coinbase Wallet SDK
+  // requires for wallet_prepareCalls.
+  const [directBusy, setDirectBusy] = useState(false)
+  const [directEvents, setDirectEvents] = useState<
+    Array<{ ts: number; step: DirectSendLaneTelemetry['step']; detail: Record<string, unknown> }>
+  >([])
+  const [directError, setDirectError] = useState<string | null>(null)
+  const [directTxHash, setDirectTxHash] = useState<string | null>(null)
 
   const preferredConnector = useMemo(() => {
     // Prefer Coinbase Wallet (Base App SDK) since this diagnostic must run
@@ -246,6 +262,58 @@ export function AddOwnerPage() {
       setReplayableError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
     } finally {
       setReplayableBusy(false)
+    }
+  }
+
+  const handleDirectLaneTry = async () => {
+    setDirectEvents([])
+    setDirectError(null)
+    setDirectTxHash(null)
+    if (!walletClient || !walletClient.request) {
+      setDirectError('Connect a wallet first.')
+      return
+    }
+    if (!canonicalCswAddress || !isAddress(canonicalCswAddress)) {
+      setDirectError('No canonical CSW.')
+      return
+    }
+    if (!privyEmbeddedEoaAddress || !isAddress(privyEmbeddedEoaAddress)) {
+      setDirectError('No Privy embedded EOA available to install.')
+      return
+    }
+    if (!cswIsConnectedSelf) {
+      setDirectError(
+        'Connect via Base App so the CSW signs for itself (connected address must equal the CSW). Then retry.',
+      )
+      return
+    }
+    setDirectBusy(true)
+    try {
+      const innerCallData = encodeFunctionData({
+        abi: ADD_OWNER_ADDRESS_ABI,
+        functionName: 'addOwnerAddress',
+        args: [privyEmbeddedEoaAddress as `0x${string}`],
+      })
+      const request = walletClient.request as (args: {
+        method: string
+        params?: unknown[]
+      }) => Promise<unknown>
+      const result = await _submitOwnerViaDirectSendTx({
+        walletRequest: request,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData,
+        onTelemetry: (event) => {
+          setDirectEvents((prev) => [
+            ...prev,
+            { ts: Date.now(), step: event.step, detail: event.detail },
+          ])
+        },
+      })
+      setDirectTxHash(result.txHash)
+    } catch (err) {
+      setDirectError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
+    } finally {
+      setDirectBusy(false)
     }
   }
 
@@ -429,6 +497,81 @@ export function AddOwnerPage() {
                     </button>
                   </div>
                 ) : null}
+
+                {/* ── Direct eth_sendTransaction lane (RECOMMENDED — Base App native) ── */}
+                <div className="mt-4 rounded-xl border border-sky-300/30 bg-sky-500/[0.06] p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-sky-300/80">
+                        Recommended · Base App native
+                      </div>
+                      <div className="text-sm font-medium text-zinc-100">
+                        Direct eth_sendTransaction
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={directBusy || installedAsOwner === true || !cswIsConnectedSelf}
+                      onClick={() => void handleDirectLaneTry()}
+                      className="rounded-lg border border-sky-300/40 bg-sky-400/10 px-3 py-1.5 text-[11px] text-sky-50 hover:border-sky-300/70 disabled:opacity-40"
+                    >
+                      {directBusy ? 'Running…' : 'Run'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-zinc-400">
+                    Sends the wrapped{' '}
+                    <code className="font-mono text-zinc-300">executeWithoutChainIdValidation([addOwnerAddress(privyEoa)])</code>{' '}
+                    calldata via a plain{' '}
+                    <code className="font-mono text-zinc-300">eth_sendTransaction</code>{' '}
+                    from the CSW to itself. Base App's native handler signs locally with the
+                    on-device passkey — no popup, no keys.coinbase.com round-trip. This is
+                    the only path that works inside the Base App in-app browser (webviews
+                    block the popup that{' '}
+                    <code className="font-mono text-zinc-300">wallet_prepareCalls</code>{' '}
+                    requires).
+                  </p>
+                  {directTxHash ? (
+                    <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100">
+                      Submitted. tx:{' '}
+                      <a
+                        href={`https://basescan.org/tx/${directTxHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 break-all"
+                      >
+                        {directTxHash}
+                      </a>
+                    </div>
+                  ) : null}
+                  {directError ? (
+                    <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3 text-[11px] text-rose-100 break-all">
+                      {directError}
+                    </div>
+                  ) : null}
+                  {directEvents.length > 0 ? (
+                    <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                        Event log
+                      </div>
+                      <ol className="space-y-2 text-[10px] font-mono text-zinc-300">
+                        {directEvents.map((event, idx) => (
+                          <li
+                            key={`${event.ts}-${idx}`}
+                            className="break-all border-l-2 border-white/10 pl-2"
+                          >
+                            <div className="text-zinc-500">
+                              {new Date(event.ts).toISOString().split('T')[1]?.replace('Z', '')} ·{' '}
+                              <span className="text-zinc-300">{event.step}</span>
+                            </div>
+                            <pre className="mt-1 whitespace-pre-wrap text-zinc-400">
+                              {JSON.stringify(event.detail, jsonReplacer, 2)}
+                            </pre>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+                </div>
 
                 {/* ── Mar 9 replayable-lane diagnostic ── */}
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">

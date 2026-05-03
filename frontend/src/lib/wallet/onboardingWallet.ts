@@ -857,6 +857,69 @@ export type ReplayableLaneTelemetry = {
   detail: Record<string, unknown>
 }
 
+// ── Direct eth_sendTransaction lane ─────────────────────────────────────
+// Why this exists: inside the Base App in-app browser (webview), the
+// Coinbase Wallet SDK route used by `wallet_prepareCalls` /
+// `wallet_sendPreparedCalls` opens a popup window to keys.coinbase.com
+// (SCWSigner.sendRequestToPopup). Webviews block popups, so the request
+// fails with "Failed to fetch RPC request" before the wallet ever sees it.
+//
+// The Mar 9 owner[2] install (tx 0x801b9d4b…) did NOT use
+// `wallet_prepareCalls` — it went through Base App's NATIVE handler for
+// `eth_sendTransaction`, which prompts the on-device passkey directly
+// without keys.coinbase.com.
+//
+// This lane reproduces that path: send the EXACT wrapped calldata
+// (executeWithoutChainIdValidation([addOwnerAddress(target)])) to the CSW
+// itself via a plain `eth_sendTransaction`. Base App detects the self-call,
+// signs locally with the passkey, and submits via its own bundler/relay.
+// No popup required — works inside the webview.
+export type DirectSendLaneTelemetry = {
+  step: 'wrap' | 'send' | 'success' | 'error'
+  detail: Record<string, unknown>
+}
+
+export async function _submitOwnerViaDirectSendTx(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  // sender === target === the canonical CSW for the replayable self-call.
+  csw: `0x${string}`
+  // Inner call: must be one of the canSkipChainIdValidation selectors
+  // (e.g. addOwnerAddress).
+  innerCallData: `0x${string}`
+  onTelemetry?: (event: DirectSendLaneTelemetry) => void
+}): Promise<{ txHash: `0x${string}` }> {
+  const { walletRequest, csw, innerCallData, onTelemetry } = params
+  const wrapped = encodeExecuteWithoutChainIdValidation(innerCallData)
+  onTelemetry?.({
+    step: 'wrap',
+    detail: { csw, wrappedSelector: wrapped.slice(0, 10), wrappedLen: wrapped.length },
+  })
+  onTelemetry?.({
+    step: 'send',
+    detail: { method: 'eth_sendTransaction', from: csw, to: csw, dataLen: wrapped.length },
+  })
+  const txHash = await walletRequest({
+    method: 'eth_sendTransaction',
+    params: [
+      {
+        from: csw,
+        to: csw,
+        data: wrapped,
+        value: '0x0',
+      },
+    ],
+  })
+  if (typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+    onTelemetry?.({
+      step: 'error',
+      detail: { reason: 'eth_sendTransaction did not return a tx hash', got: txHash },
+    })
+    throw new Error('eth_sendTransaction did not return a transaction hash.')
+  }
+  onTelemetry?.({ step: 'success', detail: { txHash } })
+  return { txHash: txHash as `0x${string}` }
+}
+
 export async function _submitOwnerViaReplayablePreparedCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
