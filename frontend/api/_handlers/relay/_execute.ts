@@ -26,8 +26,11 @@ import {
  *    with `executionKind: 'rawCalls'` carrying pre-encoded `handleOps`
  *    calldata. Reference:
  *    https://docs.relay.link/features/gasless-execution
- *  - Relay's `/execute` requires an API key passed in the `x-api-key` header.
- *    We hold that key server-side and never expose it to the browser.
+ *  - Relay's `/execute` endpoint is public; an API key (`x-api-key` header)
+ *    is optional and only raises rate limits. When the env key is set, we
+ *    forward it server-side so it never reaches the browser. When unset, we
+ *    forward the request keyless on Relay's public rate-limit tier — fine for
+ *    diagnostic / one-off testing of the Mar 9 add-owner path.
  *
  * Request body (POST, JSON):
  *   {
@@ -174,10 +177,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const apiKey = resolveRelayApiKey()
   if (!apiKey) {
-    return res.status(503).json({
-      success: false,
-      error: 'Relay API key is not configured on this deployment',
-    } satisfies ApiEnvelope<never>)
+    logger.info('[relay/execute] forwarding without x-api-key (public rate-limit tier)')
   }
 
   const upstreamPayload = {
@@ -192,12 +192,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let upstreamRes: Response
   try {
+    const upstreamHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (apiKey) {
+      upstreamHeaders['x-api-key'] = apiKey
+    }
     upstreamRes = await fetch(RELAY_EXECUTE_URL, {
       method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
+      headers: upstreamHeaders,
       body: JSON.stringify(upstreamPayload),
     })
   } catch (error) {
