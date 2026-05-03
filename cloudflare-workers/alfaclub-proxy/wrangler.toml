@@ -1,0 +1,27 @@
+name = "alfaclub-proxy"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+# Bump observability so you can grep cf-ray in the dashboard.
+[observability]
+enabled = true
+
+# Plain vars (non-secret). Set with `wrangler deploy` or in the dashboard.
+[vars]
+UPSTREAM_API_BASE = "https://api.alfaclub.app"
+# Comma-separated path prefix allowlist. Anything outside this set returns 404.
+# Default: only the two endpoints the bridge actually hits.
+ALLOWED_PATH_PREFIXES = "/api/websocket/room_history_paginate,/api/websocket/update_read_msg"
+# Cache GET responses for at most N seconds at the Worker edge (0 = no cache).
+# Keep at 0 for chat history — staleness would mask new /gmeow messages.
+EDGE_CACHE_TTL_SECONDS = "0"
+
+# SECRETS — set via `wrangler secret put <NAME>`:
+#   PROXY_SHARED_SECRET   — must match Vercel env ALFACLUB_CHAT_API_PROXY_SECRET.
+#                           The bridge sends it in `x-proxy-secret`.
+#                           Reject any request that doesn't carry the right value.
+
+# Optional custom domain. Recommended so you don't expose *.workers.dev.
+# Add via dashboard → Workers → your-worker → Triggers → Custom Domains.
+# Example: relay.4626.fun

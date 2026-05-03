@@ -1142,9 +1142,11 @@ describe('ALFACLUB_CHAT_API_PROXY_URL — optional escape hatch for Cloudflare-b
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
       ALFACLUB_CHAT_API_PROXY_URL: 'https://relay.example.com',
+      ALFACLUB_CHAT_API_PROXY_SECRET: 'shared-secret',
     })
     const flags = readAlfaClubChatBridgeFlags()
     expect(flags.apiProxyUrl).toBe('https://relay.example.com')
+    expect(flags.apiProxySecret).toBe('shared-secret')
   })
 
   it('rejects http:// (cleartext) proxy URLs', () => {
@@ -1374,6 +1376,7 @@ describe('routing-vs-fingerprint separation (PR #492 Codex review)', () => {
       await _fetchRoomHistoryForTests({
         apiBaseUrl: 'https://relay.example.com',
         fingerprintBaseUrl: 'https://api.alfaclub.app',
+        proxySecret: 'shared-secret',
         roomId: '1043',
         jwt: 'fake-jwt-redacted',
         limit: 20,
@@ -1391,6 +1394,27 @@ describe('routing-vs-fingerprint separation (PR #492 Codex review)', () => {
     expect(headers.Referer).toBe('https://alfaclub.app/')
     expect(headers['Sec-Fetch-Site']).toBe('same-site')
     expect(headers.Authorization).toBe('Bearer fake-jwt-redacted')
+    expect(headers['x-proxy-secret']).toBe('shared-secret')
+  })
+
+  it('direct upstream calls do not include x-proxy-secret when proxy secret is unset', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy(captured)
+    try {
+      await _fetchRoomHistoryForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        fingerprintBaseUrl: 'https://api.alfaclub.app',
+        roomId: '1043',
+        jwt: 'fake-jwt-redacted',
+        limit: 20,
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+    const headers = captured[0]?.headers ?? {}
+    expect(headers.Authorization).toBe('Bearer fake-jwt-redacted')
+    expect(headers['x-proxy-secret']).toBeUndefined()
   })
 
   it('proxy routing with custom non-AlfaClub fingerprint base omits the triplet (does not invent alfaclub.app)', async () => {
@@ -1432,6 +1456,7 @@ describe('routing-vs-fingerprint separation (PR #492 Codex review)', () => {
       await _markReadMessageForTests({
         apiBaseUrl: 'https://relay.example.com',
         fingerprintBaseUrl: 'https://api.alfaclub.app',
+        proxySecret: 'shared-secret',
         roomId: '1043',
         jwt: 'fake-jwt-redacted',
         messageDate: 1_777_000_000_000,
@@ -1450,6 +1475,7 @@ describe('routing-vs-fingerprint separation (PR #492 Codex review)', () => {
     expect(headers.Referer).toBe('https://alfaclub.app/')
     expect(headers['Sec-Fetch-Site']).toBe('same-site')
     expect(headers['Content-Type']).toBe('application/json')
+    expect(headers['x-proxy-secret']).toBe('shared-secret')
   })
 
   it('markReadMessage on direct custom non-AlfaClub base omits Origin/Referer/Sec-Fetch-Site', async () => {
@@ -1485,6 +1511,7 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
       ingestJwt: null,
       apiBaseUrl: 'https://api.alfaclub.app',
       apiProxyUrl: null,
+      apiProxySecret: null,
       websocketUrl: 'wss://ws.alfaclub.app',
       groupId: 'alfa-room-main',
       pollIntervalMs: 6_000,

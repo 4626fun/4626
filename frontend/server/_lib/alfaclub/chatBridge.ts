@@ -146,6 +146,11 @@ export type AlfaClubChatBridgeFlags = {
    * the bridge calls `apiBaseUrl` directly.
    */
   apiProxyUrl: string | null
+  /**
+   * Shared secret sent only to the configured proxy. Never forwarded
+   * to AlfaClub directly.
+   */
+  apiProxySecret: string | null
   websocketUrl: string
   groupId: string
   pollIntervalMs: number
@@ -271,6 +276,11 @@ function normalizeApiProxyUrl(raw: string | undefined): string | null {
   }
 }
 
+function normalizeApiProxySecret(raw: string | undefined): string | null {
+  const value = (raw ?? '').trim()
+  return value || null
+}
+
 /**
  * Pick the URL the bridge should hit for an AlfaClub HTTP API call
  * (the *routing* URL — where the request is actually sent).
@@ -367,6 +377,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     ingestJwt: (process.env.ALFACLUB_CHAT_INGEST_JWT ?? '').trim() || null,
     apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
     apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
+    apiProxySecret: normalizeApiProxySecret(process.env.ALFACLUB_CHAT_API_PROXY_SECRET),
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
     groupId: groupIdRaw || `alfaclub-room-${roomId ?? 'unknown'}`,
     pollIntervalMs: parsePositiveInt(
@@ -870,11 +881,14 @@ export function resolveAlfaClubOriginHeaders(apiBaseUrl: string): AlfaClubOrigin
 function buildAlfaClubApiHeaders(params: {
   jwt: string
   fingerprintBaseUrl: string
+  proxySecret?: string | null
 }): Record<string, string> {
+  const proxySecret = (params.proxySecret ?? '').trim()
   return {
     ...ALFACLUB_API_COMMON_BROWSER_HEADERS,
     ...resolveAlfaClubOriginHeaders(params.fingerprintBaseUrl),
     Authorization: `Bearer ${params.jwt}`,
+    ...(proxySecret ? { 'x-proxy-secret': proxySecret } : {}),
   }
 }
 
@@ -982,6 +996,8 @@ async function fetchRoomHistory(params: {
    * callers that don't know about the proxy split.
    */
   fingerprintBaseUrl?: string
+  /** Shared secret for the proxy gate. Omit on direct upstream calls. */
+  proxySecret?: string | null
   roomId: string
   jwt: string
   limit: number
@@ -1001,6 +1017,7 @@ async function fetchRoomHistory(params: {
       headers: buildAlfaClubApiHeaders({
         jwt: params.jwt,
         fingerprintBaseUrl: params.fingerprintBaseUrl ?? params.apiBaseUrl,
+        proxySecret: params.proxySecret,
       }),
       signal: controller.signal,
     })
@@ -1032,6 +1049,8 @@ async function markReadMessage(params: {
    * Defaults to `apiBaseUrl`.
    */
   fingerprintBaseUrl?: string
+  /** Shared secret for the proxy gate. Omit on direct upstream calls. */
+  proxySecret?: string | null
   roomId: string
   jwt: string
   messageDate: number
@@ -1047,6 +1066,7 @@ async function markReadMessage(params: {
         ...buildAlfaClubApiHeaders({
           jwt: params.jwt,
           fingerprintBaseUrl: params.fingerprintBaseUrl ?? params.apiBaseUrl,
+          proxySecret: params.proxySecret,
         }),
         'Content-Type': 'application/json',
       },
@@ -1312,6 +1332,10 @@ function resetSocketBackoff(): void {
 
 function noteSuppressedSocketAttempt(): void {
   recordBridgeSuppressedSocketAttempt()
+}
+
+function resolveAlfaClubProxySecret(flags: AlfaClubChatBridgeFlags): string | null {
+  return flags.apiProxyUrl ? flags.apiProxySecret : null
 }
 
 function flushAuthFailRollup(): void {
@@ -1937,6 +1961,7 @@ async function executeCommandBatch(params: {
       await markReadMessage({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
         fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(params.flags),
+        proxySecret: resolveAlfaClubProxySecret(params.flags),
         roomId: params.roomId,
         jwt: params.jwt,
         messageDate: command.date,
@@ -2021,6 +2046,7 @@ async function runBridgeTick(
     fetchedMessages = await fetchRoomHistory({
       apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
       fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+      proxySecret: resolveAlfaClubProxySecret(flags),
       roomId,
       jwt,
       limit: flags.historyLimit,
@@ -2046,6 +2072,7 @@ async function runBridgeTick(
         fetchedMessages = await fetchRoomHistory({
           apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
           fingerprintBaseUrl: resolveAlfaClubFingerprintBaseUrl(flags),
+          proxySecret: resolveAlfaClubProxySecret(flags),
           roomId,
           jwt: fallbackJwt as string,
           limit: flags.historyLimit,
@@ -2361,6 +2388,7 @@ export function _classifyHistoryErrorForTests(error: unknown): HistoryErrorKind 
 export async function _fetchRoomHistoryForTests(params: {
   apiBaseUrl: string
   fingerprintBaseUrl?: string
+  proxySecret?: string | null
   roomId: string
   jwt: string
   limit: number
@@ -2373,6 +2401,7 @@ export async function _fetchRoomHistoryForTests(params: {
 export async function _markReadMessageForTests(params: {
   apiBaseUrl: string
   fingerprintBaseUrl?: string
+  proxySecret?: string | null
   roomId: string
   jwt: string
   messageDate: number

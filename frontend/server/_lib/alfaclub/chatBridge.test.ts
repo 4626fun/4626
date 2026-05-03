@@ -92,6 +92,7 @@ function makeFlags(overrides: Partial<AlfaClubChatBridgeFlags> = {}): AlfaClubCh
     ingestJwt: null,
     apiBaseUrl: 'https://api.alfaclub.app',
     apiProxyUrl: null,
+    apiProxySecret: null,
     websocketUrl: 'wss://ws.alfaclub.app',
     groupId: 'alfaclub-room-1043',
     pollIntervalMs: 6_000,
