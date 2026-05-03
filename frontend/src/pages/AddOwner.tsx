@@ -13,9 +13,11 @@ import {
   _submitOwnerViaDirectSendTx,
   _submitOwnerViaRelayExecute,
   _submitOwnerViaReplayablePreparedCalls,
+  _submitOwnerViaSelfBuiltUserOp,
   type DirectSendLaneTelemetry,
   type RelayLaneTelemetry,
   type ReplayableLaneTelemetry,
+  type SelfBuiltUserOpLaneTelemetry,
 } from '@/lib/wallet/onboardingWallet'
 
 const ADD_OWNER_ADDRESS_ABI = [
@@ -143,6 +145,23 @@ export function AddOwnerPage() {
   >([])
   const [directError, setDirectError] = useState<string | null>(null)
   const [directTxHash, setDirectTxHash] = useState<string | null>(null)
+
+  // ── Self-built UserOp + Relay lane (Base App webview-native, no popup) ──
+  // Builds the UserOperation client-side (no wallet_prepareCalls needed),
+  // signs the replayable hash with personal_sign (NATIVE wallet method, no
+  // popup), encodes EntryPoint.handleOps, and POSTs to /api/relay/execute.
+  // Relay's solver pays gas. This is the cleanest reproduction of the Mar 9
+  // path that works inside Base App's in-app browser.
+  const [selfBuiltBusy, setSelfBuiltBusy] = useState(false)
+  const [selfBuiltEvents, setSelfBuiltEvents] = useState<
+    Array<{
+      ts: number
+      step: SelfBuiltUserOpLaneTelemetry['step']
+      detail: Record<string, unknown>
+    }>
+  >([])
+  const [selfBuiltError, setSelfBuiltError] = useState<string | null>(null)
+  const [selfBuiltResponse, setSelfBuiltResponse] = useState<unknown>(null)
 
   const preferredConnector = useMemo(() => {
     // Prefer Coinbase Wallet (Base App SDK) since this diagnostic must run
@@ -314,6 +333,59 @@ export function AddOwnerPage() {
       setDirectError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
     } finally {
       setDirectBusy(false)
+    }
+  }
+
+  const handleSelfBuiltLaneTry = async () => {
+    setSelfBuiltEvents([])
+    setSelfBuiltError(null)
+    setSelfBuiltResponse(null)
+    if (!walletClient || !walletClient.request) {
+      setSelfBuiltError('Connect a wallet first.')
+      return
+    }
+    if (!canonicalCswAddress || !isAddress(canonicalCswAddress)) {
+      setSelfBuiltError('No canonical CSW.')
+      return
+    }
+    if (!privyEmbeddedEoaAddress || !isAddress(privyEmbeddedEoaAddress)) {
+      setSelfBuiltError('No Privy embedded EOA available to install.')
+      return
+    }
+    if (!cswIsConnectedSelf) {
+      setSelfBuiltError(
+        'Connect via Base App so the CSW signs for itself (connected address must equal the CSW). Then retry.',
+      )
+      return
+    }
+    setSelfBuiltBusy(true)
+    try {
+      const innerCallData = encodeFunctionData({
+        abi: ADD_OWNER_ADDRESS_ABI,
+        functionName: 'addOwnerAddress',
+        args: [privyEmbeddedEoaAddress as `0x${string}`],
+      })
+      const request = walletClient.request as (args: {
+        method: string
+        params?: unknown[]
+      }) => Promise<unknown>
+      const result = await _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: request,
+        chainId: 8453,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData,
+        onTelemetry: (event) => {
+          setSelfBuiltEvents((prev) => [
+            ...prev,
+            { ts: Date.now(), step: event.step, detail: event.detail },
+          ])
+        },
+      })
+      setSelfBuiltResponse(result.relayResponse)
+    } catch (err) {
+      setSelfBuiltError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
+    } finally {
+      setSelfBuiltBusy(false)
     }
   }
 
@@ -498,12 +570,89 @@ export function AddOwnerPage() {
                   </div>
                 ) : null}
 
-                {/* ── Direct eth_sendTransaction lane (RECOMMENDED — Base App native) ── */}
-                <div className="mt-4 rounded-xl border border-sky-300/30 bg-sky-500/[0.06] p-4 space-y-3">
+                {/* ── Self-built UserOp + Relay lane (BEST PATH — Base App native, no popup) ── */}
+                <div className="mt-4 rounded-xl border border-emerald-300/40 bg-emerald-500/[0.07] p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-sky-300/80">
-                        Recommended · Base App native
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/90">
+                        BEST PATH · No popup, no eth_sendTransaction revert
+                      </div>
+                      <div className="text-sm font-medium text-zinc-100">
+                        Self-built UserOp + Relay
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={
+                        selfBuiltBusy || installedAsOwner === true || !cswIsConnectedSelf
+                      }
+                      onClick={() => void handleSelfBuiltLaneTry()}
+                      className="rounded-lg border border-emerald-300/50 bg-emerald-400/15 px-3 py-1.5 text-[11px] text-emerald-50 hover:border-emerald-300/80 disabled:opacity-40"
+                    >
+                      {selfBuiltBusy ? 'Running…' : 'Run'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-zinc-400">
+                    Builds the UserOperation client-side (no{' '}
+                    <code className="font-mono text-zinc-300">wallet_prepareCalls</code>),
+                    reads the replayable nonce from{' '}
+                    <code className="font-mono text-zinc-300">EntryPoint.getNonce(csw, 8453)</code>,
+                    computes{' '}
+                    <code className="font-mono text-zinc-300">getUserOpHashWithoutChainId</code>{' '}
+                    locally, asks the wallet for ONE{' '}
+                    <code className="font-mono text-zinc-300">personal_sign</code> (a NATIVE
+                    method — no keys.coinbase.com popup), encodes{' '}
+                    <code className="font-mono text-zinc-300">EntryPoint.handleOps</code>,
+                    and POSTs to{' '}
+                    <code className="font-mono text-zinc-300">/api/relay/execute</code>.
+                    Relay's solver submits + pays gas — same shape as Mar 9.
+                  </p>
+                  {selfBuiltResponse ? (
+                    <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200 mb-2">
+                        Relay accepted
+                      </div>
+                      <pre className="text-[10px] font-mono text-emerald-50 break-all whitespace-pre-wrap">
+                        {JSON.stringify(selfBuiltResponse, jsonReplacer, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                  {selfBuiltError ? (
+                    <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3 text-[11px] text-rose-100 break-all">
+                      {selfBuiltError}
+                    </div>
+                  ) : null}
+                  {selfBuiltEvents.length > 0 ? (
+                    <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                        Event log
+                      </div>
+                      <ol className="space-y-2 text-[10px] font-mono text-zinc-300">
+                        {selfBuiltEvents.map((event, idx) => (
+                          <li
+                            key={`${event.ts}-${idx}`}
+                            className="break-all border-l-2 border-white/10 pl-2"
+                          >
+                            <div className="text-zinc-500">
+                              {new Date(event.ts).toISOString().split('T')[1]?.replace('Z', '')}{' '}
+                              · <span className="text-zinc-300">{event.step}</span>
+                            </div>
+                            <pre className="mt-1 whitespace-pre-wrap text-zinc-400">
+                              {JSON.stringify(event.detail, jsonReplacer, 2)}
+                            </pre>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* ── Direct eth_sendTransaction lane (RECOMMENDED — Base App native) ── */}
+                <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-amber-300/70">
+                        Diagnostic only · Reverts on-chain (Unauthorized)
                       </div>
                       <div className="text-sm font-medium text-zinc-100">
                         Direct eth_sendTransaction

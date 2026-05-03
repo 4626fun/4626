@@ -4,10 +4,14 @@ import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import {
+  createPublicClient,
   decodeAbiParameters,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
+  http,
   isAddress,
+  keccak256,
   recoverAddress,
   recoverMessageAddress,
 } from 'viem'
@@ -2668,5 +2672,309 @@ function serializeUserOpForLog(op: V06UserOpFields): Record<string, string> {
     maxPriorityFeePerGas: `0x${op.maxPriorityFeePerGas.toString(16)}`,
     paymasterAndData: op.paymasterAndData,
     signature: op.signature,
+  }
+}
+
+// ── Self-built UserOp + Relay lane (Base App webview-native) ──────────
+// Why this exists: every prior lane on /add-owner relies on
+// `wallet_prepareCalls`, which (in the Coinbase Wallet SDK) opens a popup
+// to keys.coinbase.com for the prepare/preview step. Webviews block that
+// popup, so inside Base App's in-app browser the request fails with
+// "Failed to fetch RPC request" before the wallet ever sees it.
+//
+// `personal_sign`, in contrast, is a NATIVE wallet method — Base App
+// handles it locally with the on-device passkey, no popup required.
+//
+// This lane reproduces the Mar 9 owner[2] install (tx 0x801b9d4b…) WITHOUT
+// any Coinbase-only prepare step:
+//   1. Read `EntryPoint.getNonce(csw, REPLAYABLE_NONCE_KEY=8453)` over a
+//      public RPC.
+//   2. Build the UserOperation v0.6 client-side with the EXACT Mar 9 shape
+//      (callData = executeWithoutChainIdValidation, gas = 0,
+//      paymasterAndData = "" — Relay's solver pays gas).
+//   3. Compute `getUserOpHashWithoutChainId(userOp) =
+//        keccak256(abi.encode(UserOperationLib.hash(userOp), entryPoint))`
+//      — the canonical CSW replayable hash.
+//   4. `personal_sign(hashToSign, csw)` — Base App's native passkey path
+//      returns a SignatureWrapper-shaped sig (the same format Mar 9 had on
+//      chain).
+//   5. Splice the signature into the UserOp, encode `EntryPoint.handleOps`,
+//      POST to /api/relay/execute. Relay's solver submits + pays gas.
+//
+// This is the ONLY known path that completes inside Base App's webview for
+// a CSW self-auth session.
+
+const REPLAYABLE_NONCE_KEY = 8453n
+
+type SelfBuiltUserOpFields = V06UserOpFields
+
+// UserOperationLib.hash(userOp) — the v0.6 packed-and-hashed representation
+// WITHOUT chainId. Matches Coinbase's `getUserOpHashWithoutChainId`.
+function hashUserOpV06WithoutChainId(op: SelfBuiltUserOpFields): `0x${string}` {
+  // packed = abi.encode(
+  //   sender, nonce, keccak(initCode), keccak(callData),
+  //   callGasLimit, verificationGasLimit, preVerificationGas,
+  //   maxFeePerGas, maxPriorityFeePerGas, keccak(paymasterAndData)
+  // )
+  const packed = encodeAbiParameters(
+    [
+      { type: 'address' },
+      { type: 'uint256' },
+      { type: 'bytes32' },
+      { type: 'bytes32' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'bytes32' },
+    ],
+    [
+      op.sender,
+      op.nonce,
+      keccak256(op.initCode),
+      keccak256(op.callData),
+      op.callGasLimit,
+      op.verificationGasLimit,
+      op.preVerificationGas,
+      op.maxFeePerGas,
+      op.maxPriorityFeePerGas,
+      keccak256(op.paymasterAndData),
+    ],
+  )
+  return keccak256(packed)
+}
+
+// The CSW's getUserOpHashWithoutChainId — keccak(abi.encode(opHash, entryPoint)).
+function getUserOpHashWithoutChainIdLocal(
+  op: SelfBuiltUserOpFields,
+  entryPoint: `0x${string}`,
+): `0x${string}` {
+  const opHash = hashUserOpV06WithoutChainId(op)
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: 'bytes32' }, { type: 'address' }],
+      [opHash, entryPoint],
+    ),
+  )
+}
+
+// Read EntryPoint v0.6 nonce(sender, key) via public RPC.
+const ENTRY_POINT_V06_GET_NONCE_ABI = [
+  {
+    type: 'function',
+    name: 'getNonce',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'sender', type: 'address' },
+      { name: 'key', type: 'uint192' },
+    ],
+    outputs: [{ name: 'nonce', type: 'uint256' }],
+  },
+] as const
+
+async function readReplayableNonce(
+  csw: `0x${string}`,
+  rpcUrl: string,
+): Promise<bigint> {
+  const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
+  const nonce = await client.readContract({
+    address: ENTRY_POINT_V06_ADDRESS,
+    abi: ENTRY_POINT_V06_GET_NONCE_ABI,
+    functionName: 'getNonce',
+    args: [csw, REPLAYABLE_NONCE_KEY],
+  })
+  return nonce as bigint
+}
+
+export type SelfBuiltUserOpLaneTelemetry = {
+  step:
+    | 'wrap'
+    | 'read_nonce'
+    | 'build_userop'
+    | 'compute_hash'
+    | 'sign'
+    | 'splice'
+    | 'encode_handle_ops'
+    | 'submit_relay'
+    | 'success'
+    | 'error'
+  detail: Record<string, unknown>
+}
+
+/**
+ * Self-built UserOp + Relay /execute lane. Bypasses wallet_prepareCalls
+ * entirely — only uses personal_sign on the wallet side.
+ *
+ * Inputs mirror _submitOwnerViaRelayExecute except:
+ *   - we DON'T need wallet_prepareCalls / wallet_sendPreparedCalls
+ *   - we DO need a public RPC URL to read the EntryPoint nonce
+ */
+export async function _submitOwnerViaSelfBuiltUserOp(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  /** Default: https://mainnet.base.org */
+  rpcUrl?: string
+  /** Default: csw (matches Mar 9). */
+  beneficiary?: `0x${string}`
+  onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
+}): Promise<{
+  userOp: SelfBuiltUserOpFields
+  hashSigned: `0x${string}`
+  signature: `0x${string}`
+  handleOpsCalldata: `0x${string}`
+  relayResponse: unknown
+}> {
+  const emit = (e: SelfBuiltUserOpLaneTelemetry) => {
+    try { params.onTelemetry?.(e) } catch { /* swallow */ }
+  }
+
+  const innerSelector = params.innerCallData.slice(0, 10).toLowerCase()
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({
+    step: 'wrap',
+    detail: { innerSelector, innerCallData: params.innerCallData, wrappedData },
+  })
+
+  // Step 1: read replayable nonce off-chain.
+  const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
+  let nonce: bigint
+  try {
+    nonce = await readReplayableNonce(params.csw, rpcUrl)
+  } catch (err) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'read_nonce',
+        error: err instanceof Error ? err.message : String(err ?? ''),
+      },
+    })
+    throw err
+  }
+  emit({ step: 'read_nonce', detail: { nonce: `0x${nonce.toString(16)}` } })
+
+  // Step 2: build userOp with Mar 9 shape (gas = 0, paymasterAndData = "").
+  // The on-chain Mar 9 trace had: callGasLimit = verificationGasLimit =
+  // preVerificationGas = maxFeePerGas = maxPriorityFeePerGas = 0,
+  // initCode = "0x", paymasterAndData = "0x". The bundler/Relay solver
+  // takes care of gas accounting on its side (gasless execution).
+  const userOp: SelfBuiltUserOpFields = {
+    sender: params.csw,
+    nonce,
+    initCode: '0x',
+    callData: wrappedData,
+    callGasLimit: 0n,
+    verificationGasLimit: 0n,
+    preVerificationGas: 0n,
+    maxFeePerGas: 0n,
+    maxPriorityFeePerGas: 0n,
+    paymasterAndData: '0x',
+    signature: '0x', // filled in step 5
+  }
+  emit({ step: 'build_userop', detail: { userOp: serializeUserOpForLog(userOp) } })
+
+  // Step 3: compute getUserOpHashWithoutChainId locally.
+  const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
+  emit({ step: 'compute_hash', detail: { hashToSign } })
+
+  // Step 4: personal_sign(hash, csw) — NATIVE wallet method, no popup.
+  // For a CSW session backed by a passkey, Base App returns the bytes that
+  // ARE the SignatureWrapper{ownerIndex, WebAuthnAuth} — exactly what the
+  // Mar 9 on-chain UserOp had as its signature.
+  let signature: `0x${string}`
+  try {
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.csw],
+    })) as `0x${string}`
+  } catch (signError) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        error: signError instanceof Error ? signError.message : String(signError ?? ''),
+      },
+    })
+    throw signError
+  }
+  if (!signature || !signature.startsWith('0x')) {
+    emit({ step: 'error', detail: { stage: 'sign', signature } })
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  emit({
+    step: 'sign',
+    detail: {
+      hashSigned: hashToSign,
+      signature,
+      signatureLengthBytes: (signature.length - 2) / 2,
+    },
+  })
+
+  // Step 5: splice the signature in, encode handleOps, submit to Relay.
+  const signedUserOp: SelfBuiltUserOpFields = { ...userOp, signature }
+  emit({
+    step: 'splice',
+    detail: { signedUserOp: serializeUserOpForLog(signedUserOp) },
+  })
+
+  const beneficiary = params.beneficiary ?? params.csw
+  const handleOpsCalldata = encodeHandleOpsV06(signedUserOp, beneficiary)
+  emit({
+    step: 'encode_handle_ops',
+    detail: {
+      entryPointAddress: ENTRY_POINT_V06_ADDRESS,
+      beneficiary,
+      handleOpsCalldata,
+      handleOpsLengthBytes: (handleOpsCalldata.length - 2) / 2,
+    },
+  })
+
+  // Step 6: POST to /api/relay/execute.
+  const relayBody = {
+    chainId: params.chainId,
+    to: ENTRY_POINT_V06_ADDRESS,
+    data: handleOpsCalldata,
+    value: '0',
+  }
+  emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
+
+  let relayResponse: unknown
+  try {
+    const fetchResult = await apiFetch('/api/relay/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(relayBody),
+    })
+    if (!fetchResult.ok) {
+      const errMessage = await resolveApiErrorMessage(
+        fetchResult,
+        'Relay /execute proxy failed',
+      )
+      emit({
+        step: 'error',
+        detail: { stage: 'submit_relay', status: fetchResult.status, message: errMessage },
+      })
+      throw new Error(errMessage)
+    }
+    relayResponse = await fetchResult.json()
+  } catch (err) {
+    if (!(err instanceof Error)) throw new Error(String(err ?? ''))
+    throw err
+  }
+
+  emit({ step: 'success', detail: { relayResponse } })
+  return {
+    userOp: signedUserOp,
+    hashSigned: hashToSign,
+    signature,
+    handleOpsCalldata,
+    relayResponse,
   }
 }
