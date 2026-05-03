@@ -795,6 +795,262 @@ export async function _submitOwnerViaPreparedCalls(params: {
   throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
+// ── Replayable-lane prepared-calls submission ───────────────────────────
+// The Mar 9 2026 owner[2] install (tx 0x801b9d4b…) used the
+// `executeWithoutChainIdValidation` selector (0x2c2abd1e) with
+// REPLAYABLE_NONCE_KEY=8453.  The on-chain trace shows the WebAuthn challenge
+// equalled `getUserOpHashWithoutChainId(userOp)` —
+// keccak256(abi.encode(UserOperationLib.hash(userOp), entryPoint())) — with
+// no replaySafeHash wrap and no chainId in the hash.
+//
+// CoinbaseSmartWallet.validateUserOp branches on bytes4(callData) ==
+// this.executeWithoutChainIdValidation.selector to recompute the userOpHash
+// without chainId.  This means: if we ask `wallet_prepareCalls` to build a
+// UserOp where calldata IS already `executeWithoutChainIdValidation([...])`
+// (instead of asking the wallet to wrap a single inner call for us), the
+// wallet's RPC must use REPLAYABLE_NONCE_KEY and return the matching
+// chain-id-free hash for signing.  That's the exact shape signed by the
+// passkey on Mar 9.
+//
+// This helper differs from `_submitOwnerViaPreparedCalls` only in that it
+// pre-wraps the inner call(s).  The inner selector MUST be one of the
+// `canSkipChainIdValidation` whitelist (addOwnerAddress, addOwnerPublicKey,
+// removeOwnerAtIndex, removeLastOwner, upgradeToAndCall) or the contract
+// reverts with SelectorNotAllowed.
+// Selector list mirrors CoinbaseSmartWallet.canSkipChainIdValidation() exactly.
+// Verified via keccak against the live signatures in coinbase/smart-wallet@main
+// (src/MultiOwnable.sol).
+const REPLAYABLE_INNER_SELECTORS = new Set<string>([
+  '0x0f0f3f24', // addOwnerAddress(address)
+  '0x29565e3b', // addOwnerPublicKey(bytes32,bytes32)
+  '0x89625b57', // removeOwnerAtIndex(uint256,bytes)
+  '0xb8197367', // removeLastOwner(uint256,bytes)
+  '0x4f1ef286', // upgradeToAndCall(address,bytes)
+])
+
+/**
+ * Encode `executeWithoutChainIdValidation(bytes[] calls)` with a single inner
+ * call.  Used to force the replayable-lane signing path on `wallet_prepareCalls`.
+ */
+export function encodeExecuteWithoutChainIdValidation(
+  innerCallData: `0x${string}`,
+): `0x${string}` {
+  // selector for executeWithoutChainIdValidation(bytes[]) is 0x2c2abd1e
+  // We use viem's encodeFunctionData via an ABI fragment for clarity.
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'executeWithoutChainIdValidation',
+        inputs: [{ name: 'calls', type: 'bytes[]' }],
+        outputs: [],
+        stateMutability: 'payable',
+      },
+    ] as const,
+    functionName: 'executeWithoutChainIdValidation',
+    args: [[innerCallData]],
+  })
+}
+
+export type ReplayableLaneTelemetry = {
+  step: 'wrap' | 'prepare' | 'sign' | 'send' | 'poll' | 'success' | 'error'
+  detail: Record<string, unknown>
+}
+
+export async function _submitOwnerViaReplayablePreparedCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  // sender === target === the canonical CSW for the replayable self-call.
+  csw: `0x${string}`
+  // Inner call: must be one of the canSkipChainIdValidation selectors.
+  innerCallData: `0x${string}`
+  paymasterUrl: string | null
+  onTelemetry?: (event: ReplayableLaneTelemetry) => void
+}): Promise<{
+  txHash: `0x${string}` | null
+  callsId: string | null
+  signatureRequestHash: `0x${string}` | null
+  hashSigned: `0x${string}` | null
+  signature: `0x${string}` | null
+  preparedUserOp: unknown
+  rawCallsStatus: unknown
+}> {
+  const emit = (e: ReplayableLaneTelemetry) => {
+    try { params.onTelemetry?.(e) } catch { /* swallow */ }
+  }
+  const innerSelector = (params.innerCallData.slice(0, 10).toLowerCase()) as string
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  const capabilities: Record<string, unknown> = {}
+  if (params.paymasterUrl) {
+    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
+      'https://api.developer.coinbase.com/',
+      'https://api.cdp.coinbase.com/',
+    )
+    capabilities.paymasterService = { url: paymasterUrlStr }
+  }
+  const prepareCallsPayload: Record<string, unknown> = {
+    version: '1.0',
+    from: params.csw,
+    chainId: chainIdHex,
+    calls: [{ to: params.csw, data: wrappedData, value: '0x0' }],
+    capabilities,
+  }
+  emit({ step: 'prepare', detail: { prepareCallsPayload } })
+
+  const prepareResult = (await params.walletRequest({
+    method: 'wallet_prepareCalls',
+    params: [prepareCallsPayload],
+  })) as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+    capabilities?: Record<string, unknown>
+  } | null
+
+  if (!prepareResult?.signatureRequest?.hash) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  }
+  if (!prepareResult.userOp) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a userOp.')
+  }
+
+  const hashToSign = unwrapDoubleHexEncodedHash(
+    prepareResult.signatureRequest.hash as `0x${string}`,
+  )
+  emit({
+    step: 'prepare',
+    detail: {
+      stage: 'prepared',
+      signatureRequestHash: prepareResult.signatureRequest.hash,
+      hashToSign,
+      preparedUserOp: prepareResult.userOp,
+    },
+  })
+
+  // personal_sign(hash, sender=csw) — the popup must sign with the passkey
+  // (or whatever owner credential it has) against this exact hash.
+  let signature: `0x${string}` | null = null
+  try {
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.csw],
+    })) as `0x${string}`
+  } catch (signError) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        error: signError instanceof Error ? signError.message : String(signError ?? ''),
+      },
+    })
+    throw signError
+  }
+  if (!signature || !signature.startsWith('0x')) {
+    emit({ step: 'error', detail: { stage: 'sign', signature } })
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  emit({
+    step: 'sign',
+    detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
+  })
+
+  // Pass the signature through wallet_sendPreparedCalls.  buildSendPreparedCalls-
+  // SignaturePayload picks the right type (secp256k1 / webauthn) from the shape.
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.csw,
+    signature,
+  })
+
+  const sendResult = (await params.walletRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [{
+      version: '1.0',
+      type: prepareResult.type ?? 'user-operation-v06',
+      data: prepareResult.userOp,
+      chainId: prepareResult.chainId ?? chainIdHex,
+      signature: signaturePayload,
+    }],
+  })) as unknown
+
+  const callsId =
+    typeof sendResult === 'string'
+      ? sendResult
+      : Array.isArray(sendResult) && typeof sendResult[0] === 'string'
+        ? sendResult[0]
+        : sendResult && typeof sendResult === 'object' && typeof (sendResult as { id?: unknown }).id === 'string'
+          ? String((sendResult as { id: string }).id)
+          : ''
+  emit({ step: 'send', detail: { sendResult, callsId } })
+
+  if (!callsId) {
+    return {
+      txHash: null,
+      callsId: null,
+      signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+      hashSigned: hashToSign,
+      signature,
+      preparedUserOp: prepareResult.userOp,
+      rawCallsStatus: sendResult,
+    }
+  }
+
+  const startedAt = Date.now()
+  let lastStatus: unknown = null
+  while (Date.now() - startedAt < PREPARED_CALLS_STATUS_TIMEOUT_MS) {
+    const statusResult = await params.walletRequest({
+      method: 'wallet_getCallsStatus',
+      params: [callsId],
+    })
+    lastStatus = statusResult
+    const statusCode = Number((statusResult as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((statusResult as { receipts?: unknown[] } | null)?.receipts)
+      ? ((statusResult as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((r) => String((r as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    emit({ step: 'poll', detail: { statusCode, hasReceipt: !!receiptHash } })
+    if (Number.isFinite(statusCode) && statusCode >= 200 && statusCode < 300) {
+      emit({ step: 'success', detail: { txHash: receiptHash, statusCode } })
+      return {
+        txHash: receiptHash as `0x${string}` | null,
+        callsId,
+        signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+        hashSigned: hashToSign,
+        signature,
+        preparedUserOp: prepareResult.userOp,
+        rawCallsStatus: statusResult,
+      }
+    }
+    if (Number.isFinite(statusCode) && statusCode >= 300) {
+      emit({ step: 'error', detail: { stage: 'poll', statusCode, statusResult } })
+      throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+    }
+    await delay(PREPARED_CALLS_STATUS_POLL_MS)
+  }
+  return {
+    txHash: null,
+    callsId,
+    signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+    hashSigned: hashToSign,
+    signature,
+    preparedUserOp: prepareResult.userOp,
+    rawCallsStatus: lastStatus,
+  }
+}
+
 // ── EOA-owner submission lane ─────────────────────────────────────────
 // Bypass the Base App popup by asking a connected EOA wallet that IS in the
 // CSW's on-chain owner array to sign the userOpHash directly. The bundler's

@@ -1,10 +1,26 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-
+import { encodeFunctionData, isAddress } from 'viem'
+import { useWalletClient } from 'wagmi'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import {
+  _submitOwnerViaReplayablePreparedCalls,
+  type ReplayableLaneTelemetry,
+} from '@/lib/wallet/onboardingWallet'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+
+const ADD_OWNER_ADDRESS_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+] as const
 
 /**
  * `/add-owner` — single-purpose surface for installing the Privy embedded EOA
@@ -27,6 +43,8 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
  * Coinbase `wallet_prepareCalls` / `wallet_sendPreparedCalls`. No EOA-owner
  * private key is required.
  */
+const jsonReplacer = (_k: string, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)
+
 export function AddOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/add-owner' })
   const {
@@ -68,6 +86,91 @@ export function AddOwnerPage() {
 
   const handleInstall = async () => {
     await onEnable4626Signing()
+  }
+
+  // ── Mar 9 replayable-lane diagnostic ─────────────────────────────────
+  // Tries the exact signing path proved by tx 0x801b9d4b… — wraps the call
+  // in `executeWithoutChainIdValidation` so Coinbase's RPC must use
+  // REPLAYABLE_NONCE_KEY=8453 and return `getUserOpHashWithoutChainId` for
+  // signing.  All steps are surfaced in the event log so we can see exactly
+  // where (and if) it fails.
+  const { data: walletClient } = useWalletClient()
+  const [replayableBusy, setReplayableBusy] = useState(false)
+  const [replayableEvents, setReplayableEvents] = useState<
+    Array<{ ts: number; step: ReplayableLaneTelemetry['step']; detail: Record<string, unknown> }>
+  >([])
+  const [replayableError, setReplayableError] = useState<string | null>(null)
+  const [replayableTxHash, setReplayableTxHash] = useState<string | null>(null)
+
+  const cswIsConnectedSelf = useMemo(() => {
+    const connected = walletClient?.account?.address?.toLowerCase()
+    return Boolean(
+      canonicalCswAddress &&
+        connected &&
+        connected === canonicalCswAddress.toLowerCase(),
+    )
+  }, [walletClient, canonicalCswAddress])
+
+  const handleReplayableLaneTry = async () => {
+    setReplayableEvents([])
+    setReplayableError(null)
+    setReplayableTxHash(null)
+    if (!walletClient || !walletClient.request) {
+      setReplayableError('Connect a wallet first.')
+      return
+    }
+    if (!canonicalCswAddress || !isAddress(canonicalCswAddress)) {
+      setReplayableError('No canonical CSW.')
+      return
+    }
+    if (!privyEmbeddedEoaAddress || !isAddress(privyEmbeddedEoaAddress)) {
+      setReplayableError('No Privy embedded EOA available to install.')
+      return
+    }
+    if (!cswIsConnectedSelf) {
+      setReplayableError(
+        'Connect via Base App so the CSW signs for itself (connected address must equal the CSW). Then retry.',
+      )
+      return
+    }
+    setReplayableBusy(true)
+    try {
+      const innerCallData = encodeFunctionData({
+        abi: ADD_OWNER_ADDRESS_ABI,
+        functionName: 'addOwnerAddress',
+        args: [privyEmbeddedEoaAddress as `0x${string}`],
+      })
+      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      const request = walletClient.request as (args: {
+        method: string
+        params?: unknown[]
+      }) => Promise<unknown>
+      const result = await _submitOwnerViaReplayablePreparedCalls({
+        walletRequest: request,
+        chainId: 8453,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData,
+        paymasterUrl,
+        onTelemetry: (event) => {
+          setReplayableEvents((prev) => [
+            ...prev,
+            { ts: Date.now(), step: event.step, detail: event.detail },
+          ])
+        },
+      })
+      if (result.txHash) {
+        setReplayableTxHash(result.txHash)
+      } else {
+        setReplayableError(
+          'Submission completed but no on-chain tx hash yet. Check the event log.',
+        )
+      }
+    } catch (err) {
+      setReplayableError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
+    } finally {
+      setReplayableBusy(false)
+    }
   }
 
   return (
@@ -196,6 +299,88 @@ export function AddOwnerPage() {
                     </button>
                   </div>
                 ) : null}
+
+                {/* ── Mar 9 replayable-lane diagnostic ── */}
+                <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Diagnostic
+                      </div>
+                      <div className="text-sm font-medium text-zinc-200">
+                        Try Mar 9 replayable lane
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={replayableBusy || installedAsOwner === true || !cswIsConnectedSelf}
+                      onClick={() => void handleReplayableLaneTry()}
+                      className="rounded-lg border border-white/15 px-3 py-1.5 text-[11px] text-zinc-100 hover:border-white/30 disabled:opacity-40"
+                    >
+                      {replayableBusy ? 'Running…' : 'Run'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-zinc-500">
+                    Wraps the inner call in{' '}
+                    <code className="font-mono text-zinc-400">executeWithoutChainIdValidation</code>{' '}
+                    and submits via wallet_prepareCalls / wallet_sendPreparedCalls. Forces
+                    REPLAYABLE_NONCE_KEY=8453 so the wallet must sign{' '}
+                    <code className="font-mono text-zinc-400">getUserOpHashWithoutChainId</code>{' '}
+                    — the same hash signed by the passkey on Mar 9 (tx 0x801b9d4b…).
+                  </p>
+                  {!cswIsConnectedSelf ? (
+                    <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-100">
+                      Connect via Base App so the CSW signs for itself
+                      (connected address must equal the canonical CSW). Currently
+                      connected:{' '}
+                      <span className="font-mono">
+                        {walletClient?.account?.address ?? 'none'}
+                      </span>
+                      .
+                    </div>
+                  ) : null}
+                  {replayableTxHash ? (
+                    <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100">
+                      Submitted. tx:{' '}
+                      <a
+                        href={`https://basescan.org/tx/${replayableTxHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline underline-offset-2 break-all"
+                      >
+                        {replayableTxHash}
+                      </a>
+                    </div>
+                  ) : null}
+                  {replayableError ? (
+                    <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3 text-[11px] text-rose-100 break-all">
+                      {replayableError}
+                    </div>
+                  ) : null}
+                  {replayableEvents.length > 0 ? (
+                    <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                        Event log
+                      </div>
+                      <ol className="space-y-2 text-[10px] font-mono text-zinc-300">
+                        {replayableEvents.map((event, idx) => (
+                          <li
+                            key={`${event.ts}-${idx}`}
+                            className="break-all border-l-2 border-white/10 pl-2"
+                          >
+                            <div className="text-zinc-500">
+                              {new Date(event.ts).toISOString().split('T')[1]?.replace('Z', '')} ·{' '}
+                              <span className="text-zinc-300">{event.step}</span>
+                            </div>
+                            <pre className="mt-1 whitespace-pre-wrap text-zinc-400">
+                              {JSON.stringify(event.detail, jsonReplacer, 2)}
+                            </pre>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+                </div>
               </>
             )}
           </div>
