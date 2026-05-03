@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { encodeFunctionData, isAddress } from 'viem'
-import { useWalletClient } from 'wagmi'
+import { useConnect, useDisconnect, useWalletClient } from 'wagmi'
+import { base } from 'wagmi/chains'
+
+import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
@@ -95,12 +98,52 @@ export function AddOwnerPage() {
   // signing.  All steps are surfaced in the event log so we can see exactly
   // where (and if) it fails.
   const { data: walletClient } = useWalletClient()
+  const { connectAsync, connectors, isPending: isConnectPending } = useConnect()
+  const { disconnectAsync, isPending: isDisconnectPending } = useDisconnect()
+  const [replayableConnectError, setReplayableConnectError] = useState<string | null>(null)
   const [replayableBusy, setReplayableBusy] = useState(false)
   const [replayableEvents, setReplayableEvents] = useState<
     Array<{ ts: number; step: ReplayableLaneTelemetry['step']; detail: Record<string, unknown> }>
   >([])
   const [replayableError, setReplayableError] = useState<string | null>(null)
   const [replayableTxHash, setReplayableTxHash] = useState<string | null>(null)
+
+  const preferredConnector = useMemo(() => {
+    // Prefer Coinbase Wallet (Base App SDK) since this diagnostic must run
+    // inside the Base App dapp browser. Fall back to whatever the shared
+    // selector picks (e.g. injected) for normal-browser smoke tests.
+    const baseFirst = connectors.find((c) =>
+      ['coinbaseWalletSDK', 'coinbaseWallet'].includes(String(c.id)),
+    )
+    if (baseFirst) return baseFirst
+    return selectPreferredWalletConnector(connectors)
+  }, [connectors])
+
+  const handleReplayableConnect = async () => {
+    setReplayableConnectError(null)
+    if (!preferredConnector) {
+      setReplayableConnectError('No wallet connector available in this context.')
+      return
+    }
+    try {
+      await connectAsync({ connector: preferredConnector, chainId: base.id })
+    } catch (err) {
+      setReplayableConnectError(
+        err instanceof Error ? err.message : 'Failed to connect wallet.',
+      )
+    }
+  }
+
+  const handleReplayableDisconnect = async () => {
+    setReplayableConnectError(null)
+    try {
+      await disconnectAsync()
+    } catch (err) {
+      setReplayableConnectError(
+        err instanceof Error ? err.message : 'Failed to disconnect.',
+      )
+    }
+  }
 
   const cswIsConnectedSelf = useMemo(() => {
     const connected = walletClient?.account?.address?.toLowerCase()
@@ -329,14 +372,41 @@ export function AddOwnerPage() {
                     — the same hash signed by the passkey on Mar 9 (tx 0x801b9d4b…).
                   </p>
                   {!cswIsConnectedSelf ? (
-                    <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-100">
-                      Connect via Base App so the CSW signs for itself
-                      (connected address must equal the canonical CSW). Currently
-                      connected:{' '}
-                      <span className="font-mono">
-                        {walletClient?.account?.address ?? 'none'}
-                      </span>
-                      .
+                    <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-100 space-y-2">
+                      <div>
+                        Connect via Base App so the CSW signs for itself
+                        (connected address must equal the canonical CSW). Currently
+                        connected:{' '}
+                        <span className="font-mono">
+                          {walletClient?.account?.address ?? 'none'}
+                        </span>
+                        .
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          disabled={isConnectPending || replayableBusy}
+                          onClick={() => void handleReplayableConnect()}
+                          className="rounded-md border border-amber-300/40 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-50 hover:border-amber-300/70 disabled:opacity-40"
+                        >
+                          {isConnectPending
+                            ? 'Opening…'
+                            : `Connect ${preferredConnector?.name ?? 'wallet'}`}
+                        </button>
+                        {walletClient?.account?.address ? (
+                          <button
+                            type="button"
+                            disabled={isDisconnectPending || replayableBusy}
+                            onClick={() => void handleReplayableDisconnect()}
+                            className="rounded-md border border-white/15 bg-black/30 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/30 disabled:opacity-40"
+                          >
+                            {isDisconnectPending ? 'Disconnecting…' : 'Disconnect'}
+                          </button>
+                        ) : null}
+                      </div>
+                      {replayableConnectError ? (
+                        <div className="text-rose-200 break-all">{replayableConnectError}</div>
+                      ) : null}
                     </div>
                   ) : null}
                   {replayableTxHash ? (
