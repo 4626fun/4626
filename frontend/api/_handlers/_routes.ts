@@ -117,6 +117,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),
   'admin/arch-b/sub-account/provision': () =>
     import('./admin/arch-b/_subAccountProvision.js'),
+  'admin/recover-stranded-csw/resolve-owner': () =>
+    import('./admin/_recoverStrandedCswResolveOwner.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cdp', cdpRouteLoaders),
