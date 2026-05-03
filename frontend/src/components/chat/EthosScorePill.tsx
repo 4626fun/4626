@@ -290,6 +290,8 @@ export function fetchEthosScoreForUserkey(userkey: string): Promise<EthosScoreVa
 }
 
 function EthosMark({ className }: { className?: string }) {
+  const [imageLoaded, setImageLoaded] = useState(true)
+
   return (
     <span
       className={cn(
@@ -298,7 +300,22 @@ function EthosMark({ className }: { className?: string }) {
       )}
       aria-hidden="true"
     >
-      <img src={ETHOS_MARK_SRC} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
+      {imageLoaded ? (
+        <img
+          src={ETHOS_MARK_SRC}
+          alt=""
+          className="h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
+          onError={() => setImageLoaded(false)}
+        />
+      ) : (
+        <span className="grid h-2.5 w-2.5 place-items-center gap-[1px]">
+          <span className="h-[2px] w-2.5 rounded-full bg-zinc-200" />
+          <span className="h-[2px] w-2 rounded-full bg-zinc-200" />
+          <span className="h-[2px] w-2.5 rounded-full bg-zinc-200" />
+        </span>
+      )}
     </span>
   )
 }
