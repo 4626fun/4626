@@ -2205,3 +2205,405 @@ export async function sendPreparedOwnerTx(params: {
   })
   throw buildOwnerDelegationError(lastPayload, lastMessage)
 }
+
+// ── Mar 9 Relay-relayer submission lane ──────────────────────────────
+// On-chain forensics from tx 0x801b9d4b… (Mar 9 2026 owner[2] install)
+// proved the production path was NOT Coinbase's bundler. The outer caller
+// was `RelayRouterV3.multicall(...)` at 0xb92fe925…fff4f, which wrapped:
+//   1. EntryPoint.handleOps([signedUserOp], beneficiary=CSW)
+//   2. RelayRouterV3.0xa6bd8c96(0, CSW, "0xfd1f54c6…01ba00")  ← Relay request-id
+//
+// The signed UserOp itself had:
+//   - gas=0, paymasterAndData=""
+//   - nonce.key = 8453 (REPLAYABLE_NONCE_KEY)
+//   - callData = executeWithoutChainIdValidation([addOwnerAddress(...)])
+//   - signature = SignatureWrapper{ownerIndex:0, WebAuthnAuth} signed against
+//                 keccak256(abi.encode(UserOperationLib.hash(userOp), entryPoint))
+//                 — i.e. getUserOpHashWithoutChainId, NOT replaySafeHash
+//
+// This matches Relay's documented gasless ERC-4337 flow:
+//   https://docs.relay.link/features/gasless-execution
+// "any transaction can be made gasless for the Smart Account by signing an
+//  ERC-4337 user operation … then create the final call data of the handleOps
+//  call of the Entry Point before submitting to the /execute endpoint."
+//
+// This helper does:
+//   1. Call wallet_prepareCalls with executeWithoutChainIdValidation calldata
+//      so the Coinbase wallet server returns:
+//        - a UserOp with the right shape (nonce.key=8453, gas=0)
+//        - a signatureRequest.hash that equals getUserOpHashWithoutChainId
+//   2. Have the CSW's owner[0] passkey sign that hash via personal_sign
+//      (Coinbase's wallet handles WebAuthn internally and returns a
+//      SignatureWrapper-shaped sig — same shape the on-chain UserOp had).
+//   3. Splice the signature into the prepared UserOp.
+//   4. Encode EntryPoint.handleOps([signedUserOp], beneficiary=CSW).
+//   5. POST to /api/relay/execute (server-side Relay API key) with
+//      executionKind: 'rawCalls'.
+//   6. Optionally poll /api/relay/intents-status until on-chain.
+//
+// This bypasses Coinbase's wallet_sendPreparedCalls entirely (the part that
+// has been failing with "Failed to fetch RPC request" — the wallet server's
+// eGe self-call check rejects pre-wrapped replayable calldata).
+
+const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
+
+const ENTRY_POINT_V07_ADDRESS = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as const
+
+// Minimal ABI fragments for handleOps on both EntryPoint versions. We mirror
+// the on-chain Mar 9 trace, which used v0.6 (selector 0x1fad948c).
+const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
+  {
+    type: 'function',
+    name: 'handleOps',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'ops',
+        type: 'tuple[]',
+        components: [
+          { name: 'sender', type: 'address' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'initCode', type: 'bytes' },
+          { name: 'callData', type: 'bytes' },
+          { name: 'callGasLimit', type: 'uint256' },
+          { name: 'verificationGasLimit', type: 'uint256' },
+          { name: 'preVerificationGas', type: 'uint256' },
+          { name: 'maxFeePerGas', type: 'uint256' },
+          { name: 'maxPriorityFeePerGas', type: 'uint256' },
+          { name: 'paymasterAndData', type: 'bytes' },
+          { name: 'signature', type: 'bytes' },
+        ],
+      },
+      { name: 'beneficiary', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const
+
+export type RelayLaneTelemetry = {
+  step:
+    | 'wrap'
+    | 'prepare'
+    | 'sign'
+    | 'splice'
+    | 'encode_handle_ops'
+    | 'submit_relay'
+    | 'success'
+    | 'error'
+  detail: Record<string, unknown>
+}
+
+type V06UserOpFields = {
+  sender: `0x${string}`
+  nonce: bigint
+  initCode: `0x${string}`
+  callData: `0x${string}`
+  callGasLimit: bigint
+  verificationGasLimit: bigint
+  preVerificationGas: bigint
+  maxFeePerGas: bigint
+  maxPriorityFeePerGas: bigint
+  paymasterAndData: `0x${string}`
+  signature: `0x${string}`
+}
+
+function asBigIntFromHexOrNumber(value: unknown, fallback: bigint = 0n): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(value)
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return fallback
+    try {
+      if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) return BigInt(trimmed)
+      // Decimal string
+      return BigInt(trimmed)
+    } catch {
+      return fallback
+    }
+  }
+  return fallback
+}
+
+function asHexBytes(value: unknown, fallback: `0x${string}` = '0x'): `0x${string}` {
+  if (typeof value === 'string' && value.startsWith('0x')) {
+    return value as `0x${string}`
+  }
+  return fallback
+}
+
+function asAddressLike(value: unknown): `0x${string}` | null {
+  if (typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)) {
+    return value as `0x${string}`
+  }
+  return null
+}
+
+/**
+ * Coerce a Coinbase-prepared UserOp blob into v0.6 fields.
+ *
+ * Coinbase's `wallet_prepareCalls` has shipped two response shapes:
+ *   - Older (still seen in some clients):
+ *     { type, chainId, signatureRequest, userOp: {...}, capabilities }
+ *   - HackMD-spec / newer:
+ *     { preparedCalls: { type, data: {...userOp}, chainId }, signatureRequest, context }
+ *
+ * Either way, the inner v0.6 UserOp object has these fields (possibly hex-string
+ * or number-typed numbers). We coerce to bigints and freeze the canonical shape.
+ */
+export function coerceV06UserOp(raw: unknown): V06UserOpFields {
+  const obj = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const sender = asAddressLike(obj.sender)
+  if (!sender) {
+    throw new Error('UserOp.sender is missing or not an address')
+  }
+  return {
+    sender,
+    nonce: asBigIntFromHexOrNumber(obj.nonce),
+    initCode: asHexBytes(obj.initCode, '0x'),
+    callData: asHexBytes(obj.callData, '0x'),
+    callGasLimit: asBigIntFromHexOrNumber(obj.callGasLimit),
+    verificationGasLimit: asBigIntFromHexOrNumber(obj.verificationGasLimit),
+    preVerificationGas: asBigIntFromHexOrNumber(obj.preVerificationGas),
+    maxFeePerGas: asBigIntFromHexOrNumber(obj.maxFeePerGas),
+    maxPriorityFeePerGas: asBigIntFromHexOrNumber(obj.maxPriorityFeePerGas),
+    paymasterAndData: asHexBytes(obj.paymasterAndData, '0x'),
+    signature: asHexBytes(obj.signature, '0x'),
+  }
+}
+
+/**
+ * Encode `EntryPoint.handleOps([signedUserOp], beneficiary)` for either v0.6
+ * or v0.7. Mar 9 used v0.6 (the EntryPoint address and selector both match).
+ */
+export function encodeHandleOpsV06(
+  signedUserOp: V06UserOpFields,
+  beneficiary: `0x${string}`,
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+    functionName: 'handleOps',
+    args: [[signedUserOp], beneficiary],
+  })
+}
+
+/**
+ * Submit an owner-install UserOp via Relay's `/execute` endpoint.
+ *
+ * @param params.entryPointVersion  '0.6' (Mar 9 default) or '0.7' (newer)
+ * @param params.beneficiary        Address that receives gas refund — Mar 9
+ *                                  used the CSW itself (`sender == beneficiary`).
+ *
+ * Returns the upstream Relay response so the caller can poll
+ * `/intents/status/v3?requestId=…` if desired.
+ */
+export async function _submitOwnerViaRelayExecute(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  entryPointVersion?: '0.6' | '0.7'
+  /** Default: csw (matches Mar 9). */
+  beneficiary?: `0x${string}`
+  onTelemetry?: (event: RelayLaneTelemetry) => void
+}): Promise<{
+  signatureRequestHash: `0x${string}` | null
+  hashSigned: `0x${string}` | null
+  signature: `0x${string}` | null
+  signedUserOp: V06UserOpFields | null
+  handleOpsCalldata: `0x${string}` | null
+  relayResponse: unknown
+}> {
+  const emit = (e: RelayLaneTelemetry) => {
+    try { params.onTelemetry?.(e) } catch { /* swallow */ }
+  }
+  const innerSelector = (params.innerCallData.slice(0, 10).toLowerCase()) as string
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  const prepareCallsPayload: Record<string, unknown> = {
+    version: '1.0',
+    from: params.csw,
+    chainId: chainIdHex,
+    calls: [{ to: params.csw, data: wrappedData, value: '0x0' }],
+    capabilities: {},
+  }
+  emit({ step: 'prepare', detail: { prepareCallsPayload } })
+
+  let prepareResult: unknown
+  try {
+    prepareResult = await params.walletRequest({
+      method: 'wallet_prepareCalls',
+      params: [prepareCallsPayload],
+    })
+  } catch (err) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'prepare',
+        error: err instanceof Error ? err.message : String(err ?? ''),
+      },
+    })
+    throw err
+  }
+
+  // Normalize both Coinbase shapes (older flat vs. HackMD-spec preparedCalls).
+  const flat = prepareResult as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+    capabilities?: Record<string, unknown>
+    preparedCalls?: { type?: string; chainId?: string; data?: unknown }
+    context?: unknown
+  } | null
+
+  const sigHash = flat?.signatureRequest?.hash
+  const userOpRaw = flat?.userOp ?? flat?.preparedCalls?.data
+  if (!sigHash) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  }
+  if (!userOpRaw) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a userOp / preparedCalls.data.')
+  }
+
+  const hashToSign = unwrapDoubleHexEncodedHash(sigHash as `0x${string}`)
+  emit({
+    step: 'prepare',
+    detail: {
+      stage: 'prepared',
+      signatureRequestHash: sigHash,
+      hashToSign,
+      preparedUserOp: userOpRaw,
+    },
+  })
+
+  // personal_sign(hash, sender=csw) — for a CSW session backed by a passkey,
+  // Base App returns a SignatureWrapper-shaped sig (passkey path), which is
+  // exactly what the Mar 9 on-chain UserOp had as its `signature` field.
+  let signature: `0x${string}` | null = null
+  try {
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.csw],
+    })) as `0x${string}`
+  } catch (signError) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        error: signError instanceof Error ? signError.message : String(signError ?? ''),
+      },
+    })
+    throw signError
+  }
+  if (!signature || !signature.startsWith('0x')) {
+    emit({ step: 'error', detail: { stage: 'sign', signature } })
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  emit({
+    step: 'sign',
+    detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
+  })
+
+  // Coerce the prepared UserOp into v0.6 fields, replace its (empty) signature
+  // with the one we just produced.
+  let baseUserOp: V06UserOpFields
+  try {
+    baseUserOp = coerceV06UserOp(userOpRaw)
+  } catch (err) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'splice',
+        error: err instanceof Error ? err.message : String(err ?? ''),
+        userOpRaw,
+      },
+    })
+    throw err
+  }
+  const signedUserOp: V06UserOpFields = { ...baseUserOp, signature }
+  emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
+
+  const beneficiary = params.beneficiary ?? params.csw
+  const entryPointAddress =
+    params.entryPointVersion === '0.7'
+      ? ENTRY_POINT_V07_ADDRESS
+      : ENTRY_POINT_V06_ADDRESS
+  const handleOpsCalldata = encodeHandleOpsV06(signedUserOp, beneficiary)
+  emit({
+    step: 'encode_handle_ops',
+    detail: {
+      entryPointVersion: params.entryPointVersion ?? '0.6',
+      entryPointAddress,
+      beneficiary,
+      handleOpsCalldata,
+      handleOpsLengthBytes: (handleOpsCalldata.length - 2) / 2,
+    },
+  })
+
+  // POST to our server-side Relay /execute proxy. The proxy holds the
+  // x-api-key and validates that `to` is an EntryPoint and `data` starts
+  // with the handleOps selector (0x1fad948c).
+  const relayBody = {
+    chainId: params.chainId,
+    to: entryPointAddress,
+    data: handleOpsCalldata,
+    value: '0',
+  }
+  emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
+
+  let relayResponse: unknown = null
+  try {
+    const fetchResult = await apiFetch('/api/relay/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(relayBody),
+    })
+    if (!fetchResult.ok) {
+      const errMessage = await resolveApiErrorMessage(fetchResult, 'Relay /execute proxy failed')
+      emit({
+        step: 'error',
+        detail: { stage: 'submit_relay', status: fetchResult.status, message: errMessage },
+      })
+      throw new Error(errMessage)
+    }
+    relayResponse = await fetchResult.json()
+  } catch (err) {
+    if (!(err instanceof Error)) throw new Error(String(err ?? ''))
+    throw err
+  }
+
+  emit({ step: 'success', detail: { relayResponse } })
+  return {
+    signatureRequestHash: sigHash as `0x${string}`,
+    hashSigned: hashToSign,
+    signature,
+    signedUserOp,
+    handleOpsCalldata,
+    relayResponse,
+  }
+}
+
+function serializeUserOpForLog(op: V06UserOpFields): Record<string, string> {
+  return {
+    sender: op.sender,
+    nonce: `0x${op.nonce.toString(16)}`,
+    initCode: op.initCode,
+    callData: op.callData,
+    callGasLimit: `0x${op.callGasLimit.toString(16)}`,
+    verificationGasLimit: `0x${op.verificationGasLimit.toString(16)}`,
+    preVerificationGas: `0x${op.preVerificationGas.toString(16)}`,
+    maxFeePerGas: `0x${op.maxFeePerGas.toString(16)}`,
+    maxPriorityFeePerGas: `0x${op.maxPriorityFeePerGas.toString(16)}`,
+    paymasterAndData: op.paymasterAndData,
+    signature: op.signature,
+  }
+}

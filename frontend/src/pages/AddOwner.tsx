@@ -11,6 +11,8 @@ import { useAccountSetupController } from '@/features/accountSetup/useAccountSet
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import {
   _submitOwnerViaReplayablePreparedCalls,
+  _submitOwnerViaRelayExecute,
+  type RelayLaneTelemetry,
   type ReplayableLaneTelemetry,
 } from '@/lib/wallet/onboardingWallet'
 
@@ -113,6 +115,18 @@ export function AddOwnerPage() {
   >([])
   const [replayableError, setReplayableError] = useState<string | null>(null)
   const [replayableTxHash, setReplayableTxHash] = useState<string | null>(null)
+
+  // ── Mar 9 Relay-relayer lane ─────────────────────────────────────────
+  // Runs the EXACT path proven by tx 0x801b9d4b…: prepare UserOp via
+  // wallet_prepareCalls, sign with passkey, encode handleOps locally, POST
+  // to /api/relay/execute (server-side proxy to https://api.relay.link/execute).
+  // Bypasses Coinbase's wallet_sendPreparedCalls entirely.
+  const [relayBusy, setRelayBusy] = useState(false)
+  const [relayEvents, setRelayEvents] = useState<
+    Array<{ ts: number; step: RelayLaneTelemetry['step']; detail: Record<string, unknown> }>
+  >([])
+  const [relayError, setRelayError] = useState<string | null>(null)
+  const [relayResponse, setRelayResponse] = useState<unknown>(null)
 
   const preferredConnector = useMemo(() => {
     // Prefer Coinbase Wallet (Base App SDK) since this diagnostic must run
@@ -232,6 +246,60 @@ export function AddOwnerPage() {
       setReplayableError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
     } finally {
       setReplayableBusy(false)
+    }
+  }
+
+  const handleRelayLaneTry = async () => {
+    setRelayEvents([])
+    setRelayError(null)
+    setRelayResponse(null)
+    if (!walletClient || !walletClient.request) {
+      setRelayError('Connect a wallet first.')
+      return
+    }
+    if (!canonicalCswAddress || !isAddress(canonicalCswAddress)) {
+      setRelayError('No canonical CSW.')
+      return
+    }
+    if (!privyEmbeddedEoaAddress || !isAddress(privyEmbeddedEoaAddress)) {
+      setRelayError('No Privy embedded EOA available to install.')
+      return
+    }
+    if (!cswIsConnectedSelf) {
+      setRelayError(
+        'Connect via Base App so the CSW signs for itself (connected address must equal the CSW). Then retry.',
+      )
+      return
+    }
+    setRelayBusy(true)
+    try {
+      const innerCallData = encodeFunctionData({
+        abi: ADD_OWNER_ADDRESS_ABI,
+        functionName: 'addOwnerAddress',
+        args: [privyEmbeddedEoaAddress as `0x${string}`],
+      })
+      const request = walletClient.request as (args: {
+        method: string
+        params?: unknown[]
+      }) => Promise<unknown>
+      const result = await _submitOwnerViaRelayExecute({
+        walletRequest: request,
+        chainId: 8453,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData,
+        // Mar 9 used EntryPoint v0.6 + beneficiary == csw — keep the defaults.
+        onTelemetry: (event) => {
+          setRelayEvents((prev) => [
+            ...prev,
+            { ts: Date.now(), step: event.step, detail: event.detail },
+          ])
+        },
+      })
+      setRelayResponse(result.relayResponse)
+    } catch (err) {
+      setRelayError(err instanceof Error ? err.message : String(err ?? 'Unknown error'))
+    } finally {
+      setRelayBusy(false)
     }
   }
 
@@ -472,6 +540,81 @@ export function AddOwnerPage() {
                       </div>
                       <ol className="space-y-2 text-[10px] font-mono text-zinc-300">
                         {replayableEvents.map((event, idx) => (
+                          <li
+                            key={`${event.ts}-${idx}`}
+                            className="break-all border-l-2 border-white/10 pl-2"
+                          >
+                            <div className="text-zinc-500">
+                              {new Date(event.ts).toISOString().split('T')[1]?.replace('Z', '')} ·{' '}
+                              <span className="text-zinc-300">{event.step}</span>
+                            </div>
+                            <pre className="mt-1 whitespace-pre-wrap text-zinc-400">
+                              {JSON.stringify(event.detail, jsonReplacer, 2)}
+                            </pre>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
+                </div>
+
+                {/* ── Mar 9 Relay-relayer diagnostic ── */}
+                <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-500/[0.04] p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-300/80">
+                        Diagnostic · Mar 9 path
+                      </div>
+                      <div className="text-sm font-medium text-zinc-100">
+                        Try Relay /execute lane
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={relayBusy || installedAsOwner === true || !cswIsConnectedSelf}
+                      onClick={() => void handleRelayLaneTry()}
+                      className="rounded-lg border border-emerald-300/40 bg-emerald-400/10 px-3 py-1.5 text-[11px] text-emerald-50 hover:border-emerald-300/70 disabled:opacity-40"
+                    >
+                      {relayBusy ? 'Running…' : 'Run'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-zinc-400">
+                    Reproduces tx{' '}
+                    <a
+                      href="https://basescan.org/tx/0x801b9d4b8f7470226c2f02d5252583f00d77da5cbb0b7dc8b73421ed8b491503"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      0x801b9d4b…
+                    </a>{' '}
+                    end-to-end: prepare UserOp via{' '}
+                    <code className="font-mono text-zinc-300">wallet_prepareCalls</code>,
+                    sign with passkey, encode{' '}
+                    <code className="font-mono text-zinc-300">EntryPoint.handleOps</code>{' '}
+                    locally, POST to /api/relay/execute (server-side proxy to Relay).
+                    Bypasses Coinbase's wallet_sendPreparedCalls entirely.
+                  </p>
+                  {relayResponse ? (
+                    <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 break-all">
+                      <div className="font-medium">Submitted to Relay.</div>
+                      <pre className="mt-2 whitespace-pre-wrap font-mono text-emerald-50/90">
+                        {JSON.stringify(relayResponse, jsonReplacer, 2)}
+                      </pre>
+                    </div>
+                  ) : null}
+                  {relayError ? (
+                    <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 p-3 text-[11px] text-rose-100 break-all">
+                      {relayError}
+                    </div>
+                  ) : null}
+                  {relayEvents.length > 0 ? (
+                    <div className="rounded-lg border border-white/10 bg-black/40 p-3">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-2">
+                        Event log
+                      </div>
+                      <ol className="space-y-2 text-[10px] font-mono text-zinc-300">
+                        {relayEvents.map((event, idx) => (
                           <li
                             key={`${event.ts}-${idx}`}
                             className="break-all border-l-2 border-white/10 pl-2"
