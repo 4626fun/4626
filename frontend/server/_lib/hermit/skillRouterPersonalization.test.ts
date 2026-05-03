@@ -80,7 +80,7 @@ describe('executeHermitCommand — per-user personalization', () => {
   })
 
   it('absence of any signal does NOT touch persistPreference (other than the one-time onboarding nudge)', async () => {
-    const persistPreference = vi.fn(async () => {})
+    const persistPreference = vi.fn(async (_params: { preferenceKey: string }) => {})
 
     await executeHermitCommand({
       commandText: '/hermit announce vault update incoming',
@@ -94,7 +94,7 @@ describe('executeHermitCommand — per-user personalization', () => {
     // No dialect/tone preference write.
     const dialectOrToneWrites = persistPreference.mock.calls.filter((call) =>
       ['hermit.spanish_dialect', 'hermit.tone'].includes(
-        (call[0] as { preferenceKey: string }).preferenceKey,
+        (call[0] as unknown as { preferenceKey?: string })?.preferenceKey ?? '',
       ),
     )
     expect(dialectOrToneWrites).toHaveLength(0)

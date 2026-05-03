@@ -295,7 +295,7 @@ describe('Hermit setup subcommands', () => {
         ok: true,
         json: async () => ({ text: '{"line":"sharper line"}' }),
       } as Response)
-      const persist = vi.fn(async () => {})
+      const persist = vi.fn(async (_params: { preferenceKey: string }) => {})
       const result = await executeHermitCommand({
         commandText: '/hermit tone make this clearer: we are shipping tonight',
         senderAddress: ALICE,
@@ -310,7 +310,7 @@ describe('Hermit setup subcommands', () => {
       // /hermit tone <name> path would have written hermit.tone; assert
       // that did NOT happen.
       const toneWrites = persist.mock.calls.filter(
-        (call) => (call[0] as { preferenceKey: string }).preferenceKey === 'hermit.tone',
+        (call) => (call[0] as unknown as { preferenceKey?: string })?.preferenceKey === 'hermit.tone',
       )
       expect(toneWrites).toHaveLength(0)
       expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -322,7 +322,7 @@ describe('Hermit setup subcommands', () => {
       // `/hermit tone galactic` fell through to the Pinata tone draft
       // path and surfaced backend / config errors. The personalization
       // handler should own every single-token /hermit tone arg.
-      const persist = vi.fn(async () => {})
+      const persist = vi.fn(async (_params: { preferenceKey: string }) => {})
       const result = await executeHermitCommand({
         commandText: '/hermit tone galactic',
         senderAddress: ALICE,
@@ -338,7 +338,7 @@ describe('Hermit setup subcommands', () => {
       expect(result.reply).toContain('See `/hermit setup`')
       // No write happened.
       const toneWrites = persist.mock.calls.filter(
-        (call) => (call[0] as { preferenceKey: string }).preferenceKey === 'hermit.tone',
+        (call) => (call[0] as unknown as { preferenceKey?: string })?.preferenceKey === 'hermit.tone',
       )
       expect(toneWrites).toHaveLength(0)
       // No Pinata call happened.
@@ -466,7 +466,7 @@ describe('Hermit onboarding nudge', () => {
   })
 
   it('does NOT append the nudge on /hermit setup / prefs / reset / lang replies', async () => {
-    const persist = vi.fn(async () => {})
+    const persist = vi.fn(async (_params: { preferenceKey: string }) => {})
 
     const setup = await executeHermitCommand({
       commandText: '/hermit setup',
@@ -500,7 +500,7 @@ describe('Hermit onboarding nudge', () => {
     // neither path wrote hermit.onboarded.
     const onboardedCalls = persist.mock.calls.filter(
       (call) =>
-        (call[0] as { preferenceKey: string }).preferenceKey === 'hermit.onboarded',
+        (call[0] as unknown as { preferenceKey?: string })?.preferenceKey === 'hermit.onboarded',
     )
     expect(onboardedCalls).toHaveLength(0)
   })

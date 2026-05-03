@@ -35,6 +35,8 @@ import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
 import {
   recordBridgeAuthFailure,
+  recordBridgeCfChallenge,
+  recordBridgeCfChallengeRecovered,
   recordBridgeHistorySuccess,
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
@@ -1192,6 +1194,14 @@ const bridgeAuthState = {
   wsErrorFlushTimer: null as RollupTimer,
   wsErrorRoomId: null as string | null,
   wsErrorLastMessage: null as string | null,
+  cfChallengeRepeats: 0,
+  cfChallengeFirstAt: 0,
+  cfChallengeFirstCfRay: null as string | null,
+  cfChallengeFlushTimer: null as RollupTimer,
+  cfChallengeRoomId: null as string | null,
+  cfChallengeLastCfRay: null as string | null,
+  cfChallengeLastHtmlErrorCode: null as string | null,
+  cfChallengeSustainedFlagged: false,
 }
 
 function isFutureIsoTimestamp(value: string | null | undefined): boolean {
@@ -1246,6 +1256,25 @@ function isRoomHistoryAuthError(error: unknown): boolean {
     message.startsWith('room_history_failed:401:') ||
     message.startsWith('room_history_failed:403:')
   )
+}
+
+function isCloudflareChallengeError(error: unknown): boolean {
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  if (!message.startsWith('room_history_failed:403:')) return false
+  return (
+    /\bcf-mitigated=challenge\b/.test(message) ||
+    /\bcloudflare=true\b/.test(message) ||
+    /\bhtml-error-code=10\d{2}\b/.test(message) ||
+    /Just a moment/i.test(message)
+  )
+}
+
+type HistoryErrorKind = 'cf_challenge' | 'auth' | 'other'
+
+function classifyHistoryError(error: unknown): HistoryErrorKind {
+  if (isCloudflareChallengeError(error)) return 'cf_challenge'
+  if (isRoomHistoryAuthError(error)) return 'auth'
+  return 'other'
 }
 
 function isKnownBadJwt(jwt: string, now = Date.now()): boolean {
@@ -1362,6 +1391,92 @@ function warnRoomHistoryAuthFallback(params: {
   bridgeAuthState.authFailFlushTimer = timer
 }
 
+function extractCfRayFromMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error)
+  const match = /\bcf-ray=([^\s"]{1,64})/i.exec(message)
+  return match?.[1]?.slice(0, 64) ?? null
+}
+
+function extractHtmlErrorCodeFromMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error)
+  const match = /\bhtml-error-code=(10\d{2})\b/i.exec(message)
+  return match?.[1] ?? null
+}
+
+function flushCfChallengeRollup(): void {
+  const repeats = bridgeAuthState.cfChallengeRepeats
+  bridgeAuthState.cfChallengeFlushTimer = null
+  if (repeats > 1) {
+    logger.warn('[alfaclub-chat] room_history_cf_challenge:rollup', {
+      roomId: bridgeAuthState.cfChallengeRoomId,
+      repeats,
+      windowStartedAt: bridgeAuthState.cfChallengeFirstAt
+        ? new Date(bridgeAuthState.cfChallengeFirstAt).toISOString()
+        : null,
+      cfRay: bridgeAuthState.cfChallengeLastCfRay,
+      htmlErrorCode: bridgeAuthState.cfChallengeLastHtmlErrorCode,
+    })
+  }
+}
+
+function warnRoomHistoryCfChallenge(params: {
+  roomId: string
+  error: unknown
+  now?: number
+}): void {
+  const now = params.now ?? Date.now()
+  const cfRay = extractCfRayFromMessage(params.error)
+  const htmlErrorCode = extractHtmlErrorCodeFromMessage(params.error)
+
+  if (bridgeAuthState.cfChallengeRepeats === 0) {
+    bridgeAuthState.cfChallengeFirstAt = now
+    bridgeAuthState.cfChallengeFirstCfRay = cfRay
+    bridgeAuthState.cfChallengeRoomId = params.roomId
+  }
+
+  if (bridgeAuthState.cfChallengeFlushTimer) {
+    bridgeAuthState.cfChallengeRepeats += 1
+    bridgeAuthState.cfChallengeLastCfRay = cfRay
+    bridgeAuthState.cfChallengeLastHtmlErrorCode = htmlErrorCode
+  } else {
+    bridgeAuthState.cfChallengeRepeats += 1
+    bridgeAuthState.cfChallengeRoomId = params.roomId
+    bridgeAuthState.cfChallengeLastCfRay = cfRay
+    bridgeAuthState.cfChallengeLastHtmlErrorCode = htmlErrorCode
+
+    logger.warn('[alfaclub-chat] room_history_cf_challenge', {
+      roomId: params.roomId,
+      repeats: bridgeAuthState.cfChallengeRepeats,
+      windowStartedAt: new Date(now).toISOString(),
+      cfRay,
+      htmlErrorCode,
+    })
+
+    if (bridgeAuthState.cfChallengeFlushTimer) {
+      clearTimeout(bridgeAuthState.cfChallengeFlushTimer)
+    }
+    const timer = setTimeout(flushCfChallengeRollup, LOG_ROLLUP_WINDOW_MS)
+    if (typeof (timer as { unref?: () => void }).unref === 'function') {
+      ;(timer as { unref: () => void }).unref()
+    }
+    bridgeAuthState.cfChallengeFlushTimer = timer
+  }
+
+  if (
+    !bridgeAuthState.cfChallengeSustainedFlagged &&
+    bridgeAuthState.cfChallengeFirstAt > 0 &&
+    now - bridgeAuthState.cfChallengeFirstAt > 60_000
+  ) {
+    bridgeAuthState.cfChallengeSustainedFlagged = true
+    logger.warn('[alfaclub-chat] cf_challenge_sustained', {
+      roomId: params.roomId,
+      firstSeenAt: new Date(bridgeAuthState.cfChallengeFirstAt).toISOString(),
+      cfRay: bridgeAuthState.cfChallengeFirstCfRay,
+      consecutive: bridgeAuthState.cfChallengeRepeats,
+    })
+  }
+}
+
 function flushWsErrorRollup(): void {
   const repeats = bridgeAuthState.wsErrorRepeats
   bridgeAuthState.wsErrorFlushTimer = null
@@ -1429,6 +1544,20 @@ function resetAuthFailureRollup(): void {
   bridgeAuthState.authFailRoomId = null
   bridgeAuthState.authFailJwtSource = null
   bridgeAuthState.authFailLastError = null
+}
+
+function resetCfChallengeRollup(): void {
+  if (bridgeAuthState.cfChallengeFlushTimer) {
+    clearTimeout(bridgeAuthState.cfChallengeFlushTimer)
+    bridgeAuthState.cfChallengeFlushTimer = null
+  }
+  bridgeAuthState.cfChallengeRepeats = 0
+  bridgeAuthState.cfChallengeFirstAt = 0
+  bridgeAuthState.cfChallengeFirstCfRay = null
+  bridgeAuthState.cfChallengeRoomId = null
+  bridgeAuthState.cfChallengeLastCfRay = null
+  bridgeAuthState.cfChallengeLastHtmlErrorCode = null
+  bridgeAuthState.cfChallengeSustainedFlagged = false
 }
 
 function rememberSeenMessageId(id: string): void {
@@ -1828,6 +1957,34 @@ async function executeCommandBatch(params: {
   }
 }
 
+function earlyTickResult(params: {
+  roomId: string
+  historyError: unknown
+  unseen?: number
+  processed: number
+  replied: number
+  errors?: Array<{ messageId: string; error: string }>
+}): AlfaClubChatBridgeTickResult {
+  return {
+    seeded: false,
+    roomId: params.roomId,
+    fetched: 0,
+    unseen: params.unseen ?? 0,
+    processed: params.processed,
+    replied: params.replied,
+    errors: [
+      {
+        messageId: 'room-history',
+        error:
+          params.historyError instanceof Error
+            ? params.historyError.message
+            : String(params.historyError),
+      },
+      ...(params.errors ?? []),
+    ],
+  }
+}
+
 async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
 ): Promise<AlfaClubChatBridgeTickResult> {
@@ -1875,7 +2032,7 @@ async function runBridgeTick(
       resolvedCommandJwt.source === 'db' &&
       Boolean(fallbackJwt) &&
       fallbackJwt !== resolvedCommandJwt.jwt &&
-      isRoomHistoryAuthError(error)
+      classifyHistoryError(error) === 'auth'
     if (!shouldRetryWithEnv) {
       historyError = error
     } else {
@@ -1902,7 +2059,22 @@ async function runBridgeTick(
   }
 
   if (historyError) {
-    const canUseLiveFallback = flags.wsLiveFallbackEnabled && isRoomHistoryAuthError(historyError)
+    const kind = classifyHistoryError(historyError)
+    if (kind === 'cf_challenge') {
+      const now = Date.now()
+      warnRoomHistoryCfChallenge({ roomId, now, error: historyError })
+      recordBridgeCfChallenge(new Date(now).toISOString(), bridgeAuthState.cfChallengeSustainedFlagged)
+      applySocketBackoff(now)
+      bridgeState.liveFallbackActive = true
+      return earlyTickResult({
+        roomId,
+        historyError,
+        processed: 0,
+        replied: 0,
+      })
+    }
+
+    const canUseLiveFallback = flags.wsLiveFallbackEnabled && kind === 'auth'
     if (!canUseLiveFallback) {
       logger.warn('[alfaclub-chat] room_history_failed:no_fallback', {
         roomId,
@@ -1949,25 +2121,14 @@ async function runBridgeTick(
     // but the tick response was indistinguishable from a healthy "no
     // new messages" tick. The synthetic `messageId` is `room-history`
     // so the error doesn't collide with real per-command ids.
-    const errors = [
-      {
-        messageId: 'room-history',
-        error:
-          historyError instanceof Error
-            ? historyError.message
-            : String(historyError),
-      },
-      ...liveBatch.errors,
-    ]
-    return {
-      seeded: false,
+    return earlyTickResult({
       roomId,
-      fetched: 0,
       unseen: liveCommands.length,
       processed: liveBatch.processed,
       replied: liveBatch.replied,
-      errors,
-    }
+      historyError,
+      errors: liveBatch.errors,
+    })
   }
 
   if (!fetchedMessages) {
@@ -1976,6 +2137,10 @@ async function runBridgeTick(
 
   clearBadJwt()
   resetAuthFailureRollup()
+  if (bridgeAuthState.cfChallengeRepeats > 0 || bridgeAuthState.cfChallengeSustainedFlagged) {
+    resetCfChallengeRollup()
+    recordBridgeCfChallengeRecovered()
+  }
   recordBridgeHistorySuccess()
 
   if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
@@ -2184,6 +2349,14 @@ export function _isRoomHistoryAuthErrorForTests(error: unknown): boolean {
   return isRoomHistoryAuthError(error)
 }
 
+export function _isCloudflareChallengeErrorForTests(error: unknown): boolean {
+  return isCloudflareChallengeError(error)
+}
+
+export function _classifyHistoryErrorForTests(error: unknown): HistoryErrorKind {
+  return classifyHistoryError(error)
+}
+
 /** Test seam: exercise `fetchRoomHistory` against an injected fetch. */
 export async function _fetchRoomHistoryForTests(params: {
   apiBaseUrl: string
@@ -2247,6 +2420,17 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  if (bridgeAuthState.cfChallengeFlushTimer) {
+    clearTimeout(bridgeAuthState.cfChallengeFlushTimer)
+    bridgeAuthState.cfChallengeFlushTimer = null
+  }
+  bridgeAuthState.cfChallengeRepeats = 0
+  bridgeAuthState.cfChallengeFirstAt = 0
+  bridgeAuthState.cfChallengeFirstCfRay = null
+  bridgeAuthState.cfChallengeRoomId = null
+  bridgeAuthState.cfChallengeLastCfRay = null
+  bridgeAuthState.cfChallengeLastHtmlErrorCode = null
+  bridgeAuthState.cfChallengeSustainedFlagged = false
 }
 
 export function _runAlfaClubChatBridgeTickForTests(

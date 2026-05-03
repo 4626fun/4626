@@ -1,12 +1,82 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from './helpers'
 
+const {
+  loggerWarnMock,
+  readAlfaClubChatTokenMock,
+  recordBridgeAuthFailureMock,
+  recordBridgeCfChallengeMock,
+  recordBridgeCfChallengeRecoveredMock,
+  recordBridgeHistorySuccessMock,
+  recordBridgeSocketBackoffMock,
+  recordBridgeSuppressedSocketAttemptMock,
+  requestImmediatePrivyRefreshMock,
+} = vi.hoisted(() => ({
+  loggerWarnMock: vi.fn(),
+  readAlfaClubChatTokenMock: vi.fn(),
+  recordBridgeAuthFailureMock: vi.fn(),
+  recordBridgeCfChallengeMock: vi.fn(),
+  recordBridgeCfChallengeRecoveredMock: vi.fn(),
+  recordBridgeHistorySuccessMock: vi.fn(),
+  recordBridgeSocketBackoffMock: vi.fn(),
+  recordBridgeSuppressedSocketAttemptMock: vi.fn(),
+  requestImmediatePrivyRefreshMock: vi.fn(async () => undefined),
+}))
+
+vi.mock('../../server/_lib/infra/logger.js', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: (...args: unknown[]) => loggerWarnMock(...args),
+    error: vi.fn(),
+  },
+}))
+
+vi.mock('../../server/_lib/alfaclub/chatTokenStore.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../server/_lib/alfaclub/chatTokenStore.ts')
+  >('../../server/_lib/alfaclub/chatTokenStore.ts')
+  return {
+    ...actual,
+    readAlfaClubChatToken: readAlfaClubChatTokenMock,
+  }
+})
+
+vi.mock('../../server/_lib/alfaclub/authHealthStore.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../server/_lib/alfaclub/authHealthStore.ts')
+  >('../../server/_lib/alfaclub/authHealthStore.ts')
+  return {
+    ...actual,
+    recordBridgeAuthFailure: recordBridgeAuthFailureMock,
+    recordBridgeCfChallenge: recordBridgeCfChallengeMock,
+    recordBridgeCfChallengeRecovered: recordBridgeCfChallengeRecoveredMock,
+    recordBridgeHistorySuccess: recordBridgeHistorySuccessMock,
+    recordBridgeSocketBackoff: recordBridgeSocketBackoffMock,
+    recordBridgeSuppressedSocketAttempt: recordBridgeSuppressedSocketAttemptMock,
+  }
+})
+
+vi.mock('../../server/_lib/alfaclub/privyTokenRefresher.js', async () => {
+  const actual = await vi.importActual<
+    typeof import('../../server/_lib/alfaclub/privyTokenRefresher.ts')
+  >('../../server/_lib/alfaclub/privyTokenRefresher.ts')
+  return {
+    ...actual,
+    requestImmediatePrivyRefresh: requestImmediatePrivyRefreshMock,
+  }
+})
+
 import {
   _ALFACLUB_API_BROWSER_HEADERS_FOR_TESTS,
+  _classifyHistoryErrorForTests,
+  _getBridgeAuthStateForTests,
   _fetchRoomHistoryForTests,
+  _isCloudflareChallengeErrorForTests,
   _isRoomHistoryAuthErrorForTests,
   _markReadMessageForTests,
+  _resetAlfaClubChatBridgeStateForTests,
+  _runAlfaClubChatBridgeTickForTests,
   _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
@@ -16,6 +86,17 @@ import {
   resolveAlfaClubFingerprintBaseUrl,
   resolveAlfaClubOriginHeaders,
 } from '../../server/_lib/alfaclub/chatBridge.ts'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  readAlfaClubChatTokenMock.mockResolvedValue(null)
+  _resetAlfaClubChatBridgeStateForTests()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  _resetAlfaClubChatBridgeStateForTests()
+})
 
 describe('readAlfaClubChatBridgeFlags', () => {
   let restoreEnv: (() => void) | null = null
@@ -399,6 +480,29 @@ describe('isRoomHistoryAuthError', () => {
   it('handles non-Error values', () => {
     expect(_isRoomHistoryAuthErrorForTests('room_history_failed:403')).toBe(true)
     expect(_isRoomHistoryAuthErrorForTests(null)).toBe(false)
+  })
+})
+
+describe('classifyHistoryError', () => {
+  it('classifies high-confidence Cloudflare challenge details separately from auth', () => {
+    const error = new Error(
+      'room_history_failed:403:cf-ray=abc cf-mitigated=challenge content-type=text/html cloudflare=true body="<!DOCTYPE html>Just a moment..."',
+    )
+    expect(_isCloudflareChallengeErrorForTests(error)).toBe(true)
+    expect(_classifyHistoryErrorForTests(error)).toBe('cf_challenge')
+  })
+
+  it('keeps cf-ray-only 403 responses on the auth path', () => {
+    const error = new Error(
+      'room_history_failed:403:cf-ray=abc content-type=application/json error="forbidden"',
+    )
+    expect(_isCloudflareChallengeErrorForTests(error)).toBe(false)
+    expect(_classifyHistoryErrorForTests(error)).toBe('auth')
+  })
+
+  it('classifies 401 as auth and 500 as other', () => {
+    expect(_classifyHistoryErrorForTests(new Error('room_history_failed:401'))).toBe('auth')
+    expect(_classifyHistoryErrorForTests(new Error('room_history_failed:500:upstream'))).toBe('other')
   })
 })
 
@@ -1368,5 +1472,191 @@ describe('routing-vs-fingerprint separation (PR #492 Codex review)', () => {
     expect(headers.Referer).toBeUndefined()
     expect(headers['Sec-Fetch-Site']).toBeUndefined()
     expect(headers.Authorization).toBe('Bearer fake-jwt-redacted')
+  })
+})
+
+describe('runBridgeTick — Cloudflare challenge remediation', () => {
+  function makeFlags() {
+    return {
+      killSwitch: false,
+      enabled: true,
+      roomId: '1043',
+      jwt: 'command.jwt.value',
+      ingestJwt: null,
+      apiBaseUrl: 'https://api.alfaclub.app',
+      apiProxyUrl: null,
+      websocketUrl: 'wss://ws.alfaclub.app',
+      groupId: 'alfa-room-main',
+      pollIntervalMs: 6_000,
+      historyLimit: 20,
+      sendTimeoutMs: 10_000,
+      requestTimeoutMs: 8_000,
+      wsLiveFallbackEnabled: true,
+      wsIngestAllRoomsEnabled: false,
+      telegramRelayEnabled: false,
+      telegramRelayBotToken: null,
+      telegramRelayChatId: null,
+      telegramRelayThreadId: null,
+    }
+  }
+
+  function installFetchResponses(responses: Response[]) {
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    const queue = [...responses]
+    ;(globalThis as { fetch?: typeof fetch }).fetch = vi.fn(async () => {
+      const response = queue.shift()
+      if (!response) {
+        return new Response(JSON.stringify({ messages: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return response
+    }) as unknown as typeof fetch
+    return () => {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+  }
+
+  function cfChallengeResponse(cfRay = 'abc123-IAD') {
+    return new Response('<!DOCTYPE html><title>Just a moment...</title>', {
+      status: 403,
+      headers: {
+        'cf-ray': cfRay,
+        'cf-mitigated': 'challenge',
+        'content-type': 'text/html; charset=utf-8',
+      },
+    })
+  }
+
+  function authForbiddenResponse() {
+    return new Response(JSON.stringify({ error: 'forbidden' }), {
+      status: 403,
+      headers: {
+        'cf-ray': 'auth-ray-IAD',
+        'content-type': 'application/json',
+      },
+    })
+  }
+
+  function okHistoryResponse() {
+    return new Response(JSON.stringify({ messages: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  it('does not refresh Privy or poison the JWT memo on a CF challenge', async () => {
+    const restoreFetch = installFetchResponses([cfChallengeResponse('cf-ray-one-IAD')])
+    try {
+      const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      expect(result.errors[0]?.error).toContain('cf-mitigated=challenge')
+    } finally {
+      restoreFetch()
+    }
+
+    expect(requestImmediatePrivyRefreshMock).not.toHaveBeenCalled()
+    expect(recordBridgeAuthFailureMock).not.toHaveBeenCalled()
+    expect(recordBridgeCfChallengeMock).toHaveBeenCalledTimes(1)
+    expect(recordBridgeSocketBackoffMock).toHaveBeenCalledWith(1000)
+    expect(_getBridgeAuthStateForTests().lastBadJwt).toBeNull()
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_cf_challenge',
+      expect.objectContaining({ roomId: '1043', cfRay: 'cf-ray-one-IAD' }),
+    )
+  })
+
+  it('keeps CF and auth rollups independent when failures are interleaved', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-02T00:00:00.000Z'))
+    const restoreFetch = installFetchResponses([
+      cfChallengeResponse('cf-1-IAD'),
+      authForbiddenResponse(),
+      cfChallengeResponse('cf-2-IAD'),
+      authForbiddenResponse(),
+      cfChallengeResponse('cf-3-IAD'),
+      cfChallengeResponse('cf-4-IAD'),
+      cfChallengeResponse('cf-5-IAD'),
+    ])
+    try {
+      for (let i = 0; i < 7; i += 1) {
+        await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      }
+      vi.advanceTimersByTime(60_000)
+    } finally {
+      restoreFetch()
+    }
+
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_cf_challenge:rollup',
+      expect.objectContaining({ repeats: 5, cfRay: 'cf-5-IAD' }),
+    )
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      '[alfaclub-chat] room_history_auth_failed:ws_live_fallback:rollup',
+      expect.objectContaining({ repeats: 2 }),
+    )
+  })
+
+  it('logs a sustained CF challenge once after 60s with the first seen timestamp', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-02T00:00:00.000Z'))
+    const restoreFetch = installFetchResponses([
+      cfChallengeResponse('first-ray-IAD'),
+      cfChallengeResponse('second-ray-IAD'),
+      cfChallengeResponse('third-ray-IAD'),
+    ])
+    try {
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      vi.setSystemTime(new Date('2026-05-02T00:01:01.000Z'))
+      vi.advanceTimersByTime(61_000)
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    } finally {
+      restoreFetch()
+    }
+
+    const sustained = loggerWarnMock.mock.calls.filter(
+      (call) => call[0] === '[alfaclub-chat] cf_challenge_sustained',
+    )
+    expect(sustained).toHaveLength(1)
+    expect(sustained[0]?.[1]).toMatchObject({
+      roomId: '1043',
+      firstSeenAt: '2026-05-02T00:00:00.000Z',
+      cfRay: 'first-ray-IAD',
+      consecutive: 2,
+    })
+    expect(recordBridgeCfChallengeMock.mock.calls.some((call) => call[1] === true)).toBe(true)
+  })
+
+  it('clears the sustained latch after a healthy history fetch so it can re-arm', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-02T00:00:00.000Z'))
+    const restoreFetch = installFetchResponses([
+      cfChallengeResponse('first-ray-IAD'),
+      cfChallengeResponse('second-ray-IAD'),
+      okHistoryResponse(),
+      cfChallengeResponse('third-ray-IAD'),
+      cfChallengeResponse('fourth-ray-IAD'),
+    ])
+    try {
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      vi.setSystemTime(new Date('2026-05-02T00:01:01.000Z'))
+      vi.advanceTimersByTime(61_000)
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      vi.setSystemTime(new Date('2026-05-02T00:02:02.000Z'))
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+      vi.setSystemTime(new Date('2026-05-02T00:03:03.000Z'))
+      vi.advanceTimersByTime(61_000)
+      await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    } finally {
+      restoreFetch()
+    }
+
+    const sustained = loggerWarnMock.mock.calls.filter(
+      (call) => call[0] === '[alfaclub-chat] cf_challenge_sustained',
+    )
+    expect(sustained).toHaveLength(2)
+    expect(recordBridgeCfChallengeRecoveredMock).toHaveBeenCalledTimes(1)
   })
 })

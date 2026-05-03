@@ -57,6 +57,15 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
         minutesUntilExpiry: 60,
         updatedAt: '2026-05-01T11:55:00.000Z',
       },
+      bridge: {
+        lastAuthFailAt: null,
+        consecutiveAuthFailures: 0,
+        lastCfChallengeAt: '2026-05-02T23:53:48.000Z',
+        consecutiveCfChallenges: 7,
+        cfChallengeSustained: true,
+        suppressedSocketAttempts: 11,
+        socketBackoffMs: 16_000,
+      },
     })
   })
 
@@ -99,6 +108,11 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
     expect(res.body?.data?.liveChatJwt?.writer).toBe('privy-token-refresher')
     expect(res.body?.data?.liveChatJwt?.minutesUntilExpiry).toBe(60)
     expect(res.body?.data?.lastSuccess?.identityTokenExp).toBe('2026-05-01T13:00:00.000Z')
+    expect(res.body?.data?.bridge).toMatchObject({
+      lastCfChallengeAt: '2026-05-02T23:53:48.000Z',
+      consecutiveCfChallenges: 7,
+      cfChallengeSustained: true,
+    })
   })
 
   it('never echoes the chat_jwt token in the response body', async () => {
@@ -139,6 +153,15 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
         expiresAt: '2026-05-01T13:00:00.000Z',
         minutesUntilExpiry: 60,
         updatedAt: '2026-05-01T11:55:00.000Z',
+      },
+      bridge: {
+        lastAuthFailAt: null,
+        consecutiveAuthFailures: 0,
+        lastCfChallengeAt: null,
+        consecutiveCfChallenges: 0,
+        cfChallengeSustained: false,
+        suppressedSocketAttempts: 0,
+        socketBackoffMs: 0,
       },
     })
     const req = createMockReq({ method: 'GET', headers: { 'x-cron-secret': 'test-cron-secret' } })

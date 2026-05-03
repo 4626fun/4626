@@ -51,6 +51,9 @@ const BRIDGE_WRITER = 'alfaclub-chat-bridge'
 export type AlfaClubBridgeAuthHealthSnapshot = {
   lastAuthFailAt: string | null
   consecutiveAuthFailures: number
+  lastCfChallengeAt: string | null
+  consecutiveCfChallenges: number
+  cfChallengeSustained: boolean
   suppressedSocketAttempts: number
   socketBackoffMs: number
 }
@@ -67,6 +70,9 @@ export type AlfaClubBridgeAuthHealthSnapshot = {
 const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
   lastAuthFailAt: null,
   consecutiveAuthFailures: 0,
+  lastCfChallengeAt: null,
+  consecutiveCfChallenges: 0,
+  cfChallengeSustained: false,
   suppressedSocketAttempts: 0,
   socketBackoffMs: 0,
 }
@@ -421,6 +427,23 @@ export function recordBridgeHistorySuccess(): void {
   void persistBridgeSnapshot()
 }
 
+export function recordBridgeCfChallenge(
+  at = new Date().toISOString(),
+  sustained = false,
+): void {
+  bridgeAuthHealth.lastCfChallengeAt = at
+  bridgeAuthHealth.consecutiveCfChallenges += 1
+  bridgeAuthHealth.cfChallengeSustained = Boolean(sustained)
+  void persistBridgeSnapshot()
+}
+
+export function recordBridgeCfChallengeRecovered(): void {
+  bridgeAuthHealth.lastCfChallengeAt = null
+  bridgeAuthHealth.consecutiveCfChallenges = 0
+  bridgeAuthHealth.cfChallengeSustained = false
+  void persistBridgeSnapshot()
+}
+
 export function recordBridgeSuppressedSocketAttempt(): void {
   bridgeAuthHealth.suppressedSocketAttempts += 1
   void persistBridgeSnapshot()
@@ -448,6 +471,19 @@ function isAlfaClubBridgeAuthHealthSnapshot(
   return (
     (v.lastAuthFailAt === null || typeof v.lastAuthFailAt === 'string') &&
     typeof v.consecutiveAuthFailures === 'number' &&
+    (
+      v.lastCfChallengeAt === undefined ||
+      v.lastCfChallengeAt === null ||
+      typeof v.lastCfChallengeAt === 'string'
+    ) &&
+    (
+      v.consecutiveCfChallenges === undefined ||
+      typeof v.consecutiveCfChallenges === 'number'
+    ) &&
+    (
+      v.cfChallengeSustained === undefined ||
+      typeof v.cfChallengeSustained === 'boolean'
+    ) &&
     typeof v.suppressedSocketAttempts === 'number' &&
     typeof v.socketBackoffMs === 'number'
   )
@@ -467,6 +503,12 @@ export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClu
     return {
       lastAuthFailAt: parsed.lastAuthFailAt,
       consecutiveAuthFailures: Math.max(0, Math.floor(parsed.consecutiveAuthFailures)),
+      lastCfChallengeAt: parsed.lastCfChallengeAt ?? null,
+      consecutiveCfChallenges: Math.max(
+        0,
+        Math.floor(parsed.consecutiveCfChallenges ?? 0),
+      ),
+      cfChallengeSustained: parsed.cfChallengeSustained ?? false,
       suppressedSocketAttempts: Math.max(0, Math.floor(parsed.suppressedSocketAttempts)),
       socketBackoffMs: Math.max(0, Math.floor(parsed.socketBackoffMs)),
     }
@@ -589,6 +631,9 @@ export async function readAuthHealthSnapshot(params?: {
 export function _resetBridgeAuthHealthForTests(): void {
   bridgeAuthHealth.lastAuthFailAt = null
   bridgeAuthHealth.consecutiveAuthFailures = 0
+  bridgeAuthHealth.lastCfChallengeAt = null
+  bridgeAuthHealth.consecutiveCfChallenges = 0
+  bridgeAuthHealth.cfChallengeSustained = false
   bridgeAuthHealth.suppressedSocketAttempts = 0
   bridgeAuthHealth.socketBackoffMs = 0
   bridgeStorageWarnLogged = false

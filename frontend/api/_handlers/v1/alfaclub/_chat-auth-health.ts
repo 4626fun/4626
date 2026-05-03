@@ -9,8 +9,8 @@
  *   - live `chat_jwt` row metadata: writer, expiry, minutes-until-expiry,
  *     and a flag indicating whether the writer matches the single-writer
  *     invariant (see `evaluateWriterAnomaly` in `authHealthStore.ts`).
- *   - bridge auth-loop counters: last history auth failure, consecutive
- *     failures, suppressed socket attempts, and current WS backoff.
+ *   - bridge auth-loop counters: auth failures, Cloudflare challenges,
+ *     suppressed socket attempts, and current WS backoff.
  *
  * Recommended monitoring thresholds (also in
  * `docs/operations/alfaclub-auth-hardening.md`):
