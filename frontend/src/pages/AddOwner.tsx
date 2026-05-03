@@ -102,6 +102,11 @@ export function AddOwnerPage() {
   const { disconnectAsync, isPending: isDisconnectPending } = useDisconnect()
   const [replayableConnectError, setReplayableConnectError] = useState<string | null>(null)
   const [replayableBusy, setReplayableBusy] = useState(false)
+  // Mar 9 used NO paymaster (paymasterAndData="", gas=0) — sponsorship was
+  // handled downstream by Relay's solver network. Default the diagnostic to
+  // "none" so we faithfully reproduce that shape. Other modes are kept for
+  // probing whether Coinbase's bundler now requires explicit sponsorship.
+  const [paymasterMode, setPaymasterMode] = useState<'none' | 'self' | 'cdp'>('none')
   const [replayableEvents, setReplayableEvents] = useState<
     Array<{ ts: number; step: ReplayableLaneTelemetry['step']; detail: Record<string, unknown> }>
   >([])
@@ -183,8 +188,16 @@ export function AddOwnerPage() {
         functionName: 'addOwnerAddress',
         args: [privyEmbeddedEoaAddress as `0x${string}`],
       })
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      let paymasterUrl: string | null = null
+      if (paymasterMode === 'self') {
+        // Always absolute — Coinbase's bundler fetches it server-side.
+        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+        paymasterUrl = origin ? `${origin}/api/paymaster` : null
+      } else if (paymasterMode === 'cdp') {
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv)
+      }
+      // mode === 'none' → leave paymasterUrl null (Mar 9 shape)
       const request = walletClient.request as (args: {
         method: string
         params?: unknown[]
@@ -371,6 +384,29 @@ export function AddOwnerPage() {
                     <code className="font-mono text-zinc-400">getUserOpHashWithoutChainId</code>{' '}
                     — the same hash signed by the passkey on Mar 9 (tx 0x801b9d4b…).
                   </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-zinc-500">Paymaster:</span>
+                    {(['none', 'self', 'cdp'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setPaymasterMode(mode)}
+                        disabled={replayableBusy}
+                        className={
+                          `rounded-md border px-2 py-0.5 transition-colors disabled:opacity-40 ` +
+                          (paymasterMode === mode
+                            ? 'border-emerald-300/60 bg-emerald-400/10 text-emerald-100'
+                            : 'border-white/15 bg-black/30 text-zinc-300 hover:border-white/30')
+                        }
+                      >
+                        {mode === 'none'
+                          ? 'None (Mar 9)'
+                          : mode === 'self'
+                            ? 'Self proxy'
+                            : 'CDP direct'}
+                      </button>
+                    ))}
+                  </div>
                   {!cswIsConnectedSelf ? (
                     <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 p-3 text-[11px] text-amber-100 space-y-2">
                       <div>
