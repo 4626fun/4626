@@ -187,6 +187,49 @@ export function AccountSetupWorkspaceView(props: {
     }
   }, [notice])
 
+  // ── Waitlist auto-trigger for 4626 signing install ──────────────────
+  // Once Step 1 (Zora link + canonical CSW) is satisfied AND the user has a
+  // connected signer that is a current owner of the canonical CSW, kick off
+  // `onEnable4626Signing` automatically so the user does not have to expand
+  // Step 2 / Advanced settings and click a button. We fire at most once per
+  // mounted session (`autoSignTriggeredRef`); user can still trigger manually
+  // via the button or clear via Reset, which re-mounts state in the controller
+  // but keeps this ref so we don't immediately re-fire after a deliberate
+  // reset. The guard set is intentionally conservative — we never auto-fire
+  // when there is an active error, when an embedded wallet is still settling,
+  // when a Base App reconnect is required, or when the controller is busy.
+  const autoSignTriggeredRef = useRef(false)
+  const zoraStepComplete = zoraLinked
+  const walletStepComplete = Boolean(canonicalCswAddress)
+  const stepOneComplete = zoraStepComplete && walletStepComplete
+  const signingStepCompleteForAuto =
+    me?.accountSignals.executionTrack === 'legacy-owner-install' ||
+    me?.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
+    /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  useEffect(() => {
+    if (context !== 'waitlist') return
+    if (autoSignTriggeredRef.current) return
+    if (!stepOneComplete) return
+    if (signingStepCompleteForAuto) return
+    if (!connectedOwnerReady) return
+    if (advancedBusy) return
+    if (needsBaseAccountReconnect) return
+    if (needsEmbeddedWallet) return
+    if (error) return
+    autoSignTriggeredRef.current = true
+    void onEnable4626Signing()
+  }, [
+    advancedBusy,
+    connectedOwnerReady,
+    context,
+    error,
+    needsBaseAccountReconnect,
+    needsEmbeddedWallet,
+    onEnable4626Signing,
+    signingStepCompleteForAuto,
+    stepOneComplete,
+  ])
+
   if (loading && !me) {
     return (
       <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
@@ -197,8 +240,11 @@ export function AccountSetupWorkspaceView(props: {
 
   if (!me) return null
 
-  const zoraStepComplete = zoraLinked
-  const walletStepComplete = Boolean(canonicalCswAddress)
+  // `zoraStepComplete`, `walletStepComplete`, and `stepOneComplete` are
+  // hoisted above the `if (!me) return null` guard so the auto-trigger effect
+  // can depend on them. `signingStepComplete` is the canonical (post-`me`)
+  // form used by the rendered step UI — it shadows the auto-trigger
+  // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
   const signingStepComplete =
     executionTrack === 'legacy-owner-install' ||
@@ -215,7 +261,6 @@ export function AccountSetupWorkspaceView(props: {
     zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect && !hasConnectedSigner
 
   if (context === 'waitlist') {
-    const stepOneComplete = zoraStepComplete && walletStepComplete
     // Which top-level step is expanded: null = auto
     const resolvedOpen: 1 | 2 =
       openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
