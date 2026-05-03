@@ -13,7 +13,6 @@ import {
   _submitOwnerViaReplayablePreparedCalls,
   type ReplayableLaneTelemetry,
 } from '@/lib/wallet/onboardingWallet'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 
 const ADD_OWNER_ADDRESS_ABI = [
   {
@@ -104,9 +103,11 @@ export function AddOwnerPage() {
   const [replayableBusy, setReplayableBusy] = useState(false)
   // Mar 9 used NO paymaster (paymasterAndData="", gas=0) — sponsorship was
   // handled downstream by Relay's solver network. Default the diagnostic to
-  // "none" so we faithfully reproduce that shape. Other modes are kept for
-  // probing whether Coinbase's bundler now requires explicit sponsorship.
-  const [paymasterMode, setPaymasterMode] = useState<'none' | 'self' | 'cdp'>('none')
+  // "none" so we faithfully reproduce that shape. "proxy" forces an absolute
+  // URL to the /api/paymaster JSON-RPC proxy (which forwards to the real CDP
+  // paymaster server-side) for probing whether Coinbase's bundler now requires
+  // explicit sponsorship.
+  const [paymasterMode, setPaymasterMode] = useState<'none' | 'proxy'>('none')
   const [replayableEvents, setReplayableEvents] = useState<
     Array<{ ts: number; step: ReplayableLaneTelemetry['step']; detail: Record<string, unknown> }>
   >([])
@@ -189,13 +190,18 @@ export function AddOwnerPage() {
         args: [privyEmbeddedEoaAddress as `0x${string}`],
       })
       let paymasterUrl: string | null = null
-      if (paymasterMode === 'self') {
-        // Always absolute — Coinbase's bundler fetches it server-side.
-        const origin = typeof window !== 'undefined' ? window.location.origin : ''
-        paymasterUrl = origin ? `${origin}/api/paymaster` : null
-      } else if (paymasterMode === 'cdp') {
-        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-        paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv)
+      if (paymasterMode === 'proxy') {
+        // Always absolute — Coinbase's bundler fetches the paymaster URL
+        // server-side from its own infra, so a relative path 404s on their
+        // origin. Prefer window.location.origin (works in normal browsers)
+        // and fall back to the canonical marketing origin
+        // (https://4626.fun) for environments — like Base App's webview —
+        // that report an empty/opaque origin.
+        let origin = typeof window !== 'undefined' ? String(window.location?.origin ?? '').trim() : ''
+        if (!origin || origin === 'null') {
+          origin = (import.meta.env.VITE_MARKETING_ORIGIN as string | undefined)?.trim() || 'https://4626.fun'
+        }
+        paymasterUrl = `${origin.replace(/\/$/, '')}/api/paymaster`
       }
       // mode === 'none' → leave paymasterUrl null (Mar 9 shape)
       const request = walletClient.request as (args: {
@@ -386,7 +392,7 @@ export function AddOwnerPage() {
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <span className="text-zinc-500">Paymaster:</span>
-                    {(['none', 'self', 'cdp'] as const).map((mode) => (
+                    {(['none', 'proxy'] as const).map((mode) => (
                       <button
                         key={mode}
                         type="button"
@@ -399,11 +405,7 @@ export function AddOwnerPage() {
                             : 'border-white/15 bg-black/30 text-zinc-300 hover:border-white/30')
                         }
                       >
-                        {mode === 'none'
-                          ? 'None (Mar 9)'
-                          : mode === 'self'
-                            ? 'Self proxy'
-                            : 'CDP direct'}
+                        {mode === 'none' ? 'None (Mar 9 shape)' : 'Proxy (CDP)'}
                       </button>
                     ))}
                   </div>
