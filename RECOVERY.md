@@ -15,9 +15,7 @@ The canonical path is **Coinbase passkey owner[0] signs `executeWithoutChainIdVa
 - **EntryPoint:** `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` (v0.6)
 - **Nonce:** `0x21050000…0001` — `key = 8453` (REPLAYABLE_NONCE_KEY for Base)
 - **Owner installed at index 2:** `0xCf8D17Ce01B73637eF936Fe7c47bA7100b820142` (recovery key, ECDSA)
-- **Signature shape:** `SignatureWrapper{ ownerIndex: 0, signatureData: <WebAuthn struct> }`
-  - WebAuthn `clientDataJSON.type = "webauthn.get"`
-  - WebAuthn `clientDataJSON.origin = "android:apk-key-hash:EAOWwOQABhsQXdlgGi5hBOadx7TY6ZX_CqJlpoxf1hk"` (org.toshi)
+- **Signature shape:** `SignatureWrapper{ ownerIndex: 0, signatureData: <WebAuthn struct> }` — see "Signature decode" below for the full verified field-by-field breakdown.
 - **Gas:** Relay solver `0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f` fronted gas (paymaster=0x0 in the userOp; sponsorship resolved off-chain by Relay).
 - **Result:** `success: true`, AddOwner event emitted at index 2.
 
@@ -80,6 +78,70 @@ from `useAccountSetupController.onEnable4626Signing()`, surfaced on
    when the WebAuthn prompt appears.
 6. Wait ~10–30 s for Relay to submit. The page will display the on-chain tx
    hash. Verify the `AddOwner` event on Basescan.
+
+## Signature decode (verified, May 4 success)
+
+The `userOp.signature` field is **672 bytes** total. It is a single ABI-encoded
+`SignatureWrapper` struct followed by trailing zero padding.
+
+### Outer: SignatureWrapper
+
+```
+struct SignatureWrapper {
+  uint256 ownerIndex;     // 0  -> owner[0] (canonical Coinbase passkey)
+  bytes   signatureData;  // 544 bytes (ABI-encoded WebAuthnAuth)
+}
+```
+
+### Inner: WebAuthnAuth
+
+```
+struct WebAuthnAuth {
+  bytes   authenticatorData;  // 37 bytes
+  string  clientDataJSON;     // 190 bytes
+  uint256 challengeIndex;     // 23  (offset of "challenge" key inside clientDataJSON)
+  uint256 typeIndex;          // 1   (offset of "type" key inside clientDataJSON)
+  uint256 r;                  // ECDSA-P256 r
+  uint256 s;                  // ECDSA-P256 s (low-s normalised)
+}
+```
+
+Raw values from the success tx:
+
+| Field | Value |
+|---|---|
+| `authenticatorData` | `0xf198086b2db17256731bc456673b96bcef23f51d1fbacdd7c4379ef65465572f1d00000000` |
+|   `rpIdHash` (first 32 bytes) | `0xf198086b2db17256731bc456673b96bcef23f51d1fbacdd7c4379ef65465572f` |
+|   `flags` (byte 32) | `0x1d` = `0001 1101` → UP=1, UV=1, AT=0, ED=0 (User Present + User Verified) |
+|   `signCount` (bytes 33-37) | `0x00000000` |
+| `clientDataJSON` | `{"type":"webauthn.get","challenge":"YS1zL9LNW0sASQoj1HXRty5snt5gquwhOTkAVIql4no","origin":"android:apk-key-hash:EAOWwOQABhsQXdlgGi5hBOadx7TY6ZX_CqJlpoxf1hk","androidPackageName":"org.toshi"}` |
+| `challengeIndex` | `23` |
+| `typeIndex` | `1` |
+| `r` | `0xf0803d85f46bf4e1c9c43fe77ee45fd50d75fe0053536bfeba99dfd920056a09` |
+| `s` | `0x1b49a228905537fe9d73fa978fce50af9631ae0c1615c407e779f8c740d31202` |
+
+### Cross-checks (all pass)
+
+- `clientDataJSON.slice(typeIndex=1, +18)` = `"type":"webauthn.g` ✅ (the substring at offset 1 is the start of the JSON `"type"` key, exactly as advertised by `typeIndex`)
+- `clientDataJSON.slice(challengeIndex=23, +60)` = `"challenge":"YS1zL9LNW0sASQoj1HXRty5snt5gquwhOTkAVIql4no","o` ✅
+- `base64url_decode(clientDataJSON.challenge)` = `0x612d732fd2cd5b4b00490a23d475d1b72e6c9ede60aaec21393900548aa5e27a` (32 bytes) → this is the `getUserOpHashWithoutChainId(userOp)` value that owner[0] signed
+- `clientDataJSON.type == "webauthn.get"` ✅
+- `clientDataJSON.origin` = `android:apk-key-hash:EAOWwOQABhsQXdlgGi5hBOadx7TY6ZX_CqJlpoxf1hk` → the `keys.coinbase.com` popup relayed the WebAuthn challenge to the user's phone where the **Toshi (Coinbase Wallet) Android app** (`org.toshi`) performed the assertion. Passkey lives on-device on the phone, not in the desktop browser.
+- `r != 0` and `s != 0` ✅ (low-s normalised)
+
+### Reproducing the decode
+
+Run the helper script in this repo:
+
+```bash
+cd scripts/recovery
+node decode-userop-signature.mjs <signature_hex>
+```
+
+It accepts any `userOp.signature` hex string (with or without `0x` prefix)
+and prints the full SignatureWrapper / WebAuthnAuth breakdown plus the
+base64url-decoded challenge. Use it on any failed userOp signature to
+confirm the shape and identify which owner index signed.
 
 ## Useful selectors / identifiers
 
