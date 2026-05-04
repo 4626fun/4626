@@ -1971,6 +1971,95 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
 
+          // ── Self-built UserOp + Relay /execute lane ──
+          // Replicates the May 4 2026 owner[2] install path exactly:
+          //   1. Build UserOp with executeWithoutChainIdValidation([addOwnerAddress(...)])
+          //   2. Compute getUserOpHashWithoutChainId locally (NO chainId, NO replaySafeHash)
+          //   3. personal_sign(hash, csw) — wallet returns SignatureWrapper
+          //   4. Encode handleOps + POST to /api/relay/execute (server proxy with x-api-key)
+          // Bypasses wallet_prepareCalls entirely (which the popup vGe self-call check rejects)
+          // and bypasses Coinbase's bundler. Relay's solver pays gas + submits via multicall.
+          const runSelfBuiltUserOpRelayLane = async (): Promise<`0x${string}` | null> => {
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'userop_typed',
+              status: 'start',
+              attempt: 0,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+            })
+            try {
+              const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
+              if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+                // Not a replayable-lane-eligible inner call — skip silently.
+                return null
+              }
+              if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
+                // Self-built lane requires sender == target.
+                return null
+              }
+              const result = await _submitOwnerViaSelfBuiltUserOp({
+                walletRequest,
+                chainId: 8453,
+                csw: canonicalSmartWalletAddress as `0x${string}`,
+                innerCallData: txRequest.data as `0x${string}`,
+                onTelemetry: (event) => {
+                  // Surface telemetry into the existing stage event channel for diagnostics.
+                  if (event.step === 'error') {
+                    // eslint-disable-next-line no-console
+                    console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                  } else {
+                    // eslint-disable-next-line no-console
+                    console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                  }
+                },
+              })
+              // The Relay response carries a requestId we could poll, but for now treat
+              // the immediate accept (HTTP 200 from the proxy) as success and let the
+              // standard confirm-owner polling below pick up the actual on-chain tx.
+              const relayResponseAny = result.relayResponse as Record<string, unknown> | null
+              const relayDataAny = relayResponseAny && typeof relayResponseAny === 'object'
+                ? (relayResponseAny.data as Record<string, unknown> | undefined)
+                : undefined
+              const candidateTxHash =
+                (typeof relayDataAny?.txHash === 'string' ? relayDataAny.txHash : null) ??
+                (typeof relayDataAny?.transactionHash === 'string' ? relayDataAny.transactionHash : null) ??
+                null
+              if (candidateTxHash && isTxHash(candidateTxHash)) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'userop_typed',
+                  status: 'success',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  txHash: candidateTxHash,
+                })
+                return candidateTxHash
+              }
+              // Relay accepted but no tx hash yet — return a sentinel and rely on
+              // confirm-owner polling. We need SOME hash though for the confirm flow,
+              // so propagate null and let outer logic fall through to other lanes.
+              return null
+            } catch (selfBuiltError) {
+              if (isUserRejectedWalletAction(selfBuiltError)) throw selfBuiltError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_typed',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(selfBuiltError).code,
+                message: selfBuiltError instanceof Error ? selfBuiltError.message : String(selfBuiltError ?? ''),
+              })
+              // eslint-disable-next-line no-console
+              console.warn('[selfBuiltUserOpRelay] lane failed; falling through', selfBuiltError)
+              return null
+            }
+          }
+
           const runSponsoredThenDirectFallback = async () => {
             try {
               txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
@@ -2028,9 +2117,19 @@ export async function sendPreparedOwnerTx(params: {
           } else if (preferSponsoredFirst) {
             await runSponsoredThenDirectFallback()
           } else {
-            try {
-              txHash = await runDirectSendTx()
-            } catch (sendTxError) {
+            // ── Self-auth, embedded-owner install ──
+            // Order: self-built UserOp + Relay (May 4 path) → eth_sendTransaction
+            // → UserOp(typed) → UserOp(non-typed). The self-built lane runs first
+            // because it's the only path that bypasses the keys.coinbase.com popup
+            // entirely on desktop external Chrome (where vGe blocks self-calls and
+            // the popup signs with the CDP session key instead of the passkey).
+            const selfBuiltHash = await runSelfBuiltUserOpRelayLane()
+            if (selfBuiltHash && isTxHash(selfBuiltHash)) {
+              txHash = selfBuiltHash
+            } else {
+              try {
+                txHash = await runDirectSendTx()
+              } catch (sendTxError) {
               if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
@@ -2069,6 +2168,7 @@ export async function sendPreparedOwnerTx(params: {
                 }
               }
             }
+          }
           }
         } else {
           if (customCoOwnerDirectLane) {
