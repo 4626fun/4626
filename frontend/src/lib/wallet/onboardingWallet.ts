@@ -3036,12 +3036,16 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     },
   })
 
-  // Step 6: POST to /api/relay/execute.
+  // Step 6: POST to /api/relay/execute (proxies to Relay's /execute/call).
+  // /execute/call requires `user` = the CSW (the smart wallet whose UserOp
+  // is being submitted). Confirmed via direct probe 2026-05-04 — the bare
+  // /execute endpoint is WAF-gated for our API key, but /execute/call works.
   const relayBody = {
     chainId: params.chainId,
     to: ENTRY_POINT_V06_ADDRESS,
     data: handleOpsCalldata,
     value: '0',
+    user: params.csw,
   }
   emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
 

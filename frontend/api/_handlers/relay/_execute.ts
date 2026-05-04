@@ -14,34 +14,39 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 /**
- * `/api/relay/execute` — server-side proxy to Relay Protocol's gasless execution
- * endpoint (`https://api.relay.link/execute`).
+ * `/api/relay/execute` — server-side proxy to Relay Protocol's `/execute/call`
+ * endpoint (`https://api.relay.link/execute/call`).
  *
  * Why this proxy exists:
  *  - The Mar 9 2026 owner[2] install (tx 0x801b9d4b…) was relayed by
  *    `RelayRouterV3.multicall(EntryPoint.handleOps + Relay.refund)`. The trace
  *    shows the inner UserOp was passkey-signed against
  *    `getUserOpHashWithoutChainId(userOp)` with `gas=0` and
- *    `paymasterAndData=""`, then submitted via Relay's `/execute` endpoint
- *    with `executionKind: 'rawCalls'` carrying pre-encoded `handleOps`
- *    calldata. Reference:
- *    https://docs.relay.link/features/gasless-execution
- *  - Relay's `/execute` endpoint is public; an API key (`x-api-key` header)
- *    is optional and only raises rate limits. When the env key is set, we
- *    forward it server-side so it never reaches the browser. When unset, we
- *    forward the request keyless on Relay's public rate-limit tier — fine for
- *    diagnostic / one-off testing of the Mar 9 add-owner path.
+ *    `paymasterAndData=""`. The submission API on Relay is `/execute/call`
+ *    which wraps the inner txs in the multicall router automatically.
+ *
+ * IMPORTANT — `/execute` vs `/execute/call`:
+ *  - `https://api.relay.link/execute` is documented but appears to be gated at
+ *    the WAF/CloudFront layer for our API key (returns bare `{"error":"Bad
+ *    Request"}` regardless of body shape). It is reserved for whitelisted
+ *    sponsored-execution partners.
+ *  - `https://api.relay.link/execute/call` is the actual working endpoint that
+ *    accepts the same `txs[]` shape as `/quote/v2`, runs them through the
+ *    bundler, and returns proper validation/EVM errors when something is
+ *    wrong. This is what Mar 9 used (RelayRouterV3.multicall is built
+ *    server-side from the txs[] we send).
  *
  * Request body (POST, JSON):
  *   {
  *     chainId: 8453,
  *     to: "0x...",         // EntryPoint v0.6 or v0.7 address
  *     data: "0x...",       // EntryPoint.handleOps([signedUserOp], beneficiary)
- *     value?: "0"          // optional, defaults to "0"
+ *     value?: "0",         // optional, defaults to "0"
+ *     user: "0x..."        // CSW address (required for /execute/call)
  *   }
  *
  * Response body:
- *   { success: true,  data: <relay /execute response>  }
+ *   { success: true,  data: <relay /execute/call response>  }
  *   { success: false, error: <message>, status: <upstream status> }
  *
  * Notes:
@@ -56,6 +61,7 @@ type RelayExecuteRequest = {
   to?: unknown
   data?: unknown
   value?: unknown
+  user?: unknown
 }
 
 type RelayExecuteSuccess = ApiEnvelope<unknown>
@@ -66,7 +72,7 @@ type RelayExecuteError = {
   data?: unknown
 }
 
-const RELAY_EXECUTE_URL = 'https://api.relay.link/execute'
+const RELAY_EXECUTE_URL = 'https://api.relay.link/execute/call'
 const HANDLE_OPS_SELECTOR = '0x1fad948c' // EntryPoint.handleOps((userOp[]),beneficiary)
 const ENTRY_POINT_V06 = '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789'
 const ENTRY_POINT_V07 = '0x0000000071727de22e5e9d8baf0edac6f37da032'
@@ -175,19 +181,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  // /execute/call requires a `user` field (the smart wallet address paying for
+  // the inner UserOp's signature). For the add-owner flow this is the CSW.
+  if (!isAddressString(body.user)) {
+    return res.status(400).json({
+      success: false,
+      error: 'user must be the CSW address (required for /execute/call)',
+    } satisfies ApiEnvelope<never>)
+  }
+
   const apiKey = resolveRelayApiKey()
   if (!apiKey) {
     logger.info('[relay/execute] forwarding without x-api-key (public rate-limit tier)')
   }
 
+  // Schema for `/execute/call` (confirmed via direct probe 2026-05-04):
+  //   { user, originChainId, destinationChainId, txs: [{ to, data, value }] }
+  // The endpoint runs txs[] through Relay's bundler and the multicall router
+  // is built server-side. Returns 400 with `{ message, tx }` on EVM revert,
+  // 400 with `{ message: "body must have required property '<name>'" }` on
+  // schema errors, 200 with the receipt on success.
   const upstreamPayload = {
-    executionKind: 'rawCalls',
-    data: {
-      chainId,
-      to: body.to,
-      data: body.data,
-      value: '0',
-    },
+    user: body.user,
+    originChainId: chainId,
+    destinationChainId: chainId,
+    txs: [
+      {
+        to: body.to,
+        data: body.data,
+        value: '0',
+      },
+    ],
   }
 
   let upstreamRes: Response
