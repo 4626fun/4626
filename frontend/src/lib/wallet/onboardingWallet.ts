@@ -2118,57 +2118,63 @@ export async function sendPreparedOwnerTx(params: {
             await runSponsoredThenDirectFallback()
           } else {
             // ── Self-auth, embedded-owner install ──
-            // Order: self-built UserOp + Relay (May 4 path) → eth_sendTransaction
-            // → UserOp(typed) → UserOp(non-typed). The self-built lane runs first
-            // because it's the only path that bypasses the keys.coinbase.com popup
-            // entirely on desktop external Chrome (where vGe blocks self-calls and
-            // the popup signs with the CDP session key instead of the passkey).
-            const selfBuiltHash = await runSelfBuiltUserOpRelayLane()
-            if (selfBuiltHash && isTxHash(selfBuiltHash)) {
-              txHash = selfBuiltHash
-            } else {
-              try {
-                txHash = await runDirectSendTx()
-              } catch (sendTxError) {
-              if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
+            // Order: UserOp(typed) → UserOp(non-typed) → eth_sendTransaction.
+            // The prepareCalls/sendPreparedCalls path is the only one that
+            // produces a valid CSW WebAuthn signature (~672 bytes nested
+            // SignatureWrapper+WebAuthnAuth). personal_sign returns 224 bytes
+            // which can never validate, so the self-built UserOp+Relay lane
+            // is dropped — it could never have worked structurally.
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+            } catch (typedUserOpError) {
+              if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
-                stage: 'send_calls',
+                stage: 'userop_typed',
                 status: 'error',
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(sendTxError).code,
-                message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
+                code: classifyOwnerApprovalError(typedUserOpError).code,
+                message: typedUserOpError instanceof Error ? typedUserOpError.message : String(typedUserOpError ?? ''),
               })
 
-              // ── Fallback: sponsored UserOp with EIP-712 typed signing ──
+              // ── Fallback: UserOp with non-typed signing ──
               try {
-                txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-              } catch (typedUserOpError) {
-                if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+              } catch (nonTypedUserOpError) {
+                if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
                 emitOwnerApprovalStage(onStageEvent, {
                   runId: effectiveApprovalRunId,
-                  stage: 'userop_typed',
+                  stage: 'userop_nontyped',
                   status: 'error',
                   executionMode,
                   signerAddress,
                   canonicalCswAddress: canonicalSmartWalletAddress,
-                  code: classifyOwnerApprovalError(typedUserOpError).code,
-                  message: typedUserOpError instanceof Error ? typedUserOpError.message : String(typedUserOpError ?? ''),
+                  code: classifyOwnerApprovalError(nonTypedUserOpError).code,
+                  message: nonTypedUserOpError instanceof Error ? nonTypedUserOpError.message : String(nonTypedUserOpError ?? ''),
                 })
 
-                // ── Last fallback: UserOp with non-typed signing ──
+                // ── Last fallback: direct eth_sendTransaction ──
                 try {
-                  txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
-                } catch (nonTypedUserOpError) {
-                  if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
-                  // All paths exhausted — throw the sendTx error (most informative)
-                  throw sendTxError
+                  txHash = await runDirectSendTx()
+                } catch (sendTxError) {
+                  if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
+                  emitOwnerApprovalStage(onStageEvent, {
+                    runId: effectiveApprovalRunId,
+                    stage: 'send_calls',
+                    status: 'error',
+                    executionMode,
+                    signerAddress,
+                    canonicalCswAddress: canonicalSmartWalletAddress,
+                    code: classifyOwnerApprovalError(sendTxError).code,
+                    message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
+                  })
+                  // All paths exhausted — throw the typed UserOp error (first/most informative)
+                  throw typedUserOpError
                 }
               }
             }
-          }
           }
         } else {
           if (customCoOwnerDirectLane) {
