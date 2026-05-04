@@ -4,6 +4,7 @@ out = "out"
 libs = ["node_modules", "lib"]
 solc = "0.8.30"
 auto_detect_solc = true
+evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
@@ -42,6 +43,7 @@ remappings = [
 runs = 256
 
 [profile.ci]
+evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 200

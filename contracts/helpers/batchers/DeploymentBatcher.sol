@@ -1134,7 +1134,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _ajnaFactory,
         address _vaultCoreModule,
         address _vaultStrategiesModule,
-        address _vaultAdminModule
+        address _vaultAdminModule,
+        address _phase2Module
     ) {
         if (_registry == address(0) || _bytecodeStore == address(0) || _create2Deployer == address(0)) revert ZeroAddress();
         if (_protocolTreasury == address(0) || _poolManager == address(0) || _taxHook == address(0)) {
@@ -1150,6 +1151,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (_vaultCoreModule == address(0) || _vaultStrategiesModule == address(0) || _vaultAdminModule == address(0)) {
             revert ZeroAddress();
         }
+        if (_phase2Module == address(0)) revert ZeroAddress();
 
         // FIX: L-02 (4626-350) — outer batcher references a hardcoded
         // Base-only Charm factory (CHARM_FACTORY public constant above),
@@ -1180,16 +1182,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         phase3Helper = new DeploymentBatcherPhase3Helper(
             _create2Deployer, _protocolTreasury, _usdc, _uniswapV3Factory, _uniswapRouter, _ajnaFactory
         );
-        phase2Module = new DeploymentBatcherPhase2Module(
-            _create2Deployer,
-            _registry,
-            _chainlinkEthUsd,
-            _poolManager,
-            _taxHook,
-            _protocolTreasury,
-            _lotteryManager,
-            _vaultActivationBatcher
-        );
+        phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
         uniV4Helper = new DeploymentBatcherUniV4Helper(_create2Deployer, _poolManager, _permit2);
         utilsHelper = new DeploymentBatcherUtilsHelper();
     }
