@@ -81,6 +81,7 @@ export function ToshiProbe() {
 
   const [providerInfo, setProviderInfo] = useState<string>('')
   const [results, setResults] = useState<Record<string, ProbeResult>>({})
+  const [resolvedSender, setResolvedSender] = useState<string | null>(null)
 
   // Capture whatever we can about the injected provider on mount-ish.
   const providerSummary = useMemo(() => {
@@ -110,18 +111,55 @@ export function ToshiProbe() {
   function getRequest():
     | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
     | null {
-    // Prefer wagmi's walletClient.request (consistent with the rest of the app).
-    if (walletClient && typeof walletClient.request === 'function') {
-      return (args) => walletClient.request(args as any) as Promise<unknown>
-    }
+    // Prefer the injected provider directly. Wagmi often fails to connect
+    // inside in-app browsers (Coinbase Wallet, Base App) because the
+    // configured connectors are popup-based; the page sees window.ethereum
+    // but no wagmi session. Bypassing wagmi here lets us probe the actual
+    // injected provider's capabilities even when wagmi is silent.
     if (typeof window !== 'undefined') {
       const eth = (window as any).ethereum
       if (eth && typeof eth.request === 'function') {
         return (args) => eth.request(args)
       }
     }
+    if (walletClient && typeof walletClient.request === 'function') {
+      return (args) => walletClient.request(args as any) as Promise<unknown>
+    }
     return null
   }
+
+  // Resolve a usable address for `from` in probes 2-5.  Prefer wagmi's
+  // connected address; fall back to eth_requestAccounts on the injected
+  // provider so we still have a sender even when wagmi is silent.
+  async function resolveSender(): Promise<`0x${string}` | null> {
+    if (connectedAddress) {
+      setResolvedSender(connectedAddress)
+      return connectedAddress as `0x${string}`
+    }
+    if (typeof window === 'undefined') return null
+    const eth = (window as any).ethereum
+    if (!eth || typeof eth.request !== 'function') return null
+    try {
+      const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[]
+      const first = Array.isArray(accounts) ? accounts[0] : null
+      const addr = typeof first === 'string' && first.startsWith('0x') ? (first as `0x${string}`) : null
+      setResolvedSender(addr)
+      return addr
+    } catch (err) {
+      setResolvedSender(`error: ${err instanceof Error ? err.message : String(err)}`)
+      return null
+    }
+  }
+
+  const probeRequestAccounts = () =>
+    runProbe('requestAccounts', async () => {
+      const req = getRequest()
+      if (!req) throw new Error('No injected provider available')
+      const result = await req({ method: 'eth_requestAccounts' })
+      const first = Array.isArray(result) ? (result as unknown[])[0] : null
+      if (typeof first === 'string') setResolvedSender(first)
+      return { detail: `Got ${Array.isArray(result) ? result.length : 0} account(s)`, raw: result }
+    })
 
   async function runProbe(
     key: string,
@@ -174,7 +212,8 @@ export function ToshiProbe() {
     runProbe('signTypedData', async () => {
       const req = getRequest()
       if (!req) throw new Error('No injected provider available')
-      if (!connectedAddress) throw new Error('No connected address')
+      const sender = await resolveSender()
+      if (!sender) throw new Error('No sender (eth_requestAccounts returned none)')
       const typedData = {
         domain: {
           name: 'Coinbase Smart Wallet',
@@ -196,7 +235,7 @@ export function ToshiProbe() {
       }
       const result = await req({
         method: 'eth_signTypedData_v4',
-        params: [connectedAddress, JSON.stringify(typedData)],
+        params: [sender, JSON.stringify(typedData)],
       })
       return {
         detail: `Returned ${typeof result === 'string' ? `${(result as string).length}-char hex` : typeof result}`,
@@ -209,13 +248,14 @@ export function ToshiProbe() {
     runProbe('prepareCalls', async () => {
       const req = getRequest()
       if (!req) throw new Error('No injected provider available')
-      if (!connectedAddress) throw new Error('No connected address')
+      const sender = await resolveSender()
+      if (!sender) throw new Error('No sender (eth_requestAccounts returned none)')
       const result = await req({
         method: 'wallet_prepareCalls',
         params: [
           {
             chainId: CHAIN_ID_HEX,
-            from: connectedAddress,
+            from: sender,
             calls: [{ to: CSW_ADDRESS, data: PROBE_DATA, value: '0x0' }],
             atomicRequired: false,
             version: '2.0.0',
@@ -240,13 +280,14 @@ export function ToshiProbe() {
     runProbe('sendCalls', async () => {
       const req = getRequest()
       if (!req) throw new Error('No injected provider available')
-      if (!connectedAddress) throw new Error('No connected address')
+      const sender = await resolveSender()
+      if (!sender) throw new Error('No sender (eth_requestAccounts returned none)')
       const result = await req({
         method: 'wallet_sendCalls',
         params: [
           {
             chainId: CHAIN_ID_HEX,
-            from: connectedAddress,
+            from: sender,
             calls: [{ to: CSW_ADDRESS, data: PROBE_DATA, value: '0x0' }],
             atomicRequired: false,
             version: '2.0.0',
@@ -268,12 +309,13 @@ export function ToshiProbe() {
     runProbe('ethSendTx', async () => {
       const req = getRequest()
       if (!req) throw new Error('No injected provider available')
-      if (!connectedAddress) throw new Error('No connected address')
+      const sender = await resolveSender()
+      if (!sender) throw new Error('No sender (eth_requestAccounts returned none)')
       const result = await req({
         method: 'eth_sendTransaction',
         params: [
           {
-            from: connectedAddress,
+            from: sender,
             to: CSW_ADDRESS,
             data: PROBE_DATA,
             value: '0x0',
@@ -288,6 +330,7 @@ export function ToshiProbe() {
       {
         time: new Date().toISOString(),
         provider: providerSummary,
+        resolvedSender,
         results,
       },
       null,
@@ -300,6 +343,12 @@ export function ToshiProbe() {
   }
 
   const probes: Array<{ key: string; label: string; fn: () => Promise<void>; warn?: string }> = [
+    {
+      key: 'requestAccounts',
+      label: '0. eth_requestAccounts (wakes the injected provider)',
+      fn: probeRequestAccounts,
+      warn: 'tap this FIRST so subsequent probes have a sender',
+    },
     { key: 'capabilities', label: '1. wallet_getCapabilities', fn: probeCapabilities },
     {
       key: 'signTypedData',
@@ -342,8 +391,13 @@ export function ToshiProbe() {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-[11px] font-mono leading-snug text-zinc-300">
+        <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-[11px] font-mono leading-snug text-zinc-300 space-y-2">
           <pre className="whitespace-pre-wrap break-all">{safeStringify(providerSummary)}</pre>
+          {resolvedSender ? (
+            <div className="rounded-lg bg-black/40 p-2">
+              <span className="text-zinc-500">resolved sender:</span> {resolvedSender}
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-3">
