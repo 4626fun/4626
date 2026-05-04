@@ -24,6 +24,7 @@ import {
   CreatorEarnings,
   CreatorStrategyFeatures,
   CswSignatureProbe,
+  ToshiProbe,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -123,6 +124,15 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
   {
     path: '/dev/csw-signature-probe',
     element: <CswSignatureProbe />,
+  },
+  // `/dev/toshi-probe` — minimal mobile diagnostic for /add-owner failures.
+  // Runs each candidate wallet method (capabilities, signTypedData,
+  // prepareCalls, sendCalls+paymaster, eth_sendTransaction) one tap at a time
+  // against the connected provider so we can identify exactly which lane
+  // Toshi/Base App accepts vs rejects without rebuilding the production page.
+  {
+    path: '/dev/toshi-probe',
+    element: <ToshiProbe />,
   },
 ]
 

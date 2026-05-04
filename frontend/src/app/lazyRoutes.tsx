@@ -196,3 +196,4 @@ export const CswSignatureProbe = lazyNamed(
   () => import('../pages/dev/CswSignatureProbe'),
   'CswSignatureProbe',
 )
+export const ToshiProbe = lazyNamed(() => import('../pages/dev/ToshiProbe'), 'ToshiProbe')
