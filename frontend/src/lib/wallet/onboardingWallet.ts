@@ -889,6 +889,7 @@ type SelfBuiltUserOpLaneTelemetry = {
     | 'build_userop'
     | 'compute_hash'
     | 'sign'
+    | 'signature_preflight'
     | 'splice'
     | 'encode_handle_ops'
     | 'submit_relay'
@@ -988,18 +989,43 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   })
   const parsedSignature = parseSignatureForRecovery(signature)
   if (parsedSignature.ecdsaSignature) {
+    const preflight = await preflightOwnerKeyMismatch({
+      walletRequest: params.walletRequest,
+      sender: params.csw,
+      hashToSign,
+      signature,
+      sessionKind: 'external_signer',
+    })
     emit({
-      step: 'error',
+      step: 'signature_preflight',
       detail: {
-        stage: 'sign',
-        reason: 'coinbase_returned_eoa_signature_for_self_auth',
+        outcome: preflight.kind,
         ownerIndex: parsedSignature.ownerIndex,
         signatureLengthBytes: (signature.length - 2) / 2,
+        recoveredAddress:
+          'recoveredAddress' in preflight ? preflight.recoveredAddress : null,
+        parsedOwnerAddress:
+          'parsedOwnerAddress' in preflight ? preflight.parsedOwnerAddress : null,
       },
     })
-    throw new Error(
-      'Coinbase returned a session-key ECDSA signature instead of the canonical passkey signature. Open /add-owner in a normal external browser so the Coinbase passkey popup can sign as the on-chain CSW owner.',
-    )
+    if (preflight.kind === 'mismatch') {
+      emit({
+        step: 'error',
+        detail: {
+          stage: 'sign',
+          reason: 'coinbase_returned_non_owner_eoa_signature_for_self_auth',
+          ownerIndex: parsedSignature.ownerIndex,
+          signatureLengthBytes: (signature.length - 2) / 2,
+          parsedOwnerAddress: preflight.parsedOwnerAddress,
+          recoveredAddress: preflight.recoveredAddress,
+          recoveredRawAddress: preflight.recoveredRawAddress,
+          recoveredEip191Address: preflight.recoveredEip191Address,
+        },
+      })
+      throw new Error(
+        `Coinbase returned an ECDSA signature for owner[${parsedSignature.ownerIndex ?? '?'}], but it does not recover to that on-chain owner. Open /add-owner in a browser session that can sign with the CSW's real owner key.`,
+      )
+    }
   }
 
   const signedUserOp: V06UserOpFields = { ...userOp, signature }
