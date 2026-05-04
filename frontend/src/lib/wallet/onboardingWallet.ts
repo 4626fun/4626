@@ -3069,20 +3069,56 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       try {
         parsedBody = rawText ? JSON.parse(rawText) : null
       } catch { /* not JSON */ }
-      const errMessage = await resolveApiErrorMessage(
-        fetchResult,
-        'Relay /execute proxy failed',
-      )
+      // Pull out Relay's upstream `data` block so its individual fields
+      // (message, tx.to, tx.data, tx.value) appear at the top level of our
+      // telemetry. Console.warn truncates nested objects, so we surface each
+      // string as its own key to make the revert reason visible.
+      let relayUpstreamMessage: string | undefined
+      let relayUpstreamTxTo: string | undefined
+      let relayUpstreamTxValue: string | undefined
+      let relayUpstreamTxDataLen: number | undefined
+      try {
+        const pb = parsedBody as Record<string, unknown> | null
+        const inner = pb && typeof pb === 'object'
+          ? (pb.data as Record<string, unknown> | undefined) ?? pb
+          : undefined
+        if (inner) {
+          if (typeof inner.message === 'string') {
+            relayUpstreamMessage = inner.message
+          } else if (typeof (inner as any).error === 'string') {
+            relayUpstreamMessage = (inner as any).error
+          }
+          const tx = inner.tx as Record<string, unknown> | undefined
+          if (tx && typeof tx === 'object') {
+            if (typeof tx.to === 'string') relayUpstreamTxTo = tx.to
+            if (typeof tx.value === 'string') relayUpstreamTxValue = tx.value
+            if (typeof tx.data === 'string') relayUpstreamTxDataLen = (tx.data.length - 2) / 2
+          }
+        }
+      } catch { /* swallow */ }
+      const errMessage = relayUpstreamMessage
+        ? `Relay /execute/call: ${relayUpstreamMessage}`
+        : await resolveApiErrorMessage(fetchResult, 'Relay /execute proxy failed')
       emit({
         step: 'error',
         detail: {
           stage: 'submit_relay',
           status: fetchResult.status,
           message: errMessage,
-          rawBody: rawText,
+          relayUpstreamMessage: relayUpstreamMessage ?? null,
+          relayUpstreamTxTo: relayUpstreamTxTo ?? null,
+          relayUpstreamTxValue: relayUpstreamTxValue ?? null,
+          relayUpstreamTxDataLen: relayUpstreamTxDataLen ?? null,
+          rawBodyFirst500: rawText.slice(0, 500),
+          rawBodyTotalLen: rawText.length,
           parsedBody,
         },
       })
+      // Also emit the message as a flat console line so it's not truncated.
+      try {
+        // eslint-disable-next-line no-console
+        console.warn('[selfBuiltUserOpRelay] relay rejected:', errMessage)
+      } catch { /* swallow */ }
       throw new Error(errMessage)
     }
     relayResponse = await fetchResult.json()
