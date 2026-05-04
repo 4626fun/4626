@@ -332,79 +332,11 @@ describe('sendPreparedOwnerTx', () => {
       signerAddress: CANONICAL_CSW,
       executionMode: 'canonicalSmartWallet',
       canonicalSmartWalletAddress: CANONICAL_CSW,
-    })).rejects.toThrow(/does not recover to that on-chain owner/i)
+    })).rejects.toThrow(/owner\[0\] WebAuthn\/passkey signature/i)
 
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-  })
-
-  it('allows self-auth ECDSA owner wrappers when recovery matches ownerAtIndex', async () => {
-    const ownerPk = generatePrivateKey()
-    const owner = privateKeyToAccount(ownerPk)
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      )),
-    )
-    apiFetchMock.mockImplementation(async (url: string) => {
-      if (url === '/api/relay/execute') {
-        return makeJsonResponse({
-          success: true,
-          data: { txHash: TX_HASH },
-        })
-      }
-      return makeJsonResponse({
-        success: true,
-        data: {
-          isOwner: true,
-          canonicalCswAddress: CANONICAL_CSW,
-          ownerAddress: OWNER_EOA,
-          txHash: TX_HASH,
-          confirmationState: 'owner_confirmed',
-        },
-      })
-    })
-    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'personal_sign') {
-        const hashToSign = args.params?.[0] as `0x${string}`
-        expect(args.params?.[1]).toBe(CANONICAL_CSW)
-        const ecdsa = await ecdsaSignEip191(ownerPk, hashToSign)
-        return wrapSignatureWithOwnerIndex(2, ecdsa)
-      }
-      if (args.method === 'eth_call') {
-        return encodeOwnerAtIndexResult(owner.address as `0x${string}`)
-      }
-      if (args.method === 'eth_getCode') {
-        return '0x'
-      }
-      throw new Error(`Unexpected method ${args.method}`)
-    })
-
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
-        request,
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      ownerAddress: OWNER_EOA,
-      signerAddress: CANONICAL_CSW,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-    })
-
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
-    expect(result.txHash).toBe(TX_HASH)
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {

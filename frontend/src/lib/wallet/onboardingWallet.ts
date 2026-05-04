@@ -920,6 +920,45 @@ function extractRelayTxHash(relayResponse: unknown): `0x${string}` | null {
   return null
 }
 
+function parseCoinbaseSignatureWrapper(signature: `0x${string}`): {
+  ownerIndex: number
+  signatureData: `0x${string}`
+} | null {
+  const tryDecodeTuple = (value: `0x${string}`) => {
+    const [ownerIndexRaw, signatureData] = decodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      value,
+    )
+    return {
+      ownerIndex: Number(ownerIndexRaw),
+      signatureData: signatureData as `0x${string}`,
+    }
+  }
+  try {
+    return tryDecodeTuple(signature)
+  } catch {
+    /* fall through */
+  }
+  try {
+    const [innerBytes] = decodeAbiParameters([{ type: 'bytes' }], signature)
+    return tryDecodeTuple(innerBytes as `0x${string}`)
+  } catch {
+    /* fall through */
+  }
+  if (hexByteLength(signature) >= 96) {
+    const headWord = signature.slice(2, 66).toLowerCase()
+    if (headWord === '0000000000000000000000000000000000000000000000000000000000000020') {
+      try {
+        const stripped = (`0x${signature.slice(66)}`) as `0x${string}`
+        return tryDecodeTuple(stripped)
+      } catch {
+        /* fall through */
+      }
+    }
+  }
+  return null
+}
+
 export async function _submitOwnerViaSelfBuiltUserOp(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -987,45 +1026,35 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     step: 'sign',
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
-  const parsedSignature = parseSignatureForRecovery(signature)
-  if (parsedSignature.ecdsaSignature) {
-    const preflight = await preflightOwnerKeyMismatch({
-      walletRequest: params.walletRequest,
-      sender: params.csw,
-      hashToSign,
-      signature,
-      sessionKind: 'external_signer',
-    })
+  const signatureWrapper = parseCoinbaseSignatureWrapper(signature)
+  const innerSignatureShape = signatureWrapper
+    ? detectSignatureShape(signatureWrapper.signatureData)
+    : detectSignatureShape(signature)
+  emit({
+    step: 'signature_preflight',
+    detail: {
+      outcome: signatureWrapper?.ownerIndex === 0 && innerSignatureShape.kind === 'webauthn'
+        ? 'owner0_webauthn'
+        : 'not_owner0_webauthn',
+      ownerIndex: signatureWrapper?.ownerIndex ?? null,
+      innerSignatureKind: innerSignatureShape.kind,
+      signatureLengthBytes: (signature.length - 2) / 2,
+    },
+  })
+  if (!signatureWrapper || signatureWrapper.ownerIndex !== 0 || innerSignatureShape.kind !== 'webauthn') {
     emit({
-      step: 'signature_preflight',
+      step: 'error',
       detail: {
-        outcome: preflight.kind,
-        ownerIndex: parsedSignature.ownerIndex,
+        stage: 'sign',
+        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
+        ownerIndex: signatureWrapper?.ownerIndex ?? null,
+        innerSignatureKind: innerSignatureShape.kind,
         signatureLengthBytes: (signature.length - 2) / 2,
-        recoveredAddress:
-          'recoveredAddress' in preflight ? preflight.recoveredAddress : null,
-        parsedOwnerAddress:
-          'parsedOwnerAddress' in preflight ? preflight.parsedOwnerAddress : null,
       },
     })
-    if (preflight.kind === 'mismatch') {
-      emit({
-        step: 'error',
-        detail: {
-          stage: 'sign',
-          reason: 'coinbase_returned_non_owner_eoa_signature_for_self_auth',
-          ownerIndex: parsedSignature.ownerIndex,
-          signatureLengthBytes: (signature.length - 2) / 2,
-          parsedOwnerAddress: preflight.parsedOwnerAddress,
-          recoveredAddress: preflight.recoveredAddress,
-          recoveredRawAddress: preflight.recoveredRawAddress,
-          recoveredEip191Address: preflight.recoveredEip191Address,
-        },
-      })
-      throw new Error(
-        `Coinbase returned an ECDSA signature for owner[${parsedSignature.ownerIndex ?? '?'}], but it does not recover to that on-chain owner. Open /add-owner in a browser session that can sign with the CSW's real owner key.`,
-      )
-    }
+    throw new Error(
+      'Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path. Retry from the browser session that opens the Coinbase passkey prompt for this smart wallet.',
+    )
   }
 
   const signedUserOp: V06UserOpFields = { ...userOp, signature }
