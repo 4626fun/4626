@@ -4,10 +4,14 @@ import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import {
+  createPublicClient,
   decodeAbiParameters,
+  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
+  http,
   isAddress,
+  keccak256,
   recoverAddress,
   recoverMessageAddress,
 } from 'viem'
@@ -359,10 +363,10 @@ const CONFIRM_OWNER_MAX_ATTEMPTS = import.meta.env.MODE === 'test' ? 6 : 10
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
-const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
-const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
 const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
 const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
+const REPLAYABLE_NONCE_KEY = 8453n
 
 function getConfirmOwnerRetryDelayMs(attempt: number): number {
   const multiplier = Math.min(5, Math.max(1, attempt + 1))
@@ -737,6 +741,319 @@ export function encodeExecuteWithoutChainIdValidation(
     functionName: 'executeWithoutChainIdValidation',
     args: [[innerCallData]],
   })
+}
+
+const ENTRY_POINT_V06_HANDLE_OPS_ABI = [
+  {
+    type: 'function',
+    name: 'handleOps',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'ops',
+        type: 'tuple[]',
+        components: [
+          { name: 'sender', type: 'address' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'initCode', type: 'bytes' },
+          { name: 'callData', type: 'bytes' },
+          { name: 'callGasLimit', type: 'uint256' },
+          { name: 'verificationGasLimit', type: 'uint256' },
+          { name: 'preVerificationGas', type: 'uint256' },
+          { name: 'maxFeePerGas', type: 'uint256' },
+          { name: 'maxPriorityFeePerGas', type: 'uint256' },
+          { name: 'paymasterAndData', type: 'bytes' },
+          { name: 'signature', type: 'bytes' },
+        ],
+      },
+      { name: 'beneficiary', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const
+
+type V06UserOpFields = {
+  sender: `0x${string}`
+  nonce: bigint
+  initCode: `0x${string}`
+  callData: `0x${string}`
+  callGasLimit: bigint
+  verificationGasLimit: bigint
+  preVerificationGas: bigint
+  maxFeePerGas: bigint
+  maxPriorityFeePerGas: bigint
+  paymasterAndData: `0x${string}`
+  signature: `0x${string}`
+}
+
+function encodeHandleOpsV06(
+  signedUserOp: V06UserOpFields,
+  beneficiary: `0x${string}`,
+): `0x${string}` {
+  return encodeFunctionData({
+    abi: ENTRY_POINT_V06_HANDLE_OPS_ABI,
+    functionName: 'handleOps',
+    args: [[signedUserOp], beneficiary],
+  })
+}
+
+function serializeUserOpForLog(op: V06UserOpFields): Record<string, string> {
+  return {
+    sender: op.sender,
+    nonce: `0x${op.nonce.toString(16)}`,
+    initCode: op.initCode,
+    callData: op.callData,
+    callGasLimit: `0x${op.callGasLimit.toString(16)}`,
+    verificationGasLimit: `0x${op.verificationGasLimit.toString(16)}`,
+    preVerificationGas: `0x${op.preVerificationGas.toString(16)}`,
+    maxFeePerGas: `0x${op.maxFeePerGas.toString(16)}`,
+    maxPriorityFeePerGas: `0x${op.maxPriorityFeePerGas.toString(16)}`,
+    paymasterAndData: op.paymasterAndData,
+    signature: op.signature,
+  }
+}
+
+const ENTRY_POINT_V06_GET_NONCE_ABI = [
+  {
+    type: 'function',
+    name: 'getNonce',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'sender', type: 'address' },
+      { name: 'key', type: 'uint192' },
+    ],
+    outputs: [{ name: 'nonce', type: 'uint256' }],
+  },
+] as const
+
+async function readReplayableNonce(
+  csw: `0x${string}`,
+  rpcUrl: string,
+): Promise<bigint> {
+  const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
+  const nonce = await client.readContract({
+    address: ENTRY_POINT_V06_ADDRESS,
+    abi: ENTRY_POINT_V06_GET_NONCE_ABI,
+    functionName: 'getNonce',
+    args: [csw, REPLAYABLE_NONCE_KEY],
+  })
+  return nonce as bigint
+}
+
+function hashUserOpV06WithoutChainId(op: V06UserOpFields): `0x${string}` {
+  const packed = encodeAbiParameters(
+    [
+      { type: 'address' },
+      { type: 'uint256' },
+      { type: 'bytes32' },
+      { type: 'bytes32' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'uint256' },
+      { type: 'bytes32' },
+    ],
+    [
+      op.sender,
+      op.nonce,
+      keccak256(op.initCode),
+      keccak256(op.callData),
+      op.callGasLimit,
+      op.verificationGasLimit,
+      op.preVerificationGas,
+      op.maxFeePerGas,
+      op.maxPriorityFeePerGas,
+      keccak256(op.paymasterAndData),
+    ],
+  )
+  return keccak256(packed)
+}
+
+function getUserOpHashWithoutChainIdLocal(
+  op: V06UserOpFields,
+  entryPoint: `0x${string}`,
+): `0x${string}` {
+  return keccak256(
+    encodeAbiParameters(
+      [{ type: 'bytes32' }, { type: 'address' }],
+      [hashUserOpV06WithoutChainId(op), entryPoint],
+    ),
+  )
+}
+
+type SelfBuiltUserOpLaneTelemetry = {
+  step:
+    | 'wrap'
+    | 'read_nonce'
+    | 'build_userop'
+    | 'compute_hash'
+    | 'sign'
+    | 'splice'
+    | 'encode_handle_ops'
+    | 'submit_relay'
+    | 'success'
+    | 'error'
+  detail: Record<string, unknown>
+}
+
+function extractRelayTxHash(relayResponse: unknown): `0x${string}` | null {
+  const root = relayResponse && typeof relayResponse === 'object'
+    ? relayResponse as Record<string, unknown>
+    : null
+  const data = root?.data && typeof root.data === 'object'
+    ? root.data as Record<string, unknown>
+    : null
+  const candidates = [
+    root?.txHash,
+    root?.transactionHash,
+    data?.txHash,
+    data?.transactionHash,
+    data?.hash,
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && isTxHash(candidate)) {
+      return candidate as `0x${string}`
+    }
+  }
+  return null
+}
+
+export async function _submitOwnerViaSelfBuiltUserOp(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  rpcUrl?: string
+  beneficiary?: `0x${string}`
+  onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
+}): Promise<{
+  userOp: V06UserOpFields
+  hashSigned: `0x${string}`
+  signature: `0x${string}`
+  handleOpsCalldata: `0x${string}`
+  relayResponse: unknown
+  txHash: `0x${string}` | null
+}> {
+  const emit = (event: SelfBuiltUserOpLaneTelemetry) => {
+    try {
+      params.onTelemetry?.(event)
+    } catch {
+      // telemetry must never block owner recovery
+    }
+  }
+
+  const innerSelector = params.innerCallData.slice(0, 10).toLowerCase()
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+
+  const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
+  const nonce = await readReplayableNonce(params.csw, rpcUrl)
+  emit({ step: 'read_nonce', detail: { nonce: `0x${nonce.toString(16)}` } })
+
+  const userOp: V06UserOpFields = {
+    sender: params.csw,
+    nonce,
+    initCode: '0x',
+    callData: wrappedData,
+    callGasLimit: 150_000n,
+    verificationGasLimit: 1_000_000n,
+    preVerificationGas: 0n,
+    maxFeePerGas: 0n,
+    maxPriorityFeePerGas: 0n,
+    paymasterAndData: '0x',
+    signature: '0x',
+  }
+  emit({ step: 'build_userop', detail: { userOp: serializeUserOpForLog(userOp) } })
+
+  const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
+  emit({ step: 'compute_hash', detail: { hashToSign } })
+
+  const signature = (await params.walletRequest({
+    method: 'personal_sign',
+    params: [hashToSign, params.csw],
+  })) as `0x${string}`
+  if (!signature || !signature.startsWith('0x')) {
+    emit({ step: 'error', detail: { stage: 'sign', signature } })
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  emit({
+    step: 'sign',
+    detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
+  })
+
+  const signedUserOp: V06UserOpFields = { ...userOp, signature }
+  emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
+
+  const beneficiary = params.beneficiary ?? params.csw
+  const handleOpsCalldata = encodeHandleOpsV06(signedUserOp, beneficiary)
+  emit({
+    step: 'encode_handle_ops',
+    detail: {
+      entryPointAddress: ENTRY_POINT_V06_ADDRESS,
+      beneficiary,
+      handleOpsCalldata,
+      handleOpsLengthBytes: (handleOpsCalldata.length - 2) / 2,
+    },
+  })
+
+  const relayBody = {
+    chainId: params.chainId,
+    to: ENTRY_POINT_V06_ADDRESS,
+    data: handleOpsCalldata,
+    value: '0',
+    user: params.csw,
+  }
+  emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
+
+  const fetchResult = await apiFetch('/api/relay/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(relayBody),
+  })
+  if (!fetchResult.ok) {
+    let rawText = ''
+    let parsedBody: unknown = null
+    try {
+      rawText = await fetchResult.clone().text()
+    } catch {
+      // ignore
+    }
+    try {
+      parsedBody = rawText ? JSON.parse(rawText) : null
+    } catch {
+      // not JSON
+    }
+    const errMessage = await resolveApiErrorMessage(fetchResult, 'Relay /execute proxy failed')
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'submit_relay',
+        status: fetchResult.status,
+        message: errMessage,
+        rawBodyFirst500: rawText.slice(0, 500),
+        rawBodyTotalLen: rawText.length,
+        parsedBody,
+      },
+    })
+    throw new Error(errMessage)
+  }
+  const relayResponse = await fetchResult.json()
+  const txHash = extractRelayTxHash(relayResponse)
+  emit({ step: 'success', detail: { relayResponse, txHash } })
+  return {
+    userOp: signedUserOp,
+    hashSigned: hashToSign,
+    signature,
+    handleOpsCalldata,
+    relayResponse,
+    txHash,
+  }
 }
 
 type ReplayableLaneTelemetry = {
@@ -1844,48 +2161,63 @@ export async function sendPreparedOwnerTx(params: {
           } else {
             emitOwnerApprovalStage(onStageEvent, {
               runId: effectiveApprovalRunId,
-              stage: 'prepare_calls',
+              stage: 'userop_typed',
               status: 'start',
+              attempt: 0,
               executionMode,
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
             })
             try {
-              const result = await _submitOwnerViaReplayablePreparedCalls({
+              const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
+              if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+                throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
+              }
+              const selfBuiltResult = await _submitOwnerViaSelfBuiltUserOp({
                 walletRequest,
                 chainId: base.id,
                 csw: canonicalSmartWalletAddress as `0x${string}`,
                 innerCallData: txRequest.data,
-                paymasterUrl,
+                onTelemetry: (event) => {
+                  try {
+                    if (event.step === 'error') {
+                      console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                    } else {
+                      console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                    }
+                  } catch {
+                    // console telemetry must never block owner recovery
+                  }
+                },
               })
-              if (!result.txHash) {
-                throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
+              if (!selfBuiltResult.txHash) {
+                throw new Error('Relay accepted the self-built UserOp without returning a transaction hash. Retry shortly before attempting another lane.')
               }
-              txHash = result.txHash
+              txHash = selfBuiltResult.txHash
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
-                stage: 'prepare_calls',
+                stage: 'userop_typed',
                 status: 'success',
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
                 txHash,
               })
-            } catch (replayablePreparedCallsError) {
-              if (isUserRejectedWalletAction(replayablePreparedCallsError)) throw replayablePreparedCallsError
+            } catch (selfBuiltUserOpError) {
+              if (isUserRejectedWalletAction(selfBuiltUserOpError)) throw selfBuiltUserOpError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
-                stage: 'prepare_calls',
+                stage: 'userop_typed',
                 status: 'error',
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(replayablePreparedCallsError).code,
-                message: replayablePreparedCallsError instanceof Error
-                  ? replayablePreparedCallsError.message
-                  : String(replayablePreparedCallsError ?? ''),
+                code: classifyOwnerApprovalError(selfBuiltUserOpError).code,
+                message: selfBuiltUserOpError instanceof Error
+                  ? selfBuiltUserOpError.message
+                  : String(selfBuiltUserOpError ?? ''),
               })
-              throw replayablePreparedCallsError
+              throw selfBuiltUserOpError
             }
           }
         } else {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { apiFetchMock, sendCoinbaseSmartWalletUserOperationMock } = vi.hoisted(() => ({
   apiFetchMock: vi.fn(),
@@ -55,6 +55,10 @@ describe('sendPreparedOwnerTx', () => {
       }),
     )
     sendCoinbaseSmartWalletUserOperationMock.mockResolvedValue({ transactionHash: TX_HASH })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('uses direct sendTransaction for external owner execution', async () => {
@@ -181,32 +185,41 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes self-auth embedded-owner installs through replayable prepared calls with WebAuthn signatures', async () => {
-    const webauthnSignature = `0x${'12'.repeat(672)}` as `0x${string}`
+  it('routes self-auth embedded-owner installs through the self-built relay lane before prepared calls', async () => {
+    const signatureWrapper = `0x${'12'.repeat(224)}` as `0x${string}`
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/relay/execute') {
+        return makeJsonResponse({
+          success: true,
+          data: { txHash: TX_HASH },
+        })
+      }
+      return makeJsonResponse({
+        success: true,
+        data: {
+          isOwner: true,
+          canonicalCswAddress: CANONICAL_CSW,
+          ownerAddress: OWNER_EOA,
+          txHash: TX_HASH,
+          confirmationState: 'owner_confirmed',
+        },
+      })
+    })
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_prepareCalls') {
-        const payload = args.params?.[0] as { calls?: Array<{ to?: string; data?: string }> }
-        expect(payload.calls?.[0]?.to).toBe(CANONICAL_CSW)
-        expect(payload.calls?.[0]?.data?.startsWith('0x2c2abd1e')).toBe(true)
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: TX_HASH },
-          userOp: { sender: CANONICAL_CSW },
-        }
-      }
       if (args.method === 'personal_sign') {
-        expect(args.params).toEqual([TX_HASH, CANONICAL_CSW])
-        return webauthnSignature
-      }
-      if (args.method === 'wallet_sendPreparedCalls') {
-        const payload = args.params?.[0] as { signature?: { type?: string; data?: { signature?: string } } }
-        expect(payload.signature?.type).toBe('webauthn')
-        expect(payload.signature?.data?.signature).toBe(webauthnSignature)
-        return 'prepared-call-id'
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return { status: 200, receipts: [{ transactionHash: TX_HASH }] }
+        expect(args.params?.[1]).toBe(CANONICAL_CSW)
+        return signatureWrapper
       }
       throw new Error(`Unexpected method ${args.method}`)
     })
@@ -226,9 +239,16 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/relay/execute',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"user":"0x1111111111111111111111111111111111111111"'),
+      }),
+    )
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
