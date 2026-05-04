@@ -1288,40 +1288,20 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
-      // SUBMISSION LANE — single canonical path (May 4 2026 verified).
-      //
-      // Self-auth (CSW selected as the connected wallet): the only path that
-      // has ever produced a valid `addOwnerAddress` userOp on a stranded CSW
-      // is the EOA-owner lane — Coinbase passkey owner[0] signs through the
-      // keys.coinbase.com popup while a wagmi-connected on-chain EOA owner
-      // address acts as the personal_sign target. See RECOVERY.md for the
-      // verified May 4 success (userOpHash 0x70255628…5b1a).
-      //
-      // Every other lane has been confirmed broken on phone Chrome:
-      //   - wallet_sendCalls       → "Self calls are not allowed"
-      //   - wallet_sendPreparedCalls (wrapped sig) → bundler types.Alias error
-      //   - wallet_sendPreparedCalls (HackMD shape) → "invalid character 'x'"
-      //   - viem typed/non-typed UserOp → same self-call guard
-      //   - eth_sendTransaction(csw → csw) → reverts Unauthorized
-      //
-      // External-signer mode (a different EOA wallet is connected as signer)
-      // continues to use the generic `sendPreparedOwnerTx` lane chooser which
-      // works for the rabby-co-owner / external-signer flows on /accounts.
-      if (connectedCanonicalWalletSelected) {
-        await submitOwnerInstallViaOnchainEoa(preparePayload.data.txRequest)
-      } else {
-        const ownerAddressForTx = ownerSignerAddress ?? null
-        await sendPreparedOwnerTx(
-          preparePayload.data.txRequest,
-          ownerAddressForTx,
-          preflightOwnerLookupAddress,
-          {
-            approvalRunId,
-            onStageEvent: emitOwnerApprovalStageEvent,
-            ownerInstallIntent: 'embeddedOwner',
-          },
-        )
-      }
+      // Self-auth (CSW selected as the connected wallet) must stay on the
+      // passkey/WebAuthn lane. The split EOA-owner lane is only for cases where
+      // the user has connected a real on-chain EOA owner separately.
+      const ownerAddressForTx = ownerSignerAddress ?? null
+      await sendPreparedOwnerTx(
+        preparePayload.data.txRequest,
+        ownerAddressForTx,
+        preflightOwnerLookupAddress,
+        {
+          approvalRunId,
+          onStageEvent: emitOwnerApprovalStageEvent,
+          ownerInstallIntent: 'embeddedOwner',
+        },
+      )
       setNotice('4626 signing is enabled on your canonical CSW.')
       await loadMe({ showSpinner: false })
     } catch (ownerError: any) {
@@ -1350,7 +1330,6 @@ export function useAccountSetupController(params: {
     publicClient,
     runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
-    submitOwnerInstallViaOnchainEoa,
   ])
 
   const retryOwnerCheck = useCallback(async () => {

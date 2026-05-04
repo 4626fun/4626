@@ -739,6 +739,203 @@ export function encodeExecuteWithoutChainIdValidation(
   })
 }
 
+type ReplayableLaneTelemetry = {
+  step: 'wrap' | 'prepare' | 'sign' | 'send' | 'poll' | 'success' | 'error'
+  detail: Record<string, unknown>
+}
+
+export async function _submitOwnerViaReplayablePreparedCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  csw: `0x${string}`
+  innerCallData: `0x${string}`
+  paymasterUrl: string | null
+  onTelemetry?: (event: ReplayableLaneTelemetry) => void
+}): Promise<{
+  txHash: `0x${string}` | null
+  callsId: string | null
+  signatureRequestHash: `0x${string}` | null
+  hashSigned: `0x${string}` | null
+  signature: `0x${string}` | null
+  preparedUserOp: unknown
+  rawCallsStatus: unknown
+}> {
+  const emit = (event: ReplayableLaneTelemetry) => {
+    try {
+      params.onTelemetry?.(event)
+    } catch {
+      // telemetry must never block owner recovery
+    }
+  }
+  const innerSelector = params.innerCallData.slice(0, 10).toLowerCase()
+  if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+    throw new Error(
+      `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
+    )
+  }
+
+  const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  const capabilities: Record<string, unknown> = {}
+  if (params.paymasterUrl) {
+    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
+      'https://api.developer.coinbase.com/',
+      'https://api.cdp.coinbase.com/',
+    )
+    capabilities.paymasterService = { url: paymasterUrlStr }
+  }
+  const prepareCallsPayload: Record<string, unknown> = {
+    version: '1.0',
+    from: params.csw,
+    chainId: chainIdHex,
+    calls: [{ to: params.csw, data: wrappedData, value: '0x0' }],
+    capabilities,
+  }
+  emit({ step: 'prepare', detail: { prepareCallsPayload } })
+
+  const prepareResult = (await params.walletRequest({
+    method: 'wallet_prepareCalls',
+    params: [prepareCallsPayload],
+  })) as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+  } | null
+
+  if (!prepareResult?.signatureRequest?.hash) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  }
+  if (!prepareResult.userOp) {
+    emit({ step: 'error', detail: { stage: 'prepare', prepareResult } })
+    throw new Error('wallet_prepareCalls did not return a userOp.')
+  }
+
+  const hashToSign = unwrapDoubleHexEncodedHash(
+    prepareResult.signatureRequest.hash as `0x${string}`,
+  )
+  emit({
+    step: 'prepare',
+    detail: {
+      stage: 'prepared',
+      signatureRequestHash: prepareResult.signatureRequest.hash,
+      hashToSign,
+      preparedUserOp: prepareResult.userOp,
+    },
+  })
+
+  let signature: `0x${string}` | null = null
+  try {
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.csw],
+    })) as `0x${string}`
+  } catch (signError) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        error: signError instanceof Error ? signError.message : String(signError ?? ''),
+      },
+    })
+    throw signError
+  }
+  if (!signature || !signature.startsWith('0x')) {
+    emit({ step: 'error', detail: { stage: 'sign', signature } })
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  emit({
+    step: 'sign',
+    detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
+  })
+
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.csw,
+    signature,
+  })
+
+  const sendResult = (await params.walletRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [{
+      version: '1.0',
+      type: prepareResult.type ?? 'user-operation-v06',
+      data: prepareResult.userOp,
+      chainId: prepareResult.chainId ?? chainIdHex,
+      signature: signaturePayload,
+    }],
+  })) as unknown
+
+  const callsId =
+    typeof sendResult === 'string'
+      ? sendResult
+      : Array.isArray(sendResult) && typeof sendResult[0] === 'string'
+        ? sendResult[0]
+        : sendResult && typeof sendResult === 'object' && typeof (sendResult as { id?: unknown }).id === 'string'
+          ? String((sendResult as { id: string }).id)
+          : ''
+  emit({ step: 'send', detail: { sendResult, callsId } })
+
+  if (!callsId) {
+    return {
+      txHash: null,
+      callsId: null,
+      signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+      hashSigned: hashToSign,
+      signature,
+      preparedUserOp: prepareResult.userOp,
+      rawCallsStatus: sendResult,
+    }
+  }
+
+  const startedAt = Date.now()
+  let lastStatus: unknown = null
+  while (Date.now() - startedAt < PREPARED_CALLS_STATUS_TIMEOUT_MS) {
+    const statusResult = await params.walletRequest({
+      method: 'wallet_getCallsStatus',
+      params: [callsId],
+    })
+    lastStatus = statusResult
+    const statusCode = Number((statusResult as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((statusResult as { receipts?: unknown[] } | null)?.receipts)
+      ? ((statusResult as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    emit({ step: 'poll', detail: { statusCode, hasReceipt: Boolean(receiptHash) } })
+    if (Number.isFinite(statusCode) && statusCode >= 200 && statusCode < 300) {
+      emit({ step: 'success', detail: { txHash: receiptHash, statusCode } })
+      return {
+        txHash: receiptHash as `0x${string}` | null,
+        callsId,
+        signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+        hashSigned: hashToSign,
+        signature,
+        preparedUserOp: prepareResult.userOp,
+        rawCallsStatus: statusResult,
+      }
+    }
+    if (Number.isFinite(statusCode) && statusCode >= 300) {
+      emit({ step: 'error', detail: { stage: 'poll', statusCode, statusResult } })
+      throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+    }
+    await delay(PREPARED_CALLS_STATUS_POLL_MS)
+  }
+  return {
+    txHash: null,
+    callsId,
+    signatureRequestHash: prepareResult.signatureRequest.hash as `0x${string}`,
+    hashSigned: hashToSign,
+    signature,
+    preparedUserOp: prepareResult.userOp,
+    rawCallsStatus: lastStatus,
+  }
+}
+
 export async function _submitOwnerViaPreparedCallsWithEoaOwner(params: {
   // Coinbase / Base App provider request fn. Routes the
   // `wallet_prepareCalls` and `wallet_sendPreparedCalls` Coinbase-only RPC
@@ -1645,17 +1842,51 @@ export async function sendPreparedOwnerTx(params: {
           } else if (preferSponsoredFirst) {
             await runSponsoredThenDirectFallback()
           } else {
-            // Self-auth (CSW signing for itself) is NOT submitted through this
-            // generic lane chooser — every popup-based path is broken (see
-            // RECOVERY.md). The controller routes self-auth installs to
-            // `submitOwnerInstallViaOnchainEoa` instead, which uses an EOA
-            // owner's `personal_sign` to produce a 65-byte secp256k1 signature
-            // the bundler can validate via plain ecrecover. If we reach this
-            // branch in self-auth mode, the controller wired the wrong path.
-            throw new Error(
-              'Self-auth owner install must be routed through submitOwnerInstallViaOnchainEoa. ' +
-                'Connect an on-chain EOA owner of this Coinbase Smart Wallet and retry.',
-            )
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'prepare_calls',
+              status: 'start',
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+            })
+            try {
+              const result = await _submitOwnerViaReplayablePreparedCalls({
+                walletRequest,
+                chainId: base.id,
+                csw: canonicalSmartWalletAddress as `0x${string}`,
+                innerCallData: txRequest.data,
+                paymasterUrl,
+              })
+              if (!result.txHash) {
+                throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
+              }
+              txHash = result.txHash
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'prepare_calls',
+                status: 'success',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                txHash,
+              })
+            } catch (replayablePreparedCallsError) {
+              if (isUserRejectedWalletAction(replayablePreparedCallsError)) throw replayablePreparedCallsError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'prepare_calls',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(replayablePreparedCallsError).code,
+                message: replayablePreparedCallsError instanceof Error
+                  ? replayablePreparedCallsError.message
+                  : String(replayablePreparedCallsError ?? ''),
+              })
+              throw replayablePreparedCallsError
+            }
           }
         } else {
           if (customCoOwnerDirectLane) {

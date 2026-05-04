@@ -181,6 +181,58 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
+  it('routes self-auth embedded-owner installs through replayable prepared calls with WebAuthn signatures', async () => {
+    const webauthnSignature = `0x${'12'.repeat(672)}` as `0x${string}`
+    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'wallet_prepareCalls') {
+        const payload = args.params?.[0] as { calls?: Array<{ to?: string; data?: string }> }
+        expect(payload.calls?.[0]?.to).toBe(CANONICAL_CSW)
+        expect(payload.calls?.[0]?.data?.startsWith('0x2c2abd1e')).toBe(true)
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: TX_HASH },
+          userOp: { sender: CANONICAL_CSW },
+        }
+      }
+      if (args.method === 'personal_sign') {
+        expect(args.params).toEqual([TX_HASH, CANONICAL_CSW])
+        return webauthnSignature
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        const payload = args.params?.[0] as { signature?: { type?: string; data?: { signature?: string } } }
+        expect(payload.signature?.type).toBe('webauthn')
+        expect(payload.signature?.data?.signature).toBe(webauthnSignature)
+        return 'prepared-call-id'
+      }
+      if (args.method === 'wallet_getCallsStatus') {
+        return { status: 200, receipts: [{ transactionHash: TX_HASH }] }
+      }
+      throw new Error(`Unexpected method ${args.method}`)
+    })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+    })
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)

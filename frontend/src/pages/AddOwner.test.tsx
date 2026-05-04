@@ -93,7 +93,7 @@ describe('AddOwnerPage', () => {
     expect((button as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('disables the install button when no on-chain EOA owner is connected', () => {
+  it('enables the install button for the passkey path when no on-chain EOA owner is connected', () => {
     mockController = {
       advancedBusy: false,
       canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
@@ -130,9 +130,10 @@ describe('AddOwnerPage', () => {
       connectedOnchainEoaOwner: null,
     }
     renderPage()
-    const button = screen.getByRole('button', { name: /Connect an EOA owner to install/i })
+    const button = screen.getByRole('button', { name: /Install signing key/i })
     expect(button).toBeTruthy()
-    expect((button as HTMLButtonElement).disabled).toBe(true)
+    expect((button as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByText(/That is okay for the passkey path/i)).toBeTruthy()
   })
 
   it('detects already-installed when privy wallet uses a non-standard embedded variant (e.g. privy-v2)', () => {

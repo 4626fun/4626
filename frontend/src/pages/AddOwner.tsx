@@ -22,11 +22,10 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
  *    paste, or even see the address — the install is fully programmatic
  *    end-to-end.
  *
- * Submission lane: the canonical Coinbase passkey (owner[0]) signs
- * `executeWithoutChainIdValidation([addOwnerAddress(privyEoa)])` via Coinbase
- * `wallet_prepareCalls` / `wallet_sendPreparedCalls`. This is the path proven
- * by the May 4 owner[2] install (userOpHash 0x70255628…5b1a, AddOwner event
- * fired at index 2, success=true on EntryPoint v0.6). See RECOVERY.md.
+ * Submission lane: the canonical Coinbase passkey (owner[0]) signs the
+ * replayable `executeWithoutChainIdValidation([addOwnerAddress(privyEoa)])`
+ * UserOp via Coinbase `wallet_prepareCalls` / `wallet_sendPreparedCalls`.
+ * This is the March 9 recovery shape documented in RECOVERY.md.
  */
 export function AddOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/add-owner' })
@@ -70,13 +69,9 @@ export function AddOwnerPage() {
     )
   }, [cswOwnersState.owners, privyEmbeddedEoaAddress])
 
-  // Detect Coinbase Wallet / Base App in-app browser. Verified May 4 2026:
-  // signing the userOp inside Coinbase Wallet's in-app browser produces a
-  // SignatureWrapper from a session key that is NOT an owner of the CSW,
-  // wrapped as if it came from owner[2]; the wallet's own preflight catches
-  // this and aborts with the misleading 'Error generating transaction —
-  // make sure you have enough funds' sheet. Recovery requires escaping to
-  // an external browser so the keys.coinbase.com passkey popup can run.
+  // Coinbase/Base in-app browsers can block or substitute the popup signing
+  // context. Recovery requires an external browser so keys.coinbase.com can
+  // hand the WebAuthn challenge to the real passkey provider.
   // See `lib/wallet/inAppBrowser.ts` for full notes.
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
   const externalAddOwnerUrl = useMemo(() => externalBrowserUrlFor('/add-owner'), [])
@@ -100,10 +95,9 @@ export function AddOwnerPage() {
           <h1 className="text-3xl font-semibold tracking-tight">Install signing key</h1>
           <p className="text-sm text-zinc-400">
             Install your Privy embedded signer onto your canonical Coinbase Smart Wallet as
-            an additional owner. To authorize the install, connect a wallet whose address
-            matches one of the on-chain EOA owners of your CSW — that wallet signs
+            an additional owner. The primary path asks your Coinbase passkey to authorize
             <code className="mx-1 font-mono text-zinc-300">addOwnerAddress(privyEoa)</code>
-            with a single <code className="font-mono text-zinc-300">personal_sign</code>.
+            through the keys.coinbase.com popup; no EOA private key is required.
           </p>
         </div>
 
@@ -136,21 +130,19 @@ export function AddOwnerPage() {
               </div>
               <div className="text-sm font-semibold">
                 {inAppEnv.isCoinbaseInApp
-                  ? "Coinbase Wallet's in-app browser can't sign owner installs"
-                  : "This in-app browser can't sign owner installs"}
+                  ? "Coinbase Wallet's in-app browser can block the passkey popup"
+                  : "This in-app browser can block the passkey popup"}
               </div>
             </div>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              Installing a new owner requires a <code className="font-mono">personal_sign</code>{' '}
-              from a wallet whose address matches one of the on-chain EOA owners of your
-              Coinbase Smart Wallet. In-app browsers substitute a session key that isn&apos;t
-              an owner, which is why the &ldquo;Review request&rdquo; sheet shows
-              &ldquo;Error generating transaction&rdquo;.
+              Installing the signer requires a WebAuthn assertion from the Coinbase
+              passkey owner of your smart wallet. In-app browsers can block or replace
+              that popup signing context, which is why the &ldquo;Review request&rdquo; sheet
+              may show &ldquo;Error generating transaction&rdquo;.
             </p>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              Tap below to open this page in your phone&apos;s default browser, then connect
-              your EOA-owner wallet (Toshi, MetaMask, etc.) and tap{' '}
-              <strong>Install signing key</strong> there.
+              Tap below to open this page in your phone&apos;s default browser, then approve
+              the Coinbase passkey prompt from there.
             </p>
             <a
               href={externalAddOwnerUrl}
@@ -222,14 +214,12 @@ export function AddOwnerPage() {
                 {installedAsOwner !== true && onchainEoaOwnerCandidates.length > 0 ? (
                   <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-xs space-y-2">
                     <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
-                      Connect an on-chain EOA owner
+                      Optional EOA-owner fallback
                     </div>
                     <p className="leading-relaxed text-zinc-400">
-                      This wallet&apos;s on-chain owner list is the only thing that can
-                      authorize a new owner. Connect a wallet whose address matches one of the
-                      EOA owners below — that wallet will sign{' '}
-                      <code className="font-mono">addOwnerAddress(privyEoa)</code> with a
-                      single <code className="font-mono">personal_sign</code> prompt.
+                      If the passkey popup is unavailable and you can connect one of these
+                      on-chain EOA owners, 4626 can use that owner as a fallback. The primary
+                      install button below does not require one of these private keys.
                     </p>
                     <ul className="space-y-1">
                       {onchainEoaOwnerCandidates.map((c) => {
@@ -251,10 +241,9 @@ export function AddOwnerPage() {
                       })}
                     </ul>
                     {!connectedOnchainEoaOwner ? (
-                      <p className="text-[11px] text-amber-300/90">
-                        No connected wallet matches an on-chain EOA owner. Connect one of the
-                        addresses above (Toshi, MetaMask import, etc.) to enable the install
-                        button.
+                      <p className="text-[11px] text-zinc-500">
+                        No connected wallet matches these EOA owners. That is okay for the
+                        passkey path; use this list only if you intentionally want the fallback.
                       </p>
                     ) : null}
                   </div>
@@ -266,8 +255,7 @@ export function AddOwnerPage() {
                     disabled={
                       advancedBusy ||
                       installedAsOwner === true ||
-                      (inAppEnv?.isAnyWalletInApp ?? false) ||
-                      !connectedOnchainEoaOwner
+                      (inAppEnv?.isAnyWalletInApp ?? false)
                     }
                     onClick={() => void handleInstall()}
                     className="btn-accent btn-no-icon inline-flex"
@@ -278,16 +266,15 @@ export function AddOwnerPage() {
                         ? 'Already installed'
                         : inAppEnv?.isAnyWalletInApp
                           ? 'Open in browser to install'
-                          : !connectedOnchainEoaOwner
-                            ? 'Connect an EOA owner to install'
-                            : 'Install signing key'}
+                          : 'Install signing key'}
                   </button>
                   <p className="text-[11px] leading-relaxed text-zinc-500">
-                    The connected EOA owner will sign{' '}
+                    The Coinbase passkey owner will sign the replayable owner-install request
+                    for{' '}
                     <code className="font-mono text-zinc-400">
                       addOwnerAddress(privyEoa)
                     </code>{' '}
-                    on your canonical CSW. Gas is sponsored by 4626.
+                    on your canonical CSW. Gas is handled through the prepared-calls flow.
                   </p>
                 </div>
 
