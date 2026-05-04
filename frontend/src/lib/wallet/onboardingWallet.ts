@@ -16,7 +16,7 @@ import {
   recoverMessageAddress,
 } from 'viem'
 import { base } from 'viem/chains'
-import { detectSignatureShape } from './signatureShape'
+import { detectSignatureShape, type SignatureShape } from './signatureShape'
 export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export type OwnerDelegationFlags = {
@@ -959,6 +959,24 @@ function parseCoinbaseSignatureWrapper(signature: `0x${string}`): {
   return null
 }
 
+function classifyOwner0WebAuthnSignature(signature: `0x${string}`): {
+  ok: boolean
+  ownerIndex: number | null
+  innerSignatureKind: SignatureShape['kind']
+  signatureLengthBytes: number
+} {
+  const signatureWrapper = parseCoinbaseSignatureWrapper(signature)
+  const innerSignatureShape = signatureWrapper
+    ? detectSignatureShape(signatureWrapper.signatureData)
+    : detectSignatureShape(signature)
+  return {
+    ok: signatureWrapper?.ownerIndex === 0 && innerSignatureShape.kind === 'webauthn',
+    ownerIndex: signatureWrapper?.ownerIndex ?? null,
+    innerSignatureKind: innerSignatureShape.kind,
+    signatureLengthBytes: (signature.length - 2) / 2,
+  }
+}
+
 export async function _submitOwnerViaSelfBuiltUserOp(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -1026,30 +1044,25 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     step: 'sign',
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
-  const signatureWrapper = parseCoinbaseSignatureWrapper(signature)
-  const innerSignatureShape = signatureWrapper
-    ? detectSignatureShape(signatureWrapper.signatureData)
-    : detectSignatureShape(signature)
+  const owner0WebAuthnCheck = classifyOwner0WebAuthnSignature(signature)
   emit({
     step: 'signature_preflight',
     detail: {
-      outcome: signatureWrapper?.ownerIndex === 0 && innerSignatureShape.kind === 'webauthn'
-        ? 'owner0_webauthn'
-        : 'not_owner0_webauthn',
-      ownerIndex: signatureWrapper?.ownerIndex ?? null,
-      innerSignatureKind: innerSignatureShape.kind,
-      signatureLengthBytes: (signature.length - 2) / 2,
+      outcome: owner0WebAuthnCheck.ok ? 'owner0_webauthn' : 'not_owner0_webauthn',
+      ownerIndex: owner0WebAuthnCheck.ownerIndex,
+      innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
+      signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
     },
   })
-  if (!signatureWrapper || signatureWrapper.ownerIndex !== 0 || innerSignatureShape.kind !== 'webauthn') {
+  if (!owner0WebAuthnCheck.ok) {
     emit({
       step: 'error',
       detail: {
         stage: 'sign',
         reason: 'coinbase_did_not_return_owner0_webauthn_signature',
-        ownerIndex: signatureWrapper?.ownerIndex ?? null,
-        innerSignatureKind: innerSignatureShape.kind,
-        signatureLengthBytes: (signature.length - 2) / 2,
+        ownerIndex: owner0WebAuthnCheck.ownerIndex,
+        innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
+        signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
       },
     })
     throw new Error(
@@ -1127,7 +1140,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
 }
 
 type ReplayableLaneTelemetry = {
-  step: 'wrap' | 'prepare' | 'sign' | 'send' | 'poll' | 'success' | 'error'
+  step: 'wrap' | 'prepare' | 'sign' | 'signature_preflight' | 'send' | 'poll' | 'success' | 'error'
   detail: Record<string, unknown>
 }
 
@@ -1238,6 +1251,31 @@ export async function _submitOwnerViaReplayablePreparedCalls(params: {
     step: 'sign',
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
+  const owner0WebAuthnCheck = classifyOwner0WebAuthnSignature(signature)
+  emit({
+    step: 'signature_preflight',
+    detail: {
+      outcome: owner0WebAuthnCheck.ok ? 'owner0_webauthn' : 'not_owner0_webauthn',
+      ownerIndex: owner0WebAuthnCheck.ownerIndex,
+      innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
+      signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+    },
+  })
+  if (!owner0WebAuthnCheck.ok) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
+        ownerIndex: owner0WebAuthnCheck.ownerIndex,
+        innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
+        signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+      },
+    })
+    throw new Error(
+      'Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path. Retry from the browser session that opens the Coinbase passkey prompt for this smart wallet.',
+    )
+  }
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.csw,
@@ -2085,25 +2123,12 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: eth_sendTransaction FIRST ──
-        // In self-auth mode (CSW signs for itself), the popup's eGe function
-        // blocks wallet_sendCalls where target === sender ("Self calls are not
-        // allowed").  addOwnerAddress is inherently a self-call.
-        //
-        // The viem-based UserOp path (runSponsoredCanonicalUserOp) also fails
-        // because the CSW's primary signer is a passkey (WebAuthn at owner[0]).
-        // The UserOp function can't discover or match the passkey owner index.
-        //
-        // wallet_prepareCalls → wallet_sendPreparedCalls fails because
-        // wallet_sendPreparedCalls expects a raw signer signature (secp256k1
-        // address or webauthn credential), but we can't produce the passkey's
-        // WebAuthn credential data from code.
-        //
-        // eth_sendTransaction goes through the popup but uses the standard
-        // transaction approval UI, NOT the wallet_sendCalls batch handler.
-        // The eGe self-call check ONLY applies to wallet_sendCalls.
-        //
-        // Fallback chain: eth_sendTransaction → UserOp(typed) → UserOp(non-typed)
+        // ── Self-authenticated session: replayable prepared-calls FIRST ──
+        // The verified March 9 recovery path is Coinbase's prepared-calls lane:
+        // wallet_prepareCalls builds the replayable UserOp, personal_sign opens
+        // the owner[0] passkey/WebAuthn prompt, then wallet_sendPreparedCalls
+        // submits the prepared UserOp. Bare self-built personal_sign sessions can
+        // choose an owner[2] ECDSA/session key, so they are not the primary path.
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -2243,27 +2268,28 @@ export async function sendPreparedOwnerTx(params: {
               if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
                 throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
               }
-              const selfBuiltResult = await _submitOwnerViaSelfBuiltUserOp({
+              const replayableResult = await _submitOwnerViaReplayablePreparedCalls({
                 walletRequest,
                 chainId: base.id,
                 csw: canonicalSmartWalletAddress as `0x${string}`,
                 innerCallData: txRequest.data,
+                paymasterUrl,
                 onTelemetry: (event) => {
                   try {
                     if (event.step === 'error') {
-                      console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                      console.warn('[replayablePreparedOwner]', event.step, event.detail)
                     } else {
-                      console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                      console.info('[replayablePreparedOwner]', event.step, event.detail)
                     }
                   } catch {
                     // console telemetry must never block owner recovery
                   }
                 },
               })
-              if (!selfBuiltResult.txHash) {
-                throw new Error('Relay accepted the self-built UserOp without returning a transaction hash. Retry shortly before attempting another lane.')
+              if (!replayableResult.txHash) {
+                throw new Error('wallet_sendPreparedCalls accepted the replayable owner UserOp without returning a transaction hash. Retry shortly before attempting another lane.')
               }
-              txHash = selfBuiltResult.txHash
+              txHash = replayableResult.txHash
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
                 stage: 'userop_typed',
@@ -2273,8 +2299,8 @@ export async function sendPreparedOwnerTx(params: {
                 canonicalCswAddress: canonicalSmartWalletAddress,
                 txHash,
               })
-            } catch (selfBuiltUserOpError) {
-              if (isUserRejectedWalletAction(selfBuiltUserOpError)) throw selfBuiltUserOpError
+            } catch (replayablePreparedError) {
+              if (isUserRejectedWalletAction(replayablePreparedError)) throw replayablePreparedError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
                 stage: 'userop_typed',
@@ -2282,12 +2308,12 @@ export async function sendPreparedOwnerTx(params: {
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(selfBuiltUserOpError).code,
-                message: selfBuiltUserOpError instanceof Error
-                  ? selfBuiltUserOpError.message
-                  : String(selfBuiltUserOpError ?? ''),
+                code: classifyOwnerApprovalError(replayablePreparedError).code,
+                message: replayablePreparedError instanceof Error
+                  ? replayablePreparedError.message
+                  : String(replayablePreparedError ?? ''),
               })
-              throw selfBuiltUserOpError
+              throw replayablePreparedError
             }
           }
         } else {
