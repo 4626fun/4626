@@ -2118,15 +2118,45 @@ export async function sendPreparedOwnerTx(params: {
             await runSponsoredThenDirectFallback()
           } else {
             // ── Self-auth, embedded-owner install ──
-            // Order: UserOp(typed) → UserOp(non-typed) → eth_sendTransaction.
-            // The prepareCalls/sendPreparedCalls path is the only one that
-            // produces a valid CSW WebAuthn signature (~672 bytes nested
-            // SignatureWrapper+WebAuthnAuth). personal_sign returns 224 bytes
-            // which can never validate, so the self-built UserOp+Relay lane
-            // is dropped — it could never have worked structurally.
+            // Order: prepareCalls→personal_sign→sendPreparedCalls (Coinbase popup
+            // signs with whatever credential is bound to the session — passkey
+            // for owner[0] or an EOA for an embedded-wallet owner; the popup
+            // wraps the result for ERC-1271 verification) → viem UserOp(typed)
+            // → viem UserOp(non-typed) → eth_sendTransaction. The prepareCalls
+            // path is required when the connected signer isn't a direct EOA
+            // owner of the CSW (e.g. owner[0] is a WebAuthn passkey).
             try {
-              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-            } catch (typedUserOpError) {
+              txHash = await _submitOwnerViaPreparedCalls({
+                walletRequest,
+                chainId: base.id,
+                sender: canonicalSmartWalletAddress as `0x${string}`,
+                to: txRequest.to,
+                data: txRequest.data,
+                paymasterUrl: paymasterUrl ?? null,
+                approvalRunId: effectiveApprovalRunId,
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                onStageEvent,
+                sessionKind: 'self_auth',
+              })
+            } catch (preparedCallsError) {
+              if (isUserRejectedWalletAction(preparedCallsError)) throw preparedCallsError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'prepare_calls',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(preparedCallsError).code,
+                message: preparedCallsError instanceof Error ? preparedCallsError.message : String(preparedCallsError ?? ''),
+              })
+
+              // ── Fallback: viem UserOp(typed) ──
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+              } catch (typedUserOpError) {
               if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
@@ -2170,10 +2200,11 @@ export async function sendPreparedOwnerTx(params: {
                     code: classifyOwnerApprovalError(sendTxError).code,
                     message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
                   })
-                  // All paths exhausted — throw the typed UserOp error (first/most informative)
-                  throw typedUserOpError
+                  // All paths exhausted — throw the prepared-calls error (first/most informative)
+                  throw preparedCallsError
                 }
               }
+            }
             }
           }
         } else {
