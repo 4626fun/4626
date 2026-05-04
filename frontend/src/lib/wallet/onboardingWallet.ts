@@ -2256,7 +2256,7 @@ export async function sendPreparedOwnerTx(params: {
           } else {
             emitOwnerApprovalStage(onStageEvent, {
               runId: effectiveApprovalRunId,
-              stage: 'userop_typed',
+              stage: 'send_calls',
               status: 'start',
               attempt: 0,
               executionMode,
@@ -2268,52 +2268,54 @@ export async function sendPreparedOwnerTx(params: {
               if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
                 throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
               }
-              const replayableResult = await _submitOwnerViaReplayablePreparedCalls({
-                walletRequest,
-                chainId: base.id,
-                csw: canonicalSmartWalletAddress as `0x${string}`,
-                innerCallData: txRequest.data,
-                paymasterUrl: null,
-                onTelemetry: (event) => {
-                  try {
-                    if (event.step === 'error') {
-                      console.warn('[replayablePreparedOwner]', event.step, event.detail)
-                    } else {
-                      console.info('[replayablePreparedOwner]', event.step, event.detail)
-                    }
-                  } catch {
-                    // console telemetry must never block owner recovery
-                  }
-                },
-              })
-              if (!replayableResult.txHash) {
-                throw new Error('wallet_sendPreparedCalls accepted the replayable owner UserOp without returning a transaction hash. Retry shortly before attempting another lane.')
+              const wrappedData = encodeExecuteWithoutChainIdValidation(txRequest.data)
+              try {
+                console.info('[replayableDirectOwner]', 'send', {
+                  from: canonicalSmartWalletAddress,
+                  to: canonicalSmartWalletAddress,
+                  innerSelector,
+                  wrappedSelector: wrappedData.slice(0, 10),
+                })
+              } catch {
+                // console telemetry must never block owner recovery
               }
-              txHash = replayableResult.txHash
+              const directResult = await walletRequest({
+                method: 'eth_sendTransaction',
+                params: [{
+                  from: canonicalSmartWalletAddress,
+                  to: canonicalSmartWalletAddress,
+                  data: wrappedData,
+                  value: '0x0',
+                }],
+              })
+              if (typeof directResult !== 'string' || !isTxHash(directResult)) {
+                throw new Error('eth_sendTransaction did not return a transaction hash for the replayable owner install.')
+              }
+              txHash = directResult
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
-                stage: 'userop_typed',
+                stage: 'send_calls',
                 status: 'success',
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
                 txHash,
               })
-            } catch (replayablePreparedError) {
-              if (isUserRejectedWalletAction(replayablePreparedError)) throw replayablePreparedError
+            } catch (replayableDirectError) {
+              if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
-                stage: 'userop_typed',
+                stage: 'send_calls',
                 status: 'error',
                 executionMode,
                 signerAddress,
                 canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(replayablePreparedError).code,
-                message: replayablePreparedError instanceof Error
-                  ? replayablePreparedError.message
-                  : String(replayablePreparedError ?? ''),
+                code: classifyOwnerApprovalError(replayableDirectError).code,
+                message: replayableDirectError instanceof Error
+                  ? replayableDirectError.message
+                  : String(replayableDirectError ?? ''),
               })
-              throw replayablePreparedError
+              throw replayableDirectError
             }
           }
         } else {

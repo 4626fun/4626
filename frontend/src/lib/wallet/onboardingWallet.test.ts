@@ -185,37 +185,7 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes passkey-shaped self-auth embedded-owner installs through replayable prepared calls', async () => {
-    const webauthnSignature = encodeAbiParameters(
-      [
-        {
-          type: 'tuple',
-          components: [
-            { name: 'authenticatorData', type: 'bytes' },
-            { name: 'clientDataJSON', type: 'string' },
-            { name: 'challengeIndex', type: 'uint256' },
-            { name: 'typeIndex', type: 'uint256' },
-            { name: 'r', type: 'uint256' },
-            { name: 's', type: 'uint256' },
-          ],
-        },
-      ],
-      [
-        {
-          authenticatorData: `0x${'ab'.repeat(37)}`,
-          clientDataJSON:
-            '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}',
-          challengeIndex: 23n,
-          typeIndex: 1n,
-          r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
-          s: 0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
-        },
-      ],
-    )
-    const signatureWrapper = encodeAbiParameters(
-      [{ type: 'uint256' }, { type: 'bytes' }],
-      [0n, webauthnSignature],
-    ) as `0x${string}`
+  it('routes self-auth embedded-owner installs through direct replayable eth_sendTransaction', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -245,26 +215,15 @@ describe('sendPreparedOwnerTx', () => {
         },
       })
     })
-    const prepareCallPayloads: Record<string, unknown>[] = []
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_prepareCalls') {
-        prepareCallPayloads.push(args.params?.[0] as Record<string, unknown>)
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: toHex('0x6b511ec86af039f28b034ae6400f58f23bf210a0f386692b4e905e5e0f8bbf3f') },
-          userOp: { sender: CANONICAL_CSW, nonce: '0x2105000000000001' },
-        }
-      }
-      if (args.method === 'personal_sign') {
-        expect(args.params?.[1]).toBe(CANONICAL_CSW)
-        return signatureWrapper
-      }
-      if (args.method === 'wallet_sendPreparedCalls') {
-        return 'calls-1'
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return { status: 200, receipts: [{ transactionHash: TX_HASH }] }
+      if (args.method === 'eth_sendTransaction') {
+        const tx = args.params?.[0] as { from?: string; to?: string; data?: string; value?: string }
+        expect(tx.from).toBe(CANONICAL_CSW)
+        expect(tx.to).toBe(CANONICAL_CSW)
+        expect(tx.value).toBe('0x0')
+        expect(tx.data?.slice(0, 10)).toBe('0x2c2abd1e')
+        expect(tx.data).toContain(TX_REQUEST.data.slice(2))
+        return TX_HASH
       }
       throw new Error(`Unexpected method ${args.method}`)
     })
@@ -284,65 +243,25 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(prepareCallPayloads).toHaveLength(1)
-    expect(prepareCallPayloads[0]?.capabilities).toEqual({})
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('blocks known-bad Coinbase self-auth session-key signatures before Relay submission', async () => {
-    const actualOwnerPk = generatePrivateKey()
-    const actualOwner = privateKeyToAccount(actualOwnerPk)
-    const sessionKeyPk = generatePrivateKey()
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      )),
-    )
-    const prepareCallPayloads: Record<string, unknown>[] = []
+  it('bypasses prepared-calls estimation for self-auth owner installs', async () => {
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_prepareCalls') {
-        prepareCallPayloads.push(args.params?.[0] as Record<string, unknown>)
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: toHex('0x6b511ec86af039f28b034ae6400f58f23bf210a0f386692b4e905e5e0f8bbf3f') },
-          userOp: { sender: CANONICAL_CSW, nonce: '0x2105000000000001' },
-        }
-      }
-      if (args.method === 'personal_sign') {
-        const hashToSign = args.params?.[0] as `0x${string}`
-        expect(args.params?.[1]).toBe(CANONICAL_CSW)
-        const ecdsaSignature = await ecdsaSignEip191(sessionKeyPk, hashToSign)
-        const sessionKeyWrapper = encodeAbiParameters(
-          [{ type: 'uint256' }, { type: 'bytes' }],
-          [2n, ecdsaSignature],
-        ) as `0x${string}`
-        const sessionKeyWrapperWithLeadingOffset =
-          `0x${'0'.repeat(62)}20${sessionKeyWrapper.slice(2)}` as `0x${string}`
-        return sessionKeyWrapperWithLeadingOffset
-      }
-      if (args.method === 'eth_call') {
-        return encodeOwnerAtIndexResult(actualOwner.address as `0x${string}`)
-      }
-      if (args.method === 'eth_getCode') {
-        return '0x'
+      if (args.method === 'eth_sendTransaction') {
+        return TX_HASH
       }
       throw new Error(`Unexpected method ${args.method}`)
     })
 
-    await expect(sendPreparedOwnerTx({
+    const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
@@ -355,15 +274,15 @@ describe('sendPreparedOwnerTx', () => {
       signerAddress: CANONICAL_CSW,
       executionMode: 'canonicalSmartWallet',
       canonicalSmartWalletAddress: CANONICAL_CSW,
-    })).rejects.toThrow(/owner\[0\] WebAuthn\/passkey signature/i)
+    })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(prepareCallPayloads).toHaveLength(1)
-    expect(prepareCallPayloads[0]?.capabilities).toEqual({})
+    expect(result.txHash).toBe(TX_HASH)
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
