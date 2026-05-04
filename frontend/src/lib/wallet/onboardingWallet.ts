@@ -2168,75 +2168,38 @@ export async function sendPreparedOwnerTx(params: {
             await runSponsoredThenDirectFallback()
           } else {
             // ── Self-auth, embedded-owner install ──
-            // Order: REPLAYABLE prepareCalls (Mar 9 canonical lane:
-            //   executeWithoutChainIdValidation([addOwnerAddress(...)]) at
-            //   nonceKey=8453, signed by passkey via the popup) → regular
-            //   prepareCalls → viem UserOp(typed) → viem UserOp(non-typed)
-            //   → eth_sendTransaction.
-            // The replayable lane reproduces the exact tx 0x801b9d4b... shape
-            // that succeeded on Mar 9 — and is the only one that triggers a
-            // passkey assertion in the popup (because nonceKey=8453 forces the
-            // CSW signing path that calls validateUserOp via the WebAuthn-aware
-            // verifier).
-            const innerSelectorLower = (txRequest.data ?? '').slice(0, 10).toLowerCase()
-            const isReplayableEligible =
-              REPLAYABLE_INNER_SELECTORS.has(innerSelectorLower) &&
-              txRequest.to.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
+            // Order: regular prepareCalls (raw addOwnerAddress — let the
+            //   Coinbase backend decide whether to wrap in
+            //   executeWithoutChainIdValidation and pick the matching
+            //   nonceKey; this is the May 4 desktop-popup canonical path) →
+            //   viem UserOp(typed) → viem UserOp(non-typed) →
+            //   eth_sendTransaction.
+            //
+            // We previously tried pre-wrapping in
+            // executeWithoutChainIdValidation(...) with nonceKey=8453 to
+            // mirror the Mar 9 trace, but RECOVERY.md notes that
+            // wallet_prepareCalls from a webview (and phone external Chrome
+            // behaves the same way) builds nonceKey=0 even when the calldata
+            // is the replayable selector — CSW.validateUserOp then reverts
+            // with InvalidNonceKey(0), surfacing as 'useroperation reverted'
+            // during gas estimation. The non-wrapped path lets Coinbase's
+            // backend handle wrapping + nonceKey selection, matching the
+            // verified May 4 desktop success.
             try {
-              if (isReplayableEligible) {
-                emitOwnerApprovalStage(onStageEvent, {
-                  runId: effectiveApprovalRunId,
-                  stage: 'prepare_calls',
-                  status: 'start',
-                  executionMode,
-                  signerAddress,
-                  canonicalCswAddress: canonicalSmartWalletAddress,
-                })
-                const replayableResult = await _submitOwnerViaReplayablePreparedCalls({
-                  walletRequest,
-                  chainId: base.id,
-                  csw: canonicalSmartWalletAddress as `0x${string}`,
-                  innerCallData: txRequest.data as `0x${string}`,
-                  paymasterUrl: paymasterUrl ?? null,
-                  onTelemetry: (event) => {
-                    try {
-                      // eslint-disable-next-line no-console
-                      console.warn('[replayablePreparedCalls]', event.step, event.detail)
-                    } catch {}
-                  },
-                })
-                if (replayableResult.txHash && isTxHash(replayableResult.txHash)) {
-                  txHash = replayableResult.txHash
-                  emitOwnerApprovalStage(onStageEvent, {
-                    runId: effectiveApprovalRunId,
-                    stage: 'prepare_calls',
-                    status: 'success',
-                    executionMode,
-                    signerAddress,
-                    canonicalCswAddress: canonicalSmartWalletAddress,
-                    txHash,
-                  })
-                } else {
-                  throw new Error(
-                    'replayable prepareCalls completed without a tx hash; falling through to non-replayable lane.',
-                  )
-                }
-              } else {
-                txHash = await _submitOwnerViaPreparedCalls({
-                  walletRequest,
-                  chainId: base.id,
-                  sender: canonicalSmartWalletAddress as `0x${string}`,
-                  to: txRequest.to,
-                  data: txRequest.data,
-                  paymasterUrl: paymasterUrl ?? null,
-                  approvalRunId: effectiveApprovalRunId,
-                  executionMode,
-                  signerAddress,
-                  canonicalCswAddress: canonicalSmartWalletAddress,
-                  onStageEvent,
-                  sessionKind: 'self_auth',
-                })
-              }
+              txHash = await _submitOwnerViaPreparedCalls({
+                walletRequest,
+                chainId: base.id,
+                sender: canonicalSmartWalletAddress as `0x${string}`,
+                to: txRequest.to,
+                data: txRequest.data,
+                paymasterUrl: paymasterUrl ?? null,
+                approvalRunId: effectiveApprovalRunId,
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                onStageEvent,
+                sessionKind: 'self_auth',
+              })
             } catch (preparedCallsError) {
               if (isUserRejectedWalletAction(preparedCallsError)) throw preparedCallsError
               try {
