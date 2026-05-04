@@ -79,20 +79,6 @@ const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
 
 let bridgeStorageWarnLogged = false
 
-export type AlfaClubBridgeAuthHealthSnapshot = {
-  lastAuthFailAt: string | null
-  consecutiveAuthFailures: number
-  suppressedSocketAttempts: number
-  socketBackoffMs: number
-}
-
-const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
-  lastAuthFailAt: null,
-  consecutiveAuthFailures: 0,
-  suppressedSocketAttempts: 0,
-  socketBackoffMs: 0,
-}
-
 /**
  * Writer names that the auth path is allowed to produce. Anything else is
  * an anomaly and gets warn-logged. The set is intentionally short — any
