@@ -43,7 +43,7 @@ describe('AddOwnerPage', () => {
     expect(screen.getByText(/Sign in to install/i)).toBeTruthy()
   })
 
-  it('shows the install button when authenticated and the privy EOA is not yet an owner', () => {
+  it('enables the install button when an on-chain EOA owner is connected', () => {
     mockController = {
       advancedBusy: false,
       canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
@@ -76,11 +76,63 @@ describe('AddOwnerPage', () => {
         },
       ],
       login: vi.fn(),
+      onchainEoaOwnerCandidates: [
+        {
+          index: 1,
+          ownerAddress: '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf',
+        },
+      ],
+      connectedOnchainEoaOwner: {
+        index: 1,
+        ownerAddress: '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf',
+      },
     }
     renderPage()
     const button = screen.getByRole('button', { name: /Install signing key/i })
     expect(button).toBeTruthy()
     expect((button as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('disables the install button when no on-chain EOA owner is connected', () => {
+    mockController = {
+      advancedBusy: false,
+      canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      cswOwnersState: {
+        status: 'ready',
+        owners: [
+          {
+            index: 1,
+            isAddressOwner: true,
+            ownerAddress: '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf',
+          },
+        ],
+        error: null,
+      },
+      error: null,
+      loading: false,
+      notice: null,
+      onEnable4626Signing: vi.fn(),
+      onResetOwnerApproval: vi.fn(),
+      privyAuthed: true,
+      privyWallets: [
+        {
+          address: '0x2f4ec723ff6add6ab81b7befbec04ce31151613f',
+          walletClientType: 'privy',
+        },
+      ],
+      login: vi.fn(),
+      onchainEoaOwnerCandidates: [
+        {
+          index: 1,
+          ownerAddress: '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf',
+        },
+      ],
+      connectedOnchainEoaOwner: null,
+    }
+    renderPage()
+    const button = screen.getByRole('button', { name: /Connect an EOA owner to install/i })
+    expect(button).toBeTruthy()
+    expect((button as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('detects already-installed when privy wallet uses a non-standard embedded variant (e.g. privy-v2)', () => {

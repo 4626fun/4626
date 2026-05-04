@@ -42,7 +42,10 @@ export function AddOwnerPage() {
     privyAuthed,
     privyWallets,
     login,
+    onchainEoaOwnerCandidates: rawOnchainEoaOwnerCandidates,
+    connectedOnchainEoaOwner,
   } = controller
+  const onchainEoaOwnerCandidates = rawOnchainEoaOwnerCandidates ?? []
 
   // Detect whether the Privy embedded EOA is already installed. Use the
   // shared `pickPrivyEmbeddedEoaWallet` helper so we accept all embedded
@@ -97,9 +100,10 @@ export function AddOwnerPage() {
           <h1 className="text-3xl font-semibold tracking-tight">Install signing key</h1>
           <p className="text-sm text-zinc-400">
             Install your Privy embedded signer onto your canonical Coinbase Smart Wallet as
-            an additional owner. The address is read from your authenticated session — no
-            paste required. Your passkey signs the install on-chain through the same flow
-            you used during waitlist setup.
+            an additional owner. To authorize the install, connect a wallet whose address
+            matches one of the on-chain EOA owners of your CSW — that wallet signs
+            <code className="mx-1 font-mono text-zinc-300">addOwnerAddress(privyEoa)</code>
+            with a single <code className="font-mono text-zinc-300">personal_sign</code>.
           </p>
         </div>
 
@@ -137,15 +141,16 @@ export function AddOwnerPage() {
               </div>
             </div>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              Installing a signing key requires your Coinbase passkey, which only the
-              keys.coinbase.com popup in a real browser tab can prompt. The wallet's in-app
-              browser blocks that popup and falls back to a session key that isn&apos;t a
-              real owner of your wallet, which is why the &ldquo;Review request&rdquo; sheet
-              shows &ldquo;Error generating transaction&rdquo;.
+              Installing a new owner requires a <code className="font-mono">personal_sign</code>{' '}
+              from a wallet whose address matches one of the on-chain EOA owners of your
+              Coinbase Smart Wallet. In-app browsers substitute a session key that isn&apos;t
+              an owner, which is why the &ldquo;Review request&rdquo; sheet shows
+              &ldquo;Error generating transaction&rdquo;.
             </p>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              Tap below to open this page in your phone&apos;s default browser, then sign in
-              again with the same email and tap <strong>Install signing key</strong> there.
+              Tap below to open this page in your phone&apos;s default browser, then connect
+              your EOA-owner wallet (Toshi, MetaMask, etc.) and tap{' '}
+              <strong>Install signing key</strong> there.
             </p>
             <a
               href={externalAddOwnerUrl}
@@ -214,13 +219,55 @@ export function AddOwnerPage() {
                   </div>
                 ) : null}
 
+                {installedAsOwner !== true && onchainEoaOwnerCandidates.length > 0 ? (
+                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-xs space-y-2">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                      Connect an on-chain EOA owner
+                    </div>
+                    <p className="leading-relaxed text-zinc-400">
+                      This wallet&apos;s on-chain owner list is the only thing that can
+                      authorize a new owner. Connect a wallet whose address matches one of the
+                      EOA owners below — that wallet will sign{' '}
+                      <code className="font-mono">addOwnerAddress(privyEoa)</code> with a
+                      single <code className="font-mono">personal_sign</code> prompt.
+                    </p>
+                    <ul className="space-y-1">
+                      {onchainEoaOwnerCandidates.map((c) => {
+                        const matched =
+                          connectedOnchainEoaOwner?.ownerAddress.toLowerCase() ===
+                          c.ownerAddress.toLowerCase()
+                        return (
+                          <li
+                            key={c.ownerAddress}
+                            className={`flex items-center gap-2 break-all font-mono ${
+                              matched ? 'text-emerald-300' : 'text-zinc-400'
+                            }`}
+                          >
+                            <span className="text-[10px]">[{c.index}]</span>
+                            <span>{c.ownerAddress}</span>
+                            {matched ? <span className="text-[10px]">✓ connected</span> : null}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                    {!connectedOnchainEoaOwner ? (
+                      <p className="text-[11px] text-amber-300/90">
+                        No connected wallet matches an on-chain EOA owner. Connect one of the
+                        addresses above (Toshi, MetaMask import, etc.) to enable the install
+                        button.
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div className="space-y-3">
                   <button
                     type="button"
                     disabled={
                       advancedBusy ||
                       installedAsOwner === true ||
-                      (inAppEnv?.isAnyWalletInApp ?? false)
+                      (inAppEnv?.isAnyWalletInApp ?? false) ||
+                      !connectedOnchainEoaOwner
                     }
                     onClick={() => void handleInstall()}
                     className="btn-accent btn-no-icon inline-flex"
@@ -231,11 +278,12 @@ export function AddOwnerPage() {
                         ? 'Already installed'
                         : inAppEnv?.isAnyWalletInApp
                           ? 'Open in browser to install'
-                          : 'Install signing key'}
+                          : !connectedOnchainEoaOwner
+                            ? 'Connect an EOA owner to install'
+                            : 'Install signing key'}
                   </button>
                   <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Your Coinbase passkey will be prompted to authorize a single
-                    transaction:{' '}
+                    The connected EOA owner will sign{' '}
                     <code className="font-mono text-zinc-400">
                       addOwnerAddress(privyEoa)
                     </code>{' '}
