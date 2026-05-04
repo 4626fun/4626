@@ -727,16 +727,50 @@ export async function _submitOwnerViaPreparedCalls(params: {
     signature,
   })
 
-  const sendResult = await params.walletRequest({
-    method: 'wallet_sendPreparedCalls',
-    params: [{
-      version: '1.0',
+  // Diagnostic: log payload before dispatch so we can see what the popup got.
+  try {
+    console.warn('[_submitOwnerViaPreparedCalls] dispatching wallet_sendPreparedCalls', {
+      sender: params.sender,
       type: prepareResult.type ?? 'user-operation-v06',
-      data: prepareResult.userOp,
       chainId: prepareResult.chainId ?? chainIdHex,
-      signature: signaturePayload,
-    }],
-  }) as unknown
+      signaturePayloadType: (signaturePayload as { type?: string } | null)?.type ?? 'raw',
+      signatureLen: typeof signature === 'string' ? (signature.length - 2) / 2 : 0,
+    })
+  } catch {}
+
+  let sendResult: unknown
+  try {
+    sendResult = await params.walletRequest({
+      method: 'wallet_sendPreparedCalls',
+      params: [{
+        version: '1.0',
+        type: prepareResult.type ?? 'user-operation-v06',
+        data: prepareResult.userOp,
+        chainId: prepareResult.chainId ?? chainIdHex,
+        signature: signaturePayload,
+      }],
+    }) as unknown
+    try {
+      console.warn('[_submitOwnerViaPreparedCalls] wallet_sendPreparedCalls returned', {
+        kind: typeof sendResult,
+        preview: typeof sendResult === 'string'
+          ? sendResult.slice(0, 80)
+          : JSON.stringify(sendResult).slice(0, 200),
+      })
+    } catch {}
+  } catch (sendErr: unknown) {
+    try {
+      const msg = sendErr instanceof Error ? sendErr.message : String(sendErr ?? '')
+      const data = (sendErr as any)?.data
+      const code = (sendErr as any)?.code
+      console.error('[_submitOwnerViaPreparedCalls] wallet_sendPreparedCalls THREW', {
+        code,
+        message: msg.slice(0, 600),
+        data: data ? JSON.stringify(data).slice(0, 600) : null,
+      })
+    } catch {}
+    throw sendErr
+  }
 
   // sendPreparedCalls may return a bare string, string[], or an object with
   // an id/preparedCallIds field depending on the wallet implementation.
@@ -781,7 +815,15 @@ export async function _submitOwnerViaPreparedCalls(params: {
         }
         throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
       }
-      if (statusCode >= 300) throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+      if (statusCode >= 300) {
+        try {
+          console.error('[_submitOwnerViaPreparedCalls] wallet_getCallsStatus FAILED', {
+            statusCode,
+            result: JSON.stringify(result).slice(0, 600),
+          })
+        } catch {}
+        throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+      }
     }
     await delay(PREPARED_CALLS_STATUS_POLL_MS)
   }
@@ -1309,7 +1351,15 @@ export async function _submitOwnerViaPreparedCallsWithEoaOwner(params: {
         }
         throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
       }
-      if (statusCode >= 300) throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+      if (statusCode >= 300) {
+        try {
+          console.error('[_submitOwnerViaPreparedCalls] wallet_getCallsStatus FAILED', {
+            statusCode,
+            result: JSON.stringify(result).slice(0, 600),
+          })
+        } catch {}
+        throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+      }
     }
     await delay(PREPARED_CALLS_STATUS_POLL_MS)
   }
@@ -2118,30 +2168,84 @@ export async function sendPreparedOwnerTx(params: {
             await runSponsoredThenDirectFallback()
           } else {
             // ── Self-auth, embedded-owner install ──
-            // Order: prepareCalls→personal_sign→sendPreparedCalls (Coinbase popup
-            // signs with whatever credential is bound to the session — passkey
-            // for owner[0] or an EOA for an embedded-wallet owner; the popup
-            // wraps the result for ERC-1271 verification) → viem UserOp(typed)
-            // → viem UserOp(non-typed) → eth_sendTransaction. The prepareCalls
-            // path is required when the connected signer isn't a direct EOA
-            // owner of the CSW (e.g. owner[0] is a WebAuthn passkey).
+            // Order: REPLAYABLE prepareCalls (Mar 9 canonical lane:
+            //   executeWithoutChainIdValidation([addOwnerAddress(...)]) at
+            //   nonceKey=8453, signed by passkey via the popup) → regular
+            //   prepareCalls → viem UserOp(typed) → viem UserOp(non-typed)
+            //   → eth_sendTransaction.
+            // The replayable lane reproduces the exact tx 0x801b9d4b... shape
+            // that succeeded on Mar 9 — and is the only one that triggers a
+            // passkey assertion in the popup (because nonceKey=8453 forces the
+            // CSW signing path that calls validateUserOp via the WebAuthn-aware
+            // verifier).
+            const innerSelectorLower = (txRequest.data ?? '').slice(0, 10).toLowerCase()
+            const isReplayableEligible =
+              REPLAYABLE_INNER_SELECTORS.has(innerSelectorLower) &&
+              txRequest.to.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
             try {
-              txHash = await _submitOwnerViaPreparedCalls({
-                walletRequest,
-                chainId: base.id,
-                sender: canonicalSmartWalletAddress as `0x${string}`,
-                to: txRequest.to,
-                data: txRequest.data,
-                paymasterUrl: paymasterUrl ?? null,
-                approvalRunId: effectiveApprovalRunId,
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                onStageEvent,
-                sessionKind: 'self_auth',
-              })
+              if (isReplayableEligible) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'prepare_calls',
+                  status: 'start',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                })
+                const replayableResult = await _submitOwnerViaReplayablePreparedCalls({
+                  walletRequest,
+                  chainId: base.id,
+                  csw: canonicalSmartWalletAddress as `0x${string}`,
+                  innerCallData: txRequest.data as `0x${string}`,
+                  paymasterUrl: paymasterUrl ?? null,
+                  onTelemetry: (event) => {
+                    try {
+                      // eslint-disable-next-line no-console
+                      console.warn('[replayablePreparedCalls]', event.step, event.detail)
+                    } catch {}
+                  },
+                })
+                if (replayableResult.txHash && isTxHash(replayableResult.txHash)) {
+                  txHash = replayableResult.txHash
+                  emitOwnerApprovalStage(onStageEvent, {
+                    runId: effectiveApprovalRunId,
+                    stage: 'prepare_calls',
+                    status: 'success',
+                    executionMode,
+                    signerAddress,
+                    canonicalCswAddress: canonicalSmartWalletAddress,
+                    txHash,
+                  })
+                } else {
+                  throw new Error(
+                    'replayable prepareCalls completed without a tx hash; falling through to non-replayable lane.',
+                  )
+                }
+              } else {
+                txHash = await _submitOwnerViaPreparedCalls({
+                  walletRequest,
+                  chainId: base.id,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: txRequest.to,
+                  data: txRequest.data,
+                  paymasterUrl: paymasterUrl ?? null,
+                  approvalRunId: effectiveApprovalRunId,
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  onStageEvent,
+                  sessionKind: 'self_auth',
+                })
+              }
             } catch (preparedCallsError) {
               if (isUserRejectedWalletAction(preparedCallsError)) throw preparedCallsError
+              try {
+                console.error('[lane chooser] _submitOwnerViaPreparedCalls FAILED — falling through to viem UserOp', {
+                  message: preparedCallsError instanceof Error ? preparedCallsError.message.slice(0, 600) : String(preparedCallsError ?? '').slice(0, 600),
+                  code: (preparedCallsError as any)?.code,
+                  data: (preparedCallsError as any)?.data ? JSON.stringify((preparedCallsError as any).data).slice(0, 600) : null,
+                })
+              } catch {}
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
                 stage: 'prepare_calls',
