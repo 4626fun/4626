@@ -3053,13 +3053,31 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       body: JSON.stringify(relayBody),
     })
     if (!fetchResult.ok) {
+      // Capture the full body for diagnostics. The proxy puts Relay's actual
+      // upstream JSON into payload.data, but resolveApiErrorMessage only reads
+      // payload.error. Read the raw text once and surface BOTH forms so we can
+      // see exactly what Relay rejected.
+      let rawText = ''
+      let parsedBody: unknown = null
+      try {
+        rawText = await fetchResult.clone().text()
+      } catch { /* swallow */ }
+      try {
+        parsedBody = rawText ? JSON.parse(rawText) : null
+      } catch { /* not JSON */ }
       const errMessage = await resolveApiErrorMessage(
         fetchResult,
         'Relay /execute proxy failed',
       )
       emit({
         step: 'error',
-        detail: { stage: 'submit_relay', status: fetchResult.status, message: errMessage },
+        detail: {
+          stage: 'submit_relay',
+          status: fetchResult.status,
+          message: errMessage,
+          rawBody: rawText,
+          parsedBody,
+        },
       })
       throw new Error(errMessage)
     }

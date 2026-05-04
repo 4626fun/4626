@@ -229,16 +229,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!upstreamRes.ok) {
+    // Extract a useful error message from Relay's upstream body. Relay typically
+    // returns either a string or an object with shape { message, name, code, ... }
+    // or { error: { message, code }, ... }. Probe several common shapes so that
+    // 400s with real error content surface to the frontend instead of a generic
+    // "Relay /execute failed with status 400".
+    let upstreamMessage: string | null = null
+    if (typeof upstreamBody === 'string' && upstreamBody.trim()) {
+      upstreamMessage = upstreamBody.trim()
+    } else if (upstreamBody && typeof upstreamBody === 'object') {
+      const obj = upstreamBody as Record<string, unknown>
+      const messageCandidates: unknown[] = [
+        obj.message,
+        obj.error,
+        (obj.error as Record<string, unknown> | undefined)?.message,
+        obj.detail,
+        obj.reason,
+      ]
+      for (const cand of messageCandidates) {
+        if (typeof cand === 'string' && cand.trim()) {
+          upstreamMessage = cand.trim()
+          break
+        }
+      }
+    }
     const errorPayload: RelayExecuteError = {
       success: false,
-      error: typeof upstreamBody === 'string'
-        ? upstreamBody
+      error: upstreamMessage
+        ? `Relay /execute (${upstreamRes.status}): ${upstreamMessage}`
         : `Relay /execute failed with status ${upstreamRes.status}`,
       status: upstreamRes.status,
     }
     if (upstreamBody && typeof upstreamBody === 'object') {
       errorPayload.data = upstreamBody
     }
+    logger.warn('[relay/execute] upstream rejected', {
+      status: upstreamRes.status,
+      upstreamMessage,
+      upstreamBody: typeof upstreamBody === 'object' ? upstreamBody : String(upstreamBody ?? ''),
+    })
     return res
       .status(upstreamRes.status >= 400 && upstreamRes.status < 600 ? upstreamRes.status : 502)
       .json(errorPayload)
