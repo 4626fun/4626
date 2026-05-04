@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {OFTBootstrapRegistry} from "../contracts/helpers/infra/OFTBootstrapRegistry.sol";
 
 interface IEndpointRegistryLike {
@@ -225,6 +225,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         internal
         returns (DeploymentBatcher deployer, MockCreatorRegistry registry, MockUniversalCreate2Deployer create2)
     {
+        vm.chainId(8453);
+
         registry = new MockCreatorRegistry(CANONICAL_ENDPOINT);
         MockBytecodeStore store = new MockBytecodeStore();
         create2 = new MockUniversalCreate2Deployer();
@@ -235,6 +237,17 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
         create2.setCodeKind(WRAPPER_CODE_ID, 2);
         create2.setCodeKind(SHARE_OFT_CODE_ID, 3);
 
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            address(create2),
+            address(registry),
+            address(0x1003),
+            address(0x1001),
+            address(0x1002),
+            address(this),
+            address(0x1005),
+            address(0x1004),
+            makeAddr("batcher")
+        );
         deployer = new DeploymentBatcher(
             address(registry),
             address(store),
@@ -252,7 +265,8 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
             address(0x1010),
             address(0x2001),
             address(0x2002),
-            address(0x2003)
+            address(0x2003),
+            address(phase2Fixture)
         );
     }
 
@@ -352,6 +366,19 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
     address internal constant PROTOCOL_TREASURY = address(0xBEEF);
 
     function setUp() public {
+        vm.chainId(8453);
+
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            address(0x1003),
+            address(0x1001),
+            address(0x1006),
+            address(0x1004),
+            address(0x1005),
+            PROTOCOL_TREASURY,
+            address(0x1008),
+            address(0x1007),
+            makeAddr("batcher")
+        );
         batcher = new DeploymentBatcher(
             address(0x1001), // registry
             address(0x1002), // bytecodeStore
@@ -369,7 +396,8 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
             address(0x1013), // ajnaFactory
             address(0x1014), // vaultCoreModule
             address(0x1015), // vaultStrategiesModule
-            address(0x1016) // vaultAdminModule
+            address(0x1016), // vaultAdminModule
+            address(phase2Fixture) // phase2Module
         );
     }
 

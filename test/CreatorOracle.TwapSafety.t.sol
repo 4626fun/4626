@@ -146,6 +146,8 @@ contract CreatorOracleTwapSafetyTest is Test {
         uint256 ethUsd18 = 2000e18;
         uint256 expectedUsdPerCreator18 = Math.mulDiv(ethUsd18, 1e18, creatorPerEth);
 
+        oracle.initializeCreatorPrice(int256(expectedUsdPerCreator18));
+        oracle.setPriceUpdateCooldown(0);
         oracle.updateCreatorPriceFromTWAP(duration);
 
         assertEq(oracle.creatorPriceUSD(), int256(expectedUsdPerCreator18));

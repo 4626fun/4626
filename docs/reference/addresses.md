@@ -14,7 +14,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.9.2` split Phase-1 deployment stack)
+### Current Live Infrastructure (`v1.10.2` split Phase-1 release target)
 
 | Contract | Address |
 |----------|---------|
@@ -23,7 +23,7 @@ Deployed contract addresses for 4626.
 | VaultActivationBatcher | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
 | CreatorLotteryManager | `<v1.10.1 manager TBD post-broadcast>` |
 | CreatorVRFConsumerV2_5 | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
-| SolanaBridgeAdapter | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
+| SolanaBridgeAdapter | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
 | UniversalBytecodeStoreV2 | `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5` |
 | UniversalCreate2DeployerFromStore | `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd` |
 | CreatorOVaultCoreModule | `0xF670590D1070B1C30E8da76176E841b6e753fDb9` |
@@ -37,7 +37,7 @@ Deployed contract addresses for 4626.
 
 Notes:
 - Shared/global contracts carry over where still canonical; the active deployment entrypoint is the split Phase-1 batcher above.
-- The repo's canonical deployment namespace is `v1.9.2` (fresh CREATE2 salt space for new per-creator deploys).
+- The repo's canonical release target is `v1.10.2` for the active split Phase-1 stack.
 - `DeploymentBatcherPhase2Module`, `DeploymentBatcherPhase3Helper`, `DeploymentBatcherUniV4Helper`, and `DeploymentBatcherUtilsHelper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

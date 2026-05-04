@@ -112,7 +112,7 @@ contract CreatorOracleRingBufferTest is Test {
 
         // Tick-cap is irrelevant for these tests — disable by setting a generous value so
         // observations record the raw tick unchanged.
-        oracle.setMaxTicksPerObservation(int24(50_000));
+        oracle.setMaxTicksPerObservation(int24(1_000));
     }
 
     // --------------------------------------------------------------------- //
@@ -204,8 +204,10 @@ contract CreatorOracleRingBufferTest is Test {
         // newIndex = (MAX_CARDINALITY - 1 + 1) % MAX_CARDINALITY = 0.
 
         uint256 fills = uint256(MAX_CARDINALITY) - 1;
+        uint256 nextTimestamp = block.timestamp;
         for (uint256 i = 0; i < fills; i++) {
-            vm.warp(block.timestamp + 1);
+            nextTimestamp += 1;
+            vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
 
@@ -221,7 +223,8 @@ contract CreatorOracleRingBufferTest is Test {
         (, int56 tcNewestPre,,,,) = oracle.observations(MAX_CARDINALITY - 1);
 
         // The N+1'th write — wrap.
-        vm.warp(block.timestamp + 1);
+        nextTimestamp += 1;
+        vm.warp(nextTimestamp);
         oracle.recordSwapObservation();
 
         (uint16 idxAfter, uint16 cardAfter, uint16 cardNextAfter,) = oracle.getObservationState();
@@ -254,8 +257,10 @@ contract CreatorOracleRingBufferTest is Test {
         // Same fill strategy as test (2), but then do a few post-wrap writes so we can
         // query TWAPs across windows that do and do not straddle the wrap boundary.
         uint256 fills = uint256(MAX_CARDINALITY) - 1;
+        uint256 nextTimestamp = block.timestamp;
         for (uint256 i = 0; i < fills; i++) {
-            vm.warp(block.timestamp + 1);
+            nextTimestamp += 1;
+            vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
         (, , uint16 cardNext,) = oracle.getObservationState();
@@ -263,7 +268,8 @@ contract CreatorOracleRingBufferTest is Test {
 
         // 5 post-wrap writes.
         for (uint256 j = 0; j < 5; j++) {
-            vm.warp(block.timestamp + 1);
+            nextTimestamp += 1;
+            vm.warp(nextTimestamp);
             oracle.recordSwapObservation();
         }
 
@@ -271,7 +277,8 @@ contract CreatorOracleRingBufferTest is Test {
         // assert the returned TWAP equals `heldTick`. A non-monotonic or sign-flipped
         // cumulative-tick accumulator across the wrap would produce a different TWAP
         // (often 0 or negative) for windows that span the boundary.
-        vm.warp(block.timestamp + 1);
+        nextTimestamp += 1;
+        vm.warp(nextTimestamp);
 
         uint32[7] memory windows = [uint32(2), 5, 10, 30, 60, 120, 300];
         for (uint256 k = 0; k < windows.length; k++) {

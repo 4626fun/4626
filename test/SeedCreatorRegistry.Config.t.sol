@@ -33,7 +33,7 @@ contract SeedCreatorRegistryHarness is SeedCreatorRegistry {
 contract SeedCreatorRegistryConfigTest is Test {
     address internal constant LIVE_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
     address internal constant LIVE_CREATOR_FACTORY = 0xC7E919899Fd4C0C4f6f4269a63046107f85848bB;
-    address internal constant LIVE_VAULT_BATCHER = 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F;
+    address internal constant LIVE_VAULT_BATCHER = 0x004684670d284EF607E1B2424fcf8ccBda8ef828;
     address internal constant LIVE_VAULT_ACT_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;
     SeedCreatorRegistryHarness internal harness;
 

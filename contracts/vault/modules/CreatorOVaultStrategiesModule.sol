@@ -131,7 +131,6 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         if (currentDebt > 0) {
             // Best-effort withdrawal; ignore shortfall
             IERC20 coin = _creatorCoin();
-            uint256 beforeBal = coin.balanceOf(address(this));
             try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {}
             uint256 afterBal = coin.balanceOf(address(this));
             coinBalance = afterBal;
@@ -324,9 +323,18 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
             // FIX: M-09 — user-facing withdrawal path is best-effort per strategy.
             // A reverting/illiquid strategy is skipped (via `_tryWithdrawFromStrategyMeasured`)
             // instead of bubbling up and freezing the entire withdrawal queue.
+            uint256 balanceBefore = _creatorCoin().balanceOf(address(this));
             uint256 withdrawn = _tryWithdrawFromStrategyMeasured(strategy, toWithdraw);
+            uint256 balanceAfter = _creatorCoin().balanceOf(address(this));
 
-            if (withdrawn == 0) continue;
+            if (withdrawn == 0) {
+                // If a hostile strategy drained idle funds while reporting failure, the
+                // user-facing deficit grew. Ask later queue strategies to cover the new gap.
+                if (balanceAfter < balanceBefore) {
+                    remaining += balanceBefore - balanceAfter;
+                }
+                continue;
+            }
 
             totalWithdrawn += withdrawn;
             remaining = remaining > withdrawn ? remaining - withdrawn : 0;

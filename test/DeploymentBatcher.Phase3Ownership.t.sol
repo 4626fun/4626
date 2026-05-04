@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
-import {DeploymentBatcher, ICharmFactory} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module, ICharmFactory} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 
 contract MockOwnableTransfer {
     address public owner;
@@ -157,15 +157,25 @@ contract MockAjnaPoolFactory {
 
 contract MockVaultStrategyManager {
     address public owner;
+    address public managementAddress;
     mapping(address => uint256) public addedWeights;
     bool public autoAllocate;
 
     constructor(address owner_) {
         owner = owner_;
+        managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
         addedWeights[strategy] = weight;
+    }
+
+    function management() external view returns (address) {
+        return managementAddress;
+    }
+
+    function setManagement(address account) external {
+        managementAddress = account;
     }
 
     function setAutoAllocate(bool enabled) external {
@@ -196,6 +206,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
     DeploymentBatcher internal batcher;
 
     function setUp() public {
+        vm.chainId(8453);
+
         vault = new MockVaultStrategyManager(ownerAddr);
         create2Deployer = new MockCreate2Deployer(
             CREATOR_CHARM_STRATEGY_CODE_ID,
@@ -205,6 +217,17 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             SOLANA_STRATEGY_CODE_ID
         );
 
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            address(create2Deployer),
+            makeAddr("registry"),
+            makeAddr("chainlinkEthUsd"),
+            makeAddr("poolManager"),
+            makeAddr("taxHook"),
+            protocolTreasury,
+            makeAddr("lotteryManager"),
+            makeAddr("vaultActivationBatcher"),
+            makeAddr("batcher")
+        );
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
@@ -222,8 +245,10 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             address(new MockAjnaPoolFactory(makeAddr("ajnaPool"))),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule")
+            makeAddr("vaultAdminModule"),
+            address(phase2Fixture)
         );
+        vault.setManagement(address(batcher));
 
         vm.mockCall(
             batcher.CHARM_FACTORY(),

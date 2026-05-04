@@ -435,6 +435,10 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
         // Wrap internally
         amountOut = _wrapInternal(amount, msg.sender, msg.sender);
+
+        // FIX: M-08 — advanced wrap mints ShareOFT and must participate in
+        // the same wrapper-level cooldown as deposit paths.
+        lastWrapperDepositBlock[msg.sender] = block.number;
     }
 
     /**
@@ -446,6 +450,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     function unwrap(uint256 amount) external nonReentrant returns (uint256 amountOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+        // FIX: M-08 — advanced unwrap releases vault shares directly and must
+        // enforce the same cooldown as withdraw paths.
+        _requireWrapperCooldown(msg.sender);
 
         // Unwrap internally (burns from user)
         amountOut = _unwrapInternal(amount, msg.sender, msg.sender);

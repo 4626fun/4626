@@ -122,12 +122,14 @@ contract MockAjnaAdapterForPhase3 is MockOwnableTransferForPhase3 {
 
 contract MockVaultStrategyManagerForPhase3 {
     address public owner;
+    address public managementAddress;
     address[] public strategies;
     uint256[] public weights;
     bool public autoAllocate;
 
     constructor(address owner_) {
         owner = owner_;
+        managementAddress = owner_;
     }
 
     function addStrategy(address strategy, uint256 weight) external {
@@ -137,6 +139,14 @@ contract MockVaultStrategyManagerForPhase3 {
 
     function setAutoAllocate(bool enabled) external {
         autoAllocate = enabled;
+    }
+
+    function management() external view returns (address) {
+        return managementAddress;
+    }
+
+    function setManagement(address account) external {
+        managementAddress = account;
     }
 
     function strategyCount() external view returns (uint256) {
@@ -204,6 +214,8 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     address internal ajnaKeeper;
 
     function setUp() public {
+        vm.chainId(8453);
+
         protocolTreasury = makeAddr("protocolTreasury");
         creatorToken = makeAddr("creatorToken");
         solanaKeeper = makeAddr("solanaKeeper");
@@ -228,6 +240,17 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         create2Deployer.setDeployment(AJNA_ADAPTER_CODE_ID, address(ajnaStrategy));
         create2Deployer.setDeployment(SOLANA_STRATEGY_CODE_ID, address(solanaStrategy));
 
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            address(create2Deployer),
+            makeAddr("registry"),
+            makeAddr("chainlinkEthUsd"),
+            makeAddr("poolManager"),
+            makeAddr("taxHook"),
+            protocolTreasury,
+            makeAddr("lotteryManager"),
+            makeAddr("vaultActivationBatcher"),
+            makeAddr("batcher")
+        );
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
@@ -245,8 +268,10 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             address(ajnaFactory),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule")
+            makeAddr("vaultAdminModule"),
+            address(phase2Fixture)
         );
+        vault.setManagement(address(batcher));
 
         vm.mockCall(
             CHARM_FACTORY,

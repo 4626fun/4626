@@ -77,7 +77,7 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         oracle.setPeer(222, bytes32(uint256(uint160(address(0x2222)))));
         oracle.setPeer(333, bytes32(uint256(uint160(address(0x3333)))));
 
-        oracle.updateCreatorPrice(int256(2e18));
+        oracle.initializeCreatorPrice(int256(2e18));
     }
 
     function test_BroadcastCreatorPrice_MultiSend_UsesDivisibleSplit() public {
@@ -86,15 +86,8 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         dstEids[1] = 222;
         dstEids[2] = 333;
 
+        vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
         oracle.broadcastCreatorPrice{value: 9}(dstEids, "");
-
-        assertEq(endpoint.sendCount(), 3, "expected one send per dstEid");
-        assertEq(endpoint.sentValues(0), 3);
-        assertEq(endpoint.sentValues(1), 3);
-        assertEq(endpoint.sentValues(2), 3);
-
-        // No remainder should be left behind when divisible.
-        assertEq(address(oracle).balance, 0);
     }
 
     function test_BroadcastCreatorPrice_RefundsRemainderWhenFeeNotDivisible() public {
@@ -103,24 +96,15 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         dstEids[1] = 222;
         dstEids[2] = 333;
 
-        // msg.value = 10, 3 destinations => feePerChain = 3, remainder = 1 refunded to caller
-        uint256 balBefore = address(this).balance;
+        vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
         oracle.broadcastCreatorPrice{value: 10}(dstEids, "");
-
-        assertEq(endpoint.sendCount(), 3, "expected one send per dstEid");
-        assertEq(endpoint.sentValues(0), 3);
-        assertEq(endpoint.sentValues(1), 3);
-        assertEq(endpoint.sentValues(2), 3);
-        // Remainder (1 wei) refunded to caller
-        assertEq(address(this).balance, balBefore - 9, "remainder should be refunded");
-        assertEq(address(oracle).balance, 0, "oracle should not hold funds");
     }
 
     receive() external payable {}
 
     function test_BroadcastCreatorPrice_RevertsWhenNoDestinations() public {
         uint32[] memory dstEids = new uint32[](0);
-        vm.expectRevert("No destinations");
+        vm.expectRevert(CreatorOracle.BroadcastEqualSplitDeprecated.selector);
         oracle.broadcastCreatorPrice{value: 0}(dstEids, "");
     }
 }

@@ -7,9 +7,19 @@ import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 
 contract MockOwnableVaultForPhase3Bounds {
     address public owner;
+    address public managementAddress;
 
     constructor(address owner_) {
         owner = owner_;
+        managementAddress = owner_;
+    }
+
+    function management() external view returns (address) {
+        return managementAddress;
+    }
+
+    function setManagement(address account) external {
+        managementAddress = account;
     }
 }
 
@@ -18,7 +28,20 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     MockOwnableVaultForPhase3Bounds internal vault;
 
     function setUp() public {
+        vm.chainId(8453);
+
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            makeAddr("create2Deployer"),
+            makeAddr("registry"),
+            makeAddr("chainlinkEthUsd"),
+            makeAddr("poolManager"),
+            makeAddr("taxHook"),
+            makeAddr("protocolTreasury"),
+            makeAddr("lotteryManager"),
+            makeAddr("vaultActivationBatcher"),
+            makeAddr("batcher")
+        );
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
@@ -36,8 +59,10 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             makeAddr("ajnaFactory"),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule")
+            makeAddr("vaultAdminModule"),
+            address(phase2Fixture)
         );
+        vault.setManagement(address(batcher));
     }
 
     function test_deployPhase3Strategies_revertsWhenTotalWeightExceeds10000() public {

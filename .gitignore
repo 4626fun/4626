@@ -243,3 +243,4 @@ indexer/exports/cohort-assignments-2026-04-23T09-00-31-403Z.json
 indexer/scripts/lookerStudioConnector/Code.gs.js
 indexer/scripts/lookerStudioConnector/appsscript.json
 indexer/migrations/003_v_zora_profiles_enriched.sql
+.env.production

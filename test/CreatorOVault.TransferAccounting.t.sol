@@ -517,14 +517,18 @@ contract CreatorOVaultStrategyResilienceTest is CreatorOVaultModulesTestBase {
         assertGt(healthyStrategy.withdrawCalls(), 0);
     }
 
-    function test_withdraw_revertsWhenStrategyWithdrawReverts_underStrictUnwindPolicy() external {
+    function test_withdraw_skipsRevertingStrategyOnUserRedemptionPath() external {
         revertingStrategy.setRevertOnWithdraw(true);
 
         uint256 assetsToWithdraw = 50_000e18;
+        uint256 balanceBefore = creatorCoin.balanceOf(alice);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("WITHDRAW_REVERT"));
-        vault.withdraw(assetsToWithdraw, alice, alice);
+        uint256 sharesSpent = vault.withdraw(assetsToWithdraw, alice, alice);
+
+        assertGt(sharesSpent, 0);
+        assertEq(creatorCoin.balanceOf(alice), balanceBefore + assetsToWithdraw);
+        assertGt(healthyStrategy.withdrawCalls(), 0);
     }
 }
 

@@ -605,16 +605,17 @@ contract VaultGaugeVotingTest is Test {
         assertEq(voting.getTotalGaugeProbabilityPPM(), 69_420);
     }
 
-    function testVaultGaugeProbabilityBoost_NoVotesEqualSplit() public {
+    function testVaultGaugeProbabilityBoost_NoVotesReturnsZero() public {
         // Ensure 5 whitelisted vaults for clean math
         voting.setVaultWhitelist(makeAddr("vault4"), true);
         voting.setVaultWhitelist(makeAddr("vault5"), true);
         assertEq(voting.whitelistedVaultCount(), 5);
 
-        // No votes cast -> equal split of 69,420 PPM across 5 vaults = 13,884 PPM
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 13_884);
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault2), 13_884);
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 13_884);
+        // No votes cast -> no boost. This avoids whitelist-size manipulation
+        // concentrating/diluting a default boost without governance votes.
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 0);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault2), 0);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 0);
     }
 
     function testVaultGaugeProbabilityBoost_WithVotesProportional() public {
@@ -634,12 +635,12 @@ contract VaultGaugeVotingTest is Test {
         assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault3), 0);
     }
 
-    function testVaultGaugeProbabilityBoost_EqualSplitStillCapped() public {
+    function testVaultGaugeProbabilityBoost_NoVotesSingleVaultStillZero() public {
         voting.setVaultWhitelist(vault2, false);
         voting.setVaultWhitelist(vault3, false);
 
         assertEq(voting.whitelistedVaultCount(), 1);
-        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 35_000);
+        assertEq(voting.getVaultGaugeProbabilityBoostPPM(vault1), 0);
     }
 
     // ================================

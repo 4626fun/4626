@@ -166,6 +166,8 @@ contract MockToken is IERC20 {
         address internal protocolTreasury = makeAddr("protocolTreasury");
 
         function setUp() public {
+            vm.chainId(8453);
+
             MockToken wethImpl = new MockToken("Wrapped Ether", "WETH");
             vm.etch(WETH_ADDR, address(wethImpl).code);
             weth = MockToken(WETH_ADDR);

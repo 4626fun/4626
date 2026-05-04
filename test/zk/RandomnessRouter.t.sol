@@ -130,6 +130,7 @@ contract ReentrantSource is IRandomnessSource {
     RandomnessRouter public router;
     address public coin;
     bool public attempted;
+    bool public reentryBlocked;
 
     constructor(RandomnessRouter _router, address _coin) {
         router = _router;
@@ -145,7 +146,11 @@ contract ReentrantSource is IRandomnessSource {
             attempted = true;
             // Attempt to re-enter `acquireRequest`. Must revert via the
             // ReentrancyGuard inherited from OpenZeppelin.
-            router.acquireRequest(coin);
+            try router.acquireRequest(coin) {
+                revert("reentry unexpectedly succeeded");
+            } catch {
+                reentryBlocked = true;
+            }
         }
         return 1;
     }
@@ -165,15 +170,14 @@ contract RandomnessRouterReentrancyTest is Test {
     }
 
     function test_acquireRequest_blocksReentry() public {
-        // The bad source's request() will recurse into router.acquireRequest,
-        // which the OZ ReentrancyGuard must reject. The recursion happens
-        // inside the low-level call in acquireRequest, so the outer
-        // require(ok && ret.length == 32, "request() failed") fires when
-        // the recursive call reverts.
-        vm.expectRevert(bytes("request() failed"));
-        router.acquireRequest(coinA);
-        // Confirm the source actually attempted reentry (i.e. the test is
-        // exercising the reentrancy path, not just an unrelated revert).
+        // The bad source's request() recurses into router.acquireRequest.
+        // The source catches the inner ReentrancyGuard revert so the outer
+        // request can complete, letting the test assert the path was exercised.
+        (address src, IRandomnessSource.SourceMode mode, uint256 key) = router.acquireRequest(coinA);
+        assertEq(src, address(bad));
+        assertEq(uint256(mode), uint256(IRandomnessSource.SourceMode.REQUEST));
+        assertEq(key, 1);
         assertTrue(bad.attempted(), "reentrant call was never attempted");
+        assertTrue(bad.reentryBlocked(), "reentrant call was not blocked");
     }
 }

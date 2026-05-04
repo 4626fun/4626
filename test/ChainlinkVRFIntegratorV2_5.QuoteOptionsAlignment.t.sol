@@ -37,6 +37,7 @@ contract ChainlinkVRFIntegratorV2_5QuoteOptionsAlignmentTest is Test {
 
     address internal owner = address(0xA11CE);
     uint32 internal constant HUB_EID = 30184;
+    bytes32 internal constant HUB_PEER = bytes32(uint256(0x1234));
     address internal constant LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     function setUp() public {
@@ -45,6 +46,8 @@ contract ChainlinkVRFIntegratorV2_5QuoteOptionsAlignmentTest is Test {
 
         vm.prank(owner);
         integrator = new ChainlinkVRFIntegratorV2_5(LZ_ENDPOINT, owner, HUB_EID);
+        vm.prank(owner);
+        integrator.setPeer(HUB_EID, HUB_PEER);
     }
 
     /// quoteFee() and quoteFeeWithGas(defaultGasLimit) MUST return identical

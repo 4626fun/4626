@@ -116,6 +116,8 @@ contract ForkCharmVaultMock {
     function baseUpper() external pure returns (int24) {
         return 887200;
     }
+
+    function rebalance() external {}
 }
 
 contract CreatorCharmStrategyForkIntegrationTest is Test {
@@ -322,7 +324,7 @@ contract CreatorCharmStrategyForkIntegrationTest is Test {
         assertEq(charm.withdrawCallCount(), withdrawCallsBefore, "rebalance should not call charm withdraw");
     }
 
-    function _assertRebalanceLog(Vm.Log[] memory logs, address emitter, uint256 expectedAssets) internal {
+    function _assertRebalanceLog(Vm.Log[] memory logs, address emitter, uint256 expectedAssets) internal pure {
         bytes32 sig = keccak256("StrategyRebalanced(uint256)");
         bool found = false;
 

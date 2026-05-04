@@ -99,7 +99,8 @@ contract RevertingStrategy is IStrategy {
     function rebalance() external pure {}
 }
 
-/// @dev Reverts AFTER partially moving funds. Used to prove measured fall-through.
+/// @dev Reverts AFTER attempting to move funds. The EVM rolls the token
+///      transfer back with the revert, so callers must observe zero delta.
 contract PartialThenRevertStrategy is IStrategy {
     IERC20 public immutable coin;
     uint256 public immutable partialAmount;
@@ -116,8 +117,8 @@ contract PartialThenRevertStrategy is IStrategy {
     function deposit(uint256) external pure returns (uint256) { revert("partial"); }
 
     function withdraw(uint256) external returns (uint256) {
-        // Move some funds first, then revert — simulates a buggy strategy that
-        // partially completed a transfer before hitting an internal invariant.
+        // Attempt to move funds first, then revert. The token transfer is
+        // rolled back with this frame's revert.
         coin.transfer(msg.sender, partialAmount);
         revert("partial-then-revert");
     }
@@ -159,7 +160,7 @@ contract MismatchStrategy is IStrategy {
 // Harness
 // -----------------------------------------------------------------------------
 
-/// @dev Byte-for-byte port of `_tryWithdrawFromStrategyMeasured` from
+/// @dev Source-level mirror of `_tryWithdrawFromStrategyMeasured` from
 ///      CreatorOVaultStrategiesModule.sol. Kept here because the production
 ///      function is `internal` on a delegatecall module and `_creatorCoin()`
 ///      expects the hosting contract to implement `IERC4626.asset()`.
@@ -185,16 +186,26 @@ contract StrategyWithdrawHarness {
         } catch (bytes memory revertData) {
             emit StrategyWithdrawFailed(strategy, amount, revertData);
             uint256 afterBalRevert = coin.balanceOf(address(this));
-            if (afterBalRevert != beforeBal) {
-                coinBalance = afterBalRevert;
+            coinBalance = afterBalRevert;
+            if (afterBalRevert > beforeBal) {
                 return afterBalRevert - beforeBal;
             }
             return 0;
         }
 
         uint256 afterBal = coin.balanceOf(address(this));
-        uint256 received = afterBal - beforeBal;
         coinBalance = afterBal;
+
+        if (afterBal < beforeBal) {
+            emit StrategyWithdrawFailed(
+                strategy,
+                amount,
+                abi.encodeWithSelector(TransferAmountMismatch.selector, reported, 0)
+            );
+            return 0;
+        }
+
+        uint256 received = afterBal - beforeBal;
 
         if (received != reported) {
             emit StrategyWithdrawFailed(
@@ -264,12 +275,11 @@ contract M09_StrategyWithdrawResilienceTest is Test {
     }
 
     // --------------------------------------------------------------
-    // 3. Partial-then-revert — strategy transferred part of the funds
-    //    before reverting. Helper must trust the measured delta, emit
-    //    the failure event, and return the measured amount so the
-    //    vault's queue loop records the recovered balance.
+    // 3. Partial-then-revert — strategy attempted a transfer before
+    //    reverting. The EVM rolls that transfer back, so the helper must
+    //    emit the failure event and return zero.
     // --------------------------------------------------------------
-    function test_PartialThenRevert_ReturnsMeasuredDelta() public {
+    function test_PartialThenRevert_ReturnsZeroBecauseTransferRollsBack() public {
         PartialThenRevertStrategy s = new PartialThenRevertStrategy(IERC20(address(coin)), 250 ether);
         _fundStrategy(address(s), 1_000 ether);
 
@@ -279,9 +289,9 @@ contract M09_StrategyWithdrawResilienceTest is Test {
 
         uint256 withdrawn = harness.tryWithdraw(address(s), 500 ether);
 
-        assertEq(withdrawn, 250 ether, "should return measured delta, not the requested amount");
-        assertEq(coin.balanceOf(address(harness)), 250 ether, "harness holds the partial amount");
-        assertEq(harness.coinBalance(), 250 ether, "coinBalance tracks measured balance");
+        assertEq(withdrawn, 0, "reverted transfer is rolled back");
+        assertEq(coin.balanceOf(address(harness)), 0, "harness should not receive reverted transfer");
+        assertEq(harness.coinBalance(), 0, "coinBalance tracks measured balance");
     }
 
     // --------------------------------------------------------------

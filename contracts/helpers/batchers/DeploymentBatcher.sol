@@ -610,7 +610,8 @@ contract DeploymentBatcherPhase2Module {
         address _taxHook,
         address _protocolTreasury,
         address _lotteryManager,
-        address _vaultActivationBatcher
+        address _vaultActivationBatcher,
+        address _batcher
     ) {
         create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
         registry = _registry;
@@ -620,7 +621,8 @@ contract DeploymentBatcherPhase2Module {
         protocolTreasury = _protocolTreasury;
         lotteryManager = _lotteryManager;
         vaultActivationBatcher = _vaultActivationBatcher;
-        batcher = msg.sender;
+        if (_batcher == address(0)) revert NotBatcherContext();
+        batcher = _batcher;
     }
 
     function deployPhase2Core(
@@ -999,7 +1001,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     // CreatorOVault delegatecall modules (shared logic contracts).
     address public immutable vaultCoreModule;
     address public immutable vaultStrategiesModule;
-    address public immutable vaultAdminModule;
+    address public vaultAdminModule;
 
     /// @notice Pending auction allocations keyed by creator/owner/version salt.
     mapping(bytes32 => PendingAuction) public pendingAuctions;
@@ -1017,7 +1019,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherPhase3Helper public immutable phase3Helper;
     /// @notice Dedicated phase-2 execution helper (delegatecall) to keep this contract under EIP-170 runtime limits.
-    DeploymentBatcherPhase2Module public immutable phase2Module;
+    DeploymentBatcherPhase2Module public phase2Module;
     /// @notice Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherUniV4Helper public immutable uniV4Helper;
     /// @notice String/salt/hash helper contract to keep this contract under EIP-170 runtime limits.
@@ -1137,21 +1139,59 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _vaultAdminModule,
         address _phase2Module
     ) {
-        if (_registry == address(0) || _bytecodeStore == address(0) || _create2Deployer == address(0)) revert ZeroAddress();
-        if (_protocolTreasury == address(0) || _poolManager == address(0) || _taxHook == address(0)) {
-            revert ZeroAddress();
-        }
+        // Stack-depth fix (fixup5f): interleave each param's zero-check immediately
+        // before its assignment so the Yul optimizer lazy-loads each calldataload
+        // value just before its first use rather than holding all 18 simultaneously
+        // live at the first grouped check. Multi-use params are read from their state
+        // vars in the helper deployments below (calldataload values freed above).
+        if (_registry == address(0)) revert ZeroAddress();
+        registry = ICreatorRegistry(_registry);
+
+        if (_bytecodeStore == address(0)) revert ZeroAddress();
+        bytecodeStore = IUniversalBytecodeStore(_bytecodeStore);
+
+        if (_create2Deployer == address(0)) revert ZeroAddress();
+        create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
+
+        if (_protocolTreasury == address(0)) revert ZeroAddress();
+        protocolTreasury = _protocolTreasury;
+
+        if (_poolManager == address(0)) revert ZeroAddress();
+        poolManager = _poolManager;
+
+        if (_taxHook == address(0)) revert ZeroAddress();
+        taxHook = _taxHook;
+
         if (_chainlinkEthUsd == address(0)) revert ZeroAddress();
-        if (
-            _usdc == address(0) || _uniswapV3Factory == address(0) || _uniswapRouter == address(0)
-                || _ajnaFactory == address(0)
-        ) {
-            revert ZeroAddress();
-        }
-        if (_vaultCoreModule == address(0) || _vaultStrategiesModule == address(0) || _vaultAdminModule == address(0)) {
-            revert ZeroAddress();
-        }
+        chainlinkEthUsd = _chainlinkEthUsd;
+
+        vaultActivationBatcher = _vaultActivationBatcher;
+        lotteryManager = _lotteryManager;
+        permit2 = _permit2;
+
+        if (_usdc == address(0)) revert ZeroAddress();
+        usdc = _usdc;
+
+        if (_uniswapV3Factory == address(0)) revert ZeroAddress();
+        uniswapV3Factory = _uniswapV3Factory;
+
+        if (_uniswapRouter == address(0)) revert ZeroAddress();
+        uniswapRouter = _uniswapRouter;
+
+        if (_ajnaFactory == address(0)) revert ZeroAddress();
+        ajnaFactory = _ajnaFactory;
+
+        if (_vaultCoreModule == address(0)) revert ZeroAddress();
+        vaultCoreModule = _vaultCoreModule;
+
+        if (_vaultStrategiesModule == address(0)) revert ZeroAddress();
+        vaultStrategiesModule = _vaultStrategiesModule;
+
+        if (_vaultAdminModule == address(0)) revert ZeroAddress();
+        vaultAdminModule = _vaultAdminModule;
+
         if (_phase2Module == address(0)) revert ZeroAddress();
+        phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
 
         // FIX: L-02 (4626-350) — outer batcher references a hardcoded
         // Base-only Charm factory (CHARM_FACTORY public constant above),
@@ -1160,30 +1200,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         // chains instead of discovering the mismatch mid-Phase3.
         require(block.chainid == 8453, "DeploymentBatcher: Base only");
 
-        registry = ICreatorRegistry(_registry);
-        bytecodeStore = IUniversalBytecodeStore(_bytecodeStore);
-        create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
-        protocolTreasury = _protocolTreasury;
-        poolManager = _poolManager;
-        taxHook = _taxHook;
-        chainlinkEthUsd = _chainlinkEthUsd;
-        vaultActivationBatcher = _vaultActivationBatcher;
-        lotteryManager = _lotteryManager;
-        permit2 = _permit2;
-        usdc = _usdc;
-        uniswapV3Factory = _uniswapV3Factory;
-        uniswapRouter = _uniswapRouter;
-        ajnaFactory = _ajnaFactory;
-
-        vaultCoreModule = _vaultCoreModule;
-        vaultStrategiesModule = _vaultStrategiesModule;
-        vaultAdminModule = _vaultAdminModule;
-
+        // Use state-var reads (calldataload values freed above).
         phase3Helper = new DeploymentBatcherPhase3Helper(
-            _create2Deployer, _protocolTreasury, _usdc, _uniswapV3Factory, _uniswapRouter, _ajnaFactory
+            address(create2Deployer), protocolTreasury, usdc, uniswapV3Factory, uniswapRouter, ajnaFactory
         );
-        phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
-        uniV4Helper = new DeploymentBatcherUniV4Helper(_create2Deployer, _poolManager, _permit2);
+        uniV4Helper = new DeploymentBatcherUniV4Helper(address(create2Deployer), poolManager, permit2);
         utilsHelper = new DeploymentBatcherUtilsHelper();
     }
 

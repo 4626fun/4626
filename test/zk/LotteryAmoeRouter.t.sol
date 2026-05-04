@@ -268,12 +268,13 @@ contract LotteryAmoeRouterTest is Test {
     function test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary() public {
         // deadline exactly MIN_DEADLINE_BUFFER seconds in the future passes.
         vm.warp(1_000_000);
+        uint256 deadline = 1_000_000 + router.MIN_DEADLINE_BUFFER();
         vm.prank(publisher);
         uint256 entryId = router.submitAmoeEntry(
             buyer,
             coin,
             keccak256("nonce-E"),
-            1_000_000 + router.MIN_DEADLINE_BUFFER(),
+            deadline,
             ""
         );
         assertGt(entryId, 0);

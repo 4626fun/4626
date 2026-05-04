@@ -113,6 +113,8 @@ contract M08CooldownPropagationTest is Test {
     address internal bob = makeAddr("bob");
 
     function setUp() public {
+        vm.roll(1);
+
         creatorCoin = new MockCreatorCoin();
         vaultShare = new MockVaultShare(address(creatorCoin));
         shareOFT = new MockShareOFTWithHook();

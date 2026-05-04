@@ -6,7 +6,7 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-04-29
-Scope: current live Base infra addresses plus the canonical `v1.9.2` split Phase-1 deployment stack for new per-creator vaults.
+Scope: current live Base infra addresses plus the canonical `v1.10.2` split Phase-1 release target for new per-creator vaults.
 
 ## Sources
 
@@ -108,7 +108,7 @@ The active bytecode manifest must include all three entries.
 
 ## Operator Checks
 
-1. Run `bash test/v183-release-target-guard.sh`.
+1. Run `bash test/current-release-target-guard.sh`.
 2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
 3. Run `forge test --match-contract SeedCreatorRegistryConfigTest`.
 4. Confirm `DeploymentBatcher` wiring onchain:

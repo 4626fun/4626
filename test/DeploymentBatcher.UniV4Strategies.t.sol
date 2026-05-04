@@ -102,6 +102,8 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
     address internal positionManager;
 
     function setUp() public {
+        vm.chainId(8453);
+
         creatorToken = makeAddr("creatorToken");
         pairedToken = makeAddr("pairedToken");
         registryOwner = makeAddr("registryOwner");
@@ -127,6 +129,17 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
         create2Deployer.setDeployment(LIMIT_ORDER_CODE_ID, address(limitOrder));
         create2Deployer.setDeployment(LP_MANAGER_CODE_ID, address(lpManager));
 
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            address(create2Deployer),
+            makeAddr("registry"),
+            makeAddr("chainlinkEthUsd"),
+            poolManager,
+            makeAddr("taxHook"),
+            makeAddr("protocolTreasury"),
+            makeAddr("lotteryManager"),
+            makeAddr("vaultActivationBatcher"),
+            makeAddr("batcher")
+        );
         batcher = new DeploymentBatcher(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
@@ -144,7 +157,8 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
             makeAddr("ajnaFactory"),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule")
+            makeAddr("vaultAdminModule"),
+            address(phase2Fixture)
         );
     }
 

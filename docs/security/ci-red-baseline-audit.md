@@ -2,11 +2,20 @@
 
 > Status: pre-existing on every branch including `main` (verified via fuzz seed cross-check on PR #469's pure-TS branch). **No regressions.** This is a triage doc to pick a remediation path per finding family.
 
+## Status Update — 2026-05-04
+
+The Forge failure baseline in this document has been remediated. Local validation now passes with:
+
+- `forge build`
+- `forge test -vv` — 761 passed, 0 failed, 0 skipped
+
+The remaining CI-red topics in this audit are Slither high-impact triage and historical Gitleaks rotation/purge work.
+
 ## Summary
 
 | Family | Count | Blocking? | Recommendation |
 |---|---|---:|---|
-| Forge `test` failures | 29 / 722 | Yes (CI red on PR + main) | Mostly fix; a few mark `vm.skip` |
+| Forge `test` failures | 0 / 761 | No | Resolved 2026-05-04; keep full Forge suite as release gate |
 | Slither high-impact findings | **128** | Yes (`fail-none` then post-filter on High) | Mostly suppress with documented rationale |
 | Gitleaks (full history) | **25** (was 26) | Yes | Partial: 1 family allowlisted in this PR; 24 historical findings need separate rotate/purge response |
 | `pnpm typecheck` | clean | — | — |
@@ -14,7 +23,20 @@
 
 ---
 
-## 1. Forge test failures (29)
+## 1. Forge test failures (resolved 2026-05-04)
+
+Status: resolved. The full suite now passes locally (`761 passed, 0 failed, 0 skipped`).
+
+Resolution notes:
+
+- Added missing Base-chain fixture setup and LayerZero peer setup where tests relied on Base-only guards.
+- Bootstrapped CreatorOracle fixtures against the current owner-only first-price invariant and updated stale broadcast/ring-buffer assumptions.
+- Updated VaultGaugeVoting tests to match the no-votes-no-boost invariant.
+- Fixed real wrapper cooldown coverage for advanced `wrap()` / `unwrap()` paths.
+- Fixed hostile strategy withdrawal accounting so negative idle-balance deltas increase the remaining deficit before the queue tries the next strategy.
+- Updated M09 and reentrancy harness expectations to match EVM rollback semantics.
+
+Historical triage notes below are kept for audit context.
 
 Running `forge test --no-match-path 'lib/**'`: **29 fails / 693 passes**. Grouped by root cause:
 

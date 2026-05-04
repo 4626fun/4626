@@ -362,12 +362,16 @@ contract HostileStrategyZeroDeltaRevertControlTest is HostileWithdrawTestBase {
         uint256 ask = 50_000e18;
         uint256 aliceBalBefore = coin.balanceOf(alice);
 
+        vm.expectEmit(true, false, false, false, address(vault));
+        emit StrategyWithdrawFailed(address(hostile), 0, "");
+
         vm.prank(alice);
         uint256 sharesSpent = vault.withdraw(ask, alice, alice);
 
         assertGt(sharesSpent, 0);
         assertEq(coin.balanceOf(alice), aliceBalBefore + ask);
-        assertEq(hostile.withdrawCalls(), 1);
+        // The strategy reverted, so its own counter write is rolled back.
+        assertEq(hostile.withdrawCalls(), 0);
         assertGt(healthy.withdrawCalls(), 0);
         assertEq(vault.coinBalance(), coin.balanceOf(address(vault)));
     }
@@ -491,11 +495,15 @@ contract PartialTransferThenRevertTest is Test {
         uint256 aliceBalBefore = coin.balanceOf(alice);
         uint256 vaultBalBefore = coin.balanceOf(address(vault));
 
+        vm.expectEmit(true, false, false, false, address(vault));
+        emit StrategyWithdrawFailed(address(stubborn), 0, "");
+
         vm.prank(alice);
         vault.withdraw(ask, alice, alice);
 
         assertEq(coin.balanceOf(alice), aliceBalBefore + ask);
-        assertEq(stubborn.withdrawCalls(), 1);
+        // The strategy reverted, so its own counter write is rolled back.
+        assertEq(stubborn.withdrawCalls(), 0);
         assertGt(healthy.withdrawCalls(), 0);
         // After the healthy strategy's legitimate transfers the vault balance
         // has moved; we only assert the coinBalance tracker stays synced.

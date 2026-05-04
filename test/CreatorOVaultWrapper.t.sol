@@ -137,6 +137,8 @@ contract CreatorOVaultWrapperTest is Test {
         vm.prank(alice);
         wrapper.wrap(1001);
 
+        vm.roll(block.number + 1);
+
         vm.prank(alice);
         uint256 sharesOut = wrapper.unwrap(1);
 

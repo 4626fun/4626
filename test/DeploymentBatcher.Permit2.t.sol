@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
@@ -170,6 +170,8 @@ contract DeploymentBatcherPermit2Test is Test {
     DeploymentBatcher internal batcher;
 
     function setUp() public {
+        vm.chainId(8453);
+
         creatorToken = new MockCreatorTokenPermit2();
         shareOFT = new MockShareOFTPermit2();
         wrapper = new MockWrapperPermit2(address(creatorToken), address(shareOFT));
@@ -196,8 +198,21 @@ contract DeploymentBatcherPermit2Test is Test {
             makeAddr("ajnaFactory"),
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule")
+            makeAddr("vaultAdminModule"),
+            makeAddr("phase2Module")
         );
+        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
+            makeAddr("create2Deployer"),
+            makeAddr("registry"),
+            makeAddr("chainlinkEthUsd"),
+            makeAddr("poolManager"),
+            makeAddr("taxHook"),
+            makeAddr("protocolTreasury"),
+            makeAddr("lotteryManager"),
+            makeAddr("vaultActivationBatcher"),
+            address(batcher)
+        );
+        vm.store(address(batcher), bytes32(uint256(8)), bytes32(uint256(uint160(address(phase2Fixture)))));
 
         creatorToken.mint(ownerAddr, 100_000_000e18);
         vm.prank(ownerAddr);
@@ -205,9 +220,10 @@ contract DeploymentBatcherPermit2Test is Test {
 
         // FIX: F-01 requires phase1SplitStates to be finalized with matching addresses.
         // Write Phase1SplitState directly into storage via vm.store.
-        // ReentrancyGuard=slot0, pendingAuctions=slot1, hasActivePendingAuction=slot2, phase1SplitStates=slot3
+        // ReentrancyGuard=slot0, vaultAdminModule=slot1, pendingAuctions=slot2,
+        // hasActivePendingAuction=slot3, phase1SplitStates=slot4.
         bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
-        bytes32 base = keccak256(abi.encode(baseSalt, uint256(3)));
+        bytes32 base = keccak256(abi.encode(baseSalt, uint256(4)));
         vm.store(address(batcher), bytes32(uint256(base) + 1), bytes32(uint256(uint160(address(vault)))));
         vm.store(address(batcher), bytes32(uint256(base) + 2), bytes32(uint256(uint160(address(wrapper)))));
         vm.store(address(batcher), bytes32(uint256(base) + 3), bytes32(uint256(uint160(address(shareOFT)))));
