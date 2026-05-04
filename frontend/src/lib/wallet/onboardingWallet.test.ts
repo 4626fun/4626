@@ -185,8 +185,37 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes self-auth embedded-owner installs through the self-built relay lane before prepared calls', async () => {
-    const signatureWrapper = `0x${'12'.repeat(224)}` as `0x${string}`
+  it('routes passkey-shaped self-auth embedded-owner installs through the self-built relay lane before prepared calls', async () => {
+    const webauthnSignature = encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            { name: 'authenticatorData', type: 'bytes' },
+            { name: 'clientDataJSON', type: 'string' },
+            { name: 'challengeIndex', type: 'uint256' },
+            { name: 'typeIndex', type: 'uint256' },
+            { name: 'r', type: 'uint256' },
+            { name: 's', type: 'uint256' },
+          ],
+        },
+      ],
+      [
+        {
+          authenticatorData: `0x${'ab'.repeat(37)}`,
+          clientDataJSON:
+            '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}',
+          challengeIndex: 23n,
+          typeIndex: 1n,
+          r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+          s: 0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+        },
+      ],
+    )
+    const signatureWrapper = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      [0n, webauthnSignature],
+    ) as `0x${string}`
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -251,6 +280,53 @@ describe('sendPreparedOwnerTx', () => {
     )
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('blocks known-bad Coinbase self-auth session-key signatures before Relay submission', async () => {
+    const ecdsaSignature = `0x${'11'.repeat(32)}${'22'.repeat(32)}1b` as `0x${string}`
+    const sessionKeyWrapper = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      [2n, ecdsaSignature],
+    ) as `0x${string}`
+    const sessionKeyWrapperWithLeadingOffset =
+      `0x${'0'.repeat(62)}20${sessionKeyWrapper.slice(2)}` as `0x${string}`
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'personal_sign') {
+        expect(args.params?.[1]).toBe(CANONICAL_CSW)
+        return sessionKeyWrapperWithLeadingOffset
+      }
+      throw new Error(`Unexpected method ${args.method}`)
+    })
+
+    await expect(sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+    })).rejects.toThrow(/session-key ECDSA signature/i)
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {

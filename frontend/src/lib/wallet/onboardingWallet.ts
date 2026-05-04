@@ -986,6 +986,21 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     step: 'sign',
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
+  const parsedSignature = parseSignatureForRecovery(signature)
+  if (parsedSignature.ecdsaSignature) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        reason: 'coinbase_returned_eoa_signature_for_self_auth',
+        ownerIndex: parsedSignature.ownerIndex,
+        signatureLengthBytes: (signature.length - 2) / 2,
+      },
+    })
+    throw new Error(
+      'Coinbase returned a session-key ECDSA signature instead of the canonical passkey signature. Open /add-owner in a normal external browser so the Coinbase passkey popup can sign as the on-chain CSW owner.',
+    )
+  }
 
   const signedUserOp: V06UserOpFields = { ...userOp, signature }
   emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
