@@ -641,6 +641,7 @@ export async function _submitOwnerViaPreparedCalls(params: {
     signatureRequest?: { hash?: string }
     userOp?: unknown
     capabilities?: Record<string, unknown>
+    context?: string
   } | null
 
   if (!prepareResult?.signatureRequest?.hash) {
@@ -713,15 +714,35 @@ export async function _submitOwnerViaPreparedCalls(params: {
     // Otherwise: tri-state-friendly — log debug, fall through.
   }
 
-  // Step 3: wallet_sendPreparedCalls → goes to Coinbase RPC (default case)
+  // Step 3: wallet_sendPreparedCalls → goes to Coinbase RPC (default case).
   //
-  // Signature `type` selection mirrors createSubAccountSigner.ts in the CB SDK:
-  // a hex string is treated as `secp256k1` (raw EOA r||s||v), anything else as
-  // `webauthn`. Critically, a 65-byte hex blob is the ONLY EOA shape — anything
-  // longer that's still hex (e.g. an ERC-1271 SignatureWrapper produced by the
-  // popup for a passkey owner) must NOT be sent as `secp256k1`, or the bundler
-  // tries to ecrecover and returns -32507. In that case we let the bundler
-  // verify the wrapper via ERC-1271 by sending it as a pre-wrapped signature.
+  // Per the HackMD wallet_sendPreparedCalls spec
+  // (https://hackmd.io/@lsr/H1ALRaPsR), the wire payload is:
+  //
+  //   { preparedCalls: { type, data, chainId }, signature: Hex, context: Hex }
+  //
+  // `signature` MUST be a flat hex string — NOT a wrapped
+  // `{type:'webauthn', data:{...}}` object. The popup already returns the
+  // ERC-1271 SignatureWrapper bytes pre-encoded for both EOA owners (65-byte
+  // r||s||v) and passkey owners (longer SignatureWrapper containing a
+  // WebAuthnAuth struct). The Go-based bundler parses `signature` as a string
+  // and rejects nested objects with `"invalid character 'x' after top-level
+  // value"`, which is exactly the error we hit before this fix.
+  //
+  // The previous flattened+wrapped shape
+  // ({version, type, data, chainId, signature:{type,data:{...}}})
+  // worked for some wallet popups but is non-conformant; the canonical CB SDK
+  // path uses the spec shape above.
+  const preparedCallsField = {
+    type: prepareResult.type ?? 'user-operation-v06',
+    data: prepareResult.userOp,
+    chainId: prepareResult.chainId ?? chainIdHex,
+  }
+  const contextField = ((prepareResult as { context?: unknown }).context ?? '0x') as string
+
+  // Keep this for diagnostics — it tells us whether the signature LOOKS like a
+  // raw EOA secp256k1 signature (65 bytes) or a longer SignatureWrapper, which
+  // is useful for triage but no longer affects what we send on the wire.
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.sender,
     signature,
@@ -731,8 +752,9 @@ export async function _submitOwnerViaPreparedCalls(params: {
   try {
     console.warn('[_submitOwnerViaPreparedCalls] dispatching wallet_sendPreparedCalls', {
       sender: params.sender,
-      type: prepareResult.type ?? 'user-operation-v06',
-      chainId: prepareResult.chainId ?? chainIdHex,
+      type: preparedCallsField.type,
+      chainId: preparedCallsField.chainId,
+      contextLen: typeof contextField === 'string' ? Math.max(0, (contextField.length - 2) / 2) : 0,
       signaturePayloadType: (signaturePayload as { type?: string } | null)?.type ?? 'raw',
       signatureLen: typeof signature === 'string' ? (signature.length - 2) / 2 : 0,
     })
@@ -743,11 +765,9 @@ export async function _submitOwnerViaPreparedCalls(params: {
     sendResult = await params.walletRequest({
       method: 'wallet_sendPreparedCalls',
       params: [{
-        version: '1.0',
-        type: prepareResult.type ?? 'user-operation-v06',
-        data: prepareResult.userOp,
-        chainId: prepareResult.chainId ?? chainIdHex,
-        signature: signaturePayload,
+        preparedCalls: preparedCallsField,
+        signature, // FLAT HEX — popup-returned SignatureWrapper bytes
+        context: contextField,
       }],
     }) as unknown
     try {
@@ -1074,21 +1094,28 @@ export async function _submitOwnerViaReplayablePreparedCalls(params: {
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
 
-  // Pass the signature through wallet_sendPreparedCalls.  buildSendPreparedCalls-
-  // SignaturePayload picks the right type (secp256k1 / webauthn) from the shape.
+  // Spec-conformant payload: { preparedCalls, signature: Hex, context: Hex }.
+  // See HackMD spec at https://hackmd.io/@lsr/H1ALRaPsR. Signature is the flat
+  // hex bytes returned by personal_sign — the popup pre-wraps for ERC-1271, so
+  // we don't wrap again. The diagnostic call to buildSendPreparedCalls-
+  // SignaturePayload is retained purely for log triage.
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.csw,
     signature,
   })
+  const _diagSignaturePayloadType = (signaturePayload as { type?: string } | null)?.type ?? 'raw'
+  void _diagSignaturePayloadType
 
   const sendResult = (await params.walletRequest({
     method: 'wallet_sendPreparedCalls',
     params: [{
-      version: '1.0',
-      type: prepareResult.type ?? 'user-operation-v06',
-      data: prepareResult.userOp,
-      chainId: prepareResult.chainId ?? chainIdHex,
-      signature: signaturePayload,
+      preparedCalls: {
+        type: prepareResult.type ?? 'user-operation-v06',
+        data: prepareResult.userOp,
+        chainId: prepareResult.chainId ?? chainIdHex,
+      },
+      signature, // FLAT HEX
+      context: ((prepareResult as { context?: unknown }).context ?? '0x') as string,
     }],
   })) as unknown
 
@@ -1285,29 +1312,23 @@ export async function _submitOwnerViaPreparedCallsWithEoaOwner(params: {
     )
   }
 
-  // Wrap as ERC-1271 SignatureWrapper(ownerIndex, ecdsaSig) and frame as
-  // `secp256k1` so the bundler RPC routes it through ecrecover for this owner
-  // index.
-  const signaturePayload = {
-    type: 'secp256k1' as const,
-    data: {
-      address: params.eoaOwnerAddress,
-      signature: rawSignature,
-    },
-  }
-
+  // Spec-conformant payload (HackMD https://hackmd.io/@lsr/H1ALRaPsR):
+  //   { preparedCalls: { type, data, chainId }, signature: Hex, context: Hex }
+  // Signature is the flat 65-byte r||s||v hex from personal_sign — the bundler
+  // will run ecrecover and match against the on-chain owner at
+  // `eoaOwnerIndex`. The previous wrapped `{type:'secp256k1', data:{...}}`
+  // shape made the Go bundler's JSON parser blow up on the bare `0x` inside
+  // the nested object ("invalid character 'x' after top-level value").
   const sendResult = (await params.cswRequest({
     method: 'wallet_sendPreparedCalls',
     params: [{
-      version: '1.0',
-      type: prepareResult.type ?? 'user-operation-v06',
-      data: prepareResult.userOp,
-      chainId: prepareResult.chainId ?? chainIdHex,
-      signature: signaturePayload,
-      // The CSW owner index for `eoaOwnerAddress`. Some bundler builds key
-      // off `ownerIndex` directly; passing it as a hint is harmless and
-      // matches the SignatureWrapper convention.
-      ownerIndex: params.eoaOwnerIndex,
+      preparedCalls: {
+        type: prepareResult.type ?? 'user-operation-v06',
+        data: prepareResult.userOp,
+        chainId: prepareResult.chainId ?? chainIdHex,
+      },
+      signature: rawSignature, // FLAT HEX (65 bytes for EOA)
+      context: ((prepareResult as { context?: unknown }).context ?? '0x') as string,
     }],
   })) as unknown
 
