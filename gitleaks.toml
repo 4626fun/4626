@@ -100,6 +100,9 @@ stopwords = [
   # Chainlink VRF keyHash on Base (public network constant, see
   # https://docs.chain.link/vrf/v2/subscription/supported-networks#base-mainnet).
   '''0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab''',
+  # Android APK certificate hash from WebAuthn clientDataJSON. This is a
+  # public app origin identifier, not an API key or credential.
+  '''EAOWwOQABhsQXdlgGi5hBOadx7TY6ZX_CqJlpoxf1hk''',
 ]
 
 # Rule-scoped allowlist for the `private-key` detector. Gitleaks matches

@@ -28,6 +28,8 @@ const EXPLICIT_OUT_OF_SCOPE = [
   // Repo/meta docs intentionally kept outside docs.4626.fun nav.
   'AGENTS.md',
   'note.md',
+  'RECOVERY.md',
+  'RECOVERY_INAPP_BUG.md',
   '.github/pull_request_template.md',
   'apps/docs-site/README.md',
   // Internal design and implementation readmes.

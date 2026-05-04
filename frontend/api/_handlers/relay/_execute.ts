@@ -13,6 +13,8 @@ import {
   logger,
 } from '../../../packages/server-core/src/index.js'
 
+const RELAY_EXECUTE_BODY_MAX_BYTES = 262_144
+
 /**
  * `/api/relay/execute` — server-side proxy to Relay Protocol's `/execute/call`
  * endpoint (`https://api.relay.link/execute/call`).
@@ -133,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let body: RelayExecuteRequest
   try {
-    body = (await readJsonBody(req)) as RelayExecuteRequest
+    body = (await readJsonBody(req, { maxBytes: RELAY_EXECUTE_BODY_MAX_BYTES })) as RelayExecuteRequest
   } catch {
     return res
       .status(400)
