@@ -245,8 +245,10 @@ describe('sendPreparedOwnerTx', () => {
         },
       })
     })
+    const prepareCallPayloads: Record<string, unknown>[] = []
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'wallet_prepareCalls') {
+        prepareCallPayloads.push(args.params?.[0] as Record<string, unknown>)
         return {
           type: 'user-operation-v06',
           chainId: '0x2105',
@@ -288,6 +290,8 @@ describe('sendPreparedOwnerTx', () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(prepareCallPayloads).toHaveLength(1)
+    expect(prepareCallPayloads[0]?.capabilities).toEqual({})
     expect(result.txHash).toBe(TX_HASH)
   })
 
@@ -306,8 +310,10 @@ describe('sendPreparedOwnerTx', () => {
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       )),
     )
+    const prepareCallPayloads: Record<string, unknown>[] = []
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'wallet_prepareCalls') {
+        prepareCallPayloads.push(args.params?.[0] as Record<string, unknown>)
         return {
           type: 'user-operation-v06',
           chainId: '0x2105',
@@ -356,6 +362,8 @@ describe('sendPreparedOwnerTx', () => {
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(prepareCallPayloads).toHaveLength(1)
+    expect(prepareCallPayloads[0]?.capabilities).toEqual({})
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {

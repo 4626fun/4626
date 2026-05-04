@@ -2273,7 +2273,7 @@ export async function sendPreparedOwnerTx(params: {
                 chainId: base.id,
                 csw: canonicalSmartWalletAddress as `0x${string}`,
                 innerCallData: txRequest.data,
-                paymasterUrl,
+                paymasterUrl: null,
                 onTelemetry: (event) => {
                   try {
                     if (event.step === 'error') {
