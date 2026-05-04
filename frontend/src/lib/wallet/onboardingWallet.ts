@@ -2960,18 +2960,30 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   }
   emit({ step: 'read_nonce', detail: { nonce: `0x${nonce.toString(16)}` } })
 
-  // Step 2: build userOp with Mar 9 shape (gas = 0, paymasterAndData = "").
-  // The on-chain Mar 9 trace had: callGasLimit = verificationGasLimit =
-  // preVerificationGas = maxFeePerGas = maxPriorityFeePerGas = 0,
-  // initCode = "0x", paymasterAndData = "0x". The bundler/Relay solver
-  // takes care of gas accounting on its side (gasless execution).
+  // Step 2: build userOp with Mar 9 shape.
+  // CORRECTED 2026-05-04 from on-chain trace decode of tx 0x801b9d4b... :
+  //   callGasLimit:         0x249f0 = 150_000
+  //   verificationGasLimit: 0xf4240 = 1_000_000
+  //   preVerificationGas:   0
+  //   maxFeePerGas:         0  (relay solver covers gas)
+  //   maxPriorityFeePerGas: 0
+  //   initCode:             "0x"
+  //   paymasterAndData:     "0x"
+  // Original code had ALL gas fields = 0 which caused EntryPoint to revert
+  // during validation (verificationGasLimit = 0 means account.validateUserOp
+  // gets 0 gas budget → OOG → revert). The signature commits to whatever
+  // values are in the UserOp at sign time, so these must match what gets
+  // submitted to handleOps. Mar 9 burned 0x37069 = ~226k gas total against
+  // these limits, well within 150k call + 1M verify.
+  const MAR9_CALL_GAS_LIMIT = 150_000n
+  const MAR9_VERIFICATION_GAS_LIMIT = 1_000_000n
   const userOp: SelfBuiltUserOpFields = {
     sender: params.csw,
     nonce,
     initCode: '0x',
     callData: wrappedData,
-    callGasLimit: 0n,
-    verificationGasLimit: 0n,
+    callGasLimit: MAR9_CALL_GAS_LIMIT,
+    verificationGasLimit: MAR9_VERIFICATION_GAS_LIMIT,
     preVerificationGas: 0n,
     maxFeePerGas: 0n,
     maxPriorityFeePerGas: 0n,
