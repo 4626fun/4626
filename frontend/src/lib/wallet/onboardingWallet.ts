@@ -1067,19 +1067,109 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   const hashToSign = getUserOpHashWithoutChainIdLocal(userOp, ENTRY_POINT_V06_ADDRESS)
   emit({ step: 'compute_hash', detail: { hashToSign } })
 
-  const signature = (await params.walletRequest({
-    method: 'personal_sign',
-    params: [hashToSign, params.csw],
-  })) as `0x${string}`
-  if (!signature || !signature.startsWith('0x')) {
-    emit({ step: 'error', detail: { stage: 'sign', signature } })
-    throw new Error('personal_sign did not return a valid signature.')
+  const signAttempts: Array<{
+    method: 'personal_sign' | 'eth_sign'
+    params: unknown[]
+    label: string
+    signature: `0x${string}` | null
+    ownerIndex: number | null
+    innerSignatureKind: SignatureShape['kind'] | 'invalid'
+    signatureLengthBytes: number
+    error?: string
+  }> = []
+  const signatureCandidates: Array<{
+    method: 'personal_sign' | 'eth_sign'
+    params: unknown[]
+    label: string
+  }> = [
+    { method: 'personal_sign', params: [hashToSign, params.csw], label: 'personal_sign_data_address' },
+    // Some wallet/runtime stacks interpret personal_sign param ordering differently.
+    { method: 'personal_sign', params: [params.csw, hashToSign], label: 'personal_sign_address_data' },
+    // Final fallback for stacks that still route CSW owner signatures via eth_sign.
+    { method: 'eth_sign', params: [params.csw, hashToSign], label: 'eth_sign_address_hash' },
+  ]
+  let signature: `0x${string}` | null = null
+  let owner0WebAuthnCheck: ReturnType<typeof classifyOwner0WebAuthnSignature> | null = null
+  for (const candidate of signatureCandidates) {
+    try {
+      const maybeSignature = (await params.walletRequest({
+        method: candidate.method,
+        params: candidate.params,
+      })) as `0x${string}`
+      if (!maybeSignature || !maybeSignature.startsWith('0x')) {
+        signAttempts.push({
+          method: candidate.method,
+          params: candidate.params,
+          label: candidate.label,
+          signature: null,
+          ownerIndex: null,
+          innerSignatureKind: 'invalid',
+          signatureLengthBytes: 0,
+          error: 'invalid_signature_payload',
+        })
+        continue
+      }
+      const classification = classifyOwner0WebAuthnSignature(maybeSignature)
+      signAttempts.push({
+        method: candidate.method,
+        params: candidate.params,
+        label: candidate.label,
+        signature: maybeSignature,
+        ownerIndex: classification.ownerIndex,
+        innerSignatureKind: classification.innerSignatureKind,
+        signatureLengthBytes: classification.signatureLengthBytes,
+      })
+      if (classification.ok) {
+        signature = maybeSignature
+        owner0WebAuthnCheck = classification
+        break
+      }
+    } catch (error) {
+      signAttempts.push({
+        method: candidate.method,
+        params: candidate.params,
+        label: candidate.label,
+        signature: null,
+        ownerIndex: null,
+        innerSignatureKind: 'invalid',
+        signatureLengthBytes: 0,
+        error: error instanceof Error ? error.message : String(error ?? ''),
+      })
+    }
+  }
+  const lastValidAttempt = [...signAttempts].reverse().find((attempt) => Boolean(attempt.signature))
+  if (!signature || !owner0WebAuthnCheck) {
+    emit({
+      step: 'error',
+      detail: {
+        stage: 'sign',
+        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
+        hashSigned: hashToSign,
+        signAttempts: signAttempts.map((attempt) => ({
+          method: attempt.method,
+          label: attempt.label,
+          ownerIndex: attempt.ownerIndex,
+          innerSignatureKind: attempt.innerSignatureKind,
+          signatureLengthBytes: attempt.signatureLengthBytes,
+          error: attempt.error ?? null,
+        })),
+        intendedAddOwnerTarget: addOwnerTarget,
+      },
+    })
+    throw new Error(
+      `Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path after trying ${signAttempts.map((a) => a.label).join(', ')}. Re-open /add-owner in Base app and select the CSW passkey/owner[0] credential before approving.`,
+    )
   }
   emit({
     step: 'sign',
-    detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
+    detail: {
+      hashSigned: hashToSign,
+      signature,
+      signatureLengthBytes: (signature.length - 2) / 2,
+      signMethod: lastValidAttempt?.method ?? 'personal_sign',
+      signLabel: lastValidAttempt?.label ?? 'personal_sign_data_address',
+    },
   })
-  const owner0WebAuthnCheck = classifyOwner0WebAuthnSignature(signature)
   emit({
     step: 'signature_preflight',
     detail: {
@@ -1090,23 +1180,6 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       intendedAddOwnerTarget: addOwnerTarget,
     },
   })
-  if (!owner0WebAuthnCheck.ok) {
-    emit({
-      step: 'error',
-      detail: {
-        stage: 'sign',
-        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
-        ownerIndex: owner0WebAuthnCheck.ownerIndex,
-        innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
-        signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
-        intendedAddOwnerTarget: addOwnerTarget,
-      },
-    })
-    throw new Error(
-      `Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path (ownerIndex=${owner0WebAuthnCheck.ownerIndex ?? 'unknown'}, innerSignature=${owner0WebAuthnCheck.innerSignatureKind}, target=${addOwnerTarget ?? 'unknown'}). Re-open /add-owner in Base app and select the CSW passkey/owner[0] credential before approving.`,
-    )
-  }
-
   const signedUserOp: V06UserOpFields = { ...userOp, signature }
   emit({ step: 'splice', detail: { signedUserOp: serializeUserOpForLog(signedUserOp) } })
 
