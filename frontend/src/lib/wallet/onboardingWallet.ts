@@ -960,7 +960,7 @@ function parseCoinbaseSignatureWrapper(signature: `0x${string}`): {
   return null
 }
 
-function classifyOwner0WebAuthnSignature(signature: `0x${string}`): {
+function classifyWebAuthnOwnerSignature(signature: `0x${string}`): {
   ok: boolean
   ownerIndex: number | null
   innerSignatureKind: SignatureShape['kind']
@@ -971,7 +971,7 @@ function classifyOwner0WebAuthnSignature(signature: `0x${string}`): {
     ? detectSignatureShape(signatureWrapper.signatureData)
     : detectSignatureShape(signature)
   return {
-    ok: signatureWrapper?.ownerIndex === 0 && innerSignatureShape.kind === 'webauthn',
+    ok: signatureWrapper?.ownerIndex != null && innerSignatureShape.kind === 'webauthn',
     ownerIndex: signatureWrapper?.ownerIndex ?? null,
     innerSignatureKind: innerSignatureShape.kind,
     signatureLengthBytes: (signature.length - 2) / 2,
@@ -1089,7 +1089,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     { method: 'eth_sign', params: [params.csw, hashToSign], label: 'eth_sign_address_hash' },
   ]
   let signature: `0x${string}` | null = null
-  let owner0WebAuthnCheck: ReturnType<typeof classifyOwner0WebAuthnSignature> | null = null
+  let webAuthnOwnerCheck: ReturnType<typeof classifyWebAuthnOwnerSignature> | null = null
   for (const candidate of signatureCandidates) {
     try {
       const maybeSignature = (await params.walletRequest({
@@ -1109,7 +1109,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         })
         continue
       }
-      const classification = classifyOwner0WebAuthnSignature(maybeSignature)
+      const classification = classifyWebAuthnOwnerSignature(maybeSignature)
       signAttempts.push({
         method: candidate.method,
         params: candidate.params,
@@ -1121,7 +1121,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       })
       if (classification.ok) {
         signature = maybeSignature
-        owner0WebAuthnCheck = classification
+        webAuthnOwnerCheck = classification
         break
       }
     } catch (error) {
@@ -1138,12 +1138,12 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     }
   }
   const lastValidAttempt = [...signAttempts].reverse().find((attempt) => Boolean(attempt.signature))
-  if (!signature || !owner0WebAuthnCheck) {
+  if (!signature || !webAuthnOwnerCheck) {
     emit({
       step: 'error',
       detail: {
         stage: 'sign',
-        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
+        reason: 'coinbase_did_not_return_webauthn_owner_signature',
         hashSigned: hashToSign,
         signAttempts: signAttempts.map((attempt) => ({
           method: attempt.method,
@@ -1157,7 +1157,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       },
     })
     throw new Error(
-      `Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path after trying ${signAttempts.map((a) => a.label).join(', ')}. Re-open /add-owner in Base app and select the CSW passkey/owner[0] credential before approving.`,
+      `Coinbase did not return a WebAuthn/passkey owner signature after trying ${signAttempts.map((a) => a.label).join(', ')}. Re-open /add-owner in Base app and select a Coinbase passkey credential for this smart wallet before approving.`,
     )
   }
   emit({
@@ -1173,10 +1173,10 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   emit({
     step: 'signature_preflight',
     detail: {
-      outcome: owner0WebAuthnCheck.ok ? 'owner0_webauthn' : 'not_owner0_webauthn',
-      ownerIndex: owner0WebAuthnCheck.ownerIndex,
-      innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
-      signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+      outcome: webAuthnOwnerCheck.ok ? 'webauthn_owner' : 'not_webauthn_owner',
+      ownerIndex: webAuthnOwnerCheck.ownerIndex,
+      innerSignatureKind: webAuthnOwnerCheck.innerSignatureKind,
+      signatureLengthBytes: webAuthnOwnerCheck.signatureLengthBytes,
       intendedAddOwnerTarget: addOwnerTarget,
     },
   })
@@ -1361,29 +1361,29 @@ export async function _submitOwnerViaReplayablePreparedCalls(params: {
     step: 'sign',
     detail: { hashSigned: hashToSign, signature, signatureLengthBytes: (signature.length - 2) / 2 },
   })
-  const owner0WebAuthnCheck = classifyOwner0WebAuthnSignature(signature)
+  const webAuthnOwnerCheck = classifyWebAuthnOwnerSignature(signature)
   emit({
     step: 'signature_preflight',
     detail: {
-      outcome: owner0WebAuthnCheck.ok ? 'owner0_webauthn' : 'not_owner0_webauthn',
-      ownerIndex: owner0WebAuthnCheck.ownerIndex,
-      innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
-      signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+      outcome: webAuthnOwnerCheck.ok ? 'webauthn_owner' : 'not_webauthn_owner',
+      ownerIndex: webAuthnOwnerCheck.ownerIndex,
+      innerSignatureKind: webAuthnOwnerCheck.innerSignatureKind,
+      signatureLengthBytes: webAuthnOwnerCheck.signatureLengthBytes,
     },
   })
-  if (!owner0WebAuthnCheck.ok) {
+  if (!webAuthnOwnerCheck.ok) {
     emit({
       step: 'error',
       detail: {
         stage: 'sign',
-        reason: 'coinbase_did_not_return_owner0_webauthn_signature',
-        ownerIndex: owner0WebAuthnCheck.ownerIndex,
-        innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
-        signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+        reason: 'coinbase_did_not_return_webauthn_owner_signature',
+        ownerIndex: webAuthnOwnerCheck.ownerIndex,
+        innerSignatureKind: webAuthnOwnerCheck.innerSignatureKind,
+        signatureLengthBytes: webAuthnOwnerCheck.signatureLengthBytes,
       },
     })
     throw new Error(
-      'Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path. Retry from the browser session that opens the Coinbase passkey prompt for this smart wallet.',
+      'Coinbase did not return a WebAuthn/passkey owner signature. Retry from the browser session that opens the Coinbase passkey prompt for this smart wallet.',
     )
   }
 
