@@ -22,7 +22,7 @@ import {
   _submitOwnerViaPreparedCalls,
   _submitOwnerViaWalletSendCalls,
   unwrapDoubleHexEncodedHash,
-  type OwnerApprovalStageEvent,
+  type PreparedCallsSignaturePayloadMode,
 } from '@/lib/wallet/onboardingWallet'
 import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
 import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
@@ -453,8 +453,10 @@ export function CswSignatureProbe() {
   const [preparedCallsState, setPreparedCallsState] = useState<StepState>(INITIAL_STEP)
   const [preparedCallsTxHash, setPreparedCallsTxHash] = useState<string | null>(null)
   const [preparedCallEventLog, setPreparedCallEventLog] = useState<string[]>([])
-  const [ownerToAddInput, setOwnerToAddInput] = useState('0x2f4ec723ff6add6ab81b7befbec04ce31151613f')
-  const [preparedCallsUsePaymaster, setPreparedCallsUsePaymaster] = useState(true)
+  const [ownerToAddInput, setOwnerToAddInput] = useState('0xb2aad65a5402714bf428a66731ae62ba5c45cac0')
+  const [preparedSignaturePayloadMode, setPreparedSignaturePayloadMode] =
+    useState<PreparedCallsSignaturePayloadMode>('full_wrapper_secp256k1')
+  const [preparedCallsUsePaymaster] = useState(true)
   const [ownerToRemoveIndexInput, setOwnerToRemoveIndexInput] = useState('2')
   const [ownerRemoveState, setOwnerRemoveState] = useState<StepState>(INITIAL_STEP)
   const [ownerRemoveTxHash, setOwnerRemoveTxHash] = useState<string | null>(null)
@@ -489,6 +491,10 @@ export function CswSignatureProbe() {
     if (!isAddress(raw)) return null
     return getAddress(raw)
   }, [cswInput])
+  const selfAuthSession = useMemo(() => {
+    if (!normalizedCswAddress || !connectedAddress) return false
+    return connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+  }, [connectedAddress, normalizedCswAddress])
 
   const targetOwnerAddress = useMemo(() => {
     return ownerSlots.find((slot) => slot.index === targetOwnerIndex)?.ownerAddress ?? null
@@ -1280,14 +1286,9 @@ export function CswSignatureProbe() {
       setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
       return
     }
-    // Hard self-auth gate: this probe drives `_submitOwnerViaPreparedCalls`,
-    // which always calls `personal_sign(hash, sender)` with `sender === CSW`.
-    // That shape is only accepted by the Base App popup when the connected
-    // account IS the CSW (self-auth session, owner[0]=passkey signing the
-    // self-call). For non-self-auth connectors (an EOA owner session) the
-    // signing address would have to be the connected EOA, not the CSW —
-    // that path is handled by `sendPreparedOwnerTx` in the account-setup
-    // controller, not by this probe.
+    // Hard self-auth gate: this probe now runs only the self-built relay UserOp
+    // lane with WebAuthn-owner enforcement. That requires the connected session
+    // to be the CSW itself so the Base App passkey owner can sign.
     const isSelfAuthSession =
       connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
     if (!isSelfAuthSession) {
@@ -1328,62 +1329,41 @@ export function CswSignatureProbe() {
     setPreparedCallEventLog([])
     setPreparedCallsState({
       kind: 'pending',
-      label: `submitting via wallet_prepareCalls${preparedCallsUsePaymaster ? ' (with paymaster)' : ' (no paymaster)'}…`,
+      label: 'submitting via Base prepared-calls owner add…',
     })
     try {
       const appendEvent = (row: string) => {
-        setPreparedCallEventLog((prev) => [...prev, row].slice(-10))
+        setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+      }
+      const formatEventDetail = (detail: unknown): string => {
+        if (detail == null) return ''
+        if (typeof detail === 'string') return detail
+        try {
+          return JSON.stringify(detail)
+        } catch {
+          return String(detail)
+        }
       }
       appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
-      const runAttempt = async (params: { paymasterUrl: string | null; attemptLabel: string }) => {
-        appendEvent(`attempt:${params.attemptLabel}`)
-        return await _submitOwnerViaPreparedCalls({
-          walletRequest: async (args) => await request(args),
-          chainId: base.id,
-          sender: normalizedCswAddress,
-          to: normalizedCswAddress,
-          data,
-          paymasterUrl: params.paymasterUrl,
-          approvalRunId: `${runId}-${params.attemptLabel}`,
-          executionMode: 'canonicalSmartWallet',
-          signerAddress: connectedAddress,
-          canonicalCswAddress: normalizedCswAddress,
-          // Hard-gated above: this code path is only reachable when
-          // `connectedAddress === normalizedCswAddress`, i.e. the Base App
-          // popup is signing for the CSW itself. Pass `sessionKind: 'self_auth'`
-          // so the preflight guard downgrades sub-account session-key
-          // ECDSA mismatches to `skipped_self_auth_session_key` instead of
-          // throwing — the bundler validates those via Coinbase's
-          // sub-account / ERC-1271 path.
-          sessionKind: 'self_auth',
-          onStageEvent: (event: OwnerApprovalStageEvent) => {
-            const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
-            appendEvent(row)
-          },
-        })
-      }
-
-      let txHash: `0x${string}`
-      try {
-        txHash = await runAttempt({
-          paymasterUrl: preparedCallsUsePaymaster ? paymasterUrlForPreparedCalls : null,
-          attemptLabel: preparedCallsUsePaymaster ? 'with_paymaster' : 'without_paymaster',
-        })
-      } catch (firstError) {
-        const message = describeError(firstError)
-        const lower = message.toLowerCase()
-        const retryWithoutPaymaster =
-          preparedCallsUsePaymaster &&
-          (lower.includes('failed to fetch rpc request') ||
-            lower.includes('internal error') ||
-            lower.includes('failed to fetch'))
-        if (!retryWithoutPaymaster) throw firstError
-        appendEvent('fallback:retry_without_paymaster')
-        txHash = await runAttempt({
-          paymasterUrl: null,
-          attemptLabel: 'without_paymaster_fallback',
-        })
-      }
+      appendEvent('lane:wallet_prepareCalls_native')
+      appendEvent(`signaturePayloadMode:${preparedSignaturePayloadMode}`)
+      const txHash = await _submitOwnerViaPreparedCalls({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        sender: normalizedCswAddress,
+        to: normalizedCswAddress,
+        data,
+        paymasterUrl: null,
+        approvalRunId: runId,
+        executionMode: 'canonicalSmartWallet',
+        signerAddress: connectedAddress,
+        canonicalCswAddress: normalizedCswAddress,
+        sessionKind: 'self_auth',
+        signaturePayloadMode: preparedSignaturePayloadMode,
+        onStageEvent: (event) => {
+          appendEvent(formatEventDetail(event).slice(0, 2000))
+        },
+      })
 
       setPreparedCallsTxHash(txHash)
       setPreparedCallsState({
@@ -1395,7 +1375,10 @@ export function CswSignatureProbe() {
       setPreparedCallsState({
         kind: 'err',
         label: 'prepared-calls owner add failed',
-        detail: describeError(error),
+        detail:
+          /Relay \/execute \(400\): execution reverted|Relay \/execute proxy failed/i.test(describeError(error))
+            ? 'Relay reached on-chain execution and reverted. The current wallet session is still returning an ECDSA owner[2] signature, not the WebAuthn owner[0] passkey signature required for this CSW self-auth add-owner path.'
+            : describeError(error),
       })
     }
   }
@@ -1914,6 +1897,7 @@ export function CswSignatureProbe() {
         </p>
       </header>
 
+      {!selfAuthSession ? (
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="space-y-2 rounded border border-zinc-800 bg-black/40 p-3">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Base App wallet</div>
@@ -2040,6 +2024,17 @@ export function CswSignatureProbe() {
           </button>
         </div>
       </section>
+      ) : (
+      <section className="space-y-2 rounded border border-zinc-800 bg-zinc-950 p-4">
+        <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+          Owner remove controls hidden (self-auth mode)
+        </div>
+        <div className="text-xs text-zinc-500">
+          Remove and bundler controls are hidden during self-auth sessions so this page
+          stays focused on add-owner via the relay lane.
+        </div>
+      </section>
+      )}
 
       {walletSession ? (
         <section
@@ -2139,11 +2134,11 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-          Self-call owner add (prepared calls)
+          Self-call owner add (Base prepared calls)
         </div>
         <div className="text-xs text-zinc-500">
-          Runs wallet_prepareCalls, then personal_sign, then wallet_sendPreparedCalls against the connected CSW session.
-          Use this lane from Base App for addOwnerAddress self-call testing.
+          Native Coinbase/Base Account lane for CSW owner install: wallet_prepareCalls,
+          sign the prepared hash, then wallet_sendPreparedCalls (self-auth session only).
         </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner address to add</div>
@@ -2154,32 +2149,41 @@ export function CswSignatureProbe() {
             spellCheck={false}
           />
         </label>
-        <label className="flex items-center gap-2 text-xs text-zinc-300">
-          <input
-            type="checkbox"
-            checked={preparedCallsUsePaymaster}
-            onChange={(event) => setPreparedCallsUsePaymaster(event.target.checked)}
-          />
-          include paymaster capability
+        <label className="space-y-1">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+            wallet_sendPreparedCalls signature payload
+          </div>
+          <select
+            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
+            value={preparedSignaturePayloadMode}
+            onChange={(event) =>
+              setPreparedSignaturePayloadMode(event.target.value as PreparedCallsSignaturePayloadMode)
+            }
+          >
+            <option value="full_wrapper_secp256k1">full wrapper + secp256k1 address</option>
+            <option value="inner_secp256k1">inner 65-byte signature + secp256k1 address</option>
+            <option value="full_wrapper_webauthn">full wrapper + webauthn sender</option>
+            <option value="auto">auto / original helper behavior</option>
+          </select>
+          <div className="text-[11px] text-zinc-500">
+            Test one mode per run. Start with the full wrapper + secp256k1 address mode.
+          </div>
         </label>
-        <div className="text-[11px] text-zinc-500">
-          paymasterUrl: <span className="font-mono text-zinc-300">{paymasterUrlForPreparedCalls ?? '(none)'}</span>
-        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
             onClick={runPreparedCallsOwnerAdd}
           >
-            run prepared-calls owner add
+            run add owner via prepared calls
           </button>
         </div>
-        <StatusRow title="prepared calls lane" state={preparedCallsState} />
+        <StatusRow title="prepared add-owner lane" state={preparedCallsState} />
         {preparedCallsTxHash ? <KeyValue label="preparedCallsTxHash" value={preparedCallsTxHash} /> : null}
         {preparedCallEventLog.length ? (
           <div className="space-y-1">
-            <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">prepared calls events</div>
-            <div className="rounded border border-zinc-800 bg-black/50 px-2 py-1 font-mono text-[11px] text-zinc-300">
+            <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">prepared add-owner events</div>
+            <div className="whitespace-pre-wrap break-all rounded border border-zinc-800 bg-black/50 px-2 py-1 font-mono text-[11px] text-zinc-300">
               {preparedCallEventLog.join('\n')}
             </div>
           </div>

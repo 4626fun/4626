@@ -258,7 +258,7 @@ function extractRelayTxHash(relayResponse: unknown): `0x${string}` | null {
   return null
 }
 
-function parseCoinbaseSignatureWrapper(signature: `0x${string}`): {
+export function parseCoinbaseSignatureWrapper(signature: `0x${string}`): {
   ownerIndex: number
   signatureData: `0x${string}`
 } | null {
@@ -693,8 +693,8 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         })
         ownerRecoveryOutcome = ownerRecovery.kind
         if (
-          !requireWebAuthnOwnerSignature &&
-          (ownerRecovery.kind === 'ok' || ownerRecovery.kind === 'skipped_self_auth_session_key')
+          ownerRecovery.kind === 'ok' ||
+          (!requireWebAuthnOwnerSignature && ownerRecovery.kind === 'skipped_self_auth_session_key')
         ) {
           signature = maybeSignature
           webAuthnOwnerCheck = classification

@@ -19,6 +19,7 @@ import { generatePrivateKey, privateKeyToAccount, sign as viemSign } from 'viem/
 import {
   _submitOwnerViaSelfBuiltUserOp,
   _submitOwnerViaPreparedCallsWithEoaOwner,
+  buildSendPreparedCallsSignaturePayload,
   preflightOwnerKeyMismatch,
   sendPreparedOwnerTx,
 } from './onboardingWallet'
@@ -73,6 +74,44 @@ function makeJsonResponse<T>(payload: T, ok = true) {
     json: vi.fn(async () => payload),
   }
 }
+
+describe('buildSendPreparedCallsSignaturePayload', () => {
+  const SENDER = '0x4444444444444444444444444444444444444444' as const
+  const SIGNER = '0x5555555555555555555555555555555555555555' as const
+  const INNER_SIGNATURE = `0x${'11'.repeat(65)}` as const
+  const WRAPPED_SIGNATURE = encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'bytes' }],
+    [2n, INNER_SIGNATURE],
+  ) as `0x${string}`
+
+  it('can send the wrapped Coinbase signature as secp256k1 payload for probe variants', () => {
+    expect(
+      buildSendPreparedCallsSignaturePayload({
+        sender: SENDER,
+        signerAddress: SIGNER,
+        signature: WRAPPED_SIGNATURE,
+        mode: 'full_wrapper_secp256k1',
+      }),
+    ).toEqual({
+      type: 'secp256k1',
+      data: { address: SIGNER, signature: WRAPPED_SIGNATURE },
+    })
+  })
+
+  it('keeps the previous auto behavior by unwrapping 65-byte inner secp256k1 signatures', () => {
+    expect(
+      buildSendPreparedCallsSignaturePayload({
+        sender: SENDER,
+        signerAddress: SIGNER,
+        signature: WRAPPED_SIGNATURE,
+        mode: 'auto',
+      }),
+    ).toEqual({
+      type: 'secp256k1',
+      data: { address: SIGNER, signature: INNER_SIGNATURE },
+    })
+  })
+})
 
 describe('sendPreparedOwnerTx', () => {
   beforeEach(() => {

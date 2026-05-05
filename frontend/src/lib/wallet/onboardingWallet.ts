@@ -43,6 +43,7 @@ export {
   _submitOwnerViaWalletSendCalls,
   buildSendPreparedCallsSignaturePayload,
 } from './onboardingWalletPrepared'
+export type { PreparedCallsSignaturePayloadMode } from './onboardingWalletPrepared'
 export type { OwnerDelegationFlags } from './onboardingWalletDelegation'
 export {
   buildOwnerDelegationError,
