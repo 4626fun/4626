@@ -718,6 +718,7 @@ const REPLAYABLE_INNER_SELECTORS = new Set<string>([
   '0xb8197367', // removeLastOwner(uint256,bytes)
   '0x4f1ef286', // upgradeToAndCall(address,bytes)
 ])
+const ADD_OWNER_ADDRESS_SELECTOR = '0x0f0f3f24'
 
 /**
  * Encode `executeWithoutChainIdValidation(bytes[] calls)` with a single inner
@@ -977,11 +978,24 @@ function classifyOwner0WebAuthnSignature(signature: `0x${string}`): {
   }
 }
 
+function decodeAddOwnerAddressTarget(innerCallData: `0x${string}`): `0x${string}` | null {
+  if (innerCallData.slice(0, 10).toLowerCase() !== ADD_OWNER_ADDRESS_SELECTOR) return null
+  if (innerCallData.length < 10) return null
+  try {
+    const encodedArgs = (`0x${innerCallData.slice(10)}`) as `0x${string}`
+    const [ownerAddress] = decodeAbiParameters([{ type: 'address' }], encodedArgs)
+    return getAddress(ownerAddress)
+  } catch {
+    return null
+  }
+}
+
 export async function _submitOwnerViaSelfBuiltUserOp(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
   csw: `0x${string}`
   innerCallData: `0x${string}`
+  expectedOwnerAddress?: `0x${string}` | null
   rpcUrl?: string
   beneficiary?: `0x${string}`
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
@@ -1007,8 +1021,29 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       `Inner selector ${innerSelector} is not in canSkipChainIdValidation. Only addOwnerAddress / addOwnerPublicKey / removeOwnerAtIndex / removeLastOwner / upgradeToAndCall are valid for the replayable lane.`,
     )
   }
+  const addOwnerTarget = decodeAddOwnerAddressTarget(params.innerCallData)
+  if (innerSelector === ADD_OWNER_ADDRESS_SELECTOR && !addOwnerTarget) {
+    throw new Error('Replayable owner-install lane could not decode addOwnerAddress(address) call target.')
+  }
+  if (params.expectedOwnerAddress && addOwnerTarget) {
+    const expectedOwner = getAddress(params.expectedOwnerAddress)
+    if (addOwnerTarget.toLowerCase() !== expectedOwner.toLowerCase()) {
+      emit({
+        step: 'error',
+        detail: {
+          stage: 'validate_intent',
+          reason: 'add_owner_target_mismatch',
+          expectedOwnerAddress: expectedOwner,
+          decodedAddOwnerTarget: addOwnerTarget,
+        },
+      })
+      throw new Error(
+        `Prepared addOwnerAddress target ${addOwnerTarget} does not match intended owner ${expectedOwner}. Reload /add-owner and retry so Coinbase signs the exact owner-install payload.`,
+      )
+    }
+  }
   const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
-  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, wrappedData } })
+  emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, addOwnerTarget, wrappedData } })
 
   const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
   const nonce = await readReplayableNonce(params.csw, rpcUrl)
@@ -1052,6 +1087,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       ownerIndex: owner0WebAuthnCheck.ownerIndex,
       innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
       signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+      intendedAddOwnerTarget: addOwnerTarget,
     },
   })
   if (!owner0WebAuthnCheck.ok) {
@@ -1063,10 +1099,11 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         ownerIndex: owner0WebAuthnCheck.ownerIndex,
         innerSignatureKind: owner0WebAuthnCheck.innerSignatureKind,
         signatureLengthBytes: owner0WebAuthnCheck.signatureLengthBytes,
+        intendedAddOwnerTarget: addOwnerTarget,
       },
     })
     throw new Error(
-      'Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path. Retry from the browser session that opens the Coinbase passkey prompt for this smart wallet.',
+      `Coinbase did not return the owner[0] WebAuthn/passkey signature required for the March 9 recovery path (ownerIndex=${owner0WebAuthnCheck.ownerIndex ?? 'unknown'}, innerSignature=${owner0WebAuthnCheck.innerSignatureKind}, target=${addOwnerTarget ?? 'unknown'}). Re-open /add-owner in Base app and select the CSW passkey/owner[0] credential before approving.`,
     )
   }
 
@@ -2338,6 +2375,7 @@ export async function sendPreparedOwnerTx(params: {
                     chainId: base.id,
                     csw: canonicalSmartWalletAddress as `0x${string}`,
                     innerCallData: txRequest.data as `0x${string}`,
+                    expectedOwnerAddress: ownerAddress ? (ownerAddress as `0x${string}`) : null,
                     onTelemetry: (event) => {
                       try {
                         if (event.step === 'error') {

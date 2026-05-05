@@ -17,6 +17,7 @@ import { encodeAbiParameters, hashMessage, keccak256, toHex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount, sign as viemSign } from 'viem/accounts'
 
 import {
+  _submitOwnerViaSelfBuiltUserOp,
   _submitOwnerViaPreparedCallsWithEoaOwner,
   preflightOwnerKeyMismatch,
   sendPreparedOwnerTx,
@@ -24,6 +25,7 @@ import {
 
 const CANONICAL_CSW = '0x1111111111111111111111111111111111111111' as const
 const OWNER_EOA = '0x2222222222222222222222222222222222222222' as const
+const ALT_OWNER_EOA = '0x3333333333333333333333333333333333333333' as const
 const TX_HASH = `0x${'a'.repeat(64)}` as const
 const TX_REQUEST = {
   chainId: 8453 as const,
@@ -1020,6 +1022,22 @@ describe('sendPreparedOwnerTx', () => {
     ).rejects.toThrow('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
 
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('_submitOwnerViaSelfBuiltUserOp', () => {
+  it('fails early when addOwner target does not match intended owner', async () => {
+    await expect(
+      _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: vi.fn(),
+        chainId: 8453,
+        csw: CANONICAL_CSW,
+        innerCallData: TX_REQUEST.data,
+        expectedOwnerAddress: ALT_OWNER_EOA,
+      }),
+    ).rejects.toThrow(
+      `Prepared addOwnerAddress target ${OWNER_EOA} does not match intended owner ${ALT_OWNER_EOA}`,
+    )
   })
 })
 
