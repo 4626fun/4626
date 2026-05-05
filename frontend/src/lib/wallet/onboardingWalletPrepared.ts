@@ -34,6 +34,21 @@ type OwnerApprovalStageEvent = {
 
 const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
 const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+const WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 50 : 20_000
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(timeoutError), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
@@ -358,17 +373,23 @@ export async function _submitOwnerViaWalletSendCalls(params: {
     canonicalCswAddress: params.canonicalCswAddress,
   })
 
-  const sendResult = await params.walletRequest({
-    method: 'wallet_sendCalls',
-    params: [{
-      version: '1.0',
-      from: params.sender,
-      chainId: chainIdHex,
-      atomicRequired: true,
-      calls: [{ to: params.to, data: params.data, value: '0x0' }],
-      capabilities,
-    }],
-  })
+  const sendResult = await withTimeout(
+    params.walletRequest({
+      method: 'wallet_sendCalls',
+      params: [{
+        version: '1.0',
+        from: params.sender,
+        chainId: chainIdHex,
+        atomicRequired: true,
+        calls: [{ to: params.to, data: params.data, value: '0x0' }],
+        capabilities,
+      }],
+    }),
+    WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS,
+    new Error(
+      'wallet_sendCalls request timed out waiting for Coinbase Wallet. Retry in your external browser, then continue with relay fallback if needed.',
+    ),
+  )
   const callsId = extractWalletCallsId(sendResult)
   if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id.')
 

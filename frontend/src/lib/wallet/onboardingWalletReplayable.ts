@@ -712,6 +712,20 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         ownerRecoveryOutcome,
       })
       if (classification.ok) {
+        if (requireWebAuthnOwnerSignature && classification.ownerIndex !== 0) {
+          signAttempts.push({
+            method: candidate.method,
+            params: candidate.params,
+            label: `${candidate.label}_rejected_non_primary_owner`,
+            signature: maybeSignature,
+            ownerIndex: classification.ownerIndex,
+            innerSignatureKind: classification.innerSignatureKind,
+            signatureLengthBytes: classification.signatureLengthBytes,
+            ownerRecoveryOutcome: 'rejected_non_primary_owner',
+            error: 'webauthn_owner_index_must_be_0_for_embedded_owner_install',
+          })
+          continue
+        }
         signature = maybeSignature
         webAuthnOwnerCheck = classification
         acceptedSignatureKind = 'webauthn_owner'

@@ -528,7 +528,10 @@ export async function sendPreparedOwnerTx(params: {
               effectiveOwnerInstallIntent === 'embeddedOwner'
                 ? ownerIndexLookupAddress ?? null
                 : ownerAddress ?? null
+            const forceRelayFirstForEmbeddedSelfAuth =
+              effectiveOwnerInstallIntent === 'embeddedOwner' && selfAuthenticatedCanonicalSession
             const preferSelfBuiltRelayFirst =
+              forceRelayFirstForEmbeddedSelfAuth ||
               (
                 ownerInstallIntent == null &&
                 Boolean(canonicalSmartWalletAddress) &&

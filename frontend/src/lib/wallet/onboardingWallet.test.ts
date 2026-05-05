@@ -487,17 +487,39 @@ describe('sendPreparedOwnerTx', () => {
     ).rejects.toThrow(/acceptable owner signature/i)
   })
 
-  it('uses wallet_sendCalls for embedded-owner when wallet account is canonical CSW', async () => {
+  it('uses relay self-built lane for embedded-owner when wallet account is canonical CSW', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/relay/execute') {
+        return makeJsonResponse({
+          success: true,
+          data: { txHash: TX_HASH },
+        })
+      }
+      return makeJsonResponse({
+        success: true,
+        data: {
+          isOwner: true,
+          canonicalCswAddress: CANONICAL_CSW,
+          ownerAddress: OWNER_EOA,
+          txHash: TX_HASH,
+          confirmationState: 'owner_confirmed',
+        },
+      })
+    })
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_sendCalls') {
-        return 'bundle-1'
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: TX_HASH }],
-        }
-      }
+      if (args.method === 'personal_sign') return signatureWrapper
       throw new Error(`Unexpected method ${args.method}`)
     })
 
@@ -516,13 +538,12 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
-    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
@@ -1052,7 +1073,7 @@ describe('_submitOwnerViaSelfBuiltUserOp', () => {
     )
   })
 
-  it('accepts a WebAuthn owner signature wrapper at ownerIndex=3 and preserves addOwner payload', async () => {
+  it('accepts a WebAuthn owner signature wrapper at ownerIndex=0 and preserves addOwner payload', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -1071,7 +1092,7 @@ describe('_submitOwnerViaSelfBuiltUserOp', () => {
       }),
     )
 
-    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(3n)
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const walletRequest = vi.fn(async (args: { method: string }) => {
       if (args.method === 'personal_sign') return signatureWrapper
       throw new Error(`Unexpected method ${args.method}`)
@@ -1095,7 +1116,7 @@ describe('_submitOwnerViaSelfBuiltUserOp', () => {
       [{ type: 'uint256' }, { type: 'bytes' }],
       signatureWrapper,
     )
-    expect(decodedOwnerIndex).toBe(3n)
+    expect(decodedOwnerIndex).toBe(0n)
 
     const relayCall = apiFetchMock.mock.calls.find((call) => call[0] === '/api/relay/execute')
     expect(relayCall).toBeTruthy()
