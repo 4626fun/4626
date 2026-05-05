@@ -15,10 +15,12 @@ import {
 
 const RELAY_QUOTE_BODY_MAX_BYTES = 262_144
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
-const HANDLE_OPS_SELECTOR = '0x1fad948c'
-const ENTRY_POINT_V06 = '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789'
-const ENTRY_POINT_V07 = '0x0000000071727de22e5e9d8baf0edac6f37da032'
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000'
+// NOTE: Unlike /api/relay/execute (which is locked to EntryPoint.handleOps),
+// /api/relay/quote forwards an arbitrary inner tx into Relay's /quote/v2 so the
+// CSW self-call lane (to = CSW, data = executeWithoutChainIdValidation(...))
+// can fetch a sponsored deposit step. We therefore only validate that `to` is
+// a 20-byte address and `data` is hex calldata — Relay validates the rest.
 
 type RelayQuoteRequest = {
   chainId?: unknown
@@ -33,8 +35,18 @@ function isAddressString(value: unknown): value is string {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value)
 }
 
-function isHexString(value: unknown, minBytes: number): value is string {
-  return typeof value === 'string' && value.startsWith('0x') && value.length >= 2 + minBytes * 2
+// Strict 0x-prefixed hex check. Enforces:
+//   - lowercase/uppercase hex charset only (no junk like 0xzzz...)
+//   - even number of hex chars (whole bytes)
+//   - minimum byte length (e.g. 4 for a function selector)
+//   - optional maximum byte length to bound forwarded calldata size
+function isHexString(value: unknown, minBytes: number, maxBytes: number = 128_000): value is string {
+  if (typeof value !== 'string') return false
+  if (!/^0x[0-9a-fA-F]*$/.test(value)) return false
+  const hexChars = value.length - 2
+  if (hexChars % 2 !== 0) return false
+  const byteLen = hexChars / 2
+  return byteLen >= minBytes && byteLen <= maxBytes
 }
 
 function resolveRelayApiKey(): string | null {
@@ -75,14 +87,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (chainId !== 8453) {
     return res.status(400).json({ success: false, error: 'chainId must be 8453 (Base mainnet)' } satisfies ApiEnvelope<never>)
   }
-  const toRaw = typeof body.to === 'string' ? body.to.toLowerCase() : ''
-  if (!isAddressString(body.to) || (toRaw !== ENTRY_POINT_V06 && toRaw !== ENTRY_POINT_V07)) {
-    return res.status(400).json({ success: false, error: 'to must be the EntryPoint v0.6 or v0.7 address' } satisfies ApiEnvelope<never>)
+  if (!isAddressString(body.to)) {
+    return res.status(400).json({ success: false, error: 'to must be a 20-byte address' } satisfies ApiEnvelope<never>)
   }
-  if (!isHexString(body.data, 4) || !body.data.toLowerCase().startsWith(HANDLE_OPS_SELECTOR)) {
+  if (!isHexString(body.data, 4)) {
     return res.status(400).json({
       success: false,
-      error: `data must start with EntryPoint.handleOps selector (${HANDLE_OPS_SELECTOR})`,
+      error: 'data must be 0x-prefixed hex calldata with an even number of hex chars and at least 4 bytes (function selector)',
     } satisfies ApiEnvelope<never>)
   }
   const valueRaw = typeof body.value === 'string' && body.value.trim() ? body.value.trim() : '0'
