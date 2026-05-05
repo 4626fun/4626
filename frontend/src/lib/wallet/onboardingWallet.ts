@@ -1075,6 +1075,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     ownerIndex: number | null
     innerSignatureKind: SignatureShape['kind'] | 'invalid'
     signatureLengthBytes: number
+    ownerRecoveryOutcome?: string | null
     error?: string
   }> = []
   const signatureCandidates: Array<{
@@ -1090,6 +1091,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   ]
   let signature: `0x${string}` | null = null
   let webAuthnOwnerCheck: ReturnType<typeof classifyWebAuthnOwnerSignature> | null = null
+  let acceptedSignatureKind: 'webauthn_owner' | 'ecdsa_owner_recovered' | null = null
   for (const candidate of signatureCandidates) {
     try {
       const maybeSignature = (await params.walletRequest({
@@ -1110,6 +1112,22 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         continue
       }
       const classification = classifyWebAuthnOwnerSignature(maybeSignature)
+      let ownerRecoveryOutcome: string | null = null
+      if (!classification.ok) {
+        const ownerRecovery = await preflightOwnerKeyMismatch({
+          walletRequest: params.walletRequest,
+          sender: params.csw,
+          hashToSign,
+          signature: maybeSignature,
+          sessionKind: 'external_signer',
+        })
+        ownerRecoveryOutcome = ownerRecovery.kind
+        if (ownerRecovery.kind === 'ok') {
+          signature = maybeSignature
+          webAuthnOwnerCheck = classification
+          acceptedSignatureKind = 'ecdsa_owner_recovered'
+        }
+      }
       signAttempts.push({
         method: candidate.method,
         params: candidate.params,
@@ -1118,12 +1136,15 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         ownerIndex: classification.ownerIndex,
         innerSignatureKind: classification.innerSignatureKind,
         signatureLengthBytes: classification.signatureLengthBytes,
+        ownerRecoveryOutcome,
       })
       if (classification.ok) {
         signature = maybeSignature
         webAuthnOwnerCheck = classification
+        acceptedSignatureKind = 'webauthn_owner'
         break
       }
+      if (acceptedSignatureKind === 'ecdsa_owner_recovered') break
     } catch (error) {
       signAttempts.push({
         method: candidate.method,
@@ -1133,6 +1154,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         ownerIndex: null,
         innerSignatureKind: 'invalid',
         signatureLengthBytes: 0,
+        ownerRecoveryOutcome: null,
         error: error instanceof Error ? error.message : String(error ?? ''),
       })
     }
@@ -1143,7 +1165,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       step: 'error',
       detail: {
         stage: 'sign',
-        reason: 'coinbase_did_not_return_webauthn_owner_signature',
+        reason: 'coinbase_did_not_return_acceptable_owner_signature',
         hashSigned: hashToSign,
         signAttempts: signAttempts.map((attempt) => ({
           method: attempt.method,
@@ -1151,13 +1173,14 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
           ownerIndex: attempt.ownerIndex,
           innerSignatureKind: attempt.innerSignatureKind,
           signatureLengthBytes: attempt.signatureLengthBytes,
+          ownerRecoveryOutcome: attempt.ownerRecoveryOutcome ?? null,
           error: attempt.error ?? null,
         })),
         intendedAddOwnerTarget: addOwnerTarget,
       },
     })
     throw new Error(
-      `Coinbase did not return a WebAuthn/passkey owner signature after trying ${signAttempts.map((a) => a.label).join(', ')}. Re-open /add-owner in Base app and select a Coinbase passkey credential for this smart wallet before approving.`,
+      `Coinbase did not return an acceptable owner signature after trying ${signAttempts.map((a) => a.label).join(', ')}. Re-open /add-owner in Base app and select a Coinbase passkey credential for this smart wallet before approving.`,
     )
   }
   emit({
@@ -1166,6 +1189,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       hashSigned: hashToSign,
       signature,
       signatureLengthBytes: (signature.length - 2) / 2,
+      acceptedSignatureKind,
       signMethod: lastValidAttempt?.method ?? 'personal_sign',
       signLabel: lastValidAttempt?.label ?? 'personal_sign_data_address',
     },
@@ -1173,7 +1197,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   emit({
     step: 'signature_preflight',
     detail: {
-      outcome: webAuthnOwnerCheck.ok ? 'webauthn_owner' : 'not_webauthn_owner',
+      outcome: acceptedSignatureKind ?? (webAuthnOwnerCheck.ok ? 'webauthn_owner' : 'not_webauthn_owner'),
       ownerIndex: webAuthnOwnerCheck.ownerIndex,
       innerSignatureKind: webAuthnOwnerCheck.innerSignatureKind,
       signatureLengthBytes: webAuthnOwnerCheck.signatureLengthBytes,

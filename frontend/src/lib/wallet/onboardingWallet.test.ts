@@ -504,7 +504,7 @@ describe('sendPreparedOwnerTx', () => {
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
       }),
-    ).rejects.toThrow(/WebAuthn\/passkey owner signature/i)
+    ).rejects.toThrow(/acceptable owner signature/i)
   })
 
   it('bypasses prepared-calls estimation when wallet account is canonical CSW', async () => {
