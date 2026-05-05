@@ -2330,6 +2330,7 @@ export async function sendPreparedOwnerTx(params: {
                 replayableDirectError instanceof Error
                   ? replayableDirectError.message
                   : String(replayableDirectError ?? '')
+              let relayFallbackError: unknown = null
               if (/self calls are not allowed/i.test(replayableDirectMessage)) {
                 try {
                   const relayFallback = await _submitOwnerViaSelfBuiltUserOp({
@@ -2362,11 +2363,13 @@ export async function sendPreparedOwnerTx(params: {
                     })
                     // Continue into confirmation flow below.
                   }
-                } catch {
-                  // If relay fallback also fails, report the original self-call error below.
+                } catch (fallbackError) {
+                  // If relay fallback also fails, prefer its specific error details.
+                  relayFallbackError = fallbackError
                 }
               }
               if (!txHash) {
+                const finalReplayableError = relayFallbackError ?? replayableDirectError
                 emitOwnerApprovalStage(onStageEvent, {
                   runId: effectiveApprovalRunId,
                   stage: 'send_calls',
@@ -2374,12 +2377,12 @@ export async function sendPreparedOwnerTx(params: {
                   executionMode,
                   signerAddress,
                   canonicalCswAddress: canonicalSmartWalletAddress,
-                  code: classifyOwnerApprovalError(replayableDirectError).code,
-                  message: replayableDirectError instanceof Error
-                    ? replayableDirectError.message
-                    : String(replayableDirectError ?? ''),
+                  code: classifyOwnerApprovalError(finalReplayableError).code,
+                  message: finalReplayableError instanceof Error
+                    ? finalReplayableError.message
+                    : String(finalReplayableError ?? ''),
                 })
-                throw replayableDirectError
+                throw finalReplayableError
               }
             }
           }

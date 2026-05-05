@@ -345,6 +345,48 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('surfaces relay fallback signature-shape error when popup self-call is blocked', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_sendTransaction') {
+        throw new Error('Self calls are not allowed.')
+      }
+      if (args.method === 'personal_sign') {
+        // 224-byte ECDSA wrapper (ownerIndex=2) — known bad for the owner[0] WebAuthn lane.
+        const badEcdsaWrapper = (`0x${'00'.repeat(32)}${'00'.repeat(32)}${'02'.padStart(64, '0')}${'00'.repeat(64)}`) as `0x${string}`
+        return badEcdsaWrapper
+      }
+      throw new Error(`Unexpected method ${args.method}`)
+    })
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        ownerAddress: OWNER_EOA,
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+      }),
+    ).rejects.toThrow(/owner\[0\] WebAuthn\/passkey signature/i)
+  })
+
   it('bypasses prepared-calls estimation when wallet account is canonical CSW', async () => {
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_sendTransaction') {
