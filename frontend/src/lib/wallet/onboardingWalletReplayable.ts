@@ -603,6 +603,9 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   }
   const wrappedData = encodeExecuteWithoutChainIdValidation(params.innerCallData)
   emit({ step: 'wrap', detail: { innerSelector, innerCallData: params.innerCallData, addOwnerTarget, wrappedData } })
+  const requireWebAuthnOwnerSignature =
+    Boolean(params.requireWebAuthnOwnerSignature) ||
+    (params.sessionKind === 'self_auth' && innerSelector === ADD_OWNER_ADDRESS_SELECTOR)
 
   const rpcUrl = params.rpcUrl ?? 'https://mainnet.base.org'
   const nonce = await readReplayableNonce(params.csw, rpcUrl)
@@ -641,7 +644,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     method: 'personal_sign' | 'eth_sign'
     params: unknown[]
     label: string
-  }> = params.requireWebAuthnOwnerSignature
+  }> = requireWebAuthnOwnerSignature
     ? [
       // For embedded-owner installs we want the Coinbase passkey/WebAuthn lane only.
       // Restricting to the canonical personal_sign argument order avoids drifting into
@@ -690,7 +693,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
         })
         ownerRecoveryOutcome = ownerRecovery.kind
         if (
-          !params.requireWebAuthnOwnerSignature &&
+          !requireWebAuthnOwnerSignature &&
           (ownerRecovery.kind === 'ok' || ownerRecovery.kind === 'skipped_self_auth_session_key')
         ) {
           signature = maybeSignature
