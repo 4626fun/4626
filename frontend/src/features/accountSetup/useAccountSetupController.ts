@@ -962,6 +962,7 @@ export function useAccountSetupController(params: {
         ownerInstallIntent: opts?.ownerInstallIntent ?? 'embeddedOwner',
         customOwnerPolicyToken: opts?.customOwnerPolicyToken ?? null,
         preferSponsoredFirst: opts?.preferSponsoredFirst === true,
+        enforceSelfAuthEmbeddedOwner: opts?.ownerInstallIntent === 'embeddedOwner',
       })
     },
     [

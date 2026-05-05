@@ -1967,6 +1967,7 @@ export async function sendPreparedOwnerTx(params: {
   ownerInstallIntent?: OwnerInstallIntent
   customOwnerPolicyToken?: string | null
   preferSponsoredFirst?: boolean
+  enforceSelfAuthEmbeddedOwner?: boolean
 }): Promise<ConfirmOwnerResponse> {
   const {
     txRequest,
@@ -1986,6 +1987,7 @@ export async function sendPreparedOwnerTx(params: {
     ownerInstallIntent,
     customOwnerPolicyToken,
     preferSponsoredFirst,
+    enforceSelfAuthEmbeddedOwner,
   } = params
   const effectiveApprovalRunId = typeof approvalRunId === 'string' && approvalRunId.trim() ? approvalRunId.trim() : `approval-${Date.now()}`
   const effectiveOwnerInstallIntent: OwnerInstallIntent = ownerInstallIntent ?? 'embeddedOwner'
@@ -2023,6 +2025,15 @@ export async function sendPreparedOwnerTx(params: {
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalCswLower ||
         walletAccountAddress === canonicalCswLower
+      if (
+        enforceSelfAuthEmbeddedOwner &&
+        effectiveOwnerInstallIntent === 'embeddedOwner' &&
+        !selfAuthenticatedCanonicalSession
+      ) {
+        throw new Error(
+          'Reconnect with your canonical Coinbase Smart Wallet session in Base App to enable 4626 signing.',
+        )
+      }
       const customCoOwnerSponsoredLane =
         effectiveOwnerInstallIntent === 'customCoOwner' && Boolean(effectiveCustomOwnerPolicyToken)
       const customCoOwnerDirectLane =

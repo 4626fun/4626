@@ -285,6 +285,31 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('requires canonical self-auth session for embedded-owner install when strict mode is enabled', async () => {
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: OWNER_EOA,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        ownerAddress: OWNER_EOA,
+        signerAddress: OWNER_EOA,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        enforceSelfAuthEmbeddedOwner: true,
+      }),
+    ).rejects.toThrow(
+      'Reconnect with your canonical Coinbase Smart Wallet session in Base App to enable 4626 signing.',
+    )
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(apiFetchMock).not.toHaveBeenCalled()
+  })
+
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
