@@ -391,7 +391,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to self-built relay lane when replayable prepared-calls signature fails', async () => {
+  it('retries standard prepared-calls lane before relay when replayable prepared-calls signature fails', async () => {
     const webauthnSignature = encodeAbiParameters(
       [
         {
@@ -501,6 +501,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(result.txHash).toBe(TX_HASH)
   })
