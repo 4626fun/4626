@@ -253,7 +253,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('bypasses prepared-calls estimation for self-auth owner installs', async () => {
+  it('bypasses prepared-calls estimation when wallet account is canonical CSW', async () => {
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_sendTransaction') {
         return TX_HASH
@@ -271,7 +271,7 @@ describe('sendPreparedOwnerTx', () => {
       chainId: 8453,
       authHeaders: async () => ({ Authorization: 'Bearer test' }),
       ownerAddress: OWNER_EOA,
-      signerAddress: CANONICAL_CSW,
+      signerAddress: OWNER_EOA,
       executionMode: 'canonicalSmartWallet',
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })

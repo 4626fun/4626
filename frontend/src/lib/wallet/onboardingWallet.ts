@@ -2009,8 +2009,20 @@ export async function sendPreparedOwnerTx(params: {
       if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
         throw new Error('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
       }
+      const walletAccountAddress =
+        typeof walletClient.account === 'string' && isAddress(walletClient.account)
+          ? walletClient.account.toLowerCase()
+          : typeof walletClient.account === 'object' &&
+              walletClient.account !== null &&
+              'address' in walletClient.account &&
+              typeof (walletClient.account as { address?: unknown }).address === 'string' &&
+              isAddress((walletClient.account as { address: string }).address)
+            ? (walletClient.account as { address: string }).address.toLowerCase()
+            : null
+      const canonicalCswLower = canonicalSmartWalletAddress.toLowerCase()
       const selfAuthenticatedCanonicalSession =
-        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
+        signerAddress.toLowerCase() === canonicalCswLower ||
+        walletAccountAddress === canonicalCswLower
       const customCoOwnerSponsoredLane =
         effectiveOwnerInstallIntent === 'customCoOwner' && Boolean(effectiveCustomOwnerPolicyToken)
       const customCoOwnerDirectLane =
