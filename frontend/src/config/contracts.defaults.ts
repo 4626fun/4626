@@ -50,12 +50,16 @@ export function normalizeCreatorVaultBatcherAddress(
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // Shared resources (registry / lottery / VRF / payout factory) carry over
-  // from the v1.8.3 broadcast (2026-04-11); they were not re-deployed in v1.9.2.
+  // Shared resources (registry / lottery / VRF) carry over from earlier
+  // broadcasts where still canonical. v1.11.0 is the active release label for
+  // the current user-vault deployment contract surface.
   registry: addr('9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb'),
   lotteryManager: addr('d593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357'),
   vrfConsumer: addr('dd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47'),
-  payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
+  // No live global PayoutRouterFactory is part of the current deploy flow.
+  // PayoutRouter is deployed per creator through DeploymentBatcher; keep this
+  // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
+  payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
   // Base↔Solana bridge integration.
   // v2 adapter deployed 2026-04-19 (tx 0xfe49c9e2...fd5e). Maps creator coins to

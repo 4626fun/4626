@@ -23,7 +23,7 @@ utils_helper="0xb79615C6B128E953347fcd6061DeaEc867482EEC"
 
 deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F'
 
-rg -F 'Current Live Infrastructure (`v1.10.2` split Phase-1 release target)' "$ADDRESSES_DOC" >/dev/null
+rg -F 'Current Live Infrastructure (`v1.11.0` protocol contract release target)' "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorRegistry | \`$registry\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorOVaultFactory | \`$factory\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "VaultActivationBatcher | \`$activation_batcher\`" "$ADDRESSES_DOC" >/dev/null
@@ -36,7 +36,7 @@ rg -F "DeploymentBatcherPhase3Helper | \`$phase3_helper\`" "$ADDRESSES_DOC" >/de
 rg -F "DeploymentBatcherUniV4Helper | \`$univ4_helper\`" "$ADDRESSES_DOC" >/dev/null
 rg -F "DeploymentBatcherUtilsHelper | \`$utils_helper\`" "$ADDRESSES_DOC" >/dev/null
 
-rg -F 'Scope: current live Base infra addresses plus the canonical `v1.10.2` split Phase-1 release target' "$INVENTORY_DOC" >/dev/null
+rg -F 'Scope: current live Base infra addresses plus the canonical `v1.11.0` protocol contract release target' "$INVENTORY_DOC" >/dev/null
 rg -F "\`solanaBridgeAdapter\` | \`$solana_adapter\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`bytecodeStore\` | \`$bytecode_store\`" "$INVENTORY_DOC" >/dev/null
 rg -F "\`create2DeployerFromStore\` | \`$create2_from_store\`" "$INVENTORY_DOC" >/dev/null
@@ -50,6 +50,7 @@ rg -F "SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('${batcher#0x}')" "$DEFAULTS" >/de
 rg -F "solanaBridgeAdapter: addr('${solana_adapter#0x}')," "$DEFAULTS" >/dev/null
 rg -F "universalBytecodeStore: addr('${bytecode_store#0x}')," "$DEFAULTS" >/dev/null
 rg -F "universalCreate2DeployerFromStore: addr('${create2_from_store#0x}')," "$DEFAULTS" >/dev/null
+rg -F "payoutRouterFactory: addr('0000000000000000000000000000000000000000')," "$DEFAULTS" >/dev/null
 rg -F "creatorVaultBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" >/dev/null
 rg -F "creatorVaultBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER" "$DEFAULTS" >/dev/null
 

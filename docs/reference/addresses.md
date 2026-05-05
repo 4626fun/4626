@@ -14,7 +14,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.10.2` split Phase-1 release target)
+### Current Live Infrastructure (`v1.11.0` protocol contract release target)
 
 | Contract | Address |
 |----------|---------|
@@ -37,7 +37,7 @@ Deployed contract addresses for 4626.
 
 Notes:
 - Shared/global contracts carry over where still canonical; the active deployment entrypoint is the split Phase-1 batcher above.
-- The repo's canonical release target is `v1.10.2` for the active split Phase-1 stack.
+- The repo's canonical release target is `v1.11.0` for the active protocol contract stack used by user vault deployments.
 - `DeploymentBatcherPhase2Module`, `DeploymentBatcherPhase3Helper`, `DeploymentBatcherUniV4Helper`, and `DeploymentBatcherUtilsHelper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

@@ -55,7 +55,7 @@ Production override safety:
 - leave `ALLOW_API_CONTRACT_OVERRIDES` unset (or `0`)
 - production then uses repo defaults from `frontend/src/config/contracts.defaults.ts`
 
-### Canonical Base rollout target (`v1.10.2 split Phase-1`)
+### Canonical Base rollout target (`v1.11.0 protocol contract stack`)
 
 Current live Base defaults use the split Phase-1 deployment batcher and its paired chunked bytecode store/deployer. Addresses below are the live Base values:
 - Registry: `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb`

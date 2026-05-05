@@ -6,7 +6,7 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-04-29
-Scope: current live Base infra addresses plus the canonical `v1.10.2` split Phase-1 release target for new per-creator vaults.
+Scope: current live Base infra addresses plus the canonical `v1.11.0` protocol contract release target for new per-creator vaults.
 
 ## Sources
 
@@ -83,12 +83,12 @@ Live batcher child addresses that are read directly from `DeploymentBatcher` are
 
 Primary release manifest:
 
-- `deployments/base/v1.8.3-bytecode-manifest.json`
+- `deployments/base/v1.11.0-bytecode-manifest.json`
 
 Historical reference manifest:
 
-- `deployments/base/v1.8.2-bytecode-manifest.json`
-- `deployments/base/v1.7.1-bytecode-manifest.json`
+- `deployments/base/v1.9.2-bytecode-manifest.json`
+- `deployments/base/v1.8.3-bytecode-manifest.json`
 
 For each deployment contract this includes:
 

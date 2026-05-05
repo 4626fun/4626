@@ -1,0 +1,163 @@
+{
+  "release": "v1.11.0",
+  "generatedAt": "2026-05-05T00:27:57Z",
+  "chain": "base",
+  "chainId": 8453,
+  "contracts": {
+    "CreatorRegistry": {
+      "creationBytecodeHash": "0x62a1b806522ccb9429ee57f0cb0f6cdb2b5c24e5330a75fe07578c1205fbfb40",
+      "codeId": "0x62a1b806522ccb9429ee57f0cb0f6cdb2b5c24e5330a75fe07578c1205fbfb40",
+      "creationBytecodeBytes": 21523
+    },
+    "CreatorOVaultFactory": {
+      "creationBytecodeHash": "0x9c07e00bd86e4b91e5400e14669e09d1dac6f6cda7b985301fdcf8cb0296970b",
+      "codeId": "0x9c07e00bd86e4b91e5400e14669e09d1dac6f6cda7b985301fdcf8cb0296970b",
+      "creationBytecodeBytes": 4706
+    },
+    "CreatorLotteryManager": {
+      "creationBytecodeHash": "0x4d9b88290f5a4a1ac9ac4134b19369b2f831d2b1d2fdb34124d7fc3a5e387983",
+      "codeId": "0x4d9b88290f5a4a1ac9ac4134b19369b2f831d2b1d2fdb34124d7fc3a5e387983",
+      "creationBytecodeBytes": 40967
+    },
+    "CreatorVRFConsumerV2_5": {
+      "creationBytecodeHash": "0x1ff0fca2400545608aedaaa876f4ef15370d8537f03d8f42250e45bb03cabe9b",
+      "codeId": "0x1ff0fca2400545608aedaaa876f4ef15370d8537f03d8f42250e45bb03cabe9b",
+      "creationBytecodeBytes": 21634
+    },
+    "VaultActivationBatcher": {
+      "creationBytecodeHash": "0x6e92a999f8326b6a75313e2d52da3867f252b0bdd3e16bee3d3f9b6b9eaa19be",
+      "codeId": "0x6e92a999f8326b6a75313e2d52da3867f252b0bdd3e16bee3d3f9b6b9eaa19be",
+      "creationBytecodeBytes": 8057
+    },
+    "SolanaBridgeAdapter": {
+      "creationBytecodeHash": "0x372f472ca7b46af8bb09e67666d727a1cb83f30dcf1963d9f89d14d51c1decc9",
+      "codeId": "0x372f472ca7b46af8bb09e67666d727a1cb83f30dcf1963d9f89d14d51c1decc9",
+      "creationBytecodeBytes": 14961
+    },
+    "UniversalBytecodeStoreV2": {
+      "creationBytecodeHash": "0x0dbc82ef76d983552d7ac3a38852b93f12b46f1e73618b48e501152346cbdb15",
+      "codeId": "0x0dbc82ef76d983552d7ac3a38852b93f12b46f1e73618b48e501152346cbdb15",
+      "creationBytecodeBytes": 1602
+    },
+    "UniversalCreate2DeployerFromStore": {
+      "creationBytecodeHash": "0x512a5e3126e3641d64f384fb070078f454b38594e8ebeda616888ffeb353fc19",
+      "codeId": "0x512a5e3126e3641d64f384fb070078f454b38594e8ebeda616888ffeb353fc19",
+      "creationBytecodeBytes": 1760
+    },
+    "CreatorOVaultCoreModule": {
+      "creationBytecodeHash": "0x4bd40f8eb33b591b13a3e3328bb20a001cdb0f39304eeca7fe17adc86bea5931",
+      "codeId": "0x4bd40f8eb33b591b13a3e3328bb20a001cdb0f39304eeca7fe17adc86bea5931",
+      "creationBytecodeBytes": 10232
+    },
+    "CreatorOVaultStrategiesModule": {
+      "creationBytecodeHash": "0x9516f379ae3ddffbce4e9d126fbc05226bc2b43f14d1c5420dd8b5b957aee22f",
+      "codeId": "0x9516f379ae3ddffbce4e9d126fbc05226bc2b43f14d1c5420dd8b5b957aee22f",
+      "creationBytecodeBytes": 9705
+    },
+    "CreatorOVaultAdminModule": {
+      "creationBytecodeHash": "0xfb65d755dee7a481deda30481de1817b234417bb22ac62edb71015db787e7f2a",
+      "codeId": "0xfb65d755dee7a481deda30481de1817b234417bb22ac62edb71015db787e7f2a",
+      "creationBytecodeBytes": 7255
+    },
+    "CreatorOVault": {
+      "creationBytecodeHash": "0xacdb474c84c8c43a4db12835237ca2e0d2c0773bef3ad15aceceaadc590f091b",
+      "codeId": "0xacdb474c84c8c43a4db12835237ca2e0d2c0773bef3ad15aceceaadc590f091b",
+      "creationBytecodeBytes": 19231
+    },
+    "CreatorOVaultWrapper": {
+      "creationBytecodeHash": "0x300c60ebdd76bcad6768f0dbc693186aaf515a648d8eb05df2009bc9fc2879e8",
+      "codeId": "0x300c60ebdd76bcad6768f0dbc693186aaf515a648d8eb05df2009bc9fc2879e8",
+      "creationBytecodeBytes": 11138
+    },
+    "CreatorShareOFT": {
+      "creationBytecodeHash": "0x732c266c73fe0417a9b9990c4dfafa1119f908f12197ef4c41219b9827b5c5e5",
+      "codeId": "0x732c266c73fe0417a9b9990c4dfafa1119f908f12197ef4c41219b9827b5c5e5",
+      "creationBytecodeBytes": 25224
+    },
+    "OFTBootstrapRegistry": {
+      "creationBytecodeHash": "0x24943e748566e0b1b084bbc1680eec1ab4de1d4702179ced346da63343b1c6ba",
+      "codeId": "0x24943e748566e0b1b084bbc1680eec1ab4de1d4702179ced346da63343b1c6ba",
+      "creationBytecodeBytes": 376
+    },
+    "CreatorGaugeController": {
+      "creationBytecodeHash": "0x0c2e2a4f0e17a269c74a3ae17ab0d37c065ebba3bfe045ee332ad0c7731f6190",
+      "codeId": "0x0c2e2a4f0e17a269c74a3ae17ab0d37c065ebba3bfe045ee332ad0c7731f6190",
+      "creationBytecodeBytes": 12931
+    },
+    "CCALaunchStrategy": {
+      "creationBytecodeHash": "0x88105940830701136abc0c86dcc7c4a984d0a6d0dfce4dd33a50967a7a9731dd",
+      "codeId": "0x88105940830701136abc0c86dcc7c4a984d0a6d0dfce4dd33a50967a7a9731dd",
+      "creationBytecodeBytes": 37677
+    },
+    "CreatorOracle": {
+      "creationBytecodeHash": "0xdb046917c5cd5ad5a22ce6072c8e420c3c691334e861e5f56f4f10a01354de3f",
+      "codeId": "0xdb046917c5cd5ad5a22ce6072c8e420c3c691334e861e5f56f4f10a01354de3f",
+      "creationBytecodeBytes": 23005
+    },
+    "PayoutRouter": {
+      "creationBytecodeHash": "0x110b3046614c3bf89d5bbc18c8c1ff7354cefa396494dbd10a3c69028c886513",
+      "codeId": "0x110b3046614c3bf89d5bbc18c8c1ff7354cefa396494dbd10a3c69028c886513",
+      "creationBytecodeBytes": 8960
+    },
+    "VaultShareBurnStream": {
+      "creationBytecodeHash": "0x4309dcc163e225c2d83615e05eb3b12c72ee4f5014f91d785e7a0563e6119751",
+      "codeId": "0x4309dcc163e225c2d83615e05eb3b12c72ee4f5014f91d785e7a0563e6119751",
+      "creationBytecodeBytes": 3925
+    },
+    "CreatorCoinPolicyController": {
+      "creationBytecodeHash": "0x9c8bf4a393cbeb30713d8819746b7ffb9508ae42d6ff9c3fe63b2ea3f90d93b5",
+      "codeId": "0x9c8bf4a393cbeb30713d8819746b7ffb9508ae42d6ff9c3fe63b2ea3f90d93b5",
+      "creationBytecodeBytes": 1811
+    },
+    "CreatorCharmStrategy": {
+      "creationBytecodeHash": "0x64ce570e3678368146fff73e08518d5685a30b84cdbb014f1a101eb696b5bdc9",
+      "codeId": "0x64ce570e3678368146fff73e08518d5685a30b84cdbb014f1a101eb696b5bdc9",
+      "creationBytecodeBytes": 23809
+    },
+    "AjnaVaultAuth": {
+      "creationBytecodeHash": "0x11ba6ce975c9d6dd1eb56d00a76c967de43020d99e6bba1c8faaf1dbcca84ae4",
+      "codeId": "0x11ba6ce975c9d6dd1eb56d00a76c967de43020d99e6bba1c8faaf1dbcca84ae4",
+      "creationBytecodeBytes": 2616
+    },
+    "AjnaERC4626Vault": {
+      "creationBytecodeHash": "0x5297c94119cce306881afa1fa58acd44549faa57804f00ab52571c9129bc841a",
+      "codeId": "0x5297c94119cce306881afa1fa58acd44549faa57804f00ab52571c9129bc841a",
+      "creationBytecodeBytes": 14987
+    },
+    "ERC4626StrategyAdapter": {
+      "creationBytecodeHash": "0xe85f861a3eec09793efd03278142a535f4af14f98bcd74b9ddbd4be2f3d525ba",
+      "codeId": "0xe85f861a3eec09793efd03278142a535f4af14f98bcd74b9ddbd4be2f3d525ba",
+      "creationBytecodeBytes": 8234
+    },
+    "SolanaStrategy": {
+      "creationBytecodeHash": "0xec2f29d30f83e245c1389eb3844ae474e3fa79515dfdd96909b4c8a7fa8cf782",
+      "codeId": "0xec2f29d30f83e245c1389eb3844ae474e3fa79515dfdd96909b4c8a7fa8cf782",
+      "creationBytecodeBytes": 6018
+    },
+    "DeploymentBatcher": {
+      "creationBytecodeHash": "0x64ac13031a892826c475d56efe5243333ede923d09b92f834b3378c990d48caf",
+      "codeId": "0x64ac13031a892826c475d56efe5243333ede923d09b92f834b3378c990d48caf",
+      "creationBytecodeBytes": 38703
+    },
+    "DeploymentBatcherPhase2Module": {
+      "creationBytecodeHash": "0x9aa0443191d662589907b3854259cbd4f4d28115e93ed05bb6a22b7705e91f39",
+      "codeId": "0x9aa0443191d662589907b3854259cbd4f4d28115e93ed05bb6a22b7705e91f39",
+      "creationBytecodeBytes": 8775
+    },
+    "DeploymentBatcherPhase3Helper": {
+      "creationBytecodeHash": "0xdd1a910a2cce2e11aae994700389bd83b68e57330cbdd2098dc1b02d4a9c327b",
+      "codeId": "0xdd1a910a2cce2e11aae994700389bd83b68e57330cbdd2098dc1b02d4a9c327b",
+      "creationBytecodeBytes": 7358
+    },
+    "DeploymentBatcherUniV4Helper": {
+      "creationBytecodeHash": "0xaa168e7cc595dc67b94c9db8c7314fb5af945e5d71292a145f41cab43fb67f51",
+      "codeId": "0xaa168e7cc595dc67b94c9db8c7314fb5af945e5d71292a145f41cab43fb67f51",
+      "creationBytecodeBytes": 4293
+    },
+    "DeploymentBatcherUtilsHelper": {
+      "creationBytecodeHash": "0x47221b0a4ae2452ee758b8565b295c9ec0e9715d384da1ebe0968773059560ef",
+      "codeId": "0x47221b0a4ae2452ee758b8565b295c9ec0e9715d384da1ebe0968773059560ef",
+      "creationBytecodeBytes": 1827
+    }
+  }
+}
