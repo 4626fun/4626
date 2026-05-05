@@ -2396,6 +2396,10 @@ export async function sendPreparedOwnerTx(params: {
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
             })
+            const expectedAddOwnerAddress =
+              effectiveOwnerInstallIntent === 'embeddedOwner'
+                ? ownerIndexLookupAddress ?? null
+                : ownerAddress ?? null
             const preferSelfBuiltRelayFirst =
               enforceSelfAuthEmbeddedOwner ||
               ownerInstallIntent === 'embeddedOwner' ||
@@ -2412,7 +2416,7 @@ export async function sendPreparedOwnerTx(params: {
                   chainId: base.id,
                   csw: canonicalSmartWalletAddress as `0x${string}`,
                   innerCallData: txRequest.data as `0x${string}`,
-                  expectedOwnerAddress: ownerAddress ? (ownerAddress as `0x${string}`) : null,
+                  expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
                   onTelemetry: (event) => {
                     try {
                       if (event.step === 'error') {
@@ -2498,7 +2502,7 @@ export async function sendPreparedOwnerTx(params: {
                     chainId: base.id,
                     csw: canonicalSmartWalletAddress as `0x${string}`,
                     innerCallData: txRequest.data as `0x${string}`,
-                    expectedOwnerAddress: ownerAddress ? (ownerAddress as `0x${string}`) : null,
+                    expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
                     onTelemetry: (event) => {
                       try {
                         if (event.step === 'error') {
