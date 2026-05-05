@@ -26,6 +26,7 @@ type RelayQuoteRequest = {
   data?: unknown
   value?: unknown
   user?: unknown
+  amount?: unknown
 }
 
 function isAddressString(value: unknown): value is string {
@@ -85,11 +86,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
   const valueRaw = typeof body.value === 'string' && body.value.trim() ? body.value.trim() : '0'
-  if (valueRaw !== '0' && valueRaw !== '0x0') {
-    return res.status(400).json({ success: false, error: 'value must be "0"' } satisfies ApiEnvelope<never>)
+  if (!/^(0x[0-9a-fA-F]+|[0-9]+)$/.test(valueRaw)) {
+    return res.status(400).json({ success: false, error: 'value must be a decimal or hex integer string' } satisfies ApiEnvelope<never>)
   }
   if (!isAddressString(body.user)) {
     return res.status(400).json({ success: false, error: 'user must be the CSW address' } satisfies ApiEnvelope<never>)
+  }
+  const amountRaw = typeof body.amount === 'string' && body.amount.trim() ? body.amount.trim() : valueRaw
+  if (!/^[0-9]+$/.test(amountRaw)) {
+    return res.status(400).json({ success: false, error: 'amount must be a decimal integer string' } satisfies ApiEnvelope<never>)
   }
 
   const upstreamPayload = {
@@ -99,10 +104,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     destinationChainId: chainId,
     originCurrency: NATIVE_CURRENCY,
     destinationCurrency: NATIVE_CURRENCY,
-    amount: '0',
+    amount: amountRaw,
     tradeType: 'EXACT_OUTPUT',
     explicitDeposit: true,
-    txs: [{ to: body.to, data: body.data, value: '0' }],
+    txs: [{ to: body.to, data: body.data, value: valueRaw }],
   }
 
   const apiKey = resolveRelayApiKey()

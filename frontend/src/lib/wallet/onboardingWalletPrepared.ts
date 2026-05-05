@@ -553,6 +553,119 @@ export async function _submitOwnerViaPreparedCalls(params: {
   throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
+export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+  paymasterUrl: string | null
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress: string | null
+  canonicalCswAddress: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<`0x${string}`> {
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'prepare_calls',
+    status: 'start',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+  })
+  const capabilities: Record<string, unknown> = {}
+  if (params.paymasterUrl) {
+    capabilities.paymasterService = {
+      url: String(params.paymasterUrl).trim().replace(
+        'https://api.developer.coinbase.com/',
+        'https://api.cdp.coinbase.com/',
+      ),
+    }
+  }
+  const prepareResult = await params.walletRequest({
+    method: 'wallet_prepareCalls',
+    params: [{
+      version: '1.0',
+      from: params.sender,
+      chainId: chainIdHex,
+      calls: [{ to: params.to, data: params.data, value: '0x0' }],
+      capabilities,
+    }],
+  }) as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+  } | null
+  if (!prepareResult?.signatureRequest?.hash) throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  if (!prepareResult.userOp) throw new Error('wallet_prepareCalls did not return a userOp.')
+
+  const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as `0x${string}`)
+  emitPreparedCallsDebug({
+    runId: params.approvalRunId,
+    hypothesisId: 'H8_normal_owner2_prepared_calls',
+    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCallsAllowAnyOwner:prepareResult',
+    message: 'normal owner[2] prepared-calls shape',
+    data: {
+      prepareResultType: prepareResult.type ?? null,
+      prepareResultChainId: prepareResult.chainId ?? null,
+      hashToSign,
+      ...summarizeUserOp(prepareResult.userOp),
+    },
+  })
+  const signature = await params.walletRequest({
+    method: 'personal_sign',
+    params: [hashToSign, params.sender],
+  }) as `0x${string}`
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+  const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
+  const signerAddress = wrappedSignature?.ownerIndex === 2 ? '0xCf8D17Ce01B73637ef936fe7c47bA7100b820142' : params.sender
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.sender,
+    signature,
+    signerAddress: signerAddress as `0x${string}`,
+    mode: 'inner_secp256k1',
+  })
+  emitPreparedCallsDebug({
+    runId: params.approvalRunId,
+    hypothesisId: 'H8_normal_owner2_prepared_calls',
+    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCallsAllowAnyOwner:signature',
+    message: 'normal owner[2] prepared-calls signature shape',
+    data: {
+      wrappedOwnerIndex: wrappedSignature?.ownerIndex ?? null,
+      wrappedSignatureDataBytes: wrappedSignature ? hexByteLength(wrappedSignature.signatureData) : null,
+      signaturePayload: summarizePreparedSignaturePayload(signaturePayload),
+    },
+  })
+
+  const sendResult = await params.walletRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [{
+      version: '1.0',
+      type: prepareResult.type ?? 'user-operation-v06',
+      data: prepareResult.userOp,
+      chainId: prepareResult.chainId ?? chainIdHex,
+      signature: signaturePayload,
+    }],
+  }) as unknown
+  const callsId = extractWalletCallsId(sendResult)
+  if (!callsId) throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+  return await pollWalletCallsStatusForTxHash({
+    walletRequest: params.walletRequest,
+    callsId,
+    approvalRunId: params.approvalRunId,
+    stage: 'prepare_calls',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+    onStageEvent: params.onStageEvent,
+  })
+}
+
 export async function _submitOwnerViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number

@@ -19,6 +19,7 @@ import {
 } from './onboardingWalletReplayable'
 import {
   _submitOwnerViaPreparedCalls,
+  _submitOwnerViaPreparedCallsAllowAnyOwner,
   _submitOwnerViaPreparedCallsWithEoaOwner,
   _submitOwnerViaWalletSendCalls,
   buildSendPreparedCallsSignaturePayload,
@@ -39,6 +40,7 @@ export {
 } from './onboardingWalletReplayable'
 export {
   _submitOwnerViaPreparedCalls,
+  _submitOwnerViaPreparedCallsAllowAnyOwner,
   _submitOwnerViaPreparedCallsWithEoaOwner,
   _submitOwnerViaWalletSendCalls,
   buildSendPreparedCallsSignaturePayload,

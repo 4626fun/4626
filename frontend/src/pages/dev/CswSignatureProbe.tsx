@@ -21,6 +21,7 @@ import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import {
   _submitOwnerViaSelfBuiltUserOp,
   encodeExecuteWithoutChainIdValidation,
+  _submitOwnerViaPreparedCallsAllowAnyOwner,
   _submitOwnerViaWalletSendCalls,
   unwrapDoubleHexEncodedHash,
 } from '@/lib/wallet/onboardingWallet'
@@ -241,6 +242,32 @@ type RemoveOwnerPreview = {
       removeOwnerAtIndex?: { ok: boolean; error: string | null }
       removeLastOwner?: { ok: boolean; error: string | null }
     }
+  }
+}
+
+type RelayQuoteEnvelope = {
+  success?: boolean
+  error?: string
+  data?: {
+    steps?: Array<{
+      id?: string
+      kind?: string
+      requestId?: string
+      items?: Array<{
+        status?: string
+        data?: {
+          from?: string
+          to?: string
+          data?: string
+          value?: string
+          chainId?: number
+        }
+        check?: {
+          endpoint?: string
+          method?: string
+        }
+      }>
+    }>
   }
 }
 
@@ -1491,6 +1518,202 @@ export function CswSignatureProbe() {
     }
   }
 
+  async function runNormalPreparedCallsOwnerAddWithOwner2() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+      })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call wallet_prepareCalls/wallet_sendPreparedCalls.',
+      })
+      return
+    }
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const data = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const runId = `probe-owner2-normal-${Date.now()}`
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    const formatEventDetail = (detail: unknown): string => {
+      if (detail == null) return ''
+      if (typeof detail === 'string') return detail
+      try {
+        return JSON.stringify(detail)
+      } catch {
+        return String(detail)
+      }
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'submitting owner[2] normal prepared-calls addOwnerAddress…',
+    })
+    try {
+      appendEvent('session:self_auth')
+      appendEvent('lane:normal_wallet_prepareCalls_owner2')
+      const txHash = await _submitOwnerViaPreparedCallsAllowAnyOwner({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        sender: normalizedCswAddress,
+        to: normalizedCswAddress,
+        data,
+        paymasterUrl: paymasterUrlForPreparedCalls,
+        approvalRunId: runId,
+        executionMode: 'canonicalSmartWallet',
+        signerAddress: connectedAddress,
+        canonicalCswAddress: normalizedCswAddress,
+        onStageEvent: (event) => {
+          appendEvent(formatEventDetail(event).slice(0, 2000))
+        },
+      })
+      setPreparedCallsTxHash(txHash)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'owner[2] normal prepared-calls owner add submitted',
+        detail: txHash,
+      })
+    } catch (error) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'owner[2] normal prepared-calls owner add failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function runRelayQuotedDepositForOwnerAdd() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself',
+        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+      })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot submit the quoted Relay deposit transaction.',
+      })
+      return
+    }
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const addOwnerData = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const wrappedData = encodeExecuteWithoutChainIdValidation(addOwnerData)
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({ kind: 'pending', label: 'fetching Relay quote deposit step…' })
+    try {
+      appendEvent('session:self_auth')
+      appendEvent('lane:relay_quote_deposit_step_first')
+      const quoteResponse = await fetch('/api/relay/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chainId: base.id,
+          user: normalizedCswAddress,
+          to: normalizedCswAddress,
+          data: wrappedData,
+          value: '0',
+          amount: '0',
+        }),
+      })
+      const quoteJson = await quoteResponse.json().catch(() => null) as RelayQuoteEnvelope | null
+      appendEvent(JSON.stringify({ step: 'relay_quote_response', ok: quoteResponse.ok, status: quoteResponse.status, data: quoteJson }).slice(0, 2000))
+      if (!quoteResponse.ok || !quoteJson?.success || !quoteJson.data?.steps) {
+        throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteResponse.status})`)
+      }
+      const depositStep = quoteJson.data.steps.find((step) => step.id === 'deposit' && step.kind === 'transaction')
+      const depositItem = depositStep?.items?.find((item) => item.data?.to && item.data?.data)
+      const tx = depositItem?.data
+      if (!tx?.to || !tx.data) {
+        throw new Error('Relay quote did not return a deposit transaction item.')
+      }
+      appendEvent(JSON.stringify({
+        step: 'relay_deposit_tx',
+        requestId: depositStep?.requestId,
+        to: tx.to,
+        value: tx.value ?? '0',
+        selector: tx.data.slice(0, 10),
+      }))
+      setPreparedCallsState({ kind: 'pending', label: 'submitting quoted Relay deposit step…' })
+      const txHashRaw = await request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: normalizedCswAddress,
+          to: tx.to,
+          data: tx.data,
+          value: tx.value ?? '0x0',
+        }],
+      })
+      if (!isTxHash(txHashRaw)) throw new Error('eth_sendTransaction did not return a transaction hash for Relay deposit.')
+      setPreparedCallsTxHash(txHashRaw)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'quoted Relay deposit submitted',
+        detail: txHashRaw,
+      })
+    } catch (error) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'quoted Relay deposit failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
   async function runBundlerOwnerAddWithKnownEoaOwner() {
     const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
     if (!walletClient || !connectedAddress) {
@@ -2530,6 +2753,22 @@ export function CswSignatureProbe() {
             onClick={() => { void runWalletSendCallsOwnerAdd({ usePaymaster: false }) }}
           >
             run add owner via native wallet_sendCalls (no paymaster)
+          </button>
+          <button
+            type="button"
+            className="rounded border border-orange-500/60 px-3 py-1.5 text-xs text-orange-200 hover:border-orange-400 disabled:opacity-50"
+            onClick={runNormalPreparedCallsOwnerAddWithOwner2}
+            disabled={!paymasterUrlForPreparedCalls}
+            title={paymasterUrlForPreparedCalls ?? 'VITE_CDP_PAYMASTER_URL is not configured'}
+          >
+            run add owner via owner[2] normal prepared calls
+          </button>
+          <button
+            type="button"
+            className="rounded border border-purple-500/60 px-3 py-1.5 text-xs text-purple-200 hover:border-purple-400"
+            onClick={runRelayQuotedDepositForOwnerAdd}
+          >
+            fetch Relay quote and submit deposit step
           </button>
           <button
             type="button"
