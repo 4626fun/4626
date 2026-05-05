@@ -71,6 +71,7 @@ Current snapshot set:
 - `deployments/base/contracts/factories/UniversalCreate2DeployerFromStore.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcher.json`
 - `deployments/base/contracts/helpers/batchers/DeploymentBatcherPhase3Helper.json`
+- `deployments/base/contracts/helpers/batchers/DeploymentBatcherUniV4Helper.json`
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
