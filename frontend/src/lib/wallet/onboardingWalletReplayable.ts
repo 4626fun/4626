@@ -555,6 +555,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   csw: `0x${string}`
   innerCallData: `0x${string}`
   expectedOwnerAddress?: `0x${string}` | null
+  requireWebAuthnOwnerSignature?: boolean
   sessionKind?: 'self_auth' | 'external_signer'
   rpcUrl?: string
   beneficiary?: `0x${string}`
@@ -640,11 +641,21 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     method: 'personal_sign' | 'eth_sign'
     params: unknown[]
     label: string
-  }> = [
-    { method: 'personal_sign', params: [hashToSign, params.csw], label: 'personal_sign_data_address' },
-    { method: 'personal_sign', params: [params.csw, hashToSign], label: 'personal_sign_address_data' },
-    { method: 'eth_sign', params: [params.csw, hashToSign], label: 'eth_sign_address_hash' },
-  ]
+  }> = params.requireWebAuthnOwnerSignature
+    ? [
+      // For embedded-owner installs we want the Coinbase passkey/WebAuthn lane only.
+      // Restricting to the canonical personal_sign argument order avoids drifting into
+      // alternate ECDSA-style responses from fallback signer implementations.
+      { method: 'personal_sign', params: [hashToSign, params.csw], label: 'personal_sign_data_address' },
+      // Retry once on the same canonical method to handle transient popup/provider failures
+      // without broadening into non-WebAuthn signature lanes.
+      { method: 'personal_sign', params: [hashToSign, params.csw], label: 'personal_sign_data_address_retry' },
+    ]
+    : [
+      { method: 'personal_sign', params: [hashToSign, params.csw], label: 'personal_sign_data_address' },
+      { method: 'personal_sign', params: [params.csw, hashToSign], label: 'personal_sign_address_data' },
+      { method: 'eth_sign', params: [params.csw, hashToSign], label: 'eth_sign_address_hash' },
+    ]
   let signature: `0x${string}` | null = null
   let webAuthnOwnerCheck: ReturnType<typeof classifyWebAuthnOwnerSignature> | null = null
   let acceptedSignatureKind: 'webauthn_owner' | 'ecdsa_owner_recovered' | null = null
@@ -678,7 +689,10 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
           sessionKind: params.sessionKind ?? 'external_signer',
         })
         ownerRecoveryOutcome = ownerRecovery.kind
-        if (ownerRecovery.kind === 'ok' || ownerRecovery.kind === 'skipped_self_auth_session_key') {
+        if (
+          !params.requireWebAuthnOwnerSignature &&
+          (ownerRecovery.kind === 'ok' || ownerRecovery.kind === 'skipped_self_auth_session_key')
+        ) {
           signature = maybeSignature
           webAuthnOwnerCheck = classification
           acceptedSignatureKind = 'ecdsa_owner_recovered'

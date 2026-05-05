@@ -529,8 +529,6 @@ export async function sendPreparedOwnerTx(params: {
                 ? ownerIndexLookupAddress ?? null
                 : ownerAddress ?? null
             const preferSelfBuiltRelayFirst =
-              enforceSelfAuthEmbeddedOwner ||
-              ownerInstallIntent === 'embeddedOwner' ||
               (
                 ownerInstallIntent == null &&
                 Boolean(canonicalSmartWalletAddress) &&
@@ -563,6 +561,7 @@ export async function sendPreparedOwnerTx(params: {
                   csw: canonicalSmartWalletAddress as `0x${string}`,
                   innerCallData: txRequest.data as `0x${string}`,
                   expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                  requireWebAuthnOwnerSignature: effectiveOwnerInstallIntent === 'embeddedOwner',
                   sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                   onTelemetry: (event) => {
                     try {
@@ -663,6 +662,7 @@ export async function sendPreparedOwnerTx(params: {
                       csw: canonicalSmartWalletAddress as `0x${string}`,
                       innerCallData: txRequest.data as `0x${string}`,
                       expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                      requireWebAuthnOwnerSignature: effectiveOwnerInstallIntent === 'embeddedOwner',
                       sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                       onTelemetry: (event) => {
                         try {
@@ -738,6 +738,7 @@ export async function sendPreparedOwnerTx(params: {
                     csw: canonicalSmartWalletAddress as `0x${string}`,
                     innerCallData: txRequest.data as `0x${string}`,
                     expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                    requireWebAuthnOwnerSignature: effectiveOwnerInstallIntent === 'embeddedOwner',
                     sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                     onTelemetry: (event) => {
                       try {
