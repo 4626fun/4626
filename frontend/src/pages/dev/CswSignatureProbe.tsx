@@ -1339,7 +1339,6 @@ export function CswSignatureProbe() {
       args: [ownerToAdd],
     })
 
-    const runId = `probe-${Date.now()}`
     setPreparedCallsTxHash(null)
     setPreparedCallEventLog([])
     setPreparedCallsState({
@@ -1371,6 +1370,7 @@ export function CswSignatureProbe() {
         expectedOwnerAddress: ownerToAdd,
         requireWebAuthnOwnerSignature: true,
         sessionKind: 'self_auth',
+        quoteRelayBeforeSubmit: true,
         onTelemetry: (event) => {
           appendEvent(formatEventDetail(event).slice(0, 2000))
         },
@@ -1670,7 +1670,7 @@ export function CswSignatureProbe() {
       functionName: 'addOwnerAddress',
       args: [ownerToAdd],
     })
-    const wrappedData = encodeExecuteWithoutChainIdValidation([innerData])
+    const wrappedData = encodeExecuteWithoutChainIdValidation(innerData)
     const runId = `probe-direct-replayable-${Date.now()}`
     const appendEvent = (row: string) => {
       setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
@@ -2491,13 +2491,13 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-          Self-call owner add (Relay two-part)
+          Self-call owner add (Base App prepared calls)
         </div>
         <div className="text-xs text-zinc-500">
-          Recreates the March 9 pattern: sign a replayable
-          executeWithoutChainIdValidation(addOwnerAddress) UserOp with the CSW passkey,
-          then submit EntryPoint.handleOps through /api/relay/execute so Relay creates
-          the Depository deposit and follow-up fulfillment transaction.
+          Preferred path: ask Base App to submit the CSW self-call through
+          <span className="font-mono text-zinc-300"> wallet_sendCalls </span>
+          with paymaster sponsorship. This keeps the passkey signature inside the
+          wallet's prepared-call flow instead of asking the CSW to sign a raw hash.
         </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner address to add</div>
@@ -2509,18 +2509,20 @@ export function CswSignatureProbe() {
           />
         </label>
         <div className="rounded border border-blue-500/20 bg-blue-500/10 p-3 text-xs leading-relaxed text-blue-100">
-          This primary action is the two-part Relay pattern: first the CSW passkey signs
-          the replayable UserOp, then Relay performs the same-chain Depository deposit
-          and fulfillment transaction. If the popup returns owner[2] ECDSA instead of
-          owner[0] WebAuthn, the helper fails before Relay submission.
+          Use the sponsored prepared-call button first. The old two-part Relay lane
+          directly calls <span className="font-mono">personal_sign(hash, CSW)</span>;
+          Base App can surface that as "Error generating message / enough funds"
+          because it is outside the wallet's sponsored prepared-call flow.
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded border border-blue-500/60 px-3 py-1.5 text-xs text-blue-200 hover:border-blue-400"
-            onClick={runPreparedCallsOwnerAdd}
+            className="rounded border border-sky-500/60 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-400 disabled:opacity-50"
+            onClick={() => { void runWalletSendCallsOwnerAdd({ usePaymaster: true }) }}
+            disabled={!paymasterUrlForPreparedCalls}
+            title={paymasterUrlForPreparedCalls ?? 'VITE_CDP_PAYMASTER_URL is not configured'}
           >
-            run Relay two-part owner add
+            run sponsored add owner via wallet_sendCalls
           </button>
           <button
             type="button"
@@ -2531,12 +2533,12 @@ export function CswSignatureProbe() {
           </button>
           <button
             type="button"
-            className="rounded border border-sky-500/60 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-400 disabled:opacity-50"
-            onClick={() => { void runWalletSendCallsOwnerAdd({ usePaymaster: true }) }}
-            disabled={!paymasterUrlForPreparedCalls}
-            title={paymasterUrlForPreparedCalls ?? 'VITE_CDP_PAYMASTER_URL is not configured'}
+            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-500 opacity-60"
+            onClick={runPreparedCallsOwnerAdd}
+            disabled
+            title="Disabled: this legacy Relay lane uses raw personal_sign(hash, CSW), which Base App can reject as an unfunded signature request. Use sponsored wallet_sendCalls instead."
           >
-            run add owner via native wallet_sendCalls (with paymaster)
+            legacy Relay two-part owner add (raw sign disabled)
           </button>
           <button
             type="button"

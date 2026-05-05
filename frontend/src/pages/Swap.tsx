@@ -16,6 +16,7 @@ import { useDebounceValue } from 'usehooks-ts'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
+import { ExternalWalletOptions } from '@/components/account/ConnectButton'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
@@ -60,6 +61,7 @@ import {
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
+import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
@@ -618,10 +620,11 @@ export function Swap() {
     user: privyUser,
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
-  const { connectors: wagmiConnectors, connectAsync: wagmiConnectAsync } = useConnect()
+  const { connectors: wagmiConnectors } = useConnect()
   const { reconnectAsync } = useReconnect()
   const [swapConnectBusy, setSwapConnectBusy] = useState(false)
   const [swapConnectError, setSwapConnectError] = useState<string | null>(null)
+  const [showSwapWalletOptions, setShowSwapWalletOptions] = useState(false)
   const walletRecoveryAttemptKeyRef = useRef('')
   const accountMe = useAccountMe()
   const { baseAccountSdk } = useBaseAccountSdk()
@@ -683,6 +686,9 @@ export function Swap() {
   const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
   const chainMeta = getChainMeta(swapChainId)
   const chainMismatch = isConnected && walletChainId != null && walletChainId !== swapChainId
+  const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
+  const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
+  const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
 
   const {
     tokenIn,
@@ -1254,56 +1260,26 @@ export function Swap() {
     setSwapConnectError(null)
 
     if (connectGate.state === 'wallet-required') {
-      setSwapConnectBusy(true)
-      void (async () => {
-        try {
-          const preferred = selectPreferredWalletConnector(wagmiConnectors)
-          // Recover an existing authorized connector first; this avoids
-          // throwing when the connector is already connected but wagmi is
-          // still hydrating account state for this route.
-          const recovered = await recoverExistingWalletConnection(preferred)
-          if (isConnected || recovered) return
-
-          if (!preferred) {
-            setSwapConnectError('No wallet connector is available in this browser. Open 4626 in your wallet app or enable a wallet extension.')
-            return
-          }
-
-          await wagmiConnectAsync({ connector: preferred })
-        } catch (connectError: unknown) {
-          if (isConnectorAlreadyConnectedError(connectError)) {
-            await recoverExistingWalletConnection()
-            setSwapConnectError(null)
-            return
-          }
-          const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
-          const rejected = message.toLowerCase().includes('reject') || message.toLowerCase().includes('denied')
-          setSwapConnectError(rejected ? 'Wallet connection was cancelled. Try again when you are ready.' : message || 'Failed to connect wallet.')
-        } finally {
-          setSwapConnectBusy(false)
-        }
-      })()
+      setShowSwapWalletOptions((current) => !current)
       return
     }
 
+    setShowSwapWalletOptions(false)
     void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
   }, [
     authBusy,
     canonicalSignInMethod,
     connectGate.state,
-    isConnected,
     executionMode,
-    recoverExistingWalletConnection,
     signIn,
     swapConnectBusy,
-    wagmiConnectAsync,
-    wagmiConnectors,
   ])
 
   useEffect(() => {
     if (!connectGate.ready) return
     walletRecoveryAttemptKeyRef.current = ''
     setSwapConnectError(null)
+    setShowSwapWalletOptions(false)
   }, [connectGate.ready])
   const visibleSwapConnectError =
     swapConnectError ?? (authError && !isConnectorAlreadyConnectedError(authError) ? authError : null)
@@ -1870,12 +1846,25 @@ export function Swap() {
         swapPanel={
           activePanel === 'swap' ? (
             !connectGate.ready ? (
-              <SwapConnectGate
-                gate={connectGate}
-                busy={authBusy || swapConnectBusy}
-                errorMessage={visibleSwapConnectError}
-                onPrimaryAction={handleConnectGateAction}
-              />
+              <div className="relative">
+                <SwapConnectGate
+                  gate={connectGate}
+                  busy={authBusy || swapConnectBusy}
+                  errorMessage={visibleSwapConnectError}
+                  onPrimaryAction={handleConnectGateAction}
+                />
+                {showSwapWalletOptions && connectGate.state === 'wallet-required' ? (
+                  <div className="absolute left-1/2 top-full z-30 mt-3 w-64 -translate-x-1/2 rounded-2xl border border-white/10 bg-[rgba(10,10,12,0.96)] p-3 shadow-2xl shadow-black/40 backdrop-blur-xl">
+                    <ExternalWalletOptions
+                      authBusy={authBusy}
+                      hasMultipleInjectedProviders={hasMultipleInjectedProviders}
+                      lockedEthereumProviderGlobal={lockedEthereumProviderGlobal}
+                      shouldHideInjectedConnector={shouldHideInjectedConnector}
+                      onClose={() => setShowSwapWalletOptions(false)}
+                    />
+                  </div>
+                ) : null}
+              </div>
             ) : (
             <SwapCard
               tokenInDisplay={tokenInDisplay}

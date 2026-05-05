@@ -58,7 +58,7 @@ export function shouldResolveConnectIdentity(input: ResolveIdentityInput): boole
   return input.showMenu || input.showOptions
 }
 
-function ExternalWalletOptions(props: {
+export function ExternalWalletOptions(props: {
   authBusy: boolean
   hasMultipleInjectedProviders: boolean
   lockedEthereumProviderGlobal: boolean
