@@ -43,7 +43,11 @@ export {
   _submitOwnerViaWalletSendCalls,
   buildSendPreparedCallsSignaturePayload,
 } from './onboardingWalletPrepared'
-export type { PreparedCallsSignaturePayloadMode } from './onboardingWalletPrepared'
+export type {
+  PreparedCallsSignaturePayloadMode,
+  PreparedCallsSignHashMode,
+  PreparedCallsSignRequestMode,
+} from './onboardingWalletPrepared'
 export type { OwnerDelegationFlags } from './onboardingWalletDelegation'
 export {
   buildOwnerDelegationError,
@@ -530,21 +534,46 @@ export async function sendPreparedOwnerTx(params: {
                 ? ownerIndexLookupAddress ?? null
                 : ownerAddress ?? null
             const forceRelayFirstForEmbeddedSelfAuth =
+              false
+            const preferReplayablePreparedCallsFirst =
               effectiveOwnerInstallIntent === 'embeddedOwner' && selfAuthenticatedCanonicalSession
             const preferSelfBuiltRelayFirst =
-              forceRelayFirstForEmbeddedSelfAuth ||
+              !preferReplayablePreparedCallsFirst && (
+                forceRelayFirstForEmbeddedSelfAuth ||
               (
                 ownerInstallIntent == null &&
                 Boolean(canonicalSmartWalletAddress) &&
                 Boolean(signerAddress) &&
                 signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
               )
+              )
             const preferWalletSendCallsFirst =
               effectiveOwnerInstallIntent === 'embeddedOwner' &&
               selfAuthenticatedCanonicalSession &&
+              !preferReplayablePreparedCallsFirst &&
               !preferSelfBuiltRelayFirst
             try {
-              if (preferWalletSendCallsFirst) {
+              if (preferReplayablePreparedCallsFirst) {
+                const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
+                if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+                  throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
+                }
+                const wrappedData = encodeExecuteWithoutChainIdValidation(txRequest.data)
+                txHash = await _submitOwnerViaPreparedCalls({
+                  walletRequest,
+                  chainId: base.id,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: canonicalSmartWalletAddress as `0x${string}`,
+                  data: wrappedData,
+                  paymasterUrl: null,
+                  approvalRunId: effectiveApprovalRunId,
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  onStageEvent,
+                  sessionKind: 'self_auth',
+                })
+              } else if (preferWalletSendCallsFirst) {
                 txHash = await _submitOwnerViaWalletSendCalls({
                   walletRequest,
                   chainId: base.id,

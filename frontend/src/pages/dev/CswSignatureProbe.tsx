@@ -19,10 +19,10 @@ import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelec
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import {
-  _submitOwnerViaPreparedCalls,
+  _submitOwnerViaSelfBuiltUserOp,
+  encodeExecuteWithoutChainIdValidation,
   _submitOwnerViaWalletSendCalls,
   unwrapDoubleHexEncodedHash,
-  type PreparedCallsSignaturePayloadMode,
 } from '@/lib/wallet/onboardingWallet'
 import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
 import { checkEphemeralKey, type EphemeralKeySignal } from '@/lib/wallet/ephemeralKeyHeuristic'
@@ -85,6 +85,10 @@ const ERC1271_ABI = [
 
 // EIP-1271 magic value: bytes4(keccak256("isValidSignature(bytes32,bytes)"))
 const ERC1271_MAGIC_VALUE: Hex = '0x1626ba7e'
+const DEBUG_SESSION_ID = '345a30'
+const DEBUG_ENDPOINT = 'http://127.0.0.1:7706/ingest/3a1085e1-3d80-4358-aa04-a03ce8273573'
+const KNOWN_EOA_OWNER_INDEX = 2
+const KNOWN_EOA_OWNER_ADDRESS = '0xCf8D17Ce01B73637ef936fe7c47bA7100b820142' as const
 
 const CSW_OWNER_MUTATION_ABI = [
   {
@@ -289,6 +293,19 @@ function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
 }
 
+function emitProbeDebug(params: {
+  runId: string
+  hypothesisId: string
+  location: string
+  message: string
+  data: Record<string, unknown>
+}): void {
+  if (typeof fetch !== 'function') return
+  // #region agent log
+  fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':DEBUG_SESSION_ID},body:JSON.stringify({sessionId:DEBUG_SESSION_ID,runId:params.runId,hypothesisId:params.hypothesisId,location:params.location,message:params.message,data:params.data,timestamp:Date.now()})}).catch(()=>{})
+  // #endregion
+}
+
 type ParsedWalletSignature = {
   kind:
     | 'raw-ecdsa'
@@ -454,8 +471,6 @@ export function CswSignatureProbe() {
   const [preparedCallsTxHash, setPreparedCallsTxHash] = useState<string | null>(null)
   const [preparedCallEventLog, setPreparedCallEventLog] = useState<string[]>([])
   const [ownerToAddInput, setOwnerToAddInput] = useState('0xb2aad65a5402714bf428a66731ae62ba5c45cac0')
-  const [preparedSignaturePayloadMode, setPreparedSignaturePayloadMode] =
-    useState<PreparedCallsSignaturePayloadMode>('full_wrapper_secp256k1')
   const [preparedCallsUsePaymaster] = useState(true)
   const [ownerToRemoveIndexInput, setOwnerToRemoveIndexInput] = useState('2')
   const [ownerRemoveState, setOwnerRemoveState] = useState<StepState>(INITIAL_STEP)
@@ -1345,40 +1360,382 @@ export function CswSignatureProbe() {
         }
       }
       appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
-      appendEvent('lane:wallet_prepareCalls_native')
-      appendEvent(`signaturePayloadMode:${preparedSignaturePayloadMode}`)
-      const txHash = await _submitOwnerViaPreparedCalls({
+      appendEvent('lane:relay_two_part_depository_then_handleOps')
+      appendEvent('step:sign replayable executeWithoutChainIdValidation UserOp')
+      appendEvent('step:submit EntryPoint.handleOps through /api/relay/execute')
+      const relayResult = await _submitOwnerViaSelfBuiltUserOp({
         walletRequest: async (args) => await request(args),
         chainId: base.id,
-        sender: normalizedCswAddress,
-        to: normalizedCswAddress,
-        data,
-        paymasterUrl: null,
-        approvalRunId: runId,
-        executionMode: 'canonicalSmartWallet',
-        signerAddress: connectedAddress,
-        canonicalCswAddress: normalizedCswAddress,
+        csw: normalizedCswAddress,
+        innerCallData: data,
+        expectedOwnerAddress: ownerToAdd,
+        requireWebAuthnOwnerSignature: true,
         sessionKind: 'self_auth',
-        signaturePayloadMode: preparedSignaturePayloadMode,
-        onStageEvent: (event) => {
+        onTelemetry: (event) => {
           appendEvent(formatEventDetail(event).slice(0, 2000))
         },
       })
+      if (!relayResult.txHash) {
+        throw new Error('Relay /execute did not return a transaction hash for the owner-add UserOp.')
+      }
+      const txHash = relayResult.txHash
 
       setPreparedCallsTxHash(txHash)
       setPreparedCallsState({
         kind: 'ok',
-        label: 'prepared-calls owner add submitted',
+        label: 'Relay two-part owner add submitted',
         detail: txHash,
       })
     } catch (error) {
       setPreparedCallsState({
         kind: 'err',
-        label: 'prepared-calls owner add failed',
+        label: 'Relay two-part owner add failed',
         detail:
           /Relay \/execute \(400\): execution reverted|Relay \/execute proxy failed/i.test(describeError(error))
             ? 'Relay reached on-chain execution and reverted. The current wallet session is still returning an ECDSA owner[2] signature, not the WebAuthn owner[0] passkey signature required for this CSW self-auth add-owner path.'
             : describeError(error),
+      })
+    }
+  }
+
+  async function runWalletSendCallsOwnerAdd(options?: { usePaymaster?: boolean }) {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+      })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call wallet_sendCalls.',
+      })
+      return
+    }
+
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const data = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const usePaymaster = Boolean(options?.usePaymaster)
+    const runId = `probe-sendcalls-${usePaymaster ? 'paymaster' : 'nopaymaster'}-${Date.now()}`
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    const formatEventDetail = (detail: unknown): string => {
+      if (detail == null) return ''
+      if (typeof detail === 'string') return detail
+      try {
+        return JSON.stringify(detail)
+      } catch {
+        return String(detail)
+      }
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'submitting via native wallet_sendCalls owner add…',
+    })
+    try {
+      appendEvent('session:self_auth')
+      appendEvent(`lane:wallet_sendCalls_native:${usePaymaster ? 'with_paymaster' : 'without_paymaster'}`)
+      const txHash = await _submitOwnerViaWalletSendCalls({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        sender: normalizedCswAddress,
+        to: normalizedCswAddress,
+        data,
+        paymasterUrl: usePaymaster ? paymasterUrlForPreparedCalls : null,
+        approvalRunId: runId,
+        executionMode: 'canonicalSmartWallet',
+        signerAddress: connectedAddress,
+        canonicalCswAddress: normalizedCswAddress,
+        onStageEvent: (event) => {
+          appendEvent(formatEventDetail(event).slice(0, 2000))
+        },
+      })
+      setPreparedCallsTxHash(txHash)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'wallet_sendCalls owner add submitted',
+        detail: txHash,
+      })
+    } catch (error) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet_sendCalls owner add failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function runBundlerOwnerAddWithKnownEoaOwner() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!publicClient) {
+      setPreparedCallsState({ kind: 'err', label: 'Base public client unavailable' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== KNOWN_EOA_OWNER_ADDRESS.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'connect the on-chain EOA owner[2]',
+        detail:
+          `Manual CSW self-auth paths keep returning owner[2], so this fallback must be signed by ` +
+          `${KNOWN_EOA_OWNER_ADDRESS}. Connected: ${connectedAddress}.`,
+      })
+      return
+    }
+    if (bundlerUserOpConfigError) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'bundler userop lane misconfigured',
+        detail: bundlerUserOpConfigError,
+      })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot sign a bundler UserOp.',
+      })
+      return
+    }
+
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const data = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const bundlerUrl = String(import.meta.env.VITE_CDP_BUNDLER_URL ?? '').trim()
+    const runId = `probe-owner2-bundler-${Date.now()}`
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'submitting addOwnerAddress via owner[2] bundler UserOp…',
+    })
+    emitProbeDebug({
+      runId,
+      hypothesisId: 'H6_direct_owner2_eoa_userop',
+      location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runBundlerOwnerAddWithKnownEoaOwner:start',
+      message: 'direct owner[2] bundler add-owner UserOp start',
+      data: {
+        csw: normalizedCswAddress,
+        ownerToAdd,
+        ownerIndex: KNOWN_EOA_OWNER_INDEX,
+        ownerAddress: KNOWN_EOA_OWNER_ADDRESS,
+        connectedAddress,
+        hasPaymasterUrl: Boolean(paymasterUrlForPreparedCalls),
+      },
+    })
+    try {
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: {
+          request: async (args: any) => await request(args),
+          signMessage: typeof (walletClient as any).signMessage === 'function'
+            ? async (args: any) => await (walletClient as any).signMessage(args)
+            : undefined,
+          signTypedData: typeof (walletClient as any).signTypedData === 'function'
+            ? async (args: any) => await (walletClient as any).signTypedData(args)
+            : undefined,
+        } as any,
+        bundlerUrl,
+        paymasterUrl: paymasterUrlForPreparedCalls ?? undefined,
+        smartWallet: normalizedCswAddress,
+        ownerAddress: KNOWN_EOA_OWNER_ADDRESS,
+        calls: [{ to: normalizedCswAddress, value: 0n, data }],
+        version: '1',
+        ownerIsContract: false,
+        userOpSignMode: 'auto',
+        ownerIndexOverride: KNOWN_EOA_OWNER_INDEX,
+        bypassOwnerIndexCache: true,
+        retryOnInvalidSignature: false,
+        ownerApprovalContext: {
+          approvalRunId: runId,
+          stage: 'add_owner_owner2_bundler',
+          executionMode: 'canonicalSmartWallet',
+        },
+      })
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H6_direct_owner2_eoa_userop',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runBundlerOwnerAddWithKnownEoaOwner:success',
+        message: 'direct owner[2] bundler add-owner UserOp succeeded',
+        data: {
+          userOpHash: result.userOpHash,
+          transactionHash: result.transactionHash,
+        },
+      })
+      setPreparedCallsTxHash(result.transactionHash)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'owner[2] bundler add-owner submitted',
+        detail: result.transactionHash,
+      })
+    } catch (error) {
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H6_direct_owner2_eoa_userop',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runBundlerOwnerAddWithKnownEoaOwner:error',
+        message: 'direct owner[2] bundler add-owner UserOp failed',
+        data: {
+          message: describeError(error),
+        },
+      })
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'owner[2] bundler add-owner failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function runDirectReplayableOwnerAdd() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+      })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call eth_sendTransaction.',
+      })
+      return
+    }
+
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const innerData = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const wrappedData = encodeExecuteWithoutChainIdValidation([innerData])
+    const runId = `probe-direct-replayable-${Date.now()}`
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'submitting addOwnerAddress via direct replayable CSW self-call…',
+    })
+    appendEvent('session:self_auth')
+    appendEvent('lane:eth_sendTransaction_executeWithoutChainIdValidation')
+    emitProbeDebug({
+      runId,
+      hypothesisId: 'H7_direct_replayable_csw_selfcall',
+      location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runDirectReplayableOwnerAdd:start',
+      message: 'direct replayable CSW self-call start',
+      data: {
+        csw: normalizedCswAddress,
+        ownerToAdd,
+        innerSelector: innerData.slice(0, 10),
+        wrappedSelector: wrappedData.slice(0, 10),
+        connectedAddress,
+      },
+    })
+    try {
+      const txHashRaw = await request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: normalizedCswAddress,
+            to: normalizedCswAddress,
+            data: wrappedData,
+            value: '0x0',
+          },
+        ],
+      })
+      if (!isTxHash(txHashRaw)) {
+        throw new Error('eth_sendTransaction did not return a transaction hash for replayable CSW self-call.')
+      }
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H7_direct_replayable_csw_selfcall',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runDirectReplayableOwnerAdd:success',
+        message: 'direct replayable CSW self-call submitted',
+        data: { txHash: txHashRaw },
+      })
+      setPreparedCallsTxHash(txHashRaw)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'direct replayable CSW self-call submitted',
+        detail: txHashRaw,
+      })
+    } catch (error) {
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H7_direct_replayable_csw_selfcall',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runDirectReplayableOwnerAdd:error',
+        message: 'direct replayable CSW self-call failed',
+        data: { message: describeError(error) },
+      })
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'direct replayable CSW self-call failed',
+        detail: describeError(error),
       })
     }
   }
@@ -2134,11 +2491,13 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-          Self-call owner add (Base prepared calls)
+          Self-call owner add (Relay two-part)
         </div>
         <div className="text-xs text-zinc-500">
-          Native Coinbase/Base Account lane for CSW owner install: wallet_prepareCalls,
-          sign the prepared hash, then wallet_sendPreparedCalls (self-auth session only).
+          Recreates the March 9 pattern: sign a replayable
+          executeWithoutChainIdValidation(addOwnerAddress) UserOp with the CSW passkey,
+          then submit EntryPoint.handleOps through /api/relay/execute so Relay creates
+          the Depository deposit and follow-up fulfillment transaction.
         </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner address to add</div>
@@ -2149,34 +2508,57 @@ export function CswSignatureProbe() {
             spellCheck={false}
           />
         </label>
-        <label className="space-y-1">
-          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-            wallet_sendPreparedCalls signature payload
-          </div>
-          <select
-            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
-            value={preparedSignaturePayloadMode}
-            onChange={(event) =>
-              setPreparedSignaturePayloadMode(event.target.value as PreparedCallsSignaturePayloadMode)
-            }
-          >
-            <option value="full_wrapper_secp256k1">full wrapper + secp256k1 address</option>
-            <option value="inner_secp256k1">inner 65-byte signature + secp256k1 address</option>
-            <option value="full_wrapper_webauthn">full wrapper + webauthn sender</option>
-            <option value="auto">auto / original helper behavior</option>
-          </select>
-          <div className="text-[11px] text-zinc-500">
-            Test one mode per run. Start with the full wrapper + secp256k1 address mode.
-          </div>
-        </label>
+        <div className="rounded border border-blue-500/20 bg-blue-500/10 p-3 text-xs leading-relaxed text-blue-100">
+          This primary action is the two-part Relay pattern: first the CSW passkey signs
+          the replayable UserOp, then Relay performs the same-chain Depository deposit
+          and fulfillment transaction. If the popup returns owner[2] ECDSA instead of
+          owner[0] WebAuthn, the helper fails before Relay submission.
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="rounded border border-zinc-700 px-3 py-1.5 text-xs text-zinc-100 hover:border-zinc-500"
+            className="rounded border border-blue-500/60 px-3 py-1.5 text-xs text-blue-200 hover:border-blue-400"
             onClick={runPreparedCallsOwnerAdd}
           >
-            run add owner via prepared calls
+            run Relay two-part owner add
           </button>
+          <button
+            type="button"
+            className="rounded border border-emerald-500/60 px-3 py-1.5 text-xs text-emerald-200 hover:border-emerald-400"
+            onClick={() => { void runWalletSendCallsOwnerAdd({ usePaymaster: false }) }}
+          >
+            run add owner via native wallet_sendCalls (no paymaster)
+          </button>
+          <button
+            type="button"
+            className="rounded border border-sky-500/60 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-400 disabled:opacity-50"
+            onClick={() => { void runWalletSendCallsOwnerAdd({ usePaymaster: true }) }}
+            disabled={!paymasterUrlForPreparedCalls}
+            title={paymasterUrlForPreparedCalls ?? 'VITE_CDP_PAYMASTER_URL is not configured'}
+          >
+            run add owner via native wallet_sendCalls (with paymaster)
+          </button>
+          <button
+            type="button"
+            className="rounded border border-amber-500/60 px-3 py-1.5 text-xs text-amber-200 hover:border-amber-400 disabled:opacity-50"
+            onClick={runBundlerOwnerAddWithKnownEoaOwner}
+            disabled={Boolean(bundlerUserOpConfigError)}
+            title={bundlerUserOpConfigError ?? `Requires connected owner[2] ${KNOWN_EOA_OWNER_ADDRESS}.`}
+          >
+            run add owner via owner[2] bundler UserOp
+          </button>
+          <button
+            type="button"
+            className="rounded border border-blue-500/60 px-3 py-1.5 text-xs text-blue-200 hover:border-blue-400"
+            onClick={runDirectReplayableOwnerAdd}
+            title="CSW self-auth lane: eth_sendTransaction from CSW to CSW with executeWithoutChainIdValidation(addOwnerAddress)."
+          >
+            run add owner via direct replayable CSW self-call
+          </button>
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          owner[2] fallback requires connected signer{' '}
+          <span className="font-mono text-zinc-300">{KNOWN_EOA_OWNER_ADDRESS}</span>.
         </div>
         <StatusRow title="prepared add-owner lane" state={preparedCallsState} />
         {preparedCallsTxHash ? <KeyValue label="preparedCallsTxHash" value={preparedCallsTxHash} /> : null}

@@ -45,6 +45,10 @@ export type PreparedCallsSignaturePayloadMode =
   | 'full_wrapper_secp256k1'
   | 'full_wrapper_webauthn'
 export type PreparedCallsSignHashMode = 'unwrapped' | 'raw_signature_request'
+export type PreparedCallsSignRequestMode =
+  | 'personal_sign_data_address'
+  | 'personal_sign_address_data'
+  | 'eth_sign_address_data'
 
 function emitPreparedCallsDebug(params: {
   runId: string
@@ -291,6 +295,7 @@ export async function _submitOwnerViaPreparedCalls(params: {
   sessionKind?: 'self_auth' | 'external_signer'
   signaturePayloadMode?: PreparedCallsSignaturePayloadMode
   signHashMode?: PreparedCallsSignHashMode
+  signRequestMode?: PreparedCallsSignRequestMode
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}`
   emitOwnerApprovalStage(params.onStageEvent, {
@@ -344,16 +349,30 @@ export async function _submitOwnerViaPreparedCalls(params: {
       prepareResultType: prepareResult.type ?? null,
       prepareResultChainId: prepareResult.chainId ?? null,
       signHashMode: params.signHashMode ?? 'unwrapped',
+      signRequestMode: params.signRequestMode ?? 'personal_sign_data_address',
       signatureRequestHashRaw,
       unwrappedHashToSign,
       hashToSign,
       ...summarizeUserOp(prepareResult.userOp),
     },
   })
-  const signature = await params.walletRequest({
-    method: 'personal_sign',
-    params: [hashToSign, params.sender],
-  }) as `0x${string}`
+  const signRequestMode = params.signRequestMode ?? 'personal_sign_data_address'
+  const signature = await params.walletRequest(
+    signRequestMode === 'eth_sign_address_data'
+      ? {
+          method: 'eth_sign',
+          params: [params.sender, hashToSign],
+        }
+      : signRequestMode === 'personal_sign_address_data'
+        ? {
+            method: 'personal_sign',
+            params: [params.sender, hashToSign],
+          }
+        : {
+            method: 'personal_sign',
+            params: [hashToSign, params.sender],
+          },
+  ) as `0x${string}`
   if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
     throw new Error('personal_sign did not return a valid signature.')
   }
@@ -364,12 +383,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
       ? hexByteLength(wrappedSignature.signatureData)
       : null
   const webAuthnClassification = classifyWebAuthnOwnerSignature(signature)
-  if (signatureBytes !== 65 && wrappedSecp256k1SignatureBytes !== 65 && params.sessionKind === 'self_auth') {
-    throw new Error(
-      `wallet_sendPreparedCalls cannot be submitted with a ${signatureBytes}-byte self-auth signature wrapper. ` +
-      'Retry through wallet_sendCalls or relay fallback for this Base App session.',
-    )
-  }
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
   let guardSummary: Record<string, unknown> | null = null
@@ -409,6 +422,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
     location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:signature',
     message: 'personal_sign returned prepared-calls owner signature summary',
     data: {
+      signHashMode: params.signHashMode ?? 'unwrapped',
+      signRequestMode,
       signatureBytes,
       wrappedOwnerIndex: wrappedSignature?.ownerIndex ?? null,
       wrappedSignatureDataBytes: wrappedSignature ? hexByteLength(wrappedSignature.signatureData) : null,
@@ -432,6 +447,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
     location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:beforeSendPreparedCalls',
     message: 'wallet_sendPreparedCalls signature payload summary',
     data: {
+      signHashMode: params.signHashMode ?? 'unwrapped',
+      signRequestMode,
       requestedMode: params.signaturePayloadMode ?? 'auto',
       usedWrappedInnerSignature: Boolean(
         wrappedSignature &&
@@ -463,6 +480,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
       location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:sendPreparedCallsError',
       message: 'wallet_sendPreparedCalls rejected prepared owner-add payload',
       data: {
+        signHashMode: params.signHashMode ?? 'unwrapped',
+        signRequestMode,
         requestedMode: params.signaturePayloadMode ?? 'auto',
         payloadSummary: summarizePreparedSignaturePayload(signaturePayload),
         error: summarizeWalletError(sendErr),
@@ -476,6 +495,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
     location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:sendPreparedCallsSuccess',
     message: 'wallet_sendPreparedCalls accepted prepared owner-add payload',
     data: {
+      signHashMode: params.signHashMode ?? 'unwrapped',
+      signRequestMode,
       requestedMode: params.signaturePayloadMode ?? 'auto',
       sendResultKind: Array.isArray(sendResult) ? 'array' : typeof sendResult,
       callsId: extractWalletCallsId(sendResult),
@@ -567,23 +588,61 @@ export async function _submitOwnerViaWalletSendCalls(params: {
     canonicalCswAddress: params.canonicalCswAddress,
   })
 
-  const sendResult = await withTimeout(
-    params.walletRequest({
-      method: 'wallet_sendCalls',
-      params: [{
-        version: '1.0',
-        from: params.sender,
-        chainId: chainIdHex,
-        atomicRequired: true,
-        calls: [{ to: params.to, data: params.data, value: '0x0' }],
-        capabilities,
-      }],
-    }),
-    WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS,
-    new Error(
-      'wallet_sendCalls request timed out waiting for Coinbase Wallet. Retry in your external browser, then continue with relay fallback if needed.',
-    ),
-  )
+  const sendCallsPayload = {
+    version: '1.0',
+    from: params.sender,
+    chainId: chainIdHex,
+    atomicRequired: true,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    capabilities,
+  }
+  emitPreparedCallsDebug({
+    runId: params.approvalRunId,
+    hypothesisId: 'H5_native_sendcalls_passkey_route',
+    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:beforeSendCalls',
+    message: 'wallet_sendCalls add-owner payload summary',
+    data: {
+      sender: params.sender,
+      chainId: chainIdHex,
+      callSelector: params.data.slice(0, 10),
+      callDataBytes: hexByteLength(params.data),
+      hasPaymasterCapability: Boolean(params.paymasterUrl),
+    },
+  })
+  let sendResult: unknown
+  try {
+    sendResult = await withTimeout(
+      params.walletRequest({
+        method: 'wallet_sendCalls',
+        params: [sendCallsPayload],
+      }),
+      WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS,
+      new Error(
+        'wallet_sendCalls request timed out waiting for Coinbase Wallet. Retry in your external browser, then continue with relay fallback if needed.',
+      ),
+    )
+  } catch (sendCallsError) {
+    emitPreparedCallsDebug({
+      runId: params.approvalRunId,
+      hypothesisId: 'H5_native_sendcalls_passkey_route',
+      location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:sendCallsError',
+      message: 'wallet_sendCalls rejected add-owner self-call',
+      data: {
+        error: summarizeWalletError(sendCallsError),
+      },
+    })
+    throw sendCallsError
+  }
+  emitPreparedCallsDebug({
+    runId: params.approvalRunId,
+    hypothesisId: 'H5_native_sendcalls_passkey_route',
+    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:sendCallsSuccess',
+    message: 'wallet_sendCalls accepted add-owner self-call',
+    data: {
+      sendResultKind: Array.isArray(sendResult) ? 'array' : typeof sendResult,
+      callsId: extractWalletCallsId(sendResult),
+    },
+  })
   const callsId = extractWalletCallsId(sendResult)
   if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id.')
 
