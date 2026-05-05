@@ -2328,10 +2328,10 @@ export async function sendPreparedOwnerTx(params: {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
               const replayableDirectMessage =
                 replayableDirectError instanceof Error
-                  ? replayableDirectError.message
+                  ? `${replayableDirectError.message}\n${replayableDirectError.stack ?? ''}`
                   : String(replayableDirectError ?? '')
               let relayFallbackError: unknown = null
-              if (/self calls are not allowed/i.test(replayableDirectMessage)) {
+              if (/(self calls are not allowed|keys\.coinbase\.com|vge)/i.test(replayableDirectMessage)) {
                 try {
                   const relayFallback = await _submitOwnerViaSelfBuiltUserOp({
                     walletRequest,
