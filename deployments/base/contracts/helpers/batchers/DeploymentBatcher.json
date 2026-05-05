@@ -2,10 +2,10 @@
   "contractName": "DeploymentBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xcDbEeB764df9878ebAFbf101cc818370f703bC4F",
+  "address": "0x271Ab2C53D79d52ddB14506a44133Fe3FA395332",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-11T03:38:51Z",
-  "deploymentTx": "0xc1a1f6f9a5e57cfef6cbeb1b339a56b765f0cbbe81aaace9c77cd0d32cc18f0b",
+  "deployedAt": "2026-05-05T07:51:45Z",
+  "deploymentTx": "0x70fef40db10e85aece6296433fdf85628571d6da234d3a6281ff9df0cefe1556",
   "abi": [
     {
       "type": "constructor",
@@ -2422,9 +2422,9 @@
     }
   ],
   "notes": [
-    "Deterministic live v1.8.3 deployment batcher for the Base full release.",
-    "Constructor dependencies: UniversalBytecodeStoreV2=0xA009B1Bf8cB711c115d832AEb392156BA6A4112e, UniversalCreate2DeployerFromStore=0xFd2657b6f1905C3F0494942F618a68963CF792Ec, CreatorOVaultCoreModule=0xeD728378f969f8e94a19fC081172D1e67B80412e, CreatorOVaultStrategiesModule=0x0f1A26b93AD56BBbC5e0486A920621944FF6ABd6, CreatorOVaultAdminModule=0xFC40e9768eeaAE634CBD2A72DA0CF809d3c908e0.",
-    "Constructor-created helpers: DeploymentBatcherPhase3Helper=0xF185Cb60E108E324f67e75cf8106B8e9950c16ed, DeploymentBatcherUniV4Helper=0xfe1C5eaa76942208298f510c820e7E8328f6d031.",
-    "BaseScan verification failed after the live v1.8.3 CREATE2 deployment because the compiled DeploymentBatcher deployment bytecode did not match the transaction deployment bytecode. Investigate this mismatch before relying on explorer verification for future reruns."
+    "Deterministic live v1.11.0 deployment batcher for the Base full release.",
+    "Constructor dependencies: UniversalBytecodeStoreV2=0xBd21c58f3D59c6E90a6bCCe462c68670F124a792, UniversalCreate2DeployerFromStore=0x24c80676E03f4c160bfa769589280fE9f9509eCb, CreatorOVaultCoreModule=0x7818AA425a22D9892b33773ccF60CA22D07446E0, CreatorOVaultStrategiesModule=0x8370c2190e8FB9f9A82D213e1f00240374F1Fd9D, CreatorOVaultAdminModule=0x493FdDC8dd670EDaCC9b8C94842AfFedbf6E31F7.",
+    "Constructor-created helpers: DeploymentBatcherPhase2Module=0x81D70248eB4276a6Db7E7DaB9c3B202e52c87593, DeploymentBatcherPhase3Helper=0xC2270DA64Cb6ab39e9361926529AA8462c7d3770, DeploymentBatcherUniV4Helper=0xbE953c5Da2Cf31C22087F528615bB8e2079b33A4, DeploymentBatcherUtilsHelper=0x9D811694842D3d67Af243bc140961fb9a9ad4040.",
+    "BaseScan verification still mismatches deployment bytecode for DeploymentBatcher and DeploymentBatcherPhase2Module after the live v1.11.0 CREATE2 deployment. Runtime wiring checks remain canonical."
   ]
 }

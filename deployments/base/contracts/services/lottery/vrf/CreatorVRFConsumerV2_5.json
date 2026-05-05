@@ -2,10 +2,10 @@
   "contractName": "CreatorVRFConsumerV2_5",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47",
+  "address": "0xd62D561A48dCe00D9913206Bfce060F8960B57b5",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-11T03:38:33Z",
-  "deploymentTx": "0x002d57e9438b08d4fd74a84a45e2e0a3b01b52d83d18b5c079eebe65ae312e47",
+  "deployedAt": "2026-05-05T04:51:21Z",
+  "deploymentTx": "0x5112c547459150a925d60ea9fd04b62f10288a7abd901b1a449ae016a53c6f72",
   "abi": [
     {
       "type": "constructor",

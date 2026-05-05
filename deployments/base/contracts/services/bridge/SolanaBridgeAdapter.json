@@ -2,10 +2,10 @@
   "contractName": "SolanaBridgeAdapter",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00",
+  "address": "0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-11T03:38:33Z",
-  "deploymentTx": "0x4452e12dc59aacf1f035490a4eadb6bc21f920d778d9dd84712fb8359d06ab71",
+  "deployedAt": "2026-05-05T04:51:21Z",
+  "deploymentTx": "0x826ef5ac68c5480b29bc5e9b3c6faeb4273070d0f67246b899215cdb666fb7f6",
   "abi": [
     {
       "type": "constructor",
@@ -1645,7 +1645,7 @@
     }
   ],
   "notes": [
-    "Deployed via script/DeployInfrastructure.s.sol as part of the live v1.8.3 shared/global broadcast.",
-    "Post-deploy lottery authorization and batcher handoff now target the live v1.8.3 registry and lottery manager."
+    "Deployed via script/DeployInfrastructure.s.sol as part of the live v1.11.0 shared/global broadcast.",
+    "Post-deploy lottery authorization and batcher handoff now target the live v1.11.0 registry and lottery manager."
   ]
 }

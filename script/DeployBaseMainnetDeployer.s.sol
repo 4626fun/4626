@@ -61,7 +61,7 @@ contract DeployBaseMainnetDeployer is Script {
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
     // - shared epoch: DEPLOYMENT_EPOCH_TAG
-    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.9.2";
+    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.11.0";
     string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
     string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
 
@@ -74,13 +74,13 @@ contract DeployBaseMainnetDeployer is Script {
     string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
 
     // Live Base mainnet fallback defaults — overridden by shared/global handoff during fresh epochs.
-    address constant DEFAULT_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
+    address constant DEFAULT_REGISTRY = 0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;
-    address constant DEFAULT_LOTTERY_MANAGER = address(0);
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x681DC69607f6E8848a56819ce8C6d591E764187a;
+    address constant DEFAULT_LOTTERY_MANAGER = 0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -155,7 +155,7 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.chainlinkEthUsd = vm.envOr("CHAINLINK_ETH_USD", DEFAULT_CHAINLINK_ETH_USD);
         cfg.vaultActivationBatcher = vm.envOr("VAULT_ACTIVATION_BATCHER", DEFAULT_VAULT_ACTIVATION_BATCHER);
         cfg.lotteryManager = vm.envOr("LOTTERY_MANAGER", DEFAULT_LOTTERY_MANAGER);
-        require(cfg.lotteryManager != address(0), "LOTTERY_MANAGER required for v1.10.1+");
+        require(cfg.lotteryManager != address(0), "LOTTERY_MANAGER required for v1.11.0+");
         cfg.permit2 = vm.envOr("PERMIT2", DEFAULT_PERMIT2);
         cfg.usdc = vm.envOr("USDC", DEFAULT_USDC);
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
