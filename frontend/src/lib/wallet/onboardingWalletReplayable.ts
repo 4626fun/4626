@@ -38,6 +38,7 @@ export type SelfBuiltUserOpLaneTelemetry = {
     | 'signature_preflight'
     | 'splice'
     | 'encode_handle_ops'
+    | 'quote_relay'
     | 'submit_relay'
     | 'success'
     | 'error'
@@ -559,12 +560,14 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   sessionKind?: 'self_auth' | 'external_signer'
   rpcUrl?: string
   beneficiary?: `0x${string}`
+  quoteRelayBeforeSubmit?: boolean
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
 }): Promise<{
   userOp: V06UserOpFields
   hashSigned: `0x${string}`
   signature: `0x${string}`
   handleOpsCalldata: `0x${string}`
+  relayQuoteResponse?: unknown
   relayResponse: unknown
   txHash: `0x${string}` | null
 }> {
@@ -813,6 +816,27 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     value: '0',
     user: params.csw,
   }
+  let relayQuoteResponse: unknown = null
+  if (params.quoteRelayBeforeSubmit) {
+    emit({ step: 'quote_relay', detail: { stage: 'request', relayBody } })
+    try {
+      const quoteResult = await apiFetch('/api/relay/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(relayBody),
+      })
+      relayQuoteResponse = await quoteResult.json().catch(() => null)
+      emit({ step: 'quote_relay', detail: { stage: 'response', relayQuoteResponse } })
+    } catch (error) {
+      emit({
+        step: 'quote_relay',
+        detail: {
+          stage: 'error',
+          error: error instanceof Error ? error.message : String(error ?? ''),
+        },
+      })
+    }
+  }
   emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
 
   const fetchResult = await apiFetch('/api/relay/execute', {
@@ -851,6 +875,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     hashSigned: hashToSign,
     signature,
     handleOpsCalldata,
+    relayQuoteResponse,
     relayResponse,
     txHash,
   }
