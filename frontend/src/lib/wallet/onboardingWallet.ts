@@ -693,6 +693,159 @@ export async function _submitOwnerViaPreparedCalls(params: {
   throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
+// ── EIP-5792 wallet_sendCalls owner submission ─────────────────────────
+function extractWalletCallsId(sendResult: unknown): string {
+  if (typeof sendResult === 'string') return sendResult
+  if (Array.isArray(sendResult) && typeof sendResult[0] === 'string') return sendResult[0]
+  if (sendResult && typeof sendResult === 'object') {
+    const record = sendResult as Record<string, unknown>
+    if (typeof record.id === 'string') return record.id
+    if (Array.isArray(record.ids) && typeof record.ids[0] === 'string') return record.ids[0]
+    if (Array.isArray(record.callIds) && typeof record.callIds[0] === 'string') return record.callIds[0]
+    if (Array.isArray(record.preparedCallIds) && typeof record.preparedCallIds[0] === 'string') {
+      return record.preparedCallIds[0]
+    }
+  }
+  return ''
+}
+
+function extractWalletCallsTxHash(statusResult: unknown): `0x${string}` | null {
+  const record = statusResult && typeof statusResult === 'object'
+    ? statusResult as Record<string, unknown>
+    : null
+  const capabilities = record?.capabilities && typeof record.capabilities === 'object'
+    ? record.capabilities as Record<string, unknown>
+    : null
+  const caip345 = capabilities?.caip345 && typeof capabilities.caip345 === 'object'
+    ? capabilities.caip345 as Record<string, unknown>
+    : null
+  const capabilityHashes = Array.isArray(caip345?.transactionHashes)
+    ? caip345.transactionHashes
+    : []
+  const receipts = Array.isArray(record?.receipts) ? record.receipts : []
+  const candidates = [
+    record?.transactionHash,
+    record?.txHash,
+    ...capabilityHashes,
+    ...receipts.map((receipt) => (receipt as { transactionHash?: unknown } | null)?.transactionHash),
+  ]
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && isTxHash(candidate)) return candidate as `0x${string}`
+  }
+  return null
+}
+
+async function pollWalletCallsStatusForTxHash(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  callsId: string
+  approvalRunId: string
+  stage: OwnerApprovalStage
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress: string | null
+  canonicalCswAddress: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<`0x${string}`> {
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < PREPARED_CALLS_STATUS_TIMEOUT_MS) {
+    const statusResult = await params.walletRequest({ method: 'wallet_getCallsStatus', params: [params.callsId] })
+    const statusCode = Number((statusResult as { status?: unknown } | null)?.status)
+    const txHash = extractWalletCallsTxHash(statusResult)
+    if (Number.isFinite(statusCode) && statusCode >= 200 && statusCode < 300) {
+      if (!txHash) {
+        throw new Error('wallet_sendCalls completed without a transaction hash. Retry shortly.')
+      }
+      emitOwnerApprovalStage(params.onStageEvent, {
+        runId: params.approvalRunId,
+        stage: params.stage,
+        status: 'success',
+        executionMode: params.executionMode,
+        signerAddress: params.signerAddress,
+        canonicalCswAddress: params.canonicalCswAddress,
+        txHash,
+      })
+      return txHash
+    }
+    if (Number.isFinite(statusCode) && statusCode >= 300) {
+      throw new Error(`wallet_sendCalls failed with status ${statusCode}`)
+    }
+    await delay(PREPARED_CALLS_STATUS_POLL_MS)
+  }
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: params.stage,
+    status: 'error',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+    code: 'wallet_send_calls_pending_timeout',
+    message: 'wallet_sendCalls status is still pending.',
+  })
+  throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
+}
+
+export async function _submitOwnerViaWalletSendCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+  paymasterUrl: string | null
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress: string | null
+  canonicalCswAddress: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<`0x${string}`> {
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+  const capabilities: Record<string, unknown> = {}
+  if (params.paymasterUrl) {
+    const normalizedPaymaster = String(params.paymasterUrl).trim()
+    if (/^https?:\/\//i.test(normalizedPaymaster)) {
+      capabilities.paymasterService = {
+        url: normalizedPaymaster.replace(
+          'https://api.developer.coinbase.com/',
+          'https://api.cdp.coinbase.com/',
+        ),
+      }
+    }
+  }
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'send_calls',
+    status: 'start',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+  })
+
+  const sendResult = await params.walletRequest({
+    method: 'wallet_sendCalls',
+    params: [{
+      version: '1.0',
+      from: params.sender,
+      chainId: chainIdHex,
+      atomicRequired: true,
+      calls: [{ to: params.to, data: params.data, value: '0x0' }],
+      capabilities,
+    }],
+  })
+  const callsId = extractWalletCallsId(sendResult)
+  if (!callsId) {
+    throw new Error('wallet_sendCalls returned no call bundle id.')
+  }
+
+  return await pollWalletCallsStatusForTxHash({
+    walletRequest: params.walletRequest,
+    callsId,
+    approvalRunId: params.approvalRunId,
+    stage: 'send_calls',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+    onStageEvent: params.onStageEvent,
+  })
+}
+
 // ── Replayable-lane prepared-calls submission ───────────────────────────
 // The Mar 9 2026 owner[2] install (tx 0x801b9d4b…) used the
 // `executeWithoutChainIdValidation` selector (0x2c2abd1e) with
@@ -2450,7 +2603,7 @@ export async function sendPreparedOwnerTx(params: {
               effectiveOwnerInstallIntent === 'embeddedOwner'
                 ? ownerIndexLookupAddress ?? null
                 : ownerAddress ?? null
-            const preferPreparedReplayableFirst =
+            const preferWalletSendCallsFirst =
               effectiveOwnerInstallIntent === 'embeddedOwner' &&
               selfAuthenticatedCanonicalSession
             const preferSelfBuiltRelayFirst =
@@ -2463,32 +2616,20 @@ export async function sendPreparedOwnerTx(params: {
                 signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
               )
             try {
-              if (preferPreparedReplayableFirst) {
-                const replayablePreparedResult = await _submitOwnerViaReplayablePreparedCalls({
+              if (preferWalletSendCallsFirst) {
+                txHash = await _submitOwnerViaWalletSendCalls({
                   walletRequest,
                   chainId: base.id,
-                  csw: canonicalSmartWalletAddress as `0x${string}`,
-                  innerCallData: txRequest.data as `0x${string}`,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: txRequest.to,
+                  data: txRequest.data,
                   paymasterUrl: null,
-                  onTelemetry: (event) => {
-                    try {
-                      if (event.step === 'error') {
-                        console.warn('[replayablePreparedOwner]', event.step, event.detail)
-                      } else {
-                        console.info('[replayablePreparedOwner]', event.step, event.detail)
-                      }
-                    } catch {
-                      // console telemetry must never block owner recovery
-                    }
-                  },
+                  approvalRunId: effectiveApprovalRunId,
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  onStageEvent,
                 })
-                if (replayablePreparedResult.txHash) {
-                  txHash = replayablePreparedResult.txHash
-                } else {
-                  throw new Error(
-                    'replayablePreparedOwner completed without a transaction hash for owner install.',
-                  )
-                }
               } else if (preferSelfBuiltRelayFirst) {
                 const relayResult = await _submitOwnerViaSelfBuiltUserOp({
                   walletRequest,
@@ -2555,7 +2696,7 @@ export async function sendPreparedOwnerTx(params: {
               })
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
-              if (preferPreparedReplayableFirst) {
+              if (preferWalletSendCallsFirst) {
                 // If replayable prepared-calls fails (common on some Base App/SDK
                 // sessions during prepare/sign), retry via the standard prepared-calls
                 // lane first to keep Coinbase-selected passkey flows before any

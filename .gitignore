@@ -246,3 +246,9 @@ indexer/migrations/003_v_zora_profiles_enriched.sql
 .env.production
 coinbase_owner_fixed.patch
 coinbase_owner_fixed.ts
+coinbase_owner_fixed_v2.ts
+coinbase_owner_full_v2.patch
+coinbase_owner_v1_to_v2.patch
+coinbase_owner_fixed_v3.ts
+coinbase_owner_full_v3.patch
+coinbase_owner_v2_to_v3.patch
