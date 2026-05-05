@@ -511,6 +511,13 @@ export async function _submitOwnerViaPreparedCalls(params: {
   if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
     throw new Error('personal_sign did not return a valid signature.')
   }
+  const signatureBytes = hexByteLength(signature)
+  if (signatureBytes !== 65 && params.sessionKind === 'self_auth') {
+    throw new Error(
+      `wallet_sendPreparedCalls cannot be submitted with a ${signatureBytes}-byte self-auth signature wrapper. ` +
+      'Retry through wallet_sendCalls or relay fallback for this Base App session.',
+    )
+  }
 
   // ── Pre-flight mismatch guard ────────────────────────────────────────
   // For EOA owners, the bundler runs ecrecover(userOpHash, sig) directly
@@ -996,6 +1003,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   csw: `0x${string}`
   innerCallData: `0x${string}`
   expectedOwnerAddress?: `0x${string}` | null
+  sessionKind?: 'self_auth' | 'external_signer'
   rpcUrl?: string
   beneficiary?: `0x${string}`
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
@@ -1119,10 +1127,10 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
           sender: params.csw,
           hashToSign,
           signature: maybeSignature,
-          sessionKind: 'external_signer',
+          sessionKind: params.sessionKind ?? 'external_signer',
         })
         ownerRecoveryOutcome = ownerRecovery.kind
-        if (ownerRecovery.kind === 'ok') {
+        if (ownerRecovery.kind === 'ok' || ownerRecovery.kind === 'skipped_self_auth_session_key') {
           signature = maybeSignature
           webAuthnOwnerCheck = classification
           acceptedSignatureKind = 'ecdsa_owner_recovered'
@@ -2488,6 +2496,7 @@ export async function sendPreparedOwnerTx(params: {
                   csw: canonicalSmartWalletAddress as `0x${string}`,
                   innerCallData: txRequest.data as `0x${string}`,
                   expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                  sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                   onTelemetry: (event) => {
                     try {
                       if (event.step === 'error') {
@@ -2590,6 +2599,7 @@ export async function sendPreparedOwnerTx(params: {
                       csw: canonicalSmartWalletAddress as `0x${string}`,
                       innerCallData: txRequest.data as `0x${string}`,
                       expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                      sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                       onTelemetry: (event) => {
                         try {
                           if (event.step === 'error') {
@@ -2667,6 +2677,7 @@ export async function sendPreparedOwnerTx(params: {
                     csw: canonicalSmartWalletAddress as `0x${string}`,
                     innerCallData: txRequest.data as `0x${string}`,
                     expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                    sessionKind: selfAuthenticatedCanonicalSession ? 'self_auth' : 'external_signer',
                     onTelemetry: (event) => {
                       try {
                         if (event.step === 'error') {

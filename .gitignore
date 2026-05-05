@@ -244,3 +244,5 @@ indexer/scripts/lookerStudioConnector/Code.gs.js
 indexer/scripts/lookerStudioConnector/appsscript.json
 indexer/migrations/003_v_zora_profiles_enriched.sql
 .env.production
+coinbase_owner_fixed.patch
+coinbase_owner_fixed.ts
