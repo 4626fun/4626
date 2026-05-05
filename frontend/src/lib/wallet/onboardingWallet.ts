@@ -2326,19 +2326,61 @@ export async function sendPreparedOwnerTx(params: {
               })
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'send_calls',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(replayableDirectError).code,
-                message: replayableDirectError instanceof Error
+              const replayableDirectMessage =
+                replayableDirectError instanceof Error
                   ? replayableDirectError.message
-                  : String(replayableDirectError ?? ''),
-              })
-              throw replayableDirectError
+                  : String(replayableDirectError ?? '')
+              if (/self calls are not allowed/i.test(replayableDirectMessage)) {
+                try {
+                  const relayFallback = await _submitOwnerViaSelfBuiltUserOp({
+                    walletRequest,
+                    chainId: base.id,
+                    csw: canonicalSmartWalletAddress as `0x${string}`,
+                    innerCallData: txRequest.data as `0x${string}`,
+                    onTelemetry: (event) => {
+                      try {
+                        if (event.step === 'error') {
+                          console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                        } else {
+                          console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                        }
+                      } catch {
+                        // console telemetry must never block owner recovery
+                      }
+                    },
+                  })
+                  if (relayFallback.txHash) {
+                    txHash = relayFallback.txHash
+                    emitOwnerApprovalStage(onStageEvent, {
+                      runId: effectiveApprovalRunId,
+                      stage: 'send_calls',
+                      status: 'success',
+                      executionMode,
+                      signerAddress,
+                      canonicalCswAddress: canonicalSmartWalletAddress,
+                      txHash,
+                    })
+                    // Continue into confirmation flow below.
+                  }
+                } catch {
+                  // If relay fallback also fails, report the original self-call error below.
+                }
+              }
+              if (!txHash) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'send_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(replayableDirectError).code,
+                  message: replayableDirectError instanceof Error
+                    ? replayableDirectError.message
+                    : String(replayableDirectError ?? ''),
+                })
+                throw replayableDirectError
+              }
             }
           }
         } else {

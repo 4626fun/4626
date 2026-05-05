@@ -253,6 +253,98 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('falls back to self-built relay lane when direct self-call is blocked by popup guard', async () => {
+    const webauthnSignature = encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            { name: 'authenticatorData', type: 'bytes' },
+            { name: 'clientDataJSON', type: 'string' },
+            { name: 'challengeIndex', type: 'uint256' },
+            { name: 'typeIndex', type: 'uint256' },
+            { name: 'r', type: 'uint256' },
+            { name: 's', type: 'uint256' },
+          ],
+        },
+      ],
+      [
+        {
+          authenticatorData: `0x${'ab'.repeat(37)}`,
+          clientDataJSON:
+            '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}',
+          challengeIndex: 23n,
+          typeIndex: 1n,
+          r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+          s: 0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+        },
+      ],
+    )
+    const signatureWrapper = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      [0n, webauthnSignature],
+    ) as `0x${string}`
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/relay/execute') {
+        return makeJsonResponse({
+          success: true,
+          data: { txHash: TX_HASH },
+        })
+      }
+      return makeJsonResponse({
+        success: true,
+        data: {
+          isOwner: true,
+          canonicalCswAddress: CANONICAL_CSW,
+          ownerAddress: OWNER_EOA,
+          txHash: TX_HASH,
+          confirmationState: 'owner_confirmed',
+        },
+      })
+    })
+    const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_sendTransaction') {
+        throw new Error('Self calls are not allowed.')
+      }
+      if (args.method === 'personal_sign') {
+        expect(args.params?.[1]).toBe(CANONICAL_CSW)
+        return signatureWrapper
+      }
+      throw new Error(`Unexpected method ${args.method}`)
+    })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+    })
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('bypasses prepared-calls estimation when wallet account is canonical CSW', async () => {
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_sendTransaction') {
