@@ -2697,27 +2697,35 @@ export async function sendPreparedOwnerTx(params: {
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
               if (preferWalletSendCallsFirst) {
+                const walletSendCallsErrorMessage =
+                  replayableDirectError instanceof Error
+                    ? `${replayableDirectError.message}\n${replayableDirectError.stack ?? ''}`
+                    : String(replayableDirectError ?? '')
+                const shouldSkipPreparedFallback =
+                  /(self calls are not allowed|keys\.coinbase\.com|vge)/i.test(walletSendCallsErrorMessage)
                 // If replayable prepared-calls fails (common on some Base App/SDK
                 // sessions during prepare/sign), retry via the standard prepared-calls
                 // lane first to keep Coinbase-selected passkey flows before any
                 // self-built relay fallback.
-                try {
-                  txHash = await _submitOwnerViaPreparedCalls({
-                    walletRequest,
-                    chainId: base.id,
-                    sender: canonicalSmartWalletAddress as `0x${string}`,
-                    to: txRequest.to,
-                    data: txRequest.data,
-                    paymasterUrl: null,
-                    approvalRunId: effectiveApprovalRunId,
-                    executionMode,
-                    signerAddress,
-                    canonicalCswAddress: canonicalSmartWalletAddress,
-                    onStageEvent,
-                    sessionKind: 'self_auth',
-                  })
-                } catch {
-                  // no-op; continue to relay fallback below
+                if (!shouldSkipPreparedFallback) {
+                  try {
+                    txHash = await _submitOwnerViaPreparedCalls({
+                      walletRequest,
+                      chainId: base.id,
+                      sender: canonicalSmartWalletAddress as `0x${string}`,
+                      to: txRequest.to,
+                      data: txRequest.data,
+                      paymasterUrl: null,
+                      approvalRunId: effectiveApprovalRunId,
+                      executionMode,
+                      signerAddress,
+                      canonicalCswAddress: canonicalSmartWalletAddress,
+                      onStageEvent,
+                      sessionKind: 'self_auth',
+                    })
+                  } catch {
+                    // no-op; continue to relay fallback below
+                  }
                 }
                 if (txHash) {
                   emitOwnerApprovalStage(onStageEvent, {

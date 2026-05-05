@@ -370,6 +370,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - For bonding-curve visualizations, prefer green candlestick bodies for the bonding-curve spread with Sudoswap overlays, and keep direct chart interactions (mouse-wheel zoom around cursor plus click-drag horizontal panning).
 - When requesting infrastructure migrations/cutovers, the user may explicitly prefer a hard cutover over staged coexistence and accepts downtime if it simplifies execution.
 - Ethos score UI should follow the official Ethos/Twitter-style treatment: use official label text and color bands, keep the pill aligned close to the avatar/logo without overlapping availability dots, and use static, interactive hover cards that persist while hovered so profile actions are clickable.
+- In user-facing communication for this workspace, avoid using the words "scrape" or "crawl" unless the user explicitly asks for those terms.
 
 ## Learned Workspace Facts
 
