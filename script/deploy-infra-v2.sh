@@ -6,7 +6,7 @@ cd "$ROOT_DIR"
 
 # Historical filename retained for operator scripts. This deploys the current
 # CreatorOVault phased infra and bytecode store.
-DEFAULT_RELEASE_TAG="v1.9.2"
+DEFAULT_RELEASE_TAG="v1.11.0"
 DEFAULT_SHARED_GLOBAL_OUTPUT_PATH="${ROOT_DIR}/tmp/base-${DEFAULT_RELEASE_TAG}-shared-global.json"
 
 load_env_file() {

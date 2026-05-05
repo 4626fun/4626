@@ -1190,8 +1190,21 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (_vaultAdminModule == address(0)) revert ZeroAddress();
         vaultAdminModule = _vaultAdminModule;
 
-        if (_phase2Module == address(0)) revert ZeroAddress();
-        phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
+        if (_phase2Module == address(0)) {
+            phase2Module = new DeploymentBatcherPhase2Module(
+                address(create2Deployer),
+                _registry,
+                _chainlinkEthUsd,
+                _poolManager,
+                _taxHook,
+                _protocolTreasury,
+                _lotteryManager,
+                _vaultActivationBatcher,
+                address(this)
+            );
+        } else {
+            phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
+        }
 
         // FIX: L-02 (4626-350) — outer batcher references a hardcoded
         // Base-only Charm factory (CHARM_FACTORY public constant above),

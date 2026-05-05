@@ -256,7 +256,8 @@ contract DeployBaseMainnetDeployer is Script {
             cfg.ajnaFactory,
             coreModuleAddr,
             strategiesModuleAddr,
-            adminModuleAddr
+            adminModuleAddr,
+            address(0)
         );
         bytes memory deployerInit = abi.encodePacked(type(DeploymentBatcher).creationCode, deployerArgs);
         address deployerAddr = _create2(CREATE2_FACTORY_ADDR, salts.deploymentBatcher, keccak256(deployerInit));

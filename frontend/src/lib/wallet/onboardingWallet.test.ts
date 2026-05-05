@@ -13,7 +13,7 @@ vi.mock('@/lib/aa/coinbaseErc4337', () => ({
   sendCoinbaseSmartWalletUserOperation: sendCoinbaseSmartWalletUserOperationMock,
 }))
 
-import { encodeAbiParameters, hashMessage, keccak256, toHex } from 'viem'
+import { decodeAbiParameters, encodeAbiParameters, hashMessage, keccak256, toHex } from 'viem'
 import { generatePrivateKey, privateKeyToAccount, sign as viemSign } from 'viem/accounts'
 
 import {
@@ -32,6 +32,39 @@ const TX_REQUEST = {
   to: CANONICAL_CSW,
   data: '0x0f0f3f240000000000000000000000002222222222222222222222222222222222222222' as const,
   value: '0x0' as const,
+}
+
+function makeWebAuthnOwnerSignatureWrapper(ownerIndex = 0n): `0x${string}` {
+  const webauthnSignature = encodeAbiParameters(
+    [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'authenticatorData', type: 'bytes' },
+          { name: 'clientDataJSON', type: 'string' },
+          { name: 'challengeIndex', type: 'uint256' },
+          { name: 'typeIndex', type: 'uint256' },
+          { name: 'r', type: 'uint256' },
+          { name: 's', type: 'uint256' },
+        ],
+      },
+    ],
+    [
+      {
+        authenticatorData: `0x${'ab'.repeat(37)}`,
+        clientDataJSON:
+          '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}',
+        challengeIndex: 23n,
+        typeIndex: 1n,
+        r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+        s: 0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+      },
+    ],
+  )
+  return encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'bytes' }],
+    [ownerIndex, webauthnSignature],
+  ) as `0x${string}`
 }
 
 function makeJsonResponse<T>(payload: T, ok = true) {
@@ -187,7 +220,7 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes self-auth embedded-owner installs through wallet_sendCalls lane first', async () => {
+  it('routes self-auth embedded-owner installs through relay lane first', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -211,16 +244,9 @@ describe('sendPreparedOwnerTx', () => {
         },
       }),
     )
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_sendCalls') {
-        return 'bundle-1'
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: TX_HASH }],
-        }
-      }
+      if (args.method === 'personal_sign') return signatureWrapper
       throw new Error(`Unexpected method ${args.method}`)
     })
 
@@ -239,17 +265,17 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
-    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('does not route embedded-owner self-auth wallet_sendCalls lane through eth_sendTransaction', async () => {
+  it('does not route embedded-owner self-auth relay lane through eth_sendTransaction', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -273,16 +299,9 @@ describe('sendPreparedOwnerTx', () => {
         },
       }),
     )
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'wallet_sendCalls') {
-        return 'bundle-1'
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: TX_HASH }],
-        }
-      }
+      if (args.method === 'personal_sign') return signatureWrapper
       throw new Error(`Unexpected method ${args.method}`)
     })
 
@@ -301,9 +320,10 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
-    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(result.txHash).toBe(TX_HASH)
   })
 
@@ -417,8 +437,8 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
@@ -1030,6 +1050,65 @@ describe('_submitOwnerViaSelfBuiltUserOp', () => {
     ).rejects.toThrow(
       `Prepared addOwnerAddress target ${OWNER_EOA} does not match intended owner ${ALT_OWNER_EOA}`,
     )
+  })
+
+  it('accepts a WebAuthn owner signature wrapper at ownerIndex=3 and preserves addOwner payload', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x0000000000000000000000000000000000000000000000002105000000000001',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )),
+    )
+    apiFetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        success: true,
+        data: { txHash: TX_HASH },
+      }),
+    )
+
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(3n)
+    const walletRequest = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'personal_sign') return signatureWrapper
+      throw new Error(`Unexpected method ${args.method}`)
+    })
+
+    const result = await _submitOwnerViaSelfBuiltUserOp({
+      walletRequest,
+      chainId: 8453,
+      csw: CANONICAL_CSW,
+      innerCallData: TX_REQUEST.data,
+      expectedOwnerAddress: OWNER_EOA,
+      sessionKind: 'self_auth',
+    })
+
+    expect(walletRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(result.userOp.signature).toBe(signatureWrapper)
+    expect(result.userOp.callData.slice(0, 10).toLowerCase()).toBe('0x2c2abd1e')
+    expect(result.userOp.callData.toLowerCase()).toContain(TX_REQUEST.data.slice(2).toLowerCase())
+
+    const [decodedOwnerIndex] = decodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      signatureWrapper,
+    )
+    expect(decodedOwnerIndex).toBe(3n)
+
+    const relayCall = apiFetchMock.mock.calls.find((call) => call[0] === '/api/relay/execute')
+    expect(relayCall).toBeTruthy()
+    const relayBody = JSON.parse((relayCall?.[1] as { body: string }).body) as {
+      chainId: number
+      to: string
+      data: string
+      user: string
+    }
+    expect(relayBody.chainId).toBe(8453)
+    expect(relayBody.to.toLowerCase()).toBe('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
+    expect(relayBody.user.toLowerCase()).toBe(CANONICAL_CSW.toLowerCase())
+    expect(relayBody.data.toLowerCase()).toContain(TX_REQUEST.data.slice(2).toLowerCase())
   })
 })
 
