@@ -187,7 +187,37 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes self-auth embedded-owner installs through direct replayable eth_sendTransaction', async () => {
+  it('routes self-auth embedded-owner installs through self-built relay lane first', async () => {
+    const webauthnSignature = encodeAbiParameters(
+      [
+        {
+          type: 'tuple',
+          components: [
+            { name: 'authenticatorData', type: 'bytes' },
+            { name: 'clientDataJSON', type: 'string' },
+            { name: 'challengeIndex', type: 'uint256' },
+            { name: 'typeIndex', type: 'uint256' },
+            { name: 'r', type: 'uint256' },
+            { name: 's', type: 'uint256' },
+          ],
+        },
+      ],
+      [
+        {
+          authenticatorData: `0x${'ab'.repeat(37)}`,
+          clientDataJSON:
+            '{"type":"webauthn.get","challenge":"AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8","origin":"https://keys.coinbase.com","crossOrigin":false}',
+          challengeIndex: 23n,
+          typeIndex: 1n,
+          r: 0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+          s: 0x2234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdefn,
+        },
+      ],
+    )
+    const signatureWrapper = encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      [0n, webauthnSignature],
+    ) as `0x${string}`
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -218,14 +248,8 @@ describe('sendPreparedOwnerTx', () => {
       })
     })
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_sendTransaction') {
-        const tx = args.params?.[0] as { from?: string; to?: string; data?: string; value?: string }
-        expect(tx.from).toBe(CANONICAL_CSW)
-        expect(tx.to).toBe(CANONICAL_CSW)
-        expect(tx.value).toBe('0x0')
-        expect(tx.data?.slice(0, 10)).toBe('0x2c2abd1e')
-        expect(tx.data).toContain(TX_REQUEST.data.slice(2))
-        return TX_HASH
+      if (args.method === 'personal_sign') {
+        return signatureWrapper
       }
       throw new Error(`Unexpected method ${args.method}`)
     })
@@ -245,17 +269,17 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_getCallsStatus' }))
-    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to self-built relay lane when direct self-call is blocked by popup guard', async () => {
+  it('uses self-built relay lane when direct self-call would be blocked by popup guard', async () => {
     const webauthnSignature = encodeAbiParameters(
       [
         {
@@ -341,13 +365,13 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to self-built relay lane when popup guard appears in stack text', async () => {
+  it('uses self-built relay lane when popup guard text appears in stack traces', async () => {
     const webauthnSignature = encodeAbiParameters(
       [
         {
@@ -435,8 +459,8 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(result.txHash).toBe(TX_HASH)
   })

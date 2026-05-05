@@ -2396,35 +2396,70 @@ export async function sendPreparedOwnerTx(params: {
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
             })
+            const preferSelfBuiltRelayFirst =
+              enforceSelfAuthEmbeddedOwner ||
+              ownerInstallIntent === 'embeddedOwner' ||
+              (
+                ownerInstallIntent == null &&
+                Boolean(canonicalSmartWalletAddress) &&
+                Boolean(signerAddress) &&
+                signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
+              )
             try {
-              const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
-              if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
-                throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
-              }
-              const wrappedData = encodeExecuteWithoutChainIdValidation(txRequest.data)
-              try {
-                console.info('[replayableDirectOwner]', 'send', {
-                  from: canonicalSmartWalletAddress,
-                  to: canonicalSmartWalletAddress,
-                  innerSelector,
-                  wrappedSelector: wrappedData.slice(0, 10),
+              if (preferSelfBuiltRelayFirst) {
+                const relayResult = await _submitOwnerViaSelfBuiltUserOp({
+                  walletRequest,
+                  chainId: base.id,
+                  csw: canonicalSmartWalletAddress as `0x${string}`,
+                  innerCallData: txRequest.data as `0x${string}`,
+                  expectedOwnerAddress: ownerAddress ? (ownerAddress as `0x${string}`) : null,
+                  onTelemetry: (event) => {
+                    try {
+                      if (event.step === 'error') {
+                        console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                      } else {
+                        console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                      }
+                    } catch {
+                      // console telemetry must never block owner recovery
+                    }
+                  },
                 })
-              } catch {
-                // console telemetry must never block owner recovery
+                if (relayResult.txHash) {
+                  txHash = relayResult.txHash
+                } else {
+                  throw new Error('selfBuiltUserOpRelay did not return a transaction hash for owner install.')
+                }
+              } else {
+                const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
+                if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
+                  throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)
+                }
+                const wrappedData = encodeExecuteWithoutChainIdValidation(txRequest.data)
+                try {
+                  console.info('[replayableDirectOwner]', 'send', {
+                    from: canonicalSmartWalletAddress,
+                    to: canonicalSmartWalletAddress,
+                    innerSelector,
+                    wrappedSelector: wrappedData.slice(0, 10),
+                  })
+                } catch {
+                  // console telemetry must never block owner recovery
+                }
+                const directResult = await walletRequest({
+                  method: 'eth_sendTransaction',
+                  params: [{
+                    from: canonicalSmartWalletAddress,
+                    to: canonicalSmartWalletAddress,
+                    data: wrappedData,
+                    value: '0x0',
+                  }],
+                })
+                if (typeof directResult !== 'string' || !isTxHash(directResult)) {
+                  throw new Error('eth_sendTransaction did not return a transaction hash for the replayable owner install.')
+                }
+                txHash = directResult
               }
-              const directResult = await walletRequest({
-                method: 'eth_sendTransaction',
-                params: [{
-                  from: canonicalSmartWalletAddress,
-                  to: canonicalSmartWalletAddress,
-                  data: wrappedData,
-                  value: '0x0',
-                }],
-              })
-              if (typeof directResult !== 'string' || !isTxHash(directResult)) {
-                throw new Error('eth_sendTransaction did not return a transaction hash for the replayable owner install.')
-              }
-              txHash = directResult
               emitOwnerApprovalStage(onStageEvent, {
                 runId: effectiveApprovalRunId,
                 stage: 'send_calls',
@@ -2436,6 +2471,21 @@ export async function sendPreparedOwnerTx(params: {
               })
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
+              if (preferSelfBuiltRelayFirst) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'send_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(replayableDirectError).code,
+                  message: replayableDirectError instanceof Error
+                    ? replayableDirectError.message
+                    : String(replayableDirectError ?? ''),
+                })
+                throw replayableDirectError
+              }
               const replayableDirectMessage =
                 replayableDirectError instanceof Error
                   ? `${replayableDirectError.message}\n${replayableDirectError.stack ?? ''}`
