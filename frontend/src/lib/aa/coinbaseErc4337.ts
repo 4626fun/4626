@@ -1421,6 +1421,18 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (origSignUserOp) {
     ;(baseAccount as any).signUserOperation = async function (userOperation: any) {
       const wrapped: Hex = await origSignUserOp(userOperation)
+      // For contract-owner/self-auth flows, long signature payloads are expected.
+      // Do not attempt "double-wrap" unwrapping here or we can strip a valid
+      // contract-owner signature envelope and cause AA23 signature failures.
+      if (ownerIsContract) {
+        if (AA_DEBUG) {
+          logger.debug('[ERC-4337] signUserOperation: skipping unwrap for contract owner', {
+            smartWallet,
+            ownerIndex,
+          })
+        }
+        return wrapped
+      }
       // viem's wrapSignature always produces a SignatureWrapper. If the inner sig
       // from the wallet was already wrapped, the result is double-wrapped.
       // Detect: try to ABI-decode the outer wrapper and check if signatureData

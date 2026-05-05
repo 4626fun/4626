@@ -17,8 +17,10 @@ import {
 import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import {
   _submitOwnerViaPreparedCalls,
+  _submitOwnerViaWalletSendCalls,
   unwrapDoubleHexEncodedHash,
   type OwnerApprovalStageEvent,
 } from '@/lib/wallet/onboardingWallet'
@@ -90,6 +92,26 @@ const CSW_OWNER_MUTATION_ABI = [
     name: 'addOwnerAddress',
     stateMutability: 'nonpayable',
     inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'removeOwnerAtIndex',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'index', type: 'uint256' },
+      { name: 'owner', type: 'bytes' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'removeLastOwner',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'index', type: 'uint256' },
+      { name: 'owner', type: 'bytes' },
+    ],
     outputs: [],
   },
 ] as const
@@ -192,6 +214,31 @@ type ProbeResult = {
 type StepState = { kind: 'idle' | 'pending' | 'ok' | 'err'; label: string; detail?: string }
 
 const INITIAL_STEP: StepState = { kind: 'idle', label: 'not run' }
+
+type RemoveOwnerPreview = {
+  txRequest: {
+    chainId: 8453
+    to: `0x${string}`
+    data: `0x${string}`
+    value: '0x0'
+  }
+  preflight: {
+    selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
+    selectedBy?: 'heuristic' | 'simulation'
+    targetOwnerIndex: number
+    targetOwnerBytes: `0x${string}`
+    targetOwnerAddress: `0x${string}` | null
+    highestPopulatedOwnerIndex: number
+    ownerCount: number
+    nextOwnerIndex: number
+    simulation: {
+      ok: boolean
+      error: string | null
+      removeOwnerAtIndex?: { ok: boolean; error: string | null }
+      removeLastOwner?: { ok: boolean; error: string | null }
+    }
+  }
+}
 
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message
@@ -408,6 +455,13 @@ export function CswSignatureProbe() {
   const [preparedCallEventLog, setPreparedCallEventLog] = useState<string[]>([])
   const [ownerToAddInput, setOwnerToAddInput] = useState('0x2f4ec723ff6add6ab81b7befbec04ce31151613f')
   const [preparedCallsUsePaymaster, setPreparedCallsUsePaymaster] = useState(true)
+  const [ownerToRemoveIndexInput, setOwnerToRemoveIndexInput] = useState('2')
+  const [ownerRemoveState, setOwnerRemoveState] = useState<StepState>(INITIAL_STEP)
+  const [ownerRemoveTxHash, setOwnerRemoveTxHash] = useState<string | null>(null)
+  const [ownerRemoveEventLog, setOwnerRemoveEventLog] = useState<string[]>([])
+  const [ownerRemovePreview, setOwnerRemovePreview] = useState<RemoveOwnerPreview | null>(null)
+  const [ownerRemoveUserOpState, setOwnerRemoveUserOpState] = useState<StepState>(INITIAL_STEP)
+  const [ownerRemoveUserOpTxHash, setOwnerRemoveUserOpTxHash] = useState<string | null>(null)
   const [create2DeployerInput, setCreate2DeployerInput] = useState('0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd')
   const [authorizedDeployerInput, setAuthorizedDeployerInput] = useState('0xab6d5c10b03300326cd7fab7267ae192842967b5')
   const [create2ReadState, setCreate2ReadState] = useState<StepState>(INITIAL_STEP)
@@ -689,6 +743,17 @@ export function CswSignatureProbe() {
     } catch {
       return resolveCdpPaymasterUrl(trimmed) ?? null
     }
+  }, [])
+
+  const bundlerUserOpConfigError = useMemo(() => {
+    const raw = String(import.meta.env.VITE_CDP_BUNDLER_URL ?? '').trim()
+    if (!raw) {
+      return 'Set VITE_CDP_BUNDLER_URL to a direct bundler RPC URL for this lane.'
+    }
+    if (raw === '/api/paymaster' || raw.endsWith('/api/paymaster')) {
+      return 'VITE_CDP_BUNDLER_URL must not point to /api/paymaster (paymaster proxy). Use direct bundler RPC.'
+    }
+    return null
   }, [])
 
   const preferredConnector = useMemo(() => {
@@ -1335,6 +1400,355 @@ export function CswSignatureProbe() {
     }
   }
 
+  async function runSelfBuiltOwnerRemove() {
+    if (!walletClient || !connectedAddress) {
+      setOwnerRemoveState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setOwnerRemoveState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    const isSelfAuthSession =
+      connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+    if (!isSelfAuthSession) {
+      setOwnerRemoveState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail:
+          `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}. ` +
+          'Reconnect via Base App so the passkey owner signs this relay payload.',
+      })
+      return
+    }
+    const removeIndex = Number(ownerToRemoveIndexInput)
+    if (!Number.isInteger(removeIndex) || removeIndex < 0) {
+      setOwnerRemoveState({ kind: 'err', label: 'invalid owner index to remove' })
+      return
+    }
+    const ownerSlot = ownerSlots.find((slot) => slot.index === removeIndex)
+    if (!ownerSlot) {
+      setOwnerRemoveState({
+        kind: 'err',
+        label: `owner slot ${removeIndex} is not loaded`,
+        detail: 'Click "load owner slots" first, then retry the removal.',
+      })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setOwnerRemoveState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot call the relay-backed self-built UserOp lane.',
+      })
+      return
+    }
+
+    setOwnerRemoveTxHash(null)
+    setOwnerRemoveEventLog([])
+    setOwnerRemovePreview(null)
+    setOwnerRemoveState({
+      kind: 'pending',
+      label: `building remove-owner preview for index ${removeIndex}…`,
+    })
+    try {
+      const appendEvent = (row: string) => {
+        setOwnerRemoveEventLog((prev) => [...prev, row].slice(-20))
+      }
+      const previewResponse = await fetch('/api/onboarding/preview-remove-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cswAddress: normalizedCswAddress,
+          connectedAddress,
+          ownerIndex: removeIndex,
+        }),
+      })
+      let previewJson: {
+        success?: boolean
+        error?: string
+        data?: RemoveOwnerPreview
+      } | null = null
+      try {
+        previewJson = await previewResponse.json()
+      } catch {
+        previewJson = null
+      }
+      if (!previewResponse.ok || !previewJson?.success || !previewJson.data) {
+        throw new Error(previewJson?.error ?? `preview-remove-owner failed (${previewResponse.status})`)
+      }
+      const preview = previewJson.data
+      setOwnerRemovePreview(preview)
+      appendEvent(`target:index=${removeIndex}`)
+      appendEvent(`target:function=${preview.preflight.selectedFunction}`)
+      appendEvent(`target:ownerType=${ownerSlot.ownerType}`)
+      appendEvent(`target:ownerAddress=${ownerSlot.ownerAddress ?? '—'}`)
+      appendEvent(`preflight:simulation=${preview.preflight.simulation.ok ? 'ok' : 'reverted'}`)
+      if (preview.preflight.simulation.error) {
+        appendEvent(`preflight:error=${preview.preflight.simulation.error}`)
+      }
+      // Best-effort session refresh before sendCalls. Coinbase/Base App can
+      // return stale "connecting" flows that time out when the WalletLink
+      // session is old; wallet_connect + chain switch helps rehydrate context.
+      try {
+        await request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x2105' }],
+        })
+        appendEvent('session:chain_switched_base')
+      } catch {
+        appendEvent('session:chain_switch_skipped')
+      }
+      try {
+        await request({
+          method: 'wallet_connect',
+          params: [{ version: '1' }],
+        })
+        appendEvent('session:wallet_connect_ok')
+      } catch {
+        appendEvent('session:wallet_connect_skipped')
+      }
+      appendEvent('lane:wallet_sendCalls_primary')
+      const txHash = await _submitOwnerViaWalletSendCalls({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        sender: normalizedCswAddress,
+        to: preview.txRequest.to,
+        data: preview.txRequest.data,
+        paymasterUrl: preparedCallsUsePaymaster ? paymasterUrlForPreparedCalls : null,
+        approvalRunId: `probe-remove-${Date.now()}`,
+        executionMode: 'canonicalSmartWallet',
+        signerAddress: connectedAddress,
+        canonicalCswAddress: normalizedCswAddress,
+        onStageEvent: (event) => {
+          const row = `${event.stage}:${event.status}${event.code ? `:${event.code}` : ''}${event.txHash ? `:${event.txHash}` : ''}`
+          appendEvent(row)
+        },
+      })
+      setOwnerRemoveTxHash(txHash)
+      setOwnerRemoveState({
+        kind: 'ok',
+        label: `${preview.preflight.selectedFunction}(${removeIndex}) submitted via wallet_sendCalls`,
+        detail: txHash,
+      })
+      return
+    } catch (error) {
+      const message = describeError(error)
+      const lower = message.toLowerCase()
+      if (lower.includes('user rejected') || lower.includes('request rejected')) {
+        setOwnerRemoveState({
+          kind: 'err',
+          label: 'owner remove canceled in wallet popup',
+          detail: `${message}. Re-run and approve the remove-owner request in Coinbase/Base App.`,
+        })
+        return
+      }
+      setOwnerRemoveState({
+        kind: 'err',
+        label: 'owner remove failed',
+        detail: message,
+      })
+    }
+  }
+
+  async function runOwnerRemoveViaBundlerUserOp() {
+    if (!walletClient || !connectedAddress) {
+      setOwnerRemoveUserOpState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setOwnerRemoveUserOpState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (!publicClient) {
+      setOwnerRemoveUserOpState({ kind: 'err', label: 'public client unavailable' })
+      return
+    }
+    const removeIndex = Number(ownerToRemoveIndexInput)
+    if (!Number.isInteger(removeIndex) || removeIndex < 0) {
+      setOwnerRemoveUserOpState({ kind: 'err', label: 'invalid owner index to remove' })
+      return
+    }
+    const targetOwnerSlot = ownerSlots.find((slot) => slot.index === removeIndex)
+    const isSelfAuthSession =
+      connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+    const resolvePasskeySignerIndexOnchain = async (): Promise<number | null> => {
+      if (!publicClient) return null
+      try {
+        const ownerCountRaw = await publicClient.readContract({
+          address: normalizedCswAddress,
+          abi: CSW_OWNER_ABI,
+          functionName: 'ownerCount',
+        })
+        const ownerCount = Number(ownerCountRaw)
+        if (!Number.isFinite(ownerCount) || ownerCount <= 0) return null
+        const maxScan = Math.min(ownerCount, 32)
+        for (let index = 0; index < maxScan; index += 1) {
+          try {
+            const ownerBytes = await publicClient.readContract({
+              address: normalizedCswAddress,
+              abi: CSW_OWNER_ABI,
+              functionName: 'ownerAtIndex',
+              args: [BigInt(index)],
+            })
+            const ownerBytesLength = (String(ownerBytes).length - 2) / 2
+            if (ownerBytesLength === 64) return index
+          } catch {
+            continue
+          }
+        }
+        return null
+      } catch {
+        return null
+      }
+    }
+
+    let signerOwnerIndex = removeIndex
+    let signerOwnerAddress = connectedAddress as Address
+    let signerOwnerIsContract = true
+
+    if (isSelfAuthSession) {
+      const passkeySignerIndex = await resolvePasskeySignerIndexOnchain()
+      if (passkeySignerIndex === null) {
+        setOwnerRemoveUserOpState({
+          kind: 'err',
+          label: 'passkey signer slot missing',
+          detail:
+            'Self-auth UserOp remove requires an onchain passkey owner slot (typically index 0). ' +
+            'No passkey owner was discovered on this CSW.',
+        })
+        return
+      }
+      signerOwnerIndex = passkeySignerIndex
+      signerOwnerAddress = normalizedCswAddress
+      signerOwnerIsContract = true
+    } else if (
+      targetOwnerSlot?.ownerType === 'eoa' &&
+      targetOwnerSlot.ownerAddress &&
+      targetOwnerSlot.ownerAddress.toLowerCase() === connectedAddress.toLowerCase()
+    ) {
+      signerOwnerIndex = removeIndex
+      signerOwnerAddress = targetOwnerSlot.ownerAddress
+      signerOwnerIsContract = false
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setOwnerRemoveUserOpState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot submit AA UserOps.',
+      })
+      return
+    }
+    if (bundlerUserOpConfigError) {
+      setOwnerRemoveUserOpState({
+        kind: 'err',
+        label: 'bundler userop lane misconfigured',
+        detail: bundlerUserOpConfigError,
+      })
+      return
+    }
+
+    setOwnerRemoveUserOpTxHash(null)
+    setOwnerRemoveUserOpState({
+      kind: 'pending',
+      label: `building remove preview for UserOp index ${removeIndex}…`,
+    })
+    try {
+      const previewResponse = await fetch('/api/onboarding/preview-remove-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cswAddress: normalizedCswAddress,
+          connectedAddress,
+          ownerIndex: removeIndex,
+        }),
+      })
+      let previewJson: {
+        success?: boolean
+        error?: string
+        data?: RemoveOwnerPreview
+      } | null = null
+      try {
+        previewJson = await previewResponse.json()
+      } catch {
+        previewJson = null
+      }
+      if (!previewResponse.ok || !previewJson?.success || !previewJson.data) {
+        throw new Error(previewJson?.error ?? `preview-remove-owner failed (${previewResponse.status})`)
+      }
+      const preview = previewJson.data
+      setOwnerRemovePreview(preview)
+      setOwnerRemoveUserOpState({
+        kind: 'pending',
+        label:
+          `submitting ${preview.preflight.selectedFunction} via bundler UserOp ` +
+          `(target=${removeIndex}, signer=${signerOwnerIndex})…`,
+      })
+
+      const bundlerUrlCandidateRaw = String(import.meta.env.VITE_CDP_BUNDLER_URL ?? '').trim()
+
+      const result = await sendCoinbaseSmartWalletUserOperation({
+        publicClient: publicClient as any,
+        walletClient: {
+          request: async (args: any) => await request(args),
+          signMessage: typeof (walletClient as any).signMessage === 'function'
+            ? async (args: any) => await (walletClient as any).signMessage(args)
+            : undefined,
+          signTypedData: typeof (walletClient as any).signTypedData === 'function'
+            ? async (args: any) => await (walletClient as any).signTypedData(args)
+            : undefined,
+        } as any,
+        bundlerUrl: bundlerUrlCandidateRaw,
+        paymasterUrl: undefined,
+        smartWallet: normalizedCswAddress,
+        ownerAddress: signerOwnerAddress,
+        calls: [
+          {
+            to: preview.txRequest.to as Address,
+            value: BigInt(preview.txRequest.value),
+            data: preview.txRequest.data as Hex,
+          },
+        ],
+        version: '1',
+        ownerIsContract: signerOwnerIsContract,
+        userOpSignMode: 'auto',
+        skipPaymaster: true,
+        // Keep signer slot deterministic: target owner index != signer owner index.
+        ownerIndexOverride: signerOwnerIndex,
+        bypassOwnerIndexCache: true,
+        retryOnInvalidSignature: false,
+      })
+      setOwnerRemoveUserOpTxHash(result.transactionHash)
+      setOwnerRemoveUserOpState({
+        kind: 'ok',
+        label: `UserOp submitted (${preview.preflight.selectedFunction})`,
+        detail: result.transactionHash,
+      })
+    } catch (error) {
+      const message = describeError(error)
+      const lower = message.toLowerCase()
+      if (lower.includes('user rejected') || lower.includes('request rejected')) {
+        setOwnerRemoveUserOpState({
+          kind: 'err',
+          label: 'owner remove UserOp canceled in wallet popup',
+          detail: `${message}. Re-run and approve the UserOp signature request in Coinbase/Base App.`,
+        })
+        return
+      }
+      setOwnerRemoveUserOpState({
+        kind: 'err',
+        label: 'owner remove UserOp failed',
+        detail: message,
+      })
+    }
+  }
+
   async function loadCreate2AuthorizationStatus() {
     if (!publicClient) {
       setCreate2ReadState({ kind: 'err', label: 'Base client unavailable', detail: 'Reload and retry.' })
@@ -1767,6 +2181,109 @@ export function CswSignatureProbe() {
             <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">prepared calls events</div>
             <div className="rounded border border-zinc-800 bg-black/50 px-2 py-1 font-mono text-[11px] text-zinc-300">
               {preparedCallEventLog.join('\n')}
+            </div>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
+        <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
+          Self-call owner remove (preview + sendCalls)
+        </div>
+        <div className="text-xs text-zinc-500">
+          Dev-only helper that first calls `/api/onboarding/preview-remove-owner`, then submits the returned remove transaction through `wallet_sendCalls`.
+        </div>
+        <label className="space-y-1">
+          <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner index to remove</div>
+          <input
+            className="w-full rounded border border-zinc-700 bg-black px-3 py-2 font-mono text-xs text-zinc-100"
+            type="number"
+            min={0}
+            value={ownerToRemoveIndexInput}
+            onChange={(event) => setOwnerToRemoveIndexInput(event.target.value)}
+          />
+        </label>
+        <div className="text-[11px] text-zinc-500">
+          selected owner slot:{' '}
+          <span className="font-mono text-zinc-300">
+            {(() => {
+              const parsedIndex = Number(ownerToRemoveIndexInput)
+              if (!Number.isInteger(parsedIndex) || parsedIndex < 0) return 'invalid index'
+              const slot = ownerSlots.find((item) => item.index === parsedIndex)
+              if (!slot) return 'not loaded (click "load owner slots")'
+              return `index=${slot.index} type=${slot.ownerType} address=${slot.ownerAddress ?? '—'} bytesLen=${slot.ownerBytesLength}`
+            })()}
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border border-rose-500/60 px-3 py-1.5 text-xs text-rose-200 hover:border-rose-400"
+            onClick={runSelfBuiltOwnerRemove}
+          >
+            run remove via wallet_sendCalls
+          </button>
+          <button
+            type="button"
+            className="rounded border border-sky-500/60 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-400"
+            onClick={runOwnerRemoveViaBundlerUserOp}
+            disabled={Boolean(bundlerUserOpConfigError)}
+            title={bundlerUserOpConfigError ?? 'Submit remove through direct bundler UserOp lane (self-funded).'}
+          >
+            run remove via bundler userop
+          </button>
+        </div>
+        {bundlerUserOpConfigError ? (
+          <div className="text-[11px] text-amber-300">{bundlerUserOpConfigError}</div>
+        ) : null}
+        <StatusRow title="owner remove lane" state={ownerRemoveState} />
+        {ownerRemoveTxHash ? <KeyValue label="ownerRemoveTxHash" value={ownerRemoveTxHash} /> : null}
+        <StatusRow title="owner remove userop lane" state={ownerRemoveUserOpState} />
+        {ownerRemoveUserOpTxHash ? <KeyValue label="ownerRemoveUserOpTxHash" value={ownerRemoveUserOpTxHash} /> : null}
+        {ownerRemovePreview ? (
+          <div className="space-y-1 rounded border border-zinc-800 bg-black/40 p-2">
+            <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">remove preflight</div>
+            <KeyValue label="selectedFunction" value={ownerRemovePreview.preflight.selectedFunction} />
+            <KeyValue label="selectedBy" value={ownerRemovePreview.preflight.selectedBy ?? 'heuristic'} />
+            <KeyValue
+              label="simulation"
+              value={
+                ownerRemovePreview.preflight.simulation.ok
+                  ? 'ok'
+                  : `reverted: ${ownerRemovePreview.preflight.simulation.error ?? 'unknown'}`
+              }
+            />
+            {ownerRemovePreview.preflight.simulation.removeOwnerAtIndex ? (
+              <KeyValue
+                label="simulation.removeOwnerAtIndex"
+                value={
+                  ownerRemovePreview.preflight.simulation.removeOwnerAtIndex.ok
+                    ? 'ok'
+                    : `reverted: ${ownerRemovePreview.preflight.simulation.removeOwnerAtIndex.error ?? 'unknown'}`
+                }
+              />
+            ) : null}
+            {ownerRemovePreview.preflight.simulation.removeLastOwner ? (
+              <KeyValue
+                label="simulation.removeLastOwner"
+                value={
+                  ownerRemovePreview.preflight.simulation.removeLastOwner.ok
+                    ? 'ok'
+                    : `reverted: ${ownerRemovePreview.preflight.simulation.removeLastOwner.error ?? 'unknown'}`
+                }
+              />
+            ) : null}
+            <KeyValue
+              label="highestPopulatedOwnerIndex"
+              value={String(ownerRemovePreview.preflight.highestPopulatedOwnerIndex)}
+            />
+          </div>
+        ) : null}
+        {ownerRemoveEventLog.length ? (
+          <div className="space-y-1">
+            <div className="font-mono text-[10px] uppercase tracking-wide text-zinc-500">owner remove events</div>
+            <div className="rounded border border-zinc-800 bg-black/50 px-2 py-1 font-mono text-[11px] text-zinc-300">
+              {ownerRemoveEventLog.join('\n')}
             </div>
           </div>
         ) : null}

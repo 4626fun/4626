@@ -38,6 +38,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'onboarding/register-sub-account': () => import('./onboarding/_register-sub-account.js'),
   'onboarding/provision-agent-owner': () => import('./onboarding/_provision-agent-owner.js'),
   'onboarding/preview-agent-owner': () => import('./onboarding/_preview-agent-owner.js'),
+  'onboarding/preview-remove-owner': () => import('./onboarding/_preview-remove-owner.js'),
   'accounts/me': () => import('./accounts/_me.js'),
   'accounts/link': () => import('./accounts/_link.js'),
   'accounts/unlink': () => import('./accounts/_unlink.js'),

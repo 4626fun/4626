@@ -34,7 +34,7 @@ type OwnerApprovalStageEvent = {
 
 const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
 const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
-const WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 50 : 20_000
+const WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 50 : 60_000
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null
