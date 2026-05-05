@@ -2424,6 +2424,9 @@ export async function sendPreparedOwnerTx(params: {
               effectiveOwnerInstallIntent === 'embeddedOwner'
                 ? ownerIndexLookupAddress ?? null
                 : ownerAddress ?? null
+            const preferPreparedReplayableFirst =
+              effectiveOwnerInstallIntent === 'embeddedOwner' &&
+              selfAuthenticatedCanonicalSession
             const preferSelfBuiltRelayFirst =
               enforceSelfAuthEmbeddedOwner ||
               ownerInstallIntent === 'embeddedOwner' ||
@@ -2434,7 +2437,33 @@ export async function sendPreparedOwnerTx(params: {
                 signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
               )
             try {
-              if (preferSelfBuiltRelayFirst) {
+              if (preferPreparedReplayableFirst) {
+                const replayablePreparedResult = await _submitOwnerViaReplayablePreparedCalls({
+                  walletRequest,
+                  chainId: base.id,
+                  csw: canonicalSmartWalletAddress as `0x${string}`,
+                  innerCallData: txRequest.data as `0x${string}`,
+                  paymasterUrl: null,
+                  onTelemetry: (event) => {
+                    try {
+                      if (event.step === 'error') {
+                        console.warn('[replayablePreparedOwner]', event.step, event.detail)
+                      } else {
+                        console.info('[replayablePreparedOwner]', event.step, event.detail)
+                      }
+                    } catch {
+                      // console telemetry must never block owner recovery
+                    }
+                  },
+                })
+                if (replayablePreparedResult.txHash) {
+                  txHash = replayablePreparedResult.txHash
+                } else {
+                  throw new Error(
+                    'replayablePreparedOwner completed without a transaction hash for owner install.',
+                  )
+                }
+              } else if (preferSelfBuiltRelayFirst) {
                 const relayResult = await _submitOwnerViaSelfBuiltUserOp({
                   walletRequest,
                   chainId: base.id,
@@ -2499,7 +2528,64 @@ export async function sendPreparedOwnerTx(params: {
               })
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
-              if (preferSelfBuiltRelayFirst) {
+              if (preferPreparedReplayableFirst) {
+                let relayFallbackError: unknown = null
+                try {
+                  const relayFallback = await _submitOwnerViaSelfBuiltUserOp({
+                    walletRequest,
+                    chainId: base.id,
+                    csw: canonicalSmartWalletAddress as `0x${string}`,
+                    innerCallData: txRequest.data as `0x${string}`,
+                    expectedOwnerAddress: expectedAddOwnerAddress ? (expectedAddOwnerAddress as `0x${string}`) : null,
+                    onTelemetry: (event) => {
+                      try {
+                        if (event.step === 'error') {
+                          console.warn('[selfBuiltUserOpRelay]', event.step, event.detail)
+                        } else {
+                          console.info('[selfBuiltUserOpRelay]', event.step, event.detail)
+                        }
+                      } catch {
+                        // console telemetry must never block owner recovery
+                      }
+                    },
+                  })
+                  if (relayFallback.txHash) {
+                    txHash = relayFallback.txHash
+                    emitOwnerApprovalStage(onStageEvent, {
+                      runId: effectiveApprovalRunId,
+                      stage: 'send_calls',
+                      status: 'success',
+                      executionMode,
+                      signerAddress,
+                      canonicalCswAddress: canonicalSmartWalletAddress,
+                      txHash,
+                    })
+                    // Continue into confirmation flow below.
+                  } else {
+                    relayFallbackError = new Error(
+                      'selfBuiltUserOpRelay fallback did not return a transaction hash for owner install.',
+                    )
+                  }
+                } catch (fallbackError) {
+                  relayFallbackError = fallbackError
+                }
+                if (!txHash) {
+                  const finalReplayableError = relayFallbackError ?? replayableDirectError
+                  emitOwnerApprovalStage(onStageEvent, {
+                    runId: effectiveApprovalRunId,
+                    stage: 'send_calls',
+                    status: 'error',
+                    executionMode,
+                    signerAddress,
+                    canonicalCswAddress: canonicalSmartWalletAddress,
+                    code: classifyOwnerApprovalError(finalReplayableError).code,
+                    message: finalReplayableError instanceof Error
+                      ? finalReplayableError.message
+                      : String(finalReplayableError ?? ''),
+                  })
+                  throw finalReplayableError
+                }
+              } else if (preferSelfBuiltRelayFirst) {
                 emitOwnerApprovalStage(onStageEvent, {
                   runId: effectiveApprovalRunId,
                   stage: 'send_calls',
