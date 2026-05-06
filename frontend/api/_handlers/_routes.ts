@@ -114,6 +114,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
     import('./arch-b/_subAccountProvisionPrepare.js'),
   'arch-b/sub-account/provision/commit': () =>
     import('./arch-b/_subAccountProvisionCommit.js'),
+  'arch-b/sub-account/baseapp/register': () =>
+    import('./arch-b/_subAccountBaseAppRegister.js'),
   'arch-b/sub-account/revoke': () => import('./arch-b/_subAccountRevoke.js'),
 
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),

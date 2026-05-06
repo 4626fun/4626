@@ -1,9 +1,18 @@
 # Sub Accounts on the Waitlist — Base App user flow
 
-Status: **proposed (Track C — blocked on canonical doc landing)** · Author: computer · Date: 2026-05-05
+Status: **server half implemented (Track C1); frontend half pending (Track C2)** · Author: computer · Date: 2026-05-05 · Updated: 2026-05-06
 Related: [ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md), [arch-b-sub-account-design-addendum.md](./arch-b-sub-account-design-addendum.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md)
 
-> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) §6 lists this flow as a known not-yet-implemented gap. Read ACCOUNT_MODEL.md before changing anything in this design.
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) §6 lists the frontend half of this flow as a known not-yet-implemented gap. Read ACCOUNT_MODEL.md before changing anything in this design.
+
+> **Server half landed in `feat/waitlist-baseapp-subaccount-server`** —
+> migration 039 (`provisioning_source` column on
+> `command_issuer_execution_context`) and `POST
+> /api/arch-b/sub-account/baseapp/register`. Both gated by
+> `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (default off). The frontend
+> half (waitlist `connect-base-app` step, `WaitlistConnectBaseApp`
+> component, Privy login config additive wallet connect) is **Track
+> C2**, a separate follow-up PR.
 
 ## TL;DR
 
