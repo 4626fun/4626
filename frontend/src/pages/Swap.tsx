@@ -12,11 +12,13 @@ import {
   useWallets,
 } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
+import { AnimatePresence, motion } from 'framer-motion'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
 import { ExternalWalletOptions } from '@/components/account/ConnectButton'
+import { AmoeEntryCard, type AmoeSigningWalletClient } from '@/components/lottery/AmoeEntryCard'
 import { SwapCard } from '@/components/swap/SwapCard'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
@@ -719,6 +721,7 @@ export function Swap() {
   const [extraTokenOptions, setExtraTokenOptions] = useState<SwapTokenOption[]>([])
   const [unverifiedSelectionMode, setUnverifiedSelectionMode] = useState(false)
   const [unverifiedTokenLabel, setUnverifiedTokenLabel] = useState<string | null>(null)
+  const [useAmoePointsForEntry, setUseAmoePointsForEntry] = useState(false)
   const [debouncedTokenSelectorQuery] = useDebounceValue(tokenSelectorQuery, 250)
   const normalizedTokenSelectorQuery = debouncedTokenSelectorQuery.trim().toLowerCase()
   const discoveredCreatorTokenOptionsQuery = useQuery({
@@ -1166,6 +1169,12 @@ export function Swap() {
       publicClient &&
       (executionMode !== 'canonical' || canonicalSignerGate.ready),
   )
+  const swapAmoeSigningClient = useMemo<AmoeSigningWalletClient | null>(() => {
+    if (!executionWalletClient || typeof executionWalletClient.signMessage !== 'function') return null
+    return {
+      signMessage: (args) => executionWalletClient.signMessage(args),
+    }
+  }, [executionWalletClient])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const canonicalExecutionSetupRequired =
@@ -1866,82 +1875,132 @@ export function Swap() {
                 ) : null}
               </div>
             ) : (
-            <SwapCard
-              tokenInDisplay={tokenInDisplay}
-              tokenOutDisplay={tokenOutDisplay}
-              tokenInIdentityLoading={tokenInIdentity.isLoading}
-              tokenOutIdentityLoading={tokenOutIdentity.isLoading}
-              amountInUnits={amountInUnits}
-              estimatedOut={estimatedOut}
-              estimatedOutUsd={null}
-              tokenInSymbol={tokenInSymbol}
-              tokenOutSymbol={tokenOutSymbol}
-              tokenInBalanceLabel={tokenInBalanceLabel}
-              tokenOutBalanceLabel={tokenOutBalanceLabel}
-              tokenInAddress={tokenIn}
-              tokenOutAddress={tokenOut}
-              isConnected={isConnected}
-              isReady={isReady && !tokenInAmountExceedsBalance}
-              busy={busy}
-              status={status}
-              error={
-                tokenInBalanceError ??
-                error ??
-                (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
-              }
-              quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
-              approvalRequired={approvalRequired}
-              routeSummary={routeSummary}
-              gasEstimateLabel={gasEstimateLabel}
-              priceImpactLabel={priceImpactLabel}
-              lpFeeUsd={lpFeeUsd}
-              protocolFeeUsd={protocolFeeUsd}
-              selectedChainId={swapChainId}
-              walletChainId={walletChainId}
-              onSelectChain={handleSelectSwapChain}
-              slippagePct={slippagePct}
-              onOpenTokenSelector={openTokenSelector}
-              onAmountChange={setAmountInUnits}
-              onQuickPercent={(pct, tokenBalance) => {
-                if (!tokenInBalanceLabel || !tokenBalance) return
-                const total = Number(tokenBalance.replace(/,/g, ''))
-                if (!Number.isFinite(total)) return
-                const next = ((pct / 100) * total).toFixed(6)
-                setAmountInUnits(next)
-              }}
-              onSwitchTokens={handleSwitchTokens}
-              onReviewTrade={() => {
-                if (unverifiedSelectionMode) return
-                void handleReviewTrade()
-              }}
-              onSetSlippagePct={setSlippagePct}
-              onResetUnverified={() => {
-                setUnverifiedSelectionMode(false)
-                setUnverifiedTokenLabel(null)
-              }}
-              onConfirmUnverified={confirmUnverifiedSelection}
-              executionMode={executionMode}
-              fallbackActive={fallbackActive}
-              swapProviderLabel={swapProviderLabel}
-              needsUnverifiedConfirmation={unverifiedSelectionMode}
-              unverifiedTokenLabel={unverifiedTokenLabel}
-              primaryActionLabel={
-                canonicalExecutionSetupRequired
-                  ? 'Enable 4626 signing'
-                  : undefined
-              }
-              onPrimaryAction={
-                canonicalExecutionSetupRequired
-                  ? handleEnableCanonicalSigning
-                  : undefined
-              }
-              forcePrimaryActionEnabled={canonicalExecutionSetupRequired}
-              primaryActionHint={
-                canonicalExecutionSetupRequired
-                  ? 'Finish one-time account setup before canonical swaps can execute.'
-                  : null
-              }
-            />
+              <div style={{ perspective: 1200 }}>
+                <AnimatePresence mode="wait" initial={false}>
+                  {useAmoePointsForEntry ? (
+                    <motion.div
+                      key="amoe-entry"
+                      initial={{ rotateY: -90, opacity: 0, scale: 0.98 }}
+                      animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+                      exit={{ rotateY: 90, opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
+                      className="space-y-3"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setUseAmoePointsForEntry(false)}
+                        className="w-full rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-vault-subtext transition hover:bg-white/[0.07] hover:text-vault-text"
+                      >
+                        ← Back to swap
+                      </button>
+                      <AmoeEntryCard
+                        walletAddress={null}
+                        creatorCoin={null}
+                        walletClientOverride={swapAmoeSigningClient}
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="swap-card"
+                      initial={{ rotateY: 90, opacity: 0, scale: 0.98 }}
+                      animate={{ rotateY: 0, opacity: 1, scale: 1 }}
+                      exit={{ rotateY: -90, opacity: 0, scale: 0.98 }}
+                      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                      style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
+                      className="space-y-3"
+                    >
+                      <SwapCard
+                        tokenInDisplay={tokenInDisplay}
+                        tokenOutDisplay={tokenOutDisplay}
+                        tokenInIdentityLoading={tokenInIdentity.isLoading}
+                        tokenOutIdentityLoading={tokenOutIdentity.isLoading}
+                        amountInUnits={amountInUnits}
+                        estimatedOut={estimatedOut}
+                        estimatedOutUsd={null}
+                        tokenInSymbol={tokenInSymbol}
+                        tokenOutSymbol={tokenOutSymbol}
+                        tokenInBalanceLabel={tokenInBalanceLabel}
+                        tokenOutBalanceLabel={tokenOutBalanceLabel}
+                        tokenInAddress={tokenIn}
+                        tokenOutAddress={tokenOut}
+                        isConnected={isConnected}
+                        isReady={isReady && !tokenInAmountExceedsBalance}
+                        busy={busy}
+                        status={status}
+                        error={
+                          tokenInBalanceError ??
+                          error ??
+                          (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
+                        }
+                        quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
+                        approvalRequired={approvalRequired}
+                        routeSummary={routeSummary}
+                        gasEstimateLabel={gasEstimateLabel}
+                        priceImpactLabel={priceImpactLabel}
+                        lpFeeUsd={lpFeeUsd}
+                        protocolFeeUsd={protocolFeeUsd}
+                        selectedChainId={swapChainId}
+                        walletChainId={walletChainId}
+                        onSelectChain={handleSelectSwapChain}
+                        slippagePct={slippagePct}
+                        onOpenTokenSelector={openTokenSelector}
+                        onAmountChange={setAmountInUnits}
+                        onQuickPercent={(pct, tokenBalance) => {
+                          if (!tokenInBalanceLabel || !tokenBalance) return
+                          const total = Number(tokenBalance.replace(/,/g, ''))
+                          if (!Number.isFinite(total)) return
+                          const next = ((pct / 100) * total).toFixed(6)
+                          setAmountInUnits(next)
+                        }}
+                        onSwitchTokens={handleSwitchTokens}
+                        onReviewTrade={() => {
+                          if (unverifiedSelectionMode) return
+                          void handleReviewTrade()
+                        }}
+                        onSetSlippagePct={setSlippagePct}
+                        onResetUnverified={() => {
+                          setUnverifiedSelectionMode(false)
+                          setUnverifiedTokenLabel(null)
+                        }}
+                        onConfirmUnverified={confirmUnverifiedSelection}
+                        executionMode={executionMode}
+                        fallbackActive={fallbackActive}
+                        swapProviderLabel={swapProviderLabel}
+                        needsUnverifiedConfirmation={unverifiedSelectionMode}
+                        unverifiedTokenLabel={unverifiedTokenLabel}
+                        primaryActionLabel={
+                          canonicalExecutionSetupRequired
+                            ? 'Enable 4626 signing'
+                            : undefined
+                        }
+                        onPrimaryAction={
+                          canonicalExecutionSetupRequired
+                            ? handleEnableCanonicalSigning
+                            : undefined
+                        }
+                        forcePrimaryActionEnabled={canonicalExecutionSetupRequired}
+                        primaryActionHint={
+                          canonicalExecutionSetupRequired
+                            ? 'Finish one-time account setup before canonical swaps can execute.'
+                            : null
+                        }
+                      />
+                      <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-vault-text transition hover:bg-white/[0.07]">
+                        <input
+                          type="checkbox"
+                          checked={useAmoePointsForEntry}
+                          onChange={(event) => setUseAmoePointsForEntry(event.target.checked)}
+                          className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-brand-primary"
+                        />
+                        <span className="min-w-0">
+                          <span className="block font-medium">Use points for a free jackpot entry</span>
+                        </span>
+                      </label>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )
           ) : (
             <LiquidityPanel

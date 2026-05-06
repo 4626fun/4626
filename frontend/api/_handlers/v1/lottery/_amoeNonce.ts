@@ -12,6 +12,7 @@ import {
 
 
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
+import { resolveAmoeCreatorTarget } from '../../../../server/_lib/lottery/amoeCreatorTarget.js'
 
 import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
 
@@ -54,12 +55,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const walletRaw = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
   const creatorCoinRaw = typeof req.query.creatorCoin === 'string' ? req.query.creatorCoin.trim() : ''
-  if (!isAddressLike(walletRaw) || !isAddressLike(creatorCoinRaw)) {
-    return res.status(400).json({ success: false, error: 'Missing or invalid wallet/creatorCoin' })
+  if (walletRaw && !isAddressLike(walletRaw)) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid wallet' })
   }
+  const creatorTarget = resolveAmoeCreatorTarget(creatorCoinRaw)
+  if (!creatorTarget.ok) {
+    const status = creatorTarget.error === 'invalid_creator_coin' ? 400 : 503
+    return res.status(status).json({
+      success: false,
+      error: creatorTarget.error === 'invalid_creator_coin' ? 'invalid_creatorCoin' : creatorTarget.error,
+    })
+  }
+  const creatorCoin = creatorTarget.creatorCoin
 
   const resolvedWallet = await resolveAmoeWallet({
-    requestedWallet: walletRaw,
+    requestedWallet: walletRaw || null,
     authAddress: g.auth?.address ?? null,
   })
   if (!resolvedWallet.ok) {
@@ -90,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const noncePayload = await issueAmoeNonce({
     wallet,
-    creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
+    creatorCoin,
   })
   const creditSnapshot = await getAmoeCreditSnapshot({
     wallet,
@@ -98,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const message = buildAmoeEntryMessage({
     wallet,
-    creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
+    creatorCoin,
     nonce: noncePayload.nonce,
     issuedAt: noncePayload.issuedAt,
     expiresAt: noncePayload.expiresAt,
@@ -110,7 +120,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     success: true,
     data: {
       wallet,
-      creatorCoin: creatorCoinRaw.toLowerCase(),
+      creatorCoin,
+      creatorCoinSource: creatorTarget.source,
       nonce: noncePayload.nonce,
       issuedAt: noncePayload.issuedAt,
       expiresAt: noncePayload.expiresAt,

@@ -74,4 +74,25 @@ describe('v1 lottery read hardening', () => {
     expect(winnersRes.body?.error).toBe('Too many requests')
     expect(Number(winnersRes.getHeader('retry-after'))).toBeGreaterThan(0)
   })
+
+  it('converts jackpot creator assets to USD at 1e6 display scale', async () => {
+    const creatorMod = await import('../_handlers/v1/lottery/_creator.ts')
+    const { creatorAssetsToUsd1e6, formatUsd } = creatorMod.__testHooks
+
+    expect(
+      creatorAssetsToUsd1e6({
+        assets1e18: 50_000_000_000_000_000_000n,
+        priceUsd1e18: 2_000_000_000_000_000_000n,
+      }),
+    ).toBe(100_000_000n)
+    expect(formatUsd(100_000_000n)).toBe('100')
+
+    expect(
+      creatorAssetsToUsd1e6({
+        assets1e18: 1_500_000_000_000_000_000n,
+        priceUsd1e18: 250_000_000_000_000_000n,
+      }),
+    ).toBe(375_000n)
+    expect(formatUsd(375_000n)).toBe('0.375')
+  })
 })

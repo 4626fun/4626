@@ -78,6 +78,7 @@ import {
   classifyAmoeError,
 } from '../../../../server/_lib/lottery/lotteryAmoeErrors.js'
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
+import { resolveAmoeCreatorTarget } from '../../../../server/_lib/lottery/amoeCreatorTarget.js'
 import {
   AMOE_EPOCH_GENESIS_UNIX_SEC,
   AMOE_EPOCH_SECONDS,
@@ -190,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? {}
   const b = body as BurnCreditsBody
   const creatorCoinRaw = typeof b.creatorCoin === 'string' ? b.creatorCoin.trim() : ''
+  const creatorTarget = resolveAmoeCreatorTarget(creatorCoinRaw)
   const message = typeof b.message === 'string' ? b.message : ''
   const signatureRaw = typeof b.signature === 'string' ? b.signature.trim() : ''
   const nonceRaw = typeof b.nonce === 'string' ? b.nonce.trim() : ''
@@ -197,15 +199,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const spendRefId = typeof b.spendRefId === 'string' ? b.spendRefId.trim() : ''
   const pointsBurned = parsePointsBurned(b.pointsBurned)
 
-  if (
-    !isAddressLike(creatorCoinRaw) ||
-    !message ||
-    !signatureRaw.startsWith('0x') ||
-    !isBytes32Like(nonceRaw)
-  ) {
+  if (!creatorTarget.ok) {
+    const status = creatorTarget.error === 'invalid_creator_coin' ? 400 : 503
+    return res.status(status).json({
+      success: false,
+      error: creatorTarget.error === 'invalid_creator_coin' ? 'invalid_creatorCoin' : creatorTarget.error,
+    })
+  }
+  const creatorCoin = creatorTarget.creatorCoin
+
+  if (!message || !signatureRaw.startsWith('0x') || !isBytes32Like(nonceRaw)) {
     return res
       .status(400)
-      .json({ success: false, error: 'Missing or invalid creatorCoin/message/signature/nonce' })
+      .json({ success: false, error: 'Missing or invalid message/signature/nonce' })
   }
   if (twitterHandle.length === 0 || spendRefId.length === 0) {
     return res
@@ -226,7 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const ip = getClientIp(req as any)
   const rl = await checkDurableRateLimit(
-    rateLimitKey('amoe', 'burn-credits', ip, creatorCoinRaw.toLowerCase()),
+    rateLimitKey('amoe', 'burn-credits', ip, creatorCoin),
     {
       windowMs: 60_000,
       maxRequests: 6,
@@ -284,7 +290,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (parsedMessage.wallet !== wallet.toLowerCase()) {
       throw new AmoeBadRequestError('wallet_mismatch')
     }
-    if (parsedMessage.creatorCoin !== creatorCoinRaw.toLowerCase()) {
+    if (parsedMessage.creatorCoin !== creatorCoin) {
       throw new AmoeBadRequestError('creator_mismatch')
     }
     if (parsedMessage.nonce !== nonceRaw.toLowerCase()) {

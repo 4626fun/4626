@@ -45,12 +45,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const walletRaw = typeof req.query.wallet === 'string' ? req.query.wallet.trim() : ''
-  if (!isAddressLike(walletRaw)) {
+  if (walletRaw && !isAddressLike(walletRaw)) {
     return res.status(400).json({ success: false, error: 'Missing or invalid wallet' })
   }
 
   const resolvedWallet = await resolveAmoeWallet({
-    requestedWallet: walletRaw,
+    requestedWallet: walletRaw || null,
     authAddress: g.auth?.address ?? null,
   })
   if (!resolvedWallet.ok) {

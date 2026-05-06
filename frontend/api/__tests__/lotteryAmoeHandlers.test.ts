@@ -17,6 +17,7 @@ const checkRateLimitMock = vi.fn()
 const getClientIpMock = vi.fn()
 const rateLimitKeyMock = vi.fn()
 const checkDurableRateLimitMock = vi.fn()
+const PROTOCOL_AMOE_CREATOR_COIN = '0x5b674196812451b7cec024fe9d22d2c0b172fa75'
 
 vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
@@ -110,12 +111,36 @@ describe('AMOE nonce handler', () => {
     buildAmoeEntryMessageMock.mockReturnValue('amoe-message')
   })
 
-  it('rejects missing wallet/creatorCoin query params', async () => {
+  it('rejects missing wallet query param', async () => {
     const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
     const req = createMockReq({ method: 'GET', query: {} })
     const res = createMockRes()
     await handler(req, res)
     expect(res.statusCode).toBe(400)
+  })
+
+  it('defaults missing creatorCoin to the protocol AMOE target', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {
+        wallet: '0x000000000000000000000000000000000000cAFe',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.creatorCoin).toBe(PROTOCOL_AMOE_CREATOR_COIN)
+    expect(res.body?.data?.creatorCoinSource).toBe('protocol-default')
+    expect(issueAmoeNonceMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+    })
+    expect(buildAmoeEntryMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+      }),
+    )
   })
 
   it('returns 429 when nonce endpoint rate limit is exceeded', async () => {
@@ -193,6 +218,35 @@ describe('AMOE nonce handler', () => {
       }),
     )
     expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.wallet).toBe('0x000000000000000000000000000000000000cafe')
+  })
+
+  it('resolves the authenticated canonical wallet when wallet is omitted', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(issueAmoeNonceMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+    })
     expect(res.body?.data?.wallet).toBe('0x000000000000000000000000000000000000cafe')
   })
 
@@ -289,6 +343,33 @@ describe('AMOE credits handler', () => {
       wallet: '0x000000000000000000000000000000000000cafe',
     })
     expect(res.statusCode).toBe(200)
+  })
+
+  it('resolves credits from the authenticated canonical wallet when wallet is omitted', async () => {
+    guardMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000Aa1' },
+    })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue({
+      profileId: 42,
+      canonicalSmartWalletAddress: '0x000000000000000000000000000000000000cafe',
+      activeOwnerWalletAddress: '0x0000000000000000000000000000000000000aa1',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeCredits')
+    const req = createMockReq({
+      method: 'GET',
+      query: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getAmoeCreditSnapshotMock).toHaveBeenCalledWith({
+      wallet: '0x000000000000000000000000000000000000cafe',
+    })
   })
 
   it('rejects credit lookups outside the authenticated canonical identity', async () => {
@@ -421,6 +502,49 @@ describe('AMOE submit handler', () => {
     expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledWith(
       expect.objectContaining({ requiredCredits: 1000 }),
     )
+  })
+
+  it('defaults omitted creatorCoin to the protocol AMOE target and only relays an entry', async () => {
+    verifyAmoeEntryProofMock.mockResolvedValueOnce({
+      wallet: '0x000000000000000000000000000000000000cafe',
+      creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+      nonce: '0x2222222222222222222222222222222222222222222222222222222222222222',
+      expiresAt: '2026-03-01T00:10:00.000Z',
+    })
+
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        message: 'amoe-message',
+        signature: '0x1234',
+        pointsBurned: 1000,
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(verifyAmoeEntryProofMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+      }),
+    )
+    expect(buildProcessAmoeEntryCallMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creatorCoin: PROTOCOL_AMOE_CREATOR_COIN,
+        pointsBurned: 1000,
+      }),
+    )
+    expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        requiredCredits: 1000,
+        refId: `${PROTOCOL_AMOE_CREATOR_COIN}:0x2222222222222222222222222222222222222222222222222222222222222222`,
+      }),
+    )
+    expect(res.body?.data?.txHash).toBe('0xfeedface')
+    expect(res.body?.data).not.toHaveProperty('tokenAmount')
+    expect(res.body?.data).not.toHaveProperty('tokensReceived')
   })
 
   it('rejects requests with missing pointsBurned', async () => {

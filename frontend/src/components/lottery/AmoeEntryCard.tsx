@@ -6,6 +6,7 @@ import { usePublicClient, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { getMarketingBaseUrl } from '@/lib/env/host'
 
 // PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
 // `frontend/server/_lib/lottery/lotteryAmoe.ts` and the on-chain math in
@@ -56,6 +57,10 @@ type NonceResponse = CreditSnapshot & {
   message: string
 }
 
+type CreatorLotteryStatsResponse = {
+  jackpotUsd?: string | null
+}
+
 type SubmitResponse = {
   txHash: Hex
   relayMode: 'server'
@@ -76,14 +81,24 @@ type CheckinResponse = {
   entriesAvailable: number
 }
 
+export type AmoeSigningWalletClient = {
+  signMessage: (args: { message: string }) => Promise<Hex | string>
+}
+
 function toErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim()) return error.message
   return fallback
 }
 
-function clampPct(value: number): number {
-  if (!Number.isFinite(value)) return 0
-  return Math.max(0, Math.min(100, value))
+function formatUsdDisplay(value: string | null): string | null {
+  if (!value) return null
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return numeric.toLocaleString(undefined, {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: numeric >= 100 ? 0 : 2,
+  })
 }
 
 function parseJsonSafe<T>(value: unknown): ApiEnvelope<T> | null {
@@ -96,10 +111,61 @@ function parseJsonSafe<T>(value: unknown): ApiEnvelope<T> | null {
   }
 }
 
-export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoin: Address | null }) {
-  const { walletAddress, creatorCoin } = props
-  const { data: walletClient } = useWalletClient()
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className} fill="currentColor">
+      <path d="M18.9 2h3.3l-7.2 8.2L23.5 22h-6.7l-5.2-6.8L5.6 22H2.3l7.7-8.8L1.8 2h6.8l4.7 6.2L18.9 2Zm-1.2 17.9h1.8L7.6 4H5.7l12 15.9Z" />
+    </svg>
+  )
+}
+
+function formatPacificDate(date = new Date()): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Los_Angeles',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
+function buildAmoeShareText(date = new Date()): string {
+  return [
+    `Today is ${formatPacificDate(date)} Pacific Time.`,
+    'I am checking in as a real person for 4626 Alternative Method of Entry.',
+    'No purchase necessary.',
+    'Join 4626 and earn points for free jackpot entries:',
+  ].join(' ')
+}
+
+function buildXIntentUrl(date = new Date()): string {
+  const params = new URLSearchParams({
+    text: buildAmoeShareText(date),
+    url: getMarketingBaseUrl(),
+  })
+  return `https://twitter.com/intent/tweet?${params.toString()}`
+}
+
+function openXPost() {
+  if (typeof window === 'undefined') return
+  window.open(buildXIntentUrl(), '_blank', 'noopener,noreferrer')
+}
+
+export const __testHooks = {
+  buildAmoeShareText,
+  buildXIntentUrl,
+  formatPacificDate,
+}
+
+export function AmoeEntryCard(props: {
+  walletAddress: Address | null
+  creatorCoin: Address | null
+  walletClientOverride?: AmoeSigningWalletClient | null
+}) {
+  const { walletAddress, creatorCoin, walletClientOverride } = props
+  const { data: connectedWalletClient } = useWalletClient()
+  const walletClient = walletClientOverride ?? connectedWalletClient
   const publicClient = usePublicClient({ chainId: base.id })
+  const protocolEntryMode = creatorCoin === null
   const officialRulesUrl = (
     import.meta.env.VITE_AMOE_OFFICIAL_RULES_URL ?? 'https://4626.fun/terms#lottery-amoe-official-rules'
   ).trim()
@@ -108,6 +174,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
   const [creditsPerEntry, setCreditsPerEntry] = useState(100)
   const [entriesAvailable, setEntriesAvailable] = useState(0)
   const [nextEntryAtCredits, setNextEntryAtCredits] = useState(100)
+  const [jackpotUsd, setJackpotUsd] = useState<string | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)
   const [entryBusy, setEntryBusy] = useState(false)
@@ -120,46 +187,58 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
   const [pointsBurned, setPointsBurned] = useState<number>(AMOE_MIN_POINTS)
 
   const refreshCredits = useCallback(async () => {
-    if (!walletAddress) return
+    if (!walletAddress && !protocolEntryMode) return
     setLoadingCredits(true)
     try {
-      const res = await apiFetch(`/api/v1/lottery/amoe/credits?wallet=${walletAddress}`, {
+      const creditParams = new URLSearchParams()
+      if (walletAddress) creditParams.set('wallet', walletAddress)
+      const creditsUrl = `/api/v1/lottery/amoe/credits${creditParams.size > 0 ? `?${creditParams.toString()}` : ''}`
+      const res = await apiFetch(creditsUrl, {
         method: 'GET',
         withCredentials: true,
       })
       const json = parseJsonSafe<CreditSnapshot>(await res.json().catch(() => null))
       if (!res.ok || !json?.success || !json.data) {
-        throw new Error(json?.error || 'Failed to load AMOE credits')
+        throw new Error(json?.error || 'Failed to load AMOE points')
       }
       setCredits(Number(json.data.credits ?? 0))
       setCreditsPerEntry(Number(json.data.creditsPerEntry ?? 100))
       setEntriesAvailable(Number(json.data.entriesAvailable ?? 0))
       setNextEntryAtCredits(Number(json.data.nextEntryAtCredits ?? 100))
+
+      const statsParams = new URLSearchParams()
+      if (creatorCoin) statsParams.set('creatorCoin', creatorCoin)
+      const statsUrl = `/api/v1/lottery/creator${statsParams.size > 0 ? `?${statsParams.toString()}` : ''}`
+      const statsRes = await apiFetch(statsUrl, { method: 'GET', withCredentials: true })
+      const statsJson = parseJsonSafe<CreatorLotteryStatsResponse>(await statsRes.json().catch(() => null))
+      setJackpotUsd(statsRes.ok && statsJson?.success ? (statsJson.data?.jackpotUsd ?? null) : null)
     } catch (error: unknown) {
-      setErrorMessage(toErrorMessage(error, 'Unable to load AMOE credits'))
+      setErrorMessage(toErrorMessage(error, 'Unable to load AMOE points'))
+      setJackpotUsd(null)
     } finally {
       setLoadingCredits(false)
     }
-  }, [walletAddress])
+  }, [creatorCoin, protocolEntryMode, walletAddress])
 
   useEffect(() => {
-    if (!walletAddress) {
+    if (!walletAddress && !protocolEntryMode) {
       setCredits(0)
       setEntriesAvailable(0)
       setNextEntryAtCredits(creditsPerEntry)
       return
     }
-  }, [creditsPerEntry, walletAddress])
+  }, [creditsPerEntry, protocolEntryMode, walletAddress])
 
   useEffect(() => {
     void refreshCredits()
   }, [refreshCredits])
 
   const handleTwitterCheckin = useCallback(async () => {
-    if (!walletAddress) {
+    if (!walletAddress && !protocolEntryMode) {
       setErrorMessage('Connect your wallet first')
       return
     }
+    openXPost()
     setCheckinBusy(true)
     setErrorMessage(null)
     setStatusMessage(null)
@@ -172,7 +251,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       })
       const json = parseJsonSafe<CheckinResponse>(await res.json().catch(() => null))
       if (!res.ok || !json?.success || !json.data) {
-        throw new Error(json?.error || 'Twitter check-in failed')
+        throw new Error(json?.error || 'X check-in failed')
       }
 
       setCredits(Number(json.data.credits ?? 0))
@@ -181,20 +260,20 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       setNextEntryAtCredits(Math.max(Number(json.data.creditsPerEntry ?? 100), Number(json.data.credits ?? 0)))
       setStatusMessage(
         json.data.awarded
-          ? `Daily check-in complete (+${json.data.awardedCredits} credit)`
+          ? `Daily X check-in complete (+${json.data.awardedCredits} point)`
           : 'Daily check-in already claimed today',
       )
       await refreshCredits()
     } catch (error: unknown) {
-      setErrorMessage(toErrorMessage(error, 'Twitter check-in failed'))
+      setErrorMessage(toErrorMessage(error, 'X check-in failed'))
     } finally {
       setCheckinBusy(false)
     }
-  }, [refreshCredits, walletAddress])
+  }, [protocolEntryMode, refreshCredits, walletAddress])
 
   const handleEnterForFree = useCallback(async () => {
-    if (!walletAddress || !creatorCoin) {
-      setErrorMessage('Missing wallet or creator coin')
+    if (!walletAddress && !protocolEntryMode) {
+      setErrorMessage('Missing wallet')
       return
     }
     if (!walletClient) {
@@ -208,10 +287,13 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
     setTxHash(null)
 
     try {
-      const nonceRes = await apiFetch(
-        `/api/v1/lottery/amoe/nonce?wallet=${walletAddress}&creatorCoin=${creatorCoin}`,
-        { method: 'GET', withCredentials: true },
-      )
+      const nonceParams = new URLSearchParams()
+      if (walletAddress) nonceParams.set('wallet', walletAddress)
+      if (creatorCoin) nonceParams.set('creatorCoin', creatorCoin)
+      const nonceRes = await apiFetch(`/api/v1/lottery/amoe/nonce?${nonceParams.toString()}`, {
+        method: 'GET',
+        withCredentials: true,
+      })
       const nonceJson = parseJsonSafe<NonceResponse>(await nonceRes.json().catch(() => null))
       const nonceData = nonceJson?.data
       if (!nonceRes.ok || !nonceJson?.success || !nonceData) {
@@ -228,7 +310,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       // have enough points for even the floor (100), surface a clear error.
       const liveBalance = Number(nonceData.credits ?? 0)
       if (liveBalance < AMOE_MIN_POINTS) {
-        throw new Error(`Need at least ${AMOE_MIN_POINTS} credits to enter (you have ${liveBalance})`)
+        throw new Error(`Need at least ${AMOE_MIN_POINTS} points to enter (you have ${liveBalance})`)
       }
       const requestedPoints = clampPoints(pointsBurned, liveBalance)
       if (requestedPoints !== pointsBurned) {
@@ -251,7 +333,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
         withCredentials: true,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          creatorCoin,
+          creatorCoin: nonceData.creatorCoin,
           message: nonceData.message,
           signature,
           pointsBurned: requestedPoints,
@@ -286,9 +368,8 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
     } finally {
       setEntryBusy(false)
     }
-  }, [creatorCoin, pointsBurned, publicClient, refreshCredits, walletAddress, walletClient])
+  }, [creatorCoin, pointsBurned, protocolEntryMode, publicClient, refreshCredits, walletAddress, walletClient])
 
-  const creditsPct = useMemo(() => clampPct((credits / Math.max(1, creditsPerEntry)) * 100), [credits, creditsPerEntry])
   const missingCredits = Math.max(0, creditsPerEntry - credits)
 
   // PR 2 — the slider's upper bound is min(balance, 1M). When balance is
@@ -301,6 +382,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
     [pointsBurned, sliderMax],
   )
   const livePreviewPct = formatWinChancePct(livePreviewPPM)
+  const jackpotUsdDisplay = useMemo(() => formatUsdDisplay(jackpotUsd), [jackpotUsd])
 
   // Keep selection in range when the live balance shrinks (e.g. after a
   // successful entry refresh).
@@ -309,137 +391,151 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
   }, [sliderMax])
 
   const canEnter = Boolean(
-    walletAddress && creatorCoin && hasEnoughForFloor && !entryBusy && !checkinBusy,
+    (walletAddress || protocolEntryMode) && hasEnoughForFloor && !entryBusy && !checkinBusy,
   )
+  const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
   return (
-    <div className="card p-5 sm:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="label">AMOE Free Entry</p>
-          <h3 className="text-lg font-medium text-zinc-100 mt-1">Daily Twitter Check-in</h3>
+    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgba(0,82,255,0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
+      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-blue-300/35 to-transparent" />
+      <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
+      <div className="relative space-y-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="label">Alternative Method of Entry</p>
+            <h3 className="text-lg font-medium text-zinc-100 mt-1">
+              Free entry
+            </h3>
+          </div>
+          <Gift className="w-5 h-5 text-brand-primary" />
         </div>
-        <Gift className="w-5 h-5 text-brand-primary" />
-      </div>
 
-      <p className="text-sm text-zinc-500">
-        Complete your daily Twitter check-in to earn 1 credit. You need {creditsPerEntry} credits to submit 1 free entry.
-      </p>
-      <div className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-200">
-          No purchase or payment of any kind is necessary to enter or win this sweepstakes.
+        <p className="text-sm leading-5 text-zinc-500">
+          AMOE (Alternative Method of Entry) lets users earn points through eligible 4626 actions for a free entry to win the jackpot.
         </p>
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-300">
-          A purchase will not improve your chances of winning.
-        </p>
-        <p className="text-[11px] text-zinc-400">
-          Free-entry and paid-entry lanes are processed under the same winner-selection flow. See Official Rules for
-          eligibility, winner determination timing, odds, and restrictions.
-        </p>
-        <a
-          href={officialRulesUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-[11px] text-brand-accent hover:text-brand-primary"
-        >
-          Official Rules (California) <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-      </div>
+        <div className="rounded-2xl bg-black/18 p-3 shadow-inner shadow-black/25">
+          <p className="text-[11px] font-semibold uppercase leading-5 tracking-wide text-zinc-200">
+            No purchase necessary. A purchase will not improve your chances of winning.
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-zinc-500">
+            <span>Free and paid entries share the same winner-selection flow.</span>
+            <a
+              href={officialRulesUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-brand-accent hover:text-brand-primary"
+            >
+              Official Rules <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-zinc-400">
-          <span>
-            Credits: <span className="text-zinc-200">{credits}</span> / {creditsPerEntry}
-          </span>
-          <span>Entries available: <span className="text-zinc-200">{entriesAvailable}</span></span>
-        </div>
-        <div className="h-2 rounded-full bg-white/8 overflow-hidden">
-          <div className="h-full bg-brand-primary/80 transition-all" style={{ width: `${creditsPct}%` }} />
-        </div>
-        <div className="text-[11px] text-zinc-500">
-          {entriesAvailable > 0 ? 'You can submit a free entry now.' : `${missingCredits} more credits needed for your next free entry.`}
-        </div>
-        {entriesAvailable < 1 ? (
-          <div className="text-[11px] text-zinc-600">Next entry unlocks at {nextEntryAtCredits} credits.</div>
-        ) : null}
-      </div>
-
-      {/* PR 2 — variable points selector. Slider + numeric input are bound
-          to the same `pointsBurned` state so editing either one updates both.
-          Live win-chance preview mirrors the on-chain formula — it is for
-          display only; the server returns the authoritative PPM after
-          submission. */}
-      <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
-        <div className="flex items-center justify-between text-xs text-zinc-300">
-          <label htmlFor="amoe-points-slider" className="font-medium">
-            Points to burn
-          </label>
-          <span className="text-zinc-400">
-            Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
-          </span>
-        </div>
-        <input
-          id="amoe-points-slider"
-          type="range"
-          min={AMOE_MIN_POINTS}
-          max={sliderMax}
-          step={1}
-          value={clampPoints(pointsBurned, sliderMax)}
-          onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
-          disabled={!hasEnoughForFloor || entryBusy}
-          className="w-full accent-brand-primary disabled:opacity-50"
-        />
-        <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
-          <span>min {AMOE_MIN_POINTS}</span>
-          <input
-            type="number"
-            min={AMOE_MIN_POINTS}
-            max={sliderMax}
-            step={1}
-            value={clampPoints(pointsBurned, sliderMax)}
-            onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
-            disabled={!hasEnoughForFloor || entryBusy}
-            className="w-28 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-right text-xs text-zinc-100 disabled:opacity-50"
-            aria-label="Points to burn (numeric input)"
-          />
-          <span>max {sliderMax.toLocaleString()}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => void handleTwitterCheckin()}
-          disabled={!walletAddress || checkinBusy || entryBusy}
-          className="rounded-xl border border-white/15 px-3 py-2 text-xs font-medium text-zinc-100 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {checkinBusy ? (
-            <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Claiming…</span>
+        <div className="space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)]">
+          <div className="flex items-start justify-between gap-3 text-xs">
+            <div>
+              <div className="text-zinc-500">Your points</div>
+              <div className="mt-0.5 text-lg font-semibold text-zinc-100">
+                {credits.toLocaleString()}
+              </div>
+            </div>
+            {jackpotUsdDisplay ? (
+              <div className="text-right">
+                <div className="text-zinc-500">Current jackpot</div>
+                <div className="mt-0.5 text-sm font-medium text-zinc-100">{jackpotUsdDisplay}</div>
+              </div>
+            ) : null}
+          </div>
+          {!hasEnoughForFloor ? (
+            <div className="space-y-2 text-xs">
+              <div>
+                <div className="font-medium text-zinc-100">Not enough points to enter</div>
+                <div className="mt-1 text-zinc-500">
+                  You need {missingCredits.toLocaleString()} more points to unlock a free entry.
+                </div>
+              </div>
+              <div className="text-zinc-500">Minimum entry: {AMOE_MIN_POINTS.toLocaleString()} points</div>
+            </div>
           ) : (
-            'Claim daily Twitter credit (+1)'
+            <>
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>Ready to enter.</span>
+                <span>
+                  Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
+                </span>
+              </div>
+              <label htmlFor="amoe-points-slider" className="text-xs font-medium text-zinc-300">
+                Entry amount
+              </label>
+              <input
+                id="amoe-points-slider"
+                type="range"
+                min={AMOE_MIN_POINTS}
+                max={sliderMax}
+                step={1}
+                value={selectedPoints}
+                onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
+                disabled={entryBusy}
+                className="w-full accent-brand-primary disabled:opacity-50"
+              />
+              <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+                <span>{AMOE_MIN_POINTS} min</span>
+                <input
+                  type="number"
+                  min={AMOE_MIN_POINTS}
+                  max={sliderMax}
+                  step={1}
+                  value={selectedPoints}
+                  onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
+                  disabled={entryBusy}
+                  className="h-8 w-28 rounded-lg border border-white/10 bg-black/18 px-2 text-right text-xs text-zinc-100 disabled:opacity-50"
+                  aria-label="Entry amount in points"
+                />
+                <span>{AMOE_MAX_POINTS.toLocaleString()} max</span>
+              </div>
+            </>
           )}
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleEnterForFree()}
-          disabled={!canEnter}
-          className="rounded-xl border border-brand-primary/35 bg-brand-primary/10 px-3 py-2 text-xs font-medium text-brand-accent hover:bg-brand-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {entryBusy ? (
-            <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</span>
-          ) : (
-            `Enter for free (${clampPoints(pointsBurned, sliderMax).toLocaleString()} credits)`
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={() => void refreshCredits()}
-          disabled={!walletAddress || loadingCredits || checkinBusy || entryBusy}
-          className="rounded-xl border border-white/10 px-3 py-2 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loadingCredits ? 'Refreshing…' : 'Refresh'}
-        </button>
-      </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {hasEnoughForFloor ? (
+            <button
+              type="button"
+              onClick={() => void handleEnterForFree()}
+              disabled={!canEnter}
+              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {entryBusy ? (
+                <span className="inline-flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</span>
+              ) : (
+                `Submit free jackpot entry (${selectedPoints.toLocaleString()} pts)`
+              )}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleTwitterCheckin()}
+            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {checkinBusy ? (
+              <span className="inline-flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Claiming…</span>
+            ) : (
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <XIcon className="h-3.5 w-3.5" /> {hasEnoughForFloor ? 'Post on X for a point' : 'Earn more points'}
+              </span>
+            )}
+          </button>
+          {hasEnoughForFloor ? (
+            <button
+              type="button"
+              onClick={() => void refreshCredits()}
+              disabled={(!walletAddress && !protocolEntryMode) || loadingCredits || checkinBusy || entryBusy}
+              className="h-9 rounded-xl bg-white/[0.03] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loadingCredits ? 'Refreshing…' : 'Refresh'}
+            </button>
+          ) : null}
+        </div>
 
       {statusMessage ? <div className="text-xs text-emerald-300">{statusMessage}</div> : null}
       {errorMessage ? <div className="text-xs text-rose-300">{errorMessage}</div> : null}
@@ -454,6 +550,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
           View transaction <ExternalLink className="w-3.5 h-3.5" />
         </a>
       ) : null}
+      </div>
     </div>
   )
 }

@@ -1222,7 +1222,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(res.statusCode).toBe(200)
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
-    expect(errMsg).toMatch(/swap_router_value_not_allowed/i)
+    expect(errMsg).toMatch(/value_transfer_not_allowed/i)
   })
 
   it('allows approve plus swap router execute batch', async () => {

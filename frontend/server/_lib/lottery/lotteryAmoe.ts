@@ -426,8 +426,11 @@ async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): P
       JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
       WHERE p2.merged_into_profile_id IS NULL
     )
-    SELECT DISTINCT id
-    FROM resolved
+    SELECT id
+    FROM (
+      SELECT DISTINCT id, bucket, ranked_at
+      FROM resolved
+    ) deduped
     ORDER BY bucket ASC, ranked_at DESC NULLS LAST
     LIMIT 1;
   `

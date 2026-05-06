@@ -4,9 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreCreators } from './ExploreCreators'
 
-const { useQueryMock, useInfiniteQueryMock } = vi.hoisted(() => ({
+const { useQueryMock, useInfiniteQueryMock, useQueriesMock } = vi.hoisted(() => ({
   useQueryMock: vi.fn(),
   useInfiniteQueryMock: vi.fn(),
+  useQueriesMock: vi.fn(),
 }))
 
 vi.mock('framer-motion', () => ({
@@ -35,6 +36,7 @@ vi.mock('react-router-dom', () => ({
 vi.mock('@tanstack/react-query', () => ({
   useQuery: useQueryMock,
   useInfiniteQuery: useInfiniteQueryMock,
+  useQueries: useQueriesMock,
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
@@ -153,6 +155,16 @@ function configureQueries(params?: {
       isLoading: false,
       isFetching: false,
     }
+  })
+  useQueriesMock.mockImplementation((opts: any) => {
+    const queries = Array.isArray(opts?.queries) ? opts.queries : []
+    return queries.map(() => ({
+      data: null,
+      isLoading: false,
+      isFetching: false,
+      isError: false,
+      error: null,
+    }))
   })
 }
 

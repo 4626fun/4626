@@ -9,6 +9,7 @@ import {
   checkRateLimit,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
+import { resolveAmoeCreatorTarget } from '../../../../server/_lib/lottery/amoeCreatorTarget.js'
 
 
 
@@ -47,6 +48,20 @@ function getCreatorCoinParam(req: VercelRequest): string {
   return v
 }
 
+function formatUsd(value: bigint): string {
+  const whole = value / 1_000_000n
+  const fraction = value % 1_000_000n
+  if (fraction === 0n) return whole.toString()
+  return `${whole.toString()}.${fraction.toString().padStart(6, '0').replace(/0+$/, '')}`
+}
+
+function creatorAssetsToUsd1e6(params: {
+  assets1e18: bigint
+  priceUsd1e18: bigint
+}): bigint {
+  return (params.assets1e18 * params.priceUsd1e18) / 1_000_000_000_000_000_000_000_000_000_000n
+}
+
 const LOTTERY_ABI = [
   {
     type: 'function',
@@ -54,6 +69,43 @@ const LOTTERY_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'creatorCoin', type: 'address' }],
     outputs: [{ type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }, { type: 'uint256' }],
+  },
+] as const
+
+const REGISTRY_ABI = [
+  {
+    type: 'function',
+    name: 'getVaultForToken',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'getOracleForToken',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const VAULT_ABI = [
+  {
+    type: 'function',
+    name: 'convertToAssets',
+    stateMutability: 'view',
+    inputs: [{ name: 'shares', type: 'uint256' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const
+
+const ORACLE_ABI = [
+  {
+    type: 'function',
+    name: 'getCreatorPrice',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'int256' }, { type: 'uint256' }],
   },
 ] as const
 
@@ -77,9 +129,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
-  const creatorCoin = getCreatorCoinParam(req)
-  if (!creatorCoin) return res.status(400).json({ success: false, error: 'creatorCoin is required' })
-  if (!isAddressLike(creatorCoin)) return res.status(400).json({ success: false, error: 'Invalid creatorCoin address' })
+  const creatorTarget = resolveAmoeCreatorTarget(getCreatorCoinParam(req))
+  if (!creatorTarget.ok) {
+    const status = creatorTarget.error === 'invalid_creator_coin' ? 400 : 503
+    return res.status(status).json({
+      success: false,
+      error: creatorTarget.error === 'invalid_creator_coin' ? 'Invalid creatorCoin address' : creatorTarget.error,
+    })
+  }
+  const creatorCoin = creatorTarget.creatorCoin
 
   const contracts = getApiContracts()
   const lotteryManager = contracts.lotteryManager
@@ -107,6 +165,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const winners = BigInt((stats as any)?.[1] ?? 0n).toString()
     const rewardsPaid = BigInt((stats as any)?.[2] ?? 0n).toString()
     const jackpotBalanceShares = BigInt((stats as any)?.[3] ?? 0n).toString()
+    let jackpotUsd: string | null = null
+
+    if (BigInt(jackpotBalanceShares) > 0n && isAddressLike(String(contracts.registry ?? ''))) {
+      const [vaultAddr, oracleAddr] = await Promise.all([
+        client.readContract({
+          address: contracts.registry as any,
+          abi: REGISTRY_ABI,
+          functionName: 'getVaultForToken',
+          args: [creatorCoin as any],
+        }).catch(() => null),
+        client.readContract({
+          address: contracts.registry as any,
+          abi: REGISTRY_ABI,
+          functionName: 'getOracleForToken',
+          args: [creatorCoin as any],
+        }).catch(() => null),
+      ])
+      if (typeof vaultAddr === 'string' && isAddressLike(vaultAddr) && typeof oracleAddr === 'string' && isAddressLike(oracleAddr)) {
+        const [jackpotAssets, priceResult] = await Promise.all([
+          client.readContract({
+            address: vaultAddr as any,
+            abi: VAULT_ABI,
+            functionName: 'convertToAssets',
+            args: [BigInt(jackpotBalanceShares)],
+          }).catch(() => null),
+          client.readContract({
+            address: oracleAddr as any,
+            abi: ORACLE_ABI,
+            functionName: 'getCreatorPrice',
+          }).catch(() => null),
+        ])
+        const priceUsd1e18 = BigInt((priceResult as any)?.[0] ?? 0n)
+        if (typeof jackpotAssets === 'bigint' && jackpotAssets > 0n && priceUsd1e18 > 0n) {
+          jackpotUsd = formatUsd(creatorAssetsToUsd1e6({ assets1e18: jackpotAssets, priceUsd1e18 }))
+        }
+      }
+    }
 
     setCache(res, 30)
     return res.status(200).json({
@@ -116,13 +211,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         generatedAt: new Date().toISOString(),
         lotteryManager: String(lotteryManager).toLowerCase(),
         creatorCoin: creatorCoin.toLowerCase(),
+        creatorCoinSource: creatorTarget.source,
         entries,
         winners,
         rewardsPaid,
         jackpotBalanceShares,
+        jackpotUsd,
       },
     })
   } catch (e: any) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to read creator lottery stats' })
   }
+}
+
+export const __testHooks = {
+  creatorAssetsToUsd1e6,
+  formatUsd,
 }

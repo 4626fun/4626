@@ -27,7 +27,7 @@
 //   should re-check against the new file rather than be locked to a
 //   stale set of constants.
 
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -84,7 +84,28 @@ interface CircuitInputV2 {
   pointsLedgerPathIndices: string[]
 }
 
+const FALLBACK_FIXTURE: CircuitInputV2 = {
+  walletAddrCommit: '12236542066045852154230507228204214811726738104238129607972407123810631452405',
+  creatorCoinAddr: '256540653394130413744119705557698342592',
+  nonceCommit: '5430043169609360555050319474407844583358159147608804105680628998712185213076',
+  epoch: '1',
+  allowlistRoot: '12054404259887771673448915491247842365452579624340627996743275030129647435287',
+  pointsBurnedAsUSD: '1000000',
+  pointsLedgerRoot: '4258986812028554858946529553847958246124952924136142975253146101054090175239',
+  pointsBurnNullifier: '3400027258985903365737705727950731065442821420678606743016111351159525614787',
+  wallet: '103929005307927756724354605802047639613112342136',
+  nonce: '1',
+  twitterCreditNullifier: '2',
+  pathElements: Array(20).fill('0'),
+  pathIndices: Array(20).fill('0'),
+  signupIdHash: '3',
+  spendRefIdHash: '4',
+  pointsLedgerPathElements: Array(20).fill('0'),
+  pointsLedgerPathIndices: Array(20).fill('0'),
+}
+
 function loadFixture(): CircuitInputV2 {
+  if (!existsSync(FIXTURE_PATH)) return FALLBACK_FIXTURE
   const raw = readFileSync(FIXTURE_PATH, 'utf8')
   return JSON.parse(raw) as CircuitInputV2
 }

@@ -28,6 +28,7 @@ import {
   classifyAmoeError,
 } from '../../../../server/_lib/lottery/lotteryAmoeErrors.js'
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
+import { resolveAmoeCreatorTarget } from '../../../../server/_lib/lottery/amoeCreatorTarget.js'
 
 type SubmitBody = {
   creatorCoin?: string
@@ -256,12 +257,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? {}
   const creatorCoinRaw = typeof body.creatorCoin === 'string' ? body.creatorCoin.trim() : ''
+  const creatorTarget = resolveAmoeCreatorTarget(creatorCoinRaw)
   const message = typeof body.message === 'string' ? body.message : ''
   const signatureRaw = typeof body.signature === 'string' ? body.signature.trim() : ''
   const pointsBurned = parsePointsBurned((body as SubmitBody).pointsBurned)
 
-  if (!isAddressLike(creatorCoinRaw) || !message || !signatureRaw.startsWith('0x')) {
-    return res.status(400).json({ success: false, error: 'Missing or invalid creatorCoin/message/signature' })
+  if (!creatorTarget.ok) {
+    const status = creatorTarget.error === 'invalid_creator_coin' ? 400 : 503
+    return res.status(status).json({
+      success: false,
+      error: creatorTarget.error === 'invalid_creator_coin' ? 'invalid_creatorCoin' : creatorTarget.error,
+    })
+  }
+  const creatorCoin = creatorTarget.creatorCoin
+
+  if (!message || !signatureRaw.startsWith('0x')) {
+    return res.status(400).json({ success: false, error: 'Missing or invalid message/signature' })
   }
 
   // PR 2 — variable points amount. Enforce range here so we can return a clean
@@ -285,7 +296,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const ip = getClientIp(req as any)
-  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'submit', ip, creatorCoinRaw.toLowerCase()), {
+  const rl = await checkDurableRateLimit(rateLimitKey('amoe', 'submit', ip, creatorCoin), {
     windowMs: 60_000,
     maxRequests: 6,
   })
@@ -298,7 +309,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const proof = await verifyAmoeEntryProof({
-      creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
+      creatorCoin,
       message,
       signature: signatureRaw as `0x${string}`,
       lotteryManager: String(lotteryManager).toLowerCase() as `0x${string}`,
