@@ -1,6 +1,6 @@
 # Zora CSW indexer: keep-fresh cron + monitoring spec
 
-Status: **proposed** · Author: computer · Date: 2026-05-05
+Status: **implemented** · Author: computer · Date: 2026-05-05 · Implemented: 2026-05-06 in PR `feat(zora-csw): indexer crons for scan + enrich` (see `feat/zora-csw-indexer-crons` branch).
 Related: `indexer/README.md`, `indexer/src/runEnrich.ts`, [zora-payout-recipient-design.md](./zora-payout-recipient-design.md)
 
 ## Problem
