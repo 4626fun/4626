@@ -7,6 +7,7 @@ import {
   getAddress,
   hashMessage,
   hashTypedData,
+  hexToBytes,
   isAddress,
   keccak256,
   recoverAddress,
@@ -14,6 +15,13 @@ import {
   type Address,
   type Hex,
 } from 'viem'
+import {
+  encodeSignatureWrapper,
+  WEBAUTHN_PASSKEY_STUB_SIGNATURE,
+  encodeWebAuthnAuthSignature,
+  getPasskeyAssertion,
+  parseDerEcdsaSignature,
+} from '@/lib/aa/passkeyUserOp'
 import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -147,6 +155,56 @@ const CSW_OWNER_MUTATION_ABI = [
     stateMutability: 'view',
     inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'bool' }],
+  },
+] as const
+
+const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
+
+const ENTRY_POINT_V06_GET_NONCE_ABI = [
+  {
+    type: 'function',
+    name: 'getNonce',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'sender', type: 'address' },
+      { name: 'key', type: 'uint192' },
+    ],
+    outputs: [{ name: 'nonce', type: 'uint256' }],
+  },
+] as const
+
+const CSW_REPLAYABLE_NONCE_AND_HASH_ABI = [
+  {
+    type: 'function',
+    name: 'REPLAYABLE_NONCE_KEY',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'getUserOpHashWithoutChainId',
+    stateMutability: 'view',
+    inputs: [
+      {
+        name: 'userOp',
+        type: 'tuple',
+        components: [
+          { name: 'sender', type: 'address' },
+          { name: 'nonce', type: 'uint256' },
+          { name: 'initCode', type: 'bytes' },
+          { name: 'callData', type: 'bytes' },
+          { name: 'callGasLimit', type: 'uint256' },
+          { name: 'verificationGasLimit', type: 'uint256' },
+          { name: 'preVerificationGas', type: 'uint256' },
+          { name: 'maxFeePerGas', type: 'uint256' },
+          { name: 'maxPriorityFeePerGas', type: 'uint256' },
+          { name: 'paymasterAndData', type: 'bytes' },
+          { name: 'signature', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [{ type: 'bytes32' }],
   },
 ] as const
 
@@ -1657,6 +1715,10 @@ export function CswSignatureProbe() {
       setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
       return
     }
+    if (!publicClient) {
+      setPreparedCallsState({ kind: 'err', label: 'publicClient unavailable' })
+      return
+    }
     if (!isAddress(ownerToAddRaw)) {
       setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
       return
@@ -1690,7 +1752,7 @@ export function CswSignatureProbe() {
     setPreparedCallEventLog([])
     setPreparedCallsState({
       kind: 'pending',
-      label: 'submitting owner-EOA executeBatch(addOwnerAddress) directly…',
+      label: 'prechecking owner status …',
     })
     try {
       appendEvent('lane:owner_executeBatch_direct')
@@ -1702,6 +1764,57 @@ export function CswSignatureProbe() {
         outerSelector: outerData.slice(0, 10),
         newOwner: ownerToAdd,
       }))
+
+      // 1) Confirm the connected EOA is actually a registered owner.
+      //    If not, the executeBatch call will revert with Unauthorized()
+      //    inside the CSW — surface that early before the user signs.
+      const isOwner = await publicClient.readContract({
+        address: normalizedCswAddress,
+        abi: CSW_OWNER_MUTATION_ABI,
+        functionName: 'isOwnerAddress',
+        args: [connectedAddress],
+      }) as boolean
+      appendEvent(JSON.stringify({ step: 'isOwnerAddress', signer: connectedAddress, isOwner }))
+      if (!isOwner) {
+        throw new Error(
+          `Connected signer ${connectedAddress} is not a registered owner of CSW ${normalizedCswAddress}. ` +
+          `executeBatch is gated to owners; call would revert. Connect with a known owner EOA (e.g. 0xCf8D17Ce01B73637ef936fe7c47bA7100b820142).`,
+        )
+      }
+
+      // 2) Confirm the new owner isn't already registered (addOwnerAddress
+      //    reverts with AlreadyOwner if so).
+      const newOwnerAlready = await publicClient.readContract({
+        address: normalizedCswAddress,
+        abi: CSW_OWNER_MUTATION_ABI,
+        functionName: 'isOwnerAddress',
+        args: [ownerToAdd],
+      }) as boolean
+      appendEvent(JSON.stringify({ step: 'isOwnerAddress(target)', target: ownerToAdd, alreadyOwner: newOwnerAlready }))
+      if (newOwnerAlready) {
+        throw new Error(`Owner ${ownerToAdd} is already registered on the CSW. Nothing to do.`)
+      }
+
+      // 3) Simulate the full call so we surface a decoded revert reason
+      //    (custom error, require message) before asking the user to sign.
+      setPreparedCallsState({ kind: 'pending', label: 'simulating call …' })
+      try {
+        await publicClient.call({
+          account: connectedAddress,
+          to: normalizedCswAddress,
+          data: outerData,
+          value: 0n,
+        })
+        appendEvent(JSON.stringify({ step: 'simulate', ok: true }))
+      } catch (simErr: any) {
+        const reason = simErr?.shortMessage ?? simErr?.cause?.shortMessage ?? simErr?.message ?? String(simErr)
+        const data = simErr?.cause?.data ?? simErr?.data
+        appendEvent(JSON.stringify({ step: 'simulate', ok: false, reason, data }).slice(0, 600))
+        throw new Error(`Simulation reverted: ${reason}${data ? ` (data=${String(data).slice(0, 12)}…)` : ''}`)
+      }
+
+      // 4) Submit for real.
+      setPreparedCallsState({ kind: 'pending', label: 'submitting owner-EOA executeBatch(addOwnerAddress) …' })
       const txHashRaw = await request({
         method: 'eth_sendTransaction',
         params: [{
@@ -2078,6 +2191,258 @@ export function CswSignatureProbe() {
       setPreparedCallsState({
         kind: 'err',
         label: 'direct replayable CSW self-call failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
+  async function runPasskeyDirectUserOpAddOwner() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    if (!publicClient) {
+      setPreparedCallsState({ kind: 'err', label: 'public client unavailable' })
+      return
+    }
+    const bundlerUrl = String(import.meta.env.VITE_CDP_BUNDLER_URL ?? '').trim()
+    if (!bundlerUrl) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'VITE_CDP_BUNDLER_URL is not set',
+        detail: 'This lane needs a direct bundler RPC URL (eth_estimateUserOperationGas / eth_sendUserOperation).',
+      })
+      return
+    }
+    if (typeof navigator === 'undefined' || !navigator.credentials || typeof navigator.credentials.get !== 'function') {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'WebAuthn unavailable',
+        detail: 'navigator.credentials.get is not available in this browser context.',
+      })
+      return
+    }
+
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const innerData = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const wrappedData = encodeExecuteWithoutChainIdValidation(innerData)
+    const runId = `probe-passkey-userop-${Date.now()}`
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'building passkey-direct UserOp (bypass Base App)…',
+    })
+    appendEvent('lane:passkey_direct_userop_bypass_base_app')
+    appendEvent(`csw:${normalizedCswAddress}`)
+    appendEvent(`ownerToAdd:${ownerToAdd}`)
+
+    async function bundlerRequest<T = unknown>(method: string, params: unknown[]): Promise<T> {
+      const response = await fetch(bundlerUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: Date.now(), method, params }),
+      })
+      const json = (await response.json()) as { result?: T; error?: { code?: number; message?: string } }
+      if (json.error) {
+        throw new Error(`bundler ${method} error: ${json.error.message ?? 'unknown'}`)
+      }
+      return json.result as T
+    }
+
+    try {
+      const replayableNonceKey = (await publicClient.readContract({
+        address: normalizedCswAddress,
+        abi: CSW_REPLAYABLE_NONCE_AND_HASH_ABI,
+        functionName: 'REPLAYABLE_NONCE_KEY',
+      })) as bigint
+      appendEvent(`REPLAYABLE_NONCE_KEY:${replayableNonceKey.toString()}`)
+
+      const nonce = (await publicClient.readContract({
+        address: ENTRY_POINT_V06_ADDRESS,
+        abi: ENTRY_POINT_V06_GET_NONCE_ABI,
+        functionName: 'getNonce',
+        args: [normalizedCswAddress, replayableNonceKey],
+      })) as bigint
+      appendEvent(`nonce:0x${nonce.toString(16)}`)
+
+      // Default gas limits suitable for replayable addOwner; bundler estimate
+      // refines them. preVerificationGas / maxFeePerGas defaults below are
+      // conservative; estimate response overrides.
+      const baseUserOp = {
+        sender: normalizedCswAddress as Hex,
+        nonce: `0x${nonce.toString(16)}` as Hex,
+        initCode: '0x' as Hex,
+        callData: wrappedData as Hex,
+        callGasLimit: '0x30d40' as Hex, // 200_000
+        verificationGasLimit: '0xf4240' as Hex, // 1_000_000
+        preVerificationGas: '0x186a0' as Hex, // 100_000
+        maxFeePerGas: '0x59682f00' as Hex, // 1.5 gwei
+        maxPriorityFeePerGas: '0x59682f00' as Hex, // 1.5 gwei
+        paymasterAndData: '0x' as Hex,
+        // Stub signature for bundler gas estimation. CDP's bundler validates
+        // the shape of the signature during eth_estimateUserOperationGas; an
+        // empty / all-zero stub fails shape validation. We reuse the canonical
+        // WebAuthn passkey stub used by viem's toCoinbaseSmartAccount and the
+        // existing coinbaseErc4337.ts patch path. Replaced with the real
+        // passkey-signed wrapper before sendUserOperation.
+        signature: WEBAUTHN_PASSKEY_STUB_SIGNATURE,
+      }
+      appendEvent('built:userop_skeleton')
+
+      type GasEstimate = {
+        callGasLimit?: Hex
+        verificationGasLimit?: Hex
+        preVerificationGas?: Hex
+      }
+      try {
+        const estimate = await bundlerRequest<GasEstimate | null>('eth_estimateUserOperationGas', [
+          baseUserOp,
+          ENTRY_POINT_V06_ADDRESS,
+        ])
+        if (estimate?.callGasLimit) baseUserOp.callGasLimit = estimate.callGasLimit
+        if (estimate?.verificationGasLimit) baseUserOp.verificationGasLimit = estimate.verificationGasLimit
+        if (estimate?.preVerificationGas) baseUserOp.preVerificationGas = estimate.preVerificationGas
+        appendEvent(
+          `gas_estimate:cgl=${baseUserOp.callGasLimit} vgl=${baseUserOp.verificationGasLimit} pvg=${baseUserOp.preVerificationGas}`,
+        )
+      } catch (e) {
+        appendEvent(`gas_estimate_failed (using defaults): ${describeError(e).slice(0, 140)}`)
+      }
+
+      // Pull a sane fee from the latest block's baseFee. If unavailable, keep defaults.
+      try {
+        const block = await publicClient.getBlock()
+        const baseFee = block.baseFeePerGas ?? 0n
+        const priorityFee = 10_000_000n // 0.01 gwei
+        const maxFeePerGas = baseFee * 2n + priorityFee
+        baseUserOp.maxFeePerGas = `0x${maxFeePerGas.toString(16)}` as Hex
+        baseUserOp.maxPriorityFeePerGas = `0x${priorityFee.toString(16)}` as Hex
+        appendEvent(`fees:max=${baseUserOp.maxFeePerGas} prio=${baseUserOp.maxPriorityFeePerGas}`)
+      } catch (e) {
+        appendEvent(`fee_read_failed (using defaults): ${describeError(e).slice(0, 140)}`)
+      }
+
+      // Compute the chainId-independent hash on-chain via the CSW.
+      const userOpStructForHash = {
+        sender: normalizedCswAddress as Hex,
+        nonce,
+        initCode: baseUserOp.initCode,
+        callData: baseUserOp.callData,
+        callGasLimit: BigInt(baseUserOp.callGasLimit),
+        verificationGasLimit: BigInt(baseUserOp.verificationGasLimit),
+        preVerificationGas: BigInt(baseUserOp.preVerificationGas),
+        maxFeePerGas: BigInt(baseUserOp.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(baseUserOp.maxPriorityFeePerGas),
+        paymasterAndData: baseUserOp.paymasterAndData,
+        // The hash function ignores signature contents (the EntryPoint hash
+        // formula does not include signature), but the ABI requires a value.
+        signature: '0x' as Hex,
+      }
+      const hashToSign = (await publicClient.readContract({
+        address: normalizedCswAddress,
+        abi: CSW_REPLAYABLE_NONCE_AND_HASH_ABI,
+        functionName: 'getUserOpHashWithoutChainId',
+        args: [userOpStructForHash],
+      })) as Hex
+      appendEvent(`hash_to_sign:${hashToSign}`)
+
+      // Ask the user's authenticator to sign the hash.
+      appendEvent('webauthn:requesting_assertion')
+      const challenge = hexToBytes(hashToSign)
+      const assertion = await getPasskeyAssertion(challenge)
+      appendEvent(
+        `webauthn:assertion received clientDataJSONLen=${assertion.clientDataJSON.length} sigDerLen=${assertion.signatureDer.length}`,
+      )
+
+      const { r, s } = parseDerEcdsaSignature(assertion.signatureDer)
+      appendEvent(`sig:r=0x${r.toString(16).padStart(64, '0')} s=0x${s.toString(16).padStart(64, '0')}`)
+
+      const innerWebAuthnSig = encodeWebAuthnAuthSignature({
+        authenticatorData: assertion.authenticatorData,
+        clientDataJSON: assertion.clientDataJSON,
+        r,
+        s,
+      })
+      const wrappedSig = encodeSignatureWrapper(0n, innerWebAuthnSig)
+      baseUserOp.signature = wrappedSig
+      appendEvent(`signature:wrapped len=${(wrappedSig.length - 2) / 2}b`)
+
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H8_passkey_direct_userop_bypass_base_app',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runPasskeyDirectUserOpAddOwner:submit',
+        message: 'submitting passkey-signed UserOp via bundler',
+        data: { csw: normalizedCswAddress, ownerToAdd, hashSigned: hashToSign },
+      })
+
+      const userOpHash = await bundlerRequest<Hex>('eth_sendUserOperation', [baseUserOp, ENTRY_POINT_V06_ADDRESS])
+      appendEvent(`bundler:eth_sendUserOperation -> ${userOpHash}`)
+      setPreparedCallsState({
+        kind: 'pending',
+        label: 'awaiting bundler receipt…',
+        detail: userOpHash,
+      })
+
+      const POLL_INTERVAL_MS = 4_000
+      const MAX_POLL_MS = 180_000
+      const start = Date.now()
+      let receiptTxHash: Hex | null = null
+      while (Date.now() - start < MAX_POLL_MS) {
+        try {
+          const receipt = (await bundlerRequest<{
+            success?: boolean
+            receipt?: { transactionHash?: Hex }
+            transactionHash?: Hex
+          } | null>('eth_getUserOperationReceipt', [userOpHash])) ?? null
+          if (receipt) {
+            const txHash = receipt.receipt?.transactionHash ?? receipt.transactionHash ?? null
+            if (txHash && isTxHash(txHash)) {
+              receiptTxHash = txHash
+              if (receipt.success === false) {
+                throw new Error(`UserOp landed but reverted (tx=${txHash}). Check trace on Basescan.`)
+              }
+              break
+            }
+          }
+        } catch (e) {
+          appendEvent(`receipt_poll_error: ${describeError(e).slice(0, 140)}`)
+        }
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS))
+      }
+      if (!receiptTxHash) {
+        throw new Error(`Bundler did not return a receipt within ${MAX_POLL_MS / 1000}s. UserOp hash: ${userOpHash}`)
+      }
+      setPreparedCallsTxHash(receiptTxHash)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'passkey-direct UserOp add-owner submitted',
+        detail: receiptTxHash,
+      })
+      appendEvent(`success:tx=${receiptTxHash}`)
+    } catch (error) {
+      emitProbeDebug({
+        runId,
+        hypothesisId: 'H8_passkey_direct_userop_bypass_base_app',
+        location: 'frontend/src/pages/dev/CswSignatureProbe.tsx:runPasskeyDirectUserOpAddOwner:error',
+        message: 'passkey-direct UserOp add-owner failed',
+        data: { message: describeError(error) },
+      })
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'passkey-direct UserOp add-owner failed',
         detail: describeError(error),
       })
     }
@@ -2851,13 +3216,41 @@ export function CswSignatureProbe() {
             spellCheck={false}
           />
         </label>
-        <div className="rounded border border-blue-500/20 bg-blue-500/10 p-3 text-xs leading-relaxed text-blue-100">
-          Use the sponsored prepared-call button first. The old two-part Relay lane
-          directly calls <span className="font-mono">personal_sign(hash, CSW)</span>;
-          Base App can surface that as "Error generating message / enough funds"
-          because it is outside the wallet's sponsored prepared-call flow.
+        <div className="rounded border border-teal-500/40 bg-teal-500/10 p-3 text-xs leading-relaxed text-teal-100">
+          <div className="font-semibold text-teal-200">
+            Recommended (passkey-only users): passkey-direct UserOp, bypass Base App.
+          </div>
+          <div className="mt-1">
+            Click the teal button below. It builds a UserOp calling{' '}
+            <span className="font-mono">executeWithoutChainIdValidation(addOwnerAddress(…))</span>,
+            asks the browser's WebAuthn API to sign the EntryPoint hash with your passkey
+            (the OS picker shows your registered credentials), wraps the signature
+            in the CSW <span className="font-mono">SignatureWrapper</span>, and submits
+            it directly to the bundler — bypassing Base App's session-key middleware
+            entirely. This is the only path that works for users who only have a
+            passkey owner (no EOA key) since Base App refuses to construct UserOps
+            for owner-mutation selectors.
+          </div>
+          <div className="mt-2 text-teal-200/70">
+            Secondary lanes: <span className="font-mono">owner executeBatch (March-9)</span>{' '}
+            requires a registered EOA owner key (e.g.{' '}
+            <span className="font-mono">0xD1780F…c9361</span>,{' '}
+            <span className="font-mono">0xCf8D17…820142</span>) — kept here as an
+            alternative for accounts that have one. Sponsored{' '}
+            <span className="font-mono">wallet_sendCalls</span> via Base App fails
+            for owner-mutation selectors with "Error generating transaction".
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="rounded border border-teal-500/60 px-3 py-1.5 text-xs text-teal-100 hover:border-teal-400 disabled:opacity-50"
+            onClick={() => { void runPasskeyDirectUserOpAddOwner() }}
+            disabled={Boolean(bundlerUserOpConfigError)}
+            title={bundlerUserOpConfigError ?? 'Builds UserOp, signs hash with WebAuthn passkey via browser, submits directly to bundler. Bypasses Base App entirely.'}
+          >
+            add owner via passkey-direct UserOp (bypass Base App)
+          </button>
           <button
             type="button"
             className="rounded border border-sky-500/60 px-3 py-1.5 text-xs text-sky-200 hover:border-sky-400 disabled:opacity-50"
@@ -2885,11 +3278,11 @@ export function CswSignatureProbe() {
           </button>
           <button
             type="button"
-            className="rounded border border-emerald-500/60 px-3 py-1.5 text-xs text-emerald-200 hover:border-emerald-400"
+            className="rounded border border-zinc-600/60 px-3 py-1.5 text-xs text-zinc-300 hover:border-zinc-400"
             onClick={runOwnerExecuteBatchAddOwner}
-            title="March-9 verified pattern: connected owner EOA calls CSW.executeBatch([{target:CSW, value:0, data:addOwnerAddress(...)}]). No EntryPoint, no UserOp, no Relay, no paymaster. Owner pays gas natively."
+            title="Secondary lane (requires EOA owner key, NOT available for passkey-only users): connected owner EOA calls CSW.executeBatch([{target:CSW, value:0, data:addOwnerAddress(...)}])."
           >
-            run add owner via owner executeBatch (March-9 pattern)
+            owner executeBatch (March-9 pattern, EOA owner only)
           </button>
           <button
             type="button"
