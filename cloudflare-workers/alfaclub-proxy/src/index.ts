@@ -116,9 +116,10 @@ export default {
       return jsonResponse(200, { ok: true, upstream: env.UPSTREAM_API_BASE })
     }
 
-    // Method allowlist. The bridge only ever sends GET (history) and
-    // POST (mark-read). Block everything else cheaply.
-    if (req.method !== 'GET' && req.method !== 'POST' && req.method !== 'OPTIONS') {
+    // Method allowlist. The bridge sends GET (history) and POST (mark-read);
+    // HEAD/OPTIONS are bodyless probes and preflight-style requests.
+    const bodylessMethod = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
+    if (!bodylessMethod && req.method !== 'POST') {
       return jsonResponse(405, { error: 'method_not_allowed' })
     }
 
@@ -157,7 +158,7 @@ export default {
     const upstreamRequest = new Request(upstreamUrl.toString(), {
       method: req.method,
       headers: upstreamHeaders,
-      body: req.method === 'GET' || req.method === 'HEAD' ? undefined : req.body,
+      body: bodylessMethod ? undefined : req.body,
       redirect: 'manual',
     })
 
