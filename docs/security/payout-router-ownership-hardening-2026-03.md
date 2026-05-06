@@ -1,5 +1,7 @@
 # Payout Router + CreatorCoin Control Hardening (March 2026)
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md) §5.1 documents the `setPayoutRecipient` + `transferOwnership(CreatorCoinPolicyController)` flow this hardening pass produced. The flow is part of the deploy phase-2 batch in `DeployVault.tsx:4910-4919`.
+
 ## Scope
 
 This change set hardens deployment-time and runtime control for payout routing, CreatorCoin admin ownership, and keeper automation when vaults switch payout flow from creator wallet lanes to protocol-governed lanes.

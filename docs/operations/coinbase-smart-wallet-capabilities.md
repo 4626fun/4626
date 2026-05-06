@@ -5,6 +5,8 @@ sidebar_position: 21
 
 # Coinbase Smart Wallet Capabilities
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). Capability inventory below is observational; the product-level decisions about which capabilities we expose to which population are in ACCOUNT_MODEL.md §3 and §5.
+
 Reference snapshot for the Coinbase Smart Wallet / Base App provider behavior observed from the 4626 wallet probe.
 
 This is a capability inventory, not a product architecture change. The canonical 4626 wallet rules still apply: the user's Zora/Base Coinbase Smart Wallet remains the asset-holding account, and signer/sub-account behavior must be interpreted through the execution track in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.

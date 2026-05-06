@@ -1,5 +1,7 @@
 # Identity surface spec — nav header identity card + `/accounts` page
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). The "mental model (ground truth)" diagram below predates the four-population taxonomy in ACCOUNT_MODEL.md §2; reconcile against the canonical doc when shipping any UI surface that displays addresses.
+
 **Status:** draft spec, awaiting approval before build.
 **Owner:** frontend.
 **Trigger:** confusion about which of {external EOA, Privy embedded EOA, Coinbase Smart Wallet} is surfaced in the header; creator coin + basename not displayed anywhere prominent.

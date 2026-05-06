@@ -56,6 +56,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 ## Quick Links
 
+- [Account Model (canonical)](https://github.com/wenakita/4626/blob/main/docs/ACCOUNT_MODEL.md) — single source of truth for user populations, identity invariants, and existing flows
 - [Wallet Architecture](/wallet-architecture) - canonical CSW, sub-account, signer roles, and trust boundaries
 - [Users](/users) - product usage and troubleshooting
 - [Creators](/creators) - launch and creator workflows

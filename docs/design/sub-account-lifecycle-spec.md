@@ -1,5 +1,7 @@
 # Sub-account lifecycle spec — user-facing surface
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md) §3 (invariants), §5.3 (the `setupSubAccount` orchestrator), §6 (waitlist sub-account integration is the planned consumer). Reconcile against the canonical doc before changing the model.
+
 **Status:** proposed · **Author:** computer · **Date:** 2026-04-19
 **Predecessor:** [arch-b-sub-account-design-addendum.md](../arch-b-sub-account-design-addendum.md) (backend design)
 **Successor:** [identity-surface-spec.md](./identity-surface-spec.md) (identity card design this builds on)

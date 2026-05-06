@@ -44,6 +44,10 @@ This monorepo includes:
 - CRE automation workflows (`cre/`) for tending, reporting, settlement, and queue operations.
 - Docusaurus docs site (`apps/docs-site/`) fed by `docs/` content and generated references.
 
+## Account Model
+
+The single source of truth for who-signs-what, which address is canonical, and which flows are already shipped is [`docs/ACCOUNT_MODEL.md`](docs/ACCOUNT_MODEL.md). Read it before writing any design doc that touches account, wallet, signer, or paymaster behaviour.
+
 ## Per-User Wallet Architecture
 
 4626 uses a role-separated wallet model for each user:
@@ -488,6 +492,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Runtime skills source: `script/agent-runtime/skills/`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
+- **Canonical account model (read first for any account/wallet design)**: `docs/ACCOUNT_MODEL.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`
 - Telegram Mini App link/onboarding architecture: `frontend/docs/telegram-miniapp-link-architecture.md`
 - CRE guide: `cre/README.md`

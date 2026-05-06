@@ -5,6 +5,8 @@ sidebar_position: 7
 
 # Canonical CSW Owner Approval
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). Per ACCOUNT_MODEL.md §3, **`addOwnerAddress` from a third-party dapp is dead for Base App-managed CSWs** ([owner-mutation-decision-2026-05.md](../owner-mutation-decision-2026-05.md)). This runbook still applies to the **server-side automation** track (Privy *server* wallet added as a CSW owner), and to legacy debugging. It does **not** apply to user-initiated frontend execution — that's the sub-account + `setToOwnerAccount()` path documented in [`frontend/docs/account-auth-invariants.md`](../../frontend/docs/account-auth-invariants.md) §"User-initiated frontend execution (CSW path)".
+
 :::caution Scope
 This runbook describes the **canonical parent-CSW owner approval** activation path.
 

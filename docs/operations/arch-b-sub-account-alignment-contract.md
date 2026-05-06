@@ -1,5 +1,7 @@
 # Arch-B Sub-Account Alignment Contract (Post-PR302)
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). The Arch-B sub-account flow is documented as §5.4 ("Arch B agent commands — server-side spend-permission flow").
+
 Status: active
 Baseline: `origin/main` including commits `6e85dc2f`, `c51e106b`, `9e86ad20`
 

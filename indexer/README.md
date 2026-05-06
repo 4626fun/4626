@@ -1,5 +1,7 @@
 # @4626/zora-csw-indexer
 
+> **Canonical reference:** [`docs/ACCOUNT_MODEL.md`](../docs/ACCOUNT_MODEL.md). The `zora_csw_owners` table this indexer populates is what discriminates between population (c) (Zora CSW with EOA owner) and population (d) (Zora CSW without one) per ACCOUNT_MODEL.md §2 / §5.5.
+
 A standalone service that indexes **Zora-created Coinbase Smart Wallets on Base** into Supabase, enriched with their current owner EOAs.
 
 ## Why this exists

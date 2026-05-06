@@ -1,7 +1,9 @@
 # Sub Accounts on the Waitlist — Base App user flow
 
-Status: **proposed** · Author: computer · Date: 2026-05-05
-Related: [arch-b-sub-account-design-addendum.md](./arch-b-sub-account-design-addendum.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md)
+Status: **proposed (Track C — blocked on canonical doc landing)** · Author: computer · Date: 2026-05-05
+Related: [ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md), [arch-b-sub-account-design-addendum.md](./arch-b-sub-account-design-addendum.md), [owner-mutation-decision-2026-05.md](./owner-mutation-decision-2026-05.md)
+
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) §6 lists this flow as a known not-yet-implemented gap. Read ACCOUNT_MODEL.md before changing anything in this design.
 
 ## TL;DR
 

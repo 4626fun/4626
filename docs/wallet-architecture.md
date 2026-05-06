@@ -6,6 +6,8 @@ slug: /wallet-architecture
 
 # Wallet Architecture
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model (populations, invariants, schema, existing flows). This page is a longer-form companion focused on the wallet roles in isolation; if the two ever conflict, ACCOUNT_MODEL.md wins.
+
 This page explains every wallet role used for one 4626 user and how those roles fit together.
 
 ## Why this architecture exists

@@ -1,5 +1,7 @@
 # Account And Auth Invariants
 
+> **Repo-wide canonical:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md) folds the invariants in this file together with the user-population taxonomy, schema, and existing-flows inventory. This file remains the authoritative source for the *invariants themselves* (ACCOUNT_MODEL.md cites these verbatim); for end-to-end account-model decisions consult ACCOUNT_MODEL.md.
+
 This document is the authoritative product model for 4626 account creation, sign-in, recovery, and identity linking.
 
 If code or UX conflicts with this document, the code/UX should change unless product explicitly decides otherwise.

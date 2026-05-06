@@ -29,6 +29,7 @@ Path-scoped or topic-scoped rules in `.cursor/rules/*.mdc` are authoritative ins
 - `.cursor/rules/csw-agent-lifecycle.mdc` owns CSW delegation, XMTP identity, ERC-8004 identity, and deploy-session wallet mechanics.
 - `.cursor/rules/waitlist-onboarding-simplicity.mdc` owns waitlist/signup simplification inside its scoped auth and waitlist files.
 - `.cursor/rules/frontend-seo-core.mdc` and `.cursor/rules/frontend-seo-internal-linking.mdc` own frontend SEO policy inside `frontend/`.
+- **`docs/ACCOUNT_MODEL.md` is the canonical reference for the 4626 account model** — user populations, identity invariants, the `command_issuer_execution_context` schema, and the existing-flows inventory (e.g. `setPayoutRecipient` is already part of the deploy phase-2 batch). Read it before writing any design doc that touches account, wallet, signer, sub-account, or paymaster behaviour.
 
 Do not preserve legacy routes, aliases, or compatibility shims just for backward compatibility. When replacing a path or interface, migrate active callers and remove the old surface unless product explicitly requires a staged rollout.
 

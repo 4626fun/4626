@@ -1,5 +1,7 @@
 # Waitlist Entry & Email Rules Matrix
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md). The user-population taxonomy in §2 is the canonical view; this matrix is the entry-path layer over it.
+
 This document maps the main onboarding/waitlist entry paths and how email requirements are enforced.
 
 ## Why this exists

@@ -2,6 +2,8 @@
 
 Status: **decided** · Author: computer · Date: 2026-05-05
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) §3 captures this decision as a load-bearing invariant ("`addOwnerAddress` from a third-party dapp is dead for Base App-managed CSWs"). This file is the original decision record; the canonical doc is the place new designs reconcile against.
+
 ## Decision
 
 **Drop "add owner to a Base App-managed CSW" as a product flow.**

@@ -1,5 +1,7 @@
 # Thin Waitlist And Accounts Architecture
 
+> **Repo-wide canonical:** [docs/ACCOUNT_MODEL.md](../../docs/ACCOUNT_MODEL.md) is the single source of truth for the account model (populations, invariants, schema). This file remains authoritative for *waitlist + accounts product behaviour* specifically, but the underlying account model it builds on is in ACCOUNT_MODEL.md.
+
 This is the canonical product model for identity onboarding:
 
 - Marketing waitlist entry lives in `frontend/src/features/waitlist/WaitlistFlow.tsx`.

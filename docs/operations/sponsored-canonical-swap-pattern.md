@@ -5,6 +5,8 @@ sidebar_position: 6
 
 # Sponsored Canonical Swap Pattern
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](../ACCOUNT_MODEL.md). This pattern is one execution lane; the canonical doc covers the full population/track matrix.
+
 This is the known-good path for gas-sponsored canonical swaps when the browser signer is the Privy embedded EOA and the user's canonical Coinbase Smart Wallet (CSW) is the asset-holding account.
 
 This path is first-class, not merely a fallback from sub-accounts. The sub-account is not involved unless a route explicitly opts into the sub-account provider and shows that sender in diagnostics.

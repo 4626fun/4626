@@ -1,5 +1,7 @@
 # CSW × Base App reconciliation
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) covers the strategic decision to drop dapp-side owner-mutation as a product flow for Base App-managed CSWs (see §3 and §5.2). This file is an operator-focused diagnostic runbook that complements that decision; if there's any conflict, ACCOUNT_MODEL.md wins.
+
 Operator-focused triage guide for Coinbase Smart Wallet (CSW) signature failures
 when the user is signing inside Base App. Read this first when the probe at
 `/dev/csw-signature-probe` shows a red verdict, or when `wallet_sendPreparedCalls`

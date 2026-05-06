@@ -1,5 +1,7 @@
 # CSW EOA-owner submission lane: end-to-end verification
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md). This lane is the production path for population (c) (Zora CSW with an EOA owner) — see ACCOUNT_MODEL.md §2 and §5.1.
+
 **Status:** active runbook
 **Audience:** anyone with control of a CSW on-chain EOA owner private key who
 wants to confirm `_submitOwnerViaPreparedCallsWithEoaOwner` actually works in

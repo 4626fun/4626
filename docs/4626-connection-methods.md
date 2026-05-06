@@ -2,6 +2,8 @@
 
 **Internal Documentation — 4626 Project Team**
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model — user populations, invariants, schema. This doc covers the *batched passkey ceremony* mechanics in detail; for the higher-level account model read ACCOUNT_MODEL.md first.
+
 ---
 
 ## Table of Contents

@@ -1,6 +1,8 @@
 Arch B Sub-Account Design Addendum
 Status: proposed · Author: computer · Date: 2026-04-18
 
+> **Canonical reference:** [docs/ACCOUNT_MODEL.md](./ACCOUNT_MODEL.md) is the single source of truth for the 4626 account model. Where this addendum's column types (e.g., `CITEXT`, `BYTEA`) differ from what actually shipped in [`frontend/db/migrations/028_arch_b_sub_accounts.sql`](../frontend/db/migrations/028_arch_b_sub_accounts.sql) (`TEXT`, `JSONB`), trust the migration. ACCOUNT_MODEL.md §4 documents the as-shipped types. The invariants in this file's "Invariants preserved" section remain authoritative and are cited verbatim from ACCOUNT_MODEL.md §3.
+
 Why
 The canonical CSW 0xab6d…67b5 for profile 1 has on-chain owners [0x6c0e…f9b3, 0xb05c…0fdd, (empty), 0xd178…9361]. The current Privy embedded EOA recorded in profile_wallets.privy_embedded_eoa_address is 0xceca…85e9, which is not a CSW owner. Every Arch B UserOp today fails at bundler submission with userop_submission_failed because the signature produced by Privy for 0xceca…85e9 cannot be validated by the parent CSW.
 
