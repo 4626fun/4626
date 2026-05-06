@@ -13,6 +13,7 @@ Security and trust artifacts for the public docs audience. These are **not** a s
 | [ajna/](./ajna/) | Ajna adversarial audit, executive brief, and Q&A compendium. |
 | [charm/](./charm/) | Charm V2 adversarial audit, executive brief, and master Q&A. |
 | [codex/](./codex/) | Codex security review records and archival finding exports. |
+| [4626/acceptances/M-38-M-39-foundry-halmos-invariant-evidence.md](./4626/acceptances/M-38-M-39-foundry-halmos-invariant-evidence.md) | Foundry invariant and Halmos symbolic-test evidence for M-38 / M-39 coverage-gap follow-up. |
 | [token-image/](./token-image/) | Token-image renderer research and breakout analysis notes. |
 
 Internal process runbooks (supply-chain setup, advisories triage, production parity checklists) are intentionally kept in the internal docs lane.
