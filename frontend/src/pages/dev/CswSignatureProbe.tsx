@@ -119,6 +119,35 @@ const CSW_OWNER_MUTATION_ABI = [
     ],
     outputs: [],
   },
+  // Coinbase Smart Wallet executeBatch: callable by any registered owner.
+  // Enables the March-9 working pattern: owner EOA submits a plain
+  // EIP-1559 tx that calls CSW.executeBatch([{ target=CSW, value=0,
+  // data=addOwnerAddress(...) }]). The nested self-call passes the
+  // CSW's onlyOwner / onlySelf gate because msg.sender = CSW (this).
+  {
+    type: 'function',
+    name: 'executeBatch',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'calls',
+        type: 'tuple[]',
+        components: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'bool' }],
+  },
 ] as const
 
 const CREATE2_DEPLOYER_AUTH_ABI = [
@@ -1609,6 +1638,97 @@ export function CswSignatureProbe() {
     }
   }
 
+  // March-9 working pattern: a registered owner EOA submits a plain
+  // EIP-1559 tx calling CSW.executeBatch([{ target=CSW, value=0,
+  // data=addOwnerAddress(<new owner>) }]). No EntryPoint, no UserOp,
+  // no Relay router, no paymaster, no executeWithoutChainIdValidation.
+  // The connected wallet is the owner; it pays gas natively. This is
+  // the pattern verified on-chain at
+  // 0x68ebffbd53879ea2edef7477d4fcfbe9acb7f53865dd899229dd01fba4c995b3
+  // (March 9, 2026) where 0xD178… (a registered owner of the CSW)
+  // sent executeBatch to the CSW.
+  async function runOwnerExecuteBatchAddOwner() {
+    const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
+    if (!walletClient || !connectedAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (!isAddress(ownerToAddRaw)) {
+      setPreparedCallsState({ kind: 'err', label: 'invalid owner address to add' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot submit eth_sendTransaction.',
+      })
+      return
+    }
+    const ownerToAdd = getAddress(ownerToAddRaw)
+    const innerData = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'addOwnerAddress',
+      args: [ownerToAdd],
+    })
+    const outerData = encodeFunctionData({
+      abi: CSW_OWNER_MUTATION_ABI,
+      functionName: 'executeBatch',
+      args: [[{ target: normalizedCswAddress, value: 0n, data: innerData }]],
+    })
+    const appendEvent = (row: string) => {
+      setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
+    }
+    setPreparedCallsTxHash(null)
+    setPreparedCallEventLog([])
+    setPreparedCallsState({
+      kind: 'pending',
+      label: 'submitting owner-EOA executeBatch(addOwnerAddress) directly…',
+    })
+    try {
+      appendEvent('lane:owner_executeBatch_direct')
+      appendEvent(JSON.stringify({
+        step: 'tx_build',
+        from: connectedAddress,
+        to: normalizedCswAddress,
+        innerSelector: innerData.slice(0, 10),
+        outerSelector: outerData.slice(0, 10),
+        newOwner: ownerToAdd,
+      }))
+      const txHashRaw = await request({
+        method: 'eth_sendTransaction',
+        params: [{
+          from: connectedAddress,
+          to: normalizedCswAddress,
+          data: outerData,
+          value: '0x0',
+        }],
+      })
+      if (!isTxHash(txHashRaw)) {
+        throw new Error('eth_sendTransaction did not return a transaction hash.')
+      }
+      setPreparedCallsTxHash(txHashRaw)
+      setPreparedCallsState({
+        kind: 'ok',
+        label: 'owner executeBatch(addOwnerAddress) submitted',
+        detail: txHashRaw,
+      })
+    } catch (error) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'owner executeBatch(addOwnerAddress) failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
   async function runRelayQuotedDepositForOwnerAdd() {
     const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
     if (!walletClient || !connectedAddress) {
@@ -2765,10 +2885,19 @@ export function CswSignatureProbe() {
           </button>
           <button
             type="button"
+            className="rounded border border-emerald-500/60 px-3 py-1.5 text-xs text-emerald-200 hover:border-emerald-400"
+            onClick={runOwnerExecuteBatchAddOwner}
+            title="March-9 verified pattern: connected owner EOA calls CSW.executeBatch([{target:CSW, value:0, data:addOwnerAddress(...)}]). No EntryPoint, no UserOp, no Relay, no paymaster. Owner pays gas natively."
+          >
+            run add owner via owner executeBatch (March-9 pattern)
+          </button>
+          <button
+            type="button"
             className="rounded border border-purple-500/60 px-3 py-1.5 text-xs text-purple-200 hover:border-purple-400"
             onClick={runRelayQuotedDepositForOwnerAdd}
+            title="Note: Relay's same-chain quote returns a swap step submitted via Relay's router — Relay is not an owner of the CSW so the inner addOwner call will not authorize. Kept for diagnostics only."
           >
-            fetch Relay quote and submit deposit step
+            fetch Relay quote and submit deposit step (diagnostic)
           </button>
           <button
             type="button"
