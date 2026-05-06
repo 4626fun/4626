@@ -19,6 +19,7 @@ function setEnabledEnv(): () => void {
     CRON_SECRET: VALID_SECRET,
     AMOE_CRON_SECRET: undefined,
     BASE_RPC_URL: 'https://example.invalid/rpc',
+    INDEXER_ETHOS_ENRICH_BUDGET: '0',
     SUPABASE_URL: 'https://example.invalid',
     SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-fake',
   })
@@ -160,6 +161,65 @@ describe('zora-csw/enrich-cron handler', () => {
     })
     expect((upserted[0] as any).metadata.passkey_owner_count).toBe(1)
     expect((upserted[0] as any).metadata.next_owner_index).toBe('2')
+    expect(res.body.ethos).toMatchObject({ attempted: 0, updated: 0, failed: 0, skipped: 0 })
+  })
+
+  it('refreshes Ethos scores for owner EOAs when enabled', async () => {
+    const cleanup = applyEnv({ INDEXER_ETHOS_ENRICH_BUDGET: '3' })
+    try {
+      const db = makeFakeDb()
+      const candidates: EnrichCandidate[] = [
+        { csw_address: '0xaaaa000000000000000000000000000000000001', creation_block: 1 },
+        { csw_address: '0xaaaa000000000000000000000000000000000002', creation_block: 2 },
+      ]
+      const refreshSpy = vi.fn(async (_db: unknown, _ownerAddresses: string[], _maxAddresses: number) => ({
+        attempted: 3,
+        updated: 2,
+        failed: 0,
+        skipped: 1,
+      }))
+      __setZoraCswEnrichCronHandlerHooksForTest({
+        db,
+        budget: 10,
+        concurrency: 2,
+        selectCandidates: async () => candidates,
+        refreshOwnerEthosScores: refreshSpy,
+        enrichOne: async (csw: Address) => ({
+          addressOwners: [
+            '0x1111111111111111111111111111111111111111',
+            csw.endsWith('1')
+              ? '0x2222222222222222222222222222222222222222'
+              : '0x3333333333333333333333333333333333333333',
+          ] as Address[],
+          passkeyOwnerCount: 0,
+          nextOwnerIndex: 2n,
+          removedOwnersCount: 0n,
+        }),
+      })
+      const handler = await getV1ApiHandler('zora-csw/enrich-cron')
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: `Bearer ${VALID_SECRET}` },
+      })
+      const res = createMockRes()
+      await handler!(req, res)
+      expect(res.statusCode).toBe(200)
+      expect(refreshSpy).toHaveBeenCalledTimes(1)
+      expect(refreshSpy.mock.calls[0]?.[2]).toBe(3)
+      expect(new Set(refreshSpy.mock.calls[0]?.[1] as string[])).toEqual(new Set([
+        '0x1111111111111111111111111111111111111111',
+        '0x2222222222222222222222222222222222222222',
+        '0x3333333333333333333333333333333333333333',
+      ]))
+      expect(res.body.ethos).toMatchObject({
+        attempted: 3,
+        updated: 2,
+        failed: 0,
+        skipped: 1,
+      })
+    } finally {
+      cleanup()
+    }
   })
 
   it('handles partial failures: succeeded rows upserted, failed rows reported', async () => {

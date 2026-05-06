@@ -3,6 +3,8 @@ export type BaseXmtpAgent = {
   name: string
   handle?: string
   address?: `0x${string}`
+  logoText: string
+  logoTone: 'blue' | 'green' | 'violet' | 'gold' | 'cyan' | 'pink' | 'orange' | 'slate'
   description: string
   category: 'trading' | 'creator' | 'prediction' | 'research' | 'sovereign' | 'launch'
 }
@@ -12,6 +14,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'jessexbt',
     name: 'jesseXBT',
     handle: 'jessexbt.base.eth',
+    logoText: 'JX',
+    logoTone: 'blue',
     description: 'Base-native Jesse Pollak knowledge agent',
     category: 'creator',
   },
@@ -19,6 +23,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'bankr',
     name: 'Bankr',
     handle: 'bankr.base.eth',
+    logoText: 'B',
+    logoTone: 'green',
     description: 'Trade, transfer, portfolio, and market actions',
     category: 'trading',
   },
@@ -26,6 +32,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'elsa',
     name: 'Elsa',
     handle: 'elsa.base.eth',
+    logoText: 'E',
+    logoTone: 'cyan',
     description: 'DeFi data and x402-powered execution tools',
     category: 'trading',
   },
@@ -33,6 +41,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'freysa',
     name: 'Freysa',
     handle: 'hifreysa.base.eth',
+    logoText: 'F',
+    logoTone: 'violet',
     description: 'Sovereign AI experiment on Base',
     category: 'sovereign',
   },
@@ -40,6 +50,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'arma',
     name: 'Arma',
     handle: 'arma.base.eth',
+    logoText: 'A',
+    logoTone: 'gold',
     description: 'Base agent available over XMTP',
     category: 'research',
   },
@@ -47,6 +59,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'neurobro',
     name: 'Neurobro',
     handle: 'oxneurobro.base.eth',
+    logoText: 'N',
+    logoTone: 'pink',
     description: 'AI agent for market context and trading strategy',
     category: 'research',
   },
@@ -54,6 +68,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'flaunchy',
     name: 'Flaunchy',
     address: '0x557463b158f70e4e269bb7bccf6c587e3bc878f4',
+    logoText: 'FL',
+    logoTone: 'orange',
     description: 'Launch and trade tokens through Flaunch',
     category: 'launch',
   },
@@ -61,6 +77,8 @@ export const BASE_XMTP_AGENTS: BaseXmtpAgent[] = [
     id: 'bracky',
     name: 'Bracky',
     address: '0x62db4c5a8fdf004754b9efe92df39927ab68920d',
+    logoText: 'BR',
+    logoTone: 'slate',
     description: 'Sports and prediction-market chat agent',
     category: 'prediction',
   },

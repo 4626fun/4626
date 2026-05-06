@@ -220,13 +220,11 @@ indexer/exports/outreach-multi-creator-believers-56-2026-04-22T07-15-49-712Z.jso
 indexer/exports/outreach-multi-creator-believers-40-2026-04-22T07-27-30-800Z.csv
 indexer/exports/outreach-multi-creator-believers-40-2026-04-22T07-27-30-800Z.json
 indexer/exports/notion-outreach-unified-379.csv
-<<<<<<< HEAD
 
 # CRE workflow scratch files (audit M-14 / 4626-323).
 # Temporary output from `cre workflow` local tooling must never be committed.
 **/.workflow-temp-*.ts
 **/.workflow-temp-*.json
-=======
 indexer/exports/dm-campaign-2026-04-22T23-49-59-505Z.csv
 indexer/exports/dm-campaign-2026-04-22T23-49-59-505Z.json
 indexer/exports/master-outreach-sheet-2026-04-22T23-47-51-912Z.csv
@@ -235,7 +233,6 @@ indexer/exports/xmtp-group-plan-2026-04-22T23-51-48-704Z.json
 indexer/exports/xmtp-group-plan-2026-04-22T23-51-49-131Z.json
 indexer/exports/xmtp-reach-2026-04-22T23-42-46-449Z.csv
 indexer/exports/xmtp-reach-2026-04-22T23-42-46-449Z.json
->>>>>>> c45969eb8 (fix(dependencies): downgrade @coral-xyz/anchor to version 0.31.0)
 indexer/exports/cohort-assignments-2026-04-23T08-08-52-997Z.csv
 indexer/exports/cohort-assignments-2026-04-23T08-08-52-997Z.json
 indexer/exports/cohort-assignments-2026-04-23T09-00-31-403Z.csv

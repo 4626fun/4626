@@ -7,6 +7,7 @@ import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
 } from '@/lib/auth/waitlistEntry'
+import { requestToggleChat } from '@/lib/chat/openChat'
 import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl, MARKETING_ORIGIN } from '@/lib/env/host'
 import { Logo } from './Logo'
@@ -85,6 +86,7 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
   const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
+  const showChatShortcut = interactive && !publicMode && hostMode === 'app'
 
   const brandElement = (
     <>
@@ -186,11 +188,29 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
           </div>
         </nav>
 
-        {showConnect ? (
-          <div className="shrink-0">
-            <NavConnectButtonBoundary>
-              <ConnectButton variant="nav" />
-            </NavConnectButtonBoundary>
+        {(showChatShortcut || showConnect) ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {showChatShortcut ? (
+              <button
+                type="button"
+                onClick={requestToggleChat}
+                className="group hidden h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/6 text-white shadow-[0_12px_28px_-18px_rgba(0,0,0,0.9)] outline-none transition-all duration-200 hover:-translate-y-px hover:border-white/18 hover:bg-white/10 focus-visible:ring-1 focus-visible:ring-white/30 md:inline-flex"
+                aria-label="Open XMTP chat"
+                title="Open XMTP chat"
+              >
+                <img
+                  src="/brand/xmtp-x-mark-white.svg"
+                  alt=""
+                  className="h-[18px] w-[18px] select-none object-contain opacity-90 transition-opacity group-hover:opacity-100"
+                  draggable={false}
+                />
+              </button>
+            ) : null}
+            {showConnect ? (
+              <NavConnectButtonBoundary>
+                <ConnectButton variant="nav" />
+              </NavConnectButtonBoundary>
+            ) : null}
           </div>
         ) : null}
       </div>

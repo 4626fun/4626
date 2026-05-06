@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   PRIVY_INTERACTIVE_LOGIN_METHODS,
+  deriveInitialAuthSessionState,
   deriveSiweSessionState,
   shouldAutoBridgeConnectedPrivySession,
   shouldAutoBridgeRestoredPrivySession,
@@ -72,6 +73,50 @@ describe('deriveSiweSessionState', () => {
       sessionAddress: null,
       hasSession: false,
       walletMatchesSession: false,
+    })
+  })
+})
+
+describe('deriveInitialAuthSessionState', () => {
+  it('hydrates from a fresh shared session snapshot', () => {
+    expect(
+      deriveInitialAuthSessionState({
+        address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        resolvedAt: 10_000,
+        now: 20_000,
+        ttlMs: 30_000,
+      }),
+    ).toEqual({
+      authAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      sessionHydrated: true,
+    })
+  })
+
+  it('does not trust a stale shared session snapshot', () => {
+    expect(
+      deriveInitialAuthSessionState({
+        address: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        resolvedAt: 10_000,
+        now: 50_001,
+        ttlMs: 30_000,
+      }),
+    ).toEqual({
+      authAddress: null,
+      sessionHydrated: false,
+    })
+  })
+
+  it('can preserve a fresh signed-out hydration state', () => {
+    expect(
+      deriveInitialAuthSessionState({
+        address: null,
+        resolvedAt: 10_000,
+        now: 20_000,
+        ttlMs: 30_000,
+      }),
+    ).toEqual({
+      authAddress: null,
+      sessionHydrated: true,
     })
   })
 })

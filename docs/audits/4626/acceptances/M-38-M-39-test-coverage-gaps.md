@@ -100,30 +100,26 @@ would make the intent explicit.
 
 ## Follow-ups tracked
 
-A dedicated test-coverage epic should be opened tracking:
+The original follow-up checklist has been converted into concrete tests in the
+verification coverage PR:
 
-1. **Foundry invariant suite.** Bootstrap `invariant_*` tests for:
-   - `CreatorOVault` share-supply ↔ NAV monotonicity.
-   - `CreatorGaugeController` jackpot reserve accounting under
-     repeated payout/deposit sequences.
-   - `ve4626BoostManager` boost-vote conservation under random
-     epoch transitions.
-2. **Fuzz expansion targets** (top 10 from the audit Section 12):
-   - Share-price arithmetic under extreme NAV values.
-   - Cross-chain message-id uniqueness under concurrent bursts.
-   - Fee-split rounding for degenerate bps/pps combinations.
-   - Oracle staleness boundary (MAX_STALENESS edge rounding).
-3. **CRE explicit-intent tests** — new files named after the exact
-   threat model:
-   - `cre-hmac-bypass.test.ts` covering
-     `allowUnsignedWhenHmacConfigured=true` behaviour across the
-     three feature-flag paths.
-   - `cre-nonce-replay.test.ts` covering nonce reuse across the
-     Vercel regional instance matrix.
-   - `cre-ai-consensus-fallback.test.ts` covering consensus failure
-     modes and the resulting disposition.
-   - `cre-claim-execute-race.test.ts` simulating the window between
-     claim acceptance and payout execution.
+1. **Foundry invariant suite.**
+   - `test/DeepInvariantTargets.t.sol` covers wrapper backing,
+     strategy-withdraw accounting, `CreatorGaugeController` jackpot reserve,
+     and bounded NAV monotonicity.
+   - `test/GovernanceVotingProperties.t.sol` covers boost/vote conservation
+     properties with Foundry/Echidna/Medusa/Certora-compatible property tests.
+2. **Fuzz expansion targets.**
+   - `test/SystemSafetySymbolic.t.sol`, `test/StrategyContractSymbolic.t.sol`,
+     `test/GovernanceVotingProperties.t.sol`, and
+     `test/LotteryAmoeProperties.t.sol` cover share-price arithmetic,
+     cross-chain/replay uniqueness models, fee-split rounding, oracle
+     freshness gates, and AMOE replay/deadline semantics.
+3. **CRE explicit-intent tests.**
+   - `frontend/api/__tests__/cre-hmac-bypass.test.ts`
+   - `frontend/api/__tests__/cre-nonce-replay.test.ts`
+   - `frontend/api/__tests__/cre-ai-consensus-fallback.test.ts`
+   - `frontend/api/__tests__/cre-claim-execute-race.test.ts`
 
 ## References
 

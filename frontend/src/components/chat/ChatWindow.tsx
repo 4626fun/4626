@@ -8,8 +8,21 @@
  * - Real-time message streaming
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, X, Send, Loader2, ArrowLeft, RotateCcw, CornerUpLeft, XCircle } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import {
+  ArrowLeft,
+  Copy,
+  CornerUpLeft,
+  ExternalLink,
+  Loader2,
+  MessageCircle,
+  Minus,
+  RotateCcw,
+  ShieldCheck,
+  UserRound,
+  X,
+  XCircle,
+} from 'lucide-react'
 import { useAccount } from 'wagmi'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -78,6 +91,17 @@ function truncateAddress(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function isAddressDisplay(value: string | null | undefined): boolean {
+  const trimmed = (value ?? '').trim()
+  return /^0x[a-fA-F0-9]{4}(?:…|\.{3})[a-fA-F0-9]{4}$/.test(trimmed) || /^0x[a-fA-F0-9]{40}$/.test(trimmed)
+}
+
+function isDuplicateAddressLabel(value: string | null | undefined, addressValue: string | null | undefined): boolean {
+  if (!value || !addressValue) return false
+  const trimmed = value.trim().toLowerCase()
+  return trimmed === addressValue.toLowerCase() || trimmed === truncateAddress(addressValue).toLowerCase()
+}
+
 function previewMessageText(value: string): string {
   const compact = value.replace(/\s+/g, ' ').trim()
   if (!compact) return 'Empty message'
@@ -109,6 +133,82 @@ type PreflightResult = {
 const DESKTOP_CHAT_WINDOW_WIDTH = 350
 const DESKTOP_CHAT_WINDOW_HEIGHT = 520
 const DESKTOP_CHAT_WINDOW_MINIMIZED_HEIGHT = 44
+
+function ChatHeaderAvatar({
+  avatar,
+  initialsValue,
+  addressValue,
+  interactive,
+  onOpenProfile,
+  className = '',
+}: {
+  avatar: string | null
+  initialsValue: string
+  addressValue: string | null
+  interactive: boolean
+  onOpenProfile?: (event?: { stopPropagation?: () => void }) => void
+  className?: string
+}) {
+  const content = (
+    <>
+      <span className="absolute left-1/2 top-0 flex h-11 w-11 -translate-x-1/2 items-center justify-center overflow-hidden rounded-full border-2 border-white/15 bg-white/10 text-[10px] font-semibold uppercase text-zinc-300">
+        {avatar ? (
+          <img src={avatar} alt="" className="h-full w-full object-cover" />
+        ) : (
+          initialsValue
+        )}
+      </span>
+      <span className="absolute left-1/2 top-[34px] z-10 -translate-x-1/2">
+        <EthosAvatarScoreForAddress address={addressValue} />
+      </span>
+    </>
+  )
+
+  if (interactive) {
+    return (
+      <button
+        type="button"
+        onClick={(event) => onOpenProfile?.(event)}
+        className={`relative h-[62px] w-12 shrink-0 ${className}`}
+        aria-label="Open profile"
+        title="Open profile"
+      >
+        {content}
+      </button>
+    )
+  }
+
+  return (
+    <div className={`relative h-[62px] w-12 shrink-0 ${className}`}>
+      {content}
+    </div>
+  )
+}
+
+function HeaderMenuItem(props: {
+  icon: ReactNode
+  label: string
+  detail?: string
+  onClick: () => void
+  disabled?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      disabled={props.disabled}
+      className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-white/[0.075] disabled:cursor-not-allowed disabled:opacity-45 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-white/[0.045] text-zinc-300">
+        {props.icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] font-semibold text-zinc-100">{props.label}</span>
+        {props.detail ? <span className="mt-0.5 block truncate text-[10px] text-zinc-500">{props.detail}</span> : null}
+      </span>
+    </button>
+  )
+}
 
 function baseAllowedGuard(): CommandGuardResult {
   return {
@@ -190,9 +290,11 @@ export function ChatWindow({
   const [desktopCommandsOpen, setDesktopCommandsOpen] = useState(false)
   const [peerAddressCopied, setPeerAddressCopied] = useState(false)
   const [peerAddressHovered, setPeerAddressHovered] = useState(false)
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const headerMenuRef = useRef<HTMLDivElement>(null)
   const resolvingPeerInboxIdRef = useRef<string | null>(null)
   const localMessageSeqRef = useRef(0)
   const trackedShownButtonsRef = useRef<Set<string>>(new Set())
@@ -231,13 +333,18 @@ export function ChatWindow({
   const dmIdentity = useIdentity(dmPeerAddress)
   const agentIdentity = getAgentIdentity(dmPeerAddress)
   const basenamePreferredName = dmIdentity.basenameDisplayName ?? dmIdentity.basename
+  const identityDisplayName = dmIdentity.source !== 'address' ? dmIdentity.displayName : null
+  const conversationNameLabel = !isAddressDisplay(conversationName) ? conversationName : null
   const headerName =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity?.name ?? basenamePreferredName ?? dmIdentity.displayName)
+      ? (agentIdentity?.name ?? basenamePreferredName ?? identityDisplayName ?? conversationNameLabel ?? 'XMTP contact')
       : conversationName
+  const identitySecondary = conversationType === 'dm' && dmPeerAddress && !isDuplicateAddressLabel(dmIdentity.secondary, dmPeerAddress)
+    ? dmIdentity.secondary
+    : null
   const headerSubline =
     conversationType === 'dm' && dmPeerAddress
-      ? (agentIdentity ? '4626 assistant' : (dmIdentity.secondary ?? truncateAddress(dmPeerAddress)))
+      ? (agentIdentity ? '4626 assistant' : identitySecondary)
       : null
   const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
   const peerProfileHref = copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null
@@ -279,11 +386,39 @@ export function ChatWindow({
     [peerProfileHref],
   )
 
+  const handleOpenBasescan = useCallback(() => {
+    if (!copyablePeerAddress) return
+    if (typeof window === 'undefined') return
+    window.open(`https://basescan.org/address/${copyablePeerAddress}`, '_blank', 'noopener,noreferrer')
+  }, [copyablePeerAddress])
+
   useEffect(() => {
     if (!peerAddressCopied) return
     const timer = window.setTimeout(() => setPeerAddressCopied(false), 1200)
     return () => window.clearTimeout(timer)
   }, [peerAddressCopied])
+
+  useEffect(() => {
+    if (!headerMenuOpen) return
+
+    function closeOnOutsidePointer(event: MouseEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (headerMenuRef.current?.contains(target)) return
+      setHeaderMenuOpen(false)
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setHeaderMenuOpen(false)
+    }
+
+    document.addEventListener('mousedown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [headerMenuOpen])
 
   // Load initial messages
   useEffect(() => {
@@ -869,6 +1004,88 @@ export function ChatWindow({
     await triggerCommand(command)
   }, [emitTelemetry, triggerCommand])
 
+  const headerMenu = headerMenuOpen ? (
+    <div
+      className="absolute left-0 top-[calc(100%+8px)] z-[80] w-[292px] overflow-hidden rounded-2xl border border-white/10 bg-[#202123]/98 p-2 text-zinc-100 shadow-[0_20px_70px_-24px_rgba(0,0,0,0.95)] ring-1 ring-black/40 backdrop-blur-xl"
+      onClick={(event) => event.stopPropagation()}
+      role="menu"
+      aria-label={`${headerName} chat menu`}
+    >
+      <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-2.5 pt-1">
+        <ChatHeaderAvatar
+          avatar={headerAvatar}
+          initialsValue={headerInitials}
+          addressValue={copyablePeerAddress}
+          interactive={false}
+          className="scale-[0.9]"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-zinc-50">{headerName}</div>
+          <div className="mt-0.5 truncate font-mono text-[10px] text-zinc-500">
+            {copyablePeerAddress ? truncateAddress(copyablePeerAddress) : 'XMTP conversation'}
+          </div>
+        </div>
+      </div>
+      <div className="mt-1 space-y-1">
+        <HeaderMenuItem
+          icon={<UserRound className="h-4 w-4" />}
+          label="View 4626 profile"
+          detail={peerProfileHref ? 'Open portfolio and identity context' : 'Profile opens when address is known'}
+          disabled={!peerProfileHref}
+          onClick={() => {
+            handleOpenPeerProfile()
+            setHeaderMenuOpen(false)
+          }}
+        />
+        <HeaderMenuItem
+          icon={<Copy className="h-4 w-4" />}
+          label={peerAddressCopied ? 'Address copied' : 'Copy address'}
+          detail={copyablePeerAddress ? truncateAddress(copyablePeerAddress) : 'Address unavailable'}
+          disabled={!copyablePeerAddress}
+          onClick={() => {
+            void handleCopyPeerAddress()
+            setHeaderMenuOpen(false)
+          }}
+        />
+        <HeaderMenuItem
+          icon={<ExternalLink className="h-4 w-4" />}
+          label="View on Basescan"
+          detail="Inspect wallet and transactions"
+          disabled={!copyablePeerAddress}
+          onClick={() => {
+            handleOpenBasescan()
+            setHeaderMenuOpen(false)
+          }}
+        />
+      </div>
+      <div className="my-2 border-t border-white/10" />
+      <div className="space-y-1">
+        <HeaderMenuItem
+          icon={<ShieldCheck className="h-4 w-4" />}
+          label="XMTP encrypted"
+          detail="Messages use XMTP end-to-end encryption"
+          onClick={() => setHeaderMenuOpen(false)}
+        />
+        <HeaderMenuItem
+          icon={<MessageCircle className="h-4 w-4" />}
+          label="Minimize chat"
+          onClick={() => {
+            setHeaderMenuOpen(false)
+            onMinimize()
+          }}
+        />
+        <HeaderMenuItem
+          icon={<X className="h-4 w-4" />}
+          label="Close chat"
+          onClick={() => {
+            setHeaderMenuOpen(false)
+            onClose()
+          }}
+        />
+      </div>
+    </div>
+  ) : null
+
   return (
     <div
       className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
@@ -895,46 +1112,34 @@ export function ChatWindow({
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
-            {peerProfileHref ? (
+            <ChatHeaderAvatar
+              avatar={headerAvatar}
+              initialsValue={headerInitials}
+              addressValue={copyablePeerAddress}
+              interactive={Boolean(peerProfileHref)}
+              onOpenProfile={handleOpenPeerProfile}
+            />
+            <div ref={headerMenuRef} className="relative min-w-0 text-left">
               <button
                 type="button"
-                onClick={() => handleOpenPeerProfile()}
-                className="relative h-10 w-10 shrink-0"
-                aria-label="Open profile"
-                title="Open profile"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setHeaderMenuOpen((prev) => !prev)
+                }}
+                className="block max-w-full rounded-lg text-left transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+                aria-haspopup="menu"
+                aria-expanded={headerMenuOpen}
               >
-                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[10px] font-medium uppercase text-zinc-300 ring-1 ring-transparent transition-colors hover:ring-white/25">
-                  {headerAvatar ? (
-                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    headerInitials
-                  )}
+                <span className="block truncate text-sm font-semibold text-zinc-100">
+                  {headerName}
                 </span>
-                <EthosAvatarScoreForAddress
-                  address={copyablePeerAddress}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2"
-                />
+                {headerSubline && (
+                  <span className="block truncate text-[10px] text-zinc-500">
+                    {headerSubline}
+                  </span>
+                )}
               </button>
-            ) : (
-              <div className="relative h-10 w-10 shrink-0">
-                <span className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[10px] font-medium uppercase text-zinc-300">
-                  {headerAvatar ? (
-                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    headerInitials
-                  )}
-                </span>
-              </div>
-            )}
-            <div className="min-w-0 text-left">
-              <div className="truncate text-sm font-semibold text-zinc-100">
-                {headerName}
-              </div>
-              {headerSubline && (
-                <div className="text-[10px] text-zinc-500 truncate">
-                  {headerSubline}
-                </div>
-              )}
+              {headerMenu}
               {copyablePeerAddress && (
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <button
@@ -976,42 +1181,30 @@ export function ChatWindow({
           onClick={onMinimize}
         >
           <div className="flex items-center gap-2 min-w-0">
-            {peerProfileHref ? (
+            <ChatHeaderAvatar
+              avatar={headerAvatar}
+              initialsValue={headerInitials}
+              addressValue={copyablePeerAddress}
+              interactive={Boolean(peerProfileHref)}
+              onOpenProfile={handleOpenPeerProfile}
+            />
+            <div ref={headerMenuRef} className="relative min-w-0">
               <button
                 type="button"
-                onClick={(event) => handleOpenPeerProfile(event)}
-                className="relative h-9 w-9 shrink-0"
-                aria-label="Open profile"
-                title="Open profile"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  setHeaderMenuOpen((prev) => !prev)
+                }}
+                className="block max-w-full rounded-lg text-left transition-colors hover:text-white focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+                aria-haspopup="menu"
+                aria-expanded={headerMenuOpen}
               >
-                <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[9px] font-medium uppercase text-zinc-300 ring-1 ring-transparent transition-colors hover:ring-white/25">
-                  {headerAvatar ? (
-                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    headerInitials
-                  )}
-                </span>
-                <EthosAvatarScoreForAddress
-                  address={copyablePeerAddress}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 scale-90"
-                />
+                <span className="block truncate text-sm font-medium text-zinc-200">{headerName}</span>
+                {headerSubline && (
+                  <span className="block truncate text-[10px] text-zinc-500">{headerSubline}</span>
+                )}
               </button>
-            ) : (
-              <div className="relative h-9 w-9 shrink-0">
-                <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-full bg-white/10 text-[9px] font-medium uppercase text-zinc-300">
-                  {headerAvatar ? (
-                    <img src={headerAvatar} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    headerInitials
-                  )}
-                </span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <div className="truncate text-sm font-medium text-zinc-200">{headerName}</div>
-              {headerSubline && (
-                <div className="text-[10px] text-zinc-500 truncate">{headerSubline}</div>
-              )}
+              {headerMenu}
               {copyablePeerAddress && (
                 <div className="mt-0.5 flex items-center gap-1.5">
                   <button

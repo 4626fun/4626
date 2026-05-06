@@ -19,7 +19,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { X } from 'lucide-react'
 import { type ChatConversation, type StartDmResult, useXmtp } from '@/lib/xmtp/provider'
-import { CHAT_OPEN_REQUEST_EVENT, isChatOpenRequest, type ChatOpenRequest } from '@/lib/chat/openChat'
+import {
+  CHAT_NEW_DM_REQUEST_EVENT,
+  CHAT_OPEN_REQUEST_EVENT,
+  isChatOpenRequest,
+  type ChatOpenRequest,
+} from '@/lib/chat/openChat'
 import { toast } from '@/components/ui/Toast'
 import {
   getBasenameAutocompleteCandidate,
@@ -326,6 +331,18 @@ function ChatWidgetInner() {
   }, [])
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleNewDmRequest = () => {
+      handleNewDm()
+      maybeConnectMessaging()
+    }
+
+    window.addEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
+    return () => window.removeEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
+  }, [handleNewDm, maybeConnectMessaging])
+
+  useEffect(() => {
     if (!showNewDm) return
     const input = newDmAddress.trim()
     if (!shouldResolveDmPreviewInput(input)) {
@@ -537,21 +554,6 @@ function ChatWidgetInner() {
           </div>
         ))}
 
-        {/* Chat bar — always on far right */}
-        <div className="pointer-events-auto">
-          <ChatBar
-            expanded={barExpanded}
-            onToggle={() =>
-              setBarExpanded((v) => {
-                const next = !v
-                if (next) maybeConnectMessaging()
-                return next
-              })
-            }
-            onOpenChat={handleOpenChat}
-            onNewDm={handleNewDm}
-          />
-        </div>
       </div>
 
       {/* New DM modal overlay */}

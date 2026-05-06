@@ -191,6 +191,30 @@ async function fetchEthosScoresByUserkeys(userkeys: string[]): Promise<Map<strin
   return scores
 }
 
+export async function fetchFreshEthosScoresByUserkeys(rawUserkeys: string[]): Promise<Map<string, EthosScore | null>> {
+  const userkeys = Array.from(
+    new Set(
+      rawUserkeys
+        .map((raw) => normalizeEthosUserkey(raw))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  )
+  const out = new Map<string, EthosScore | null>()
+  for (let i = 0; i < userkeys.length; i += 100) {
+    const chunk = userkeys.slice(i, i + 100)
+    const scores = await fetchEthosScoresByUserkeys(chunk)
+    for (const userkey of chunk) {
+      const value = scores.get(userkey) ?? null
+      USERKEY_SCORE_CACHE.set(userkey, {
+        value,
+        expiresAt: Date.now() + SCORE_CACHE_TTL_MS,
+      })
+      out.set(userkey, value)
+    }
+  }
+  return out
+}
+
 async function fetchEthosProfileByUserkey(userkey: string): Promise<EthosProfileSummary | null> {
   const search = searchParamsForUserkey(userkey)
   if (!search) return null

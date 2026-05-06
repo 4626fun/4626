@@ -602,8 +602,10 @@ export function ExploreCreators() {
     if (currentSort !== 'ethosScore') return filtered
 
     return [...filtered].sort((a, b) => {
-      const aScore = ethosByCoinKey.get(getCoinKey(a))?.score?.score ?? Number.NEGATIVE_INFINITY
-      const bScore = ethosByCoinKey.get(getCoinKey(b))?.score?.score ?? Number.NEGATIVE_INFINITY
+      const rawAScore = ethosByCoinKey.get(getCoinKey(a))?.score?.score
+      const rawBScore = ethosByCoinKey.get(getCoinKey(b))?.score?.score
+      const aScore = typeof rawAScore === 'number' && rawAScore > 0 ? rawAScore : Number.NEGATIVE_INFINITY
+      const bScore = typeof rawBScore === 'number' && rawBScore > 0 ? rawBScore : Number.NEGATIVE_INFINITY
       return bScore - aScore
     })
   }, [baseDisplayCoins, currentSort, ethosByCoinKey, ethosFilter])

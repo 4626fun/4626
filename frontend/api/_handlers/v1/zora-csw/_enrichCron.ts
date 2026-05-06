@@ -25,12 +25,17 @@ import {
   isSupabaseAdminConfigured,
 } from '../../../../server/_lib/db/supabaseAdmin.js'
 import {
+  readEthosEnrichBudget,
   isZoraCswIndexerEnabled,
   readEnrichBudget,
   readRpcConcurrency,
   ZORA_CSW_OWNERS_TABLE,
 } from '../../../../server/_lib/zora-csw/cronConfig.js'
 import { enrichCswOwners } from '../../../../server/_lib/zora-csw/enrichOwners.js'
+import {
+  refreshZoraOwnerEthosScores,
+  type OwnerEthosRefreshResult,
+} from '../../../../server/_lib/zora-csw/ownerEthosScores.js'
 import type { Address, PublicClient } from 'viem'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -72,8 +77,14 @@ export interface ZoraCswEnrichCronHandlerHooks {
     db: SupabaseLike,
     budget: number,
   ) => Promise<EnrichCandidate[]>
+  refreshOwnerEthosScores?: (
+    db: SupabaseLike,
+    ownerAddresses: string[],
+    maxAddresses: number,
+  ) => Promise<OwnerEthosRefreshResult>
   budget?: number
   concurrency?: number
+  ethosBudget?: number
 }
 
 let __testHooks: ZoraCswEnrichCronHandlerHooks = {}
@@ -190,6 +201,7 @@ export default async function handler(
   const db = __testHooks.db ?? getSupabaseAdmin()
   const budget = __testHooks.budget ?? readEnrichBudget()
   const concurrency = __testHooks.concurrency ?? readRpcConcurrency()
+  const ethosBudget = __testHooks.ethosBudget ?? readEthosEnrichBudget()
   const selectCandidates = __testHooks.selectCandidates ?? selectCandidatesDefault
 
   let candidates: EnrichCandidate[]
@@ -280,12 +292,39 @@ export default async function handler(
     upsertErrors.push(err instanceof Error ? err.message : 'unknown_error')
   }
 
+  let ethos: OwnerEthosRefreshResult = { attempted: 0, updated: 0, failed: 0, skipped: 0 }
+  if (ethosBudget > 0 && outcomes.some((outcome) => outcome.ok)) {
+    const ownerAddresses = outcomes.flatMap((outcome) => (outcome.ok ? outcome.current_owners ?? [] : []))
+    const refreshOwnerEthosScores =
+      __testHooks.refreshOwnerEthosScores ??
+      ((refreshDb, addresses, maxAddresses) =>
+        refreshZoraOwnerEthosScores({
+          db: refreshDb,
+          ownerAddresses: addresses,
+          maxAddresses,
+        }))
+    try {
+      ethos = await refreshOwnerEthosScores(db, ownerAddresses, ethosBudget)
+    } catch (err) {
+      ethos = {
+        attempted: 0,
+        updated: 0,
+        failed: Math.min(ethosBudget, ownerAddresses.length),
+        skipped: 0,
+      }
+      console.warn('[zora-csw-enrich-cron] ethos refresh failed', {
+        error: err instanceof Error ? err.message : 'unknown_error',
+      })
+    }
+  }
+
   if (candidates.length > 0 || failed > 0) {
     console.info('[zora-csw-enrich-cron] tick', {
       processed: candidates.length,
       succeeded,
       failed,
       updated,
+      ethos,
       upsertErrorCount: upsertErrors.length,
     })
   }
@@ -297,8 +336,10 @@ export default async function handler(
     succeeded,
     failed,
     updated,
+    ethos,
     budget,
     concurrency,
+    ethosBudget,
     ...(upsertErrors.length > 0 && { error: upsertErrors.join('; ').slice(0, 500) }),
   })
 }

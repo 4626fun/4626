@@ -47,6 +47,7 @@ let lastPrivyBridgeFailureAt = 0
 let lastPrivyBridgeFailureReason = ''
 let autoPrivyBridgeInFlight = false
 const AUTH_ME_CACHE_TTL_MS = 1_500
+const AUTH_SESSION_SNAPSHOT_TTL_MS = 30_000
 let authMeCacheToken: string | null = null
 let authMeCacheAddress: string | null = null
 let authMeCacheResolvedAt = 0
@@ -55,6 +56,58 @@ let authMeInFlight: Promise<string | null> | null = null
 let autoPrivyBridgeAttempted = false
 let authHandoffRedeemInFlightCode: string | null = null
 let authHandoffRedeemInFlight: Promise<AuthHandoffRedeemResponse | null> | null = null
+let sharedAuthSnapshotAddress: string | null = null
+let sharedAuthSnapshotResolvedAt = 0
+let sharedAuthSnapshotVersion = 0
+const sharedAuthSnapshotListeners = new Set<(address: string | null) => void>()
+
+export function deriveInitialAuthSessionState(input: {
+  address: string | null | undefined
+  resolvedAt: number
+  now: number
+  ttlMs?: number
+}): { authAddress: string | null; sessionHydrated: boolean } {
+  const ttlMs = Math.max(0, Number(input.ttlMs ?? AUTH_SESSION_SNAPSHOT_TTL_MS))
+  const address = typeof input.address === 'string' && input.address.trim().length > 0 ? input.address : null
+  const resolvedAt = Number(input.resolvedAt)
+  const now = Number(input.now)
+  const fresh =
+    Number.isFinite(resolvedAt) &&
+    resolvedAt > 0 &&
+    Number.isFinite(now) &&
+    now >= resolvedAt &&
+    now - resolvedAt <= ttlMs
+
+  return {
+    authAddress: fresh ? address : null,
+    sessionHydrated: fresh,
+  }
+}
+
+function readInitialSharedAuthSessionState() {
+  return deriveInitialAuthSessionState({
+    address: sharedAuthSnapshotAddress,
+    resolvedAt: sharedAuthSnapshotResolvedAt,
+    now: Date.now(),
+  })
+}
+
+function writeSharedAuthSnapshot(address: string | null) {
+  const nextAddress = typeof address === 'string' && address.trim().length > 0 ? address : null
+  const previousAddress = sharedAuthSnapshotAddress
+  sharedAuthSnapshotAddress = nextAddress
+  sharedAuthSnapshotResolvedAt = Date.now()
+  sharedAuthSnapshotVersion += 1
+  if (previousAddress === nextAddress) return
+  for (const listener of sharedAuthSnapshotListeners) {
+    listener(nextAddress)
+  }
+}
+
+function subscribeSharedAuthSnapshot(listener: (address: string | null) => void): () => void {
+  sharedAuthSnapshotListeners.add(listener)
+  return () => sharedAuthSnapshotListeners.delete(listener)
+}
 
 function shouldSkipAutoPrivyBridge(): boolean {
   const now = Date.now()
@@ -404,9 +457,10 @@ export function useSiweAuth() {
   const getPrivyAccessToken: (() => Promise<string | null>) | null =
     typeof privyAny?.getAccessToken === 'function' ? privyAny.getAccessToken.bind(privyAny) : null
 
-  const [authAddress, setAuthAddress] = useState<string | null>(null)
+  const initialSessionState = useMemo(() => readInitialSharedAuthSessionState(), [])
+  const [authAddress, setAuthAddress] = useState<string | null>(initialSessionState.authAddress)
   const [cswOwnership, setCswOwnership] = useState<CswOwnershipAttestation | null>(null)
-  const [sessionHydrated, setSessionHydrated] = useState(false)
+  const [sessionHydrated, setSessionHydrated] = useState(initialSessionState.sessionHydrated)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const autoPrivyAttemptKeyRef = useRef<string>('')
@@ -428,13 +482,23 @@ export function useSiweAuth() {
 
   const refresh = useCallback(async () => {
     const requestId = ++refreshRequestIdRef.current
+    const snapshotVersionAtStart = sharedAuthSnapshotVersion
     const nextAddress = await fetchAuthMeAddress()
 
-    if (requestId === refreshRequestIdRef.current) {
+    if (requestId === refreshRequestIdRef.current && sharedAuthSnapshotVersion === snapshotVersionAtStart) {
+      writeSharedAuthSnapshot(nextAddress)
       setAuthAddress(nextAddress)
     }
 
     return nextAddress
+  }, [])
+
+  useEffect(() => {
+    return subscribeSharedAuthSnapshot((nextAddress) => {
+      setAuthAddress(nextAddress)
+      setCswOwnership(null)
+      setSessionHydrated(true)
+    })
   }, [])
 
   useEffect(() => {
@@ -455,6 +519,7 @@ export function useSiweAuth() {
           // is cleared above.
           primeAuthMeCache(null, redeemed.address)
           supersedePendingRefresh()
+          writeSharedAuthSnapshot(redeemed.address)
           setAuthAddress(redeemed.address)
           setCswOwnership(null)
           if (!cancelled) setSessionHydrated(true)
@@ -554,6 +619,7 @@ export function useSiweAuth() {
         writeStoredSessionToken(null)
         primeAuthMeCache(null, address)
         supersedePendingRefresh()
+        writeSharedAuthSnapshot(address)
         setAuthAddress(address)
         setCswOwnership(null)
         try {
@@ -567,6 +633,7 @@ export function useSiweAuth() {
         if (shouldResetPrivyBridgeState(message)) {
           writeStoredSessionToken(null)
           supersedePendingRefresh()
+          writeSharedAuthSnapshot(null)
           setAuthAddress(null)
           setCswOwnership(null)
           autoPrivyAttemptKeyRef.current = ''
@@ -804,6 +871,7 @@ export function useSiweAuth() {
       writeStoredSessionToken(null)
       const resolved = typeof signed === 'string' ? signed : null
       supersedePendingRefresh()
+      writeSharedAuthSnapshot(resolved)
       setAuthAddress(resolved)
       const csw = (verifyJson?.data as any)?.cswOwnership
       if (
@@ -839,6 +907,7 @@ export function useSiweAuth() {
       writeStoredSessionToken(null)
       primeAuthMeCache(null, null)
       supersedePendingRefresh()
+      writeSharedAuthSnapshot(null)
       setAuthAddress(null)
       setCswOwnership(null)
     } finally {

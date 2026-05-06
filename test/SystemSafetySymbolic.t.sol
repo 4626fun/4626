@@ -363,7 +363,8 @@ contract CreatorShareOFTFeeAndLotterySymbolicTest is Test {
     }
 
     function _feeApplies(uint8 fromType, uint8 toType, bool feesEnabled) internal pure returns (bool) {
-        return feesEnabled && fromType == uint8(OperationType.SwapOnly) && toType != uint8(OperationType.NoFees);
+        return feesEnabled && fromType == uint8(OperationType.SwapOnly) && toType != uint8(OperationType.SwapOnly)
+            && toType != uint8(OperationType.NoFees);
     }
 
     function _lotteryBeneficiary(
@@ -508,7 +509,7 @@ contract SolanaBridgeAndCcaCompletionSymbolicTest is Test {
 }
 
 contract LotteryAmoeDeadlineAndReplaySymbolicTest is Test {
-    uint256 internal constant MIN_DEADLINE_BUFFER = 30;
+    uint256 internal constant MIN_DEADLINE_BUFFER = 60;
 
     function check_amoeDeadlineGate(uint64 nowTs, uint64 deadline) public pure {
         bool accepted = _deadlineAccepted(nowTs, deadline);

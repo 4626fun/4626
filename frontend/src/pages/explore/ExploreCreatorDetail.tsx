@@ -8,7 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
-import { EthosAvatarScoreForUserkey } from '@/components/chat/EthosScorePill'
+import { EthosAvatarScoreForUserkey, getEthosScorePalette, useEthosScoreForUserkey } from '@/components/chat/EthosScorePill'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
@@ -28,6 +28,40 @@ import {
 } from '@/features/explore/exploreShared'
 
 const CONTENT_COINS_PAGE_SIZE = 20
+
+function CreatorHeaderAvatar({
+  avatarUrl,
+  displayName,
+  ethosSocialUserkey,
+}: {
+  avatarUrl?: string | null
+  displayName: string
+  ethosSocialUserkey: string | null
+}) {
+  const ethosScore = useEthosScoreForUserkey(ethosSocialUserkey)
+  const scoreValue = ethosScore.data?.score
+  const hasPositiveScore = typeof scoreValue === 'number' && scoreValue > 0
+  const palette = getEthosScorePalette(scoreValue ?? null, ethosScore.data?.level ?? null)
+  const ringClass = hasPositiveScore
+    ? `${palette.borderClass} shadow-[0_0_0_1px_rgba(0,0,0,0.9)]`
+    : 'border-white/10'
+
+  return (
+    <div className="relative h-[68px] w-14 shrink-0 sm:h-[92px] sm:w-20">
+      {avatarUrl ? (
+        <img src={avatarUrl} alt={displayName} className={`h-14 w-14 rounded-xl border-2 object-cover sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`} />
+      ) : (
+        <div className={`flex h-14 w-14 items-center justify-center rounded-xl border-2 bg-linear-to-br from-zinc-600 to-zinc-700 sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`}>
+          <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
+        </div>
+      )}
+      <EthosAvatarScoreForUserkey
+        userkey={ethosSocialUserkey}
+        className="absolute bottom-1 left-1/2 -translate-x-1/2 scale-110 sm:bottom-2"
+      />
+    </div>
+  )
+}
 
 function formatNumber(value: string | number | undefined): string {
   if (!value) return '-'
@@ -458,19 +492,11 @@ export function ExploreCreatorDetail() {
           <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
             {/* Avatar & Name */}
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="relative h-[76px] w-14 shrink-0 sm:h-[100px] sm:w-20">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={displayName} className="h-14 w-14 rounded-xl object-cover sm:h-20 sm:w-20 sm:rounded-2xl" />
-                ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-linear-to-br from-zinc-600 to-zinc-700 sm:h-20 sm:w-20 sm:rounded-2xl">
-                    <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
-                  </div>
-                )}
-                <EthosAvatarScoreForUserkey
-                  userkey={ethosSocialUserkey}
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 scale-110"
-                />
-              </div>
+              <CreatorHeaderAvatar
+                avatarUrl={avatarUrl}
+                displayName={displayName}
+                ethosSocialUserkey={ethosSocialUserkey}
+              />
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl sm:text-2xl font-semibold text-white truncate">{displayName}</h1>
                 {handle && (

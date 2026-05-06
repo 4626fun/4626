@@ -33,3 +33,11 @@ export function readRpcConcurrency(): number {
   if (!Number.isFinite(n) || n <= 0) return 12
   return Math.floor(n)
 }
+
+export function readEthosEnrichBudget(): number {
+  const raw = String(process.env.INDEXER_ETHOS_ENRICH_BUDGET ?? '').trim()
+  if (!raw) return 250
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 0) return 250
+  return Math.floor(n)
+}

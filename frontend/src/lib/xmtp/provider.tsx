@@ -488,7 +488,7 @@ function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | n
   return null
 }
 
-async function canMessageAddressOnCurrentEnv(address: `0x${string}`): Promise<boolean | null> {
+export async function canMessageAddressOnCurrentEnv(address: `0x${string}`): Promise<boolean | null> {
   const identifiers = [{ identifier: address, identifierKind: IdentifierKind.Ethereum }]
   try {
     const result = await (Client as any).canMessage(identifiers, XMTP_ENV as any)

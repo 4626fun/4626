@@ -87,7 +87,7 @@ function CreatorSocialEthosBadge({
         level={ethosScore.level}
         profileQuery={resolvedEthosUserkey}
         profileQueryKind="userkey"
-        className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2"
+        className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2"
       />
     )
   }
@@ -95,7 +95,7 @@ function CreatorSocialEthosBadge({
   return (
     <EthosAvatarScoreForUserkey
       userkey={resolvedEthosUserkey}
-      className="absolute bottom-0 left-1/2 z-10 -translate-x-1/2"
+      className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2"
     />
   )
 }
@@ -157,6 +157,11 @@ export function TokenRow({
 
   const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
   const ethosPalette = getEthosScorePalette(ethosScore?.score ?? null, ethosScore?.level ?? null)
+  const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
+  const ethosHasPositiveScore = ethosScoreValue != null && ethosScoreValue > 0
+  const ethosAvatarRingClass = ethosHasPositiveScore
+    ? `${ethosPalette.borderClass} shadow-[0_0_0_1px_rgba(0,0,0,0.9)]`
+    : 'border-white/10'
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
@@ -259,9 +264,9 @@ export function TokenRow({
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
             <div className="relative h-10 w-10 shrink-0 sm:h-11 sm:w-11">
               {avatarUrl ? (
-                <img src={avatarUrl} alt={name} className="mx-auto h-7 w-7 rounded-full object-cover sm:h-8 sm:w-8" />
+                <img src={avatarUrl} alt={name} className={`mx-auto h-7 w-7 rounded-full border-2 object-cover sm:h-8 sm:w-8 ${ethosAvatarRingClass}`} />
               ) : (
-                <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-8 sm:w-8">
+                <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border-2 bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-8 sm:w-8 ${ethosAvatarRingClass}`}>
                   <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
                 </div>
               )}
@@ -286,8 +291,8 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
         {/* Ethos */}
-        <span className={`px-3 py-2 text-center tabular-nums ${ethosScore?.score != null ? ethosPalette.textClass : 'text-zinc-700'}`}>
-          {ethosScore?.score != null ? ethosScore.score.toLocaleString(undefined, { useGrouping: false }) : '—'}
+        <span className={`px-3 py-2 text-center tabular-nums ${ethosHasPositiveScore ? ethosPalette.textClass : 'text-zinc-700'}`}>
+          {ethosHasPositiveScore ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false }) : '—'}
         </span>
 
         {/* Market cap */}

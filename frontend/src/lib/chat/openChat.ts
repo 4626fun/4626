@@ -1,4 +1,6 @@
 export const CHAT_OPEN_REQUEST_EVENT = '4626:chat-open-request'
+export const CHAT_TOGGLE_REQUEST_EVENT = '4626:chat-toggle-request'
+export const CHAT_NEW_DM_REQUEST_EVENT = '4626:chat-new-dm-request'
 
 export type ChatOpenRequest =
   | {
@@ -19,6 +21,16 @@ export type ChatOpenRequest =
 export function requestOpenChat(request: ChatOpenRequest): void {
   if (typeof window === 'undefined') return
   window.dispatchEvent(new CustomEvent<ChatOpenRequest>(CHAT_OPEN_REQUEST_EVENT, { detail: request }))
+}
+
+export function requestToggleChat(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(CHAT_TOGGLE_REQUEST_EVENT))
+}
+
+export function requestNewDm(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(CHAT_NEW_DM_REQUEST_EVENT))
 }
 
 export function isChatOpenRequest(value: unknown): value is ChatOpenRequest {

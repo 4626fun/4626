@@ -5,7 +5,8 @@ import {
   Bot,
   ChevronRight,
   Hash,
-  PanelLeftClose,
+  PanelRightClose,
+  Plus,
   Search,
   Sparkles,
   Users,
@@ -15,17 +16,18 @@ import { useAccount } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { BASE_XMTP_AGENTS, type BaseXmtpAgent } from '@/lib/chat/baseXmtpAgents'
-import { requestOpenChat } from '@/lib/chat/openChat'
+import { CHAT_TOGGLE_REQUEST_EVENT, requestNewDm, requestOpenChat } from '@/lib/chat/openChat'
 import { useIdentity } from '@/hooks/useIdentity'
-import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
-import { resolveBasenameAddress } from '@/lib/basename/basename-api'
+import { canMessageAddressOnCurrentEnv, useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
+import { getBasenameProfileByName, resolveBasenameAddress } from '@/lib/basename/basename-api'
 import { cn } from '@/lib/shared/utils'
-import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress } from './EthosScorePill'
+import { EthosAvatarScoreBadge, EthosAvatarScoreForAddress, getEthosScorePalette, useEthosScore } from './EthosScorePill'
 
 type AgentRow = {
   creatorAddress: string
   xmtpAgentAddress: string
   agentType?: 'eoa' | 'csw'
+  cswAddress?: string | null
   listedPublicly: boolean
   createdAt: string
 }
@@ -51,6 +53,8 @@ type AgentsResponse = {
 
 const PRESENCE_OPT_IN_KEY = '4626.chat.presence.optedIn'
 const RAIL_WIDTH_CLASS = 'w-[320px] xl:w-[336px]'
+const CANONICAL_4626_AGENT_ADDRESS = '0xab6d5c10b03300326cd7fab7267ae192842967b5'
+const CANONICAL_4626_MAIN_ACCOUNT = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'
 
 function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`
@@ -65,6 +69,43 @@ function resolveAgentAddress(value: string | null | undefined): `0x${string}` | 
   return value.toLowerCase() as `0x${string}`
 }
 
+function isCanonical4626AgentAddress(value: string | null | undefined): boolean {
+  return value?.toLowerCase() === CANONICAL_4626_AGENT_ADDRESS
+}
+
+function isCanonical4626MainAccount(value: string | null | undefined): boolean {
+  return value?.toLowerCase() === CANONICAL_4626_MAIN_ACCOUNT
+}
+
+function isCanonical4626Agent(agent: AgentRow): boolean {
+  return (
+    isCanonical4626AgentAddress(agent.xmtpAgentAddress) ||
+    isCanonical4626AgentAddress(agent.cswAddress) ||
+    isCanonical4626AgentAddress(agent.creatorAddress)
+  )
+}
+
+function getCreatorAgentDisplayGroupKey(agent: AgentRow): string {
+  if (
+    isCanonical4626Agent(agent) ||
+    isCanonical4626MainAccount(agent.creatorAddress) ||
+    isCanonical4626MainAccount(agent.cswAddress) ||
+    isCanonical4626MainAccount(agent.xmtpAgentAddress)
+  ) {
+    return '4626-canonical-agent'
+  }
+  return agent.xmtpAgentAddress.toLowerCase()
+}
+
+function pickPreferredCreatorAgentRow(current: AgentRow | undefined, candidate: AgentRow): AgentRow {
+  if (!current) return candidate
+  const currentIsCanonical = isCanonical4626Agent(current)
+  const candidateIsCanonical = isCanonical4626Agent(candidate)
+  if (candidateIsCanonical && !currentIsCanonical) return candidate
+  if (candidate.agentType === 'csw' && current.agentType !== 'csw') return candidate
+  return current
+}
+
 function scoreRank(score: number | null | undefined): number {
   return typeof score === 'number' && Number.isFinite(score) ? score : -1
 }
@@ -77,12 +118,12 @@ function initials(value: string): string {
 
 function RailSection(props: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="space-y-1.5">
+    <section className="space-y-1">
       <div className="flex items-end justify-between gap-3 px-2">
         <div className="label text-[8px] tracking-[0.18em]">{props.label}</div>
         {props.hint ? <div className="text-[10px] text-zinc-600">{props.hint}</div> : null}
       </div>
-      <div className="space-y-1">{props.children}</div>
+      <div className="space-y-0.5">{props.children}</div>
     </section>
   )
 }
@@ -97,17 +138,22 @@ function RailAvatar(props: {
   ethosLevel?: string | null
 }) {
   const dotClass =
-    props.status === 'available'
+    props.status === 'available' || props.status === 'agent'
       ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)] motion-safe:animate-pulse'
       : props.status === 'recent'
         ? 'bg-amber-300'
-        : props.status === 'agent'
-          ? 'bg-brand-primary'
-          : 'bg-zinc-500'
+        : 'bg-zinc-500'
+  const fetchedEthosScore = useEthosScore(props.ethosScore === undefined ? props.ethosAddress : null)
+  const effectiveEthosScore = props.ethosScore !== undefined ? props.ethosScore : fetchedEthosScore.data?.score
+  const effectiveEthosLevel = props.ethosScore !== undefined ? props.ethosLevel : fetchedEthosScore.data?.level
+  const ethosScoreValue = typeof effectiveEthosScore === 'number' ? effectiveEthosScore : null
+  const ethosHasPositiveScore = ethosScoreValue != null && ethosScoreValue > 0
+  const ethosPalette = getEthosScorePalette(ethosScoreValue, effectiveEthosLevel)
+  const avatarRingClass = ethosHasPositiveScore ? ethosPalette.borderClass : 'border-white/10'
 
   return (
-    <div className="relative h-11 w-11 shrink-0">
-      <div className="relative h-9 w-9 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.06]">
+    <div className="relative h-[52px] w-11 shrink-0">
+      <div className={`absolute left-1/2 top-0 h-10 w-10 -translate-x-1/2 overflow-hidden rounded-full border-2 bg-white/[0.06] ${avatarRingClass}`}>
         {props.imageUrl ? (
           <img src={props.imageUrl} alt="" className="h-full w-full object-cover" />
         ) : (
@@ -119,25 +165,23 @@ function RailAvatar(props: {
       {props.status ? (
         <span
           className={cn(
-            'absolute right-1 top-0 h-2.5 w-2.5 rounded-full border border-black/85 ring-1 ring-black/40',
+            'absolute right-0.5 top-1 h-2.5 w-2.5 rounded-full border border-black/85 ring-1 ring-black/40',
             dotClass,
           )}
         />
       ) : null}
-      {props.ethosScore !== undefined ? (
-        <EthosAvatarScoreBadge
-          score={props.ethosScore}
-          level={props.ethosLevel}
-          profileQuery={props.ethosAddress}
-          profileQueryKind="address"
-          className="absolute bottom-1 left-1/2 -translate-x-1/2"
-        />
-      ) : (
-        <EthosAvatarScoreForAddress
-          address={props.ethosAddress}
-          className="absolute bottom-1 left-1/2 -translate-x-1/2"
-        />
-      )}
+      <span className="absolute left-1/2 top-[31px] z-10 -translate-x-1/2 scale-[0.92]">
+        {props.ethosScore !== undefined ? (
+          <EthosAvatarScoreBadge
+            score={props.ethosScore}
+            level={props.ethosLevel}
+            profileQuery={props.ethosAddress}
+            profileQueryKind="address"
+          />
+        ) : (
+          <EthosAvatarScoreForAddress address={props.ethosAddress} />
+        )}
+      </span>
     </div>
   )
 }
@@ -154,12 +198,37 @@ function RowShell(props: {
       disabled={props.disabled}
       onClick={props.onClick}
       aria-label={props.label}
-      className="group relative flex w-full items-center gap-3 rounded-2xl border border-transparent px-2.5 py-2.5 text-left transition-[background,border-color,transform] duration-200 motion-reduce:transition-none hover:-translate-y-px hover:border-white/10 hover:bg-white/[0.055] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/70"
+      className="group relative flex w-full items-center gap-2.5 rounded-2xl border border-transparent px-2 py-1.5 text-left transition-[background,border-color,transform] duration-200 motion-reduce:transition-none hover:-translate-y-px hover:border-white/10 hover:bg-white/[0.055] active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/70"
     >
       <span aria-hidden="true" className="pointer-events-none absolute inset-y-1 left-0 w-px bg-brand-primary/0 transition-colors group-hover:bg-brand-primary/50" />
       {props.children}
       <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-700 transition-colors group-hover:text-brand-primary/80" />
     </button>
+  )
+}
+
+function BaseAgentLogo({ agent }: { agent: BaseXmtpAgent }) {
+  const toneClass: Record<BaseXmtpAgent['logoTone'], string> = {
+    blue: 'border-blue-400/45 bg-blue-500/15 text-blue-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    green: 'border-emerald-400/45 bg-emerald-500/15 text-emerald-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    violet: 'border-violet-400/45 bg-violet-500/15 text-violet-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    gold: 'border-amber-300/45 bg-amber-400/15 text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    cyan: 'border-cyan-300/45 bg-cyan-400/15 text-cyan-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    pink: 'border-pink-400/45 bg-pink-500/15 text-pink-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    orange: 'border-orange-400/45 bg-orange-500/15 text-orange-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+    slate: 'border-slate-300/35 bg-slate-400/12 text-slate-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]',
+  }
+
+  return (
+    <span
+      className={cn(
+        'flex h-full w-full items-center justify-center rounded-[14px] border text-[11px] font-black uppercase tracking-[-0.04em]',
+        toneClass[agent.logoTone],
+      )}
+      aria-hidden="true"
+    >
+      {agent.logoText}
+    </span>
   )
 }
 
@@ -192,7 +261,7 @@ function usePresenceHeartbeat(enabled: boolean) {
   }, [address, enabled, isConnected])
 }
 
-function ConversationUserRow({ conversation }: { conversation: ChatConversation }) {
+function ConversationUserRow({ conversation, onOpen }: { conversation: ChatConversation; onOpen?: () => void }) {
   const peerAddress = isAddress(conversation.peerAddress) ? conversation.peerAddress : null
   const identity = useIdentity(peerAddress ?? undefined)
   const name = identity.displayName || conversation.name || (peerAddress ? shortAddress(peerAddress) : 'XMTP contact')
@@ -206,6 +275,7 @@ function ConversationUserRow({ conversation }: { conversation: ChatConversation 
         } else {
           requestOpenChat({ kind: 'group', conversationId: conversation.id, name: conversation.name || 'Conversation' })
         }
+        onOpen?.()
       }}
     >
       <RailAvatar
@@ -216,14 +286,14 @@ function ConversationUserRow({ conversation }: { conversation: ChatConversation 
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>
+          <div className="truncate text-[12.5px] font-medium text-zinc-100">{name}</div>
           {conversation.unreadCount > 0 ? (
             <span className="rounded-full bg-brand-primary px-1.5 py-0.5 text-[9px] font-semibold text-white">
               {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}
             </span>
           ) : null}
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500">
+        <div className="truncate text-[10.5px] leading-tight text-zinc-500">
           {identity.secondary ?? conversation.lastMessageText ?? 'Recent XMTP contact'}
         </div>
       </div>
@@ -231,14 +301,17 @@ function ConversationUserRow({ conversation }: { conversation: ChatConversation 
   )
 }
 
-function PresenceUserRow({ user }: { user: AvailabilityUser }) {
+function PresenceUserRow({ user, onOpen }: { user: AvailabilityUser; onOpen?: () => void }) {
   const identity = useIdentity(user.address)
   const name = user.displayName || identity.displayName || shortAddress(user.address)
 
   return (
     <RowShell
       label={`Open chat with ${name}`}
-      onClick={() => requestOpenChat({ kind: 'dm', peerAddress: user.address, nameHint: name, imageUrl: user.avatarUrl ?? identity.avatar ?? null })}
+      onClick={() => {
+        requestOpenChat({ kind: 'dm', peerAddress: user.address, nameHint: name, imageUrl: user.avatarUrl ?? identity.avatar ?? null })
+        onOpen?.()
+      }}
     >
       <RailAvatar
         name={name}
@@ -250,9 +323,9 @@ function PresenceUserRow({ user }: { user: AvailabilityUser }) {
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>
+          <div className="truncate text-[12.5px] font-medium text-zinc-100">{name}</div>
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500">
+        <div className="truncate text-[10.5px] leading-tight text-zinc-500">
           {identity.secondary ?? (user.status === 'available' ? 'Available now' : 'Recently active')}
         </div>
       </div>
@@ -260,12 +333,40 @@ function PresenceUserRow({ user }: { user: AvailabilityUser }) {
   )
 }
 
-function BaseAgentRow({ agent }: { agent: BaseXmtpAgent }) {
-  const directIdentity = useIdentity(agent.address)
+function BaseAgentRow({ agent, onOpen }: { agent: BaseXmtpAgent; onOpen?: () => void }) {
   const targetLabel = agent.handle ?? agent.address ?? agent.name
   const [resolving, setResolving] = useState(false)
   const [failed, setFailed] = useState(false)
   const [resolvedAddress, setResolvedAddress] = useState<`0x${string}` | null>(agent.address ?? null)
+  const directIdentity = useIdentity(resolvedAddress ?? agent.address)
+  const handleProfile = useQuery({
+    queryKey: ['baseAgentHandleProfile', agent.handle],
+    queryFn: async () => {
+      if (!agent.handle) return null
+      return getBasenameProfileByName(agent.handle)
+    },
+    enabled: Boolean(agent.handle),
+    staleTime: 10 * 60_000,
+  })
+  const profileAvatar = handleProfile.data?.avatar ?? directIdentity.avatar ?? null
+  const xmtpReachability = useQuery({
+    queryKey: ['xmtpReachability', resolvedAddress],
+    queryFn: async () => {
+      if (!resolvedAddress) return null
+      return canMessageAddressOnCurrentEnv(resolvedAddress)
+    },
+    enabled: Boolean(resolvedAddress),
+    staleTime: 5 * 60_000,
+  })
+  const isXmtpReachable = xmtpReachability.data === true
+  const addressLabel = resolvedAddress ? shortAddress(resolvedAddress) : targetLabel
+  const subtitle = resolving
+    ? 'Resolving XMTP address…'
+    : failed
+      ? `Could not resolve ${targetLabel}`
+      : xmtpReachability.isLoading
+        ? `Checking XMTP reachability · ${addressLabel}`
+        : `${agent.description} · ${addressLabel}`
 
   useEffect(() => {
     if (resolvedAddress || !agent.handle) return
@@ -300,12 +401,15 @@ function BaseAgentRow({ agent }: { agent: BaseXmtpAgent }) {
         kind: 'dm',
         peerAddress: nextAddress,
         nameHint: agent.name,
-        imageUrl: directIdentity.avatar ?? null,
+        imageUrl: profileAvatar,
       })
+      onOpen?.()
     } finally {
       setResolving(false)
     }
   }
+
+  if (xmtpReachability.data === false) return null
 
   return (
     <RowShell
@@ -315,60 +419,90 @@ function BaseAgentRow({ agent }: { agent: BaseXmtpAgent }) {
     >
       <RailAvatar
         name={agent.name}
-        imageUrl={directIdentity.avatar ?? null}
-        icon={<Bot className="h-4 w-4 text-brand-primary" />}
-        status="agent"
+        imageUrl={profileAvatar}
+        icon={<BaseAgentLogo agent={agent} />}
+        status={isXmtpReachable ? 'available' : undefined}
         ethosAddress={resolvedAddress}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className="truncate text-[13px] font-medium text-zinc-100">{agent.name}</div>
+          <div className="truncate text-[12.5px] font-medium text-zinc-100">{agent.name}</div>
           <span className="shrink-0 rounded-full border border-brand-primary/20 bg-brand-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-blue-200">
             Base
           </span>
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500">
-          {resolving
-            ? 'Resolving XMTP address…'
-            : failed
-              ? `Could not resolve ${targetLabel}`
-              : `${agent.description} · ${resolvedAddress ? shortAddress(resolvedAddress) : targetLabel}`}
+        <div className="truncate text-[10.5px] leading-tight text-zinc-500">
+          {subtitle}
         </div>
       </div>
     </RowShell>
   )
 }
 
-function CreatorAgentRow({ agent }: { agent: AgentRow }) {
-  const creatorIdentity = useIdentity(agent.creatorAddress)
+function CreatorAgentRow({ agent, onOpen }: { agent: AgentRow; onOpen?: () => void }) {
+  const canonical = isCanonical4626Agent(agent)
+  const identityAddress = canonical
+    ? CANONICAL_4626_MAIN_ACCOUNT
+    : agent.cswAddress && isAddress(agent.cswAddress)
+      ? agent.cswAddress
+      : agent.creatorAddress
+  const scoreAddress = canonical ? CANONICAL_4626_MAIN_ACCOUNT : identityAddress
+  const creatorIdentity = useIdentity(identityAddress)
   const agentIdentity = useIdentity(agent.xmtpAgentAddress)
   const agentAddress = isAddress(agent.xmtpAgentAddress) ? agent.xmtpAgentAddress : null
-  const name = `${creatorIdentity.displayName || shortAddress(agent.creatorAddress)} agent`
+  const identityLabel = creatorIdentity.source !== 'address'
+    ? creatorIdentity.displayName
+    : agentIdentity.source !== 'address'
+      ? agentIdentity.displayName
+      : shortAddress(identityAddress)
+  const name = canonical ? 'agent 4626' : `${identityLabel} agent`
+  const avatar = creatorIdentity.avatar ?? agentIdentity.avatar ?? null
+  const xmtpReachability = useQuery({
+    queryKey: ['xmtpReachability', agentAddress],
+    queryFn: async () => {
+      if (!agentAddress) return null
+      return canMessageAddressOnCurrentEnv(agentAddress)
+    },
+    enabled: Boolean(agentAddress),
+    staleTime: 5 * 60_000,
+  })
+  const isXmtpReachable = xmtpReachability.data === true
+  const addressLabel = agentAddress ? shortAddress(agentAddress) : 'missing address'
+  const subtitle = xmtpReachability.isLoading
+      ? `Checking XMTP reachability · ${addressLabel}`
+      : canonical
+        ? `Canonical ERC-8004 agent · ${creatorIdentity.secondary ?? shortAddress(CANONICAL_4626_MAIN_ACCOUNT)}`
+        : `${agent.agentType === 'csw' ? 'Smart-wallet agent' : 'Creator agent'} · ${agentIdentity.secondary ?? shortAddress(agent.xmtpAgentAddress)}`
+
+  if (xmtpReachability.data === false) return null
 
   return (
     <RowShell
       label={`Open chat with ${name}`}
       disabled={!agentAddress}
       onClick={() => {
-        if (agentAddress) requestOpenChat({ kind: 'dm', peerAddress: agentAddress, nameHint: name, imageUrl: creatorIdentity.avatar ?? null })
+        if (agentAddress) {
+          requestOpenChat({ kind: 'dm', peerAddress: agentAddress, nameHint: name, imageUrl: avatar })
+          onOpen?.()
+        }
       }}
     >
       <RailAvatar
         name={name}
-        imageUrl={creatorIdentity.avatar ?? null}
+        imageUrl={avatar}
         icon={<Bot className="h-4 w-4 text-brand-primary" />}
-        status="agent"
-        ethosAddress={agent.creatorAddress}
+        status={isXmtpReachable ? 'available' : undefined}
+        ethosAddress={scoreAddress}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <div className="truncate text-[13px] font-medium text-zinc-100">{name}</div>
+          <div className="truncate text-[12.5px] font-medium text-zinc-100">{name}</div>
           <span className="shrink-0 rounded-full border border-brand-primary/20 bg-brand-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-blue-200">
             AI
           </span>
         </div>
-        <div className="mt-0.5 truncate text-[11px] text-zinc-500">
-          {agent.agentType === 'csw' ? 'Smart-wallet agent' : 'Creator agent'} · {agentIdentity.secondary ?? shortAddress(agent.xmtpAgentAddress)}
+        <div className="truncate text-[10.5px] leading-tight text-zinc-500">
+          {subtitle}
         </div>
       </div>
     </RowShell>
@@ -377,9 +511,9 @@ function CreatorAgentRow({ agent }: { agent: AgentRow }) {
 
 function RailSkeletonRows() {
   return (
-    <div className="space-y-2 px-1 py-1" role="status" aria-live="polite" aria-label="Loading chat availability">
+    <div className="space-y-1.5 px-1 py-1" role="status" aria-live="polite" aria-label="Loading chat availability">
       {Array.from({ length: 5 }).map((_, index) => (
-        <div key={index} className="flex items-center gap-3 rounded-2xl px-2.5 py-2.5">
+        <div key={index} className="flex items-center gap-2.5 rounded-2xl px-2 py-1.5">
           <div className="h-9 w-9 rounded-2xl bg-white/[0.07] motion-safe:animate-pulse" />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="h-3 w-2/3 rounded-full bg-white/[0.07] motion-safe:animate-pulse" />
@@ -415,6 +549,21 @@ export function ChatAvailabilityRail() {
   })
 
   usePresenceHeartbeat(presenceEnabled)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleToggleRequest = () => {
+      setExpanded((current) => {
+        const next = !current
+        if (next && status === 'idle') void connect()
+        return next
+      })
+    }
+
+    window.addEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
+    return () => window.removeEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleToggleRequest)
+  }, [connect, status])
 
   const availability = useQuery({
     queryKey: ['chatAvailability'],
@@ -463,9 +612,15 @@ export function ChatAvailabilityRail() {
 
   const visibleAgents = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (agents.data ?? [])
+    const dedupedByDisplayAccount = new Map<string, AgentRow>()
+    for (const agent of (agents.data ?? [])
       .filter((agent) => !q || agent.creatorAddress.toLowerCase().includes(q) || agent.xmtpAgentAddress.toLowerCase().includes(q))
-      .slice(0, 20)
+      .sort((a, b) => Number(isCanonical4626Agent(b)) - Number(isCanonical4626Agent(a)))
+    ) {
+      const key = getCreatorAgentDisplayGroupKey(agent)
+      dedupedByDisplayAccount.set(key, pickPreferredCreatorAgentRow(dedupedByDisplayAccount.get(key), agent))
+    }
+    return [...dedupedByDisplayAccount.values()].slice(0, 20)
   }, [agents.data, query])
 
   const visibleBaseAgents = useMemo(() => {
@@ -523,11 +678,11 @@ export function ChatAvailabilityRail() {
         : 'XMTP idle'
 
   return (
-    <aside className={cn('fixed bottom-24 left-4 top-24 z-60 hidden overflow-hidden rounded-[28px] border border-white/10 bg-black/72 shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)] backdrop-blur-2xl md:flex md:flex-col motion-safe:animate-scale-in', RAIL_WIDTH_CLASS)}>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_42%_at_16%_0%,rgba(0,82,255,0.16),transparent_68%)]" />
+    <aside className={cn('fixed bottom-24 right-4 top-24 z-60 hidden overflow-hidden rounded-[28px] border border-white/10 bg-black/72 shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)] backdrop-blur-2xl md:flex md:flex-col motion-safe:animate-scale-in', RAIL_WIDTH_CLASS)}>
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_42%_at_84%_0%,rgba(0,82,255,0.16),transparent_68%)]" />
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/22 to-transparent" />
 
-      <div className="relative border-b border-white/8 p-4">
+      <div className="relative border-b border-white/8 p-3">
         <div className="flex items-center justify-between gap-2">
           <div>
             <div className="label">Available to Chat</div>
@@ -536,16 +691,29 @@ export function ChatAvailabilityRail() {
               {connectedLabel}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded(false)}
-            className="rounded-2xl border border-white/8 bg-white/[0.035] p-2 text-zinc-500 transition hover:border-white/14 hover:bg-white/[0.07] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
-            aria-label="Collapse availability rail"
-          >
-            <PanelLeftClose className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                requestNewDm()
+                setExpanded(false)
+              }}
+              className="rounded-2xl border border-white/8 bg-white/[0.035] p-2 text-zinc-500 transition hover:border-white/14 hover:bg-white/[0.07] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+              aria-label="Start new direct message"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="rounded-2xl border border-white/8 bg-white/[0.035] p-2 text-zinc-500 transition hover:border-white/14 hover:bg-white/[0.07] hover:text-zinc-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+              aria-label="Collapse availability rail"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <label className="mt-4 flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.045] px-3 py-2.5 transition-colors focus-within:border-brand-primary/35 focus-within:bg-white/[0.06]">
+        <label className="mt-3 flex items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.045] px-3 py-2 transition-colors focus-within:border-brand-primary/35 focus-within:bg-white/[0.06]">
           <span className="sr-only">Search people, vaults, and agents</span>
           <Search className="h-3.5 w-3.5 text-zinc-600 transition-colors group-focus-within:text-brand-primary" />
           <input
@@ -558,7 +726,7 @@ export function ChatAvailabilityRail() {
         <button
           type="button"
           onClick={() => setPresenceOptIn(!presenceEnabled)}
-          className={`mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border px-3 py-2.5 text-[12px] font-medium transition ${
+          className={`mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border px-3 py-2 text-[12px] font-medium transition ${
             presenceEnabled
               ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
               : 'border-white/8 bg-white/[0.035] text-zinc-500 hover:border-white/14 hover:bg-white/[0.06] hover:text-zinc-300'
@@ -569,7 +737,7 @@ export function ChatAvailabilityRail() {
         </button>
       </div>
 
-      <div className="relative grid grid-cols-3 gap-1 border-b border-white/8 p-2">
+      <div className="relative grid grid-cols-3 gap-1 border-b border-white/8 p-1.5">
         {[
           { id: 'users' as const, label: 'Users', icon: Users },
           { id: 'vaults' as const, label: 'Vaults', icon: Hash },
@@ -582,7 +750,7 @@ export function ChatAvailabilityRail() {
               type="button"
               onClick={() => setTab(item.id)}
               aria-pressed={tab === item.id}
-              className={`flex items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-[11px] font-medium transition ${
+              className={`flex items-center justify-center gap-1.5 rounded-2xl px-2 py-1.5 text-[11px] font-medium transition ${
                 tab === item.id ? 'bg-white/[0.075] text-zinc-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]' : 'text-zinc-500 hover:bg-white/[0.045] hover:text-zinc-300'
               }`}
             >
@@ -593,7 +761,7 @@ export function ChatAvailabilityRail() {
         })}
       </div>
 
-      <div className="relative min-h-0 flex-1 space-y-4 overflow-y-auto p-3 [scrollbar-gutter:stable]">
+      <div className="relative min-h-0 flex-1 space-y-2.5 overflow-y-auto p-2.5 [scrollbar-gutter:stable]">
         {tab === 'users' ? (
           <>
             {availability.isLoading && conversations.length === 0 ? <RailSkeletonRows /> : null}
@@ -607,14 +775,14 @@ export function ChatAvailabilityRail() {
             {visibleConversations.length > 0 ? (
               <RailSection label="Recent Conversations" hint={`${visibleConversations.length}`}>
                 {visibleConversations.map((conversation) => (
-                  <ConversationUserRow key={conversation.id} conversation={conversation} />
+                  <ConversationUserRow key={conversation.id} conversation={conversation} onOpen={() => setExpanded(false)} />
                 ))}
               </RailSection>
             ) : null}
             {visiblePresenceUsers.length > 0 ? (
               <RailSection label="Online Users" hint="ETHOS ranked">
                 {visiblePresenceUsers.map((user) => (
-                  <PresenceUserRow key={user.address} user={user} />
+                  <PresenceUserRow key={user.address} user={user} onOpen={() => setExpanded(false)} />
                 ))}
               </RailSection>
             ) : null}
@@ -649,7 +817,7 @@ export function ChatAvailabilityRail() {
           <>
             {visibleBaseAgents.length > 0 ? (
               <RailSection label="Base Agents" hint={`${visibleBaseAgents.length} curated`}>
-                {visibleBaseAgents.map((agent) => <BaseAgentRow key={agent.id} agent={agent} />)}
+                {visibleBaseAgents.map((agent) => <BaseAgentRow key={agent.id} agent={agent} onOpen={() => setExpanded(false)} />)}
               </RailSection>
             ) : null}
             {agents.isLoading ? (
@@ -664,7 +832,7 @@ export function ChatAvailabilityRail() {
             ) : null}
             {!agents.isLoading && !agentsError && visibleAgents.length > 0 ? (
               <RailSection label="Creator Agents" hint="4626 directory">
-                {visibleAgents.map((agent) => <CreatorAgentRow key={agent.creatorAddress} agent={agent} />)}
+                {visibleAgents.map((agent) => <CreatorAgentRow key={agent.creatorAddress} agent={agent} onOpen={() => setExpanded(false)} />)}
               </RailSection>
             ) : null}
             {!agents.isLoading && !agentsError && visibleAgents.length === 0 && visibleBaseAgents.length === 0 ? (

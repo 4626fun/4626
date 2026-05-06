@@ -162,12 +162,19 @@ function normalizeEthosUserkey(value: string | null | undefined): string | null 
 
 function formatScore(score: number | null | undefined): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return 'No Credibility Score'
+  if (score === 0) return '-'
   return new Intl.NumberFormat(undefined, { maximumFractionDigits: 0, useGrouping: false }).format(score)
+}
+
+function displayEthosLevel(score: number | null | undefined, level?: string | null): string | null {
+  if (score === 0) return 'Neutral'
+  return level ?? null
 }
 
 function formatCredibilityScoreLabel(score: number | null | undefined, level?: string | null): string {
   const scoreText = formatScore(score)
-  return level ? `Ethos Credibility Score ${scoreText} · ${level}` : `Ethos Credibility Score ${scoreText}`
+  const displayLevel = displayEthosLevel(score, level)
+  return displayLevel ? `Ethos Credibility Score ${scoreText} · ${displayLevel}` : `Ethos Credibility Score ${scoreText}`
 }
 
 function formatReviewSummary(profile: EthosProfileSummary | null | undefined): string {
@@ -189,6 +196,7 @@ function normalizeEthosLevel(level: string | null | undefined): string | null {
 
 function inferEthosLevelFromScore(score: number | null | undefined): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return 'neutral'
+  if (score === 0) return 'neutral'
   if (score < 800) return 'untrusted'
   if (score < 1200) return 'questionable'
   if (score < 1400) return 'neutral'
@@ -202,7 +210,7 @@ function inferEthosLevelFromScore(score: number | null | undefined): string {
 }
 
 export function getEthosScorePalette(score: number | null | undefined, level?: string | null): EthosScorePalette {
-  const key = normalizeEthosLevel(level) ?? inferEthosLevelFromScore(score)
+  const key = score === 0 ? 'neutral' : normalizeEthosLevel(level) ?? inferEthosLevelFromScore(score)
   return ETHOS_LEVEL_PALETTES[key] ?? ETHOS_LEVEL_PALETTES.neutral!
 }
 
@@ -452,6 +460,7 @@ export function EthosAvatarScoreBadge({
 
   if (!hasScore) return null
   const palette = getEthosScorePalette(score, level)
+  const levelLabel = displayEthosLevel(score, level) ?? palette.level
 
   const showPopoverNearBadge = () => {
     clearCloseTimer()
@@ -522,7 +531,7 @@ export function EthosAvatarScoreBadge({
             </span>
             <span className="text-right">
               <span className={cn('block font-serif text-[30px] leading-none', palette.textClass)}>{formatScore(score)}</span>
-              <span className={cn('mt-0.5 block text-[10px] font-semibold', palette.strongTextClass)}>{level ?? palette.level}</span>
+              <span className={cn('mt-0.5 block text-[10px] font-semibold', palette.strongTextClass)}>{levelLabel}</span>
             </span>
           </span>
           {profileValue?.profileUrl ? (
@@ -545,7 +554,8 @@ export function EthosAvatarScoreBadge({
       <span
         ref={badgeRef}
         className={cn(
-          'group/ethos pointer-events-auto relative inline-flex h-[16px] items-center gap-0.5 rounded-md border bg-[#07080a]/95 py-0 pl-1.5 pr-0.5 text-[9px] font-semibold leading-none shadow-[0_1px_2px_rgba(0,0,0,0.55)]',
+          'group/ethos pointer-events-auto relative inline-flex h-[16px] items-center gap-0.5 rounded-md border py-0 pl-1.5 pr-0.5 text-[9px] font-semibold leading-none shadow-[0_1px_2px_rgba(0,0,0,0.55)] backdrop-blur',
+          palette.bgClass,
           palette.borderClass,
           palette.textClass,
           className,
