@@ -35,6 +35,8 @@ import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
+import { WaitlistConnectBaseApp } from './WaitlistConnectBaseApp'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
 type AccountsSummary = {
   privyUserId: string
@@ -74,6 +76,14 @@ type WaitlistStatsData = {
   signedUpCount: number
   capacity: number
   spotsRemaining: number
+}
+
+function getSubAccountCompletionAccountKey(account: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): string | null {
+  const privyUserId = account?.privyUserId?.trim()
+  if (privyUserId) return `privy:${privyUserId}`
+  const email = account?.email?.trim().toLowerCase()
+  if (email) return `email:${email}`
+  return null
 }
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
@@ -457,9 +467,11 @@ export function WaitlistFlow(props: {
   const privyAuthed = privy.authenticated
   const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'
   const { getAccessToken } = privy
-  const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
+  const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
   const [step, setStep] = useState<WaitlistStep>('auth')
+  const [subAccountStepCompletedAccountKey, setSubAccountStepCompletedAccountKey] = useState<string | null>(null)
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
 
   const {
     busy,
@@ -527,6 +539,7 @@ export function WaitlistFlow(props: {
 
   const resetResolvedAccountState = useCallback(() => {
     setAccount(null)
+    setSubAccountStepCompletedAccountKey(null)
   }, [])
 
   const fetchWaitlistStats = useCallback(async () => {
@@ -549,6 +562,7 @@ export function WaitlistFlow(props: {
       bypassRecoveryCooldown?: boolean
     }): Promise<AccountsSummary | null> => {
       let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
+      let embeddedEoaAddressForStep = embeddedEoaAddress
       const waitForTokenHydration = opts?.waitForTokenHydration === true
       const bypassRecoveryCooldown = opts?.bypassRecoveryCooldown === true
       const recoveryCooldownActive = recoveryRequiredBootstrapCooldownUntilRef.current > Date.now()
@@ -604,7 +618,8 @@ export function WaitlistFlow(props: {
             'Account sync',
           )
           if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-            await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
+            const embeddedWallet = await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
+            embeddedEoaAddressForStep = embeddedWallet.address
             canonicalization = await withTimeout(
               runCanonicalizationPipeline({
                 privyToken: token,
@@ -671,10 +686,35 @@ export function WaitlistFlow(props: {
         setError('Verify your email with 4626 to finish creating this account.')
         return nextAccount
       }
-      setStep(resolveWaitlistStep({ account: nextAccount }))
+      // Track C2 requires the actual Privy embedded EOA signer. Linked
+      // external wallets can also hydrate on `privy.user.wallet`, so only
+      // trust the embedded-wallet helper used by the signer setup path.
+      const accountCompletionKey = getSubAccountCompletionAccountKey(nextAccount)
+      const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
+      const subAccountStepCompleted = Boolean(
+        accountCompletionKey && subAccountStepCompletedAccountKey === accountCompletionKey,
+      )
+      setStep(
+        resolveWaitlistStep({
+          account: nextAccount,
+          subAccountFlowEnabled,
+          embeddedEoaAvailable,
+          subAccountStepCompleted,
+        }),
+      )
       return nextAccount
     },
-    [activeReferralCode, ensureEmbeddedWallet, getAccessToken, privyAuthed, setError, setRecoveryRequired],
+    [
+      activeReferralCode,
+      embeddedEoaAddress,
+      ensureEmbeddedWallet,
+      getAccessToken,
+      privyAuthed,
+      setError,
+      setRecoveryRequired,
+      subAccountFlowEnabled,
+      subAccountStepCompletedAccountKey,
+    ],
   )
 
   const requestBootstrap = useCallback(
@@ -976,6 +1016,16 @@ export function WaitlistFlow(props: {
     }
   }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
 
+  const handleSubAccountSkip = useCallback(() => {
+    setSubAccountStepCompletedAccountKey(getSubAccountCompletionAccountKey(account))
+    setStep('done')
+  }, [account])
+
+  const handleSubAccountComplete = useCallback(() => {
+    setSubAccountStepCompletedAccountKey(getSubAccountCompletionAccountKey(account))
+    setStep('done')
+  }, [account])
+
   const onOpenAccounts = useCallback(async () => {
     if (completionBusy) return
     setCompletionBusy(true)
@@ -1064,6 +1114,13 @@ export function WaitlistFlow(props: {
     }, 30_000)
     return () => window.clearInterval(intervalId)
   }, [fetchWaitlistStats])
+
+  useEffect(() => {
+    if (privyAuthed) return
+    if (!account && !subAccountStepCompletedAccountKey) return
+    resetResolvedAccountState()
+    setStep('auth')
+  }, [account, privyAuthed, resetResolvedAccountState, subAccountStepCompletedAccountKey])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1189,6 +1246,10 @@ export function WaitlistFlow(props: {
             onRecoverAccount={onRecoverAccount}
             disableMotion
           />
+        ) : step === 'connect-base-app' ? (
+          <div key="connect-base-app-static" className="flex min-h-[460px] items-center justify-center py-12 sm:py-20">
+            <WaitlistConnectBaseApp onSkip={handleSubAccountSkip} onComplete={handleSubAccountComplete} />
+          </div>
         ) : step === 'done' && account ? (
           <div key="done-static">
             <WaitlistSetupWorkspace
@@ -1215,6 +1276,17 @@ export function WaitlistFlow(props: {
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
             />
+          ) : step === 'connect-base-app' ? (
+            <motion.div
+              key="connect-base-app"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: WAITLIST_EASE }}
+              className="flex min-h-[460px] items-center justify-center py-12 sm:py-20"
+            >
+              <WaitlistConnectBaseApp onSkip={handleSubAccountSkip} onComplete={handleSubAccountComplete} />
+            </motion.div>
           ) : step === 'done' && account ? (
             <motion.div
               key="done"

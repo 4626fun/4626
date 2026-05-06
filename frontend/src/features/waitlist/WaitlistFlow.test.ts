@@ -71,6 +71,50 @@ describe('resolveWaitlistStep', () => {
       }),
     ).toBe('done')
   })
+
+  it('Track C2 — routes verified accounts to connect-base-app when flag enabled and embedded EOA exists', () => {
+    expect(
+      resolveWaitlistStep({
+        account: { emailVerified: true, appAccessStatus: null },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: false,
+      }),
+    ).toBe('connect-base-app')
+  })
+
+  it('Track C2 — does not route to connect-base-app when flag is off', () => {
+    expect(
+      resolveWaitlistStep({
+        account: { emailVerified: true, appAccessStatus: null },
+        subAccountFlowEnabled: false,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: false,
+      }),
+    ).toBe('done')
+  })
+
+  it('Track C2 — does not route to connect-base-app when embedded EOA is missing', () => {
+    expect(
+      resolveWaitlistStep({
+        account: { emailVerified: true, appAccessStatus: null },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: false,
+        subAccountStepCompleted: false,
+      }),
+    ).toBe('done')
+  })
+
+  it('Track C2 — once the connect-base-app step is completed, falls through to done', () => {
+    expect(
+      resolveWaitlistStep({
+        account: { emailVerified: true, appAccessStatus: 'approved' },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: true,
+      }),
+    ).toBe('done')
+  })
 })
 
 describe('shouldAutoBootstrapWaitlistSession', () => {

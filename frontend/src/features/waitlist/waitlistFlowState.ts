@@ -1,4 +1,4 @@
-export type WaitlistStep = 'auth' | 'done'
+export type WaitlistStep = 'auth' | 'connect-base-app' | 'done'
 
 type WaitlistAccountWithCanonical = {
   accountSignals: {
@@ -10,11 +10,26 @@ type CanonicalBootstrapResult = {
   canonicalCswAddress: string | null
 }
 
+/**
+ * Resolve the next waitlist step from the current account snapshot.
+ *
+ * Track C2 — when `subAccountFlowEnabled` is true and the bootstrap
+ * surfaced a Privy embedded EOA (i.e. profile is created), verified-email
+ * accounts route through the optional `connect-base-app` step before
+ * `done`. With the flag off, behaviour matches the prior `auth → done`
+ * shape exactly so the existing waitlist surface is untouched.
+ */
 export function resolveWaitlistStep(params: {
   account: { emailVerified: boolean; appAccessStatus: string | null }
+  subAccountFlowEnabled?: boolean
+  embeddedEoaAvailable?: boolean
+  subAccountStepCompleted?: boolean
 }): WaitlistStep {
-  const { account } = params
+  const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted } = params
   if (!account.emailVerified) return 'auth'
+  if (subAccountFlowEnabled && embeddedEoaAvailable && !subAccountStepCompleted) {
+    return 'connect-base-app'
+  }
   // Keep waitlist onboarding one-tap: verified accounts move to completion UI.
   // Any wallet/canonical setup can continue in background or dedicated account surfaces.
   return 'done'

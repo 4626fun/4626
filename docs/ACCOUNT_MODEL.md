@@ -33,7 +33,7 @@ and what works on `4626.fun` today:
 | # | Population | Connected wallet | Canonical CSW | Signer | Sub-account? | Spend permission? | What works on 4626.fun today |
 |---|---|---|---|---|---|---|---|
 | (a) | **Privy email-only** — signed up via email on 4626.fun | Privy embedded EOA only | none (no parent CSW) | Privy embedded EOA | No | No | All EOA-friendly flows: vault deposits, swaps, gauge votes. No CSW-gated flows. |
-| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA via sub-account `setToOwnerAccount()` (planned). Server: Privy server wallet added to parent CSW (separate track). | Planned (orchestrator built, not yet on a product surface — see §5.3) | Planned (Track C / waitlist scope; v1 ships without) | **Today:** EOA-friendly flows only — same surface as population (a). The sub-account orchestrator (`setupSubAccount` + `useSubAccountSetup`) is built and tested but no product page consumes it yet; Track C wires it into the waitlist signup. Base App-gated owner mutations on the parent CSW are **not** available and will not be (see §4). |
+| (b) | **Base App user** — signed in via Base App | Parent CSW (passkey at `owner[0]`) | The Base App CSW | Frontend: Privy embedded EOA via sub-account `setToOwnerAccount()` (orchestrator wired into waitlist `connect-base-app` step; see §5.3). Server: Privy server wallet added to parent CSW (separate track). | Wired (orchestrator + waitlist step; ships dark behind `WAITLIST_SUBACCOUNT_FLOW_ENABLED` / `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED`) | Planned (Track C / waitlist scope; v1 ships without) | **Today:** EOA-friendly flows only — same surface as population (a). The sub-account orchestrator (`setupSubAccount` + `useSubAccountSetup`) is wired into the waitlist `connect-base-app` step but the user-visible flow stays off until both `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (server) and `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED=1` (frontend) are flipped in production. Base App-gated owner mutations on the parent CSW are **not** available and will not be (see §4). This row will flip from "EOA-friendly flows only" to "sub-account-backed canonical flows" only after the production flag flip lands; do not edit the row earlier than that. |
 | (c) | **Zora CSW user with EOA owner in our Supabase mapping** | The user-controlled EOA from `zora_csw_owners.current_owners` (often the Privy-embedded EOA from Zora's own onboarding) | The Zora-deployed CSW | EOA owner of the Zora CSW | Possible but not the default | No | March-9 owner-`executeBatch` lane works for owner-mutating calls on the Zora CSW (e.g. `addOwnerAddress`). Signed UserOps via the EOA owner work for `setPayoutRecipient` / `transferOwnership` on the creator coin (this is **what the deploy flow already does** — see §5). |
 | (d) | **Zora CSW user with no EOA owner** | The Zora CSW (Coinbase-managed signers only — passkeys) | The Zora-deployed CSW | None we can use from a third-party dapp | No (Base App middleware blocks owner-mutation UserOps from third-party dapps for this population — same constraint as (b) for owner mutations) | No | Read paths only. Pre-flight simulation in the deploy flow detects this and surfaces a clear error before any signature prompt. The user must complete owner-gated actions from inside Zora / Base App's own UI. |
 
@@ -222,11 +222,14 @@ including a passkey-direct UserOp lane that bypasses Base App entirely
 via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 **Do not surface to end users.**
 
-### 5.3 Sub-account orchestrator — exists, not yet wired into product
+### 5.3 Sub-account orchestrator — wired into waitlist signup flow
 
 **Location.** `frontend/src/lib/wallet/subAccountSetup.ts`
 (`setupSubAccount()` orchestrator) and `frontend/src/hooks/useSubAccountSetup.ts`
 (React hook). Tests at `frontend/src/lib/wallet/subAccountSetup.test.ts`.
+Waitlist consumer: `frontend/src/features/waitlist/WaitlistConnectBaseApp.tsx`
+mounted as the `connect-base-app` step in `WaitlistFlow.tsx`. Server
+endpoint: `POST /api/arch-b/sub-account/baseapp/register` (Track C1).
 
 **What it does.** Three stages, idempotent:
 1. `wallet_getSubAccounts({ account: parentCSW, domain })`.
@@ -235,9 +238,11 @@ via `navigator.credentials.get()`. These are dev-scoped diagnostics.
 3. `setToOwnerAccount(...)` — silent, no popup; routes future signing
    through the embedded EOA.
 
-**Status.** Working code with tests, but not wired into any product
-surface. The waitlist integration (Track C) is the planned consumer —
-see [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md).
+**Status.** Wired into the waitlist signup flow as of Track C2. Ships
+dark behind `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED` (frontend) +
+`WAITLIST_SUBACCOUNT_FLOW_ENABLED` (server, Track C1). Default off in
+production until the flags are flipped. Spec:
+[docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md).
 
 ### 5.4 Arch B agent commands — server-side spend-permission flow
 
@@ -274,12 +279,12 @@ owner EOAs, refreshed via cron. This is how we identify population (c)
 
 Honest inventory of what isn't built:
 
-- **Sub-accounts on the waitlist signup flow (Track C).** Designed in
-  [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md);
-  blocked on this canonical doc landing so that the waitlist component
-  has a stable invariant set to reference. The orchestrator code (§5.3)
-  exists and has tests, but the new waitlist step + register endpoint
-  (`POST /api/arch-b/sub-account/baseapp/register`) are unbuilt.
+- ~~**Sub-accounts on the waitlist signup flow (Track C).**~~ **Closed.**
+  Server half (Track C1, PR #532) and frontend half (Track C2, this PR)
+  both shipped; the flow ships dark behind
+  `WAITLIST_SUBACCOUNT_FLOW_ENABLED` (server) +
+  `VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED` (frontend). See §5.3 and
+  [docs/sub-accounts-baseapp-design.md](./sub-accounts-baseapp-design.md).
 - **User-facing copy for population (d) when the deploy pre-flight
   simulation fails.** Today the deploy throws a generic-ish "Cannot set
   CreatorCoin payout recipient ... from <owner>" error. Population (d)
