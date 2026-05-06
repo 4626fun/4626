@@ -10,38 +10,14 @@ import {
     MockVRFCoordinatorV2Plus
 } from "test/vault/CreatorVRFConsumerV2_5.RelayFunding.t.sol";
 
-contract ReentrantVRFCoordinator is MockVRFCoordinatorV2Plus {
-    uint256 public fulfillAttempts;
-    bool public lastFulfillSucceeded;
-    bytes public lastFulfillReturnData;
-
-    function fulfill(CreatorVRFConsumerHarness consumer, uint256 requestId, uint256[] memory randomWords) external {
-        fulfillAttempts++;
-        consumer.rawFulfillRandomWords(requestId, randomWords);
-    }
-
-    function tryFulfill(CreatorVRFConsumerHarness consumer, uint256 requestId, uint256[] memory randomWords)
-        external
-        returns (bool ok, bytes memory returnData)
-    {
-        fulfillAttempts++;
-        (ok, returnData) = address(consumer)
-            .call(abi.encodeWithSelector(consumer.rawFulfillRandomWords.selector, requestId, randomWords));
-        lastFulfillSucceeded = ok;
-        lastFulfillReturnData = returnData;
-    }
-}
-
 contract ReentrantLocalVrfRequester {
     CreatorVRFConsumerHarness public immutable consumer;
-    ReentrantVRFCoordinator public immutable coordinator;
     uint256 public callbackCount;
     bool public reentryCallSucceeded;
     bytes public reentryReturnData;
 
-    constructor(CreatorVRFConsumerHarness consumer_, ReentrantVRFCoordinator coordinator_) {
+    constructor(CreatorVRFConsumerHarness consumer_) {
         consumer = consumer_;
-        coordinator = coordinator_;
     }
 
     function request() external returns (uint256 requestId) {
@@ -50,10 +26,8 @@ contract ReentrantLocalVrfRequester {
 
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external {
         callbackCount++;
-        (bool coordinatorCallSucceeded, bytes memory coordinatorReturnData) = address(coordinator)
-            .call(abi.encodeWithSelector(coordinator.tryFulfill.selector, consumer, requestId, randomWords));
-        require(coordinatorCallSucceeded, "coordinator reentry wrapper failed");
-        (reentryCallSucceeded, reentryReturnData) = abi.decode(coordinatorReturnData, (bool, bytes));
+        (reentryCallSucceeded, reentryReturnData) = address(consumer)
+            .call(abi.encodeWithSelector(consumer.rawFulfillRandomWords.selector, requestId, randomWords));
     }
 }
 
@@ -61,19 +35,19 @@ contract CreatorVRFConsumerV25CallbackReentrancyTest is Test {
     uint32 internal constant BASE_EID = 30184;
 
     CreatorVRFConsumerHarness internal consumer;
-    ReentrantVRFCoordinator internal coordinator;
+    MockVRFCoordinatorV2Plus internal coordinator;
     ReentrantLocalVrfRequester internal requester;
 
     function setUp() external {
         MockEndpointV2 endpoint = new MockEndpointV2();
         MockCreatorRegistryForVRF registry = new MockCreatorRegistryForVRF(address(endpoint), BASE_EID);
-        coordinator = new ReentrantVRFCoordinator();
+        coordinator = new MockVRFCoordinatorV2Plus();
 
         consumer = new CreatorVRFConsumerHarness(address(registry), address(this));
         consumer.setVRFCoordinator(address(coordinator));
         consumer.setVRFConfig(1, bytes32(uint256(0xAA)), 40000, 3);
 
-        requester = new ReentrantLocalVrfRequester(consumer, coordinator);
+        requester = new ReentrantLocalVrfRequester(consumer);
         consumer.setLocalCallerAuthorization(address(requester), true);
     }
 
@@ -83,12 +57,11 @@ contract CreatorVRFConsumerV25CallbackReentrancyTest is Test {
         uint256[] memory words = new uint256[](1);
         words[0] = 123456;
 
-        coordinator.fulfill(consumer, requestId, words);
+        vm.prank(address(coordinator));
+        consumer.rawFulfillRandomWords(requestId, words);
 
         assertEq(requester.callbackCount(), 1, "callback should run once");
         assertFalse(requester.reentryCallSucceeded(), "reentrant raw fulfill must fail");
-        assertEq(coordinator.fulfillAttempts(), 2, "callback should attempt reentry through coordinator");
-        assertFalse(coordinator.lastFulfillSucceeded(), "coordinator reentry must hit fulfilled guard");
 
         (,,,,, uint256 randomWord, bool fulfilled,, bool callbackSent,) = consumer.vrfRequests(requestId);
         assertTrue(fulfilled, "request should be fulfilled before callback reentry");

@@ -199,9 +199,16 @@ function isPublicKeyCredential(value: unknown): value is PublicKeyCredential {
 }
 
 /**
- * Request a WebAuthn assertion from the user's authenticator using the
- * provided 32-byte challenge. `allowCredentials: []` is intentional — the
+ * Request a same-origin WebAuthn assertion from the user's authenticator using
+ * the provided 32-byte challenge. `allowCredentials: []` is intentional — the
  * OS picker handles credential selection.
+ *
+ * This cannot assert Coinbase Smart Wallet passkeys from 4626.fun: browser
+ * WebAuthn only permits an RP ID that is the current origin's effective domain
+ * or a registrable suffix. Coinbase-managed CSW credentials live in Coinbase's
+ * RP context, so owner actions for those passkeys must be routed through the
+ * wallet/Base App prepared-call context instead of direct `navigator.credentials`
+ * calls from this app.
  *
  * Browser-only. Will throw if `navigator.credentials` is undefined.
  */
@@ -215,7 +222,6 @@ export async function getPasskeyAssertion(
   if (!credentials || typeof credentials.get !== 'function') {
     throw new Error('getPasskeyAssertion: navigator.credentials.get is not available')
   }
-  const rpId = window.location.hostname
   // Cast: lib.dom's `BufferSource` is invariant over ArrayBuffer vs SharedArrayBuffer
   // since TS 5.7; in practice WebAuthn accepts a normal Uint8Array view.
   const credential = await credentials.get({
@@ -224,7 +230,6 @@ export async function getPasskeyAssertion(
       allowCredentials: [],
       userVerification: 'required',
       timeout: 60_000,
-      rpId,
     },
   })
   if (!isPublicKeyCredential(credential)) {

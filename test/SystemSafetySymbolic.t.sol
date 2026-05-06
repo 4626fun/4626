@@ -363,8 +363,7 @@ contract CreatorShareOFTFeeAndLotterySymbolicTest is Test {
     }
 
     function _feeApplies(uint8 fromType, uint8 toType, bool feesEnabled) internal pure returns (bool) {
-        return feesEnabled && fromType == uint8(OperationType.SwapOnly) && toType != uint8(OperationType.SwapOnly)
-            && toType != uint8(OperationType.NoFees);
+        return feesEnabled && fromType == uint8(OperationType.SwapOnly) && toType != uint8(OperationType.NoFees);
     }
 
     function _lotteryBeneficiary(

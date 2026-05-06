@@ -891,6 +891,13 @@ export function CswSignatureProbe() {
     return null
   }, [])
 
+  const passkeyDirectUserOpUnavailableReason =
+    'Direct browser WebAuthn cannot assert Coinbase Smart Wallet passkeys from the 4626.fun RP context. Use the Base App prepared-call lanes so Coinbase signs inside its own passkey context.'
+  const isCoinbaseWebAuthnRpHost = (hostname: string): boolean => {
+    const normalized = hostname.toLowerCase()
+    return normalized === 'keys.coinbase.com' || normalized === 'sign.coinbase.com'
+  }
+
   const preferredConnector = useMemo(() => {
     const baseFirst =
       connectors.find((connector) => {
@@ -2197,6 +2204,20 @@ export function CswSignatureProbe() {
   }
 
   async function runPasskeyDirectUserOpAddOwner() {
+    const currentHost = typeof window === 'undefined' ? '' : window.location.hostname
+    if (!isCoinbaseWebAuthnRpHost(currentHost)) {
+      setPreparedCallsState({
+        kind: 'err',
+        label: 'passkey-direct UserOp unavailable',
+        detail: passkeyDirectUserOpUnavailableReason,
+      })
+      setPreparedCallEventLog((prev) => [
+        ...prev,
+        'lane:passkey_direct_userop_unavailable_wrong_rp_context',
+      ].slice(-30))
+      return
+    }
+
     const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
     if (!normalizedCswAddress) {
       setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
@@ -3218,18 +3239,16 @@ export function CswSignatureProbe() {
         </label>
         <div className="rounded border border-teal-500/40 bg-teal-500/10 p-3 text-xs leading-relaxed text-teal-100">
           <div className="font-semibold text-teal-200">
-            Recommended (passkey-only users): passkey-direct UserOp, bypass Base App.
+            Passkey-only users must sign inside the Coinbase/Base App context.
           </div>
           <div className="mt-1">
-            Click the teal button below. It builds a UserOp calling{' '}
-            <span className="font-mono">executeWithoutChainIdValidation(addOwnerAddress(…))</span>,
-            asks the browser's WebAuthn API to sign the EntryPoint hash with your passkey
-            (the OS picker shows your registered credentials), wraps the signature
-            in the CSW <span className="font-mono">SignatureWrapper</span>, and submits
-            it directly to the bundler — bypassing Base App's session-key middleware
-            entirely. This is the only path that works for users who only have a
-            passkey owner (no EOA key) since Base App refuses to construct UserOps
-            for owner-mutation selectors.
+            Coinbase Smart Wallet passkeys are issued under Coinbase RP IDs such as{' '}
+            <span className="font-mono">keys.coinbase.com</span> /{' '}
+            <span className="font-mono">sign.coinbase.com</span>. A page on{' '}
+            <span className="font-mono">4626.fun</span> cannot ask{' '}
+            <span className="font-mono">navigator.credentials.get</span> for those
+            credentials, so the old passkey-direct UserOp experiment is disabled.
+            Use the Base App prepared-call lanes below when testing passkey-owned CSWs.
           </div>
           <div className="mt-2 text-teal-200/70">
             Secondary lanes: <span className="font-mono">owner executeBatch (March-9)</span>{' '}
@@ -3246,10 +3265,10 @@ export function CswSignatureProbe() {
             type="button"
             className="rounded border border-teal-500/60 px-3 py-1.5 text-xs text-teal-100 hover:border-teal-400 disabled:opacity-50"
             onClick={() => { void runPasskeyDirectUserOpAddOwner() }}
-            disabled={Boolean(bundlerUserOpConfigError)}
-            title={bundlerUserOpConfigError ?? 'Builds UserOp, signs hash with WebAuthn passkey via browser, submits directly to bundler. Bypasses Base App entirely.'}
+            disabled
+            title={passkeyDirectUserOpUnavailableReason}
           >
-            add owner via passkey-direct UserOp (bypass Base App)
+            passkey-direct UserOp unavailable (wrong RP context)
           </button>
           <button
             type="button"
