@@ -16,12 +16,17 @@ function isGenericInjectedConnector(connector: WalletConnectorLike): boolean {
   return id === 'injected' || id.endsWith('.injected')
 }
 
+function isInjectedExtensionConnector(connector: WalletConnectorLike): boolean {
+  const text = connectorText(connector)
+  return isGenericInjectedConnector(connector) || text.includes('metamask') || text.includes('rabby')
+}
+
 export function filterHiddenInjectedConnectors<T extends WalletConnectorLike>(
   connectors: readonly T[],
   shouldHideInjectedConnector: boolean,
 ): T[] {
   if (!shouldHideInjectedConnector) return [...connectors]
-  return connectors.filter((connector) => !connectorId(connector).includes('injected'))
+  return connectors.filter((connector) => !isInjectedExtensionConnector(connector))
 }
 
 export function selectPreferredWalletConnector<T extends WalletConnectorLike>(connectors: readonly T[]): T | null {

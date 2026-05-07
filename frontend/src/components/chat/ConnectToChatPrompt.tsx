@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAccount } from 'wagmi'
 import { useLogin } from '@privy-io/react-auth'
 import { MessageSquare } from 'lucide-react'
-import { CHAT_TOGGLE_REQUEST_EVENT } from '@/lib/chat/openChat'
+import { CHAT_OPEN_REQUEST_EVENT, CHAT_TOGGLE_REQUEST_EVENT } from '@/lib/chat/openChat'
 
 function useSafeChatLogin() {
   try {
@@ -45,7 +45,11 @@ export function ConnectToChatPrompt(props: { onActivate?: (() => void) | null })
     }
 
     window.addEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleChatShortcut)
-    return () => window.removeEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleChatShortcut)
+    window.addEventListener(CHAT_OPEN_REQUEST_EVENT, handleChatShortcut)
+    return () => {
+      window.removeEventListener(CHAT_TOGGLE_REQUEST_EVENT, handleChatShortcut)
+      window.removeEventListener(CHAT_OPEN_REQUEST_EVENT, handleChatShortcut)
+    }
   }, [handleConnect])
 
   return (

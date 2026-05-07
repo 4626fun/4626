@@ -44,8 +44,15 @@ target/deploy/*-keypair.json
 *.keypair.json
 *keypair.json
 
-# Environment files
+# Environment files (secrets)
 .env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+!**/.env.*.example
+!**/.env.tpl
 
 # IDE and editor files
 .vscode/*
@@ -144,7 +151,6 @@ frontend/xmtp-production-*.db3*
 
 # Test and development files (keep local)
 .vercel
-.env*.local
 
 # Local artifacts / generated files (do not commit)
 /latest.graphql

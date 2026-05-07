@@ -2,6 +2,7 @@ import type { ApiRouteLoaders } from './_routeLoader.js'
 import { loadHandlerFromMap } from './_routeLoader.js'
 
 export const waitlistRouteLoaders: ApiRouteLoaders = {
+  'airtable-sync': () => import('./waitlist/_airtableSync.js'),
   'bootstrap': () => import('./waitlist/_bootstrap.js'),
   'leaderboard': () => import('./waitlist/_leaderboard.js'),
   'me': () => import('./waitlist/_me.js'),

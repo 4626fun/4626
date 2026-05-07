@@ -256,6 +256,11 @@ function ChatWidgetInner() {
   }, [pendingOpenRequest, processOpenRequest, status])
 
   useEffect(() => {
+    if (!pendingOpenRequest || status !== 'idle' || !isConnected) return
+    void connect()
+  }, [connect, isConnected, pendingOpenRequest, status])
+
+  useEffect(() => {
     if (!pendingDeepLinkIntent) return
     maybeConnectMessaging()
   }, [pendingDeepLinkIntent, maybeConnectMessaging])

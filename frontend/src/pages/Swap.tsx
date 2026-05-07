@@ -62,7 +62,7 @@ import {
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
-import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
+import { filterHiddenInjectedConnectors, selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -1243,7 +1243,9 @@ export function Swap() {
   useEffect(() => {
     if (connectGate.state !== 'wallet-required' || authBusy || swapConnectBusy) return
 
-    const preferred = selectPreferredWalletConnector(wagmiConnectors)
+    const preferred = selectPreferredWalletConnector(
+      filterHiddenInjectedConnectors(wagmiConnectors, shouldHideInjectedConnector),
+    )
     const connectorKey = preferred ? `${preferred.id}:${preferred.name}` : 'any'
     const attemptKey = `${authAddress ?? 'session'}:${executionMode}:${connectorKey}`
     if (walletRecoveryAttemptKeyRef.current === attemptKey) return
@@ -1260,6 +1262,7 @@ export function Swap() {
     connectGate.state,
     executionMode,
     recoverExistingWalletConnection,
+    shouldHideInjectedConnector,
     swapConnectBusy,
     wagmiConnectors,
   ])

@@ -1,7 +1,7 @@
 {
   "name": "4626-app",
   "private": true,
-  "version": "1.8.1",
+  "version": "1.11.0",
   "engines": {
     "node": ">=20.19.0 <23"
   },
@@ -54,6 +54,7 @@
     "agent:eliza": "tsx --env-file=.env --env-file=../cre/.env server/agent/eliza/index.ts",
     "agent:eliza:doctor": "tsx --env-file=.env --env-file=../cre/.env scripts/agent/eliza-doctor.ts",
     "agent:eliza:standby:smoke": "bash -lc 'tmp_xmtp_db_dir=$(mktemp -d); trap \"rm -rf \\\"$tmp_xmtp_db_dir\\\"\" EXIT; timeout 20s env PORT=${PORT:-8081} AGENT_RUNTIME_ROLE=standby AGENT_CONSUME_XMTP=false XMTP_DB_DIRECTORY=\"$tmp_xmtp_db_dir\" pnpm agent:eliza; code=$?; if [ \"$code\" -eq 124 ]; then exit 0; fi; exit \"$code\"'",
+    "keeper:jobs:worker": "tsx --env-file=.env scripts/keeper-job-worker.ts",
     "alfaclub:chat:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts",
     "relay:add-owner:smoke": "tsx --env-file=.env scripts/smoke-relay-add-owner.ts",
     "solana-provisioner:start": "if [ -f server/solana-provisioner/.env ]; then tsx --env-file=server/solana-provisioner/.env server/solana-provisioner/index.ts; else tsx server/solana-provisioner/index.ts; fi",
@@ -65,6 +66,7 @@
     "batcher:solana:config:safe": "tsx scripts/ops/propose-batcher-solana-config-safe.ts",
     "privy:user:migrate": "tsx scripts/migrate-privy-user.ts",
     "db:migrate": "pnpm -C .. dlx supabase@latest migration up --linked",
+    "db:types": "pnpm -C .. dlx supabase@latest gen types typescript --project-id qajpnuvqlcfseghnldkl > server/_lib/db/supabase.types.ts",
     "check:agent-registration": "node scripts/check-agent-registration.mjs",
     "check:agent-discoverability": "node scripts/check-agent-discoverability.mjs",
     "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",

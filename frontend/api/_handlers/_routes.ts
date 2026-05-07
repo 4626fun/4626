@@ -69,6 +69,12 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'deploy/config': () => import('./deploy/_config.js'),
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
+  'keeper/jobs/enqueue': () => import('./keeper/jobs/_enqueue.js'),
+  'keeper/jobs/claim': () => import('./keeper/jobs/_claim.js'),
+  'keeper/jobs/complete': () => import('./keeper/jobs/_complete.js'),
+  'keeper/jobs/run': () => import('./keeper/jobs/_run.js'),
+  'keeper/jobs/status': () => import('./keeper/jobs/_status.js'),
+  'keeper/jobs/health': () => import('./keeper/jobs/_health.js'),
 
   'flags/discover': () => import('./flags/_discover.js'),
   'flags/evaluate': () => import('./flags/_evaluate.js'),

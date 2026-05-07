@@ -642,6 +642,12 @@ export function ChatAvailabilityRail() {
     if (typeof window !== 'undefined') window.localStorage.setItem(PRESENCE_OPT_IN_KEY, next ? '1' : '0')
   }
 
+  function collapseAfterOpenIfReady() {
+    if (status === 'connected') {
+      setExpanded(false)
+    }
+  }
+
   if (!expanded) {
     const totalUnread = conversations.reduce((sum, conversation) => sum + conversation.unreadCount, 0)
     return (
@@ -652,11 +658,16 @@ export function ChatAvailabilityRail() {
             setExpanded(true)
             if (status === 'idle') void connect()
           }}
-          className="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-zinc-300 shadow-[0_18px_46px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-[border-color,background,transform] duration-200 hover:-translate-y-px hover:border-brand-primary/35 hover:bg-black/80 hover:text-brand-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
-          aria-label="Open available chat users"
+          className="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-zinc-300 shadow-[0_18px_46px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-[border-color,background,transform] duration-200 hover:-translate-y-px hover:border-brand-primary/35 hover:bg-black/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
+          aria-label="Open XMTP chat"
         >
           <span aria-hidden="true" className="absolute inset-x-2 top-0 h-px bg-linear-to-r from-transparent via-white/18 to-transparent" />
-          <Users className="h-5 w-5" />
+          <img
+            src="/brand/xmtp-x-mark-white.svg"
+            alt=""
+            className="h-5 w-5 select-none object-contain opacity-90 transition-opacity group-hover:opacity-100"
+            draggable={false}
+          />
           {totalUnread > 0 ? (
             <span className="absolute -right-1 -top-1 min-w-5 rounded-full border border-black bg-brand-primary px-1.5 py-0.5 text-[10px] font-semibold text-white">
               {totalUnread > 99 ? '99+' : totalUnread}
@@ -775,14 +786,14 @@ export function ChatAvailabilityRail() {
             {visibleConversations.length > 0 ? (
               <RailSection label="Recent Conversations" hint={`${visibleConversations.length}`}>
                 {visibleConversations.map((conversation) => (
-                  <ConversationUserRow key={conversation.id} conversation={conversation} onOpen={() => setExpanded(false)} />
+                  <ConversationUserRow key={conversation.id} conversation={conversation} onOpen={collapseAfterOpenIfReady} />
                 ))}
               </RailSection>
             ) : null}
             {visiblePresenceUsers.length > 0 ? (
               <RailSection label="Online Users" hint="ETHOS ranked">
                 {visiblePresenceUsers.map((user) => (
-                  <PresenceUserRow key={user.address} user={user} onOpen={() => setExpanded(false)} />
+                  <PresenceUserRow key={user.address} user={user} onOpen={collapseAfterOpenIfReady} />
                 ))}
               </RailSection>
             ) : null}
@@ -817,7 +828,7 @@ export function ChatAvailabilityRail() {
           <>
             {visibleBaseAgents.length > 0 ? (
               <RailSection label="Base Agents" hint={`${visibleBaseAgents.length} curated`}>
-                {visibleBaseAgents.map((agent) => <BaseAgentRow key={agent.id} agent={agent} onOpen={() => setExpanded(false)} />)}
+                {visibleBaseAgents.map((agent) => <BaseAgentRow key={agent.id} agent={agent} onOpen={collapseAfterOpenIfReady} />)}
               </RailSection>
             ) : null}
             {agents.isLoading ? (
@@ -832,7 +843,7 @@ export function ChatAvailabilityRail() {
             ) : null}
             {!agents.isLoading && !agentsError && visibleAgents.length > 0 ? (
               <RailSection label="Creator Agents" hint="4626 directory">
-                {visibleAgents.map((agent) => <CreatorAgentRow key={agent.creatorAddress} agent={agent} onOpen={() => setExpanded(false)} />)}
+                {visibleAgents.map((agent) => <CreatorAgentRow key={agent.creatorAddress} agent={agent} onOpen={collapseAfterOpenIfReady} />)}
               </RailSection>
             ) : null}
             {!agents.isLoading && !agentsError && visibleAgents.length === 0 && visibleBaseAgents.length === 0 ? (

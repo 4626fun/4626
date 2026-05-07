@@ -9,14 +9,28 @@ describe('wagmiConnectorSelection', () => {
       { id: 'io.metamask', name: 'MetaMask' },
       { id: 'injected', name: 'Injected' },
       { id: 'rabby', name: 'Rabby' },
+      { id: 'walletConnect', name: 'WalletConnect' },
     ]
 
     expect(filterHiddenInjectedConnectors(connectors, false)).toEqual(connectors)
     expect(filterHiddenInjectedConnectors(connectors, true).map((connector) => connector.id)).toEqual([
       'coinbaseWalletSDK',
-      'io.metamask',
-      'rabby',
+      'walletConnect',
     ])
+  })
+
+  it('keeps Coinbase as the preferred swap connector during provider collisions', () => {
+    const connectors = [
+      { id: 'io.metamask', name: 'MetaMask' },
+      { id: 'injected', name: 'Injected' },
+      { id: 'coinbaseWalletSDK', name: 'Coinbase Wallet' },
+      { id: 'rabby', name: 'Rabby' },
+    ]
+
+    const filtered = filterHiddenInjectedConnectors(connectors, true)
+
+    expect(filtered.map((connector) => connector.id)).toEqual(['coinbaseWalletSDK'])
+    expect(selectPreferredWalletConnector(filtered)?.id).toBe('coinbaseWalletSDK')
   })
 
   it('prefers the targeted Rabby connector before generic injected fallbacks', () => {
