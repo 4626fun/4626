@@ -141,7 +141,7 @@ async function defaultGetClient(): Promise<PublicClient> {
   if (!rpcUrl) throw new Error('BASE_RPC_URL not set')
   const { createPublicClient, http } = await import('viem')
   const { base } = await import('viem/chains')
-  return createPublicClient({ chain: base, transport: http(rpcUrl) }) as PublicClient
+  return createPublicClient({ chain: base, transport: http(rpcUrl) }) as unknown as PublicClient
 }
 
 async function upsertEnriched(

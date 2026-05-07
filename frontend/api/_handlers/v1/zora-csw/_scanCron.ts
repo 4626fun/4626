@@ -179,7 +179,7 @@ async function defaultFetchWindow(
   const { createPublicClient, http } = await import('viem')
   const { base } = await import('viem/chains')
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
-  return fetchCreationsWindow(client, fromBlock, toBlock)
+  return fetchCreationsWindow(client as any, fromBlock, toBlock)
 }
 
 export default async function handler(

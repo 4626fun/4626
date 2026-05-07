@@ -15,8 +15,11 @@ const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1'])
 
 const INDEXABLE_ROUTES: CanonicalRouteConfig[] = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
-  { path: '/faq', changefreq: 'weekly', priority: '0.7' },
-  { path: '/faq/how-it-works', changefreq: 'weekly', priority: '0.6' },
+  { path: '/risks', changefreq: 'weekly', priority: '0.8' },
+  { path: '/security', changefreq: 'weekly', priority: '0.7' },
+  { path: '/about', changefreq: 'weekly', priority: '0.7' },
+  { path: '/terms', changefreq: 'weekly', priority: '0.5' },
+  { path: '/privacy', changefreq: 'weekly', priority: '0.5' },
 ]
 
 const HEADER_BLOCKED_PATTERNS: readonly string[] = [

@@ -24,6 +24,138 @@
   --4626-warm-ivory: #F8F0E6;
 }
 
+/* ─── 1a · Marketing landing composition ─────────────────────────────
+   Return to the original cinematic right-column composition: left-aligned
+   copy, lots of negative space, one primary action. */
+#ch-hero .scene-pin {
+  justify-content: flex-start !important;
+  align-items: center !important;
+}
+.hero-content {
+  width: min(440px, calc(100vw - 2rem)) !important;
+  max-width: 440px !important;
+  margin-left: min(62vw, 980px) !important;
+  margin-right: 0 !important;
+  align-items: flex-start !important;
+  text-align: left !important;
+  transform: translateY(0);
+}
+.hero-headline {
+  font-size: clamp(3.1rem, 4.4vw, 5.2rem) !important;
+  line-height: 0.88 !important;
+  margin-bottom: 1.7rem !important;
+  letter-spacing: -0.045em !important;
+}
+.hero-word-serif .hero-char {
+  font-style: italic !important;
+}
+.hero-support {
+  max-width: 340px !important;
+  gap: 0.48rem !important;
+  color: rgba(224, 231, 244, 0.70) !important;
+  font-size: clamp(0.82rem, 0.82vw, 0.98rem) !important;
+  line-height: 1.55 !important;
+}
+.hero-support-line:nth-child(n+2) {
+  color: rgba(168, 181, 204, 0.56) !important;
+}
+.hero-pill-row,
+.waitlist-inline-form,
+.audience-cards,
+.hero-trust-grid {
+  display: none !important;
+}
+.hero-disclaimer {
+  justify-content: flex-start !important;
+  max-width: 340px !important;
+  margin: 1rem 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: rgba(165, 176, 196, 0.58) !important;
+  font-size: 9px !important;
+  line-height: 1.7 !important;
+  letter-spacing: 0.13em !important;
+  opacity: 0.58 !important;
+}
+.hero-chain {
+  justify-content: flex-start !important;
+  margin-top: 2rem !important;
+}
+.hero-partners {
+  justify-content: flex-start !important;
+  margin-top: 0.75rem !important;
+}
+.hero-cta {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  margin-top: 1.85rem !important;
+}
+.hero-cta .cta-button.secondary {
+  display: none !important;
+}
+@media (max-width: 768px) {
+  #ch-hero .scene-pin {
+    align-items: flex-start !important;
+    justify-content: center !important;
+  }
+  .hero-content {
+    width: min(360px, calc(100vw - 2rem)) !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+    align-items: center !important;
+    padding-top: clamp(5.75rem, 13vh, 7.25rem);
+    transform: none;
+  }
+  .hero-headline {
+    font-size: clamp(3rem, 12.4vw, 4.25rem) !important;
+    line-height: 0.9 !important;
+    margin-bottom: 1.25rem !important;
+  }
+  .hero-support,
+  .hero-disclaimer {
+    text-align: center !important;
+    justify-content: center !important;
+  }
+  .hero-support {
+    max-width: 320px !important;
+    gap: 0.42rem !important;
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+  }
+  .hero-disclaimer {
+    max-width: 310px !important;
+    margin-top: 0.85rem !important;
+    font-size: 8px !important;
+    line-height: 1.55 !important;
+  }
+  .hero-chain {
+    justify-content: center !important;
+    margin-top: 1.5rem !important;
+  }
+  .hero-partners {
+    justify-content: center !important;
+    gap: 0.8rem !important;
+    margin-top: 0.65rem !important;
+  }
+  .hero-partner-logo {
+    height: 16px !important;
+    opacity: 0.42 !important;
+  }
+  .hero-cta {
+    justify-content: center !important;
+    margin-top: 1.45rem !important;
+  }
+  .hero-cta .cta-button {
+    min-width: 170px;
+    min-height: 46px;
+    padding: 0.85rem 1.2rem !important;
+    font-size: 0.64rem !important;
+  }
+}
+
 /* ─── 1 · Re-map accent tokens · gold replaces electric-blue ───────── */
 :root {
   --color-accent: var(--4626-gold);

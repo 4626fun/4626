@@ -220,9 +220,11 @@ function localApiRoutesPlugin(): Plugin {
         '/api/flags/discover': () => import('./api/_handlers/flags/_discover'),
         '/api/flags/evaluate': () => import('./api/_handlers/flags/_evaluate'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
+        '/api/waitlist/lead': () => import('./api/_handlers/waitlist/_lead'),
         '/api/waitlist/me': () => import('./api/_handlers/waitlist/_me'),
         '/api/waitlist/leaderboard': () => import('./api/_handlers/waitlist/_leaderboard'),
         '/api/waitlist/position': () => import('./api/_handlers/waitlist/_position'),
+        '/api/analytics/event': () => import('./api/_handlers/analytics/_event'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
         '/api/token/image': () => import('./api/_handlers/token/_image'),
@@ -413,6 +415,71 @@ function localApiRoutesPlugin(): Plugin {
   }
 }
 
+function readLocalHostModeOverride(): string {
+  const candidates = [
+    path.resolve(__dirname, '../.env'),
+    path.resolve(__dirname, './.env'),
+  ]
+  let value = String(process.env.VITE_HOST_MODE_OVERRIDE ?? '').trim().toLowerCase()
+  for (const filePath of candidates) {
+    if (!fs.existsSync(filePath)) continue
+    const raw = fs.readFileSync(filePath, 'utf8')
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eq = trimmed.indexOf('=')
+      if (eq === -1) continue
+      const key = trimmed.slice(0, eq).trim()
+      if (key !== 'VITE_HOST_MODE_OVERRIDE') continue
+      value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '').toLowerCase()
+    }
+  }
+  return value
+}
+
+const TRUST_PAGE_PATHS = new Set(['/risks', '/security', '/about', '/terms', '/privacy'])
+
+function localMarketingLandingPlugin(): Plugin {
+  return {
+    name: '4626-local-marketing-landing',
+    apply: 'serve',
+    configureServer(server) {
+      loadDotEnvFile(path.resolve(__dirname, '../.env'))
+      loadDotEnvFile(path.resolve(__dirname, './.env'))
+
+      server.middlewares.use((req, res, next) => {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          next()
+          return
+        }
+
+        const rawUrl = req.url ?? '/'
+        const url = new URL(rawUrl, 'http://localhost')
+        const isRoot = url.pathname === '/'
+        const trustPagePath = TRUST_PAGE_PATHS.has(url.pathname) ? url.pathname : null
+        const hostMode = readLocalHostModeOverride()
+        if ((!isRoot && !trustPagePath) || hostMode !== 'marketing') {
+          next()
+          return
+        }
+
+        const landingPath = trustPagePath
+          ? path.resolve(__dirname, `public${trustPagePath}/index.html`)
+          : path.resolve(__dirname, 'public/immersive/index.html')
+        fs.readFile(landingPath, 'utf8', (error, html) => {
+          if (error) {
+            next(error)
+            return
+          }
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/html; charset=utf-8')
+          res.end(html)
+        })
+      })
+    },
+  }
+}
+
 function resolveOxCjsPlugin(): Plugin {
   return {
     name: '4626-resolve-ox-cjs',
@@ -462,7 +529,12 @@ export default defineConfig(({ command }) => {
 
   return {
     cacheDir: viteCacheDir,
-    plugins: [resolveOxCjsPlugin(), react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
+    plugins: [
+      resolveOxCjsPlugin(),
+      react(),
+      tailwindcss(),
+      ...(command === 'serve' ? [localMarketingLandingPlugin(), localApiRoutesPlugin()] : []),
+    ],
     // Default localhost-only. Set VITE_DEV_SERVER_HOST=true (or 0.0.0.0) to expose on LAN/WSL.
     server: {
       host: devServerHost,

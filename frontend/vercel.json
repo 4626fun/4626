@@ -87,6 +87,30 @@
     {
       "path": "/api/keeper/jobs/run",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-sweep-canary",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-vault-canary",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-active-vaults",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/process-keepr-actions",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-bridge-integrity",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-strategy-canary",
+      "schedule": "*/30 * * * *"
     }
   ],
   "routes": [

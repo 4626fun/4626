@@ -489,6 +489,53 @@ body {
   opacity: 0;
   transform: translateY(16px);
 }
+.hero-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 1rem auto 0;
+  opacity: 0;
+  transform: translateY(16px);
+}
+.hero-pill-row span {
+  padding: 0.42rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(242, 242, 242, 0.72);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.hero-disclaimer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem 0.8rem;
+  max-width: 46rem;
+  margin: 1.3rem auto 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(221, 160, 28, 0.26);
+  border-radius: 999px;
+  background: rgba(8, 8, 8, 0.62);
+  color: rgba(245, 240, 225, 0.78);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0;
+  transform: translateY(16px);
+}
+.hero-disclaimer a {
+  color: var(--4626-gold-highlight, #FFD45A);
+  text-decoration: none;
+}
+.hero-disclaimer a:hover {
+  text-decoration: underline;
+}
 
 .hero-chain {
   margin-top: 2rem;
@@ -511,6 +558,144 @@ body {
   height: 14px;
   background: var(--color-border);
   margin: 0 4px;
+}
+.waitlist-inline-form {
+  width: min(760px, 100%);
+  margin: 1rem auto 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) minmax(140px, 0.8fr) minmax(150px, 0.9fr) auto;
+  gap: 0.65rem;
+  align-items: end;
+  padding: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  opacity: 0;
+  transform: translateY(16px);
+}
+.waitlist-inline-form label {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+}
+.waitlist-inline-form label span,
+.waitlist-form-note,
+.waitlist-form-status {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: rgba(220, 225, 235, 0.66);
+}
+.waitlist-inline-form input,
+.waitlist-inline-form select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--color-text);
+  padding: 0 0.75rem;
+  font: inherit;
+}
+.waitlist-inline-form select {
+  color-scheme: dark;
+}
+.waitlist-inline-form button {
+  min-height: 42px;
+  border: 1px solid var(--4626-gold, var(--color-accent));
+  border-radius: 12px;
+  background: linear-gradient(180deg, var(--4626-gold-highlight, #FFD45A), var(--4626-gold, #DDA01C));
+  color: #1a1410;
+  padding: 0 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.waitlist-inline-form button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.waitlist-form-note,
+.waitlist-form-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  text-align: center;
+}
+.waitlist-form-note a {
+  color: var(--4626-gold-highlight, #FFD45A);
+}
+.waitlist-hp {
+  position: absolute;
+  left: -9999px;
+}
+.audience-cards {
+  width: min(760px, 100%);
+  margin: 1rem auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  opacity: 0;
+  transform: translateY(16px);
+}
+.audience-cards article {
+  padding: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.42);
+  text-align: left;
+}
+.audience-cards h2 {
+  margin: 0 0 0.35rem;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.audience-cards p {
+  margin: 0 0 0.65rem;
+  color: rgba(220, 225, 235, 0.68);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+.audience-cards a {
+  color: var(--4626-gold-highlight, #FFD45A);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+.audience-cards a:hover {
+  text-decoration: underline;
+}
+.hero-trust-grid {
+  width: min(760px, 100%);
+  margin: 0.9rem auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.035);
+  opacity: 0;
+  transform: translateY(16px);
+}
+.hero-trust-grid a {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  color: rgba(245, 248, 255, 0.82);
+  text-align: left;
+  text-decoration: none;
+}
+.hero-trust-grid a + a {
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+.hero-trust-grid span {
+  color: rgba(221, 160, 28, 0.92);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.hero-trust-grid a:hover {
+  background: rgba(221, 160, 28, 0.08);
 }
 .chain-logo {
   height: 20px;
@@ -2156,8 +2341,8 @@ body {
 .vault-compact-stats > div::before {
   content: attr(data-label);
 }
-.vault-compact-stats > div:nth-child(1)::before { content: 'APY'; }
-.vault-compact-stats > div:nth-child(2)::before { content: 'TVL'; }
+.vault-compact-stats > div:nth-child(1)::before { content: 'Status'; }
+.vault-compact-stats > div:nth-child(2)::before { content: 'Stage'; }
 .vault-compact-stats > div::before {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -2231,6 +2416,18 @@ body {
 }
 .vcs-value.accent {
   color: var(--color-accent);
+}
+.vault-demo-preview .vcs-value {
+  font-size: clamp(0.7rem, 0.55rem + 0.4vw, 0.95rem);
+  line-height: 1.3;
+  white-space: normal;
+}
+.vault-risk-link {
+  color: var(--4626-gold-highlight, var(--color-accent));
+  text-decoration: none;
+}
+.vault-risk-link:hover {
+  text-decoration: underline;
 }
 .vaults-cta {
   text-align: center;
@@ -2888,6 +3085,7 @@ body {
   font-size: clamp(2.6rem, 1.6rem + 3.0vw, 4.4rem);
   letter-spacing: -0.02em;
   color: #EDE5CB;
+  display: none !important;
 }
 /* Scope gradient clip-text onto the inner span so the flex parent doesn't
    propagate transparent text-fill-color to any nested element. */
@@ -3137,6 +3335,21 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
+.footer-official {
+  max-width: 34rem;
+  display: grid;
+  gap: 0.3rem;
+  color: rgba(220, 225, 235, 0.72);
+  line-height: 1.5;
+}
+.footer-official strong {
+  color: rgba(245, 248, 255, 0.92);
+  font-weight: 500;
+}
+.footer-official p {
+  margin: 0.4rem 0 0;
+  color: rgba(245, 240, 225, 0.72);
+}
 .footer-brand {
   display: flex;
   align-items: center;
@@ -3187,6 +3400,25 @@ body {
   }
   .hero-section-label { justify-content: center; }
   .hero-chain { justify-content: center; flex-wrap: wrap; }
+  .waitlist-inline-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+  .audience-cards {
+    grid-template-columns: 1fr;
+  }
+  .hero-trust-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .hero-trust-grid a + a {
+    border-left: 0;
+  }
+  .hero-trust-grid a:nth-child(even) {
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .hero-trust-grid a:nth-child(n + 3) {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
   .hero-partners { justify-content: center; flex-wrap: wrap; gap: 12px; }
   .hero-cta { align-items: center; }
   .hero-float-tokens { display: none; }
@@ -3262,10 +3494,13 @@ body {
     top: auto;
     left: auto;
     transform: none;
-    width: 100%;
-    max-width: 100%;
+    width: min(330px, calc(100vw - 40px));
+    max-width: min(330px, calc(100vw - 40px));
     height: auto;
-    padding: 1.25rem 1rem;
+    margin: 0 auto;
+    padding: 0;
+    transform: translateY(-7vh) scale(0.82);
+    transform-origin: 50% 0;
   }
   /* Hide pixel-coord edges — they map to desktop layout */
   .node-graph .ng-edges-svg { display: none; }
@@ -3275,8 +3510,8 @@ body {
     inset: auto;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.75rem;
+    align-items: stretch;
+    gap: 0.46rem;
     width: 100%;
   }
 
@@ -3292,32 +3527,22 @@ body {
     bottom: auto;
     transform: none;
   }
+  .node-graph .ng-node,
+  .node-graph .ng-node-strat,
+  .node-graph .ng-node-downstream {
+    opacity: 1 !important;
+  }
   .ng-node-idle { display: none; } /* aesthetic-only buffer, skip on mobile */
 
-  /* Strategy column — on mobile we want the downstream venue cards to sit
-     DIRECTLY UNDER their parent strategy (Uniswap V3 → Charm, Meteora →
-     Solana). `display: contents` flattens this wrapper so its 3 children
-     become direct flex items of .ng-nodes, letting us interleave the
-     downstream cards via CSS `order`. */
   .ng-strat-column {
     display: contents;
   }
-  /* Ensure the 3 strategy cards still render as blocks in the flattened flow */
   .ng-strat-column .ng-node-strat {
     position: relative;
     width: 100%;
-    display: flex;
-    justify-content: center;
+    display: block;
   }
 
-  /* Interleave order (flex siblings of .ng-nodes):
-       deposit  (1)
-       hub      (2)
-       Ajna     (3)  — strat-0
-       Charm    (4)  — strat-1
-       Uniswap  (5)  — downstream-1 (directly under Charm)
-       Solana   (6)  — strat-2
-       Meteora  (7)  — downstream-2 (directly under Solana) */
   #ng-node-deposit { order: 1; }
   #engine-hub      { order: 2; }
   #strat-0         { order: 3; }
@@ -3325,6 +3550,11 @@ body {
   #downstream-1    { order: 5; }
   #strat-2         { order: 6; }
   #downstream-2    { order: 7; }
+
+  .ng-node-downstream {
+    display: block !important;
+    width: 100%;
+  }
 
   /* Downstream nodes — override .ng-ds-uni/met desktop absolute coords */
   .ng-ds-uni,
@@ -3336,35 +3566,83 @@ body {
     bottom: auto;
     transform: none;
   }
-  /* Visual hint: downstream cards are CONSEQUENCES of their strategy, so
-     inset them slightly and make them a touch smaller/subtler — reads as
-     "this is where that strategy's liquidity lives." */
+  /* Downstream cards become compact venue tags inside the stack rather than
+     floating labels off to the side. */
   .ng-node-downstream .ng-ds-inner {
-    width: min(220px, 88%);
-    margin-left: 2rem; /* indent to show hierarchy */
-    opacity: 0.92;
+    width: min(220px, 74%);
+    min-height: 26px;
+    margin: -0.2rem auto 0;
+    opacity: 0.78;
+    padding: 0.3rem 0.56rem;
+    justify-content: center;
+    border-style: dashed;
+    border-radius: 999px;
   }
 
   /* Card sizing — comfortable mobile widths */
   .strategy-card-inner {
-    width: min(260px, 100%);
-    padding: 0.7rem 0.85rem;
+    width: 100%;
+    padding: 0.52rem 0.68rem;
+    border-radius: 13px;
+    gap: 0.12rem;
   }
-  .strat-pct { font-size: 1.1rem; }
-  .strat-role { font-size: 10px; max-width: 100%; }
-  .ng-node-inner { padding: 0.55rem 0.85rem; gap: 0.55rem; }
-  .ng-node-icon img { width: 30px; height: 30px; }
-  .ng-node-title { font-size: 0.78rem; }
-  .ng-hub-label { font-size: 9px; }
-  .ng-node-hub-inner { padding: 0.7rem 1rem; }
+  .strat-card-top {
+    width: 100%;
+  }
+  .strat-name { font-size: 8px; letter-spacing: 0.14em; }
+  .strat-icon-img { width: 14px; height: 14px; }
+  .strat-expand-icon { font-size: 10px; }
+  .strat-pct { font-size: 0.92rem; line-height: 1; }
+  .strat-amount { font-size: 7.5px; }
+  .strat-role {
+    display: none;
+  }
+  .ng-node-inner { padding: 0.5rem 0.68rem; gap: 0.48rem; width: 100%; border-radius: 13px; }
+  .ng-node-icon img { width: 24px; height: 24px; }
+  .ng-node-title { font-size: 0.72rem; }
+  .ng-node-sub { font-size: 8px; }
+  .ng-hub-label { font-size: 8px; }
+  .ng-hub-deploy { font-size: 7px; margin-top: 0.1rem; }
+  .ng-hub-amount { font-size: 0.78rem; }
+  .ng-node-hub-inner {
+    width: min(235px, 76%);
+    min-height: 54px;
+    margin: 0 auto;
+    padding: 0.42rem 0.7rem;
+    gap: 0.12rem;
+    border-radius: 999px;
+  }
+  .ng-hub-icon {
+    margin-bottom: 0;
+    transform: scale(0.76);
+  }
+  .ng-hub-label {
+    font-size: 7px;
+    letter-spacing: 0.14em;
+  }
+  .ng-hub-deploy {
+    display: none;
+  }
+  .ng-hub-amount {
+    font-size: 0.68rem;
+  }
   .ng-ds-inner {
-    width: min(240px, 100%);
+    width: 100%;
   }
+  .ng-node-hub,
+  .ng-node-deposit {
+    width: 100%;
+  }
+  #downstream-1 { margin-bottom: 0.18rem; }
+  #downstream-2 { margin-bottom: 0; }
 
   /* Morph zone */
   .morph-zone {
     width: 200px;
     height: 200px;
+  }
+  .coin-deposit-panel {
+    display: none !important;
   }
 
   /* Bottom copy — brighter and larger */
@@ -3392,29 +3670,39 @@ body {
   .accrue-desc { font-size: 1rem; color: rgba(220, 225, 235, 0.92); }
   .clock-date { font-size: 0.9rem; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.9); }
 
-  /* Yield curve */
-  .yield-curve-wrap { aspect-ratio: 4 / 3; }
-  .yc-axis-y { left: -2px; width: 32px; }
-  .yc-axis-y .yc-label { font-size: 9px; color: rgba(220, 225, 235, 0.78); }
-  .yc-axis-x { left: 36px; }
-  .yc-axis-x .yc-label { font-size: 9px; color: rgba(220, 225, 235, 0.78); }
-  .yc-callout-card { padding: 8px 11px; border-radius: 8px; }
-  .yc-callout-ratio { font-size: 14px; color: #EDEDED; }
-  .yc-callout-apy { font-size: 10px; }
-  .yc-callout-day { font-size: 8px; color: rgba(220, 225, 235, 0.85); }
+  /* Outcome curve: simplify on mobile so it reads as a premium visual accent,
+     not a dense trading chart. */
+  .yield-curve-wrap {
+    width: min(330px, 90vw);
+    margin-inline: auto;
+    aspect-ratio: 4 / 3;
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(8, 11, 18, 0.42), rgba(2, 3, 6, 0.18));
+    overflow: hidden;
+  }
+  .yield-curve-wrap canvas {
+    opacity: 0.72;
+    filter: saturate(0.65) contrast(0.92) brightness(0.86);
+  }
+  .yc-axis,
+  #yc-milestones {
+    display: none !important;
+  }
 
   /* Stats bar */
   .accrue-stats {
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.5);
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.38);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    margin: 0.5rem 0.5rem 0;
+    width: min(330px, 90vw);
+    margin: 0.75rem auto 0;
   }
-  .accrue-stat { padding: 0.875rem 1rem; }
-  .accrue-stat-value { font-size: 1.05rem; color: #EDEDED; }
-  .accrue-stat-label { font-size: 10px; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.88); }
+  .accrue-stat { padding: 0.65rem 0.8rem; }
+  .accrue-stat-value { font-size: 0.92rem; color: #EDEDED; }
+  .accrue-stat-label { font-size: 8px; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.66); }
   .accrue-stat-divider { height: 18px; }
   .accrue-equation {
     font-size: 0.9rem;
@@ -3458,6 +3746,9 @@ body {
     align-items: center;
     text-align: center;
     padding: 2rem 1.5rem;
+  }
+  .footer-official {
+    justify-items: center;
   }
   .footer-links {
     gap: 1rem;
@@ -4113,17 +4404,20 @@ body {
     top: auto;
     left: auto;
     transform: none;
-    width: 100%;
-    max-width: 100%;
+    width: min(330px, calc(100vw - 40px));
+    max-width: min(330px, calc(100vw - 40px));
     height: auto;
-    padding: 13rem 0.75rem 1rem;
+    margin: 0 auto;
+    padding: 0;
+    transform: translateY(-9vh) scale(0.9);
+    transform-origin: 50% 0;
   }
   .cca-node-graph .cca-edges-svg { display: none; }
   .cca-nodes {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.45rem;
     width: 100%;
     height: auto;
   }
@@ -4134,6 +4428,17 @@ body {
     top: auto;
     transform: none;
     order: -1; /* share token on top */
+    width: min(240px, 78%);
+  }
+  .cca-ng-token .ng-node-inner {
+    justify-content: center;
+    min-height: 44px;
+    border-radius: 999px;
+    padding: 0.45rem 0.68rem;
+  }
+  .cca-ng-token .ng-node-icon img {
+    width: 24px;
+    height: 24px;
   }
   .cca-strat-column {
     position: relative;
@@ -4142,13 +4447,42 @@ body {
     transform: none;
     width: 100%;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.42rem;
   }
   .cca-strat-column .strategy-card-inner {
-    width: min(280px, 100%);
+    width: 100%;
+    padding: 0.52rem 0.68rem;
+    border-radius: 13px;
+    gap: 0.12rem;
+  }
+  .cca-strat-column .strat-name {
+    font-size: 8px;
+    letter-spacing: 0.14em;
+  }
+  .cca-strat-column .strat-icon-img {
+    width: 14px;
+    height: 14px;
+  }
+  .cca-strat-column .strat-pct {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .cca-strat-column .strat-role {
+    font-size: 8.5px;
+    line-height: 1.28;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
   .cca-summary {
-    font-size: 0.95rem;
+    top: auto;
+    bottom: 10%;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 300px;
+    font-size: 0.9rem;
+    line-height: 1.45;
     padding: 0 0.75rem;
     color: rgba(220, 225, 235, 0.92);
   }

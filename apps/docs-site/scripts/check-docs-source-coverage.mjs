@@ -47,6 +47,8 @@ const EXPLICIT_OUT_OF_SCOPE = [
   'circuits/amoe/**',
   // Relayer/keeper internal engineering readmes.
   'relayer/zkproof/README.md',
+  'cloudflare-workers/alfaclub-proxy/README.md',
+  'runbooks/alfaclub-token-rotation.md',
   // SEO assets engineering readme.
   'seo/README.md',
   // Repo-level meta doc (single sign-on notes), peer of note.md.

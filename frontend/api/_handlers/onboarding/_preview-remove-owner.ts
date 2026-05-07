@@ -134,7 +134,7 @@ function errorMessage(error: unknown): string {
 }
 
 async function simulateRemoveCall(params: {
-  publicClient: ReturnType<typeof createPublicClient>
+  publicClient: any
   cswAddress: Address
   data: Hex
 }): Promise<{ ok: boolean; error: string | null }> {

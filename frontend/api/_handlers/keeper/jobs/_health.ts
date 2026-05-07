@@ -3,11 +3,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  getDb,
   requireKeeprApiKey,
   setCors,
   setNoStore,
 } from '../../../../packages/server-core/src/index.js'
-import { getDb } from '../../../../server/_lib/db/postgres.js'
 
 type KeeperJobHealth = {
   retry: number

@@ -36,6 +36,8 @@ describe('PageMeta', () => {
     expect(queryMeta('twitter:image', 'name')?.getAttribute('content')).toBe(
       'http://localhost:3000/social/twitter-summary-large-image-1200x675.png',
     )
+    expect(queryMeta('twitter:site', 'name')?.getAttribute('content')).toBe('@4626fun')
+    expect(queryMeta('twitter:creator', 'name')?.getAttribute('content')).toBe('@wenakita')
     expect(queryMeta('og:image:alt', 'property')?.getAttribute('content')).toBe(
       '4626.fun logo and Creator Vaults on Base tagline',
     )

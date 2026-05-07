@@ -14,7 +14,7 @@ const WAITLIST_JOURNEY_STEPS = [
   { label: 'Deposit',       sub: `${STORY_CONTENT.defaultDepositTokens} ${STORY_CONTENT.creatorTokenSymbol.toLowerCase()} opens the vault` },
   { label: 'Mint ■AKITA',  sub: 'vault share tokens are issued to depositors' },
   { label: 'CCA',           sub: 'shares distributed to the public over 7 days' },
-  { label: 'Earn yield',    sub: 'deposited tokens are immediately put to work' },
+  { label: 'Route strategies',    sub: 'deposited tokens enter variable strategy infrastructure' },
 ] as const
 
 export function Home() {
@@ -83,9 +83,9 @@ export function Home() {
             transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             <h1 className="headline text-4xl leading-[0.94] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:text-[5.75rem] xl:text-[6.5rem]">
-              <span className="whitespace-nowrap">Turn Creator Coins</span>
+            <span className="whitespace-nowrap">ERC-4626 Creator Vaults</span>
               <br />
-              <span className="glow-brand">Into Earnings</span>
+            <span className="glow-brand">On Base</span>
             </h1>
           </motion.div>
 
@@ -95,7 +95,7 @@ export function Home() {
             transition={{ duration: 0.7, delay: 0.55 }}
             className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-500 sm:text-lg"
           >
-            Deposit once. Earn from every trade, forever.
+            Turn creator coins into redeemable vault shares. Experimental software. Vaults are not live yet.
           </motion.p>
 
           {showJoinWaitlistCta ? (
@@ -156,7 +156,7 @@ export function Home() {
           >
             <span className="label">How it works</span>
             <h2 className="headline text-2xl sm:text-3xl lg:text-4xl mt-2">
-              Deposit. Mint. Distribute. Earn.
+              Deposit. Mint. Distribute. Route.
             </h2>
           </motion.div>
 

@@ -5,6 +5,7 @@ export const waitlistRouteLoaders: ApiRouteLoaders = {
   'airtable-sync': () => import('./waitlist/_airtableSync.js'),
   'bootstrap': () => import('./waitlist/_bootstrap.js'),
   'leaderboard': () => import('./waitlist/_leaderboard.js'),
+  'lead': () => import('./waitlist/_lead.js'),
   'me': () => import('./waitlist/_me.js'),
   'position': () => import('./waitlist/_position.js'),
   'referrer': () => import('./waitlist/_referrer.js'),

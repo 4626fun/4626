@@ -115,6 +115,155 @@ pnpm -C frontend keeper:jobs:worker
 
 Vercel also runs `/api/keeper/jobs/run` every 5 minutes through `vercel.json`. That cron is gated by `CRON_SECRET` and uses the same job runner as the external worker script.
 
+## Sweep Canary
+
+The first real fallback workflow is a single-strategy CCA sweep canary. Vercel calls `/api/keeper/jobs/enqueue-sweep-canary` every 15 minutes. The endpoint is `CRON_SECRET` gated and is disabled unless a canary strategy is configured.
+
+Required canary env:
+
+```bash
+KEEPER_SWEEP_CANARY_CCA_STRATEGY_ADDRESS=0x...
+```
+
+Optional mark-settled chaining:
+
+```bash
+KEEPER_SWEEP_CANARY_VAULT_ADDRESS=0x...
+```
+
+When `KEEPER_SWEEP_CANARY_VAULT_ADDRESS` is set and `/api/cre/keeper/sweep` returns `completed: true` with `completionStage: "completed"`, the runner enqueues a second deduped `internal_api` job for `/api/cre/keeper/mark-settled`. This keeps DB settlement writes behind the existing `mark-settled` invariant gate instead of writing DB state directly from the queue worker.
+
+When `KEEPER_SWEEP_CANARY_ENFORCE_INVARIANTS` is unset or `true`, also set:
+
+```bash
+KEEPER_SWEEP_CANARY_CREATOR_COIN_ADDRESS=0x...
+KEEPER_SWEEP_CANARY_SHARE_TOKEN_ADDRESS=0x...
+KEEPER_SWEEP_CANARY_GAUGE_CONTROLLER_ADDRESS=0x...
+KEEPER_SWEEP_CANARY_PAYOUT_RECIPIENT_MODE=gauge
+```
+
+Router mode additionally requires:
+
+```bash
+KEEPER_SWEEP_CANARY_PAYOUT_RECIPIENT_MODE=payout_router
+KEEPER_SWEEP_CANARY_PAYOUT_ROUTER_ADDRESS=0x...
+KEEPER_SWEEP_CANARY_BURN_STREAM_ADDRESS=0x...
+```
+
+The enqueued job is:
+
+```json
+{
+  "kind": "internal_api",
+  "dedupeKey": "sweep-canary:<ccaStrategyAddress>",
+  "payload": {
+    "path": "/api/cre/keeper/sweep",
+    "body": {
+      "ccaStrategyAddress": "0x...",
+      "enforceInvariants": true,
+      "invariants": {}
+    }
+  }
+}
+```
+
+Keep the canary to one known strategy until retries/failures stay at zero for a full deployment cycle.
+
+## Vault Tend/Report Canary
+
+Vercel also calls `/api/keeper/jobs/enqueue-vault-canary` every 30 minutes. It is disabled unless both envs are set:
+
+```bash
+KEEPER_VAULT_CANARY_VAULT_ADDRESS=0x...
+KEEPER_VAULT_CANARY_ACTIONS=tend,report
+```
+
+Start with either `report` or `tend`, not both, unless you intentionally want both keeper writes active for the same vault. Each action is deduped separately:
+
+```json
+{
+  "kind": "internal_api",
+  "dedupeKey": "vault-report-canary:<vaultAddress>",
+  "payload": {
+    "path": "/api/cre/keeper/report",
+    "body": { "vaultAddress": "0x..." }
+  }
+}
+```
+
+## Active Vault Discovery
+
+The broader CRE replacement path is `/api/keeper/jobs/enqueue-active-vaults`, called by Vercel every 30 minutes. It is disabled by default.
+
+Enable it only after the single-vault canaries are stable:
+
+```bash
+KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED=1
+KEEPER_ACTIVE_VAULT_WORKFLOWS=sweep
+KEEPER_ACTIVE_VAULT_CHAIN_ID=8453
+KEEPER_ACTIVE_VAULT_LIMIT=5
+KEEPER_ACTIVE_VAULT_ENFORCE_INVARIANTS=true
+KEEPER_ACTIVE_VAULT_PAYOUT_RECIPIENT_MODE=gauge
+```
+
+Supported workflows are:
+
+- `sweep` — enqueues `/api/cre/keeper/sweep` for unsettled vaults with `contracts.ccaStrategy`.
+- `tend` — enqueues `/api/cre/keeper/tend` for each discovered vault.
+- `report` — enqueues `/api/cre/keeper/report` for each discovered vault.
+- `payout` — enqueues `/api/cre/keeper/payout-router-harvest` for vaults with `contracts.payoutRouter`.
+
+Discovery reads `keepr_vaults` directly and embeds addresses in the queued payloads. The worker still only executes POST jobs, so it does not need to call `/api/cre/vaults/active` at runtime.
+
+## Keepr Action Queue Processing
+
+Vercel also calls `/api/keeper/jobs/process-keepr-actions` every 5 minutes. This replaces the CRE `keepr-action-queue` loop when enabled:
+
+```bash
+KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED=1
+KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT=1
+KEEPER_PROCESS_KEEPR_ACTIONS_RETRY_DELAY_SECONDS=60
+```
+
+It fetches `/api/keepr/actions/pending`, claims one action with `updateStatus: executing`, executes `/api/keepr/actions/execute`, and finalizes with `executed`, `retry`, or `failed`. Trust-zone headers are derived from the action type and the existing `KEEPR_ZONE_KEY_*` env vars.
+
+## Bridge Integrity Monitor
+
+Vercel also calls `/api/keeper/jobs/enqueue-bridge-integrity` every 15 minutes. This replaces the CRE bridge-integrity monitor when enabled:
+
+```bash
+KEEPER_BRIDGE_INTEGRITY_ENQUEUE_ENABLED=1
+```
+
+It enqueues `/api/cre/keeper/bridge-integrity`, a read-only keeper endpoint that evaluates the existing `/api/deploy/solanaInfraStatus` response and reports `ok`, `warning`, or `critical` findings. It does not mutate bridge contracts.
+
+## Ajna/Charm Strategy Canaries
+
+Vercel also calls `/api/keeper/jobs/enqueue-strategy-canary` every 30 minutes. This is disabled by default and enqueues existing `keepr_actions` instead of adding new direct strategy writers:
+
+```bash
+KEEPER_STRATEGY_CANARY_ENABLED=1
+KEEPER_STRATEGY_CANARY_ACTIONS=ajna,charm
+KEEPER_STRATEGY_CANARY_VAULT_ADDRESS=0x...
+KEEPER_STRATEGY_CANARY_GROUP_ID=<group-id>
+```
+
+Ajna:
+
+```bash
+KEEPER_STRATEGY_CANARY_AJNA_AUTH_ADDRESS=0x...
+KEEPER_STRATEGY_CANARY_AJNA_STRATEGY_ADDRESS=0x...
+KEEPER_STRATEGY_CANARY_AJNA_TARGET_BUCKET=1234
+```
+
+Charm:
+
+```bash
+KEEPER_STRATEGY_CANARY_CHARM_VAULT_ADDRESS=0x...
+```
+
+These canaries rely on `/api/keeper/jobs/process-keepr-actions` to execute the action queue. Keep `KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT=1` until each strategy action has run cleanly.
+
 Monitor stuck jobs:
 
 ```bash

@@ -1,9 +1,17 @@
 import {
   claimDueKeeperJobs,
   completeKeeperJob,
+  enqueueKeeperJob,
   releaseExpiredKeeperJobClaims,
   type KeeperJob,
 } from './keeperJobs.js'
+import {
+  KEEPR_TRUST_ZONE_HEADER,
+  KEEPR_TRUST_ZONE_KEY_HEADER,
+  getKeeprTrustZoneEnvKey,
+  resolveKeeprEffectiveActionType,
+  resolveKeeprTrustZone,
+} from '../agentControl/trustZones.js'
 
 const ALLOWED_INTERNAL_API_PREFIXES = [
   '/api/cre/keeper/',
@@ -24,12 +32,29 @@ type KeeperJobRunResult = {
   kind: string
   status: 'succeeded' | 'failed' | 'retry'
   error: string | null
+  followUpJobId?: number
 }
 
 export type KeeperJobTickResult = {
   claimed: number
   releasedExpiredClaims: number
   results: KeeperJobRunResult[]
+}
+
+type PendingKeeprAction = {
+  id: number
+  vaultAddress: string
+  groupId: string
+  actionType: string | null
+  action: Record<string, unknown> | null
+  status: string
+}
+
+export type KeeprActionProcessResult = {
+  processed: number
+  succeeded: number
+  failed: number
+  retried: number
 }
 
 function normalizePositiveInt(value: unknown, fallback: number, min: number, max: number): number {
@@ -42,6 +67,55 @@ function joinUrl(baseUrl: string, path: string): string {
   const base = baseUrl.replace(/\/+$/, '')
   const suffix = path.startsWith('/') ? path : `/${path}`
   return `${base}${suffix}`
+}
+
+function zoneHeaders(actionType: string | null, action: Record<string, unknown> | null): Record<string, string> {
+  const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action)
+  const zone = resolveKeeprTrustZone(effectiveActionType ?? actionType)
+  const key = String(process.env[getKeeprTrustZoneEnvKey(zone)] ?? '').trim()
+  return {
+    [KEEPR_TRUST_ZONE_HEADER]: zone,
+    ...(key ? { [KEEPR_TRUST_ZONE_KEY_HEADER]: key } : null),
+  }
+}
+
+async function apiGet<T>(params: { baseUrl: string; apiKey: string; path: string }): Promise<T> {
+  const response = await fetch(joinUrl(params.baseUrl, params.path), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      Accept: 'application/json',
+    },
+  })
+  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: T; error?: string } | null
+  if (!response.ok || json?.success !== true || !json.data) {
+    throw new Error(json?.error || `request_failed:${params.path}:${response.status}`)
+  }
+  return json.data
+}
+
+async function apiPost<T>(params: {
+  baseUrl: string
+  apiKey: string
+  path: string
+  body: Record<string, unknown>
+  headers?: Record<string, string>
+}): Promise<T> {
+  const response = await fetch(joinUrl(params.baseUrl, params.path), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(params.headers ?? {}),
+    },
+    body: JSON.stringify(params.body),
+  })
+  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: T; error?: string } | null
+  if (!response.ok || json?.success !== true || !json.data) {
+    throw new Error(json?.error || `request_failed:${params.path}:${response.status}`)
+  }
+  return json.data
 }
 
 function readInternalApiPayload(job: KeeperJob): {
@@ -87,6 +161,45 @@ async function callInternalApi(params: {
     : { response: json?.data ?? null }
 }
 
+function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unknown>): Record<string, unknown> | null {
+  const payloadBody =
+    job.payload.body && typeof job.payload.body === 'object' && !Array.isArray(job.payload.body)
+      ? (job.payload.body as Record<string, unknown>)
+      : null
+  const markSettled =
+    payloadBody?.markSettled && typeof payloadBody.markSettled === 'object' && !Array.isArray(payloadBody.markSettled)
+      ? (payloadBody.markSettled as Record<string, unknown>)
+      : null
+  const vaultAddress = typeof markSettled?.vaultAddress === 'string' ? markSettled.vaultAddress.trim().toLowerCase() : ''
+  if (!/^0x[a-f0-9]{40}$/.test(vaultAddress)) return null
+  if (result.completed !== true || result.completionStage !== 'completed') return null
+
+  return {
+    vaultAddress,
+    settledAt: new Date().toISOString(),
+    settlementStage: 'completed',
+  }
+}
+
+async function enqueueFollowUpIfNeeded(job: KeeperJob, result: Record<string, unknown>): Promise<number | undefined> {
+  const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
+  if (path !== '/api/cre/keeper/sweep') return undefined
+  const markSettledBody = readSweepFollowUpMarkSettled(job, result)
+  if (!markSettledBody) return undefined
+
+  const followUp = await enqueueKeeperJob({
+    kind: 'internal_api',
+    dedupeKey: `mark-settled:${String(markSettledBody.vaultAddress).toLowerCase()}`,
+    source: 'keeper-sweep-follow-up',
+    payload: {
+      path: '/api/cre/keeper/mark-settled',
+      body: markSettledBody,
+    },
+    maxAttempts: 3,
+  })
+  return followUp.id
+}
+
 async function runOneJob(params: {
   baseUrl: string
   apiKey: string
@@ -103,14 +216,21 @@ async function runOneJob(params: {
             apiKey: params.apiKey,
             job: params.job,
           })
+    const followUpJobId = await enqueueFollowUpIfNeeded(params.job, result)
 
     await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: 'succeeded',
-      result,
+      result: followUpJobId ? { ...result, followUpJobId } : result,
     })
-    return { id: params.job.id, kind: params.job.kind, status: 'succeeded', error: null }
+    return {
+      id: params.job.id,
+      kind: params.job.kind,
+      status: 'succeeded',
+      error: null,
+      ...(followUpJobId ? { followUpJobId } : null),
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const retryable = !message.startsWith('unsupported_job_kind') && !message.includes('_not_allowed')
@@ -159,4 +279,103 @@ export async function runKeeperJobTick(input: RunKeeperJobTickInput): Promise<Ke
     releasedExpiredClaims,
     results,
   }
+}
+
+export async function processKeeprActions(input: {
+  baseUrl: string
+  apiKey: string
+  limit?: number | null
+  retryDelaySeconds?: number | null
+}): Promise<KeeprActionProcessResult> {
+  const baseUrl = String(input.baseUrl ?? '').trim()
+  if (!baseUrl) throw new Error('keeper_coordination_base_url_required')
+  const apiKey = String(input.apiKey ?? '').trim()
+  if (!apiKey) throw new Error('keepr_api_key_required')
+  const limit = normalizePositiveInt(input.limit, 1, 1, 10)
+  const retryDelaySeconds = normalizePositiveInt(input.retryDelaySeconds, 60, 1, 86_400)
+
+  const pending = await apiGet<{ actions: PendingKeeprAction[]; count: number }>({
+    baseUrl,
+    apiKey,
+    path: `/api/keepr/actions/pending?limit=${limit}`,
+  })
+
+  const result: KeeprActionProcessResult = { processed: 0, succeeded: 0, failed: 0, retried: 0 }
+  for (const action of pending.actions ?? []) {
+    const actionPayload =
+      action.action && typeof action.action === 'object' && !Array.isArray(action.action)
+        ? action.action
+        : null
+    const headers = zoneHeaders(action.actionType, actionPayload)
+    const effectiveActionType = resolveKeeprEffectiveActionType(action.actionType, actionPayload) ?? action.actionType
+
+    const claim = await apiPost<{ updated: boolean }>({
+      baseUrl,
+      apiKey,
+      path: '/api/keepr/actions/updateStatus',
+      headers,
+      body: {
+        id: action.id,
+        status: 'executing',
+        actionType: effectiveActionType,
+        action: actionPayload,
+      },
+    })
+    if (!claim.updated) continue
+
+    result.processed += 1
+    try {
+      const execution = await apiPost<{ executed?: boolean; retryable?: boolean; error?: string }>({
+        baseUrl,
+        apiKey,
+        path: '/api/keepr/actions/execute',
+        headers,
+        body: {
+          id: action.id,
+          vaultAddress: action.vaultAddress,
+          groupId: action.groupId,
+          actionType: effectiveActionType,
+          action: actionPayload,
+        },
+      })
+      if (execution.executed === true) {
+        await apiPost({
+          baseUrl,
+          apiKey,
+          path: '/api/keepr/actions/updateStatus',
+          headers,
+          body: {
+            id: action.id,
+            status: 'executed',
+            actionType: effectiveActionType,
+            action: actionPayload,
+          },
+        })
+        result.succeeded += 1
+      } else {
+        throw new Error(execution.error || 'action_not_executed')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const retryable = !message.includes('not_authorized') && !message.includes('invalid_')
+      await apiPost({
+        baseUrl,
+        apiKey,
+        path: '/api/keepr/actions/updateStatus',
+        headers,
+        body: {
+          id: action.id,
+          status: retryable ? 'retry' : 'failed',
+          error: message,
+          retryDelaySeconds,
+          actionType: effectiveActionType,
+          action: actionPayload,
+        },
+      })
+      if (retryable) result.retried += 1
+      else result.failed += 1
+    }
+  }
+
+  return result
 }

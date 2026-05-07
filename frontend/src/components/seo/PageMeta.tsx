@@ -131,6 +131,8 @@ export function PageMeta({
     setOrCreateMeta('og:type', 'website', 'property')
     setOrCreateMeta('og:url', canonical, 'property')
     setOrCreateMeta('twitter:card', 'summary_large_image', 'name')
+    setOrCreateMeta('twitter:site', '@4626fun', 'name')
+    setOrCreateMeta('twitter:creator', '@wenakita', 'name')
     setOrCreateMeta('twitter:title', fullTitle, 'name')
 
     setOrCreateMeta('og:image', resolvedOgImage, 'property')

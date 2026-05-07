@@ -4,15 +4,15 @@ export const PAGE_META = {
   home: {
     title: '4626.fun — Creator Vaults on Base',
     description:
-      'Deposit your creator coin once. Earn trading fees, yield, and lottery rewards — shared with every holder.',
+      '4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.',
   },
   waitlist: {
     title: 'Join the Waitlist — 4626.fun',
-    description: 'Get early access to Creator Vaults on Base. Deposit once. Earn from every trade, forever.',
+    description: 'Get early access to ERC-4626 creator-vault infrastructure on Base.',
   },
   explore: {
     title: 'Explore Creators',
-    description: 'Discover and invest in creator vaults on Base.',
+    description: 'Discover creator-vault previews and creator activity on Base.',
   },
   deploy: {
     title: 'Deploy Vault',

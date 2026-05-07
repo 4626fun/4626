@@ -258,16 +258,24 @@ export async function releaseExpiredKeeperJobClaims(): Promise<number> {
   const result = await db.sql`
     UPDATE keeper_jobs
     SET
-      status = 'retry',
+      status = CASE
+        WHEN attempt_count >= max_attempts THEN 'failed'
+        ELSE 'retry'
+      END,
       claimed_by = NULL,
       claimed_at = NULL,
       claim_expires_at = NULL,
-      last_error = COALESCE(last_error, 'claim_expired'),
+      last_error = COALESCE(
+        last_error,
+        CASE
+          WHEN attempt_count >= max_attempts THEN 'claim_expired_max_attempts'
+          ELSE 'claim_expired'
+        END
+      ),
       updated_at = NOW()
     WHERE status = 'claimed'
       AND claim_expires_at IS NOT NULL
       AND claim_expires_at <= NOW()
-      AND attempt_count < max_attempts
     RETURNING id;
   `
   return result.rows?.length ?? 0

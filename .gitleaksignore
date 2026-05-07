@@ -1,0 +1,3 @@
+ec7f6c4cf6d4a6a992b100df77399da1f5a30a08:frontend/.env.example:airtable-api-key:1206
+ec7f6c4cf6d4a6a992b100df77399da1f5a30a08:frontend/server/_lib/onboarding/waitlistAirtableSync.ts:airtable-api-key:44
+d2ae1b710f1260d51fe965e6f2dace5c78aa139a:frontend/src/hooks/useSiweAuth.test.ts:generic-api-key:90

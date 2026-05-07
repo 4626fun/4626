@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base href="/immersive/">
   <title>4626.fun — Creator Vaults on Base</title>
-  <meta name="description" content="ERC-4626 creator coin vaults. Deposit a creator coin, receive vault shares, earn fees pro rata. Redeemable anytime.">
+  <meta name="description" content="4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.">
   <link rel="canonical" href="https://4626.fun/">
 
   <!-- Brand favicons + PWA (canonical kit) -->
@@ -24,20 +24,53 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="4626.fun">
   <meta property="og:title" content="4626.fun — Creator Vaults on Base">
-  <meta property="og:description" content="ERC-4626 creator coin vaults. Deposit a creator coin, receive vault shares, earn fees pro rata. Redeemable anytime.">
+  <meta property="og:description" content="4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.">
   <meta property="og:url" content="https://4626.fun/">
   <meta property="og:image" content="https://4626.fun/social/og-image-1200x630.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@4626fun">
+  <meta name="twitter:creator" content="@wenakita">
   <meta name="twitter:title" content="4626.fun — Creator Vaults on Base">
-  <meta name="twitter:description" content="ERC-4626 creator coin vaults. Deposit a creator coin, receive vault shares, earn fees pro rata. Redeemable anytime.">
+  <meta name="twitter:description" content="4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.">
   <meta name="twitter:image" content="https://4626.fun/social/twitter-summary-large-image-1200x675.png">
 
   <link rel="stylesheet" href="./base.css">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./refinement.css">
   <link rel="stylesheet" href="./brand-skin.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "4626.fun",
+        "url": "https://4626.fun/",
+        "email": "hello@4626.fun",
+        "sameAs": [
+          "https://x.com/4626fun",
+          "https://docs.4626.fun",
+          "https://github.com/wenakita"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "name": "4626.fun",
+        "url": "https://4626.fun/"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "4626.fun",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "Web",
+        "url": "https://4626.fun/",
+        "description": "ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice."
+      }
+    ]
+  }
+  </script>
   <!-- Self-hosted vendor libraries (three.js 0.183.0, GSAP 3.13.0, ScrollTrigger 3.13.0).
        Relative paths resolve under <base href="/immersive/"> to /immersive/vendor/*.
        Scoped to 'self' in CSP — no external script-src allowlist needed. -->
@@ -135,8 +168,19 @@
 
           <div class="hero-support" id="hero-support">
             <p class="hero-support-line" data-line="0">Deposit a creator coin into a vault.</p>
-            <p class="hero-support-line" data-line="1">Receive vault shares. Fees shared pro rata.</p>
-            <p class="hero-support-line" data-line="2">Redeemable anytime.</p>
+            <p class="hero-support-line" data-line="1">Receive vault shares.</p>
+            <p class="hero-support-line" data-line="2">Pre-launch infrastructure. Demo data is illustrative.</p>
+          </div>
+          <div class="hero-pill-row" id="hero-pill-row" aria-label="Product status">
+            <span>Pre-launch</span>
+            <span>ERC-4626 native</span>
+            <span>Base first</span>
+            <span>No APY claims</span>
+          </div>
+          <div class="hero-disclaimer" id="hero-disclaimer">
+            <span>Experimental software.</span>
+            <span>Demo vaults are previews, not live products.</span>
+            <a href="https://4626.fun/risks">Risks</a>
           </div>
           <div class="hero-chain" id="hero-chain">
             <span class="hero-chain-text">Only on</span>
@@ -156,6 +200,55 @@
           </div>
           <div class="hero-cta" id="hero-cta">
             <a href="https://4626.fun/waitlist" class="cta-button">Join Waitlist</a>
+            <a href="https://docs.4626.fun" class="cta-button secondary" target="_blank" rel="noopener noreferrer">Read Docs</a>
+          </div>
+          <form class="waitlist-inline-form" id="waitlist-inline-form" aria-label="Join the 4626.fun waitlist">
+            <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="waitlist-hp">
+            <label>
+              <span>Email</span>
+              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+            </label>
+            <label>
+              <span>Role</span>
+              <select name="role" required>
+                <option value="">Choose one</option>
+                <option value="creator">Creator</option>
+                <option value="builder">Builder</option>
+                <option value="depositor">Early user</option>
+                <option value="partner">Partner</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>
+              <span>X handle optional</span>
+              <input name="x_handle" type="text" inputmode="text" autocomplete="off" placeholder="@4626fun">
+            </label>
+            <button type="submit">Join</button>
+            <p class="waitlist-form-note">By joining, you agree to the <a href="https://4626.fun/terms">Terms</a>, <a href="https://4626.fun/privacy">Privacy</a>, and <a href="https://4626.fun/risks">Risks</a>.</p>
+            <p class="waitlist-form-status" id="waitlist-form-status" role="status" aria-live="polite"></p>
+          </form>
+          <div class="audience-cards" id="audience-cards" aria-label="Who 4626.fun is for">
+            <article>
+              <h2>For creators</h2>
+              <p>Prepare a creator-vault launch without pretending demo economics are live.</p>
+              <a href="#waitlist-inline-form">Apply as a creator</a>
+            </article>
+            <article>
+              <h2>For builders</h2>
+              <p>Study the ERC-4626, CCA, and strategy-routing primitives behind the stack.</p>
+              <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Read the docs</a>
+            </article>
+            <article>
+              <h2>For early users</h2>
+              <p>Follow the launch, learn the risks, and join before vaults go live.</p>
+              <a href="#waitlist-inline-form">Join the waitlist</a>
+            </article>
+          </div>
+          <div class="hero-trust-grid" id="hero-trust-grid" aria-label="Trust links">
+            <a href="https://4626.fun/risks"><span>01</span> Risks</a>
+            <a href="https://4626.fun/security"><span>02</span> Security status</a>
+            <a href="https://4626.fun/about"><span>03</span> Official links</a>
+            <a href="https://4626.fun/privacy"><span>04</span> Privacy</a>
           </div>
         </div>
 
@@ -185,7 +278,7 @@
     </section>
 
     <!-- ╔═══ CHAPTER 2: TOKEN JOURNEY (1800vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-token" data-height="1800">
+    <section class="scroll-scene" id="ch-token" data-height="2200">
       <div class="scene-pin">
         <!-- Central vertical line -->
         <div class="token-line" id="token-line">
@@ -225,7 +318,7 @@
             <div class="token-detail" id="coin-detail">
               <div class="detail-section-label" style="color: var(--color-text-muted);">Deposited<br>Asset</div>
               <p class="detail-amount">1 AKITA</p>
-              <p class="detail-desc">Deposited in vault. Earning fees.</p>
+              <p class="detail-desc">Deposited in vault. Strategy outcomes are variable.</p>
             </div>
             <!-- Initial-deposit detail card (nested under coin, strategy-card style).
                  Clickable: toggles .strat-expanded to reveal the expanded detail rows. -->
@@ -254,7 +347,7 @@
                   </div>
                   <div class="strat-detail-row">
                     <span class="strat-detail-label">Idle Buffer</span>
-                    <span class="strat-detail-value">5,000,000 AKITA (10%) retained for instant redemptions</span>
+                      <span class="strat-detail-value">5,000,000 AKITA (10%) retained as an idle liquidity buffer</span>
                   </div>
                   <div class="strat-detail-row">
                     <span class="strat-detail-label">Source</span>
@@ -284,7 +377,7 @@
             <div class="token-detail" id="share-detail">
               <div class="detail-section-label" style="color: var(--color-accent);">Vault<br>Share</div>
               <p class="detail-amount">1 ■AKITA</p>
-              <p class="detail-desc">Held by you. Redeemable anytime for your claim on the vault.</p>
+              <p class="detail-desc">Held by you. Redeemability depends on available liquidity and strategy unwinding.</p>
             </div>
           </div>
 
@@ -351,7 +444,7 @@
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Idle Buffer</span>
-                        <span class="strat-detail-value">5,000,000 AKITA (10%) retained for instant redemptions</span>
+                      <span class="strat-detail-value">5,000,000 AKITA (10%) retained as an idle liquidity buffer</span>
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Source</span>
@@ -388,22 +481,22 @@
                   </div>
                   <p class="strat-pct">30%</p>
                   <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
-                  <p class="strat-role">Permissionless lending pools for interest-bearing yield.</p>
+                  <p class="strat-role">Permissionless lending pools. Outcomes depend on market activity.</p>
                   <!-- Expandable detail panel -->
                   <div class="strat-detail-panel">
                     <div class="strat-detail-wrap">
                       <div class="strat-detail-divider"></div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Mechanism</span>
-                        <span class="strat-detail-value">Supply AKITA into permissionless lending pools. Borrowers pay interest; lenders earn yield with no governance overhead.</span>
+                        <span class="strat-detail-value">Supply AKITA into permissionless lending pools. Borrower demand and pool health determine outcomes.</span>
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Risk</span>
                         <span class="strat-detail-value strat-risk-low">Low</span>
                       </div>
                       <div class="strat-detail-row">
-                        <span class="strat-detail-label">Est. Yield</span>
-                        <span class="strat-detail-value strat-yield">4.2 – 7.8% APY</span>
+                        <span class="strat-detail-label">Status</span>
+                        <span class="strat-detail-value strat-yield">Illustrative preview — vaults not live</span>
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Chain</span>
@@ -438,8 +531,8 @@
                         <span class="strat-detail-value strat-risk-med">Medium</span>
                       </div>
                       <div class="strat-detail-row">
-                        <span class="strat-detail-label">Est. Yield</span>
-                        <span class="strat-detail-value strat-yield">12.5 – 24.1% APY</span>
+                        <span class="strat-detail-label">Status</span>
+                        <span class="strat-detail-value strat-yield">Illustrative preview — outcomes vary</span>
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Chain</span>
@@ -460,7 +553,7 @@
                   </div>
                   <p class="strat-pct">30%</p>
                   <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
-                  <p class="strat-role">Bridged to Solana for Meteora Alpha Vault liquidity.</p>
+                  <p class="strat-role">Bridge-routed Solana liquidity strategy. Cross-chain systems add risk.</p>
                   <!-- Expandable detail panel -->
                   <div class="strat-detail-panel">
                     <div class="strat-detail-wrap">
@@ -474,8 +567,8 @@
                         <span class="strat-detail-value strat-risk-med">Medium-High</span>
                       </div>
                       <div class="strat-detail-row">
-                        <span class="strat-detail-label">Est. Yield</span>
-                        <span class="strat-detail-value strat-yield">18.3 – 31.7% APY</span>
+                        <span class="strat-detail-label">Status</span>
+                        <span class="strat-detail-value strat-yield">Illustrative preview — bridge risk applies</span>
                       </div>
                       <div class="strat-detail-row">
                         <span class="strat-detail-label">Chain</span>
@@ -564,14 +657,14 @@
         </div>
 
         <!-- Cross copy (bottom) -->
-        <p class="token-cross-copy" id="token-cross-copy">Receive a vault share. Fees are shared pro rata.</p>
+        <p class="token-cross-copy" id="token-cross-copy">Receive a vault share. Strategy outcomes flow through the vault proportionally.</p>
         <p class="token-entry-cue" id="token-entry-cue">1:1 at entry (demo)</p>
 
         <!-- Dual-view phase copy — single, non-redundant line (the per-token captions above already describe "deposit creator coin / receive vault share / redeemable claim"). -->
         <p class="dual-entry" id="dual-entry">At entry, 1 AKITA mints 1 ■AKITA.</p>
 
         <!-- Fee label (allocation phase) -->
-        <p class="fee-label" id="fee-label">Fees flow back · pro rata</p>
+        <p class="fee-label" id="fee-label">Fees may accrue · outcomes vary</p>
       </div>
     </section>
 
@@ -586,7 +679,7 @@
               <span class="ed-kicker-rule"></span>
               <span class="ed-kicker-label">Accrue</span>
             </div>
-            <p class="accrue-desc">Fees flow into the vault. Your share <em>grows</em>.</p>
+            <p class="accrue-desc">Fees may flow into the vault. Your share reflects <em>variable</em> strategy outcomes.</p>
           </div>
           <!-- Central ratio display -->
           <div class="accrue-ratio-display" id="accrue-ratio-display">
@@ -611,7 +704,7 @@
           <!-- ═══ WebGL Yield Curve ═══ -->
           <div class="yield-curve-wrap" id="yield-curve-wrap">
             <canvas id="yield-curve-canvas"></canvas>
-            <!-- Y-axis labels (populated by JS for 1.000→1.034 range) -->
+            <!-- Y-axis labels (populated by JS for the illustrative ratio range) -->
             <div class="yc-axis yc-axis-y" id="yc-axis-y"></div>
             <!-- X-axis labels (month ticks Aug 2025 → Apr 2026, populated by JS) -->
             <div class="yc-axis yc-axis-x" id="yc-axis-x"></div>
@@ -632,8 +725,8 @@
             </div>
             <div class="accrue-stat-divider"></div>
             <div class="accrue-stat">
-              <p class="accrue-stat-label">APY</p>
-              <p class="accrue-stat-value accent" id="stat-apy">0.0%</p>
+              <p class="accrue-stat-label">Status</p>
+              <p class="accrue-stat-value accent" id="stat-apy">Demo</p>
             </div>
           </div>
           <p class="accrue-equation" id="accrue-equation"></p>
@@ -642,7 +735,7 @@
         <!-- Volatility narrative text (overlaid on yield curve area) -->
         <div class="vol-narrative" id="vol-narrative">
           <p class="vol-headline" id="vol-headline">The token price can do anything.</p>
-          <p class="vol-sub" id="vol-sub">But vault holders earn fees regardless — pro rata, every day, no matter what.</p>
+          <p class="vol-sub" id="vol-sub">Vault depositors receive a proportional claim on fees generated by underlying strategies. Fees may be zero, and vault shares may lose value.</p>
         </div>
       </div>
     </section>
@@ -833,7 +926,7 @@
         </div>
 
         <!-- Summary line -->
-        <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
+        <p class="cca-summary" id="cca-summary">Deposit an asset. Strategy outcomes vary. The share token finds price discovery.</p>
 
 
       </div>
@@ -851,7 +944,7 @@
             <span class="ed-kicker-label">The Full Picture</span>
           </div>
           <h2 class="dual-title"><em>Two</em> tokens. <em>One</em> vault.</h2>
-          <p class="dual-sub">The underlying asset earns yield through strategies. The share token distributes ownership through the CCA.</p>
+          <p class="dual-sub">The underlying asset enters strategy infrastructure. The share token distributes ownership through the CCA.</p>
         </div>
 
         <!-- Dual graph container -->
@@ -970,8 +1063,8 @@
               <span class="ed-kicker-rule"></span>
               <span class="ed-kicker-label">Creator Vaults</span>
             </div>
-            <h2 class="vaults-headline"><em>Deposit.</em> Earn together.</h2>
-            <p class="vaults-sub">A curated selection of early creator vaults on Base.</p>
+            <h2 class="vaults-headline"><em>Demo.</em> Preview only.</h2>
+            <p class="vaults-sub">Illustrative creator-vault previews. Vaults are not live yet.</p>
           </div>
 
           <div class="vaults-editorial" id="vaults-grid">
@@ -980,7 +1073,7 @@
               <div class="vault-card-glow"></div>
               <div class="vault-featured-top">
                 <div class="vault-featured-meta">
-                  <span class="vault-featured-kicker">Featured</span>
+                  <span class="vault-featured-kicker">Demo preview</span>
                   <h3 class="vault-featured-name">Akita Vault</h3>
                   <span class="vault-card-share">■AKITA</span>
                 </div>
@@ -989,11 +1082,11 @@
                   <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="vault-card-share-img">
                 </figure>
               </div>
-              <p class="vault-featured-quote">“Deposit AKITA. Earn alongside the community.”</p>
-              <div class="vault-featured-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value accent">14.2%</span></div>
-                <div><span class="vcs-label">TVL</span><span class="vcs-value">$1.8M</span></div>
-                <div><span class="vcs-label">Depositors</span><span class="vcs-value">2,148</span></div>
+              <p class="vault-featured-quote">Illustrative strategy mix: Ajna · Charm · Meteora · Idle buffer.</p>
+              <div class="vault-featured-stats vault-demo-preview">
+                <div><span class="vcs-label">Status</span><span class="vcs-value accent">DEMO PREVIEW</span></div>
+                <div><span class="vcs-label">Stage</span><span class="vcs-value">Vaults not live</span></div>
+                <div><span class="vcs-label">Risk</span><a class="vcs-value vault-risk-link" href="https://4626.fun/risks">Read risks</a></div>
               </div>
             </article>
 
@@ -1009,9 +1102,9 @@
                   <h3>Jesse Vault</h3>
                   <span class="vault-card-share">■JESSE</span>
                 </div>
-                <div class="vault-compact-stats">
-                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">18.6%</span></div>
-                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$3.2M</span></div>
+                <div class="vault-compact-stats vault-demo-preview">
+                  <div><span class="vcs-label">Status</span><span class="vcs-value accent">DEMO</span></div>
+                  <div><span class="vcs-label">Stage</span><span class="vcs-value">Not live</span></div>
                 </div>
               </article>
               <article class="vault-card vault-compact" id="vc-2">
@@ -1024,9 +1117,9 @@
                   <h3>Gabriel Haines</h3>
                   <span class="vault-card-share">■GABRIELHAINES</span>
                 </div>
-                <div class="vault-compact-stats">
-                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">9.4%</span></div>
-                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$740K</span></div>
+                <div class="vault-compact-stats vault-demo-preview">
+                  <div><span class="vcs-label">Status</span><span class="vcs-value accent">DEMO</span></div>
+                  <div><span class="vcs-label">Stage</span><span class="vcs-value">Not live</span></div>
                 </div>
               </article>
               <article class="vault-card vault-compact" id="vc-3">
@@ -1039,18 +1132,18 @@
                   <h3>Nick Shirley</h3>
                   <span class="vault-card-share">■THENICKSHIRLEY</span>
                 </div>
-                <div class="vault-compact-stats">
-                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">22.1%</span></div>
-                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$520K</span></div>
+                <div class="vault-compact-stats vault-demo-preview">
+                  <div><span class="vcs-label">Status</span><span class="vcs-value accent">DEMO</span></div>
+                  <div><span class="vcs-label">Stage</span><span class="vcs-value">Not live</span></div>
                 </div>
               </article>
             </div>
           </div>
 
           <div class="vaults-cta" id="vaults-cta">
-            <a href="https://4626.fun/waitlist" class="cta-button secondary">View All Vaults</a>
+            <a href="https://4626.fun/risks" class="cta-button secondary">Read risks</a>
           </div>
-          <p class="vaults-disclaimer" id="vaults-disclaimer">For demonstration purposes only. Example vault shares shown here do not exist yet.</p>
+          <p class="vaults-disclaimer" id="vaults-disclaimer">DEMO PREVIEW - illustrative only. Vaults are not live yet. Strategy outcomes are variable and may be zero or negative.</p>
         </div>
       </div>
     </section>
@@ -1128,7 +1221,7 @@
             <h2 class="close-brand-wordmark">4626<em>.fun</em></h2>
           </div>
           <div class="close-line" id="close-line"></div>
-          <p class="close-tag" id="close-tag">Earn together.</p>
+          <p class="close-tag" id="close-tag">ERC-4626 creator vaults on Base.</p>
           <div class="close-cta" id="close-cta">
             <a href="https://4626.fun/waitlist" class="enter-vaults-btn" id="closing">Join Waitlist</a>
           </div>
@@ -1189,9 +1282,9 @@
                a frame caught mid-scroll. -->
           <div class="cres-finale-poster" id="cres-finale-poster" aria-hidden="true">
 
-            <!-- L3.5 · Earn together. (tagline that settles above the mark) -->
+            <!-- L3.5 · Standardized vaults. (tagline that settles above the mark) -->
             <div class="cres-line cres-line-earn" id="cres-line-earn">
-              <span class="cres-text cres-earn"><em>Earn together.</em></span>
+              <span class="cres-text cres-earn" aria-hidden="true"></span>
             </div>
 
             <!-- L4 · 4626.fun (brand anchor — hairlines draw out) -->
@@ -1220,7 +1313,7 @@
                 <span class="cres-cta-label">Join the Waitlist</span>
                 <span class="cres-cta-arrow" aria-hidden="true">→</span>
               </a>
-              <span class="cres-finale-meta" aria-hidden="true">Early access · No spam · Unsubscribe anytime</span>
+              <span class="cres-finale-meta" aria-hidden="true">Base-native · ERC-4626 · Built for creators and builders</span>
             </div>
 
           </div><!-- /cres-finale-poster -->
@@ -1236,8 +1329,18 @@
       <img src="/logo/icon-transparent-256.png" alt="4626.fun" class="footer-icon footer-icon-mark" width="20" height="20">
       <span>&copy; 2026 4626.fun</span>
     </div>
+    <div class="footer-official">
+      <strong>Official channels</strong>
+      <p>Use the links below to verify 4626.fun. We will never ask for seed phrases, private keys, or deposits over DM.</p>
+    </div>
     <div class="footer-links">
       <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
+      <a href="https://x.com/4626fun" target="_blank" rel="noopener noreferrer">X</a>
+      <a href="https://4626.fun/risks">Risks</a>
+      <a href="https://4626.fun/security">Security</a>
+      <a href="https://4626.fun/about">About</a>
+      <a href="https://4626.fun/terms">Terms</a>
+      <a href="https://4626.fun/privacy">Privacy</a>
       <a href="https://github.com/wenakita" target="_blank" rel="noopener noreferrer">GitHub</a>
       <a href="https://discord.gg/4626" target="_blank" rel="noopener noreferrer">Discord</a>
     </div>
@@ -1245,6 +1348,147 @@
 
   <!-- Audio toggle is injected by audio.js as a floating bottom-right button. -->
 
+  <script>
+    ;(() => {
+      const ATTR_KEY = 'cv:first-touch-attribution'
+      const VISITOR_KEY = 'cv:visitor-id'
+      const SESSION_KEY = 'cv:session-id'
+      const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
+      const uuid = () => {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID()
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+      }
+      const readStored = (key) => {
+        try {
+          const raw = localStorage.getItem(key)
+          return raw ? JSON.parse(raw) : null
+        } catch {
+          return null
+        }
+      }
+      const writeStored = (key, value) => {
+        try {
+          localStorage.setItem(key, JSON.stringify(value))
+        } catch {
+          // Storage can fail in privacy modes.
+        }
+      }
+      const getOrCreateId = (storage, key) => {
+        try {
+          const existing = storage.getItem(key)
+          if (existing) return existing
+          const next = uuid()
+          storage.setItem(key, next)
+          return next
+        } catch {
+          return uuid()
+        }
+      }
+      const params = new URLSearchParams(window.location.search)
+      const currentAttribution = Object.fromEntries(
+        UTM_KEYS.map((key) => [key, params.get(key) || '']).filter(([, value]) => value),
+      )
+      const firstTouch =
+        readStored(ATTR_KEY) || {
+          ...currentAttribution,
+          referrer: document.referrer || '',
+          landing_path: `${window.location.pathname}${window.location.search}`,
+          captured_at: new Date().toISOString(),
+        }
+      writeStored(ATTR_KEY, firstTouch)
+      const visitorId = getOrCreateId(localStorage, VISITOR_KEY)
+      const sessionId = getOrCreateId(sessionStorage, SESSION_KEY)
+      const attributionPayload = () => ({
+        ...currentAttribution,
+        referrer: document.referrer || '',
+        visitor_id: visitorId,
+        session_id: sessionId,
+        first_touch: firstTouch,
+      })
+      const track = (eventName, props = {}) => {
+        fetch('/api/analytics/event', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            event_name: eventName,
+            path: window.location.pathname,
+            ...attributionPayload(),
+            props,
+          }),
+          keepalive: true,
+        }).catch(() => {})
+      }
+      track('page_view')
+      document.querySelectorAll('a[href*="docs.4626.fun"]').forEach((link) => {
+        link.addEventListener('click', () => track('docs_click'))
+      })
+      document.querySelectorAll('a[href*="x.com/4626fun"]').forEach((link) => {
+        link.addEventListener('click', () => track('x_click'))
+      })
+      document.querySelectorAll('a[href*="github.com"]').forEach((link) => {
+        link.addEventListener('click', () => track('github_click'))
+      })
+      document.querySelectorAll('a[href*="discord.gg"]').forEach((link) => {
+        link.addEventListener('click', () => track('discord_click'))
+      })
+      document.querySelectorAll('a[href*="/risks"]').forEach((link) => {
+        link.addEventListener('click', () => track('risks_link_click'))
+      })
+      const form = document.getElementById('waitlist-inline-form')
+      const status = document.getElementById('waitlist-form-status')
+      if (form) {
+        let started = false
+        form.addEventListener('input', () => {
+          if (started) return
+          started = true
+          track('waitlist_form_start')
+        })
+        form.addEventListener('submit', async (event) => {
+          event.preventDefault()
+          const data = new FormData(form)
+          const button = form.querySelector('button[type="submit"]')
+          if (status) status.textContent = 'Joining...'
+          if (button) button.disabled = true
+          try {
+            const response = await fetch('/api/waitlist/lead', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                email: data.get('email'),
+                role: data.get('role'),
+                x_handle: data.get('x_handle'),
+                website: data.get('website'),
+                ...attributionPayload(),
+              }),
+            })
+            const json = await response.json().catch(() => null)
+            if (!response.ok || !json?.success) throw new Error(json?.error || 'Unable to join right now.')
+            track('waitlist_submit_success', { status: json.data?.status || 'new' })
+            if (status) status.textContent = 'You are on the list. Watch @4626fun for launch updates.'
+            form.reset()
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to join right now.'
+            track('waitlist_submit_error', { message })
+            if (status) status.textContent = message
+          } finally {
+            if (button) button.disabled = false
+          }
+        })
+      }
+      const scrollMarks = new Set()
+      window.addEventListener('scroll', () => {
+        const max = document.documentElement.scrollHeight - window.innerHeight
+        if (max <= 0) return
+        const depth = Math.floor((window.scrollY / max) * 100)
+        ;[25, 50, 75, 100].forEach((mark) => {
+          if (depth >= mark && !scrollMarks.has(mark)) {
+            scrollMarks.add(mark)
+            track(`scroll_depth_${mark}`)
+          }
+        })
+      }, { passive: true })
+    })()
+  </script>
   <script type="module" src="./app.js"></script>
   <script src="./refinement.js" defer></script>
   <script src="./audio.js" defer></script>

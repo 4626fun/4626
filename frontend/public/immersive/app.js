@@ -1321,6 +1321,11 @@ window.__Continuity = Continuity;
   const heroChain = document.getElementById('hero-chain');
   const heroPartners = document.getElementById('hero-partners');
   const heroCta = document.getElementById('hero-cta');
+  const heroPillRow = document.getElementById('hero-pill-row');
+  const heroDisclaimer = document.getElementById('hero-disclaimer');
+  const waitlistInlineForm = document.getElementById('waitlist-inline-form');
+  const audienceCards = document.getElementById('audience-cards');
+  const heroTrustGrid = document.getElementById('hero-trust-grid');
   const chars = document.querySelectorAll('.hero-char');
   const supportLines = document.querySelectorAll('.hero-support-line');
 
@@ -1359,11 +1364,27 @@ window.__Continuity = Continuity;
     }, 1.6 + i * 0.15);
   });
 
+  if (heroPillRow) {
+    entrance.to(heroPillRow, { opacity: 1, y: 0, duration: 0.7 }, 1.95);
+  }
+
   entrance.to(heroChain, { opacity: 1, y: 0, duration: 0.7 }, 2.1);
   if (heroPartners) {
     entrance.to(heroPartners, { opacity: 1, y: 0, duration: 0.7 }, 2.35);
   }
   entrance.to(heroCta, { opacity: 1, y: 0, duration: 0.7 }, 2.55);
+  if (heroDisclaimer) {
+    entrance.to(heroDisclaimer, { opacity: 1, y: 0, duration: 0.7 }, 2.75);
+  }
+  if (waitlistInlineForm) {
+    entrance.to(waitlistInlineForm, { opacity: 1, y: 0, duration: 0.7 }, 2.9);
+  }
+  if (audienceCards) {
+    entrance.to(audienceCards, { opacity: 1, y: 0, duration: 0.7 }, 3.05);
+  }
+  if (heroTrustGrid) {
+    entrance.to(heroTrustGrid, { opacity: 1, y: 0, duration: 0.7 }, 3.18);
+  }
 
   if (heroFloats) {
     entrance.to(heroFloats, { opacity: 1, duration: 2, ease: 'power2.out' }, 1.5);
@@ -2258,7 +2279,7 @@ window.__Continuity = Continuity;
 })();
 
 // ────────────────────────────────────────────
-// 8. CHAPTER 3: ACCRUE (850vh) + WebGL self-drawing yield curve
+// 8. CHAPTER 3: ACCRUE (850vh) + WebGL self-drawing outcome curve
 // ────────────────────────────────────────────
 (function chapterAccrue() {
   const section = document.getElementById('ch-accrue');
@@ -2292,17 +2313,9 @@ window.__Continuity = Continuity;
   const VAULT_LAUNCH = new Date(2025, 7, 10); // Aug 10, 2025
   const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-  // ── Share-ratio model: 1.000 → 1.034 over 248 days ──
-  // Aggressive piecewise growth — higher APY display throughout:
-  //   Days 0-25:   launch surge               (~42% ann)
-  //   Days 25-55:  momentum peak              (~58% ann)
-  //   Days 55-95:  correction & rebalance     (~8% ann)
-  //   Days 95-140: second wind                (~48% ann)
-  //   Days 140-190: mature yield               (~35% ann)
-  //   Days 190-225: compression phase          (~22% ann)
-  //   Days 225-248: tail-off                   (~14% ann)
-  // NOTE: ratios are normalized post-hoc to land at exactly 1.034,
-  // so these APYs drive the *shape* — steeper climbs, sharper dips.
+  // ── Share-ratio model: illustrative path over 248 days ──
+  // This is visual demo data only. It describes shape and volatility, not a
+  // public performance claim.
   const RATE_SEGMENTS = [
     { end:  25, apy: 0.72 },
     { end:  55, apy: 0.85 },
@@ -2343,8 +2356,7 @@ window.__Continuity = Continuity;
     return _dailyRatio[di] + frac * (_dailyRatio[di + 1] - _dailyRatio[di]);
   }
 
-  // Instantaneous APY at a given day (annualized from recent 7-day window)
-  function apyAtDay(d) {
+  function outcomeBandAtDay(d) {
     if (d < 7) return 0;
     const r0 = ratioAtDay(d - 7);
     const r1 = ratioAtDay(d);
@@ -2432,15 +2444,15 @@ window.__Continuity = Continuity;
       <div class="yc-callout-card">
         <span class="yc-callout-day">${ms.label}</span>
         <span class="yc-callout-ratio">${ratioAtDay(ms.day).toFixed(3)}</span>
-        <span class="yc-callout-apy">${apyAtDay(ms.day).toFixed(1)}% APY</span>
+        <span class="yc-callout-apy">Demo outcome</span>
       </div>`;
     ycMilestonesWrap.appendChild(div);
     return { day: ms.day, el: div, chimed: false, pitch: ms.pitch };
   });
 
-  // ── WebGL Yield Curve Renderer ──
+  // ── WebGL Outcome Curve Renderer ──
   const gl = ycCanvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
-  if (!gl) { console.warn('WebGL not supported for yield curve'); return; }
+  if (!gl) { console.warn('WebGL not supported for outcome curve'); return; }
 
   // Chart margins (normalized 0-1)
   const ML = 0.08, MR = 0.06, MT = 0.08, MB = 0.14;
@@ -2971,7 +2983,7 @@ window.__Continuity = Continuity;
       const clampedRatio = ratioAtDay(currentDay);
       displayedRatio += (clampedRatio - displayedRatio) * 0.12;
       if (Math.abs(displayedRatio - clampedRatio) < 0.0001) displayedRatio = clampedRatio;
-      const apy = apyAtDay(currentDay);
+      const outcomeBand = outcomeBandAtDay(currentDay);
       // Closing vol narrative — widened hold so the closing beat reads.
       const volNarrOp = multiMapSmooth(p, [0.72, 0.79, 0.93, 0.985], [0, 1, 1, 0]);
       const volHeadOp = multiMapSmooth(p, [0.72, 0.79, 0.93, 0.985], [0, 1, 1, 0]);
@@ -3012,7 +3024,7 @@ window.__Continuity = Continuity;
         //                                    follows stats out, slightly delayed
         //     • clock (timestamp pill)    → fade-in-place + tiny scale-down
         //                                    (anchored timestamp, no travel)
-        //     • ycWrap (yield curve)      → redirects RIGHT (+28px) + slight
+        //     • ycWrap (outcome curve)    → redirects RIGHT (+28px) + slight
         //                                    scale 1→0.96 — curve logic flows
         //                                    laterally toward distribution
         //     • ratioDisplay              → inward scale-compress (kept) but
@@ -3055,7 +3067,7 @@ window.__Continuity = Continuity;
 
         if (ycWrap) {
           ycWrap.style.opacity = ycOp;
-          // LATERAL ROUTE RIGHT: yield curve redirects toward the side where
+          // LATERAL ROUTE RIGHT: outcome curve redirects toward the side where
           // CCA's distribution structure will materialize. +28px is enough
           // to read as motion without overshooting. Scaled by viewport width
           // so narrow screens (320px) don't route past the right edge.
@@ -3105,7 +3117,7 @@ window.__Continuity = Continuity;
         clockDate.textContent = dateStr;
         statDays.textContent = currentDay;
         statRatio.textContent = displayedRatio.toFixed(3);
-        statApy.textContent = `${apy.toFixed(1)}%`;
+        statApy.textContent = outcomeBand >= 0 ? 'Variable' : 'Negative';
         if (equation) equation.textContent = `1 ■AKITA = ${displayedRatio.toFixed(3)} AKITA`;
         if (ratioValue) ratioValue.textContent = displayedRatio.toFixed(3);
 
@@ -3125,7 +3137,7 @@ window.__Continuity = Continuity;
         // Phase 2 (0.20–0.80): HOLD accrue flanks, but add subtle breathing
         //   motion so the viewer perceives the pair as LIVE, not frozen stage
         //   props. Tiny sinusoidal drift + scale oscillation synced to the
-        //   yield-curve drawing phase.
+        //   outcome-curve drawing phase.
         // Phase 3 (0.80–0.98): pair collapses toward CCA center, underlying
         //   fades as it recedes behind the share (CCA protagonist).
         let pairPose;
@@ -4086,7 +4098,7 @@ window.__Continuity = Continuity;
             // for easeOutQuint — cubic-bezier(0.22, 1, 0.36, 1) equivalent.
             // The quint curve has a much softer asymptote near t=1, which
             // removes the sub-pixel "tick" at FLIP settle that read as
-            // jitter on the "Deposit. Earn together." headline. Letter-
+            // jitter on the original three-line headline. Letter-
             // spacing tween now also runs on the quint curve so its
             // resolution matches the transform, preventing the two
             // channels from parting ways in the final 10% of the arrival.
@@ -4284,7 +4296,7 @@ window.__Continuity = Continuity;
 
   // Phase G: crescendo (SIX-beat typographic finale)
   // L1 One vault → L2 Two tokens + sublabels → L3 (3,3)
-  // → L3.5 Earn together → L4 4626.fun → L5 Partners + CTA
+  // → L3.5 creator-vault infra → L4 4626.fun → L5 Partners + CTA
   const crescendo   = document.getElementById('close-crescendo');
   const cresAura    = document.getElementById('cres-aura');
   const cresLine1   = document.getElementById('cres-line-1');
@@ -4584,7 +4596,7 @@ window.__Continuity = Continuity;
       //   L1   "One vault."              inward compression (letter-spread)
       //   L2   "Two tokens." + sublabels  horizontal split + sublabel fade
       //   L3   "(3, 3)"                  depth recession (scale + blur)
-      //   L3.5 "Earn together."          italic reveal-and-hold (in poster)
+      //   L3.5 creator-vault infra       italic reveal-and-hold (in poster)
       //   L4   "4626.fun"                structural lock-in (in poster, holds)
       //   L5   Partners + CTA finale     ecosystem row + Join Waitlist (holds)
       //
@@ -4632,15 +4644,15 @@ window.__Continuity = Continuity;
       // poster fades IN 0.858→0.885 and HOLDS to end. Inside the poster,
       // L3.5/L4/L5 each reveal on their own micro-window and HOLD — no
       // fade-out curve, so the final frame is a composed editorial page
-      // (Earn together. / 4626.fun wordmark + rules + brand tag / partners
+      // (creator-vault infra / 4626.fun wordmark + rules + brand tag / partners
       // row + CTA + meta) instead of a caught crossfade.
       const cresStackOp  = multiMapSmooth(p, [0.840, 0.862], [1, 0]);
       const cresPosterOp = multiMapSmooth(p, [0.858, 0.885], [0, 1]);
-      // L3.5 — "Earn together."  Reveal-then-hold. Letter-spread still
+      // L3.5 — creator-vault infra. Reveal-then-hold. Letter-spread still
       // relaxes 0.06em → -0.02em over its progress window for life.
       const cresEarnOp   = multiMapSmooth(p, [0.862, 0.880], [0, 1]);
       const cresEarnProg = multiMapSmooth(p, [0.862, 0.880], [0, 1]);
-      // L4 — "4626.fun"  Structural lock-in; holds at full width forever.
+      // L4 — "4626.fun"  Structural lock-in; holds at full width through the finale.
       const cres4Op    = multiMapSmooth(p, [0.875, 0.892], [0, 1]);
       const cresRuleW  = Math.max(0, mapRange(p, 0.878, 0.895, 0, 260));
       const cresRuleOp = multiMapSmooth(p, [0.878, 0.895], [0, 1]);
@@ -4649,7 +4661,7 @@ window.__Continuity = Continuity;
       const cresFinaleOp = multiMapSmooth(p, [0.890, 0.906], [0, 1]);
 
       // ═══ PHASE F (p 0.95 → end): Brand close — NOW UNDERNEATH L4 ═══
-      // The "4626.fun" wordmark and "Earn together." tag are now carried by
+      // The "4626.fun" wordmark and creator-vault tag are now carried by
       // the crescendo (L4 and L3 respectively), so the corresponding DOM
       // elements (#close-brand, #close-tag, #close-line) are held at 0
       // opacity throughout. Partners row + CTA fade in gently under L4 so
@@ -4837,8 +4849,8 @@ window.__Continuity = Continuity;
           line.style.opacity = lineOp;
         }
         if (tag) {
-          // VAULTS → CLOSE split: vaults-headline "Deposit. Earn together."
-          // splits — "Deposit." drops away, "Earn together." migrates to
+          // VAULTS → CLOSE split: vaults headline splits, then the
+          // creator-vault tag migrates to
           // #close-tag. Matrix §6 row (4). We don't literally move DOM
           // but we time the tag reveal to pick up where the headline left
           // off (its bridge rect was captured at vaults exit).
@@ -4985,7 +4997,7 @@ window.__Continuity = Continuity;
             cresLine3.style.filter = '';
           }
         }
-        // ── L3.5 — "Earn together." (italic crossfade + letter-spread relax) ──
+        // ── L3.5 — creator-vault infra (italic crossfade + letter-spread relax) ──
         if (cresLineEarn) {
           cresLineEarn.style.opacity = cresEarnOp;
           if (!Motion.reduced) {

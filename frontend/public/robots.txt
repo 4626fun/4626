@@ -1,5 +1,10 @@
 User-agent: *
 Allow: /
+Allow: /risks
+Allow: /security
+Allow: /about
+Allow: /terms
+Allow: /privacy
 
 # Sitemaps
 Sitemap: https://4626.fun/sitemap.xml
