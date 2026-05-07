@@ -86,11 +86,11 @@ export function ExternalWalletOptions(props: {
       ) : null}
       {props.hasMultipleInjectedProviders ? (
         <div className="px-4 py-2 app-meta-value text-zinc-500">
-          Multiple wallet extensions detected. Use Coinbase Wallet.
+          Multiple wallet extensions detected. Choose Rabby, Coinbase Wallet, or WalletConnect directly.
         </div>
       ) : props.lockedEthereumProviderGlobal ? (
         <div className="px-4 py-2 app-meta-value text-zinc-500">
-          Wallet extension collision detected (`window.ethereum` is locked). Use Coinbase Wallet.
+          Wallet extension collision detected (`window.ethereum` is locked). Choose Rabby, Coinbase Wallet, or WalletConnect directly.
         </div>
       ) : null}
       {allowExternalWalletButtons

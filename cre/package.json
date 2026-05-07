@@ -15,6 +15,7 @@
     "start:keepr-action-queue": "tsx runner.ts keepr-action-queue",
     "start:strategy-signal-listener": "tsx runner.ts strategy-signal-listener",
     "start:bridge-integrity-monitor": "tsx runner.ts bridge-integrity-monitor",
+    "start:solana-orchestrator": "tsx solana-keeper-orchestrator.ts",
     "dry-run": "DRY_RUN=true tsx runner.ts",
     "dry-run:vault-keeper": "DRY_RUN=true tsx runner.ts vault-keeper",
     "dry-run:payout-router-harvest": "DRY_RUN=true tsx runner.ts payout-router-harvest",

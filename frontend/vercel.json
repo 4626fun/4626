@@ -111,6 +111,14 @@
     {
       "path": "/api/keeper/jobs/enqueue-strategy-canary",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-solana-reconcile",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/keeper/jobs/enqueue-strategy-signals",
+      "schedule": "*/5 * * * *"
     }
   ],
   "routes": [

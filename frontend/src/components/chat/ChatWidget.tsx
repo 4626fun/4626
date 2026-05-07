@@ -11,7 +11,7 @@
  * ┌──────────────────────────────────────────┐
  * │  ...page content...                      │
  * │                                          │
- * │   [ChatWindow 2] [ChatWindow 1] [ChatBar]│ ← bottom-right
+ * │   [ChatWindow 1] [ChatWindow 2]          │ ← bottom-left
  * └──────────────────────────────────────────┘
  */
 
@@ -538,8 +538,8 @@ function ChatWidgetInner() {
         )}
       </div>
 
-      <div className="fixed bottom-4 right-5 z-50 hidden md:flex items-end gap-3 pointer-events-none">
-        {/* Chat windows — stack from right to left */}
+      <div className="fixed bottom-4 left-5 z-50 hidden md:flex items-end gap-3 pointer-events-none">
+        {/* Chat windows — stack from left to right */}
         {openWindows.map((win) => (
           <div key={win.id} className="pointer-events-auto motion-safe:animate-slide-up">
             <ChatWindow

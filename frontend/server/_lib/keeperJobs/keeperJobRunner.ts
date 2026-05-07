@@ -50,6 +50,17 @@ type PendingKeeprAction = {
   status: string
 }
 
+class KeeperJobApiError extends Error {
+  status: number
+  data: Record<string, unknown> | null
+
+  constructor(message: string, params: { status: number; data?: Record<string, unknown> | null }) {
+    super(message)
+    this.status = params.status
+    this.data = params.data ?? null
+  }
+}
+
 export type KeeprActionProcessResult = {
   processed: number
   succeeded: number
@@ -113,7 +124,14 @@ async function apiPost<T>(params: {
   })
   const json = (await response.json().catch(() => null)) as { success?: boolean; data?: T; error?: string } | null
   if (!response.ok || json?.success !== true || !json.data) {
-    throw new Error(json?.error || `request_failed:${params.path}:${response.status}`)
+    const data =
+      json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
+        ? (json.data as Record<string, unknown>)
+        : null
+    throw new KeeperJobApiError(json?.error || `request_failed:${params.path}:${response.status}`, {
+      status: response.status,
+      data,
+    })
   }
   return json.data
 }
@@ -216,14 +234,24 @@ async function runOneJob(params: {
             apiKey: params.apiKey,
             job: params.job,
           })
-    const followUpJobId = await enqueueFollowUpIfNeeded(params.job, result)
 
     await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: 'succeeded',
-      result: followUpJobId ? { ...result, followUpJobId } : result,
+      result,
     })
+
+    let followUpJobId: number | undefined
+    try {
+      followUpJobId = await enqueueFollowUpIfNeeded(params.job, result)
+    } catch (error) {
+      console.warn('[keeper/jobs] follow-up enqueue failed after primary success', {
+        jobId: params.job.id,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+
     return {
       id: params.job.id,
       kind: params.job.kind,
@@ -357,7 +385,11 @@ export async function processKeeprActions(input: {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      const retryable = !message.includes('not_authorized') && !message.includes('invalid_')
+      const explicitRetryable =
+        error instanceof KeeperJobApiError && typeof error.data?.retryable === 'boolean'
+          ? error.data.retryable
+          : null
+      const retryable = explicitRetryable ?? (!message.includes('not_authorized') && !message.includes('invalid_'))
       await apiPost({
         baseUrl,
         apiKey,

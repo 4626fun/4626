@@ -113,13 +113,15 @@ type InjectedProviderWindow = { ethereum?: unknown } | undefined
 
 function readInjectedProvidersFromWindow(windowRef: InjectedProviderWindow): any[] {
   if (!windowRef) return []
+  const directRabby = (windowRef as any)?.rabby
   try {
     const ethereum = (windowRef as any)?.ethereum
     const providers = Array.isArray(ethereum?.providers) ? ethereum.providers : []
-    if (providers.length > 0) return providers
-    return ethereum ? [ethereum] : []
+    const out = providers.length > 0 ? [...providers] : ethereum ? [ethereum] : []
+    if (directRabby) out.unshift(directRabby)
+    return out
   } catch {
-    return []
+    return directRabby ? [directRabby] : []
   }
 }
 

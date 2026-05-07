@@ -18,7 +18,7 @@ function isGenericInjectedConnector(connector: WalletConnectorLike): boolean {
 
 function isInjectedExtensionConnector(connector: WalletConnectorLike): boolean {
   const text = connectorText(connector)
-  return isGenericInjectedConnector(connector) || text.includes('metamask') || text.includes('rabby')
+  return isGenericInjectedConnector(connector) || text.includes('metamask')
 }
 
 export function filterHiddenInjectedConnectors<T extends WalletConnectorLike>(

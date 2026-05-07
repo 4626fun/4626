@@ -264,6 +264,75 @@ KEEPER_STRATEGY_CANARY_CHARM_VAULT_ADDRESS=0x...
 
 These canaries rely on `/api/keeper/jobs/process-keepr-actions` to execute the action queue. Keep `KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT=1` until each strategy action has run cleanly.
 
+## Strategy Signal Polling Fallback
+
+Vercel also calls `/api/keeper/jobs/enqueue-strategy-signals` every 5 minutes. This is disabled by default and replaces the always-on websocket listener with explicit cron-polled queued actions:
+
+```bash
+KEEPER_STRATEGY_SIGNALS_ENABLED=1
+KEEPER_STRATEGY_SIGNALS_TARGETS_JSON='[
+  {
+    "vaultAddress": "0x...",
+    "groupId": "...",
+    "actionType": "strategy.charm.rebalance",
+    "dedupeKey": "strategy-signal:charm:...",
+    "action": {
+      "charmVaultAddress": "0x...",
+      "strategyAddress": "0x..."
+    }
+  }
+]'
+```
+
+Only `strategy.ajna.rebucket` and `strategy.charm.rebalance` are accepted. Execution still goes through `keepr_actions` and `/api/keeper/jobs/process-keepr-actions`.
+
+## Solana Reconcile Fallback
+
+Vercel also calls `/api/keeper/jobs/enqueue-solana-reconcile` every 15 minutes. This is disabled by default and enqueues checkpointed calls to `/api/cre/keeper/solana/reconcile`:
+
+```bash
+KEEPER_SOLANA_RECONCILE_ENABLED=1
+KEEPER_SOLANA_RECONCILE_WORKFLOW=solana-orchestrator
+KEEPER_SOLANA_RECONCILE_ACTIONS=relay_entries,settle_fees,winner_relay
+```
+
+Supported action labels are:
+
+- `relay_entries`
+- `settle_fees`
+- `winner_relay`
+- `price_monitor`
+- `graduation`
+- `rebalance`
+
+The reconcile endpoint is idempotent by `workflow + checkpointKey`. If `KEEPER_SOLANA_RECONCILE_CHECKPOINT_PREFIX` is unset, the daily UTC date is used.
+
+Run the owned Solana orchestrator sidecar:
+
+```bash
+pnpm -C cre start:solana-orchestrator
+```
+
+Required sidecar env:
+
+```bash
+SOLANA_ORCHESTRATOR_API_KEY=<shared-secret>
+SOLANA_ORCHESTRATOR_PORT=8789
+```
+
+By default every action fails closed. Enable globally or per action:
+
+```bash
+SOLANA_ORCHESTRATOR_EXECUTE=1
+# or:
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
+SOLANA_ORCHESTRATOR_SETTLE_FEES_ENABLED=1
+SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED=1
+SOLANA_ORCHESTRATOR_PRICE_MONITOR_ENABLED=1
+SOLANA_ORCHESTRATOR_GRADUATION_ENABLED=1
+SOLANA_ORCHESTRATOR_REBALANCE_ENABLED=1
+```
+
 Monitor stuck jobs:
 
 ```bash

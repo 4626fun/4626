@@ -24,7 +24,9 @@ import claimHandler from '../_handlers/keeper/jobs/_claim.js'
 import completeHandler from '../_handlers/keeper/jobs/_complete.js'
 import enqueueActiveVaultsHandler from '../_handlers/keeper/jobs/_enqueueActiveVaults.js'
 import enqueueBridgeIntegrityHandler from '../_handlers/keeper/jobs/_enqueueBridgeIntegrity.js'
+import enqueueSolanaReconcileHandler from '../_handlers/keeper/jobs/_enqueueSolanaReconcile.js'
 import enqueueStrategyCanaryHandler from '../_handlers/keeper/jobs/_enqueueStrategyCanary.js'
+import enqueueStrategySignalsHandler from '../_handlers/keeper/jobs/_enqueueStrategySignals.js'
 import enqueueSweepCanaryHandler from '../_handlers/keeper/jobs/_enqueueSweepCanary.js'
 import enqueueVaultCanaryHandler from '../_handlers/keeper/jobs/_enqueueVaultCanary.js'
 import enqueueHandler from '../_handlers/keeper/jobs/_enqueue.js'
@@ -69,7 +71,9 @@ describe('keeper job coordination handlers', () => {
     await expect(getApiHandler('keeper/jobs/enqueue')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-active-vaults')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-bridge-integrity')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('keeper/jobs/enqueue-solana-reconcile')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-strategy-canary')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('keeper/jobs/enqueue-strategy-signals')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-sweep-canary')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-vault-canary')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/claim')).resolves.toBeTypeOf('function')
@@ -437,6 +441,128 @@ describe('keeper job coordination handlers', () => {
     }
   })
 
+  it('keeps strategy signal polling disabled by default', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-strategy-signals',
+      KEEPER_STRATEGY_SIGNALS_ENABLED: undefined,
+    })
+    try {
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-strategy-signals' },
+      })
+      const res = createMockRes()
+
+      await enqueueStrategySignalsHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data).toMatchObject({ enabled: false, jobs: [], reason: 'disabled' })
+      expect(dbSqlMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('enqueues explicit strategy signal targets when enabled', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-strategy-signals',
+      KEEPER_STRATEGY_SIGNALS_ENABLED: '1',
+      KEEPER_STRATEGY_SIGNALS_TARGETS_JSON: JSON.stringify([
+        {
+          vaultAddress: '0x5555555555555555555555555555555555555555',
+          groupId: 'group-1',
+          actionType: 'strategy.charm.rebalance',
+          dedupeKey: 'strategy-signal:charm:test',
+          action: {
+            charmVaultAddress: '0x9999999999999999999999999999999999999999',
+            strategyAddress: '0x9999999999999999999999999999999999999999',
+          },
+        },
+      ]),
+    })
+    try {
+      dbSqlMock.mockResolvedValueOnce({ rows: [{ id: 701 }], rowCount: 1 })
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-strategy-signals' },
+      })
+      const res = createMockRes()
+
+      await enqueueStrategySignalsHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.enabled).toBe(true)
+      expect(res.body?.data?.jobs).toEqual([
+        {
+          id: 701,
+          actionType: 'strategy.charm.rebalance',
+          dedupeKey: 'strategy-signal:charm:test',
+        },
+      ])
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('keeps Solana reconcile disabled by default', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-solana-reconcile',
+      KEEPER_SOLANA_RECONCILE_ENABLED: undefined,
+    })
+    try {
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-solana-reconcile' },
+      })
+      const res = createMockRes()
+
+      await enqueueSolanaReconcileHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data).toMatchObject({ enabled: false, jobs: [], reason: 'disabled' })
+      expect(dbSqlMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('enqueues configured Solana reconcile actions with checkpoint dedupe', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-solana-reconcile',
+      KEEPER_SOLANA_RECONCILE_ENABLED: '1',
+      KEEPER_SOLANA_RECONCILE_WORKFLOW: 'solana-orchestrator',
+      KEEPER_SOLANA_RECONCILE_ACTIONS: 'relay_entries,settle_fees',
+      KEEPER_SOLANA_RECONCILE_CHECKPOINT_PREFIX: 'test-window',
+    })
+    try {
+      dbSqlMock
+        .mockResolvedValueOnce({
+          rows: [jobRow({ id: 601, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:relay_entries' })],
+          rowCount: 1,
+        })
+        .mockResolvedValueOnce({
+          rows: [jobRow({ id: 602, dedupe_key: 'solana-reconcile:solana-orchestrator:test-window:settle_fees' })],
+          rowCount: 1,
+        })
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-solana-reconcile' },
+      })
+      const res = createMockRes()
+
+      await enqueueSolanaReconcileHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.enabled).toBe(true)
+      expect(res.body?.data?.jobs?.map((job: any) => job.dedupeKey)).toEqual([
+        'solana-reconcile:solana-orchestrator:test-window:relay_entries',
+        'solana-reconcile:solana-orchestrator:test-window:settle_fees',
+      ])
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('discovers active vault rows and enqueues configured workflows', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-active-vaults',
@@ -632,6 +758,10 @@ describe('keeper job coordination handlers', () => {
           rowCount: 1,
         })
         .mockResolvedValueOnce({
+          rows: [jobRow({ id: 201, status: 'succeeded' })],
+          rowCount: 1,
+        })
+        .mockResolvedValueOnce({
           rows: [
             jobRow({
               id: 202,
@@ -646,10 +776,6 @@ describe('keeper job coordination handlers', () => {
               },
             }),
           ],
-          rowCount: 1,
-        })
-        .mockResolvedValueOnce({
-          rows: [jobRow({ id: 201, status: 'succeeded' })],
           rowCount: 1,
         })
       const req = createMockReq({
