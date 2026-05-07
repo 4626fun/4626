@@ -7,10 +7,15 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
+import {
+  getSupabaseAdmin,
+  isSupabaseAdminConfigured,
+} from '../../../server/_lib/db/supabaseAdmin.js'
 import { isAuthorizedCron } from '../../../server/_lib/lottery/cronAuth.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import {
   readWaitlistAirtableSyncConfig,
+  syncWaitlistSupabaseToAirtable,
   syncWaitlistToAirtable,
   type WaitlistAirtableSyncResult,
 } from '../../../server/_lib/onboarding/waitlistAirtableSync.js'
@@ -47,19 +52,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const db = await getDb()
-  if (!db) {
-    res.status(503).json({ success: false, error: 'database_not_configured' } satisfies ApiEnvelope<never>)
-    return
-  }
-
   try {
-    await ensureWaitlistSchema(db as any)
-    const data = await syncWaitlistToAirtable({
-      db,
-      config,
-      dryRun: isDryRun(req),
-    })
+    const dryRun = isDryRun(req)
+    let data: WaitlistAirtableSyncResult
+    if (isSupabaseAdminConfigured()) {
+      data = await syncWaitlistSupabaseToAirtable({
+        client: getSupabaseAdmin(),
+        config,
+        dryRun,
+      })
+    } else {
+      const db = await getDb()
+      if (!db) {
+        res.status(503).json({ success: false, error: 'database_not_configured' } satisfies ApiEnvelope<never>)
+        return
+      }
+      await ensureWaitlistSchema(db as any)
+      data = await syncWaitlistToAirtable({
+        db,
+        config,
+        dryRun,
+      })
+    }
     const hasErrors = data.tables.some(table => table.errors.length > 0)
     const status = hasErrors ? 207 : 200
     res.status(status).json({ success: !hasErrors, data } satisfies ApiEnvelope<WaitlistAirtableSyncResult>)

@@ -1,6 +1,7 @@
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[] }> }
 
 type AirtableFetch = typeof fetch
+type SupabaseLike = { from: (table: string) => any }
 
 type AirtableTableKey = 'applicants' | 'referrals' | 'tasks' | 'onboarding'
 
@@ -51,7 +52,7 @@ const DEFAULT_TABLES: Record<AirtableTableKey, Omit<AirtableTableConfig, 'key'>>
   referrals: {
     label: 'WAITLIST REFERRALS',
     table: 'tblb1hAx5w3S7hnGM',
-    mergeField: 'id',
+    mergeField: 'notes',
   },
   tasks: {
     label: 'WAITLIST TASKS',
@@ -143,6 +144,194 @@ function mapApplicantStatus(value: unknown): string {
   return 'new'
 }
 
+function weightedPoints(source: unknown, amount: unknown): number {
+  const normalizedSource = String(source ?? '').trim()
+  const normalizedAmount = safeInt(amount)
+  if (normalizedSource === 'amoe_entry_spend') return normalizedAmount
+  if (
+    normalizedSource === 'amoe_twitter_daily' ||
+    normalizedSource === 'amoe_checkin' ||
+    normalizedSource === 'waitlist_signup' ||
+    normalizedSource === 'referral_passthrough' ||
+    normalizedSource === 'csw_link'
+  ) {
+    return normalizedAmount
+  }
+  if (
+    normalizedSource === 'referral_signup' ||
+    normalizedSource === 'referral_csw_link' ||
+    normalizedSource === 'referral_qualified'
+  ) {
+    return Math.round(normalizedAmount * 0.6)
+  }
+  if (normalizedSource.startsWith('social_')) return Math.round(normalizedAmount * 0.5)
+  if (normalizedSource.startsWith('bonus_') || normalizedSource === 'task') return Math.round(normalizedAmount * 0.3)
+  if (
+    normalizedSource === 'agent_feedback' ||
+    normalizedSource === 'agent_reputation' ||
+    normalizedSource === 'lens_identity' ||
+    normalizedSource === 'grove_proof'
+  ) {
+    return Math.round(normalizedAmount * 0.4)
+  }
+  if (
+    normalizedSource === 'link_email' ||
+    normalizedSource === 'link_google' ||
+    normalizedSource === 'link_apple' ||
+    normalizedSource === 'link_twitter' ||
+    normalizedSource === 'link_telegram' ||
+    normalizedSource === 'link_tiktok' ||
+    normalizedSource === 'link_external_eoa' ||
+    normalizedSource === 'link_zora' ||
+    normalizedSource === 'resolve_csw' ||
+    normalizedSource === 'has_creator_coin'
+  ) {
+    return Math.round(normalizedAmount * 0.6)
+  }
+  return Math.round(normalizedAmount * 0.3)
+}
+
+function compactRecord(record: AirtableRecord): AirtableRecord {
+  return {
+    fields: Object.fromEntries(
+      Object.entries(record.fields).filter(([, value]) => value !== null),
+    ),
+  }
+}
+
+function applicantRecordFromProfile(raw: any): AirtableRecord {
+  return {
+    fields: {
+      name: toStringOrNull(raw?.persona) ?? toStringOrNull(raw?.email) ?? `profile ${safeInt(raw?.id ?? raw?.signup_id)}`,
+      email: String(raw?.email ?? ''),
+      wallet_address:
+        toStringOrNull(raw?.csw_address) ??
+        toStringOrNull(raw?.primary_smart_wallet) ??
+        toStringOrNull(raw?.primary_wallet),
+      referral_code: toStringOrNull(raw?.referral_code),
+      status: mapApplicantStatus(raw?.app_access_status),
+      email_verified_at: toIso(raw?.created_at),
+      wallet_linked_at:
+        toStringOrNull(raw?.csw_address) ||
+        toStringOrNull(raw?.primary_smart_wallet) ||
+        toStringOrNull(raw?.primary_wallet)
+          ? toIso(raw?.updated_at)
+          : null,
+      onboarding_completed_at: toStringOrNull(raw?.app_access_status) === 'approved'
+        ? toIso(raw?.app_access_decided_at)
+        : null,
+    },
+  }
+}
+
+function taskRecordFromPoint(raw: any, profileById: Map<number, any> = new Map()): AirtableRecord {
+  const profile = profileById.get(safeInt(raw?.signup_id))
+  return {
+    fields: {
+      title: `point:${safeInt(raw?.point_id ?? raw?.id)}:${toStringOrNull(raw?.source) ?? 'waitlist_points'}`,
+      description: toStringOrNull(raw?.source_id),
+      status: 'Done',
+      summary: `${safeInt(raw?.amount)} points${toStringOrNull(profile?.email) ? ` for ${toStringOrNull(profile?.email)}` : ''}`,
+      priority: 'Low',
+      completed_at: toIso(raw?.created_at),
+      task_type: 'Other',
+    },
+  }
+}
+
+function referralRecordFromConversion(raw: any, profileById: Map<number, any> = new Map()): AirtableRecord {
+  const referrer = profileById.get(safeInt(raw?.referrer_signup_id))
+  const invitee = profileById.get(safeInt(raw?.invitee_signup_id))
+  const referralId = safeInt(raw?.referral_conversion_id ?? raw?.id)
+  return {
+    fields: {
+      status: raw?.qualified_at || toStringOrNull(raw?.status) === 'qualified' ? 'qualified' : 'pending',
+      qualified_at: toIso(raw?.qualified_at),
+      notes: [
+        `referral:${referralId}`,
+        toStringOrNull(raw?.referral_code) ? `code: ${toStringOrNull(raw?.referral_code)}` : null,
+        toStringOrNull(referrer?.email) ? `referrer: ${toStringOrNull(referrer?.email)}` : null,
+        toStringOrNull(invitee?.email) ? `referred: ${toStringOrNull(invitee?.email)}` : null,
+        toBool(raw?.is_valid) ? null : `invalid: ${toStringOrNull(raw?.invalid_reason) ?? 'unknown'}`,
+      ].filter(Boolean).join('\n') || null,
+    },
+  }
+}
+
+function onboardingRecordFromProfile(raw: any): AirtableRecord | null {
+  const canonicalWallet =
+    toStringOrNull(raw?.csw_address) ??
+    toStringOrNull(raw?.primary_smart_wallet) ??
+    toStringOrNull(raw?.primary_wallet)
+  if (!canonicalWallet) return null
+  const emailVerified = Boolean(toStringOrNull(raw?.email))
+  const walletLinked = true
+  const readiness = toStringOrNull(raw?.app_access_status) === 'denied'
+    ? 'blocked'
+    : emailVerified && walletLinked
+      ? 'ready'
+      : emailVerified || walletLinked
+        ? 'in progress'
+        : 'not started'
+  return {
+    fields: {
+      email_verified: emailVerified,
+      wallet_linked: walletLinked,
+      canonical_wallet: canonicalWallet,
+      last_synced_at: new Date().toISOString(),
+      email_verified_at: emailVerified ? toIso(raw?.created_at) : null,
+      wallet_linked_at: walletLinked ? toIso(raw?.updated_at) : null,
+      readiness_status: readiness,
+    },
+  }
+}
+
+async function readSupabaseDataset(client: SupabaseLike, limit: number): Promise<{
+  profiles: any[]
+  points: any[]
+  referrals: any[]
+}> {
+  const [profilesResult, pointsResult, referralsResult] = await Promise.all([
+    client
+      .from('profiles')
+      .select([
+        'id',
+        'email',
+        'persona',
+        'primary_wallet',
+        'csw_address',
+        'primary_smart_wallet',
+        'primary_embedded_eoa',
+        'embedded_wallet',
+        'referral_code',
+        'app_access_status',
+        'app_access_decided_at',
+        'created_at',
+        'updated_at',
+      ].join(','))
+      .order('updated_at', { ascending: false, nullsFirst: false })
+      .limit(limit),
+    client
+      .from('points')
+      .select('id,signup_id,source,source_id,amount,created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit),
+    client
+      .from('referral_conversions')
+      .select('id,referral_code,referrer_signup_id,invitee_signup_id,is_valid,invalid_reason,status,qualified_at,created_at')
+      .order('created_at', { ascending: false })
+      .limit(limit),
+  ])
+  if (profilesResult.error) throw new Error(`supabase_profiles:${profilesResult.error.message}`)
+  if (pointsResult.error) throw new Error(`supabase_points:${pointsResult.error.message}`)
+  if (referralsResult.error) throw new Error(`supabase_referrals:${referralsResult.error.message}`)
+  return {
+    profiles: profilesResult.data ?? [],
+    points: pointsResult.data ?? [],
+    referrals: referralsResult.data ?? [],
+  }
+}
+
 export async function readApplicantRecords(db: Db, limit: number): Promise<AirtableRecord[]> {
   const result = await db.sql`
     WITH point_totals AS (
@@ -202,22 +391,7 @@ export async function readApplicantRecords(db: Db, limit: number): Promise<Airta
     LIMIT ${limit};
   `
   return (result.rows ?? []).map((raw: any) => ({
-    fields: {
-      name: toStringOrNull(raw?.persona) ?? toStringOrNull(raw?.email) ?? `profile ${safeInt(raw?.signup_id)}`,
-      email: String(raw?.email ?? ''),
-      wallet_address: toStringOrNull(raw?.csw_address) ?? toStringOrNull(raw?.primary_wallet),
-      referral_code: toStringOrNull(raw?.referral_code),
-      referred_by_code: null,
-      status: mapApplicantStatus(raw?.app_access_status),
-      approval_notes: null,
-      email_verified_at: toIso(raw?.created_at),
-      wallet_linked_at: toStringOrNull(raw?.csw_address) || toStringOrNull(raw?.primary_wallet)
-        ? toIso(raw?.updated_at)
-        : null,
-      onboarding_completed_at: toStringOrNull(raw?.app_access_status) === 'approved'
-        ? toIso(raw?.app_access_decided_at)
-        : null,
-    },
+    fields: applicantRecordFromProfile(raw).fields,
   }))
 }
 
@@ -244,19 +418,9 @@ export async function readReferralRecords(db: Db, limit: number): Promise<Airtab
     ORDER BY rc.created_at DESC
     LIMIT ${limit};
   `
+  const profileById = new Map<number, any>()
   return (result.rows ?? []).map((raw: any) => ({
-    fields: {
-      id: String(safeInt(raw?.referral_conversion_id)),
-      created_at: toIso(raw?.created_at),
-      status: raw?.qualified_at || toStringOrNull(raw?.status) === 'qualified' ? 'qualified' : 'pending',
-      qualified_at: toIso(raw?.qualified_at),
-      notes: [
-        toStringOrNull(raw?.referral_code) ? `code: ${toStringOrNull(raw?.referral_code)}` : null,
-        toStringOrNull(raw?.referrer_email) ? `referrer: ${toStringOrNull(raw?.referrer_email)}` : null,
-        toStringOrNull(raw?.invitee_email) ? `referred: ${toStringOrNull(raw?.invitee_email)}` : null,
-        toBool(raw?.is_valid) ? null : `invalid: ${toStringOrNull(raw?.invalid_reason) ?? 'unknown'}`,
-      ].filter(Boolean).join('\n') || null,
-    },
+    fields: referralRecordFromConversion(raw, profileById).fields,
   }))
 }
 
@@ -276,16 +440,11 @@ export async function readTaskRecords(db: Db, limit: number): Promise<AirtableRe
     ORDER BY points.created_at DESC, points.id DESC
     LIMIT ${limit};
   `
+  const profileById = new Map<number, any>(
+    (result.rows ?? []).map((raw: any) => [safeInt(raw?.signup_id), { email: raw?.email }]),
+  )
   return (result.rows ?? []).map((raw: any) => ({
-    fields: {
-      title: `point:${safeInt(raw?.point_id)}:${toStringOrNull(raw?.source) ?? 'waitlist_points'}`,
-      description: toStringOrNull(raw?.source_id),
-      status: 'Done',
-      summary: `${safeInt(raw?.amount)} points${toStringOrNull(raw?.email) ? ` for ${toStringOrNull(raw?.email)}` : ''}`,
-      priority: 'Low',
-      completed_at: toIso(raw?.created_at),
-      task_type: 'Other',
-    },
+    fields: taskRecordFromPoint(raw, profileById).fields,
   }))
 }
 
@@ -317,29 +476,9 @@ export async function readOnboardingRecords(db: Db, limit: number): Promise<Airt
     ORDER BY updated_at DESC NULLS LAST, id DESC
     LIMIT ${limit};
   `
-  return (result.rows ?? []).map((raw: any) => {
-    const canonicalCsw = toStringOrNull(raw?.csw_address) ?? toStringOrNull(raw?.primary_smart_wallet)
-    const emailVerified = Boolean(toStringOrNull(raw?.email))
-    const walletLinked = Boolean(canonicalCsw || toStringOrNull(raw?.primary_wallet))
-    const readiness = toStringOrNull(raw?.app_access_status) === 'denied'
-      ? 'blocked'
-      : emailVerified && walletLinked
-        ? 'ready'
-        : emailVerified || walletLinked
-          ? 'in progress'
-          : 'not started'
-    return {
-      fields: {
-        email_verified: emailVerified,
-        wallet_linked: walletLinked,
-        canonical_wallet: canonicalCsw ?? toStringOrNull(raw?.primary_wallet) ?? `profile:${safeInt(raw?.signup_id)}`,
-        last_synced_at: new Date().toISOString(),
-        email_verified_at: emailVerified ? toIso(raw?.created_at) : null,
-        wallet_linked_at: walletLinked ? toIso(raw?.updated_at) : null,
-        readiness_status: readiness,
-      },
-    }
-  })
+  return (result.rows ?? [])
+    .map((raw: any) => onboardingRecordFromProfile(raw))
+    .filter((record): record is AirtableRecord => record !== null)
 }
 
 async function upsertAirtableBatch(params: {
@@ -363,7 +502,7 @@ async function upsertAirtableBatch(params: {
         fieldsToMergeOn: [table.mergeField],
       },
       typecast: true,
-      records,
+      records: records.map(compactRecord),
     }),
   })
 
@@ -454,6 +593,84 @@ export async function syncWaitlistToAirtable(params: {
       fetchImpl,
     })),
   )
+  return {
+    dryRun,
+    baseId: config.baseId,
+    tables,
+  }
+}
+
+export async function syncWaitlistSupabaseToAirtable(params: {
+  client: SupabaseLike
+  config: WaitlistAirtableSyncConfig
+  dryRun?: boolean
+  fetchImpl?: AirtableFetch
+}): Promise<WaitlistAirtableSyncResult> {
+  const { client, config, dryRun = false, fetchImpl = fetch } = params
+  const dataset = await readSupabaseDataset(client, config.limit)
+  const profileById = new Map<number, any>(
+    dataset.profiles.map((profile: any) => [safeInt(profile?.id), profile]),
+  )
+  const pointTotals = new Map<number, number>()
+  for (const point of dataset.points) {
+    const signupId = safeInt(point?.signup_id)
+    pointTotals.set(signupId, (pointTotals.get(signupId) ?? 0) + weightedPoints(point?.source, point?.amount))
+  }
+
+  const recordsByKey: Record<AirtableTableKey, AirtableRecord[]> = {
+    applicants: dataset.profiles
+      .filter((profile: any) => Boolean(toStringOrNull(profile?.email)))
+      .sort((a: any, b: any) => {
+        const aPoints = pointTotals.get(safeInt(a?.id)) ?? 0
+        const bPoints = pointTotals.get(safeInt(b?.id)) ?? 0
+        return bPoints - aPoints || safeInt(a?.id) - safeInt(b?.id)
+      })
+      .map(applicantRecordFromProfile),
+    referrals: dataset.referrals.map((referral: any) => referralRecordFromConversion(referral, profileById)),
+    tasks: dataset.points.map((point: any) => taskRecordFromPoint(point, profileById)),
+    onboarding: dataset.profiles
+      .map(onboardingRecordFromProfile)
+      .filter((record): record is AirtableRecord => record !== null),
+  }
+
+  const tables = await Promise.all(
+    Object.values(config.tables).map(async table => {
+      const records = recordsByKey[table.key]
+      if (dryRun) {
+        return {
+          key: table.key,
+          label: table.label,
+          table: table.table,
+          mergeField: table.mergeField,
+          attempted: records.length,
+          upserted: 0,
+          errors: [],
+        }
+      }
+
+      let upserted = 0
+      const errors: string[] = []
+      for (let index = 0; index < records.length; index += AIRTABLE_BATCH_SIZE) {
+        const batch = records.slice(index, index + AIRTABLE_BATCH_SIZE)
+        try {
+          upserted += await upsertAirtableBatch({ config, table, records: batch, fetchImpl })
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'unknown_airtable_error'
+          errors.push(message)
+        }
+      }
+      return {
+        key: table.key,
+        label: table.label,
+        table: table.table,
+        mergeField: table.mergeField,
+        attempted: records.length,
+        upserted,
+        errors,
+      }
+    }),
+  )
+
   return {
     dryRun,
     baseId: config.baseId,

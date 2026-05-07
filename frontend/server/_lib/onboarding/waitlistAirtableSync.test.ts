@@ -86,6 +86,7 @@ describe('waitlist Airtable sync', () => {
           {
             signup_id: 9,
             email: 'waitlist@example.com',
+            primary_wallet: '0x4444444444444444444444444444444444444444',
             points_total: 88,
             rank: 4,
             referral_conversion_id: 2,
@@ -109,6 +110,7 @@ describe('waitlist Airtable sync', () => {
     }))
     const applicantsBody = calls.find(call => call.url.includes(config!.tables.applicants.table))?.body
     const referralsBody = calls.find(call => call.url.includes(config!.tables.referrals.table))?.body
+    const onboardingBody = calls.find(call => call.url.includes(config!.tables.onboarding.table))?.body
 
     expect(result.tables.map(table => [table.key, table.upserted])).toEqual([
       ['applicants', 1],
@@ -122,10 +124,12 @@ describe('waitlist Airtable sync', () => {
       status: 'new',
     })
     expect(applicantsBody.records[0].fields).not.toHaveProperty('id')
-    expect(referralsBody.performUpsert.fieldsToMergeOn).toEqual(['id'])
-    expect(referralsBody.records[0].fields).toMatchObject({
-      id: '2',
-      status: 'pending',
+    expect(applicantsBody.records[0].fields).not.toHaveProperty('approval_notes')
+    expect(referralsBody.performUpsert.fieldsToMergeOn).toEqual(['notes'])
+    expect(referralsBody.records[0].fields.notes).toContain('referral:2')
+    expect(onboardingBody.performUpsert.fieldsToMergeOn).toEqual(['canonical_wallet'])
+    expect(onboardingBody.records[0].fields).toMatchObject({
+      canonical_wallet: '0x4444444444444444444444444444444444444444',
     })
   })
 })
