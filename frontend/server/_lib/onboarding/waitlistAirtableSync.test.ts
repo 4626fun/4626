@@ -76,10 +76,10 @@ describe('waitlist Airtable sync', () => {
   })
 
   it('upserts rows using Airtable-supported merge keys', async () => {
-    const fetchImpl = vi.fn(async () => new Response(
-      JSON.stringify({ records: [{ id: 'rec1' }] }),
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => new Response(
+      JSON.stringify({ records: init?.method === 'GET' ? [] : [{ id: 'rec1' }] }),
       { status: 200, headers: { 'content-type': 'application/json' } },
-    )) as unknown as typeof fetch & { mock: { calls: Array<[RequestInfo | URL, RequestInit]> } }
+    )) as unknown as typeof fetch & { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }
     const db = {
       sql: async () => ({
         rows: [
@@ -104,10 +104,9 @@ describe('waitlist Airtable sync', () => {
       fetchImpl,
     })
 
-    const calls = fetchImpl.mock.calls.map(([url, init]) => ({
-      url: String(url),
-      body: JSON.parse(String(init.body)),
-    }))
+    const calls = fetchImpl.mock.calls.flatMap(([url, init]) => (
+      init?.body ? [{ url: String(url), body: JSON.parse(String(init.body)) }] : []
+    ))
     const applicantsBody = calls.find(call => call.url.includes(config!.tables.applicants.table))?.body
     const referralsBody = calls.find(call => call.url.includes(config!.tables.referrals.table))?.body
     const onboardingBody = calls.find(call => call.url.includes(config!.tables.onboarding.table))?.body
@@ -127,9 +126,58 @@ describe('waitlist Airtable sync', () => {
     expect(applicantsBody.records[0].fields).not.toHaveProperty('approval_notes')
     expect(referralsBody.performUpsert.fieldsToMergeOn).toEqual(['notes'])
     expect(referralsBody.records[0].fields.notes).toContain('referral:2')
-    expect(onboardingBody.performUpsert.fieldsToMergeOn).toEqual(['canonical_wallet'])
+    expect(onboardingBody.performUpsert.fieldsToMergeOn).toEqual(['signup_id'])
     expect(onboardingBody.records[0].fields).toMatchObject({
+      signup_id: 9,
       canonical_wallet: '0x4444444444444444444444444444444444444444',
     })
+  })
+
+  it('backfills signup_id onto legacy onboarding rows before switching merge fields', async () => {
+    const fetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === 'GET') {
+        return new Response(
+          JSON.stringify({
+            records: [{
+              id: 'recLegacy',
+              fields: { canonical_wallet: 'profile:9' },
+            }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }
+      return new Response(
+        JSON.stringify({ records: [{ id: 'recUpdated' }] }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    }) as unknown as typeof fetch & { mock: { calls: Array<[RequestInfo | URL, RequestInit | undefined]> } }
+    const db = {
+      sql: async () => ({
+        rows: [{
+          signup_id: 9,
+          email: 'waitlist@example.com',
+          primary_wallet: '0x4444444444444444444444444444444444444444',
+        }],
+      }),
+    }
+    const { config } = readWaitlistAirtableSyncConfig({ AIRTABLE_PERSONAL_ACCESS_TOKEN: 'pat_test' })
+    expect(config).not.toBeNull()
+
+    const result = await syncWaitlistToAirtable({ db, config: config!, fetchImpl })
+
+    const onboardingUrl = config!.tables.onboarding.table
+    const onboardingCalls = fetchImpl.mock.calls.filter(([url]) => String(url).includes(onboardingUrl))
+    const lookupUrl = new URL(String(onboardingCalls[0]![0]))
+    const backfillBody = JSON.parse(String(onboardingCalls[1]![1]?.body))
+    const upsertBody = JSON.parse(String(onboardingCalls[2]![1]?.body))
+
+    expect(result.tables.find((table) => table.key === 'onboarding')).toMatchObject({
+      upserted: 1,
+      errors: [],
+    })
+    expect(lookupUrl.searchParams.get('filterByFormula')).toContain("profile:9")
+    expect(backfillBody.records).toEqual([{ id: 'recLegacy', fields: { signup_id: 9 } }])
+    expect(backfillBody.performUpsert).toBeUndefined()
+    expect(upsertBody.performUpsert.fieldsToMergeOn).toEqual(['signup_id'])
   })
 })

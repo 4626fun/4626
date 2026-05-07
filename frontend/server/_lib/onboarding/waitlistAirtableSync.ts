@@ -23,6 +23,11 @@ type AirtableRecord = {
   fields: Record<string, string | number | boolean | null>
 }
 
+type AirtableResponseRecord = {
+  id: string
+  fields?: Record<string, unknown>
+}
+
 export type WaitlistAirtableTableResult = {
   key: AirtableTableKey
   label: string
@@ -43,6 +48,7 @@ const AIRTABLE_BATCH_SIZE = 10
 const DEFAULT_SYNC_LIMIT = 500
 const MAX_SYNC_LIMIT = 2000
 const DEFAULT_AIRTABLE_BASE_ID = 'apppGxObBZlGy0AAo'
+const ONBOARDING_LEGACY_MERGE_FIELD = 'canonical_wallet'
 const DEFAULT_TABLES: Record<AirtableTableKey, Omit<AirtableTableConfig, 'key'>> = {
   applicants: {
     label: 'WAITLIST APPLICANTS',
@@ -62,7 +68,7 @@ const DEFAULT_TABLES: Record<AirtableTableKey, Omit<AirtableTableConfig, 'key'>>
   onboarding: {
     label: 'WAITLIST ONBOARDING',
     table: 'tbl48bNOWQ8yN3xRr',
-    mergeField: 'canonical_wallet',
+    mergeField: 'signup_id',
   },
 }
 
@@ -134,6 +140,50 @@ function safeInt(value: unknown): number {
 
 function toBool(value: unknown): boolean {
   return value === true || value === 'true' || value === 1 || value === '1'
+}
+
+function airtableTableUrl(config: WaitlistAirtableSyncConfig, table: AirtableTableConfig): string {
+  return `https://api.airtable.com/v0/${encodeURIComponent(config.baseId)}/${encodeURIComponent(table.table)}`
+}
+
+function airtableHeaders(config: WaitlistAirtableSyncConfig): Record<string, string> {
+  return {
+    Authorization: `Bearer ${config.token}`,
+    'Content-Type': 'application/json',
+  }
+}
+
+function escapeAirtableFormulaString(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+function onboardingLegacyKeys(record: AirtableRecord): string[] {
+  const signupId = safeInt(record.fields.signup_id)
+  const currentWallet = toStringOrNull(record.fields.canonical_wallet)
+  return Array.from(new Set([
+    currentWallet,
+    signupId > 0 ? `profile:${signupId}` : null,
+  ].filter((value): value is string => Boolean(value))))
+}
+
+function needsSignupIdBackfill(row: AirtableResponseRecord, signupId: number): boolean {
+  const existing = safeInt(row.fields?.signup_id)
+  return signupId > 0 && existing !== signupId
+}
+
+function chooseOnboardingBackfillRow(
+  rows: AirtableResponseRecord[],
+  keys: string[],
+  signupId: number,
+): AirtableResponseRecord | null {
+  for (const key of keys) {
+    const match = rows.find((row) => (
+      toStringOrNull(row.fields?.[ONBOARDING_LEGACY_MERGE_FIELD]) === key &&
+      needsSignupIdBackfill(row, signupId)
+    ))
+    if (match) return match
+  }
+  return rows.find((row) => needsSignupIdBackfill(row, signupId)) ?? null
 }
 
 function mapApplicantStatus(value: unknown): string {
@@ -275,6 +325,7 @@ function onboardingRecordFromProfile(raw: any): AirtableRecord | null {
         : 'not started'
   return {
     fields: {
+      signup_id: safeInt(raw?.id ?? raw?.signup_id),
       email_verified: emailVerified,
       wallet_linked: walletLinked,
       canonical_wallet: canonicalWallet,
@@ -490,13 +541,10 @@ async function upsertAirtableBatch(params: {
   const { config, table, records, fetchImpl } = params
   if (records.length === 0) return 0
 
-  const url = `https://api.airtable.com/v0/${encodeURIComponent(config.baseId)}/${encodeURIComponent(table.table)}`
+  const url = airtableTableUrl(config, table)
   const response = await fetchImpl(url, {
     method: 'PATCH',
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      'Content-Type': 'application/json',
-    },
+    headers: airtableHeaders(config),
     body: JSON.stringify({
       performUpsert: {
         fieldsToMergeOn: [table.mergeField],
@@ -514,6 +562,92 @@ async function upsertAirtableBatch(params: {
   const body = await response.json().catch(() => ({}))
   const returnedRecords = Array.isArray((body as any)?.records) ? (body as any).records : []
   return returnedRecords.length || params.records.length
+}
+
+async function listAirtableRowsByLegacyOnboardingKeys(params: {
+  config: WaitlistAirtableSyncConfig
+  table: AirtableTableConfig
+  keys: string[]
+  fetchImpl: AirtableFetch
+}): Promise<AirtableResponseRecord[]> {
+  const { config, table, keys, fetchImpl } = params
+  if (keys.length === 0) return []
+  const url = new URL(airtableTableUrl(config, table))
+  const formula = keys.length === 1
+    ? `{${ONBOARDING_LEGACY_MERGE_FIELD}} = '${escapeAirtableFormulaString(keys[0]!)}'`
+    : `OR(${keys.map((key) => `{${ONBOARDING_LEGACY_MERGE_FIELD}} = '${escapeAirtableFormulaString(key)}'`).join(',')})`
+  url.searchParams.set('filterByFormula', formula)
+  url.searchParams.set('pageSize', String(Math.min(10, keys.length)))
+
+  const response = await fetchImpl(url, {
+    method: 'GET',
+    headers: airtableHeaders(config),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`airtable_onboarding_backfill_lookup_failed:${response.status}:${body.slice(0, 500)}`)
+  }
+  const body = await response.json().catch(() => ({}))
+  const records = Array.isArray((body as any)?.records) ? (body as any).records : []
+  return records.flatMap((record: any) => (
+    typeof record?.id === 'string' ? [{ id: record.id, fields: record.fields ?? {} }] : []
+  ))
+}
+
+async function patchAirtableRows(params: {
+  config: WaitlistAirtableSyncConfig
+  table: AirtableTableConfig
+  records: Array<{ id: string; fields: Record<string, string | number | boolean | null> }>
+  fetchImpl: AirtableFetch
+}): Promise<number> {
+  const { config, table, records, fetchImpl } = params
+  if (records.length === 0) return 0
+  const response = await fetchImpl(airtableTableUrl(config, table), {
+    method: 'PATCH',
+    headers: airtableHeaders(config),
+    body: JSON.stringify({
+      typecast: true,
+      records,
+    }),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    throw new Error(`airtable_onboarding_backfill_patch_failed:${response.status}:${body.slice(0, 500)}`)
+  }
+  const body = await response.json().catch(() => ({}))
+  const returnedRecords = Array.isArray((body as any)?.records) ? (body as any).records : []
+  return returnedRecords.length || records.length
+}
+
+async function backfillOnboardingSignupIds(params: {
+  config: WaitlistAirtableSyncConfig
+  table: AirtableTableConfig
+  records: AirtableRecord[]
+  fetchImpl: AirtableFetch
+}): Promise<number> {
+  const { config, table, records, fetchImpl } = params
+  const patches: Array<{ id: string; fields: { signup_id: number } }> = []
+
+  for (const record of records) {
+    const signupId = safeInt(record.fields.signup_id)
+    if (signupId <= 0) continue
+    const keys = onboardingLegacyKeys(record)
+    if (keys.length === 0) continue
+    const rows = await listAirtableRowsByLegacyOnboardingKeys({ config, table, keys, fetchImpl })
+    const row = chooseOnboardingBackfillRow(rows, keys, signupId)
+    if (row) patches.push({ id: row.id, fields: { signup_id: signupId } })
+  }
+
+  let patched = 0
+  for (let index = 0; index < patches.length; index += AIRTABLE_BATCH_SIZE) {
+    patched += await patchAirtableRows({
+      config,
+      table,
+      records: patches.slice(index, index + AIRTABLE_BATCH_SIZE),
+      fetchImpl,
+    })
+  }
+  return patched
 }
 
 async function readRecordsForTable(db: Db, key: AirtableTableKey, limit: number): Promise<AirtableRecord[]> {
@@ -556,6 +690,23 @@ async function syncOneTable(params: {
 
   let upserted = 0
   const errors: string[] = []
+  if (table.key === 'onboarding') {
+    try {
+      await backfillOnboardingSignupIds({ config, table, records, fetchImpl })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'unknown_airtable_error'
+      return {
+        key: table.key,
+        label: table.label,
+        table: table.table,
+        mergeField: table.mergeField,
+        attempted: records.length,
+        upserted,
+        errors: [message],
+      }
+    }
+  }
+
   for (let index = 0; index < records.length; index += AIRTABLE_BATCH_SIZE) {
     const batch = records.slice(index, index + AIRTABLE_BATCH_SIZE)
     try {
