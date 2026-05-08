@@ -83,19 +83,19 @@ Several files share extensions but target different runtimes/tools:
 Static public assets in `frontend/public/` are served directly and copied into `dist/` at build time. Treat `dist/manifest.json` as generated output; the linked source manifest is [`public/site.webmanifest`](./public/site.webmanifest).
 
 - Keep creative master assets under [`assets/brand/master/`](./assets/brand/master/) instead of `tmp/` or `public/`.
-- Canonical SEO favicons, PWA icons, logo exports, and social cards come from the 4626.fun SEO brand kit. Lightweight kit docs live under [`brand/4626fun-seo-brand-kit/`](./brand/4626fun-seo-brand-kit/); deployable assets live under `public/favicons/`, `public/logo/`, and `public/social/`.
-- Marketing social card: replace the committed brand-kit files in `public/social/`, then run `pnpm -C frontend generate:social-preview` to verify required files exist.
-- Brand-kit favicons and install icons: replace the committed files under `public/favicons/`, then run `pnpm -C frontend generate:brand-icons` to verify required files exist.
+- Canonical SEO favicons, PWA icons, logo exports, and social cards come from the 4626 v2 brand kit. Deployable first-party brand assets live under `public/assets/` and are referenced through `src/config/site.ts` plus `shared/site-config.json`.
+- Marketing social card: replace the committed v2 brand-kit files in `public/assets/`, then run `pnpm -C frontend generate:social-preview` to verify required files exist.
+- Brand-kit favicons and install icons: replace the committed files under `public/assets/`, then run `pnpm -C frontend generate:brand-icons` to verify required files exist.
 - To clear legacy derived image outputs before a full refresh, run `pnpm -C frontend clean:derived-assets`. This removes generated legacy PNGs plus `dist/` and `build/`, but preserves `public/site.webmanifest` and the canonical brand-kit directories.
 - To verify the static, non-screenshot brand assets after a reset, run `pnpm -C frontend generate:brand-assets:static`.
 - Full workflow: see [`frontend/docs/brand-refresh-checklist.md`](./docs/brand-refresh-checklist.md).
 
 These pipelines are intentionally separate:
 
-- `public/social/og-image-1200x630.png` is the curated Open Graph card.
-- `public/social/twitter-summary-large-image-1200x675.png` is the curated Twitter card.
-- `public/social/og-image-1200x630.png` is also used as the Mini App/Farcaster hero image.
-- `public/social/social-profile-avatar-1080x1080.png` is used for Mini App splash/avatar surfaces.
+- `public/assets/og-image.png` is the curated Open Graph card.
+- `public/assets/twitter-card.png` is the curated Twitter card.
+- `public/assets/og-image.png` is also used as the Mini App/Farcaster hero image.
+- `public/assets/logo-mark-1024.png` is used for Mini App splash/avatar surfaces.
 - `assets/brand/master/` is the long-term intake area for design masters before they are converted into repo-owned SVG sources.
 - Shell-level social/meta URLs and IDs are centralized in `frontend/scripts/html-shells.config.mjs`.
 

@@ -1,9 +1,11 @@
 {
-  "name": "4626-app",
+  "name": "4626-web",
+  "description": "ERC-4626 creator vaults on Base",
+  "homepage": "https://4626.fun",
   "private": true,
   "version": "1.11.0",
   "engines": {
-    "node": ">=20.19.0 <23"
+    "node": ">=20.18.0 <23"
   },
   "type": "module",
   "scripts": {

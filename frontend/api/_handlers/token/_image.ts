@@ -625,8 +625,8 @@ const TOKEN_ICON_STYLE = {
 
 const DEFAULT_TOKEN_FRAME_OVERLAY_CANDIDATES = [
   '/mnt/data/logo.png',
+  fileURLToPath(new URL('../../../public/assets/favicon.svg', import.meta.url)),
   fileURLToPath(new URL('../../../public/favicon.svg', import.meta.url)),
-  fileURLToPath(new URL('../../../public/favicons/favicon.svg', import.meta.url)),
 ] as const
 
 const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> = {

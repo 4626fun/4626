@@ -1,57 +1,30 @@
 # 4626.fun SEO Folder
 
-This folder was generated from the supplied 4626.fun brand artwork.
+This folder is retained as a lightweight pointer to the active 4626.fun brand system.
+Canonical deployable assets now live in `frontend/public/assets/`.
 
-## What is included
+## Active Assets
 
-- `public-root/` — files that should live at the root of your public/static folder.
-  - `favicon.ico`
-  - `favicon.svg`
-  - `apple-touch-icon.png`
-  - `site.webmanifest`
-  - `robots.txt`
-  - `sitemap.xml`
-  - `browserconfig.xml`
-  - `llms.txt`
-
-- `assets/logos/` — transparent logo mark assets.
-  - SVG source
-  - transparent PNG exports
-  - black/white SVG variants
-
-- `assets/favicons/` — favicon, Android, Apple, maskable, and Microsoft tile icons.
-
-- `assets/social/` — social preview images.
-  - `og-image.png` — 1200 × 630
-  - `twitter-card.png` — 1200 × 675
-  - `linkedin-share.png` — 1200 × 627
-  - `og-square.png` — 1200 × 1200
-  - `icon-share-card.png` — 1200 × 1200
-
-- `implementation/` — copy/paste snippets.
-  - `meta-tags.html`
-  - `next-metadata.ts`
-  - `react-helmet-seo.jsx`
-  - JSON-LD structured data
-  - keyword/copy starter file
+- `frontend/public/assets/` — favicon, Android, Apple, maskable, Microsoft tile, logo, product, and social preview assets.
+- `frontend/public/site.webmanifest` — PWA install manifest.
+- `frontend/public/browserconfig.xml` — Microsoft tile metadata.
+- `frontend/shared/site-config.json` and `frontend/src/config/site.ts` — canonical URL, metadata, color, and asset-path references.
 
 ## Recommended install
 
 For a Next.js, Vite, or similar app:
 
-1. Copy everything inside `public-root/` into your app's `public/` directory.
-2. Copy `assets/logos/` to `public/seo/logos/`.
-3. Copy `assets/favicons/` to `public/seo/favicons/`.
-4. Copy `assets/social/` to `public/seo/social/`.
-5. Use `implementation/meta-tags.html` or `implementation/next-metadata.ts` in your app.
+1. Replace the v2 kit files in `frontend/public/assets/`.
+2. Keep root compatibility files such as `frontend/public/favicon.ico` and `frontend/public/apple-touch-icon.png` aligned with the v2 assets.
+3. Use `frontend/src/config/site.ts` and `frontend/shared/site-config.json` for future code references.
 
 ## Brand defaults
 
 - Site: `https://4626.fun/`
-- Title: `4626.fun - Creator Vaults on Base`
-- Description: `Creator Vaults on Base — a premium onchain destination for creator vaults, digital assets, and community access.`
-- Theme color: `#0F6FFF`
-- Background color: `#FFF7EE`
+- Title: `4626.fun - ERC-4626 Creator Vaults on Base`
+- Description: `ERC-4626 creator vaults on Base.`
+- Theme color: `#020204`
+- Background color: `#020204`
 
 ## Note
 

@@ -7,7 +7,7 @@ const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
 
 const config: Config = {
   title: '4626.fun Docs',
-  tagline: 'Documentation for the 4626 protocol',
+  tagline: 'ERC-4626 creator vaults on Base',
   favicon: 'brand/favicon.svg',
 
   url: 'https://docs.4626.fun',

@@ -14,23 +14,23 @@ export default {
         // Uniswap Pink (single accent)
         // Uses <alpha-value> so classes like `bg-uniswap/10` work.
         uniswap: 'rgb(255 0 122 / <alpha-value>)',
-        // Creator Vaults Brand Kit (Glass Vault)
-        // - Primary: Electric Blue (#0052FF)
+        // Creator Vaults Brand Kit (v2)
+        // - Primary: controlled Base Blue (#0000FF)
         // - Surfaces: True black + deep charcoal
         brand: {
           // Named tokens (preferred)
-          primary: '#0052FF',
-          hover: '#004AD9',
-          accent: '#3B82F6',
-          glow: 'rgba(0, 82, 255, 0.15)',
+          primary: '#0000FF',
+          hover: '#1E59FF',
+          accent: '#1E59FF',
+          glow: 'rgba(0, 0, 255, 0.15)',
           // Numeric scale (legacy; kept for existing UI)
           50: '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
-          400: '#3B82F6',
-          500: '#0052FF',
-          600: '#004AD9',
+          400: '#1E59FF',
+          500: '#0000FF',
+          600: '#0000CC',
           700: '#0033CC',
           800: '#0029A3',
           900: '#001F7A',

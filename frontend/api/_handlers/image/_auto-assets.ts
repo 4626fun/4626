@@ -9,7 +9,7 @@ import { fetchBytes } from '../../../server/_lib/infra/blob.js'
 import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
-const FRAME_SVG_URL = new URL('../../../public/brand/4626v2.svg', import.meta.url)
+const FRAME_SVG_URL = new URL('../../../public/assets/logo-mark-blue.svg', import.meta.url)
 const AUTO_ASSET_MAX_BODY_BYTES = 20_000
 const AUTO_ASSET_MAX_BYTES = 10 * 1024 * 1024
 const AUTO_ASSET_FETCH_TIMEOUT_MS = 8_000

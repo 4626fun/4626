@@ -1,8 +1,10 @@
 import { useState } from 'react'
 
+import { siteAssets } from '@/config/site'
+
 import { TextScramble } from './TextScramble'
 
-const BRAND_ICON_SRC = '/logo/icon-transparent-512.png'
+const BRAND_ICON_SRC = siteAssets.logo
 
 export interface LogoProps {
   className?: string

@@ -317,7 +317,7 @@ export function sendPaymentRequiredResponse(
         currentUrl: resolveResourceUrl(req, req.url ?? params.paymentRequirements.resource),
         testnet: params.network === 'base-sepolia',
         appName: '4626',
-        appLogo: 'https://4626.fun/logo/icon-transparent-512.png',
+        appLogo: 'https://4626.fun/assets/logo-mark-1024.png',
         cdpClientKey: (process.env.X402_CDP_CLIENT_KEY ?? '').trim() || undefined,
       }),
     )

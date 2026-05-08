@@ -1,15 +1,25 @@
 :root {
-  --brand-primary: 0 82 255;
-  --brand-hover: 26 102 255;
-  --brand-glow: 0 82 255;
-  --vault-bg: 248 250 252;
-  --vault-card: 255 255 255;
-  --vault-card-raised: 241 245 249;
-  --vault-border: 226 232 240;
-  --vault-border-strong: 148 163 184;
-  --vault-text: 11 18 32;
-  --vault-subtext: 71 85 105;
-  --vault-muted: 100 116 139;
+  --bg: #08080b;
+  --surface: #111114;
+  --surface-2: #17171c;
+  --border: #23232a;
+  --fg: #f4f4f5;
+  --fg-dim: #8a8a92;
+  --brand-blue: #0000ff;
+  --brand-blue-soft: #1e59ff;
+  --positive: #66c800;
+  --warning: #ffd12f;
+  --brand-primary: 0 0 255;
+  --brand-hover: 30 89 255;
+  --brand-glow: 0 0 255;
+  --vault-bg: 8 8 11;
+  --vault-card: 17 17 20;
+  --vault-card-raised: 23 23 28;
+  --vault-border: 35 35 42;
+  --vault-border-strong: 52 52 62;
+  --vault-text: 244 244 245;
+  --vault-subtext: 138 138 146;
+  --vault-muted: 113 113 122;
 }
 
 html.dark {

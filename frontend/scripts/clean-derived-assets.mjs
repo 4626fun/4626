@@ -11,7 +11,6 @@ const buildDir = path.resolve(root, 'build')
 const derivedPublicAssets = [
   'app-hero.png',
   'app-icon.png',
-  'apple-touch-icon.png',
   'favicon-16x16.png',
   'favicon-32x32.png',
   'icon-192-maskable.png',
@@ -42,7 +41,7 @@ async function main() {
 
   console.log(
     `removed ${derivedPublicAssets.length} legacy/UI-derived public assets and cleared dist/build.\n` +
-      'Canonical SEO brand-kit assets, site.webmanifest, and checked-in source assets were left intact.',
+      'Canonical v2 brand assets, root compatibility icons, site.webmanifest, and checked-in source assets were left intact.',
   )
 }
 

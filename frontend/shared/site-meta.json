@@ -1,9 +1,10 @@
 {
   "siteAppName": "4626.fun",
   "siteName": "4626.fun",
-  "siteTitle": "4626.fun | Creator Vaults on Base",
-  "siteDescription": "4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.",
-  "siteImageAlt": "4626.fun logo and Creator Vaults on Base tagline",
+  "siteTitle": "4626.fun - ERC-4626 Creator Vaults on Base",
+  "siteDescription": "ERC-4626 creator vaults on Base.",
+  "siteSocialDescription": "Creator coin vaults, yield, and fair launches on Base.",
+  "siteImageAlt": "4626.fun - ERC-4626 creator vaults on Base",
   "telegramLinkTitle": "Connect | 4626.fun",
   "telegramLinkDescription": "Verify email inside Telegram and link your canonical 4626 account."
 }

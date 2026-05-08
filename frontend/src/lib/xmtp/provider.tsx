@@ -689,7 +689,7 @@ function showNotification(title: string, body: string) {
   try {
     new Notification(title, {
       body: body.slice(0, 120),
-      icon: '/favicons/favicon-192x192.png',
+      icon: '/assets/android-chrome-192x192.png',
       tag: 'xmtp-message', // collapse multiple
     })
   } catch { /* ignore */ }

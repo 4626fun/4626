@@ -6,7 +6,7 @@
    Strategy: keep the cinematic dark backdrop intact (the typography
    and visual hierarchy were authored white-on-dark and only read at
    their best there). Migrate the electric-blue accent (#0052FF) to
-   the canonical brand gold (#DDA01C) per the SEO + brand kit, plus
+   the canonical brand blue (#0000FF) per the SEO + brand kit, plus
    add the small "scroll to begin" affordance for the audio gate.
 
    No layouts, motion families, or components are reshaped — only
@@ -15,13 +15,13 @@
 
 /* ─── 0 · Brand tokens (canonical, from kit) ───────────────────────── */
 :root {
-  --4626-gold: #DDA01C;
-  --4626-gold-highlight: #FFD45A;
+  --4626-gold: #0000FF;
+  --4626-gold-highlight: #1E59FF;
   --4626-gold-soft: rgba(221, 160, 28, 0.14);
   --4626-gold-glow: rgba(221, 160, 28, 0.32);
   --4626-gold-glow-strong: rgba(221, 160, 28, 0.55);
   --4626-charcoal: #2B2F30;
-  --4626-warm-ivory: #F8F0E6;
+  --4626-warm-ivory: #020204;
 }
 
 /* ─── 1a · Marketing landing composition ─────────────────────────────

@@ -51,9 +51,9 @@ type VaultPreviewMeta = {
   creatorTokenAddress: Address | null
 }
 
-const DEFAULT_PREVIEW_TITLE = '4626.fun - Creator Vaults'
+const DEFAULT_PREVIEW_TITLE = '4626.fun - ERC-4626 Creator Vaults on Base'
 const DEFAULT_PREVIEW_DESCRIPTION =
-  'Creator Vaults on Base. Explore creators, content coins, vaults, and trends on 4626.'
+  'Creator coin vaults, yield, and fair launches on Base.'
 const SITE_NAME = '4626.fun'
 const BOT_CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=3600'
 const SOCIAL_BOT_USER_AGENT_RE =
@@ -376,7 +376,7 @@ function buildTokenImageUrl(params: {
 }
 
 function buildFallbackImageUrl(origin: string): string {
-  const url = new URL('/social/og-image-1200x630.png', origin)
+  const url = new URL('/assets/og-image.png', origin)
   return url.toString()
 }
 

@@ -285,7 +285,7 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
             />
 
             <div className="absolute inset-0 flex items-center justify-center">
-              <img src="/brand/4626.svg" alt="4626 vault" className="h-11 w-11 object-contain" loading="lazy" style={{ opacity: 0.82 }} />
+              <img src="/assets/logo-mark.svg" alt="4626 vault" className="h-11 w-11 object-contain" loading="lazy" style={{ opacity: 0.82 }} />
             </div>
           </motion.div>
           <span

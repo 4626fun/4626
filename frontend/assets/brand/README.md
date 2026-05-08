@@ -9,7 +9,7 @@ Current master intake:
 Workflow:
 
 1. Put the highest-fidelity logo master here.
-2. Use that master to redraw or replace the editable source assets in `public/` and `assets/social/`.
+2. Use that master to redraw or replace the editable source assets in `public/assets/`.
 3. Regenerate the derived PNG outputs with the repo scripts.
 
 Do not treat files in `public/` as the long-term creative master. `public/` is for source assets used by the generators and for generated runtime assets.

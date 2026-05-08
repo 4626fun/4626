@@ -3,6 +3,9 @@ import fs from 'node:fs'
 const SHARED_SITE_META = JSON.parse(
   fs.readFileSync(new URL('../shared/site-meta.json', import.meta.url), 'utf8'),
 )
+const SHARED_SITE_CONFIG = JSON.parse(
+  fs.readFileSync(new URL('../shared/site-config.json', import.meta.url), 'utf8'),
+)
 
 function trimTrailingSlash(url) {
   return String(url).replace(/\/+$/, '')
@@ -20,26 +23,32 @@ function buildAbsoluteUrl(baseUrl, assetPath, version) {
 }
 
 const BASE_HTML_SHELL_CONFIG = {
-  appBaseUrl: 'https://4626.fun',
-  marketingSocialImagePath: '/social/og-image-1200x630.png',
-  marketingSocialImageVersion: null,
-  appSocialImagePath: '/social/og-image-1200x630.png',
-  twitterCardImagePath: '/social/twitter-summary-large-image-1200x675.png',
+  appBaseUrl: SHARED_SITE_CONFIG.url,
+  marketingSocialImagePath: SHARED_SITE_CONFIG.assets.ogImage,
+  marketingSocialImageVersion: 2,
+  appSocialImagePath: SHARED_SITE_CONFIG.assets.ogImage,
+  appSocialImageVersion: 2,
+  twitterCardImagePath: SHARED_SITE_CONFIG.assets.twitterImage,
+  twitterCardImageVersion: 2,
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  miniappHeroPath: '/social/og-image-1200x630.png',
-  miniappSplashPath: '/social/social-profile-avatar-1080x1080.png',
+  miniappHeroPath: SHARED_SITE_CONFIG.assets.ogImage,
+  miniappHeroVersion: 2,
+  miniappSplashPath: SHARED_SITE_CONFIG.assets.miniappSplash,
+  miniappSplashVersion: 2,
   siteAppName: SHARED_SITE_META.siteAppName,
   siteName: SHARED_SITE_META.siteName,
   siteTitle: SHARED_SITE_META.siteTitle,
   siteDescription: SHARED_SITE_META.siteDescription,
+  siteSocialDescription: SHARED_SITE_META.siteSocialDescription,
   siteImageAlt: SHARED_SITE_META.siteImageAlt,
-  siteKeywords:
-    'creator vaults, ERC-4626, tokenized vaults, Base, creator coins, creator finance infrastructure',
+  siteKeywords: SHARED_SITE_CONFIG.keywords,
   siteAuthor: '4626.fun',
-  siteAuthorUrl: 'https://4626.fun',
+  siteAuthorUrl: SHARED_SITE_CONFIG.url,
   siteAuthorEmail: 'hello@4626.fun',
-  msTileColor: '#F8F0E6',
+  themeColor: SHARED_SITE_CONFIG.themeColor,
+  msTileColor: SHARED_SITE_CONFIG.themeColor,
+  brandBlue: SHARED_SITE_CONFIG.brandBlue,
   telegramLinkTitle: SHARED_SITE_META.telegramLinkTitle,
   telegramLinkDescription: SHARED_SITE_META.telegramLinkDescription,
   telegramLinkUrl: 'https://4626.fun/telegram/link',
@@ -47,7 +56,16 @@ const BASE_HTML_SHELL_CONFIG = {
   talentappProjectVerification:
     '4b7b5b97d054b1a85c4d9635e53e928824fe96da81482cdecc54993bbe539de3df58eba944a698e62a7e6d5bad8b974254b2770354f4f3521c083c74a74af0da',
   miniappLaunchName: '4626.fun',
-  miniappSplashBackgroundColor: '#DDA01C',
+  miniappSplashBackgroundColor: SHARED_SITE_CONFIG.themeColor,
+  faviconIcoPath: `${SHARED_SITE_CONFIG.assets.faviconIco}?v=2`,
+  faviconSvgPath: `${SHARED_SITE_CONFIG.assets.faviconSvg}?v=2`,
+  favicon64Path: SHARED_SITE_CONFIG.assets.favicon64,
+  favicon48Path: SHARED_SITE_CONFIG.assets.favicon48,
+  favicon32Path: SHARED_SITE_CONFIG.assets.favicon32,
+  favicon16Path: SHARED_SITE_CONFIG.assets.favicon16,
+  appleTouchIconPath: `${SHARED_SITE_CONFIG.assets.appleTouchIcon}?v=2`,
+  safariPinnedTabPath: SHARED_SITE_CONFIG.assets.safariPinnedTab,
+  organizationLogoUrl: buildAbsoluteUrl(SHARED_SITE_CONFIG.url, SHARED_SITE_CONFIG.assets.logoPng, 2),
 }
 
 export const HTML_SHELL_CONFIG = Object.freeze({
@@ -61,18 +79,22 @@ export const HTML_SHELL_CONFIG = Object.freeze({
   appSocialImageUrl: buildAbsoluteUrl(
     BASE_HTML_SHELL_CONFIG.appBaseUrl,
     BASE_HTML_SHELL_CONFIG.appSocialImagePath,
+    BASE_HTML_SHELL_CONFIG.appSocialImageVersion,
   ),
   twitterCardImageUrl: buildAbsoluteUrl(
     BASE_HTML_SHELL_CONFIG.appBaseUrl,
     BASE_HTML_SHELL_CONFIG.twitterCardImagePath,
+    BASE_HTML_SHELL_CONFIG.twitterCardImageVersion,
   ),
   miniappHeroUrl: buildAbsoluteUrl(
     BASE_HTML_SHELL_CONFIG.appBaseUrl,
     BASE_HTML_SHELL_CONFIG.miniappHeroPath,
+    BASE_HTML_SHELL_CONFIG.miniappHeroVersion,
   ),
   miniappSplashUrl: buildAbsoluteUrl(
     BASE_HTML_SHELL_CONFIG.appBaseUrl,
     BASE_HTML_SHELL_CONFIG.miniappSplashPath,
+    BASE_HTML_SHELL_CONFIG.miniappSplashVersion,
   ),
 })
 
@@ -90,12 +112,24 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   SITE_NAME: HTML_SHELL_CONFIG.siteName,
   SITE_TITLE: HTML_SHELL_CONFIG.siteTitle,
   SITE_DESCRIPTION: HTML_SHELL_CONFIG.siteDescription,
+  SITE_SOCIAL_DESCRIPTION: HTML_SHELL_CONFIG.siteSocialDescription,
   SITE_IMAGE_ALT: HTML_SHELL_CONFIG.siteImageAlt,
   SITE_KEYWORDS: HTML_SHELL_CONFIG.siteKeywords,
   SITE_AUTHOR: HTML_SHELL_CONFIG.siteAuthor,
   SITE_AUTHOR_URL: HTML_SHELL_CONFIG.siteAuthorUrl,
   SITE_AUTHOR_EMAIL: HTML_SHELL_CONFIG.siteAuthorEmail,
+  THEME_COLOR: HTML_SHELL_CONFIG.themeColor,
   MS_TILE_COLOR: HTML_SHELL_CONFIG.msTileColor,
+  BRAND_BLUE: HTML_SHELL_CONFIG.brandBlue,
+  FAVICON_ICO_PATH: HTML_SHELL_CONFIG.faviconIcoPath,
+  FAVICON_SVG_PATH: HTML_SHELL_CONFIG.faviconSvgPath,
+  FAVICON_64_PATH: HTML_SHELL_CONFIG.favicon64Path,
+  FAVICON_48_PATH: HTML_SHELL_CONFIG.favicon48Path,
+  FAVICON_32_PATH: HTML_SHELL_CONFIG.favicon32Path,
+  FAVICON_16_PATH: HTML_SHELL_CONFIG.favicon16Path,
+  APPLE_TOUCH_ICON_PATH: HTML_SHELL_CONFIG.appleTouchIconPath,
+  SAFARI_PINNED_TAB_PATH: HTML_SHELL_CONFIG.safariPinnedTabPath,
+  ORGANIZATION_LOGO_URL: HTML_SHELL_CONFIG.organizationLogoUrl,
   TELEGRAM_LINK_TITLE: HTML_SHELL_CONFIG.telegramLinkTitle,
   TELEGRAM_LINK_DESCRIPTION: HTML_SHELL_CONFIG.telegramLinkDescription,
   TELEGRAM_LINK_URL: HTML_SHELL_CONFIG.telegramLinkUrl,

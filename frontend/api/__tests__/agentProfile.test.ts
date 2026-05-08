@@ -8,7 +8,7 @@ const IDENTITY_REGISTRY = 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a43
 const canonicalRegistration = {
   name: '4626 Agent',
   description: 'Canonical public profile for the 4626 agent.',
-  image: 'https://4626.fun/logo/icon-transparent-512.png',
+  image: 'https://4626.fun/assets/logo-mark-1024.png',
   active: true,
   x402Support: true,
   reputationRegistry: 'eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63',

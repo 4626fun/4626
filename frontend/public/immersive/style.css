@@ -530,7 +530,7 @@ body {
   transform: translateY(16px);
 }
 .hero-disclaimer a {
-  color: var(--4626-gold-highlight, #FFD45A);
+  color: var(--4626-gold-highlight, #1E59FF);
   text-decoration: none;
 }
 .hero-disclaimer a:hover {
@@ -606,7 +606,7 @@ body {
   min-height: 42px;
   border: 1px solid var(--4626-gold, var(--color-accent));
   border-radius: 12px;
-  background: linear-gradient(180deg, var(--4626-gold-highlight, #FFD45A), var(--4626-gold, #DDA01C));
+  background: linear-gradient(180deg, var(--4626-gold-highlight, #1E59FF), var(--4626-gold, #0000FF));
   color: #1a1410;
   padding: 0 1rem;
   font-weight: 700;
@@ -623,7 +623,7 @@ body {
   text-align: center;
 }
 .waitlist-form-note a {
-  color: var(--4626-gold-highlight, #FFD45A);
+  color: var(--4626-gold-highlight, #1E59FF);
 }
 .waitlist-hp {
   position: absolute;
@@ -658,7 +658,7 @@ body {
   line-height: 1.45;
 }
 .audience-cards a {
-  color: var(--4626-gold-highlight, #FFD45A);
+  color: var(--4626-gold-highlight, #1E59FF);
   font-size: 0.75rem;
   text-decoration: none;
 }

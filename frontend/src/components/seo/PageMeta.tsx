@@ -13,7 +13,7 @@
 import { useEffect } from 'react'
 
 import { PAGE_META } from '@/lib/seo/pageMetaContent'
-import { SITE_APP_NAME, SITE_DESCRIPTION, SITE_IMAGE_ALT } from '@/lib/seo/siteMeta'
+import { SITE_APP_NAME, SITE_ASSETS, SITE_DESCRIPTION, SITE_IMAGE_ALT } from '@/lib/seo/siteMeta'
 
 function getPageOrigin(): string {
   if (typeof window === 'undefined') return 'https://app.4626.fun'
@@ -106,8 +106,8 @@ export function PageMeta({
   useEffect(() => {
     const origin = getPageOrigin()
     const canonical = normalizeCanonicalUrl(canonicalPath, origin)
-    const fallbackOgImage = `${origin}/social/og-image-1200x630.png`
-    const fallbackTwitterImage = `${origin}/social/twitter-summary-large-image-1200x675.png`
+    const fallbackOgImage = `${origin}${SITE_ASSETS.ogImage}`
+    const fallbackTwitterImage = `${origin}${SITE_ASSETS.twitterImage}`
     const resolvedDescription = String(description ?? '').trim() || SITE_DESCRIPTION
     const ogImageOverride = String(ogImage ?? '').trim()
     const resolvedOgImage = ogImageOverride || fallbackOgImage

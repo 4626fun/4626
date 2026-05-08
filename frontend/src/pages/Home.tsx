@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
+import { siteAssets, siteConfig } from '@/config/site'
 import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { getHostMode, MARKETING_ORIGIN } from '@/lib/env/host'
@@ -29,13 +30,21 @@ export function Home() {
       '@graph': [
         {
           '@type': 'WebSite',
-          name: '4626.fun',
-          url: 'https://4626.fun/',
+          name: siteConfig.name,
+          url: siteConfig.url,
+          description: siteConfig.description,
+        },
+        {
+          '@type': 'Organization',
+          name: siteConfig.name,
+          url: siteConfig.url,
+          logo: `${siteConfig.url}${siteAssets.logoPng}`,
+          description: siteConfig.description,
         },
         {
           '@type': 'WebPage',
           name: META.home.title,
-          url: 'https://4626.fun/',
+          url: siteConfig.url,
           description: META.home.description,
         },
       ],

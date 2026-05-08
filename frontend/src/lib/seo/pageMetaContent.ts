@@ -2,13 +2,12 @@ import { TELEGRAM_LINK_DESCRIPTION } from '@/lib/seo/siteMeta'
 
 export const PAGE_META = {
   home: {
-    title: '4626.fun — Creator Vaults on Base',
-    description:
-      '4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.',
+    title: '4626.fun - ERC-4626 Creator Vaults on Base',
+    description: 'ERC-4626 creator vaults on Base.',
   },
   waitlist: {
     title: 'Join the Waitlist — 4626.fun',
-    description: 'Get early access to ERC-4626 creator-vault infrastructure on Base.',
+    description: 'Get early access to ERC-4626 creator vaults on Base.',
   },
   explore: {
     title: 'Explore Creators',
@@ -16,7 +15,7 @@ export const PAGE_META = {
   },
   deploy: {
     title: 'Deploy Vault',
-    description: 'Launch your ERC-4626 creator vault on Base.',
+    description: 'Launch an ERC-4626 creator coin vault on Base.',
   },
   swap: {
     title: 'Swap',

@@ -412,7 +412,7 @@ export function Vault() {
     zoraCoin?.mediaContent?.previewImage?.small ||
     undefined
   const { imageUrl } = useTokenMetadata(shareOFTAddress ?? tokenAddress ?? undefined)
-  const heroImage = imageUrl || zoraPreview || '/brand/logo.svg'
+  const heroImage = imageUrl || zoraPreview || '/assets/logo-mark.svg'
   const assetPriceUsd = useMemo(() => {
     const direct = Number(zoraCoin?.tokenPrice?.priceInUsdc ?? '')
     if (Number.isFinite(direct) && direct > 0) return direct

@@ -148,7 +148,7 @@ export function FaqHowItWorks() {
                       <div className="flex-1 h-px bg-white/8 relative">
                         <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-transparent to-white/20" />
                       </div>
-                      <img src="/brand/4626.svg" alt="4626 vault" className="w-6 h-6 opacity-70" />
+                      <img src="/assets/logo-mark.svg" alt="4626 vault" className="w-6 h-6 opacity-70" />
                       <div className="flex-1 h-px bg-white/8" />
                       <TokenImage tokenAddress={AKITA.token as `0x${string}`} symbol="AKITA" size="sm" isWrapped wrappedShape="rect" />
                     </div>

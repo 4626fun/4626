@@ -476,7 +476,7 @@ if (audioToggle) {
   }
   const geo1 = new THREE.BufferGeometry();
   geo1.setAttribute('position', new THREE.BufferAttribute(pos1, 3));
-  const mat1 = makeBokehMaterial(0xDDA01C, 6, 0.5, FOCAL_Z); // brand gold
+  const mat1 = makeBokehMaterial(0x0000FF, 6, 0.5, FOCAL_Z); // brand blue
   scene.add(new THREE.Points(geo1, mat1));
 
   // Layer 2: Dim white dust (depth)
