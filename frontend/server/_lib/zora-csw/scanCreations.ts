@@ -78,6 +78,31 @@ export type CswCreation = {
   logIndex: number
 }
 
+type ZoraSmartWalletCreatedArgs = {
+  smartWallet: Address
+  baseOwner: Address
+  owners: readonly Address[]
+  nonce: bigint
+}
+
+function isZoraSmartWalletCreatedArgs(
+  value: readonly unknown[] | Record<string, unknown> | undefined,
+): value is ZoraSmartWalletCreatedArgs {
+  if (!value || Array.isArray(value)) return false
+  const asRecord = value as Record<string, unknown>
+  const smartWallet = asRecord.smartWallet
+  const baseOwner = asRecord.baseOwner
+  const owners = asRecord.owners
+  const nonce = asRecord.nonce
+  return (
+    typeof smartWallet === 'string' &&
+    typeof baseOwner === 'string' &&
+    Array.isArray(owners) &&
+    owners.every((owner) => typeof owner === 'string') &&
+    typeof nonce === 'bigint'
+  )
+}
+
 export function readGetLogsWindow(): bigint {
   const raw = String(process.env.INDEXER_GETLOGS_WINDOW ?? '').trim()
   if (!raw) return DEFAULT_GETLOGS_WINDOW
@@ -120,12 +145,8 @@ export async function fetchCreationsWindow(
         topics: log.topics,
       })
       if (decoded.eventName !== 'ZoraSmartWalletCreated') continue
-      const args = decoded.args as {
-        smartWallet: Address
-        baseOwner: Address
-        owners: readonly Address[]
-        nonce: bigint
-      }
+      if (!isZoraSmartWalletCreatedArgs(decoded.args)) continue
+      const args = decoded.args
       out.push({
         cswAddress: getAddress(args.smartWallet),
         baseOwner: getAddress(args.baseOwner),

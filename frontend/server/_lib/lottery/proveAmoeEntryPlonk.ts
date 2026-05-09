@@ -432,7 +432,10 @@ export async function proveAmoeEntryPlonk(
  * any handler that doesn't actually generate proofs (most of them).
  */
 async function _loadSnarkjs(): Promise<SnarkjsLike> {
-  const mod = (await import('snarkjs')) as unknown as SnarkjsLike
+  const snarkjsModuleName = 'snarkjs'
+  const mod = (await import(
+    /* @vite-ignore */ snarkjsModuleName
+  )) as unknown as SnarkjsLike
   if (!mod?.plonk?.fullProve || !mod?.plonk?.exportSolidityCallData) {
     throw new AmoeProofGenerationError(
       'plonk_snarkjs_failed',
