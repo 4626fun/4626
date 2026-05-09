@@ -1330,79 +1330,17 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   }
 }
 
-async function assertDirectCreate2DeployAuthorization(params: {
-  smartWallet: Address
-  calls: Call[]
-}): Promise<void> {
-  if (!Array.isArray(params.calls) || params.calls.length === 0) return
+function assertNoDirectCreate2DeployCalls(calls: Call[]): void {
+  if (!Array.isArray(calls) || calls.length === 0) return
 
-  const directCreate2Targets = new Set<Address>()
-  for (const call of params.calls) {
+  for (const call of calls) {
     if (!call?.to || !isAddress(call.to)) continue
     const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
     if (!data.startsWith('0x') || data.length < 10) continue
     if (data.slice(0, 10) !== SELECTOR_CREATE2_DEPLOY_FROM_STORE) continue
-    directCreate2Targets.add(getAddress(call.to as Address))
-  }
-  if (directCreate2Targets.size === 0) return
-
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
-  const readClient = createPublicClient({
-    chain: base,
-    transport: http(rpc, { timeout: 12_000 }),
-  })
-  const CREATE2_AUTH_ABI = [
-    { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-    {
-      type: 'function',
-      name: 'authorizedDeployers',
-      stateMutability: 'view',
-      inputs: [{ name: 'deployer', type: 'address' }],
-      outputs: [{ type: 'bool' }],
-    },
-  ] as const
-
-  const smartWalletLower = params.smartWallet.toLowerCase()
-  for (const create2Target of directCreate2Targets) {
-    let owner: Address
-    let authorized: boolean
-    try {
-      const [ownerRead, authRead] = (await Promise.all([
-        readClient.readContract({
-          address: create2Target,
-          abi: CREATE2_AUTH_ABI,
-          functionName: 'owner',
-        }),
-        readClient.readContract({
-          address: create2Target,
-          abi: CREATE2_AUTH_ABI,
-          functionName: 'authorizedDeployers',
-          args: [params.smartWallet],
-        }),
-      ])) as [Address, boolean]
-      owner = getAddress(ownerRead)
-      authorized = Boolean(authRead)
-    } catch {
-      // Legacy/non-standard deployers may not expose these accessors.
-      // Let downstream simulation catch failures in those cases.
-      continue
-    }
-    if (authorized || owner.toLowerCase() === smartWalletLower) continue
-
-    if (owner.toLowerCase() === UNIVERSAL_CREATE2_FACTORY) {
-      throw new DeploySessionRequestError(
-        409,
-        `create2 precheck failed: smart wallet ${params.smartWallet} is not authorized in create2Deployer ${create2Target} ` +
-          `(owner ${owner}). This deployer is owned by the universal CREATE2 factory and cannot be updated post-deploy. ` +
-          `Rotate to a deploy-capable create2 deployer or remove direct create2 deploy calls from this session.`,
-      )
-    }
-
     throw new DeploySessionRequestError(
       409,
-      `create2 precheck failed: smart wallet ${params.smartWallet} is not authorized in create2Deployer ${create2Target} ` +
-        `(owner ${owner}). Direct deploy(bytes32,bytes32,bytes) calls will revert with NotAuthorizedDeployer(). ` +
-        `Authorize this smart wallet via setAuthorizedDeployer, or remove direct create2 deploy calls from this session.`,
+      `Direct create2 deploy calls are not allowed in deploy sessions. Route stored-bytecode deployments through DeploymentBatcher.`,
     )
   }
 }
@@ -2519,10 +2457,7 @@ export async function validateDeploySessionRequest(params: {
       throw new DeploySessionRequestError(400, 'Missing deploy calls')
     }
 
-    await assertDirectCreate2DeployAuthorization({
-      smartWallet,
-      calls: allSubmittedCalls,
-    })
+    assertNoDirectCreate2DeployCalls(allSubmittedCalls)
 
     if (phase1Calls.length > 0) {
       await assertPhase1BatcherReadiness(phase1Calls)

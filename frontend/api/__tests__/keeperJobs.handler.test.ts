@@ -215,7 +215,8 @@ describe('keeper job coordination handlers', () => {
     expect(res.body?.data?.count).toBe(1)
     expect(res.body?.data?.releasedExpiredClaims).toBe(1)
     expect(res.body?.data?.jobs?.[0]?.claimedBy).toBe('worker-a')
-    const releaseExpiredSql = Array.from(dbSqlMock.mock.calls[0]?.[0] ?? []).join(' ')
+    const firstSqlCall = dbSqlMock.mock.calls[0] as unknown[] | undefined
+    const releaseExpiredSql = Array.from((firstSqlCall?.[0] ?? []) as Iterable<unknown>).join(' ')
     expect(releaseExpiredSql).toContain("WHEN attempt_count >= max_attempts THEN 'failed'")
     expect(releaseExpiredSql).not.toMatch(/AND\s+attempt_count\s+<\s+max_attempts/)
   })

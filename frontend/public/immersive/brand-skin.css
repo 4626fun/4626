@@ -1,0 +1,366 @@
+/* ══════════════════════════════════════════════════════════════════════
+   brand-skin.css — 4626.fun · Brand alignment overlay
+   ──────────────────────────────────────────────────────────────────────
+   Loaded LAST, after style.css and refinement.css.
+
+   Strategy: keep the cinematic dark backdrop intact (the typography
+   and visual hierarchy were authored white-on-dark and only read at
+   their best there). Migrate the electric-blue accent (#0052FF) to
+   the canonical brand blue (#0000FF) per the SEO + brand kit, plus
+   add the small "scroll to begin" affordance for the audio gate.
+
+   No layouts, motion families, or components are reshaped — only
+   accent color and a single new affordance.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ─── 0 · Brand tokens (canonical, from kit) ───────────────────────── */
+:root {
+  --4626-gold: #0000FF;
+  --4626-gold-highlight: #1E59FF;
+  --4626-gold-soft: rgba(221, 160, 28, 0.14);
+  --4626-gold-glow: rgba(221, 160, 28, 0.32);
+  --4626-gold-glow-strong: rgba(221, 160, 28, 0.55);
+  --4626-charcoal: #2B2F30;
+  --4626-warm-ivory: #020204;
+}
+
+/* ─── 1a · Marketing landing composition ─────────────────────────────
+   Return to the original cinematic right-column composition: left-aligned
+   copy, lots of negative space, one primary action. */
+#ch-hero .scene-pin {
+  justify-content: flex-start !important;
+  align-items: center !important;
+}
+.hero-content {
+  width: min(440px, calc(100vw - 2rem)) !important;
+  max-width: 440px !important;
+  margin-left: min(62vw, 980px) !important;
+  margin-right: 0 !important;
+  align-items: flex-start !important;
+  text-align: left !important;
+  transform: translateY(0);
+}
+.hero-headline {
+  font-size: clamp(3.1rem, 4.4vw, 5.2rem) !important;
+  line-height: 0.88 !important;
+  margin-bottom: 1.7rem !important;
+  letter-spacing: -0.045em !important;
+}
+.hero-word-serif .hero-char {
+  font-style: italic !important;
+}
+.hero-support {
+  max-width: 340px !important;
+  gap: 0.48rem !important;
+  color: rgba(224, 231, 244, 0.70) !important;
+  font-size: clamp(0.82rem, 0.82vw, 0.98rem) !important;
+  line-height: 1.55 !important;
+}
+.hero-support-line:nth-child(n+2) {
+  color: rgba(168, 181, 204, 0.56) !important;
+}
+.hero-pill-row,
+.waitlist-inline-form,
+.audience-cards,
+.hero-trust-grid {
+  display: none !important;
+}
+.hero-disclaimer {
+  justify-content: flex-start !important;
+  max-width: 340px !important;
+  margin: 1rem 0 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: rgba(165, 176, 196, 0.58) !important;
+  font-size: 9px !important;
+  line-height: 1.7 !important;
+  letter-spacing: 0.13em !important;
+  opacity: 0.58 !important;
+}
+.hero-chain {
+  justify-content: flex-start !important;
+  margin-top: 2rem !important;
+}
+.hero-partners {
+  justify-content: flex-start !important;
+  margin-top: 0.75rem !important;
+}
+.hero-cta {
+  display: flex;
+  justify-content: flex-start;
+  gap: 0.8rem;
+  margin-top: 1.85rem !important;
+}
+.hero-cta .cta-button.secondary {
+  display: none !important;
+}
+@media (max-width: 768px) {
+  #ch-hero .scene-pin {
+    align-items: flex-start !important;
+    justify-content: center !important;
+  }
+  .hero-content {
+    width: min(360px, calc(100vw - 2rem)) !important;
+    margin: 0 auto !important;
+    text-align: center !important;
+    align-items: center !important;
+    padding-top: clamp(5.75rem, 13vh, 7.25rem);
+    transform: none;
+  }
+  .hero-headline {
+    font-size: clamp(3rem, 12.4vw, 4.25rem) !important;
+    line-height: 0.9 !important;
+    margin-bottom: 1.25rem !important;
+  }
+  .hero-support,
+  .hero-disclaimer {
+    text-align: center !important;
+    justify-content: center !important;
+  }
+  .hero-support {
+    max-width: 320px !important;
+    gap: 0.42rem !important;
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+  }
+  .hero-disclaimer {
+    max-width: 310px !important;
+    margin-top: 0.85rem !important;
+    font-size: 8px !important;
+    line-height: 1.55 !important;
+  }
+  .hero-chain {
+    justify-content: center !important;
+    margin-top: 1.5rem !important;
+  }
+  .hero-partners {
+    justify-content: center !important;
+    gap: 0.8rem !important;
+    margin-top: 0.65rem !important;
+  }
+  .hero-partner-logo {
+    height: 16px !important;
+    opacity: 0.42 !important;
+  }
+  .hero-cta {
+    justify-content: center !important;
+    margin-top: 1.45rem !important;
+  }
+  .hero-cta .cta-button {
+    min-width: 170px;
+    min-height: 46px;
+    padding: 0.85rem 1.2rem !important;
+    font-size: 0.64rem !important;
+  }
+}
+
+/* ─── 1 · Re-map accent tokens · gold replaces electric-blue ───────── */
+:root {
+  --color-accent: var(--4626-gold);
+  --color-accent-bright: var(--4626-gold-highlight);
+  --color-accent-glow: var(--4626-gold-soft);
+  --color-accent-glow-strong: var(--4626-gold-glow);
+  --color-border-accent: rgba(221, 160, 28, 0.22);
+}
+
+/* ─── 2 · CTA buttons · gold pill replaces blue pill ───────────────── */
+.cta-button,
+.cres-cta-btn,
+.enter-vaults-btn,
+.nav-btn {
+  /* nav-btn was authored as a thin transparent outline; leave alone if
+     not the primary CTA — only override when it's actively styled blue. */
+}
+.cta-button {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+  color: #1a1410 !important;
+  border: 1px solid var(--4626-gold) !important;
+  box-shadow: 0 6px 18px rgba(221, 160, 28, 0.28),
+              0 1px 0 rgba(255, 220, 130, 0.45) inset !important;
+}
+.cta-button:hover {
+  background: linear-gradient(180deg, #ffe07f 0%, var(--4626-gold-highlight) 100%) !important;
+  border-color: var(--4626-gold-highlight) !important;
+  box-shadow: 0 10px 26px rgba(221, 160, 28, 0.42),
+              0 1px 0 rgba(255, 235, 170, 0.55) inset !important;
+}
+.cta-button.secondary {
+  background: transparent !important;
+  color: var(--4626-gold-highlight) !important;
+  border: 1px solid rgba(221, 160, 28, 0.55) !important;
+  box-shadow: none !important;
+}
+.cta-button.secondary:hover {
+  border-color: var(--4626-gold) !important;
+  background: var(--4626-gold-soft) !important;
+  color: var(--4626-gold-highlight) !important;
+}
+
+/* Crescendo CTA + final waitlist button — same gold pill treatment */
+.cres-cta-btn,
+.enter-vaults-btn,
+#closing.enter-vaults-btn {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+  color: #1a1410 !important;
+  border: 1px solid var(--4626-gold) !important;
+  box-shadow: 0 6px 18px rgba(221, 160, 28, 0.32),
+              0 1px 0 rgba(255, 220, 130, 0.45) inset !important;
+}
+.cres-cta-btn:hover,
+.enter-vaults-btn:hover {
+  background: linear-gradient(180deg, #ffe07f 0%, var(--4626-gold-highlight) 100%) !important;
+  border-color: var(--4626-gold-highlight) !important;
+}
+
+/* ─── 3 · Section labels & kickers · gold tick replaces blue ───────── */
+.section-label::before {
+  background: var(--4626-gold) !important;
+}
+
+/* ─── 4 · Scroll progress thread · gold ───────────────────────────── */
+.scroll-progress > * {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+}
+.scroll-progress::after {
+  background: var(--4626-gold-highlight) !important;
+  box-shadow: 0 0 12px var(--4626-gold),
+              0 0 24px var(--4626-gold-glow-strong) !important;
+}
+
+/* ─── 5 · Editorial accent text (e.g. yield ratio, italic emphasis) ── */
+.cres-brand em,
+.close-brand-wordmark em {
+  color: var(--4626-gold-highlight) !important;
+  font-style: italic;
+}
+
+/* ─── 6 · Selection · gold ─────────────────────────────────────────── */
+::selection {
+  background: var(--4626-gold-glow) !important;
+  color: #fff !important;
+}
+
+/* ─── 7 · Audio toggle (bottom-right) · subtle gold border on hover ── */
+.audio-toggle-float:hover {
+  border-color: var(--4626-gold) !important;
+  background: var(--4626-gold-soft) !important;
+  color: var(--4626-gold-highlight) !important;
+}
+
+/* ─── 8 · "Scroll to begin" hint (audio gating affordance) ─────────── */
+/* Tiny pill above the audio toggle that fades out after first scroll
+   or 8 seconds. JS toggles .is-visible / .is-dismissed. */
+.audio-scroll-hint {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(1.25rem + 56px);
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-display, system-ui);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245, 240, 225, 0.94);
+  background: rgba(20, 22, 26, 0.78);
+  border: 1px solid rgba(221, 160, 28, 0.38);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32),
+              0 0 0 1px rgba(221, 160, 28, 0.12) inset;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  z-index: 9998;
+  white-space: nowrap;
+}
+.audio-scroll-hint.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.audio-scroll-hint.is-dismissed {
+  opacity: 0;
+  transform: translateY(6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .audio-scroll-hint { transition: opacity 0.2s linear; }
+}
+
+/* ─── 9 · Token rings & glows that referenced electric-blue ────────── */
+/* Most ring colors come from var(--color-accent) which we already
+   re-pointed in §1, so they swing to gold automatically. The few
+   hardcoded blues live in style.css conic-gradients and refinement.css
+   ::before/::after rules with absolute hexes — patch those here. */
+.token-img-ring::before,
+.share-img-ring::before {
+  border-color: var(--4626-gold-soft) !important;
+}
+
+/* ─── 10 · Vault card focus / hover · gold outline ─────────────────── */
+.vault-card:hover {
+  border-color: rgba(221, 160, 28, 0.32) !important;
+  box-shadow: 0 0 0 1px rgba(221, 160, 28, 0.12),
+              0 12px 32px rgba(0, 0, 0, 0.42) !important;
+}
+
+/* ─── 11 · Brand mark (tri-ring SEO kit) overrides ─────────────────────
+   The new brand mark from the SEO kit (gold/silver/blue stacked rings,
+   transparent PNG) is shape-defined, not rectangular — so we need to
+   undo the rounded-square treatments (border-radius / object-fit:cover
+   / borders) the legacy app-icon-7.jpg required. .*-mark suffix classes
+   are applied alongside the existing icon classes so size/position
+   stays managed by the original rules.
+   ─────────────────────────────────────────────────────────────────── */
+.brand-icon-mark,
+.close-vault-icon-mark,
+.close-logo-mark,
+.footer-icon-mark {
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  /* Slight contrast lift so the metallic ring outlines stay readable
+     against the deep cinematic backdrop without looking fake-glowy. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+/* The close-logo had a blue drop-shadow accent in the legacy treatment;
+   for the new mark we let the gold/silver/blue rings speak for
+   themselves rather than haloing them in a single accent color. */
+.close-logo-mark {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+/* Close-vault icon sits on a dark editorial plate; a touch more
+   shadow helps it hold its shape inside the plate. */
+.close-vault-icon-mark {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+/* ─── 11a · Display sizing for the tri-ring mark ───────────────────────
+   The SEO-kit mark is composed of three concentric stroked rings; at
+   the legacy 28px nav slot the strokes fall below 1px and disappear
+   visually. Bump the nav slot to 40px (34/30 on smaller viewports) and
+   the footer slot to 28px so the rings actually read. Also override
+   the global .brand-icon { opacity: 0.88 } from refinement.css — at
+   these sizes we want full opacity so the metallic ring outlines hold.
+   ─────────────────────────────────────────────────────────────────── */
+.brand-icon-mark {
+  width: 40px !important;
+  height: 40px !important;
+  opacity: 1 !important;
+}
+@media (max-width: 768px) {
+  .brand-icon-mark { width: 34px !important; height: 34px !important; }
+}
+@media (max-width: 380px) {
+  .brand-icon-mark { width: 30px !important; height: 30px !important; }
+}
+.footer-icon-mark {
+  width: 28px !important;
+  height: 28px !important;
+  opacity: 0.78 !important;
+}

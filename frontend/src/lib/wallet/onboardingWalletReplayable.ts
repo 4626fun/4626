@@ -7,7 +7,6 @@ import {
   encodeFunctionData,
   getAddress,
   http,
-  isAddress,
   keccak256,
   recoverAddress,
   recoverMessageAddress,

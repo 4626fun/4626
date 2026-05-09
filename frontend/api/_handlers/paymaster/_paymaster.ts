@@ -183,6 +183,38 @@ const COINBASE_SMART_WALLET_FACTORY_ABI = [
 
 // Minimal deployment-batcher ABI for decoding the two-step (phase1/2/3) functions.
 // These functions take a tuple as the first argument, so we MUST decode via ABI (not by word offset).
+const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase2Auxiliaries',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'swapRouter', type: 'address' },
+          { name: 'weth', type: 'address' },
+          { name: 'protocolRewards', type: 'address' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vaultShareBurnStream', type: 'bytes32' },
+          { name: 'payoutRouter', type: 'bytes32' },
+          { name: 'creatorCoinPolicyController', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
 const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
@@ -744,8 +776,6 @@ const SELECTOR_BATCHER_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE = '0xc5c1e920'
 const SELECTOR_ACTIVATION_BATCH_ACTIVATE_WITH_PERMIT2_FOR = '0xdc5de72c'
-
-const SELECTOR_CREATE2_DEPLOY_FROM_STORE = '0xd76fad23' // deploy(bytes32,bytes32,bytes)
 
 const SELECTOR_VAULT_SET_BURN_STREAM = '0xf3a1c8b6' // setBurnStream(address)
 const SELECTOR_VAULT_SET_WHITELIST = '0x53d6fd59' // setWhitelist(address,bool)
@@ -1687,16 +1717,6 @@ function decodeUint256ArgFromCalldata(data: Hex, argIndex: number): bigint | nul
   }
 }
 
-function decodeAddressArgFromAbiEncodedBytes(data: Hex, argIndex: number): Address | null {
-  // abi.encode packs each arg in 32 byte slots (no selector).
-  const start = 2 + argIndex * 64
-  const word = data.slice(start, start + 64)
-  if (word.length !== 64) return null
-  const addr = `0x${word.slice(24)}` // last 20 bytes
-  if (!isAddress(addr)) return null
-  return getAddress(addr)
-}
-
 function decodeAddressFromPackedPath(path: Hex, byteOffset: number): Address | null {
   if (!isHexString(path)) return null
   const totalBytes = Math.max(0, Math.floor((path.length - 2) / 2))
@@ -1969,6 +1989,10 @@ async function validateInnerCalls(params: {
     contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
   if (!contracts.creatorVaultBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
+  const vaultAuxiliaryDeployBatcher =
+    contracts.vaultAuxiliaryDeployBatcher && isAddress(contracts.vaultAuxiliaryDeployBatcher)
+      ? getAddress(contracts.vaultAuxiliaryDeployBatcher)
+      : null
   const vaultActivationBatcher = getAddress(contracts.vaultActivationBatcher)
   const permit2 = getAddress(contracts.permit2)
   const configuredSwapRouter =
@@ -2055,6 +2079,9 @@ async function validateInnerCalls(params: {
   let expectedVesting: Address | null = null
   let expectedCodeIds: { vault: Hex } | null = null
   let expectedVersion: string | null = null
+  let expectedBurnStream: Address | null = null
+  let expectedPayoutRouter: Address | null = null
+  let expectedCreatorCoinPolicyController: Address | null = null
 
   for (const c of innerCalls) {
     const selector = getSelector(c.data)
@@ -2102,7 +2129,9 @@ async function validateInnerCalls(params: {
 
         if (isPhase2DeploySelector) {
           if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
+        }
 
+        if (isPhase2DeploySelector) {
           const creatorTreasuryArg = p && isAddress(p.creatorTreasury) ? getAddress(p.creatorTreasury) : null
           const payoutRecipientArg = p && isAddress(p.payoutRecipient) ? getAddress(p.payoutRecipient) : null
           if (!creatorTreasuryArg || !payoutRecipientArg) throw new Error('batcher_phase2_policy_decode_failed')
@@ -2741,9 +2770,6 @@ async function validateInnerCalls(params: {
 
   // In Phase 2/3, validate the vault address via CREATE2 inputs (salt + codeId + constructor args).
   // If codeIds are missing, fall back to the Phase1Deployed event for this creator/owner.
-  let expectedBurnStream: Address | null = null
-  let expectedPayoutRouter: Address | null = null
-  let expectedCreatorCoinPolicyController: Address | null = null
   if (mode === 'deploy_phase2' || mode === 'deploy_phase3') {
     if (!expectedVault) throw new Error('missing_vault')
     const client = await getBaseClient()
@@ -2875,6 +2901,7 @@ async function validateInnerCalls(params: {
         expectedProtocolTreasury,
         defaultSwapRouterForDerivedAddresses,
         BASE_WETH,
+        ZERO_ADDRESS,
       ]),
     })
     const policyControllerSalt = deriveCreatorCoinPolicyControllerSalt({
@@ -2990,6 +3017,47 @@ async function validateInnerCalls(params: {
       if (!ALLOWED_BATCHER_SELECTORS.has(selector)) throw new Error('batcher_selector_not_allowed')
       continue
     }
+    if (vaultAuxiliaryDeployBatcher && c.target === vaultAuxiliaryDeployBatcher) {
+      if (selector !== '0x3ed598cb') throw new Error('auxiliary_batcher_selector_not_allowed')
+      {
+        if (!expectedCreatorToken || !expectedVault || !expectedBurnStream || !expectedPayoutRouter || !expectedCreatorCoinPolicyController) {
+          throw new Error('missing_expected_addresses')
+        }
+        let decodedAux: any
+        try {
+          decodedAux = decodeFunctionData({ abi: VAULT_AUXILIARY_DEPLOY_BATCHER_ABI as any, data: c.data })
+        } catch {
+          throw new Error('batcher_aux_decode_failed')
+        }
+        const p = decodedAux?.args?.[0]
+        const codeIds = decodedAux?.args?.[1]
+        const creatorTokenArg = p && isAddress(p.creatorToken) ? getAddress(p.creatorToken) : null
+        const ownerArg = p && isAddress(p.owner) ? getAddress(p.owner) : null
+        const vaultArg = p && isAddress(p.vault) ? getAddress(p.vault) : null
+        const swapRouterArg = p && isAddress(p.swapRouter) ? getAddress(p.swapRouter) : null
+        const wethArg = p && isAddress(p.weth) ? getAddress(p.weth) : null
+        const protocolRewardsArg = p && isAddress(p.protocolRewards) ? getAddress(p.protocolRewards) : null
+        if (!creatorTokenArg || creatorTokenArg !== expectedCreatorToken) throw new Error('batcher_aux_creator_mismatch')
+        if (!ownerArg || ownerArg !== params.sender) throw new Error('batcher_aux_owner_mismatch')
+        if (!vaultArg || vaultArg !== expectedVault) throw new Error('batcher_aux_vault_mismatch')
+        if (!swapRouterArg || !allowedPayoutRouterV3Routers.has(swapRouterArg)) throw new Error('batcher_aux_swap_router_mismatch')
+        if (!wethArg || wethArg !== BASE_WETH) throw new Error('batcher_aux_weth_mismatch')
+        const protocolRewardsErr = validatePayoutRouterProtocolRewardsArg(protocolRewardsArg)
+        if (protocolRewardsErr) throw new Error(protocolRewardsErr)
+        const hasValidAuxiliaryCodeIds =
+          codeIds &&
+          typeof codeIds === 'object' &&
+          isHexString(codeIds.vaultShareBurnStream) &&
+          isHexString(codeIds.payoutRouter) &&
+          isHexString(codeIds.creatorCoinPolicyController) &&
+          String(codeIds.vaultShareBurnStream).toLowerCase() === String(VAULT_SHARE_BURN_STREAM_CODE_ID).toLowerCase() &&
+          String(codeIds.payoutRouter).toLowerCase() === String(PAYOUT_ROUTER_CODE_ID).toLowerCase() &&
+          String(codeIds.creatorCoinPolicyController).toLowerCase() ===
+            String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()
+        if (!hasValidAuxiliaryCodeIds) throw new Error('batcher_aux_codeids_mismatch')
+      }
+      continue
+    }
     if (c.target === vaultActivationBatcher) {
       if (!ALLOWED_ACTIVATION_SELECTORS.has(selector)) throw new Error('activation_selector_not_allowed')
       continue
@@ -3044,116 +3112,10 @@ async function validateInnerCalls(params: {
       continue
     }
 
-    // Deterministic CREATE2 deploy via UniversalCreate2DeployerFromStore (used for burn stream + payout router).
+    // Creator wallets must route stored-bytecode CREATE2 through DeploymentBatcher so
+    // the create2 deployer ACL can authorize protocol deploy surfaces, not every CSW.
     if (c.target === create2DeployerFromStore) {
-      if (mode !== 'deploy_phase2' && mode !== 'deploy_phase3') throw new Error('create2_deploy_not_allowed')
-      if (!expectedVault || !expectedBurnStream || !expectedPayoutRouter || !expectedCreatorCoinPolicyController) {
-        throw new Error('missing_expected_addresses')
-      }
-      if (selector !== SELECTOR_CREATE2_DEPLOY_FROM_STORE) throw new Error('create2_selector_not_allowed')
-
-      const create2Abi = [
-        {
-          type: 'function',
-          name: 'deploy',
-          stateMutability: 'nonpayable',
-          inputs: [
-            { name: 'salt', type: 'bytes32' },
-            { name: 'codeId', type: 'bytes32' },
-            { name: 'constructorArgs', type: 'bytes' },
-          ],
-          outputs: [{ name: 'addr', type: 'address' }],
-        },
-      ] as const
-
-      const decodedDeploy = decodeFunctionData({ abi: create2Abi, data: c.data })
-      if (decodedDeploy.functionName !== 'deploy') throw new Error('create2_decode_failed')
-
-      const salt = decodedDeploy.args[0] as Hex
-      const codeId = decodedDeploy.args[1] as Hex
-      const ctorArgs = decodedDeploy.args[2] as Hex
-
-      const codeIdLc = String(codeId).toLowerCase()
-      if (codeIdLc === String(VAULT_SHARE_BURN_STREAM_CODE_ID).toLowerCase()) {
-        const expectedSalt = deriveVaultShareBurnStreamSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
-        if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
-        const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
-        if (!vaultArg || vaultArg !== expectedVault) throw new Error('burn_stream_vault_mismatch')
-      } else if (codeIdLc === String(PAYOUT_ROUTER_CODE_ID).toLowerCase()) {
-        const expectedSalt = derivePayoutRouterSalt({ creatorToken: expectedCreatorToken as Address, owner: params.sender })
-        if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
-
-        // PayoutRouter constructor args:
-        // M-04 (audit 2026-04-25): added trailing `protocolRewards` argument
-        // (immutable). The deploy flow lets callers pass `address(0)` to
-        // select the chain default; the contract reverts at construction if
-        // the resolved address has no code. We accept any non-undefined value
-        // here because the contract enforces the deploy-time invariant.
-        // constructor(address creatorCoin, address vault, address burnStream, address owner, address swapRouter, address weth, address protocolRewards)
-        const creatorCoinArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
-        const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 1)
-        const burnStreamArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 2)
-        const ownerArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 3)
-        const swapRouterArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 4)
-        const wethArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 5)
-        const protocolRewardsArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 6)
-
-        if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) throw new Error('payout_router_creator_mismatch')
-        if (!vaultArg || vaultArg !== expectedVault) throw new Error('payout_router_vault_mismatch')
-        if (!burnStreamArg || burnStreamArg !== expectedBurnStream) {
-          params.debug?.({
-            deployer: create2DeployerFromStore,
-            storeEnv: envStore,
-            storeFromDeployer: deployerStore,
-            storeUsed: bytecodeStore,
-            expectedVault,
-            expectedBurnStream,
-            expectedPayoutRouter,
-            payoutRouterBurnStreamArg: burnStreamArg,
-          })
-          throw new Error('payout_router_burn_stream_mismatch')
-        }
-        if (!ownerArg || ownerArg !== expectedProtocolTreasury) throw new Error('payout_router_owner_mismatch')
-        if (!swapRouterArg || !allowedPayoutRouterV3Routers.has(swapRouterArg)) {
-          throw new Error('payout_router_swap_router_mismatch')
-        }
-        if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
-        // 4626-audit-2026-04-25 review: validate the 7th constructor arg.
-        // PayoutRouter only enforces `code.length > 0` and `_claimProtocolRewards`
-        // uses permissive low-level calls, so without this gate a caller can
-        // route protocol-reward claims to an arbitrary contract. The contract
-        // semantics (PayoutRouter.DEFAULT_PROTOCOL_REWARDS) accept exactly two
-        // values: `address(0)` (sentinel -> default) or the canonical default
-        // itself. Reject anything else here, with the same strict-but-safe
-        // semantics on Base mainnet and Base forks alike.
-        const protocolRewardsErr = validatePayoutRouterProtocolRewardsArg(protocolRewardsArg)
-        if (protocolRewardsErr) {
-          throw new Error(protocolRewardsErr)
-        }
-      } else if (codeIdLc === String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()) {
-        const expectedSalt = deriveCreatorCoinPolicyControllerSalt({
-          creatorToken: expectedCreatorToken as Address,
-          owner: params.sender,
-        })
-        if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
-
-        // CreatorCoinPolicyController constructor args:
-        // constructor(address creatorCoin, address payoutRouter, address owner)
-        const creatorCoinArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
-        const payoutRouterArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 1)
-        const ownerArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 2)
-        if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) {
-          throw new Error('policy_controller_creator_mismatch')
-        }
-        if (!payoutRouterArg || payoutRouterArg !== expectedPayoutRouter) {
-          throw new Error('policy_controller_payout_router_mismatch')
-        }
-        if (!ownerArg || ownerArg !== expectedProtocolTreasury) throw new Error('policy_controller_owner_mismatch')
-      } else {
-        throw new Error('create2_codeid_not_allowed')
-      }
-
-      continue
+      throw new Error('direct_create2_deploy_not_allowed')
     }
 
     // PayoutRouter admin calls (phase2/phase3 deploy flow)

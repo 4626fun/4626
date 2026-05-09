@@ -105,6 +105,7 @@ export type AlfaClubChatBridgeFlags = {
   roomId: string | null
   jwt: string | null
   ingestJwt: string | null
+  botToken: string | null
   apiBaseUrl: string
   /**
    * Optional proxy origin for AlfaClub HTTP API calls
@@ -281,6 +282,11 @@ function normalizeApiProxySecret(raw: string | undefined): string | null {
   return value || null
 }
 
+function normalizeAlfaClubBotToken(raw: string | undefined): string | null {
+  const value = (raw ?? '').trim()
+  return value || null
+}
+
 /**
  * Pick the URL the bridge should hit for an AlfaClub HTTP API call
  * (the *routing* URL — where the request is actually sent).
@@ -375,6 +381,11 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     roomId,
     jwt: (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null,
     ingestJwt: (process.env.ALFACLUB_CHAT_INGEST_JWT ?? '').trim() || null,
+    botToken: normalizeAlfaClubBotToken(
+      process.env.ALFACLUB_API_KEY ??
+        process.env.alfaclub_api_key ??
+        process.env.ALFACLUB_BOT_TOKEN,
+    ),
     apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
     apiProxyUrl: normalizeApiProxyUrl(process.env.ALFACLUB_CHAT_API_PROXY_URL),
     apiProxySecret: normalizeApiProxySecret(process.env.ALFACLUB_CHAT_API_PROXY_SECRET),
@@ -1080,6 +1091,58 @@ async function markReadMessage(params: {
     // Read receipts are best-effort only.
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+function truncateAlfaClubBotMessage(text: string): string {
+  const trimmed = text.trim()
+  if (trimmed.length <= 2_000) return trimmed
+  return `${trimmed.slice(0, 1_997)}...`
+}
+
+function buildBotMessageIdempotencyKey(params: {
+  roomId: string
+  messageId: string
+}): string {
+  const raw = `alfaclub-bridge:${params.roomId}:${params.messageId}`
+  return raw.replace(/[^A-Za-z0-9._:-]/g, '-').slice(0, 128)
+}
+
+async function sendRoomMessageViaBotToken(params: {
+  apiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<void> {
+  const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/message`, params.apiBaseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.botToken}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': params.idempotencyKey,
+      },
+      body: JSON.stringify({
+        body: truncateAlfaClubBotMessage(params.text),
+      }),
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`bot_message_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
+  if (!response.ok) {
+    const bodyText = await response.text().catch(() => '')
+    const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
+    throw new Error(`bot_message_failed:${response.status}${detail ? `:${detail}` : ''}`)
   }
 }
 
@@ -1949,14 +2012,28 @@ async function executeCommandBatch(params: {
         continue
       }
       const attachments = extractAlfaClubActionAttachments(result.action)
-      await sendRoomMessageViaWebSocket({
-        websocketUrl: params.flags.websocketUrl,
-        jwt: params.jwt,
-        roomId: params.roomId,
-        text: responseText,
-        attachments,
-        timeoutMs: params.flags.sendTimeoutMs,
-      })
+      if (params.flags.botToken) {
+        await sendRoomMessageViaBotToken({
+          apiBaseUrl: params.flags.apiBaseUrl,
+          botToken: params.flags.botToken,
+          roomId: params.roomId,
+          text: responseText,
+          idempotencyKey: buildBotMessageIdempotencyKey({
+            roomId: params.roomId,
+            messageId: command.id,
+          }),
+          timeoutMs: params.flags.sendTimeoutMs,
+        })
+      } else {
+        await sendRoomMessageViaWebSocket({
+          websocketUrl: params.flags.websocketUrl,
+          jwt: params.jwt,
+          roomId: params.roomId,
+          text: responseText,
+          attachments,
+          timeoutMs: params.flags.sendTimeoutMs,
+        })
+      }
       replied += 1
       await markReadMessage({
         apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
@@ -2408,6 +2485,17 @@ export async function _markReadMessageForTests(params: {
   timeoutMs: number
 }): Promise<void> {
   return markReadMessage(params)
+}
+
+export async function _sendRoomMessageViaBotTokenForTests(params: {
+  apiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<void> {
+  return sendRoomMessageViaBotToken(params)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {

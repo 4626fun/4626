@@ -77,6 +77,7 @@ import {
   _markReadMessageForTests,
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
+  _sendRoomMessageViaBotTokenForTests,
   _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
@@ -111,6 +112,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
       ALFACLUB_CHAT_ROOM_ID: '1043',
       ALFACLUB_CHAT_JWT: 'token-xyz',
+      alfaclub_api_key: 'alfa_bot_lowercase',
       ALFACLUB_CHAT_GROUP_ID: 'alfa-room-main',
       ALFACLUB_CHAT_POLL_INTERVAL_MS: '7000',
       ALFACLUB_CHAT_HISTORY_LIMIT: '35',
@@ -130,6 +132,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.roomId).toBe('1043')
     expect(flags.jwt).toBe('token-xyz')
     expect(flags.ingestJwt).toBeNull()
+    expect(flags.botToken).toBe('alfa_bot_lowercase')
     expect(flags.groupId).toBe('alfa-room-main')
     expect(flags.pollIntervalMs).toBe(7000)
     expect(flags.historyLimit).toBe(35)
@@ -185,6 +188,18 @@ describe('readAlfaClubChatBridgeFlags', () => {
     const flags = readAlfaClubChatBridgeFlags()
     expect(flags.jwt).toBe('command-token')
     expect(flags.ingestJwt).toBe('ingest-token')
+  })
+
+  it('prefers uppercase AlfaClub bot token env when both aliases exist', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_API_KEY: 'alfa_bot_uppercase',
+      alfaclub_api_key: 'alfa_bot_lowercase',
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.botToken).toBe('alfa_bot_uppercase')
   })
 
   it('auto-enables telegram relay when bot token and destination are configured', () => {
@@ -375,6 +390,83 @@ describe('buildAlfaClubOutboundFrame', () => {
         ],
       },
     })
+  })
+})
+
+describe('sendRoomMessageViaBotToken', () => {
+  type CapturedRequest = {
+    url: string
+    method: string
+    headers: Record<string, string>
+    body: string
+  }
+
+  function installFetchSpy(captured: CapturedRequest[], status = 200) {
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    ;(globalThis as { fetch?: typeof fetch }).fetch = vi.fn(
+      async (input: unknown, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+        captured.push({
+          url: typeof input === 'string' ? input : String(input),
+          method: init?.method ?? 'GET',
+          headers: (init?.headers ?? {}) as Record<string, string>,
+          body: String(init?.body ?? ''),
+        })
+        return new Response(JSON.stringify({ ok: true, messageId: '6a7dccc8-0000-4000-8000-000000000000', deduped: false }), {
+          status,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    ) as unknown as typeof fetch
+    return () => {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+  }
+
+  it('posts replies through the stable bot-token message endpoint', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy(captured)
+    try {
+      await _sendRoomMessageViaBotTokenForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'gmeow from Hermit',
+        idempotencyKey: 'alfaclub-bridge:1043:m-1',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    expect(captured).toHaveLength(1)
+    const request = captured[0]
+    expect(request?.url).toBe('https://api.alfaclub.app/api/room/1043/message')
+    expect(request?.method).toBe('POST')
+    expect(request?.headers.Authorization).toBe('Bearer alfa_bot_test')
+    expect(request?.headers['Content-Type']).toBe('application/json')
+    expect(request?.headers['Idempotency-Key']).toBe('alfaclub-bridge:1043:m-1')
+    expect(JSON.parse(request?.body ?? '{}')).toEqual({ body: 'gmeow from Hermit' })
+  })
+
+  it('bounds message bodies to AlfaClub bot-token limits', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy(captured)
+    try {
+      await _sendRoomMessageViaBotTokenForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'x'.repeat(2_100),
+        idempotencyKey: 'alfaclub-bridge:1043:m-2',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    const body = JSON.parse(captured[0]?.body ?? '{}') as { body: string }
+    expect(body.body).toHaveLength(2_000)
+    expect(body.body.endsWith('...')).toBe(true)
   })
 })
 
@@ -1509,6 +1601,7 @@ describe('runBridgeTick — Cloudflare challenge remediation', () => {
       roomId: '1043',
       jwt: 'command.jwt.value',
       ingestJwt: null,
+      botToken: null,
       apiBaseUrl: 'https://api.alfaclub.app',
       apiProxyUrl: null,
       apiProxySecret: null,

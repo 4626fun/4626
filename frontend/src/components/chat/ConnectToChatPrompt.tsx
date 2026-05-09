@@ -55,7 +55,7 @@ export function ConnectToChatPrompt(props: { onActivate?: (() => void) | null })
   return (
     <>
       <div className="fixed inset-0 z-50 pointer-events-none md:hidden">
-        <div className="absolute top-4 right-4 pointer-events-auto">
+        <div className="absolute bottom-20 left-4 pointer-events-auto">
           <button
             type="button"
             onClick={handleConnect}

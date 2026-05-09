@@ -24,6 +24,7 @@ export type ApiContracts = {
   create2Deployer: ContractAddress
   universalBytecodeStore?: ContractAddress
   universalCreate2DeployerFromStore?: ContractAddress
+  vaultAuxiliaryDeployBatcher?: ContractAddress
   vaultActivationBatcher: ContractAddress
   creatorVaultBatcher?: ContractAddress
   protocolTreasury: ContractAddress
@@ -95,6 +96,10 @@ export function getApiContracts(): ApiContracts {
     universalCreate2DeployerFromStore: pickAddressProdSafe(
       'UNIVERSAL_CREATE2_FROM_STORE',
       BASE_DEFAULTS.universalCreate2DeployerFromStore,
+    ),
+    vaultAuxiliaryDeployBatcher: pickAddressProdSafe(
+      'VAULT_AUXILIARY_DEPLOY_BATCHER',
+      BASE_DEFAULTS.vaultAuxiliaryDeployBatcher,
     ),
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
     creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),

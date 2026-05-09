@@ -58,6 +58,7 @@ export const CONTRACTS = {
   // and fall back to calldata-based deployments when missing.
   universalBytecodeStore: envAddress('VITE_UNIVERSAL_BYTECODE_STORE', BASE_DEFAULTS.universalBytecodeStore)!,
   universalCreate2DeployerFromStore: envAddress('VITE_UNIVERSAL_CREATE2_DEPLOYER', BASE_DEFAULTS.universalCreate2DeployerFromStore)!,
+  vaultAuxiliaryDeployBatcher: envAddress('VITE_VAULT_AUXILIARY_DEPLOY_BATCHER', BASE_DEFAULTS.vaultAuxiliaryDeployBatcher),
 
   // Phase 1/2 (AA): Vault activation batcher (approve + deposit + wrap + launch auction)
   vaultActivationBatcher: envAddress('VITE_VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher),

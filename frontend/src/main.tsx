@@ -138,6 +138,13 @@ function isKnownExtensionWalletError(message: string, source: string): boolean {
   if (!message) return false
   const hitPattern = EXTENSION_ETHEREUM_ERROR_PATTERNS.some((pattern) => pattern.test(message))
   if (!hitPattern) return false
+  const lowerMessage = message.toLowerCase()
+  if (
+    lowerMessage.includes('cannot redefine property: ethereum') ||
+    lowerMessage.includes('cannot set property ethereum of #<window> which has only a getter')
+  ) {
+    return true
+  }
   const src = String(source || '').toLowerCase()
   if (!src) return true
   return (

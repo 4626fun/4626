@@ -4,17 +4,14 @@ import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { isAddress } from 'viem'
 import { base } from 'viem/chains'
-import { detectSignatureShape } from './signatureShape'
 import {
   classifyOwnerApprovalError,
   isRetryablePaymasterSessionError,
-  messageHasOwnerApprovalDebugTag,
   normalizeOwnerApprovalError,
 } from './onboardingWalletErrors'
 import {
   _submitOwnerViaSelfBuiltUserOp,
   encodeExecuteWithoutChainIdValidation,
-  unwrapDoubleHexEncodedHash,
   REPLAYABLE_INNER_SELECTORS,
 } from './onboardingWalletReplayable'
 import {
@@ -22,13 +19,10 @@ import {
   _submitOwnerViaPreparedCallsAllowAnyOwner,
   _submitOwnerViaPreparedCallsWithEoaOwner,
   _submitOwnerViaWalletSendCalls,
-  buildSendPreparedCallsSignaturePayload,
 } from './onboardingWalletPrepared'
 import {
   buildOwnerDelegationError,
-  deriveOwnerDelegationFlags,
   readApiError,
-  shouldRefreshOwnerDelegationOnForeground,
 } from './onboardingWalletDelegation'
 export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 export { normalizeOwnerApprovalError } from './onboardingWalletErrors'
@@ -147,10 +141,6 @@ const CONFIRM_OWNER_MAX_ATTEMPTS = import.meta.env.MODE === 'test' ? 6 : 10
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
-const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
-const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
-const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
-const REPLAYABLE_NONCE_KEY = 8453n
 
 function getConfirmOwnerRetryDelayMs(attempt: number): number {
   const multiplier = Math.min(5, Math.max(1, attempt + 1))

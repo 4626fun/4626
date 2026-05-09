@@ -174,28 +174,11 @@ const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
-const UNIVERSAL_CREATE2_FACTORY = addr('4e59b44847b379578588920cA78FbF26c0B4956C')
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0x004684670d284ef607e1b2424fcf8ccbda8ef828',
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
   '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
-const CREATE2_DEPLOYER_AUTH_ABI = [
-  {
-    type: 'function',
-    name: 'owner',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
-  {
-    type: 'function',
-    name: 'authorizedDeployers',
-    stateMutability: 'view',
-    inputs: [{ name: 'deployer', type: 'address' }],
-    outputs: [{ type: 'bool' }],
-  },
-] as const
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -1134,17 +1117,45 @@ const COIN_OWNERSHIP_ABI = [
   },
 ] as const
 
-const UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI = [
+const VAULT_AUXILIARY_DEPLOY_BATCHER_ABI = [
   {
     type: 'function',
-    name: 'deploy',
+    name: 'deployPhase2Auxiliaries',
     stateMutability: 'nonpayable',
     inputs: [
-      { name: 'salt', type: 'bytes32' },
-      { name: 'codeId', type: 'bytes32' },
-      { name: 'constructorArgs', type: 'bytes' },
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'swapRouter', type: 'address' },
+          { name: 'weth', type: 'address' },
+          { name: 'protocolRewards', type: 'address' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vaultShareBurnStream', type: 'bytes32' },
+          { name: 'payoutRouter', type: 'bytes32' },
+          { name: 'creatorCoinPolicyController', type: 'bytes32' },
+        ],
+      },
     ],
-    outputs: [{ name: 'deployed', type: 'address' }],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'burnStream', type: 'address' },
+          { name: 'payoutRouter', type: 'address' },
+          { name: 'creatorCoinPolicyController', type: 'address' },
+        ],
+      },
+    ],
   },
 ] as const
 
@@ -3654,13 +3665,14 @@ function DeployVaultBatcher({
       // To avoid mismatches, compute these expected addresses the same way (fall back to local bytecode if needed).
       let burnStreamAddress = predictCreate2Address({ create2Deployer, salt: burnStreamSalt, initCode: burnStreamInitCode })
       let payoutRouterAddress = (() => {
-        const args = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
+        const args = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
           creatorToken,
           vaultAddress,
           burnStreamAddress,
           protocolTreasury,
           getAddress(BASE_SWAP_ROUTER as Address),
           weth,
+          ZERO_ADDRESS,
         ])
         const init = concatHex([DEPLOY_BYTECODE.PayoutRouter as Hex, args])
         return predictCreate2Address({ create2Deployer, salt: payoutRouterSalt, initCode: init })
@@ -3726,13 +3738,14 @@ function DeployVaultBatcher({
           const burnInitHash = keccak256(concatHex([burnCreation as Hex, burnStreamArgs]))
           burnStreamAddress = getCreate2Address({ from: create2Deployer, salt: burnStreamSalt, bytecodeHash: burnInitHash })
 
-          const routerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
+          const routerArgsFixed = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address,address'), [
             creatorToken,
             vaultAddress,
             burnStreamAddress,
             protocolTreasury,
             getAddress(BASE_SWAP_ROUTER as Address),
             weth,
+            ZERO_ADDRESS,
           ])
           const routerInitHash = keccak256(concatHex([routerCreation as Hex, routerArgsFixed]))
           payoutRouterAddress = getCreate2Address({ from: create2Deployer, salt: payoutRouterSalt, bytecodeHash: routerInitHash })
@@ -4433,6 +4446,7 @@ function DeployVaultBatcher({
       const payoutRouterWethCreatorFee =
         parseUniswapV3Fee(runtimeConfig?.payoutRouterWethCreatorFee) ?? DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE
       if (!publicClient) throw new Error('Network client not ready')
+      const vaultAuxiliaryDeployBatcher = normalizeAddressLike(CONTRACTS.vaultAuxiliaryDeployBatcher)
       if (
         !expected ||
         !expectedGauge ||
@@ -4479,66 +4493,51 @@ function DeployVaultBatcher({
 
       const weth = getAddress((CONTRACTS.weth ?? BASE_WETH) as Address)
       const usdc = getAddress((CONTRACTS.usdc ?? BASE_USDC) as Address)
-      const burnStreamSalt = deriveVaultShareBurnStreamSalt({ creatorToken, owner })
-      const burnStreamConstructorArgs = encodeAbiParameters(parseAbiParameters('address'), [expected.vault])
-      const burnStreamDeployCall = {
-        target: expectedCreate2Deployer,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI,
-          functionName: 'deploy',
-          args: [burnStreamSalt, vaultShareBurnStreamCodeId, burnStreamConstructorArgs],
-        }),
-      } as const
-
       const burnStreamAlreadyDeployed = await (async () => {
         const bc = await publicClient.getBytecode({ address: expectedBurnStream })
         return !!bc && bc !== '0x'
       })()
-
-      const payoutRouterSalt = derivePayoutRouterSalt({ creatorToken, owner })
-      const payoutRouterConstructorArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address,address,address'), [
-        creatorToken,
-        expected.vault,
-        expectedBurnStream,
-        expectedProtocolTreasury,
-        getAddress(BASE_SWAP_ROUTER as Address),
-        weth,
-      ])
-      const payoutRouterDeployCall = {
-        target: expectedCreate2Deployer,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI,
-          functionName: 'deploy',
-          args: [payoutRouterSalt, payoutRouterCodeId, payoutRouterConstructorArgs],
-        }),
-      } as const
 
       const payoutRouterAlreadyDeployed = await (async () => {
         const bc = await publicClient.getBytecode({ address: expectedPayoutRouter })
         return !!bc && bc !== '0x'
       })()
 
-      const creatorCoinPolicyControllerSalt = deriveCreatorCoinPolicyControllerSalt({ creatorToken, owner })
-      const creatorCoinPolicyControllerConstructorArgs = encodeAbiParameters(
-        parseAbiParameters('address,address,address'),
-        [creatorToken, expectedPayoutRouter, expectedProtocolTreasury],
-      )
-      const creatorCoinPolicyControllerDeployCall = {
-        target: expectedCreate2Deployer,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: UNIVERSAL_CREATE2_DEPLOY_FROM_STORE_ABI,
-          functionName: 'deploy',
-          args: [creatorCoinPolicyControllerSalt, creatorCoinPolicyControllerCodeId, creatorCoinPolicyControllerConstructorArgs],
-        }),
-      } as const
-
       const creatorCoinPolicyControllerAlreadyDeployed = await (async () => {
         const bc = await publicClient.getBytecode({ address: expectedCreatorCoinPolicyController })
         return !!bc && bc !== '0x'
       })()
+
+      const phase2AuxiliaryDeployNeeded =
+        !burnStreamAlreadyDeployed || !payoutRouterAlreadyDeployed || !creatorCoinPolicyControllerAlreadyDeployed
+      if (phase2AuxiliaryDeployNeeded && !vaultAuxiliaryDeployBatcher) {
+        throw new Error('Vault auxiliary deploy batcher is not configured. Set VITE_VAULT_AUXILIARY_DEPLOY_BATCHER after deploying the helper.')
+      }
+      const phase2AuxiliaryDeployCall = phase2AuxiliaryDeployNeeded
+        ? ({
+            target: vaultAuxiliaryDeployBatcher as Address,
+            value: 0n,
+            data: encodeFunctionData({
+              abi: VAULT_AUXILIARY_DEPLOY_BATCHER_ABI,
+              functionName: 'deployPhase2Auxiliaries',
+              args: [
+                {
+                  creatorToken,
+                  owner,
+                  vault: expected.vault,
+                  swapRouter: getAddress(BASE_SWAP_ROUTER as Address),
+                  weth,
+                  protocolRewards: ZERO_ADDRESS,
+                },
+                {
+                  vaultShareBurnStream: vaultShareBurnStreamCodeId,
+                  payoutRouter: payoutRouterCodeId,
+                  creatorCoinPolicyController: creatorCoinPolicyControllerCodeId,
+                },
+              ],
+            }),
+          } as const)
+        : null
 
       const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
       const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
@@ -5691,9 +5690,7 @@ function DeployVaultBatcher({
           }
         }
 
-        if (!burnStreamAlreadyDeployed) phase2Calls.push(burnStreamDeployCall)
-        if (!payoutRouterAlreadyDeployed) phase2Calls.push(payoutRouterDeployCall)
-        if (!creatorCoinPolicyControllerAlreadyDeployed) phase2Calls.push(creatorCoinPolicyControllerDeployCall)
+        if (phase2AuxiliaryDeployCall) phase2Calls.push(phase2AuxiliaryDeployCall)
         if (!burnStreamAlreadyConfigured) phase2Calls.push(vaultSetBurnStreamCall)
         phase2Calls.push(vaultWhitelistRouterCall)
         if (payoutRouterSetKeeperCall) phase2Calls.push(payoutRouterSetKeeperCall)
@@ -5778,6 +5775,7 @@ function DeployVaultBatcher({
           const allow = new Set<string>([
             getAddress(creatorToken).toLowerCase(),
             getAddress(batcherAddress).toLowerCase(),
+            ...(vaultAuxiliaryDeployBatcher ? [getAddress(vaultAuxiliaryDeployBatcher).toLowerCase()] : []),
             getAddress(expectedCreate2Deployer).toLowerCase(),
             getAddress(expected.vault).toLowerCase(),
             getAddress(expectedPayoutRouter).toLowerCase(),
@@ -5801,48 +5799,10 @@ function DeployVaultBatcher({
         const phase2Create2Calls = phase2PostCalls.filter(
           (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
         )
-        const phase2ConfigCalls = phase2PostCalls.filter((c) => !phase2Create2Calls.includes(c))
         if (phase2Create2Calls.length > 0) {
-          let create2Owner: Address | null = null
-          let ownerAuthorized = false
-          try {
-            const [create2OwnerRead, ownerAuthorizedRead] = await Promise.all([
-              publicClient.readContract({
-                address: expectedCreate2Deployer,
-                abi: CREATE2_DEPLOYER_AUTH_ABI,
-                functionName: 'owner',
-              }),
-              publicClient.readContract({
-                address: expectedCreate2Deployer,
-                abi: CREATE2_DEPLOYER_AUTH_ABI,
-                functionName: 'authorizedDeployers',
-                args: [owner],
-              }),
-            ])
-            create2Owner = getAddress(create2OwnerRead as Address)
-            ownerAuthorized = Boolean(ownerAuthorizedRead)
-          } catch (error) {
-            logger.warn('[DeployVault] create2 authorization precheck skipped', {
-              create2Deployer: expectedCreate2Deployer,
-              owner,
-              error: String(error),
-            })
-          }
-          if (create2Owner && !ownerAuthorized && !sameAddress(create2Owner, owner)) {
-            if (sameAddress(create2Owner, UNIVERSAL_CREATE2_FACTORY)) {
-              throw new Error(
-                `Configured create2 deployer ${expectedCreate2Deployer} blocks direct deploy calls from ${shortAddress(owner)}. ` +
-                  `Owner is the universal CREATE2 factory (${shortAddress(create2Owner)}), so authorized deployers cannot be updated. ` +
-                  `Rotate to a batcher wired to a deploy-capable create2 deployer, then retry.`,
-              )
-            }
-            throw new Error(
-              `Configured create2 deployer ${expectedCreate2Deployer} blocks direct deploy calls from ${shortAddress(owner)} ` +
-                `(owner ${shortAddress(create2Owner)}). Authorize ${shortAddress(owner)} via setAuthorizedDeployer, ` +
-                `or rotate to a deploy-capable batcher, then retry.`,
-            )
-          }
+          throw new Error('Deploy plan still contains direct create2 deploy calls. Refresh and retry with the deploy-capable batcher path.')
         }
+        const phase2ConfigCalls = phase2PostCalls
         // Keep phase2 deterministic: finalize-only (deposit + split + ownership transfer).
         // Move CREATE2 + post-config behind a batcher-primary phase3 UserOp.
         const phase2FinalizeCalls = [phase2FinalizeCall]

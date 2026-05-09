@@ -13,7 +13,7 @@ same state**.
 | --- | --- | --- |
 | AlfaClub auth state (`alfaclub_runtime_secret`) | Supabase (storage) | RLS deny-all |
 | Privy session-token rotation | Vercel cron — `/api/v1/alfaclub/chat-token-refresh` | `CRON_SECRET` |
-| Chat bridge tick (poll → command → reply) | Vercel cron — `/api/v1/alfaclub/chat-bridge-run` | `CRON_SECRET` + `ALFACLUB_CHAT_BRIDGE_ENABLED` |
+| Chat bridge tick (poll → command → reply) | Vercel cron — `/api/v1/alfaclub/chat-bridge-run` | `CRON_SECRET` + `ALFACLUB_CHAT_BRIDGE_ENABLED`; replies prefer `ALFACLUB_API_KEY` / `alfaclub_api_key` bot-token sends when configured |
 | `/hermit`, `/meme`, `/gmeow` creative replies | Pinata-hosted Open Claw (Hermit) agent | Open to any AlfaClub room user (bridge-side gates only). `HERMIT_ALLOWED_USERS` still gates non-AlfaClub surfaces (direct HTTP, Telegram). `HERMIT_PINATA_*` for Pinata transport. |
 | Eliza / XMTP / Telegram / Twitter / Discord runtimes | Railway long-lived agent | `AGENT_RUNTIME_ROLE=primary` |
 | Hermit persona / memory / Spanish style guide | Pinata workspace `/home/node/clawd/workspace/` | manual seed sync (see below) |
@@ -35,7 +35,10 @@ bridge alive:
 - `POST /api/v1/alfaclub/chat-bridge-run` — every minute. Reads the active
   `chat_jwt` from `alfaclub_runtime_secret`, polls room history, dispatches
   matching slash commands through the deterministic command executor, and
-  posts replies via AlfaClub's WebSocket transport.
+  posts replies through AlfaClub's stable bot-token endpoint when
+  `ALFACLUB_API_KEY` (or the local `alfaclub_api_key` alias) is configured.
+  If no bot token is configured, it falls back to the legacy WebSocket send
+  transport.
 - `POST /api/v1/alfaclub/chat-token-refresh` — every 30 minutes (`13,43 * * * *`).
   Calls `runAlfaClubPrivyRefreshOnce`, which exchanges the existing access /
   refresh tokens with Privy and writes the rotated identity token back into
@@ -124,6 +127,11 @@ prompts into copy / memes. Reads workspace seeds from
 The Vercel chat bridge calls Pinata over a single HTTP / WebSocket endpoint
 (`HERMIT_PINATA_CHAT_ENDPOINT` + `HERMIT_PINATA_BEARER_TOKEN`). This is the
 only AlfaClub-related path Pinata participates in.
+
+Reply transport is separate from Hermit generation. AlfaClub bot tokens
+(`alfa_bot_...`) are send-only, so they replace the fragile websocket reply
+send path but do not replace the read-side `chat_jwt` used to poll room
+history and ingest commands.
 
 **Pinata must NOT** write any `alfaclub_runtime_secret` row, run the Privy
 refresher, or otherwise touch AlfaClub auth. The boundary is enforced both

@@ -93,7 +93,7 @@ type PendingDeepLinkIntent = {
   peerName: string
 }
 
-function ChatWidgetInner() {
+function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
   const { isConnected, address } = useAccount()
   const { startDm, connect, status, identityAddress } = useXmtp()
 
@@ -523,7 +523,7 @@ function ChatWidgetInner() {
         )}
 
         {!showMobileBar && !activeMobileWindow && (
-          <div className="absolute top-4 right-4 pointer-events-auto">
+          <div className="absolute bottom-20 left-4 pointer-events-auto">
             <ChatBar
               expanded={false}
               variant="mobile"
@@ -538,8 +538,27 @@ function ChatWidgetInner() {
         )}
       </div>
 
-      <div className="fixed bottom-4 left-5 z-50 hidden md:flex items-end gap-3 pointer-events-none">
-        {/* Chat windows — stack from left to right */}
+      <div
+        className={`fixed bottom-4 z-50 hidden items-end gap-3 pointer-events-none transition-[left] duration-200 md:flex motion-reduce:transition-none ${
+          props.availabilityRailExpanded
+            ? 'left-[calc(1rem+320px+0.75rem)] xl:left-[calc(1rem+336px+0.75rem)]'
+            : 'left-5'
+        }`}
+      >
+        <div className="pointer-events-auto motion-safe:animate-slide-up">
+          <ChatBar
+            expanded={barExpanded}
+            variant="desktop"
+            onToggle={() => {
+              setBarExpanded((prev) => !prev)
+              maybeConnectMessaging()
+            }}
+            onOpenChat={handleOpenChat}
+            onNewDm={handleNewDm}
+          />
+        </div>
+
+        {/* Chat windows — stack from left to right, beside the bottom dock. */}
         {openWindows.map((win) => (
           <div key={win.id} className="pointer-events-auto motion-safe:animate-slide-up">
             <ChatWindow
@@ -669,7 +688,7 @@ function ChatWidgetInner() {
  * Chat widget dock. The app layout owns the XMTP provider so directory pages,
  * the availability rail, and the dock all share one client.
  */
-export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
+export function ChatWidget(props: { initiallyActivated?: boolean; availabilityRailExpanded?: boolean } = {}) {
   const { chatActivated, setChatActivated } = useChatActivation({ initiallyActivated: props.initiallyActivated })
 
   if (!chatActivated) {
@@ -682,5 +701,5 @@ export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
     )
   }
 
-  return <ChatWidgetInner />
+  return <ChatWidgetInner availabilityRailExpanded={props.availabilityRailExpanded} />
 }

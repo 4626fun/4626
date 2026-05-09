@@ -209,7 +209,7 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
   // -------------------------- Body validation --------------------------
 
   it('returns 400 invalid_body when body is null', async () => {
-    mocks.readBoundedJsonObjectBody.mockResolvedValue(null)
+    mocks.readBoundedJsonObjectBody.mockResolvedValue(null as unknown as Record<string, unknown>)
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await handler(req, res)

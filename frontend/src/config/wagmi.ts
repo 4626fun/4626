@@ -111,17 +111,75 @@ function buildReadTransport(url: string) {
 
 type InjectedProviderWindow = { ethereum?: unknown } | undefined
 
+type Eip6963ProviderDetail = {
+  info?: {
+    rdns?: string
+    name?: string
+  }
+  provider?: unknown
+}
+
+const eip6963Providers = new Map<string, Eip6963ProviderDetail>()
+let eip6963DiscoveryStarted = false
+
+function rememberEip6963Provider(detail: Eip6963ProviderDetail | null | undefined) {
+  const provider = detail?.provider
+  if (!provider) return
+  const rdns = String(detail?.info?.rdns ?? '').trim().toLowerCase()
+  const name = String(detail?.info?.name ?? '').trim().toLowerCase()
+  const key = rdns || name
+  if (!key) return
+  eip6963Providers.set(key, detail)
+}
+
+function requestEip6963Providers() {
+  if (!IS_BROWSER || typeof window === 'undefined') return
+  try {
+    window.dispatchEvent(new Event('eip6963:requestProvider'))
+  } catch {
+    // EIP-6963 is best-effort; fall back to legacy injected globals.
+  }
+}
+
+function ensureEip6963Discovery() {
+  if (!IS_BROWSER || typeof window === 'undefined' || eip6963DiscoveryStarted) return
+  eip6963DiscoveryStarted = true
+  window.addEventListener('eip6963:announceProvider', ((event: CustomEvent<Eip6963ProviderDetail>) => {
+    rememberEip6963Provider(event.detail)
+  }) as EventListener)
+  requestEip6963Providers()
+}
+
+function findEip6963Provider(predicate: (detail: Eip6963ProviderDetail) => boolean): any | undefined {
+  ensureEip6963Discovery()
+  requestEip6963Providers()
+  for (const detail of eip6963Providers.values()) {
+    try {
+      if (predicate(detail)) return detail.provider as any
+    } catch {
+      // ignore malformed provider detail
+    }
+  }
+  return undefined
+}
+
 function readInjectedProvidersFromWindow(windowRef: InjectedProviderWindow): any[] {
   if (!windowRef) return []
   const directRabby = (windowRef as any)?.rabby
+  const eip6963Rabby = findEip6963Provider((detail) => {
+    const rdns = String(detail.info?.rdns ?? '').trim().toLowerCase()
+    const name = String(detail.info?.name ?? '').trim().toLowerCase()
+    return rdns === 'io.rabby' || name.includes('rabby') || (detail.provider as any)?.isRabby === true
+  })
   try {
     const ethereum = (windowRef as any)?.ethereum
     const providers = Array.isArray(ethereum?.providers) ? ethereum.providers : []
     const out = providers.length > 0 ? [...providers] : ethereum ? [ethereum] : []
+    if (eip6963Rabby) out.unshift(eip6963Rabby)
     if (directRabby) out.unshift(directRabby)
     return out
   } catch {
-    return directRabby ? [directRabby] : []
+    return [directRabby, eip6963Rabby].filter(Boolean)
   }
 }
 
@@ -133,6 +191,17 @@ function findNamedInjectedProvider(windowRef: InjectedProviderWindow, predicate:
     } catch {
       return false
     }
+  })
+}
+
+function findTargetedEip6963Provider(target: 'rabby' | 'metamask'): any | undefined {
+  return findEip6963Provider((detail) => {
+    const rdns = String(detail.info?.rdns ?? '').trim().toLowerCase()
+    const name = String(detail.info?.name ?? '').trim().toLowerCase()
+    if (target === 'rabby') {
+      return rdns === 'io.rabby' || name.includes('rabby') || (detail.provider as any)?.isRabby === true
+    }
+    return rdns === 'io.metamask' || name.includes('metamask')
   })
 }
 
@@ -188,6 +257,7 @@ const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
 
 function buildConnectors() {
   const onWaitlistAuthPath = IS_BROWSER && isWaitlistAuthPath(window.location.pathname)
+  const providerCollision = detectEthereumProviderCollision()
   const baseConnectors: any[] = [
     coinbaseWallet({
       appName: 'Creator Vaults',
@@ -201,13 +271,29 @@ function buildConnectors() {
     return baseConnectors as any
   }
 
-  // Keep waitlist/email-auth surfaces extension-light to avoid injected-provider
-  // races and analytics retry noise before users opt into wallet linking.
-  baseConnectors.push(
-    metaMask({
-      enableAnalytics: false,
-    }),
-  )
+  if (!providerCollision.shouldDisableInjectedConnector) {
+    baseConnectors.push(
+      metaMask({
+        enableAnalytics: false,
+      }),
+    )
+  } else {
+    baseConnectors.push(
+      injected({
+        target: {
+          id: 'io.metamask',
+          name: 'MetaMask',
+          provider(window) {
+            return (
+              findTargetedEip6963Provider('metamask') ??
+              findNamedInjectedProvider(window, (provider) => provider?.isMetaMask === true && provider?.isRabby !== true)
+            )
+          },
+        },
+        shimDisconnect: true,
+      }),
+    )
+  }
 
   baseConnectors.push(
     injected({
@@ -215,7 +301,7 @@ function buildConnectors() {
         id: 'rabby',
         name: 'Rabby',
         provider(window) {
-          return findNamedInjectedProvider(window, (provider) => provider?.isRabby === true)
+          return findTargetedEip6963Provider('rabby') ?? findNamedInjectedProvider(window, (provider) => provider?.isRabby === true)
         },
       },
       shimDisconnect: true,
@@ -225,8 +311,7 @@ function buildConnectors() {
   // Some wallet extensions install a getter-only `window.ethereum`, which causes
   // other extensions to throw during provider injection. Avoid injected connector
   // in that state (or when multiple injected providers conflict); users can still
-  // connect via Coinbase Wallet / Base app, MetaMask, or targeted connectors like Rabby.
-  const providerCollision = detectEthereumProviderCollision()
+  // connect via Coinbase Wallet / Base app or targeted connectors like Rabby.
   const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !providerCollision.shouldDisableInjectedConnector
   const connectors = shouldUseInjected
     ? [...baseConnectors, injected({ shimDisconnect: true })]

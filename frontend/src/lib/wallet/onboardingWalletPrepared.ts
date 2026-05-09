@@ -1,6 +1,5 @@
 import { recoverAddress } from 'viem'
 
-import { classifyOwnerApprovalError } from './onboardingWalletErrors'
 import {
   classifyWebAuthnOwnerSignature,
   hexByteLength,
@@ -378,10 +377,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
   }
   const signatureBytes = hexByteLength(signature)
   const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
-  const wrappedSecp256k1SignatureBytes =
-    wrappedSignature && hexByteLength(wrappedSignature.signatureData) === 65
-      ? hexByteLength(wrappedSignature.signatureData)
-      : null
   const webAuthnClassification = classifyWebAuthnOwnerSignature(signature)
 
   let preparedCallsSignerAddress: `0x${string}` | null = null

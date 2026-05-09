@@ -90,6 +90,7 @@ function makeFlags(overrides: Partial<AlfaClubChatBridgeFlags> = {}): AlfaClubCh
     roomId: '1043',
     jwt: 'jwt-current',
     ingestJwt: null,
+    botToken: null,
     apiBaseUrl: 'https://api.alfaclub.app',
     apiProxyUrl: null,
     apiProxySecret: null,

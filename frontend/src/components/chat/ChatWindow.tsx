@@ -18,6 +18,7 @@ import {
   MessageCircle,
   Minus,
   RotateCcw,
+  Send,
   ShieldCheck,
   UserRound,
   X,

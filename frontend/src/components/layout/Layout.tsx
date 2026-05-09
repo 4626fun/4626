@@ -13,14 +13,9 @@ import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
 
-const LazyChatWidget = lazy(async () => {
-  const mod = await import('../chat/ChatWidget')
-  return { default: mod.ChatWidget }
-})
-
-const LazyChatAvailabilityRail = lazy(async () => {
-  const mod = await import('../chat/ChatAvailabilityRail')
-  return { default: mod.ChatAvailabilityRail }
+const LazyChatSurface = lazy(async () => {
+  const mod = await import('../chat/ChatSurface')
+  return { default: mod.ChatSurface }
 })
 
 const LazyAccountWalletRail = lazy(async () => {
@@ -279,8 +274,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
 
           {/* Chat discovery and dock — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
           <Suspense fallback={null}>
-            <LazyChatAvailabilityRail />
-            <LazyChatWidget initiallyActivated />
+            <LazyChatSurface />
           </Suspense>
         </XmtpChatProvider>
       ) : (

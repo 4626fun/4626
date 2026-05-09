@@ -1431,7 +1431,8 @@ describe('preflightOwnerKeyMismatch (raw + EIP-191 dual recovery)', () => {
     expect(outcome.kind).toBe('skipped_self_auth_session_key')
     if (outcome.kind === 'skipped_self_auth_session_key') {
       expect(outcome.parsedOwnerIndex).toBe(OWNER_INDEX)
-      expect(outcome.parsedOwnerAddress.toLowerCase()).toBe(
+      expect(outcome.parsedOwnerAddress).not.toBeNull()
+      expect(outcome.parsedOwnerAddress?.toLowerCase()).toBe(
         onChainOwnerAccount.address.toLowerCase(),
       )
       // Recovered keys are still surfaced for telemetry — they just don't

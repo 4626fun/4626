@@ -74,6 +74,7 @@ export const BASE_DEFAULTS = {
   // batcher's onchain getters.
   universalBytecodeStore: addr('Bd21c58f3D59c6E90a6bCCe462c68670F124a792'),
   universalCreate2DeployerFromStore: addr('24c80676E03f4c160bfa769589280fE9f9509eCb'),
+  vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
   vaultActivationBatcher: addr('681DC69607f6E8848a56819ce8C6d591E764187a'),
