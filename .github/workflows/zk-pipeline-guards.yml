@@ -122,28 +122,8 @@ jobs:
         run: forge test --match-contract AmoePlonkVerifier -vv
 
       - name: Run LotteryAmoeRouter suite
-        # 34/35 baseline. ONE specific test is allowed to fail right now
-        # because it reproduces on main and is unrelated to ZK:
-        #
-        #   test/zk/LotteryAmoeRouter.t.sol:LotteryAmoeRouterTest
-        #   :: test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary()
-        #   reverts NotPublisher() on a deadline-buffer boundary case.
-        #
-        # Anything else failing — OR this test starting to pass — means CI
-        # should re-evaluate the allowlist. The codex bot caught a real
-        # weakness in the previous version of this guard
-        # (https://github.com/wenakita/4626/pull/410#discussion_r3155849944):
-        # gating only on `count > 1` allowed a different test to regress
-        # silently as long as the baseline failure was fixed at the same
-        # time. We now compare the EXACT failure set against an explicit
-        # allowlist.
-        env:
-          # The single (suite_path, test_name) pair that's currently allowed
-          # to fail. Update this list (or remove it entirely) when the
-          # baseline failure is fixed; the guard will tell you when that
-          # happens.
-          ALLOWED_FAILURES: |
-            test/zk/LotteryAmoeRouter.t.sol:LotteryAmoeRouterTest::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary()
+        # No known baseline failures remain in this suite. Keep
+        # ALLOWED_FAILURES empty so any failure is treated as a regression.
         run: |
           set +e
           forge test --match-contract LotteryAmoe --json > /tmp/result.json

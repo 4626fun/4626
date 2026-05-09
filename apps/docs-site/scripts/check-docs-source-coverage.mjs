@@ -35,6 +35,7 @@ const EXPLICIT_OUT_OF_SCOPE = [
   // Internal design and implementation readmes.
   'design/base-brand-archive/README.md',
   'frontend/public/protocols/README.md',
+  'frontend/public/assets/README_ASSETS.md',
   // Internal design/typography working notes, not public docs-site content.
   'DESIGN_REFINEMENT.md',
   'TYPOGRAPHY_AUDIT.md',
