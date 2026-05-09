@@ -56,9 +56,6 @@ vi.mock('framer-motion', () => ({
 }))
 
 let mockPrivyAuthenticated = true
-let mockPrivyUser: unknown = null
-let mockEmbeddedEoaAddress: string | null = null
-let mockWaitlistSubAccountFlowEnabled = false
 const mockGetAccessToken = vi.fn<() => Promise<string | null>>(async () => 'privy-token-default')
 const mockPrivyLogout = vi.fn(async () => undefined)
 const mockLinkEmail = vi.fn(async () => undefined)
@@ -80,7 +77,6 @@ const mockWagmiWalletClientState = {
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
     authenticated: mockPrivyAuthenticated,
-    user: mockPrivyUser,
     getAccessToken: mockGetAccessToken,
     logout: mockPrivyLogout,
     linkEmail: mockLinkEmail,
@@ -137,41 +133,7 @@ vi.mock('@/lib/privy/client', () => ({
 vi.mock('@/lib/privy/embeddedWallet', () => ({
   extractPrivyWalletsFromUser: () => [],
   useEnsurePrivyEmbeddedWallet: () => ({
-    embeddedEoaAddress: mockEmbeddedEoaAddress,
     ensureEmbeddedWallet: async () => ({ address: '0x0000000000000000000000000000000000000042' }),
-  }),
-}))
-
-vi.mock('@/lib/flags/featureFlags', () => ({
-  debugLogsFlag: () => false,
-  injectedConnectorFlag: () => false,
-  useropTelemetryFlag: () => false,
-  waitlistSubAccountFlowFlag: () => mockWaitlistSubAccountFlowEnabled,
-  zoraGlobalWalletConnectorFlag: () => false,
-}))
-
-vi.mock('@/lib/base/baseBuilderCodes', () => ({
-  DATA_SUFFIX: undefined,
-  ERC_8021_MARKER_HEX: '80218021802180218021802180218021',
-  appendBuilderSuffixToHex: (data: unknown) => data,
-  appendDataSuffixToHex: (data: unknown) => data,
-  hasErc8021RepeatingMarker: () => false,
-  isBaseChain: () => true,
-  payloadEndsWithDataSuffix: () => false,
-  resolveBuilderCodes: () => [],
-  resolveDataSuffix: () => undefined,
-  warnGlobalWagmiDataSuffixBehavior: () => undefined,
-}))
-
-vi.mock('@/hooks/useSubAccountSetup', () => ({
-  useSubAccountSetup: () => ({
-    setupSubAccount: async () => ({
-      parentAddress: '0x1111111111111111111111111111111111111111',
-      subAccountAddress: '0x2222222222222222222222222222222222222222',
-    }),
-    isSettingUp: false,
-    lastStage: null,
-    embeddedWallet: { address: mockEmbeddedEoaAddress },
   }),
 }))
 
@@ -253,9 +215,6 @@ const WAITLIST_BOOTSTRAP_PAYLOAD = {
 describe('WaitlistFlow simplified completion UI', () => {
   beforeEach(() => {
     mockPrivyAuthenticated = true
-    mockPrivyUser = null
-    mockEmbeddedEoaAddress = null
-    mockWaitlistSubAccountFlowEnabled = false
     collisionStateRef.current = {
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
@@ -311,91 +270,6 @@ describe('WaitlistFlow simplified completion UI', () => {
     ).toBe(false)
   })
 
-  it('does not route to Base App setup from a non-embedded Privy user wallet', async () => {
-    mockWaitlistSubAccountFlowEnabled = true
-    mockPrivyUser = {
-      wallet: {
-        address: '0x2222222222222222222222222222222222222222',
-        walletClientType: 'metamask',
-        chainType: 'ethereum',
-      },
-    }
-    mockEmbeddedEoaAddress = null
-
-    render(
-      <MemoryRouter>
-        <WaitlistFlow />
-      </MemoryRouter>,
-    )
-
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
-    expect(screen.queryByTestId('waitlist-connect-base-app')).toBeNull()
-  })
-
-  it('requires Base App setup again after a skipped account is replaced by another eligible account', async () => {
-    mockWaitlistSubAccountFlowEnabled = true
-    mockEmbeddedEoaAddress = '0x0000000000000000000000000000000000000042'
-    let bootstrapPayload = WAITLIST_BOOTSTRAP_PAYLOAD
-    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
-      if (input.startsWith('/api/waitlist/bootstrap')) {
-        return jsonResponse(bootstrapPayload) as any
-      }
-      if (input.startsWith('/api/auth/privy')) {
-        return jsonResponse({ success: true }) as any
-      }
-      if (input.startsWith('/api/auth/handoff/create')) {
-        return jsonResponse({
-          success: true,
-          data: { code: 'handoff-code', expiresAt: '2099-01-01T00:00:00.000Z' },
-        }) as any
-      }
-      throw new Error(`Unhandled apiFetch call: ${input}`)
-    })
-    const queryClient = new QueryClient({
-      defaultOptions: {
-        queries: { retry: false },
-        mutations: { retry: false },
-      },
-    })
-    const renderFlow = () => (
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <WaitlistFlow />
-        </MemoryRouter>
-      </QueryClientProvider>
-    )
-
-    const view = rtlRender(renderFlow())
-
-    expect(await screen.findByTestId('waitlist-connect-base-app')).toBeTruthy()
-    fireEvent.click(screen.getByTestId('skip-base-app-button'))
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
-
-    await act(async () => {
-      mockPrivyAuthenticated = false
-      view.rerender(renderFlow())
-    })
-    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-
-    bootstrapPayload = {
-      success: true,
-      data: {
-        requiresPrivyAuth: false,
-        ...WAITLIST_ACCOUNT,
-        privyUserId: 'did:privy:second-user',
-        email: 'second@example.com',
-      },
-    }
-    await act(async () => {
-      mockPrivyAuthenticated = true
-      mockEmbeddedEoaAddress = '0x0000000000000000000000000000000000000043'
-      view.rerender(renderFlow())
-    })
-
-    expect(await screen.findByTestId('waitlist-connect-base-app')).toBeTruthy()
-    expect(screen.queryByText(/activate your account/i)).toBeNull()
-  })
-
   it('keeps auth state to a single heading stack', () => {
     mockPrivyAuthenticated = false
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
@@ -432,10 +306,10 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
-    expect(screen.getByText(/enable 4626 signing|finish 4626 signing setup/i)).toBeTruthy()
+    expect(screen.getByText(/finish 4626 signing setup/i)).toBeTruthy()
     // Completed setup stage still displays the verified identity row.
     expect(screen.getByText(/0x1111…1111/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /reconnect via base account|approve signing access|connect owner wallet|switch wallet to current owner/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /switch wallet to current owner|reconnect via base account|approve signing access|connect owner wallet/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^reset$/i })).toBeTruthy()
   })
 

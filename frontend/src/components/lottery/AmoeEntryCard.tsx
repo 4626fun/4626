@@ -119,27 +119,18 @@ function XIcon({ className }: { className?: string }) {
   )
 }
 
-function formatPacificDate(date = new Date()): string {
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/Los_Angeles',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date)
-}
-
-function buildAmoeShareText(date = new Date()): string {
+function buildAmoeShareText(): string {
   return [
-    `Today is ${formatPacificDate(date)} Pacific Time.`,
-    'I am checking in as a real person for 4626 Alternative Method of Entry.',
+    'Checking in for 4626 Alternative Method of Entry.',
     'No purchase necessary.',
-    'Join 4626 and earn points for free jackpot entries:',
+    'Earn points through eligible actions and use them for free jackpot entries.',
+    'Join me:',
   ].join(' ')
 }
 
-function buildXIntentUrl(date = new Date()): string {
+function buildXIntentUrl(): string {
   const params = new URLSearchParams({
-    text: buildAmoeShareText(date),
+    text: buildAmoeShareText(),
     url: getMarketingBaseUrl(),
   })
   return `https://twitter.com/intent/tweet?${params.toString()}`
@@ -153,7 +144,6 @@ function openXPost() {
 export const __testHooks = {
   buildAmoeShareText,
   buildXIntentUrl,
-  formatPacificDate,
 }
 
 export function AmoeEntryCard(props: {
@@ -172,8 +162,8 @@ export function AmoeEntryCard(props: {
 
   const [credits, setCredits] = useState(0)
   const [creditsPerEntry, setCreditsPerEntry] = useState(100)
-  const [, setEntriesAvailable] = useState(0)
-  const [, setNextEntryAtCredits] = useState(100)
+  const [entriesAvailable, setEntriesAvailable] = useState(0)
+  const [nextEntryAtCredits, setNextEntryAtCredits] = useState(100)
   const [jackpotUsd, setJackpotUsd] = useState<string | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)

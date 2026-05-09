@@ -62,7 +62,7 @@ import {
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
-import { filterHiddenInjectedConnectors, selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
+import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
@@ -1175,6 +1175,10 @@ export function Swap() {
       signMessage: (args) => executionWalletClient.signMessage(args),
     }
   }, [executionWalletClient])
+  const swapAmoeWalletAddress = useMemo<Address | null>(() => {
+    if (executionMode === 'eoa') return executionSignerAddress ?? null
+    return null
+  }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const canonicalExecutionSetupRequired =
@@ -1243,9 +1247,7 @@ export function Swap() {
   useEffect(() => {
     if (connectGate.state !== 'wallet-required' || authBusy || swapConnectBusy) return
 
-    const preferred = selectPreferredWalletConnector(
-      filterHiddenInjectedConnectors(wagmiConnectors, shouldHideInjectedConnector),
-    )
+    const preferred = selectPreferredWalletConnector(wagmiConnectors)
     const connectorKey = preferred ? `${preferred.id}:${preferred.name}` : 'any'
     const attemptKey = `${authAddress ?? 'session'}:${executionMode}:${connectorKey}`
     if (walletRecoveryAttemptKeyRef.current === attemptKey) return
@@ -1262,7 +1264,6 @@ export function Swap() {
     connectGate.state,
     executionMode,
     recoverExistingWalletConnection,
-    shouldHideInjectedConnector,
     swapConnectBusy,
     wagmiConnectors,
   ])
@@ -1898,7 +1899,7 @@ export function Swap() {
                         ← Back to swap
                       </button>
                       <AmoeEntryCard
-                        walletAddress={null}
+                        walletAddress={swapAmoeWalletAddress}
                         creatorCoin={null}
                         walletClientOverride={swapAmoeSigningClient}
                       />
