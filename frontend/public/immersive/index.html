@@ -17,8 +17,27 @@
       property="og:description"
       content="ERC-4626 creator vaults. Deposit alongside the strategists you trust."
     />
+    <!-- theme-color matches the immersive page's actual --bg (#06070d), so
+         the mobile browser chrome blends with the rendered page background.
+         The manifest's theme_color (#020204) governs the PWA shell, which
+         is a separate surface. -->
     <meta name="theme-color" content="#06070d" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090a12'/%3E%3Cpath d='M8 19h7v4h3v-4h2v-3h-2V8h-3.6L8 16.6V19zm7-3h-4l4-5v5z' fill='%23E8B964'/%3E%3C/svg%3E" />
+    <meta name="msapplication-TileColor" content="#020204" />
+
+    <!-- Favicon set from the v2 brand kit. NB: this page declares
+         <base href="/immersive/">, so we use root-relative paths
+         ("/assets/...") to bypass the base and hit the canonical asset
+         locations under /assets/. -->
+    <link rel="icon" href="/assets/favicon.ico?v=2" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/assets/favicon-48x48.png" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/assets/favicon-64x64.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2" />
+    <link rel="mask-icon" href="/assets/safari-pinned-tab-v2.svg" color="#0000FF" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
