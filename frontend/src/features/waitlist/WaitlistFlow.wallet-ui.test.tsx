@@ -130,6 +130,12 @@ vi.mock('@/lib/privy/client', () => ({
   usePrivyClientStatus: () => 'ready',
 }))
 
+vi.mock('@/lib/base/baseBuilderCodes', () => ({
+  DATA_SUFFIX: undefined,
+  resolveDataSuffix: () => undefined,
+  warnGlobalWagmiDataSuffixBehavior: () => undefined,
+}))
+
 vi.mock('@/lib/privy/embeddedWallet', () => ({
   extractPrivyWalletsFromUser: () => [],
   useEnsurePrivyEmbeddedWallet: () => ({
