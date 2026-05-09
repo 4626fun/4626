@@ -1,0 +1,9 @@
+/*
+ * frontend/public/immersive/refinement.css
+ *
+ * Stub. The canonical refinement.css holds polish/typography overrides
+ * applied on top of style.css. It was never committed to git (referenced
+ * by index.html since fc884c1 but absent from every branch). This empty
+ * stub stops the production MIME-type errors; replace wholesale when the
+ * real file is recovered from the design team's local working tree.
+ */
