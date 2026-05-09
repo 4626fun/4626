@@ -4056,3 +4056,255 @@ html body.is-folding > header {
     opacity: 0.7;
   }
 }
+
+/* =============================================================
+   Mobile optimizations (added in feat/mobile-optimization)
+   ============================================================= */
+
+/* ---- Horizontal overflow guard ----------------------------------
+   The body already had `overflow-x: clip` to prevent horizontal scroll
+   without breaking position:sticky / window.scrollY. But position:fixed
+   descendants (e.g. .bg-layers) escape body's clip and can re-introduce
+   horizontal scroll on the <html> element. We add overflow-x: clip on
+   <html> too so any stray fixed/absolute layer truly cannot widen the
+   document. `clip` (not `hidden`) preserves the scroll container intact. */
+html {
+  overflow-x: clip;
+}
+
+/* ---- Constrain decorative starfield/inset layers on mobile ------
+   .reveal__starlayer uses `inset: -10%` for a soft over-bleed at desktop
+   sizes. On a 390px viewport that translates to ~78px of overflow on
+   each side, which combined with overflow:visible on parents is one of
+   the main sources of mobile horizontal overflow. Tighten the bleed
+   on small screens so layers stay inside the viewport. */
+@media (max-width: 720px) {
+  .reveal__starlayer { inset: 0; }
+}
+
+/* ---- iOS safe-area insets ---------------------------------------
+   Account for notch / dynamic island / home indicator so floating UI
+   doesn't get clipped or sit underneath system gestures. */
+.nav {
+  padding-top: max(22px, env(safe-area-inset-top, 0px));
+  padding-left: max(clamp(24px, 4vw, 56px), env(safe-area-inset-left, 0px));
+  padding-right: max(clamp(24px, 4vw, 56px), env(safe-area-inset-right, 0px));
+}
+#audio-toggle {
+  bottom: max(clamp(14px, 2vw, 24px), env(safe-area-inset-bottom, 0px));
+  right: max(clamp(14px, 2vw, 24px), env(safe-area-inset-right, 0px));
+}
+.foot__row {
+  padding-bottom: max(0px, env(safe-area-inset-bottom, 0px));
+}
+
+/* ---- Mobile hamburger trigger -----------------------------------
+   Hidden by default (desktop); shown only when the inline links are
+   collapsed (<= 740px). Sized 44x44 to meet WCAG 2.2 / Apple HIG
+   minimum tap-target guidance. */
+.nav__hamburger {
+  display: none;
+  position: relative;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.nav__hamburger:hover { border-color: rgba(255, 255, 255, 0.22); }
+.nav__hamburger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(232, 185, 100, 0.5);
+}
+.nav__hamburger-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 1.5px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform 0.28s var(--ease), opacity 0.18s var(--ease), top 0.28s var(--ease);
+}
+.nav__hamburger-bar:nth-child(1) { top: 14px; }
+.nav__hamburger-bar:nth-child(2) { top: 21px; }
+.nav__hamburger-bar:nth-child(3) { top: 28px; }
+.nav__hamburger.is-open .nav__hamburger-bar:nth-child(1) {
+  top: 21px;
+  transform: rotate(45deg);
+}
+.nav__hamburger.is-open .nav__hamburger-bar:nth-child(2) { opacity: 0; }
+.nav__hamburger.is-open .nav__hamburger-bar:nth-child(3) {
+  top: 21px;
+  transform: rotate(-45deg);
+}
+@media (max-width: 740px) {
+  .nav__hamburger { display: inline-flex; }
+  /* On mobile, hide Launch App pill in the nav (waitlist CTA lives in
+     the drawer + the section below the hero). The hamburger is the
+     single mobile entry point. */
+  .nav__cta { display: none; }
+  /* Slightly tighter horizontal padding on the nav itself so the
+     hamburger has room to breathe at the right edge. */
+  .nav { gap: 12px; }
+}
+
+/* ---- Mobile nav drawer ------------------------------------------
+   Full-viewport overlay shown when hamburger is tapped. Uses a slide-in
+   panel from the right; backdrop is a translucent blur so the page
+   feels paused, not replaced. */
+.nav-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;     /* above audio toggle (60) and fold overlay */
+  background: rgba(6, 7, 13, 0);
+  backdrop-filter: blur(0px);
+  -webkit-backdrop-filter: blur(0px);
+  transition: background 0.28s var(--ease), backdrop-filter 0.28s var(--ease);
+  display: none;
+}
+@media (max-width: 740px) {
+  .nav-drawer { display: block; }
+}
+.nav-drawer[hidden] { display: none !important; }
+.nav-drawer.is-open {
+  background: rgba(6, 7, 13, 0.78);
+  backdrop-filter: blur(16px) saturate(1.1);
+  -webkit-backdrop-filter: blur(16px) saturate(1.1);
+}
+.nav-drawer__panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(86vw, 380px);
+  background: linear-gradient(180deg,
+    rgba(14, 13, 22, 0.98) 0%,
+    rgba(10, 9, 18, 0.98) 100%);
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  padding:
+    max(24px, env(safe-area-inset-top, 0px))
+    max(20px, env(safe-area-inset-right, 0px))
+    max(24px, env(safe-area-inset-bottom, 0px))
+    20px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0.24, 1);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.nav-drawer.is-open .nav-drawer__panel { transform: translateX(0); }
+
+.nav-drawer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.nav-drawer__close {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
+}
+.nav-drawer__close:hover { border-color: rgba(255, 255, 255, 0.22); }
+.nav-drawer__close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(232, 185, 100, 0.5);
+}
+
+.nav-drawer__links {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+.nav-drawer__links a {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  padding: 0 4px;
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: color 0.2s var(--ease), padding-left 0.2s var(--ease);
+}
+.nav-drawer__links a:hover,
+.nav-drawer__links a:active {
+  color: var(--gold);
+  padding-left: 8px;
+}
+.nav-drawer__links a:last-child { border-bottom: 0; }
+
+.nav-drawer__cta {
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.nav-drawer__social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.nav-drawer__social a {
+  color: var(--ink-3);
+  transition: color 0.2s var(--ease);
+}
+.nav-drawer__social a:hover { color: var(--ink); }
+
+/* When the drawer is open, lock body scroll so the page doesn't move
+   underneath the panel. Using both overflow:hidden and a position:fixed
+   trick to handle Mobile Safari's quirky scroll behavior. */
+html.nav-drawer-open,
+html.nav-drawer-open body {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ---- Mobile-specific spacing tweaks for hero copy ---------------
+   On iPhone-class viewports the absolute nav (~80px) plus the 100vh
+   3D vault canvas push the headline well below the first scroll. Pull
+   the headline copy up a touch so the eyebrow + first phrase peek above
+   the fold (signaling there's more to scroll). */
+@media (max-width: 480px) {
+  .hero__copy {
+    padding-top: 0 !important;
+    padding-bottom: 32px !important;
+  }
+  /* Slightly tighter hero ctas spacing */
+  .hero__ctas { gap: 10px !important; }
+  .hero__ctas .btn { padding: 14px 20px !important; font-size: 13px !important; }
+}
+
+/* ---- Reduced motion: drawer animation ---------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .nav-drawer,
+  .nav-drawer__panel { transition: none; }
+}

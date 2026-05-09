@@ -63,13 +63,78 @@
         <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
       </nav>
 
-      <a href="/#cta" class="pill pill--ghost" id="launch-app-btn">
+      <a href="/#cta" class="pill pill--ghost nav__cta" id="launch-app-btn">
         <span>Launch App</span>
         <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
           <path d="M4 4h8v8M4 12 12 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
       </a>
+
+      <!-- Mobile hamburger trigger — only visible <=740px via CSS -->
+      <button
+        type="button"
+        class="nav__hamburger"
+        id="nav-hamburger"
+        aria-label="Open menu"
+        aria-expanded="false"
+        aria-controls="nav-drawer"
+      >
+        <span class="nav__hamburger-bar" aria-hidden="true"></span>
+        <span class="nav__hamburger-bar" aria-hidden="true"></span>
+        <span class="nav__hamburger-bar" aria-hidden="true"></span>
+      </button>
     </header>
+
+    <!-- Mobile nav drawer — full-viewport overlay opened by the hamburger.
+         Lives outside <header.nav> so it can take z-index above everything
+         else (audio toggle, fold overlay, etc). Only rendered/animated on
+         small viewports; on desktop it stays display:none via CSS. -->
+    <div
+      class="nav-drawer"
+      id="nav-drawer"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Site navigation"
+      hidden
+    >
+      <div class="nav-drawer__panel">
+        <div class="nav-drawer__head">
+          <span class="brand brand--small">
+            <img class="brand__mark" src="/assets/logo-mark.svg" alt="" width="22" height="22" decoding="async" />
+            <span class="brand__word">4626<span class="brand__dot">.</span>fun</span>
+          </span>
+          <button
+            type="button"
+            class="nav-drawer__close"
+            id="nav-drawer-close"
+            aria-label="Close menu"
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M6 6l12 12M6 18 18 6"/>
+            </svg>
+          </button>
+        </div>
+        <nav class="nav-drawer__links" aria-label="Mobile primary">
+          <a href="/#how">How it works</a>
+          <a href="/#features">Features</a>
+          <a href="/risks">Risks</a>
+          <a href="/security">Security</a>
+          <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
+        </nav>
+        <a href="/waitlist" class="btn btn--gold nav-drawer__cta">
+          <span>Join the waitlist</span>
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </a>
+        <div class="nav-drawer__social" aria-label="Social links">
+          <a href="https://x.com/4626fun" target="_blank" rel="noopener noreferrer">X</a>
+          <a href="https://t.me/fun4626" target="_blank" rel="noopener noreferrer">Telegram</a>
+          <a href="https://discord.com/invite/4626" target="_blank" rel="noopener noreferrer">Discord</a>
+          <a href="https://github.com/4626fun" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </div>
+      </div>
+    </div>
 
     <!-- HERO -->
     <main>
@@ -797,6 +862,77 @@
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeFold(); });
       })();
     </script>
+
+    <!-- Mobile nav drawer: hamburger button toggles a full-viewport drawer
+         containing primary nav + waitlist CTA + social links. Trapped focus
+         and Escape-to-close are kept simple here — a dedicated focus-trap
+         lib would be overkill for a 5-link menu. -->
+    <script>
+      (function () {
+        const trigger = document.getElementById('nav-hamburger');
+        const drawer = document.getElementById('nav-drawer');
+        const closeBtn = document.getElementById('nav-drawer-close');
+        if (!trigger || !drawer) return;
+        const linkEls = drawer.querySelectorAll('a');
+        // Track the pending hide-after-close-transition timer so a fast
+        // close → reopen sequence (within the 280ms transition window)
+        // doesn't let a stale timeout forcibly hide an active drawer.
+        let hideTimer = null;
+
+        function open() {
+          // Cancel any pending close-hide before reopening; otherwise the
+          // stale timer fires post-reopen and toggles drawer.hidden=true
+          // while aria-expanded/is-open/body-lock still report open.
+          if (hideTimer !== null) { clearTimeout(hideTimer); hideTimer = null; }
+          drawer.hidden = false;
+          // double rAF so the hidden->visible transition actually animates
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            drawer.classList.add('is-open');
+          }));
+          trigger.setAttribute('aria-expanded', 'true');
+          trigger.classList.add('is-open');
+          document.documentElement.classList.add('nav-drawer-open');
+          // focus the close button so screen readers + keyboard users land in the dialog
+          closeBtn?.focus();
+        }
+        function close() {
+          drawer.classList.remove('is-open');
+          trigger.setAttribute('aria-expanded', 'false');
+          trigger.classList.remove('is-open');
+          document.documentElement.classList.remove('nav-drawer-open');
+          // Clear any prior pending hide so we always own a single in-flight
+          // timer; then schedule the unmount once the transition completes.
+          if (hideTimer !== null) clearTimeout(hideTimer);
+          hideTimer = setTimeout(() => {
+            drawer.hidden = true;
+            hideTimer = null;
+          }, 280);
+          trigger.focus();
+        }
+        trigger.addEventListener('click', () => {
+          if (drawer.classList.contains('is-open')) close(); else open();
+        });
+        closeBtn?.addEventListener('click', close);
+        // Click outside the panel closes the drawer
+        drawer.addEventListener('click', (e) => {
+          if (e.target === drawer) close();
+        });
+        // Tapping any link closes the drawer (so /#how etc. scroll smoothly)
+        linkEls.forEach((a) => a.addEventListener('click', () => {
+          // Slight delay so the navigation kicks off before we tear down
+          setTimeout(close, 50);
+        }));
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && drawer.classList.contains('is-open')) close();
+        });
+        // If the viewport widens past the mobile breakpoint while the drawer
+        // is open (e.g. orientation change on iPad), close it so the desktop
+        // nav reappears cleanly.
+        const mq = window.matchMedia('(min-width: 741px)');
+        mq.addEventListener?.('change', (e) => { if (e.matches && drawer.classList.contains('is-open')) close(); });
+      })();
+    </script>
+
     <script>
       // ---------- Hero embers canvas (drifting warm + cool dust) ----------
       (function () {
