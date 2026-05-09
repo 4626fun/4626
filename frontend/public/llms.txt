@@ -1,0 +1,24 @@
+# 4626.fun
+
+4626.fun is a Base-native creator finance protocol built around ERC-4626 creator vaults.
+
+## What it is
+Creators wrap their creator coins into ERC-4626 vaults, enabling fair launches, fee accrual, and DeFi composability on Base.
+
+## Primary topics
+- ERC-4626 creator vaults
+- EIP-7540 asynchronous vaults
+- Creator coin yield and fee compounding
+- Base creator economy
+- Uniswap Continuous Clearing Auction (CCA)
+- LayerZero OFT shares
+- Chainlink VRF incentives
+
+## Key links
+- Site: https://4626.fun/
+- Docs: https://docs.4626.fun/
+- Source: https://github.com/4626fun
+- Community: https://t.me/fun4626
+
+## Status
+Pre-launch. The waitlist accepts creators, allocators, and ecosystem partners.

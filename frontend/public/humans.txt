@@ -1,0 +1,11 @@
+/* TEAM */
+Brand: 4626.fun
+Site: https://4626.fun
+Docs: https://docs.4626.fun
+
+/* SITE */
+Stack: React + TypeScript SPA (Vite) with static immersive landing
+Hosting: Vercel
+Chain: Base (L2)
+Standards: ERC-4626 vaults, EIP-7540 async vaults
+Design: Near-black canvas, one Base Blue accent, geometric "4" mark
