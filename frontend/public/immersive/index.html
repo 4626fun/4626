@@ -31,7 +31,7 @@
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:site" content="@4626fun">
-  <meta name="twitter:creator" content="@wenakita">
+  <meta name="twitter:creator" content="@4626fun">
   <meta name="twitter:title" content="4626.fun — Creator Vaults on Base">
   <meta name="twitter:description" content="4626.fun is building ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice.">
   <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
@@ -52,7 +52,9 @@
         "sameAs": [
           "https://x.com/4626fun",
           "https://docs.4626.fun",
-          "https://github.com/wenakita"
+          "https://github.com/4626fun",
+          "https://discord.com/invite/4626",
+          "https://t.me/fun4626"
         ]
       },
       {
@@ -67,6 +69,59 @@
         "operatingSystem": "Web",
         "url": "https://4626.fun/",
         "description": "ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice."
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is a creator vault?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A creator vault is an ERC-4626 strategy vault built around a creator coin. Fans deposit the underlying creator coin and receive ERC-4626 vault share tokens that represent a pro-rata claim on the vault's assets and any strategy outcomes. 4626.fun is building this infrastructure on Base. Vaults are not live yet — demo data is illustrative only."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How is a creator vault different from holding a creator coin?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "A creator coin in a wallet is idle. A creator vault routes that coin into onchain strategies — for example, lending markets, concentrated liquidity, or cross-chain positions — and gives depositors a transferable ERC-4626 share token in return. Strategy outcomes are variable and may be zero or negative."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is 4626.fun audited?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "4626.fun is pre-launch experimental software. Vaults are not live and there are no live deposits. Audit status, reports, and contract addresses will be published at https://4626.fun/security as the protocol approaches mainnet."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What chain does 4626.fun use?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "4626.fun is built on Base (Ethereum L2). Cross-chain strategy legs use LayerZero OFT and bridge into ecosystems like Solana via Meteora."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the risks?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Vault shares are not bank deposits and are not insured. Creator coins may be volatile or illiquid. Smart contract bugs, strategy losses, bridge failures, fee periods of zero, and delayed redemptions are all possible. See https://4626.fun/risks for full disclosure."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I deploy a vault now?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Not yet. 4626.fun is in pre-launch. Creators, builders, and early users can join the waitlist at https://4626.fun/waitlist to receive launch updates."
+            }
+          }
+        ]
       }
     ]
   }
@@ -119,6 +174,8 @@
       <span class="brand-text">4626<span class="brand-dot">.</span>fun</span>
     </a>
     <div class="nav-right">
+      <a href="https://4626.fun/risks" class="nav-link">Risks</a>
+      <a href="https://4626.fun/security" class="nav-link">Security</a>
       <a href="https://docs.4626.fun" class="nav-link" target="_blank" rel="noopener noreferrer">Docs</a>
       <a href="https://4626.fun/waitlist" class="nav-btn">Join Waitlist</a>
     </div>
@@ -1341,8 +1398,9 @@
       <a href="https://4626.fun/about">About</a>
       <a href="https://4626.fun/terms">Terms</a>
       <a href="https://4626.fun/privacy">Privacy</a>
-      <a href="https://github.com/wenakita" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="https://discord.gg/4626" target="_blank" rel="noopener noreferrer">Discord</a>
+      <a href="https://github.com/4626fun" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://discord.com/invite/4626" target="_blank" rel="noopener noreferrer">Discord</a>
+      <a href="https://t.me/fun4626" target="_blank" rel="noopener noreferrer">Telegram</a>
     </div>
   </footer>
 
@@ -1428,8 +1486,11 @@
       document.querySelectorAll('a[href*="github.com"]').forEach((link) => {
         link.addEventListener('click', () => track('github_click'))
       })
-      document.querySelectorAll('a[href*="discord.gg"]').forEach((link) => {
+      document.querySelectorAll('a[href*="discord.com"], a[href*="discord.gg"]').forEach((link) => {
         link.addEventListener('click', () => track('discord_click'))
+      })
+      document.querySelectorAll('a[href*="t.me"]').forEach((link) => {
+        link.addEventListener('click', () => track('telegram_click'))
       })
       document.querySelectorAll('a[href*="/risks"]').forEach((link) => {
         link.addEventListener('click', () => track('risks_link_click'))
