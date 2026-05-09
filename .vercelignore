@@ -37,6 +37,11 @@ target
 !frontend/api/_handlers/v1/build
 !frontend/api/_handlers/v1/build/**
 
+# Keep vendored Three.js build (immersive landing imports three.module.js
+# from this directory; "build" is the upstream npm package layout)
+!frontend/public/immersive/vendor/three/build
+!frontend/public/immersive/vendor/three/build/**
+
 # Local env / secrets
 .env
 .env.*
