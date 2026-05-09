@@ -1,432 +1,1391 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <base href="/immersive/">
-  <title>4626.fun — Creator Vaults on Base</title>
-  <meta name="description" content="ERC-4626 creator vaults on Base. Creators deploy. Communities deposit. Yield flows back. Pre-launch — vaults are not live yet.">
-  <link rel="canonical" href="https://4626.fun/">
-  <meta name="robots" content="index,follow,max-image-preview:large">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Served from /immersive/ on 4626.fun (per frontend/vercel.json route).
+         The base href makes every relative URL (./assets/, ./styles.css, etc.)
+         resolve under /immersive/ instead of the page URL. -->
+    <base href="/immersive/" />
+    <title>4626.fun — Creator Vaults. Earn Together.</title>
+    <meta
+      name="description"
+      content="4626.fun is the home for ERC-4626 creator vaults. Creators launch on-chain strategy vaults. Their community deposits alongside them. Everyone earns together."
+    />
+    <meta property="og:title" content="4626.fun — Creator Vaults. Earn Together." />
+    <meta
+      property="og:description"
+      content="ERC-4626 creator vaults. Deposit alongside the strategists you trust."
+    />
+    <meta name="theme-color" content="#06070d" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23090a12'/%3E%3Cpath d='M8 19h7v4h3v-4h2v-3h-2V8h-3.6L8 16.6V19zm7-3h-4l4-5v5z' fill='%23E8B964'/%3E%3C/svg%3E" />
 
-  <!-- Brand favicons + PWA -->
-  <link rel="icon" href="/favicon.ico" sizes="any">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2">
-  <link rel="mask-icon" href="/assets/safari-pinned-tab.svg" color="#0000FF">
-  <link rel="manifest" href="/site.webmanifest">
-  <meta name="theme-color" content="#020203">
-  <meta name="msapplication-TileColor" content="#020204">
-  <meta name="msapplication-config" content="/browserconfig.xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
 
-  <!-- Open Graph + Twitter -->
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="4626.fun">
-  <meta property="og:title" content="4626.fun — Creator Vaults on Base">
-  <meta property="og:description" content="ERC-4626 creator vaults on Base. Creators deploy. Communities deposit. Yield flows back. Pre-launch.">
-  <meta property="og:url" content="https://4626.fun/">
-  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:site" content="@4626fun">
-  <meta name="twitter:creator" content="@4626fun">
-  <meta name="twitter:title" content="4626.fun — Creator Vaults on Base">
-  <meta name="twitter:description" content="ERC-4626 creator vaults on Base. Creators deploy. Communities deposit. Yield flows back. Pre-launch.">
-  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
-
-  <link rel="stylesheet" href="./landing.css?v=20260509">
-
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@graph": [
+    <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
+         module sources stay 'self' under the production CSP. The import
+         map lets vault.js / vaults-cloth.js keep their bare-specifier
+         imports (e.g. 'three', 'three/addons/...') unchanged. -->
+    <script type="importmap">
       {
-        "@type": "Organization",
-        "name": "4626.fun",
-        "url": "https://4626.fun/",
-        "logo": "https://4626.fun/assets/logo-mark-1024.png",
-        "email": "hello@4626.fun",
-        "sameAs": [
-          "https://x.com/4626fun",
-          "https://docs.4626.fun",
-          "https://github.com/4626fun",
-          "https://discord.com/invite/4626",
-          "https://t.me/fun4626"
-        ]
-      },
-      {
-        "@type": "WebSite",
-        "name": "4626.fun",
-        "url": "https://4626.fun/"
-      },
-      {
-        "@type": "SoftwareApplication",
-        "name": "4626.fun",
-        "applicationCategory": "FinanceApplication",
-        "operatingSystem": "Web",
-        "url": "https://4626.fun/",
-        "description": "ERC-4626 creator-vault infrastructure on Base. Experimental software. Vaults are not live yet. Not financial advice."
-      },
-      {
-        "@type": "FAQPage",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "What is a creator vault?",
-            "acceptedAnswer": { "@type": "Answer", "text": "A creator vault is an ERC-4626 strategy vault built around a creator coin. Fans deposit the underlying creator coin and receive ERC-4626 vault share tokens that represent a pro-rata claim on the vault's assets and any strategy outcomes." }
-          },
-          {
-            "@type": "Question",
-            "name": "Is 4626.fun audited?",
-            "acceptedAnswer": { "@type": "Answer", "text": "4626.fun is pre-launch experimental software. Vaults are not live and there are no live deposits. Audit reports and contract addresses will be published at https://4626.fun/security as the protocol approaches mainnet." }
-          },
-          {
-            "@type": "Question",
-            "name": "Where is 4626.fun deployed?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Base (Ethereum L2). Cross-chain strategy legs use LayerZero OFT and bridge into ecosystems like Solana via Meteora." }
-          },
-          {
-            "@type": "Question",
-            "name": "How do I deposit into a vault?",
-            "acceptedAnswer": { "@type": "Answer", "text": "You can't yet. 4626.fun is in pre-launch. Creators, builders, and early users can join the waitlist at https://4626.fun/waitlist to receive launch updates." }
-          },
-          {
-            "@type": "Question",
-            "name": "What are the risks?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Vault shares are not bank deposits and are not insured. Creator coins may be volatile or illiquid. Smart contract bugs, strategy losses, bridge failures, fee periods of zero, and delayed redemptions are all possible. See https://4626.fun/risks for full disclosure." }
-          }
-        ]
+        "imports": {
+          "three": "./vendor/three/build/three.module.js",
+          "three/addons/": "./vendor/three/addons/"
+        }
       }
-    ]
-  }
-  </script>
-
-  <!-- Self-hosted vendor libraries (three.js 0.183.0).
-       Relative paths resolve under <base href="/immersive/"> to /immersive/vendor/*.
-       Scoped to 'self' in CSP — no external script-src allowlist needed. -->
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "./vendor/three/build-20260509/three.module.js",
-      "three/addons/": "./vendor/three/addons/"
-    }
-  }
-  </script>
-</head>
-<body>
-  <a class="skip-link" href="#main">Skip to content</a>
-
-  <header class="nav" aria-label="Site header">
-    <a class="brand" href="/" aria-label="4626.fun home">
-      <img src="/assets/logo-mark.svg" alt="" class="brand-mark" width="32" height="32">
-      <span class="brand-text">4626<span class="brand-dot">.</span>fun</span>
-    </a>
-    <nav class="nav-links" aria-label="Primary">
-      <a href="/risks">Risks</a>
-      <a href="/security">Security</a>
-      <a href="/story">Story</a>
-      <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
-    </nav>
-    <a class="nav-cta" href="https://4626.fun/waitlist">Join Waitlist</a>
-  </header>
-
-  <main id="main">
-    <!-- HERO ────────────────────────────────────────────────────── -->
-    <section class="hero" aria-labelledby="hero-title">
-      <!-- 3D vault canvas hosts vault.js's chamfered cube with HDRI environment + bloom -->
-      <div class="hero-stage">
-        <div class="hero-cube-halo" aria-hidden="true"></div>
-        <div id="vault-canvas" class="vault-canvas" aria-hidden="true"></div>
-      </div>
-
-      <div class="hero-copy">
-        <p class="hero-eyebrow">ERC-4626 · Base · Pre-launch</p>
-        <h1 id="hero-title" class="hero-title">
-          Creator vaults.<br>
-          <em>Earn together.</em>
-        </h1>
-        <p class="hero-lead">
-          4626.fun turns creator coins into ERC-4626 strategy vaults on Base. Creators deploy. Communities deposit. When the strategy earns, everyone earns — the chain settles the math.
-        </p>
-
-        <form class="hero-form" id="waitlist-inline-form" aria-label="Join the 4626.fun waitlist">
-          <input type="text" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" class="hero-form-hp">
-          <div class="hero-form-row">
-            <label class="hero-form-field hero-form-email">
-              <span class="hero-form-label">Email</span>
-              <input name="email" type="email" autocomplete="email" required placeholder="you@example.com">
-            </label>
-            <label class="hero-form-field hero-form-role">
-              <span class="hero-form-label">I am a&hellip;</span>
-              <select name="role" required>
-                <option value="">Choose one</option>
-                <option value="creator">Creator</option>
-                <option value="depositor">Fan / depositor</option>
-                <option value="builder">Developer / builder</option>
-                <option value="partner">Ecosystem partner</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <button type="submit" class="hero-form-submit">Reserve your spot →</button>
-          </div>
-          <p class="hero-form-note">
-            By joining you agree to the <a href="/terms">Terms</a>, <a href="/privacy">Privacy</a>, and <a href="/risks">Risks</a>. Pre-launch — no live deposits yet.
-          </p>
-          <p class="hero-form-status" id="waitlist-form-status" role="status" aria-live="polite"></p>
-        </form>
-
-        <ul class="trust-strip" aria-label="Trust signals">
-          <li>Pre-launch</li>
-          <li>Audit in progress</li>
-          <li>No live deposits yet</li>
-          <li>ERC-4626 + EIP-7540</li>
-          <li>Built on Base</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- HOW IT WORKS ─────────────────────────────────────────────── -->
-    <section class="how" aria-labelledby="how-title">
-      <p class="section-eyebrow">How it works</p>
-      <h2 id="how-title" class="section-title">Three steps. One standard. Shared yield.</h2>
-      <ol class="how-steps">
-        <li>
-          <span class="how-step-num">01</span>
-          <h3>Creator deploys</h3>
-          <p>The creator deploys an ERC-4626 vault on Base around their <a href="/glossary/creator-vault">creator coin</a>. The genesis deposit seeds the strategy split.</p>
-        </li>
-        <li>
-          <span class="how-step-num">02</span>
-          <h3>Community deposits</h3>
-          <p>Fans send the creator coin (or another supported asset) to the vault and receive an ERC-4626 share token in return — a transferable receipt that participates in the strategy.</p>
-        </li>
-        <li>
-          <span class="how-step-num">03</span>
-          <h3>Strategy settles on-chain</h3>
-          <p>The vault routes assets across Ajna lend markets, Charm concentrated LP, and a Solana cross-chain leg. Outcomes are variable. The chain is the audit log.</p>
-        </li>
-      </ol>
-    </section>
-
-    <!-- TRUST / STATUS ───────────────────────────────────────────── -->
-    <section class="status" aria-labelledby="status-title">
-      <p class="section-eyebrow">Pre-launch status</p>
-      <h2 id="status-title" class="section-title">Built in public, deployed conservatively.</h2>
-      <div class="status-grid">
-        <article class="status-card">
-          <h3>Audit in progress</h3>
-          <p>Vaults are not live and there are no live deposits. Audit reports and contract addresses will be published at <a href="/security">/security</a> as the protocol approaches mainnet.</p>
-        </article>
-        <article class="status-card">
-          <h3>Demo previews are illustrative</h3>
-          <p>Any TVL, APY, or holder counts shown across 4626.fun are illustrative demo previews. None are live. <a href="/risks">Read the risks</a>.</p>
-        </article>
-        <article class="status-card">
-          <h3>The chain is the audit log</h3>
-          <p>Every deposit, allocation, accrual, fee, and redemption settles on-chain. Strategy logic is open. Vault shares are ERC-4626 — composable everywhere DeFi is.</p>
-        </article>
-      </div>
-    </section>
-
-    <!-- FAQ ──────────────────────────────────────────────────────── -->
-    <section class="faq" aria-labelledby="faq-title">
-      <p class="section-eyebrow">FAQ</p>
-      <h2 id="faq-title" class="section-title">Common questions, honestly answered.</h2>
-      <div class="faq-list">
-        <details>
-          <summary>What is a creator vault?</summary>
-          <p>An ERC-4626 strategy vault built around a creator coin. Fans deposit the underlying creator coin and receive ERC-4626 vault share tokens that represent a pro-rata claim on the vault's assets and any strategy outcomes. <a href="/creator-vaults">More →</a></p>
-        </details>
-        <details>
-          <summary>Is 4626.fun audited?</summary>
-          <p>Pre-launch. The contracts are in audit. There are no live deposits. Audit reports and contract addresses will be published at <a href="/security">/security</a> as the protocol approaches mainnet.</p>
-        </details>
-        <details>
-          <summary>Where is 4626.fun deployed?</summary>
-          <p>Base (Ethereum L2). Cross-chain strategy legs use LayerZero OFT and bridge into ecosystems like Solana via Meteora. <a href="/erc-4626">More on the standard →</a></p>
-        </details>
-        <details>
-          <summary>How do I deposit into a vault?</summary>
-          <p>You can't yet. 4626.fun is in pre-launch. <a href="/waitlist">Join the waitlist</a> to get notified when vaults open.</p>
-        </details>
-        <details>
-          <summary>What are the risks?</summary>
-          <p>Vault shares are not bank deposits and are not insured. Creator coins may be volatile or illiquid. Smart contract bugs, strategy losses, bridge failures, zero-fee periods, and delayed redemptions are all possible. <a href="/risks">Full disclosure →</a></p>
-        </details>
-      </div>
-    </section>
-
-    <!-- FINAL CTA ────────────────────────────────────────────────── -->
-    <section class="final-cta">
-      <h2>Earn beside the creators you actually trust.</h2>
-      <p>Pre-launch private beta. <a href="https://4626.fun/waitlist" class="final-cta-btn">Join the waitlist</a></p>
-      <p class="final-cta-note">No live deposits until audit completes. <a href="/risks">Read the risks →</a></p>
-    </section>
-  </main>
-
-  <footer class="foot" aria-label="Site footer">
-    <div class="foot-brand">
-      <img src="/assets/logo-mark.svg" alt="" class="foot-mark" width="20" height="20">
-      <span>&copy; 2026 4626.fun</span>
+    </script>
+  </head>
+  <body>
+    <script>document.documentElement.classList.add('js');</script>
+    <!-- Subtle global page noise + grid (very low intensity) -->
+    <div class="bg-layers" aria-hidden="true">
+      <div class="bg-noise"></div>
     </div>
-    <p class="foot-disclaimer">
-      4626.fun will never DM you first asking for seed phrases, private keys, or deposits. Always verify links from 4626.fun.
-    </p>
-    <nav class="foot-links" aria-label="Footer">
-      <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
-      <a href="https://x.com/4626fun" target="_blank" rel="noopener noreferrer">X</a>
-      <a href="/risks">Risks</a>
-      <a href="/security">Security</a>
-      <a href="/about">About</a>
-      <a href="/terms">Terms</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/story">Story</a>
-      <a href="https://github.com/4626fun" target="_blank" rel="noopener noreferrer">GitHub</a>
-      <a href="https://discord.com/invite/4626" target="_blank" rel="noopener noreferrer">Discord</a>
-      <a href="https://t.me/fun4626" target="_blank" rel="noopener noreferrer">Telegram</a>
-    </nav>
-  </footer>
 
-  <!-- ─── Inline tracking + waitlist submission ─── -->
-  <script>
-    ;(() => {
-      const ATTR_KEY = 'cv:first-touch-attribution'
-      const VISITOR_KEY = 'cv:visitor-id'
-      const SESSION_KEY = 'cv:session-id'
-      const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term']
-      const uuid = () => {
-        if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID()
-        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-      }
-      const readStored = (key) => {
-        try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : null } catch { return null }
-      }
-      const writeStored = (key, value) => {
-        try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
-      }
-      const getOrCreateId = (storage, key) => {
-        try {
-          const existing = storage.getItem(key)
-          if (existing) return existing
-          const next = uuid()
-          storage.setItem(key, next)
-          return next
-        } catch { return uuid() }
-      }
-      const params = new URLSearchParams(window.location.search)
-      const currentAttribution = Object.fromEntries(
-        UTM_KEYS.map((key) => [key, params.get(key) || '']).filter(([, v]) => v),
-      )
-      const firstTouch = readStored(ATTR_KEY) || {
-        ...currentAttribution,
-        referrer: document.referrer || '',
-        landing_path: `${window.location.pathname}${window.location.search}`,
-        captured_at: new Date().toISOString(),
-      }
-      writeStored(ATTR_KEY, firstTouch)
-      const visitorId = getOrCreateId(localStorage, VISITOR_KEY)
-      const sessionId = getOrCreateId(sessionStorage, SESSION_KEY)
-      const attributionPayload = () => ({
-        ...currentAttribution,
-        referrer: document.referrer || '',
-        visitor_id: visitorId,
-        session_id: sessionId,
-        first_touch: firstTouch,
-      })
-      const track = (eventName, props = {}) => {
-        fetch('/api/analytics/event', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            event_name: eventName,
-            path: window.location.pathname,
-            ...attributionPayload(),
-            props,
-          }),
-          keepalive: true,
-        }).catch(() => {})
-      }
-      track('page_view')
-      document.querySelectorAll('a[href*="docs.4626.fun"]').forEach((link) => {
-        link.addEventListener('click', () => track('docs_click'))
-      })
-      document.querySelectorAll('a[href*="x.com/4626fun"]').forEach((link) => {
-        link.addEventListener('click', () => track('x_click'))
-      })
-      document.querySelectorAll('a[href*="github.com"]').forEach((link) => {
-        link.addEventListener('click', () => track('github_click'))
-      })
-      document.querySelectorAll('a[href*="discord.com"], a[href*="discord.gg"]').forEach((link) => {
-        link.addEventListener('click', () => track('discord_click'))
-      })
-      document.querySelectorAll('a[href*="t.me"]').forEach((link) => {
-        link.addEventListener('click', () => track('telegram_click'))
-      })
-      document.querySelectorAll('a[href*="/risks"]').forEach((link) => {
-        link.addEventListener('click', () => track('risks_link_click'))
-      })
-      document.querySelectorAll('a[href*="/story"]').forEach((link) => {
-        link.addEventListener('click', () => track('story_click'))
-      })
-      const form = document.getElementById('waitlist-inline-form')
-      const status = document.getElementById('waitlist-form-status')
-      if (form) {
-        let started = false
-        form.addEventListener('input', () => {
-          if (started) return
-          started = true
-          track('waitlist_form_start')
-        })
-        form.addEventListener('submit', async (event) => {
-          event.preventDefault()
-          const data = new FormData(form)
-          const button = form.querySelector('button[type="submit"]')
-          if (status) status.textContent = 'Joining…'
-          if (button) button.disabled = true
+    <!-- NAV -->
+    <header class="nav">
+      <a href="#" class="brand" aria-label="4626.fun home">
+        <svg class="brand__mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="28" height="28" rx="6" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9 19h7v4M16 23h3v-4h2v-3h-2V8h-3.6L9 16.6V19h7" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        </svg>
+        <span class="brand__word">4626<span class="brand__dot">.</span>fun</span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#how">How it works</a>
+        <a href="#features">Features</a>
+        <a href="https://github.com" target="_blank" rel="noopener">Docs</a>
+      </nav>
+
+      <a href="#cta" class="pill pill--ghost" id="launch-app-btn">
+        <span>Launch App</span>
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4h8v8M4 12 12 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </a>
+    </header>
+
+    <!-- HERO -->
+    <main>
+      <section class="hero">
+        <!-- Landscape backdrop — seamless looping forward-flight video.
+             The OBSDN technique: a true closed-loop video where the last
+             frame matches the first, giving infinite forward motion with
+             no scale tricks or crossfade artifacts. -->
+        <div class="hero__bg-stage" aria-hidden="true">
+          <video id="hero-bg-video" class="hero__bg" autoplay loop muted playsinline preload="auto"
+                 poster="assets/landscape.jpg">
+            <source src="assets/hero_loop.mp4" type="video/mp4" />
+          </video>
+        </div>
+
+        <!-- 3D cube perfectly centered — hero focal point -->
+        <div id="vault-canvas" class="hero__cube" aria-hidden="true"></div>
+
+        <!-- Animated lightning strikes (procedural SVG — sits between bg and clouds) -->
+        <svg class="hero__lightning" id="hero-lightning" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+          <defs>
+            <filter id="boltGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="3" result="b1"/>
+              <feGaussianBlur stdDeviation="10" in="SourceGraphic" result="b2"/>
+              <feMerge>
+                <feMergeNode in="b2"/>
+                <feMergeNode in="b1"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+          </defs>
+          <g id="hero-lightning-bolts"></g>
+        </svg>
+
+        <!-- Full-scene white flash overlay (triggered with the bolts) -->
+        <div class="hero__flash" aria-hidden="true"></div>
+
+        <!-- Far layer: thin cloud streaks high in the sky (slow lateral drift) -->
+        <div class="hero__parallax hero__parallax--streaks" aria-hidden="true">
+          <img src="assets/cloud_streaks.png" alt="" />
+          <img src="assets/cloud_streaks.png" alt="" />
+        </div>
+
+        <!-- Foreground stormclouds drifting at the top of the viewport -->
+        <div class="hero__clouds hero__clouds--top" aria-hidden="true">
+          <img src="assets/clouds.png" alt="" />
+          <img src="assets/clouds.png" alt="" />
+        </div>
+        <div class="hero__clouds hero__clouds--bottom" aria-hidden="true">
+          <img src="assets/clouds.png" alt="" />
+          <img src="assets/clouds.png" alt="" />
+        </div>
+
+        <!-- Near layer: ground fog hugging the bottom (fast lateral drift,
+             scales up to sell forward motion) -->
+        <div class="hero__parallax hero__parallax--fog" aria-hidden="true">
+          <img src="assets/fog.png" alt="" />
+          <img src="assets/fog.png" alt="" />
+        </div>
+
+        <!-- Bottom fade into page -->
+        <div class="hero__fade" aria-hidden="true"></div>
+
+        <!-- Headline section sits below the hero scene -->
+        <div class="hero__copy">
+          <span class="hero__eyebrow">
+            <span class="hero__eyebrow-rule"></span>ERC-4626 / Base<span class="hero__eyebrow-rule"></span>
+          </span>
+
+          <h1 class="hero__title">
+            <span class="hero__title-phrase">Creator Vaults.</span>
+            <span class="hero__title-phrase"><em>Earn Together.</em></span>
+          </h1>
+
+          <p class="hero__sub">
+            On-chain strategy vaults, deployed by creators, deposited into by their
+            community. One standard. One engine. Shared yield.
+          </p>
+
+          <div class="hero__ctas">
+            <a href="#cta" class="btn btn--primary">
+              <span>Request access</span>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <a href="#how" class="btn btn--ghost">
+              <span>Read the standard</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====================================================
+           TYPOGRAPHY REVEAL — "One vault. Two tokens."
+           Apple-keynote / Renaissance Edition pacing. The viewer
+           scrolls into a deep-space dark void; words rise into view
+           one phrase at a time with golden-italic emphasis on the
+           lead word, then the section concludes with a small caption
+           that cues the product details below.
+           ==================================================== -->
+      <section class="reveal" aria-label="What 4626 is">
+        <div class="reveal__starfield" aria-hidden="true">
+          <div class="reveal__starlayer reveal__starlayer--far"></div>
+          <div class="reveal__starlayer reveal__starlayer--mid"></div>
+          <div class="reveal__starlayer reveal__starlayer--near"></div>
+        </div>
+
+        <div class="reveal__pin">
+          <div class="reveal__eyebrow">
+            <span class="reveal__eyebrow-rule"></span>
+            <span>The Full Picture</span>
+            <span class="reveal__eyebrow-rule"></span>
+          </div>
+
+          <h2 class="reveal__title">
+            <span class="reveal__phrase" data-phrase="1">
+              <em>One</em>&nbsp;vault.
+            </span>
+            <span class="reveal__phrase" data-phrase="2">
+              <em>Two</em>&nbsp;tokens.
+            </span>
+          </h2>
+
+          <p class="reveal__caption" data-phrase="3">
+            The underlying asset enters strategy infrastructure.<br />
+            The share token distributes ownership through the CCA.
+          </p>
+
+          <div class="reveal__scrollhint" data-phrase="4" aria-hidden="true">
+            <span>Scroll</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           ANATOMY — What "two tokens, one vault" actually means.
+           Two paired comparison cards (Underlying vs Share)
+           followed by the allocation-flow diagram. This is the
+           payoff to the typography reveal above.
+           ===================================================== -->
+      <section id="anatomy" class="anatomy">
+        <header class="section__head">
+          <span class="section__eyebrow">// Anatomy</span>
+          <h2 class="section__title">Every deposit creates <em>two</em> tokens.</h2>
+          <p class="section__sub">
+            One you give. One you keep. The vault is the contract that binds
+            them — priced by the strategy, redeemable by the chain.
+          </p>
+        </header>
+
+        <!-- Token cards — paired comparison -->
+        <div class="anatomy__cards">
+          <article class="tokencard tokencard--underlying" data-anim="left">
+            <div class="tokencard__head">
+              <span class="tokencard__role">Deposited</span>
+              <span class="tokencard__chip">Underlying Asset</span>
+            </div>
+            <div class="tokencard__avatar tokencard__avatar--circle">
+              <img src="./assets/tokens/akita_source.png" alt="AKITA token" />
+            </div>
+            <div class="tokencard__name">
+              <span class="tokencard__amount">1</span>
+              <span class="tokencard__ticker">AKITA</span>
+            </div>
+            <p class="tokencard__copy">
+              The asset you put in. Strategy outcomes are variable.
+              The vault holds it, deploys it, and tracks every cent on-chain.
+            </p>
+            <ul class="tokencard__meta">
+              <li><span>Standard</span><b>ERC-20</b></li>
+              <li><span>Custody</span><b>Vault contract</b></li>
+              <li><span>Receipt</span><b>Burned on deposit</b></li>
+            </ul>
+          </article>
+
+          <!-- Bridge — thin animated connector that links the two cards -->
+          <div class="anatomy__bridge" aria-hidden="true">
+            <svg viewBox="0 0 200 80" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="bridgeGrad" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#9bb4ff" stop-opacity=".0"/>
+                  <stop offset="30%" stop-color="#9bb4ff" stop-opacity=".55"/>
+                  <stop offset="50%" stop-color="#fbe5a3" stop-opacity=".95"/>
+                  <stop offset="70%" stop-color="#d8a64a" stop-opacity=".55"/>
+                  <stop offset="100%" stop-color="#d8a64a" stop-opacity=".0"/>
+                </linearGradient>
+              </defs>
+              <path class="anatomy__bridge-path"
+                    d="M0 40 Q 100 8, 200 40"
+                    stroke="url(#bridgeGrad)" stroke-width="1.4" fill="none"/>
+              <path class="anatomy__bridge-path anatomy__bridge-path--down"
+                    d="M0 40 Q 100 72, 200 40"
+                    stroke="url(#bridgeGrad)" stroke-width="1.4" fill="none"/>
+              <circle class="anatomy__bridge-pulse" r="3" fill="#fbe5a3"/>
+            </svg>
+            <span class="anatomy__bridge-label">ERC&#8209;4626</span>
+          </div>
+
+          <article class="tokencard tokencard--share" data-anim="right">
+            <div class="tokencard__head">
+              <span class="tokencard__role">Issued</span>
+              <span class="tokencard__chip tokencard__chip--gold">Vault Share</span>
+            </div>
+            <div class="tokencard__avatar tokencard__avatar--square">
+              <img src="./assets/tokens/akita_share.png" alt="vAKITA share token" />
+            </div>
+            <div class="tokencard__name">
+              <span class="tokencard__amount">1</span>
+              <span class="tokencard__ticker tokencard__ticker--gold">▪AKITA</span>
+            </div>
+            <p class="tokencard__copy">
+              Your claim on the vault. Held by you. Redeemability depends
+              on available liquidity and strategy unwinding — transparent and on-chain.
+            </p>
+            <ul class="tokencard__meta">
+              <li><span>Standard</span><b>ERC-4626</b></li>
+              <li><span>Custody</span><b>Your wallet</b></li>
+              <li><span>Receipt</span><b>Minted on deposit</b></li>
+            </ul>
+          </article>
+        </div>
+
+        <!-- Allocation Flow — the math of where the money goes -->
+        <div class="flow" data-anim="flow">
+          <div class="flow__head">
+            <span class="flow__eyebrow">Allocation Engine</span>
+            <h3 class="flow__title">
+              <span class="flow__deposit" data-count="50000000">0</span>
+              <span class="flow__deposit-unit">AKITA</span>
+              <span class="flow__deposit-meta">deposited &mdash; routed in real time</span>
+            </h3>
+          </div>
+
+          <!-- The diagram: source on the left, vault in the middle, destinations on the right -->
+          <div class="flow__diagram">
+            <!-- LEFT: source side (share-token issuance) -->
+            <div class="flow__column flow__column--left">
+              <span class="flow__column-title">Share Token Distribution</span>
+              <div class="flow__node" data-pct="40">
+                <div class="flow__node-pct"><span data-count="40">0</span><i>%</i></div>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">CCA Auction</span>
+                  <span class="flow__node-meta">Continuous price discovery</span>
+                </div>
+                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+                </span>
+              </div>
+              <div class="flow__node" data-pct="40">
+                <div class="flow__node-pct"><span data-count="40">0</span><i>%</i></div>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Creator Vesting</span>
+                  <span class="flow__node-meta">Linear unlock, on-chain</span>
+                </div>
+                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+              </div>
+              <div class="flow__node" data-pct="20">
+                <div class="flow__node-pct"><span data-count="20">0</span><i>%</i></div>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Liquidity Pool</span>
+                  <span class="flow__node-meta">Uniswap V3 pair</span>
+                </div>
+                <span class="flow__node-logo" aria-hidden="true">
+                  <img src="./assets/logos/uniswap-official-pink.svg" alt="" />
+                </span>
+              </div>
+            </div>
+
+            <!-- CENTER: vault hub -->
+            <div class="flow__hub">
+              <div class="flow__hub-ring flow__hub-ring--outer"></div>
+              <div class="flow__hub-ring flow__hub-ring--inner"></div>
+              <div class="flow__hub-core">
+                <span class="flow__hub-tag">ERC-4626</span>
+                <span class="flow__hub-name">Vault</span>
+              </div>
+            </div>
+
+            <!-- RIGHT: destination side (deployed strategies) -->
+            <div class="flow__column flow__column--right">
+              <span class="flow__column-title">Underlying Deployment</span>
+              <div class="flow__node" data-pct="30">
+                <span class="flow__node-logo" aria-hidden="true">
+                  <img src="./assets/logos/ajna-official.svg" alt="" />
+                </span>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Ajna Protocol</span>
+                  <span class="flow__node-meta">Lend-side credit</span>
+                </div>
+                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
+              </div>
+              <div class="flow__node" data-pct="30">
+                <span class="flow__node-logo" aria-hidden="true">
+                  <img src="./assets/logos/charm.png" alt="" />
+                </span>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Charm Finance</span>
+                  <span class="flow__node-meta">Concentrated LP</span>
+                </div>
+                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
+              </div>
+              <div class="flow__node" data-pct="30">
+                <span class="flow__node-logo" aria-hidden="true">
+                  <img src="./assets/logos/solana-mark.svg" alt="" />
+                </span>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Solana Bridge</span>
+                  <span class="flow__node-meta">Cross-chain yield</span>
+                </div>
+                <div class="flow__node-pct"><span data-count="30">0</span><i>%</i></div>
+              </div>
+              <div class="flow__node flow__node--idle" data-pct="10">
+                <span class="flow__node-logo flow__node-logo--mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="7" stroke-dasharray="2 3"/><circle cx="12" cy="12" r="2"/></svg>
+                </span>
+                <div class="flow__node-body">
+                  <span class="flow__node-label">Idle Buffer</span>
+                  <span class="flow__node-meta">Instant redemptions</span>
+                </div>
+                <div class="flow__node-pct"><span data-count="10">0</span><i>%</i></div>
+              </div>
+            </div>
+
+            <!-- SVG connectors layer (sits behind the columns, above bg) -->
+            <svg class="flow__lines" aria-hidden="true" viewBox="0 0 1200 600" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="flowGradLeft" x1="1" y1="0" x2="0" y2="0">
+                  <stop offset="0%" stop-color="#fbe5a3" stop-opacity=".75"/>
+                  <stop offset="100%" stop-color="#9bb4ff" stop-opacity=".05"/>
+                </linearGradient>
+                <linearGradient id="flowGradRight" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0%" stop-color="#fbe5a3" stop-opacity=".75"/>
+                  <stop offset="100%" stop-color="#9bb4ff" stop-opacity=".05"/>
+                </linearGradient>
+              </defs>
+              <!-- Left side: 3 lines from left nodes to hub -->
+              <path class="flow__line" d="M 280 110 C 460 110, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
+              <path class="flow__line" d="M 280 300 C 440 300, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
+              <path class="flow__line" d="M 280 490 C 460 490, 480 300, 600 300" stroke="url(#flowGradLeft)" stroke-width="1.2" fill="none"/>
+              <!-- Right side: 4 lines from hub to right nodes -->
+              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 80, 920 80" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
+              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 240, 920 240" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
+              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 400, 920 400" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
+              <path class="flow__line flow__line--right" d="M 600 300 C 720 300, 740 540, 920 540" stroke="url(#flowGradRight)" stroke-width="1.2" fill="none"/>
+            </svg>
+          </div>
+        </div>
+      </section>
+
+      <!-- =====================================================
+           LIVE VAULTS — cloth-physics fabric slider showcasing
+           creator vaults. Each panel is a draped fabric mesh
+           rendered with verlet-integrated cloth physics in Three.js.
+           Navigate left/right and the current panel falls / folds
+           away while the next drapes into place.
+           ===================================================== -->
+      <section id="vaults" class="vaults">
+        <header class="section__head">
+          <span class="section__eyebrow">// Live Vaults</span>
+          <h2 class="section__title">Creator vaults, <em>draped</em> in code.</h2>
+          <p class="section__sub">
+            Real strategies. Real depositors. Real on-chain receipts. A glimpse
+            of the vaults already running on Base.
+          </p>
+        </header>
+
+        <div class="vaults__stage" id="vaults-stage" aria-label="Creator vault showcase">
+          <!-- Three.js cloth-physics canvas mounts here -->
+          <div class="vaults__scene" id="vaults-scene" aria-hidden="true"></div>
+
+          <!-- HTML overlay: vault metadata that matches the current panel -->
+          <div class="vaults__meta" id="vaults-meta">
+            <div class="vaults__meta-inner" data-vault="0">
+              <span class="vaults__creator">Akita Inu</span>
+              <h3 class="vaults__name">Akita Strategy Vault</h3>
+              <p class="vaults__pitch">
+                Memecoin treasury deployed across Ajna lend markets,
+                Charm concentrated LPs, and a Solana cross-chain leg.
+              </p>
+              <ul class="vaults__stats">
+                <li><span>TVL</span><b>$2.4M</b></li>
+                <li><span>APY (30d)</span><b>11.4%</b></li>
+                <li><span>Holders</span><b>1,283</b></li>
+                <li><span>Ticker</span><b>▪AKITA</b></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Slider controls -->
+          <div class="vaults__controls">
+            <button class="vaults__nav vaults__nav--prev" type="button" id="vaults-prev" aria-label="Previous vault">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="vaults__pager">
+              <span class="vaults__pager-current" id="vaults-current">01</span>
+              <span class="vaults__pager-rule"></span>
+              <span class="vaults__pager-total" id="vaults-total">03</span>
+            </div>
+            <button class="vaults__nav vaults__nav--next" type="button" id="vaults-next" aria-label="Next vault">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Hidden source data — read by vaults.js -->
+        <script type="application/json" id="vaults-data">
+        [
+          {
+            "creator": "Akita Inu",
+            "name": "Akita Strategy Vault",
+            "pitch": "Memecoin treasury deployed across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.",
+            "avatar": "./assets/creators/akita.webp",
+            "ticker": "▪AKITA",
+            "tvl": "$2.4M",
+            "apy": "11.4%",
+            "holders": "1,283",
+            "accent": "#4d7eff"
+          },
+          {
+            "creator": "Jesse Pollak",
+            "name": "Onchain Summer Vault",
+            "pitch": "Long-Base thesis. Deposits route to Aerodrome LPs and Base-native lending markets, with a 30-day async settlement window.",
+            "avatar": "./assets/creators/jesse.webp",
+            "ticker": "▪OCS",
+            "tvl": "$8.7M",
+            "apy": "14.2%",
+            "holders": "4,902",
+            "accent": "#0052ff"
+          },
+          {
+            "creator": "Gabriel Haines",
+            "name": "DeFi Researcher Vault",
+            "pitch": "High-water-mark performance fee. Quant-driven rotation between Ajna, Charm, and idle Base reserves.",
+            "avatar": "./assets/creators/gabrielhaines.webp",
+            "ticker": "▪GABE",
+            "tvl": "$1.1M",
+            "apy": "9.8%",
+            "holders": "412",
+            "accent": "#d8a64a"
+          }
+        ]
+        </script>
+      </section>
+
+      <!-- HOW IT WORKS -->
+      <section id="how" class="how">
+        <header class="section__head">
+          <span class="section__eyebrow">// How it works</span>
+          <h2 class="section__title">Three steps. One vault. Shared yield.</h2>
+          <p class="section__sub">
+            The ERC-4626 standard turns any strategy into a tokenized share. Creators
+            run the strategy, depositors hold the shares, the chain settles the math.
+          </p>
+        </header>
+
+        <ol class="steps">
+          <li class="step">
+            <span class="step__num">01</span>
+            <div class="step__icon" aria-hidden="true">
+              <!-- Wand / deploy -->
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M14 34 34 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M30 10l4 4M10 30l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <circle cx="36" cy="12" r="2" fill="currentColor"/>
+                <circle cx="12" cy="36" r="2" fill="currentColor"/>
+                <path d="M22 22l4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" stroke-opacity=".25" stroke-width="1" stroke-dasharray="2 3"/>
+              </svg>
+            </div>
+            <h3 class="step__title">Creator deploys a vault</h3>
+            <p class="step__copy">
+              Pick a strategy, set fees, mint a tokenized 4626 vault on Base in one
+              transaction. Your vault, your rules, your on-chain reputation.
+            </p>
+          </li>
+
+          <li class="step">
+            <span class="step__num">02</span>
+            <div class="step__icon" aria-hidden="true">
+              <!-- Community deposit -->
+              <svg viewBox="0 0 48 48" fill="none">
+                <rect x="10" y="18" width="28" height="22" rx="2" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M10 24h28" stroke="currentColor" stroke-width="1.6"/>
+                <circle cx="24" cy="32" r="3" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M16 14l8-6 8 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M20 14h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3 class="step__title">Community deposits in</h3>
+            <p class="step__copy">
+              Fans, friends, and strangers deposit USDC, ETH or any supported asset and
+              receive 4626 shares. One vault, one position, one shared engine.
+            </p>
+          </li>
+
+          <li class="step">
+            <span class="step__num">03</span>
+            <div class="step__icon" aria-hidden="true">
+              <!-- Yield flow -->
+              <svg viewBox="0 0 48 48" fill="none">
+                <circle cx="24" cy="24" r="10" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M24 19v10M19 24h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M8 24a16 16 0 0 1 16-16M40 24a16 16 0 0 1-16 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="2 3"/>
+                <path d="M22 6l2 2-2 2M26 42l-2-2 2-2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3 class="step__title">Yield flows back, together</h3>
+            <p class="step__copy">
+              Strategy gains accrue to the share price. Depositors redeem any time,
+              creators earn a transparent performance fee. Everyone settles on-chain.
+            </p>
+          </li>
+        </ol>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="features">
+        <header class="section__head">
+          <span class="section__eyebrow">// Features</span>
+          <h2 class="section__title">A protocol for <em>shared</em> upside.</h2>
+          <p class="section__sub">
+            Built on the ERC-4626 tokenized vault standard. Every action is composable,
+            inspectable, and replicable on-chain — by design.
+          </p>
+        </header>
+
+        <div class="grid">
+          <article class="card">
+            <div class="card__icon" data-tone="gold" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <rect x="5" y="5" width="22" height="22" rx="3" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M10 16h12M10 12h12M10 20h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>ERC-4626 native</h3>
+            <p>Every vault is a tokenized share. Composable across DeFi by default — wallets, aggregators, and analytics all speak the same standard.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" data-tone="blue" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <path d="M6 16h6l3-8 4 16 3-8h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Async deposits &amp; withdrawals</h3>
+            <p>Strategies can settle on their own cadence using EIP-7540 async flows. No forced liquidity. No mismatched timing.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" data-tone="gold" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="10" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M11 16l4 4 7-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Verifiable on-chain</h3>
+            <p>Holdings, P&amp;L, fees, depositors — every byte readable on Base. No black boxes. The chain is the audit log.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" data-tone="blue" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <path d="M16 4v24M8 10h12a4 4 0 0 1 0 8H12a4 4 0 0 0 0 8h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Creator performance fees</h3>
+            <p>Set a high-water-mark performance fee in basis points. Creators only earn when depositors earn. Aligned by code.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" data-tone="gold" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <circle cx="11" cy="13" r="3.5" stroke="currentColor" stroke-width="1.6"/>
+                <circle cx="22" cy="11" r="2.5" stroke="currentColor" stroke-width="1.6"/>
+                <path d="M5 25c1.5-4 4-6 6-6s4.5 2 6 6M17 23c1.2-2.4 3-3.5 5-3.5s3.8 1.1 5 3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>Social leaderboard</h3>
+            <p>Vaults ranked by APY, TVL, and follow count. Discover strategists by track record, not promises.</p>
+          </article>
+
+          <article class="card">
+            <div class="card__icon" data-tone="blue" aria-hidden="true">
+              <svg viewBox="0 0 32 32" fill="none">
+                <path d="M16 4 6 9v7c0 7 5 11 10 12 5-1 10-5 10-12V9l-10-5z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+                <path d="M12 16l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <h3>Base-native &amp; gas-light</h3>
+            <p>Deployed on Base for cheap, fast settlement. Account-abstraction friendly so depositors can join in one click.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section id="cta" class="cta">
+        <div class="cta__inner">
+          <!-- Wordmark lockup, Renaissance-style -->
+          <div class="cta__lockup" aria-hidden="true">
+            <span class="cta__wordmark">4626<em>.fun</em></span>
+            <span class="cta__sub-lockup">Creator Vaults on Base</span>
+          </div>
+
+          <h2 class="cta__title">Earn beside the people you<br /><em>actually trust.</em></h2>
+          <p class="cta__sub">
+            4626.fun is in private beta. Get the keys, deploy a vault, or just deposit
+            with a creator you follow.
+          </p>
+
+          <!-- Hand-off to the existing /waitlist React flow rather than
+               capturing a lead inline. Keeps a single source of truth for
+               waitlist signups (referral codes, role picker, wallet link
+               step, points, etc. all live there). -->
+          <div class="cta__form cta__form--waitlist">
+            <a href="/waitlist" class="btn btn--gold">
+              <span>Join the waitlist</span>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+          </div>
+          <p class="cta__caption">
+            <em>Base-native &middot; ERC-4626 &middot; Built for creators and builders.</em>
+          </p>
+
+          <!-- BUILT WITH lockup -->
+          <div class="cta__builtwith" aria-label="Built with">
+            <span class="cta__builtwith-label">Built with</span>
+            <ul class="cta__builtwith-row">
+              <li><img src="./assets/logos/Base_lockup_white.svg" alt="Base" /></li>
+              <li><img src="./assets/logos/ajna-official.svg" alt="Ajna" /></li>
+              <li><img src="./assets/logos/uniswap-official-pink.svg" alt="Uniswap" /></li>
+              <li><img src="./assets/logos/charm.png" alt="Charm" /></li>
+              <li><img src="./assets/logos/meteora-v2.svg" alt="Meteora" /></li>
+              <li><img src="./assets/logos/solana-mark.svg" alt="Solana" /></li>
+              <li><img src="./assets/logos/Zorb-3.svg" alt="Zorb" /></li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="foot">
+      <div class="foot__row">
+        <span class="brand brand--small">
+          <svg class="brand__mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <rect x="2" y="2" width="28" height="28" rx="6" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M9 19h7v4M16 23h3v-4h2v-3h-2V8h-3.6L9 16.6V19h7" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+          <span class="brand__word">4626<span class="brand__dot">.</span>fun</span>
+        </span>
+        <nav class="foot__links" aria-label="Footer">
+          <a href="#" aria-label="X">X</a>
+          <a href="#" aria-label="GitHub">GitHub</a>
+          <a href="#" aria-label="Discord">Discord</a>
+        </nav>
+        <span class="foot__meta">© 2026 · Earn together.</span>
+      </div>
+    </footer>
+
+    <!-- Page-fold transition layer (revealed when Launch App is clicked) -->
+    <div class="fold" id="fold-overlay" aria-hidden="true">
+      <div class="fold__panel">
+        <span class="fold__eyebrow">// Vaults launching soon</span>
+        <h2 class="fold__title">The app is <em>almost</em> live.</h2>
+        <p class="fold__copy">
+          We&rsquo;re finishing the audit and onboarding the first wave of creators.
+          Reserve a spot — the first 200 get a vault deployer credit.
+        </p>
+        <div class="fold__form">
+          <a href="/waitlist" class="btn btn--gold">
+            <span>Reserve access</span>
+          </a>
+        </div>
+        <button class="fold__close" type="button" id="fold-close" aria-label="Close and return to landing page">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M6 6l12 12M6 18 18 6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <script type="module" src="./vault.js"></script>
+    <script type="module" src="./vaults-cloth.js"></script>
+
+    <!-- Page-fold transition: when Launch App is clicked, the entire site
+         folds away in 3D (skewed perspective + rotation) and reveals the
+         coming-soon panel underneath. ESC or close button reverses it. -->
+    <script>
+      (function () {
+        const btn = document.getElementById('launch-app-btn');
+        const overlay = document.getElementById('fold-overlay');
+        const closeBtn = document.getElementById('fold-close');
+        const main = document.querySelector('main');
+        const footer = document.querySelector('.foot');
+        const nav = document.querySelector('.topbar') || document.querySelector('header');
+        if (!btn || !overlay) return;
+
+        function openFold(e) {
+          e.preventDefault();
+          document.body.classList.add('is-folding');
+          // Stagger overlay reveal so the page fold animation finishes first
+          setTimeout(() => {
+            overlay.classList.add('is-open');
+            // Belt-and-braces: also set inline opacity in case CSS class is
+            // overridden by user-agent reduced-motion stylesheets.
+            overlay.style.opacity = '1';
+            overlay.style.pointerEvents = 'auto';
+          }, 380);
+        }
+        function closeFold() {
+          overlay.classList.remove('is-open');
+          overlay.style.opacity = '';
+          overlay.style.pointerEvents = '';
+          setTimeout(() => document.body.classList.remove('is-folding'), 240);
+        }
+        btn.addEventListener('click', openFold);
+        closeBtn?.addEventListener('click', closeFold);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeFold(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeFold(); });
+      })();
+    </script>
+    <script>
+      // ---------- Hero embers canvas (drifting warm + cool dust) ----------
+      (function () {
+        const c = document.getElementById('hero-embers');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        let w = 0, h = 0;
+        function resize() {
+          const r = c.getBoundingClientRect();
+          w = r.width; h = r.height;
+          c.width = w * dpr; c.height = h * dpr;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        resize();
+        new ResizeObserver(resize).observe(c);
+
+        const N = 90;
+        const parts = Array.from({ length: N }, () => ({
+          x: Math.random(),
+          y: Math.random(),
+          r: 0.5 + Math.random() * 1.7,
+          s: 0.04 + Math.random() * 0.14,
+          drift: (Math.random() - 0.5) * 0.0008,
+          o: 0.25 + Math.random() * 0.6,
+          phase: Math.random() * Math.PI * 2,
+          warm: Math.random() < 0.65,
+        }));
+
+        let last = performance.now();
+        function draw(now) {
+          const dt = Math.min(0.05, (now - last) / 1000); last = now;
+          ctx.clearRect(0, 0, w, h);
+          for (const p of parts) {
+            // Drift up + slow horizontal sway
+            p.y -= p.s * dt;
+            p.x += p.drift + Math.sin(now * 0.0006 + p.phase) * 0.0005;
+            if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
+            const x = p.x * w;
+            const y = p.y * h;
+            const tw = 0.55 + 0.45 * Math.sin(now * 0.003 + p.phase * 4);
+            const a = p.o * tw;
+            const col = p.warm
+              ? `rgba(255, 195, 110, ${a})`
+              : `rgba(140, 175, 240, ${a * 0.65})`;
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(x, y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          requestAnimationFrame(draw);
+        }
+        requestAnimationFrame(draw);
+      })();
+
+      // ---------- Ember/dust particles canvas (other sections) ----------
+      (function () {
+        const c = document.getElementById('embers');
+        if (!c) return;
+        const ctx = c.getContext('2d');
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        let w = 0, h = 0;
+        function resize() {
+          const r = c.getBoundingClientRect();
+          w = r.width; h = r.height;
+          c.width = w * dpr; c.height = h * dpr;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+        resize();
+        new ResizeObserver(resize).observe(c);
+
+        const N = 70;
+        const parts = Array.from({ length: N }, () => ({
+          x: Math.random(),
+          y: Math.random(),
+          r: 0.4 + Math.random() * 1.6,
+          s: 0.05 + Math.random() * 0.12,
+          o: 0.2 + Math.random() * 0.6,
+          phase: Math.random() * Math.PI * 2,
+          warm: Math.random() < 0.55,
+        }));
+
+        let last = performance.now();
+        function draw(now) {
+          const dt = Math.min(0.05, (now - last) / 1000); last = now;
+          ctx.clearRect(0, 0, w, h);
+          for (const p of parts) {
+            // Drift upward slowly
+            p.y -= p.s * dt;
+            p.x += Math.sin(now * 0.0008 + p.phase) * 0.0006;
+            if (p.y < -0.05) { p.y = 1.05; p.x = Math.random(); }
+            const x = p.x * w;
+            const y = p.y * h;
+            const tw = 0.55 + 0.45 * Math.sin(now * 0.003 + p.phase * 4);
+            const a = p.o * tw;
+            const col = p.warm
+              ? `rgba(255, 200, 110, ${a})`
+              : `rgba(140, 175, 255, ${a * 0.7})`;
+            ctx.fillStyle = col;
+            ctx.beginPath();
+            ctx.arc(x, y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          requestAnimationFrame(draw);
+        }
+        requestAnimationFrame(draw);
+      })();
+
+      // ---------- Procedural SVG lightning storm ----------
+      (function () {
+        const svg = document.getElementById('hero-lightning');
+        const layer = document.getElementById('hero-lightning-bolts');
+        const flash = document.querySelector('.hero__flash');
+        if (!svg || !layer || !flash) return;
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+        const W = 1000, H = 600;
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+
+        // Build a jagged main bolt path from (x0,y0) toward (x1,y1) with random zigzags.
+        function buildBoltPath(x0, y0, x1, y1, segments, jitter) {
+          const pts = [{ x: x0, y: y0 }];
+          for (let i = 1; i < segments; i++) {
+            const t = i / segments;
+            // taper jitter near endpoints for cleaner attach points
+            const taper = Math.sin(t * Math.PI);
+            const px = x0 + (x1 - x0) * t + (Math.random() - 0.5) * jitter * taper;
+            const py = y0 + (y1 - y0) * t + (Math.random() - 0.5) * jitter * 0.35 * taper;
+            pts.push({ x: px, y: py });
+          }
+          pts.push({ x: x1, y: y1 });
+          let d = `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)}`;
+          for (let i = 1; i < pts.length; i++) d += ` L ${pts[i].x.toFixed(1)} ${pts[i].y.toFixed(1)}`;
+          return { d, pts };
+        }
+
+        // Branch path from a point on the main path going outward at an angle.
+        function buildBranch(x, y, angleDeg, length, segments, jitter) {
+          const ang = (angleDeg * Math.PI) / 180;
+          const x1 = x + Math.cos(ang) * length;
+          const y1 = y + Math.sin(ang) * length;
+          return buildBoltPath(x, y, x1, y1, segments, jitter).d;
+        }
+
+        function makePath(d, strokeWidth, opacity) {
+          const p = document.createElementNS(SVG_NS, 'path');
+          p.setAttribute('d', d);
+          p.setAttribute('stroke', 'rgba(235, 245, 255, 1)');
+          p.setAttribute('stroke-width', strokeWidth);
+          p.setAttribute('stroke-linecap', 'round');
+          p.setAttribute('stroke-linejoin', 'round');
+          p.setAttribute('fill', 'none');
+          p.setAttribute('opacity', opacity);
+          p.setAttribute('filter', 'url(#boltGlow)');
+          return p;
+        }
+
+        // Animate a path so the light "draws" along it from start to end, then
+        // holds briefly, then fades. Uses stroke-dasharray + opacity.
+        function animateDraw(pathEl, drawMs, holdMs, fadeMs) {
+          const len = pathEl.getTotalLength();
+          pathEl.style.strokeDasharray = len;
+          pathEl.style.strokeDashoffset = len;
+          pathEl.style.opacity = 1;
+          // kick reflow
+          // eslint-disable-next-line no-unused-expressions
+          pathEl.getBoundingClientRect();
+          // Phase 1: draw (light traveling down the path)
+          pathEl.animate(
+            [
+              { strokeDashoffset: len, opacity: 0.95 },
+              { strokeDashoffset: 0,   opacity: 1 },
+            ],
+            { duration: drawMs, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' }
+          );
+          // Phase 2: brief hold + flicker, then fade
+          setTimeout(() => {
+            pathEl.animate(
+              [
+                { opacity: 1 },
+                { opacity: 0.5 },
+                { opacity: 0.85 },
+                { opacity: 0 },
+              ],
+              { duration: fadeMs, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' }
+            );
+          }, drawMs + holdMs);
+          // Cleanup
+          setTimeout(() => { pathEl.remove(); }, drawMs + holdMs + fadeMs + 60);
+        }
+
+        // Flicker = tiny re-flash mid-life, optional
+        function flicker(pathEl, atMs) {
+          setTimeout(() => {
+            pathEl.animate(
+              [{ opacity: 0.2 }, { opacity: 1 }, { opacity: 0.6 }],
+              { duration: 90, easing: 'steps(3, end)' }
+            );
+          }, atMs);
+        }
+
+        function rand(min, max) { return min + Math.random() * (max - min); }
+
+        function spawnBolt({ scale = 1, branchProb = 0.55, withFlicker = true } = {}) {
+          // Random origin somewhere along the top, random ground target
+          const x0 = rand(W * 0.1, W * 0.9);
+          const y0 = rand(-30, 60);
+          // Bolts mostly head downward but with random horizontal drift
+          const drift = rand(-W * 0.18, W * 0.18);
+          const x1 = Math.max(40, Math.min(W - 40, x0 + drift));
+          const y1 = rand(H * 0.55, H * 0.95);
+
+          const segments = Math.round(rand(16, 24));
+          const jitter = rand(45, 90) * scale;
+          const main = buildBoltPath(x0, y0, x1, y1, segments, jitter);
+
+          const group = document.createElementNS(SVG_NS, 'g');
+          // Outer soft halo — warm pale gold (very wide, low alpha)
+          const halo = makePath(main.d, 5.5 * scale, 0.16);
+          halo.setAttribute('stroke', 'rgba(255, 230, 170, 1)');
+          // Mid stroke — warm white-yellow
+          const mid = makePath(main.d, 1.6 * scale, 0.55);
+          mid.setAttribute('stroke', 'rgba(255, 240, 205, 1)');
+          // Hot core — bright white with a faint warm tint
+          const core = makePath(main.d, 0.7 * scale, 1);
+          core.setAttribute('stroke', 'rgba(255, 252, 240, 1)');
+          group.appendChild(halo);
+          group.appendChild(mid);
+          group.appendChild(core);
+
+          // Branches — lots of them, recursively forked
+          const branchEls = [];
+          if (branchProb > 0) {
+            // Two passes: primary branches off the trunk + secondary off those
+            const primaryCount = Math.round(rand(3, 7));
+            const primaryBranches = [];
+            for (let i = 0; i < primaryCount; i++) {
+              if (Math.random() > branchProb) continue;
+              const idx = Math.floor(rand(2, main.pts.length - 2));
+              const p = main.pts[idx];
+              const baseAng = 90 + rand(-65, 65); // splayed downward
+              const len = rand(70, 170) * scale;
+              const segs = Math.round(rand(7, 12));
+              const jit = rand(22, 48) * scale;
+              const bd = buildBoltPath(p.x, p.y, p.x + Math.cos(baseAng * Math.PI / 180) * len, p.y + Math.sin(baseAng * Math.PI / 180) * len, segs, jit);
+              const bMid = makePath(bd.d, 1.0 * scale, 0.5);
+              bMid.setAttribute('stroke', 'rgba(255, 235, 190, 1)');
+              const bCore = makePath(bd.d, 0.45 * scale, 0.92);
+              bCore.setAttribute('stroke', 'rgba(255, 250, 230, 1)');
+              group.appendChild(bMid);
+              group.appendChild(bCore);
+              branchEls.push({ bMid, bCore, atFraction: idx / main.pts.length, drawScale: 0.55 });
+              primaryBranches.push({ pts: bd.pts, parentFraction: idx / main.pts.length });
+            }
+            // Secondary branches off the primary branches — fine micro-forks
+            primaryBranches.forEach((pb) => {
+              const secCount = Math.round(rand(1, 3));
+              for (let j = 0; j < secCount; j++) {
+                if (Math.random() > branchProb * 0.6) continue;
+                const idx = Math.floor(rand(2, Math.max(3, pb.pts.length - 1)));
+                const p = pb.pts[idx];
+                const baseAng = 90 + rand(-80, 80);
+                const len = rand(25, 70) * scale;
+                const segs = Math.round(rand(4, 7));
+                const jit = rand(10, 22) * scale;
+                const bd = buildBoltPath(p.x, p.y, p.x + Math.cos(baseAng * Math.PI / 180) * len, p.y + Math.sin(baseAng * Math.PI / 180) * len, segs, jit);
+                const bMid = makePath(bd.d, 0.7 * scale, 0.4);
+                bMid.setAttribute('stroke', 'rgba(255, 230, 180, 1)');
+                const bCore = makePath(bd.d, 0.32 * scale, 0.85);
+                bCore.setAttribute('stroke', 'rgba(255, 250, 230, 1)');
+                group.appendChild(bMid);
+                group.appendChild(bCore);
+                // Secondary branches start once primary is well underway
+                branchEls.push({ bMid, bCore, atFraction: pb.parentFraction + 0.15, drawScale: 0.4 });
+              }
+            });
+          }
+
+          layer.appendChild(group);
+
+          // Animation timing
+          const drawMs = 220 + rand(0, 140);   // light travels down the bolt
+          const holdMs = 60 + rand(0, 80);     // brief held flash
+          const fadeMs = 360 + rand(0, 220);   // gentle fade
+
+          // Draw main path (all 3 layers travel together)
+          [halo, mid, core].forEach((el) => animateDraw(el, drawMs, holdMs, fadeMs));
+
+          // Branches kick in slightly after the main bolt reaches their attach point
+          branchEls.forEach(({ bMid, bCore, atFraction, drawScale }) => {
+            const branchDelay = drawMs * Math.min(0.92, atFraction * 0.85);
+            setTimeout(() => {
+              animateDraw(bMid,  drawMs * (drawScale || 0.55), holdMs, fadeMs);
+              animateDraw(bCore, drawMs * (drawScale || 0.55), holdMs, fadeMs);
+            }, branchDelay);
+          });
+
+          if (withFlicker && Math.random() < 0.5) {
+            const flickAt = drawMs + holdMs * 0.3 + rand(20, 80);
+            flicker(core, flickAt);
+            flicker(mid, flickAt);
+          }
+
+          // Cleanup the group well after everything is gone
+          setTimeout(() => { group.remove(); }, drawMs + holdMs + fadeMs + 600);
+
+          return { drawMs, holdMs, fadeMs };
+        }
+
+        function fire(el) {
+          el.classList.remove('is-firing');
+          void el.offsetWidth;
+          el.classList.add('is-firing');
+        }
+
+        function strike() {
+          const r = Math.random();
+          let intensity, scale;
+          if (r < 0.5) {
+            // small distant strike — 1 thin bolt, soft flash
+            intensity = 0.55; scale = 0.7;
+            spawnBolt({ scale, branchProb: 0.35 });
+          } else if (r < 0.85) {
+            // medium — 1 main bolt with branches, brighter flash
+            intensity = 1.0; scale = 1.0;
+            spawnBolt({ scale, branchProb: 0.7 });
+            // sometimes a faint distant secondary
+            if (Math.random() < 0.4) {
+              setTimeout(() => spawnBolt({ scale: 0.55, branchProb: 0.25 }), 80 + Math.random() * 200);
+            }
+          } else {
+            // BIG — 2 bolts close in time, big sky flash
+            intensity = 1.7; scale = 1.25;
+            spawnBolt({ scale, branchProb: 0.85 });
+            setTimeout(() => spawnBolt({ scale: scale * 0.9, branchProb: 0.7 }), 60 + Math.random() * 120);
+          }
+          fire(flash);
+          window.dispatchEvent(new CustomEvent('vault:lightning', { detail: { intensity } }));
+
+          // 35% chance of a faint after-flicker bolt
+          if (Math.random() < 0.35) {
+            setTimeout(() => {
+              spawnBolt({ scale: 0.5, branchProb: 0.2, withFlicker: false });
+              fire(flash);
+              window.dispatchEvent(new CustomEvent('vault:lightning', { detail: { intensity: 0.45 } }));
+            }, 280 + Math.random() * 360);
+          }
+        }
+
+        function schedule() {
+          const next = 2500 + Math.random() * 4500;
+          setTimeout(() => { strike(); schedule(); }, next);
+        }
+        setTimeout(() => { strike(); schedule(); }, 1500);
+      })();
+
+      // Card cursor glow
+      document.querySelectorAll('.card').forEach((c) => {
+        c.addEventListener('mousemove', (e) => {
+          const r = c.getBoundingClientRect();
+          c.style.setProperty('--mx', e.clientX - r.left + 'px');
+          c.style.setProperty('--my', e.clientY - r.top + 'px');
+        });
+      });
+
+      // Reveal on scroll — use rootMargin so elements reveal slightly before entering viewport
+      (function () {
+        const els = document.querySelectorAll('.reveal, .step, .card, .section__head, .cta__inner, .hero__stats, .tokencard, .anatomy__bridge, .flow');
+        if (!('IntersectionObserver' in window)) {
+          els.forEach((e) => e.classList.add('is-in'));
+          return;
+        }
+        const io = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (e.isIntersecting) {
+                e.target.classList.add('is-in');
+                io.unobserve(e.target);
+              }
+            });
+          },
+          { threshold: 0.01, rootMargin: '0px 0px -10% 0px' }
+        );
+        els.forEach((e) => {
+          io.observe(e);
+          // If element is already on screen at load, reveal immediately
+          const r = e.getBoundingClientRect();
+          if (r.top < window.innerHeight && r.bottom > 0) {
+            e.classList.add('is-in');
+          }
+        });
+        // Safety net: reveal everything after 1.2s in case IO never fires (e.g. printing/screenshots)
+        setTimeout(() => els.forEach((e) => e.classList.add('is-in')), 1200);
+      })();
+    </script>
+
+    <!-- Count-up animation for [data-count] elements when their section becomes visible -->
+    <script>
+      (function () {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          document.querySelectorAll('[data-count]').forEach((el) => {
+            const target = parseInt(el.dataset.count, 10);
+            el.textContent = formatNum(target);
+          });
+          return;
+        }
+        function formatNum(n) {
+          if (n >= 1000000) {
+            return (n / 1000000).toFixed(n % 1000000 === 0 ? 0 : 1) + 'M';
+          }
+          if (n >= 1000) return (n / 1000).toFixed(0) + 'k';
+          return String(n);
+        }
+        function ease(t) { return 1 - Math.pow(1 - t, 3); }   // easeOutCubic
+        function animate(el) {
+          if (el.dataset.counted) return;
+          el.dataset.counted = '1';
+          const target = parseInt(el.dataset.count, 10) || 0;
+          const duration = target > 1000 ? 1600 : 900;
+          const start = performance.now();
+          function tick(now) {
+            const t = Math.min(1, (now - start) / duration);
+            const v = Math.round(target * ease(t));
+            el.textContent = formatNum(v);
+            if (t < 1) requestAnimationFrame(tick);
+            else el.textContent = formatNum(target);
+          }
+          requestAnimationFrame(tick);
+        }
+        if (!('IntersectionObserver' in window)) {
+          document.querySelectorAll('[data-count]').forEach(animate);
+          return;
+        }
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach((e) => {
+            if (e.isIntersecting) { animate(e.target); io.unobserve(e.target); }
+          });
+        }, { threshold: 0.4 });
+        document.querySelectorAll('[data-count]').forEach((el) => io.observe(el));
+      })();
+    </script>
+
+    <!-- Cinematic typography reveal: phrases reveal at scroll-progress
+         thresholds inside the .reveal section. -->
+    <script>
+      (function () {
+        const section = document.querySelector('.reveal');
+        if (!section) return;
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          section.classList.add('is-revealed-1', 'is-revealed-2', 'is-revealed-3', 'is-revealed-4');
+          return;
+        }
+        // Map of scroll-progress (0..1, where 0 = section top hits viewport top,
+        // 1 = section bottom hits viewport bottom) to reveal step.
+        const stops = [
+          { p: 0.05, step: 1 },  // eyebrow + first phrase
+          { p: 0.32, step: 2 },  // second phrase
+          { p: 0.55, step: 3 },  // caption
+          { p: 0.78, step: 4 },  // scroll hint
+        ];
+        let raf = null;
+        function update() {
+          raf = null;
+          const rect = section.getBoundingClientRect();
+          const vh = window.innerHeight || document.documentElement.clientHeight;
+          const total = rect.height - vh;
+          if (total <= 0) return;
+          // 0 when section top hits viewport top, 1 when bottom hits viewport bottom
+          const progress = Math.max(0, Math.min(1, (-rect.top) / total));
+          stops.forEach(({ p, step }) => {
+            const cls = 'is-revealed-' + step;
+            if (progress >= p) section.classList.add(cls);
+            else section.classList.remove(cls);
+          });
+        }
+        function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll, { passive: true });
+        update();
+      })();
+    </script>
+
+    <!-- Hero video plays at native 1.0× (the file itself is now smoothly
+         time-stretched via motion-interpolation in ffmpeg, so no browser
+         playback-rate manipulation is needed). -->
+
+    <!-- Background music: Handel Sarabande HWV 437 -->
+    <audio id="bg-music" src="assets/sarabande.mp3" loop preload="auto" playsinline></audio>
+    <button id="audio-toggle" type="button" aria-label="Toggle sound" aria-pressed="true" data-state="playing">
+      <svg class="audio-toggle__icon audio-toggle__icon--muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>
+      <svg class="audio-toggle__icon audio-toggle__icon--playing" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a9 9 0 0 1 0 14"/></svg>
+      <span class="audio-toggle__label">Sound</span>
+    </button>
+    <script>
+      (function () {
+        const audio = document.getElementById('bg-music');
+        const btn = document.getElementById('audio-toggle');
+        if (!audio || !btn) return;
+        const KEY = '4626fun.audio.muted';
+        let stored;
+        try { stored = localStorage.getItem(KEY); } catch (_) { stored = null; }
+        // Default: muted until user gesture (browsers block autoplay with sound)
+        let userMuted = stored === '1';
+        audio.volume = 0.32;
+        audio.muted = true;
+        let started = false;
+
+        function setUI(playing) {
+          btn.dataset.state = playing ? 'playing' : 'muted';
+          btn.setAttribute('aria-pressed', playing ? 'true' : 'false');
+          btn.setAttribute('aria-label', playing ? 'Mute sound' : 'Unmute sound');
+        }
+
+        function fadeTo(target, ms) {
+          const start = audio.volume;
+          const t0 = performance.now();
+          function step(t) {
+            const k = Math.min(1, (t - t0) / ms);
+            audio.volume = start + (target - start) * k;
+            if (k < 1) requestAnimationFrame(step);
+          }
+          requestAnimationFrame(step);
+        }
+
+        // Skip the soft tail-of-phrase intro (matches 4626.fun's 5.5s offset)
+        const START_OFFSET = 5.0;
+        const FADE_IN_MS = 3000;
+        const TARGET_VOL = 0.18; // subtle ambient — not loud, not silent
+
+        function seekToStart() {
+          try { audio.currentTime = START_OFFSET; } catch (_) {}
+        }
+        // Loop back to the offset instead of 0 so the intro never plays
+        audio.addEventListener('ended', seekToStart);
+        audio.addEventListener('seeked', () => {}, { once: true });
+
+        async function tryStart() {
+          if (started || userMuted) return;
+          started = true;
           try {
-            const response = await fetch('/api/waitlist/lead', {
-              method: 'POST',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({
-                email: data.get('email'),
-                role: data.get('role'),
-                website: data.get('website'),
-                ...attributionPayload(),
-              }),
-            })
-            const json = await response.json().catch(() => null)
-            if (!response.ok || !json?.success) throw new Error(json?.error || 'Unable to join right now.')
-            track('waitlist_submit_success', { status: json.data?.status || 'new' })
-            if (status) status.textContent = "You're on the list. Watch @4626fun for launch updates."
-            form.reset()
-          } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to join right now.'
-            track('waitlist_submit_error', { message })
-            if (status) status.textContent = message
-          } finally {
-            if (button) button.disabled = false
+            audio.muted = false;
+            audio.volume = 0;
+            seekToStart();
+            await audio.play();
+            fadeTo(TARGET_VOL, FADE_IN_MS);
+            setUI(true);
+          } catch (_) {
+            // Autoplay blocked — wait for explicit click on the toggle.
+            started = false;
           }
-        })
-      }
-      const scrollMarks = new Set()
-      window.addEventListener('scroll', () => {
-        const max = document.documentElement.scrollHeight - window.innerHeight
-        if (max <= 0) return
-        const depth = Math.floor((window.scrollY / max) * 100)
-        ;[25, 50, 75, 100].forEach((mark) => {
-          if (depth >= mark && !scrollMarks.has(mark)) {
-            scrollMarks.add(mark)
-            track(`scroll_depth_${mark}`)
-          }
-        })
-      }, { passive: true })
-    })()
-  </script>
+        }
 
-  <!-- Vault.js renders the 3D chamfered cube with HDRI + bloom into #vault-canvas -->
-  <script type="module" src="./vault.js?v=20260509"></script>
-</body>
+        // Try once on first user gesture anywhere on the page
+        const gestureEvents = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+        const onGesture = () => {
+          gestureEvents.forEach((ev) => window.removeEventListener(ev, onGesture, { passive: true }));
+          tryStart();
+        };
+        gestureEvents.forEach((ev) => window.addEventListener(ev, onGesture, { passive: true, once: true }));
+
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const playing = btn.dataset.state === 'playing';
+          if (playing) {
+            fadeTo(0, 350);
+            setTimeout(() => { audio.pause(); }, 380);
+            userMuted = true;
+            try { localStorage.setItem(KEY, '1'); } catch (_) {}
+            setUI(false);
+          } else {
+            userMuted = false;
+            try { localStorage.setItem(KEY, '0'); } catch (_) {}
+            try {
+              audio.muted = false;
+              audio.volume = 0;
+              if (!started) seekToStart();
+              await audio.play();
+              fadeTo(TARGET_VOL, FADE_IN_MS);
+              started = true;
+              setUI(true);
+            } catch (err) {
+              console.warn('audio play blocked', err);
+            }
+          }
+        });
+
+        // Default ON — show playing state immediately; the first user gesture
+        // (any pointer/scroll/key/touch) will start the audio with a 3s fade.
+        setUI(true);
+      })();
+    </script>
+  </body>
 </html>
