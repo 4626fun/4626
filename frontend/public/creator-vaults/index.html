@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Creator Vaults | 4626.fun</title>
+  <meta name="description" content="A creator vault is an ERC-4626 strategy vault built around a creator coin. Creators deploy. Fans deposit. Outcomes settle on-chain. Pre-launch on Base.">
+  <link rel="canonical" href="https://4626.fun/creator-vaults">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="4626.fun">
+  <meta property="og:title" content="Creator Vaults | 4626.fun">
+  <meta property="og:description" content="ERC-4626 strategy vaults built around creator coins. Pre-launch on Base.">
+  <meta property="og:url" content="https://4626.fun/creator-vaults">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@4626fun">
+  <meta name="twitter:creator" content="@4626fun">
+  <meta name="twitter:title" content="Creator Vaults | 4626.fun">
+  <meta name="twitter:description" content="ERC-4626 strategy vaults built around creator coins. Pre-launch on Base.">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/trust-page.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "name": "Creator Vaults",
+        "url": "https://4626.fun/creator-vaults",
+        "description": "A creator vault is an ERC-4626 strategy vault built around a creator coin. Creators deploy. Fans deposit. Outcomes settle on-chain.",
+        "isPartOf": { "@type": "WebSite", "name": "4626.fun", "url": "https://4626.fun/" },
+        "about": { "@type": "DefinedTerm", "name": "Creator Vault", "url": "https://4626.fun/glossary/creator-vault" }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is a creator vault?",
+            "acceptedAnswer": { "@type": "Answer", "text": "A creator vault is an ERC-4626 strategy vault built around a creator coin. Fans deposit the underlying creator coin and receive ERC-4626 vault share tokens that represent a pro-rata claim on vault assets and any strategy outcomes." }
+          },
+          {
+            "@type": "Question",
+            "name": "Who deploys a creator vault?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Creators deploy their own vault on Base around their creator coin. The genesis deposit seeds the vault and initializes the strategy allocation. 4626.fun is pre-launch — vault deployment opens to approved creators when mainnet ships." }
+          },
+          {
+            "@type": "Question",
+            "name": "What does a depositor receive?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Depositors receive an ERC-4626 share token that represents their pro-rata claim on vault assets. The share is transferable, composable across DeFi, and redeemable subject to vault liquidity." }
+          },
+          {
+            "@type": "Question",
+            "name": "Where is 4626.fun deployed?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Base (Ethereum L2). Cross-chain strategy legs use LayerZero OFT and bridge into Solana via Meteora." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="https://docs.4626.fun">Docs</a>
+      <a href="/risks">Risks</a>
+      <a href="/security">Security</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-hero">
+      <p class="eyebrow">Creator Vaults</p>
+      <h1>An ERC-4626 vault, built around your creator coin.</h1>
+      <p class="lede">A creator vault routes a creator coin into onchain strategies and gives depositors a transferable share token in return. Creators deploy. Fans deposit. The chain settles the math. <strong>Pre-launch — vaults are not live yet.</strong></p>
+      <div class="notice">Demo data on 4626.fun is illustrative. Strategy outcomes are variable and may be zero or negative. <a href="/risks">Read the risks</a>.</div>
+      <div class="status-row" aria-label="Status summary">
+        <span>ERC-4626 native</span>
+        <span>EIP-7540 async</span>
+        <span>Base L2</span>
+        <span>Pre-launch</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="how-it-works">
+      <h2 class="section-title" id="how-it-works">How a creator vault works</h2>
+      <div class="grid three">
+        <article class="card strong"><small>01</small><h2>Creator deploys</h2><p>The creator deploys a vault on Base around their <a href="/glossary/creator-vault">creator coin</a>. The genesis deposit seeds the vault and initializes the strategy split.</p></article>
+        <article class="card strong"><small>02</small><h2>Community deposits</h2><p>Depositors send the creator coin (or another supported asset) to the vault and receive an <a href="/glossary/erc-4626">ERC-4626</a> share token in return — a transferable receipt for their pro-rata claim.</p></article>
+        <article class="card strong"><small>03</small><h2>Strategy settles on-chain</h2><p>The vault routes assets across Ajna lend markets, Charm concentrated LP, and a Solana cross-chain leg. Outcomes are variable. The chain is the audit log.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="who-its-for">
+      <h2 class="section-title" id="who-its-for">Who creator vaults are for</h2>
+      <div class="grid two">
+        <article class="card"><h2>Creators with a coin</h2><p>If your creator coin already has a community on Zora, Coinbase Creator Coins, Clanker, or any ERC-20 launcher, a vault gives that coin somewhere to go after the mint — strategy infrastructure that does not require custom contracts.</p></article>
+        <article class="card"><h2>Fans and depositors</h2><p>Holding a creator coin in a wallet earns nothing. A vault deposit gives you a share token that participates in onchain strategy outcomes — variable, redeemable subject to liquidity, and transferable across DeFi.</p></article>
+        <article class="card"><h2>Builders and strategists</h2><p>Each vault is a configurable allocation across DeFi primitives. Strategists can fork existing vault patterns or propose new ones, and ERC-4626 share tokens compose with everything that already speaks the standard.</p></article>
+        <article class="card"><h2>Base ecosystem partners</h2><p>Creator vaults inherit Base's account abstraction surface — Coinbase Smart Wallet compatible, gas-light, Privy-friendly. Onchain Summer aligned.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="aligned-by-code">
+      <h2 class="section-title" id="aligned-by-code">Aligned by code</h2>
+      <div class="table-list">
+        <div class="table-row"><b>High-water-mark performance fee</b><span>Creators only earn during periods when vault share value rises above its previous peak. Drawdown periods earn no creator fee. Aligned by code, not by promise.</span></div>
+        <div class="table-row"><b>Pro-rata accounting</b><span>Every depositor's claim is a function of shares held divided by total shares. Strategy gains and losses settle proportionally. No special tranches.</span></div>
+        <div class="table-row"><b>EIP-7540 async redemptions</b><span>Liquid strategy positions support immediate redemption. Cross-chain or concentrated-LP positions settle through the EIP-7540 pending → claimable → claimed lifecycle. <a href="/glossary/eip-7540">What is EIP-7540?</a></span></div>
+        <div class="table-row"><b>The chain is the audit log</b><span>Every deposit, allocation, accrual, fee accrual, and redemption is on-chain. No off-chain "trust me." No hidden vault accounting.</span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="status">
+      <h2 class="section-title" id="status">Pre-launch status</h2>
+      <div class="grid two">
+        <article class="card"><h2>Audit in progress</h2><p>4626.fun is pre-launch experimental software. Vaults are not live and there are no live deposits. Audit reports and contract addresses will be published at <a href="/security">/security</a> as the protocol approaches mainnet.</p></article>
+        <article class="card"><h2>Demo vaults are previews</h2><p>The Akita, Jesse, Gabriel Haines, and Nick Shirley vaults shown across 4626.fun are illustrative previews. None are live. Strategy outcomes shown are illustrative, not historical.</p></article>
+      </div>
+      <p style="margin-top:1.5rem;"><a href="/waitlist">Join the waitlist</a> to receive launch updates. The first 200 approved creators receive a vault deployer credit.</p>
+    </section>
+
+    <section aria-labelledby="learn-more">
+      <h2 class="section-title" id="learn-more">Learn more</h2>
+      <div class="grid three">
+        <article class="card"><h2><a href="/erc-4626">ERC-4626 explained</a></h2><p>The tokenized vault standard, why it matters for creator coins, and how 4626.fun extends it with EIP-7540.</p></article>
+        <article class="card"><h2><a href="/vs/yearn">Creator vaults vs. Yearn</a></h2><p>How the creator-coin-first approach differs from anonymous yield aggregation.</p></article>
+        <article class="card"><h2><a href="https://docs.4626.fun">Read the docs</a></h2><p>Vault mechanics, allocation engine, CCA distribution, and integration guides.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div>Official links: <a href="/">4626.fun</a> · <a href="https://docs.4626.fun">docs.4626.fun</a> · <a href="https://x.com/4626fun">@4626fun</a> · <a href="https://discord.com/invite/4626">Discord</a> · <a href="https://t.me/fun4626">Telegram</a> · <a href="mailto:hello@4626.fun">hello@4626.fun</a></div>
+    <div>4626.fun will never DM you first asking for seed phrases, private keys, or deposits. Always verify links from 4626.fun.</div>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Creator Vaults vs. Yearn | 4626.fun</title>
+  <meta name="description" content="Yearn aggregates anonymous capital across yield strategies. 4626.fun applies the same ERC-4626 standard to creator coins, with public-reputation creators and Base-native infrastructure.">
+  <link rel="canonical" href="https://4626.fun/vs/yearn">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="4626.fun">
+  <meta property="og:title" content="Creator Vaults vs. Yearn | 4626.fun">
+  <meta property="og:description" content="ERC-4626 in common. Audience and asset model in different.">
+  <meta property="og:url" content="https://4626.fun/vs/yearn">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@4626fun">
+  <meta name="twitter:creator" content="@4626fun">
+  <meta name="twitter:title" content="Creator Vaults vs. Yearn | 4626.fun">
+  <meta name="twitter:description" content="ERC-4626 in common. Audience and asset model different.">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/trust-page.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": "Creator Vaults vs. Yearn",
+    "description": "Both speak ERC-4626. They're built for different audiences, different assets, and different alignment models.",
+    "url": "https://4626.fun/vs/yearn",
+    "author": { "@type": "Organization", "name": "4626.fun", "url": "https://4626.fun/" },
+    "publisher": { "@type": "Organization", "name": "4626.fun", "url": "https://4626.fun/", "logo": "https://4626.fun/assets/logo-mark-1024.png" },
+    "mainEntityOfPage": "https://4626.fun/vs/yearn"
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="https://docs.4626.fun">Docs</a>
+      <a href="/risks">Risks</a>
+      <a href="/security">Security</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-hero">
+      <p class="eyebrow">Comparison</p>
+      <h1>Creator vaults vs. Yearn.</h1>
+      <p class="lede">Both speak <a href="/erc-4626">ERC-4626</a>. They're built for different audiences, different underlying assets, and different alignment models. Here's where they overlap and where they don't.</p>
+      <div class="notice">This page is informational. 4626.fun is pre-launch. <a href="https://yearn.fi">Yearn Finance</a> has been live since 2020 and is independently audited. We're not making claims about Yearn's risk profile — see their <a href="https://docs.yearn.fi">docs</a> for that.</div>
+      <div class="status-row" aria-label="Snapshot">
+        <span>ERC-4626 — both</span>
+        <span>Asset model — different</span>
+        <span>Audience — different</span>
+        <span>Network — different</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="at-a-glance">
+      <h2 class="section-title" id="at-a-glance">At a glance</h2>
+      <div class="table-list">
+        <div class="table-row"><b>Standard</b><span><strong>4626.fun:</strong> ERC-4626 + EIP-7540 async &nbsp;·&nbsp; <strong>Yearn:</strong> ERC-4626 (V3 vaults)</span></div>
+        <div class="table-row"><b>Underlying asset</b><span><strong>4626.fun:</strong> creator coins (Zora, Coinbase Creator Coins, Clanker, any ERC-20) &nbsp;·&nbsp; <strong>Yearn:</strong> blue-chip ERC-20s (USDC, ETH, DAI, WBTC, etc.)</span></div>
+        <div class="table-row"><b>Vault deployer</b><span><strong>4626.fun:</strong> creators with public reputations and on-chain track records &nbsp;·&nbsp; <strong>Yearn:</strong> Yearn strategist DAO</span></div>
+        <div class="table-row"><b>Audience</b><span><strong>4626.fun:</strong> creator-coin holders + DeFi-curious fans + Base ecosystem &nbsp;·&nbsp; <strong>Yearn:</strong> DeFi-native yield seekers</span></div>
+        <div class="table-row"><b>Network</b><span><strong>4626.fun:</strong> Base-native, with cross-chain strategy legs &nbsp;·&nbsp; <strong>Yearn:</strong> multi-chain (Ethereum, Base, Arbitrum, Optimism, others)</span></div>
+        <div class="table-row"><b>Discovery</b><span><strong>4626.fun:</strong> social leaderboard tied to creator identities &nbsp;·&nbsp; <strong>Yearn:</strong> APY rankings by asset</span></div>
+        <div class="table-row"><b>Fee model</b><span><strong>4626.fun:</strong> creator-set high-water-mark performance fee in basis points &nbsp;·&nbsp; <strong>Yearn:</strong> management + performance fees set by governance</span></div>
+        <div class="table-row"><b>Status</b><span><strong>4626.fun:</strong> pre-launch, audit in progress &nbsp;·&nbsp; <strong>Yearn:</strong> live since 2020, independently audited multiple times</span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="when">
+      <h2 class="section-title" id="when">When does each one make sense?</h2>
+      <div class="grid two">
+        <article class="card"><h2>Use Yearn when</h2><p>You want optimized yield on a blue-chip ERC-20 you already hold, you want exposure to professionally curated DeFi strategies, and you don't need a creator-economy or social discovery layer. Yearn's V3 vaults are battle-tested infrastructure for anonymous capital aggregation.</p></article>
+        <article class="card"><h2>Use a creator vault when</h2><p>You hold a creator coin and want it to do something other than sit idle, OR you want to deposit alongside a creator whose track record you can verify on-chain. Creator vaults are about the social + asset alignment, not just the yield curve.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="overlap">
+      <h2 class="section-title" id="overlap">What they have in common</h2>
+      <div class="grid three">
+        <article class="card"><h2>ERC-4626 shares</h2><p>Both issue ERC-4626 share tokens that compose with downstream DeFi.</p></article>
+        <article class="card"><h2>On-chain accounting</h2><p>Both expose <code>totalAssets()</code> and per-share conversion functions for transparent share-price tracking.</p></article>
+        <article class="card"><h2>Strategy modularity</h2><p>Both vaults route capital across multiple underlying DeFi primitives behind a single share interface.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="differences">
+      <h2 class="section-title" id="differences">Where they differ</h2>
+      <div class="grid two">
+        <article class="card"><h2>Asset reputation</h2><p><strong>Yearn:</strong> assumes the underlying ERC-20 is liquid, deep, and well-priced (USDC, ETH, DAI). <strong>Creator vaults:</strong> the underlying is a creator coin — volatile, illiquid, and tied to a specific creator's community. Different risk profile, different audience.</p></article>
+        <article class="card"><h2>Identity surface</h2><p><strong>Yearn:</strong> strategist DAO; depositors don't have a relationship with strategy authors. <strong>Creator vaults:</strong> the deployer is a named creator with a public X/Farcaster identity and a track record. The social layer is the product.</p></article>
+        <article class="card"><h2>Async settlement</h2><p><strong>Yearn V3:</strong> mostly synchronous redemption against liquid strategies. <strong>4626.fun:</strong> EIP-7540 async by default, since cross-chain and concentrated-LP positions can't always settle in a single tx.</p></article>
+        <article class="card"><h2>Distribution mechanic</h2><p><strong>Yearn:</strong> deposits at any time; share price is the settlement price. <strong>4626.fun:</strong> initial vault share distribution runs through a 7-day Uniswap V4 <a href="/glossary/cca">Continuous Clearing Auction</a> — gradual price discovery, no sniping.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="next">
+      <h2 class="section-title" id="next">Next</h2>
+      <div class="grid three">
+        <article class="card"><h2><a href="/creator-vaults">Creator vaults overview</a></h2><p>How 4626.fun applies the standard.</p></article>
+        <article class="card"><h2><a href="/erc-4626">ERC-4626 explained</a></h2><p>The standard itself, in plain English.</p></article>
+        <article class="card"><h2><a href="/waitlist">Join the waitlist</a></h2><p>Pre-launch. First 200 creators get a vault deployer credit.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div>Official links: <a href="/">4626.fun</a> · <a href="https://docs.4626.fun">docs.4626.fun</a> · <a href="https://x.com/4626fun">@4626fun</a> · <a href="https://discord.com/invite/4626">Discord</a> · <a href="https://t.me/fun4626">Telegram</a> · <a href="mailto:hello@4626.fun">hello@4626.fun</a></div>
+    <div>4626.fun will never DM you first asking for seed phrases, private keys, or deposits. Always verify links from 4626.fun.</div>
+  </footer>
+</body>
+</html>

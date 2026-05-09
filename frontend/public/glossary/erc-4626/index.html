@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ERC-4626 — Glossary | 4626.fun</title>
+  <meta name="description" content="ERC-4626 is the Ethereum tokenized-vault standard, finalized in 2022 as EIP-4626. It defines a uniform interface for any vault that wraps a single ERC-20 underlying asset.">
+  <link rel="canonical" href="https://4626.fun/glossary/erc-4626">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="4626.fun">
+  <meta property="og:title" content="ERC-4626 — Glossary | 4626.fun">
+  <meta property="og:description" content="The Ethereum tokenized-vault standard.">
+  <meta property="og:url" content="https://4626.fun/glossary/erc-4626">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@4626fun">
+  <meta name="twitter:creator" content="@4626fun">
+  <meta name="twitter:title" content="ERC-4626 — Glossary | 4626.fun">
+  <meta name="twitter:description" content="The Ethereum tokenized-vault standard.">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/trust-page.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "DefinedTerm",
+    "name": "ERC-4626",
+    "alternateName": ["EIP-4626", "Tokenized Vault Standard"],
+    "url": "https://4626.fun/glossary/erc-4626",
+    "description": "ERC-4626 is the Ethereum tokenized-vault standard, finalized in 2022 as EIP-4626. It defines a uniform interface (deposit, mint, withdraw, redeem, totalAssets, convertToShares, convertToAssets) for any vault that wraps a single ERC-20 underlying asset. Wallets, aggregators, and other contracts can integrate any ERC-4626 vault without bespoke adapters.",
+    "inDefinedTermSet": { "@type": "DefinedTermSet", "name": "4626.fun Glossary", "url": "https://4626.fun/glossary/" },
+    "sameAs": ["https://eips.ethereum.org/EIPS/eip-4626", "https://ethereum.org/en/developers/docs/standards/tokens/erc-4626/"]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="https://docs.4626.fun">Docs</a>
+      <a href="/risks">Risks</a>
+      <a href="/security">Security</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-hero">
+      <p class="eyebrow">Glossary</p>
+      <h1>ERC-4626</h1>
+      <p class="lede">The Ethereum tokenized-vault standard. <a href="https://eips.ethereum.org/EIPS/eip-4626">EIP-4626</a> defines a uniform interface for any vault that wraps a single ERC-20 underlying asset, so wallets, aggregators, and downstream contracts can integrate any compliant vault without bespoke adapters.</p>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 class="section-title" id="interface">Core interface</h2>
+      <div class="table-list">
+        <div class="table-row"><b><code>asset()</code></b><span>The underlying ERC-20 the vault wraps.</span></div>
+        <div class="table-row"><b><code>totalAssets()</code></b><span>Total underlying held by the vault, including any deployed strategy positions.</span></div>
+        <div class="table-row"><b><code>deposit(assets, receiver)</code></b><span>Sends underlying in, mints share token out.</span></div>
+        <div class="table-row"><b><code>redeem(shares, receiver, owner)</code></b><span>Burns shares, returns the corresponding share of underlying.</span></div>
+        <div class="table-row"><b><code>convertToShares</code> / <code>convertToAssets</code></b><span>Per-share exchange-rate functions.</span></div>
+        <div class="table-row"><b><code>previewDeposit</code> / <code>previewRedeem</code></b><span>Round-trip estimates without simulating a full transaction.</span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="see-also">
+      <h2 class="section-title" id="see-also">See also</h2>
+      <div class="grid three">
+        <article class="card"><h2><a href="/erc-4626">Full explainer</a></h2><p>Long-form ERC-4626 walkthrough.</p></article>
+        <article class="card"><h2><a href="/glossary/eip-7540">EIP-7540</a></h2><p>Async deposits and redemptions.</p></article>
+        <article class="card"><h2><a href="/glossary/creator-vault">Creator vault</a></h2><p>How 4626.fun applies the standard.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div>Official links: <a href="/">4626.fun</a> · <a href="https://docs.4626.fun">docs.4626.fun</a> · <a href="https://x.com/4626fun">@4626fun</a> · <a href="https://discord.com/invite/4626">Discord</a> · <a href="https://t.me/fun4626">Telegram</a> · <a href="mailto:hello@4626.fun">hello@4626.fun</a></div>
+    <div>4626.fun will never DM you first asking for seed phrases, private keys, or deposits. Always verify links from 4626.fun.</div>
+  </footer>
+</body>
+</html>

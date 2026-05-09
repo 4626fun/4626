@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ERC-4626 explained | 4626.fun</title>
+  <meta name="description" content="ERC-4626 is the Ethereum tokenized-vault standard. It defines a common interface for deposit, withdraw, and share accounting. 4626.fun applies it to creator coins on Base.">
+  <link rel="canonical" href="https://4626.fun/erc-4626">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="4626.fun">
+  <meta property="og:title" content="ERC-4626 explained | 4626.fun">
+  <meta property="og:description" content="The tokenized vault standard, applied to creator coins on Base.">
+  <meta property="og:url" content="https://4626.fun/erc-4626">
+  <meta property="og:image" content="https://4626.fun/assets/og-image.png?v=2">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@4626fun">
+  <meta name="twitter:creator" content="@4626fun">
+  <meta name="twitter:title" content="ERC-4626 explained | 4626.fun">
+  <meta name="twitter:description" content="The tokenized vault standard, applied to creator coins on Base.">
+  <meta name="twitter:image" content="https://4626.fun/assets/twitter-card.png?v=2">
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/trust-page.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        "headline": "ERC-4626 explained",
+        "description": "ERC-4626 is the Ethereum tokenized-vault standard. It defines a common interface for deposit, withdraw, and share accounting.",
+        "url": "https://4626.fun/erc-4626",
+        "author": { "@type": "Organization", "name": "4626.fun", "url": "https://4626.fun/" },
+        "publisher": { "@type": "Organization", "name": "4626.fun", "url": "https://4626.fun/", "logo": "https://4626.fun/assets/logo-mark-1024.png" },
+        "mainEntityOfPage": "https://4626.fun/erc-4626"
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is ERC-4626?",
+            "acceptedAnswer": { "@type": "Answer", "text": "ERC-4626 is the Ethereum tokenized-vault standard, finalized in EIP-4626. It defines a uniform interface (deposit, mint, withdraw, redeem, totalAssets, convertToShares, convertToAssets) so any vault that wraps a single ERC-20 underlying asset is readable and integrable by wallets, aggregators, and other contracts." }
+          },
+          {
+            "@type": "Question",
+            "name": "Why does ERC-4626 matter for creator coins?",
+            "acceptedAnswer": { "@type": "Answer", "text": "Creator coins are ERC-20s. ERC-4626 lets you wrap any creator coin in a strategy vault while keeping the share token composable with the rest of DeFi — wallets, indexers, aggregators, and downstream protocols already speak the standard." }
+          },
+          {
+            "@type": "Question",
+            "name": "What is EIP-7540?",
+            "acceptedAnswer": { "@type": "Answer", "text": "EIP-7540 is an extension of ERC-4626 that adds asynchronous deposits and redemptions through a request → claimable → claimed lifecycle. It's the right primitive for vaults that hold cross-chain or concentrated-LP positions where withdrawals can't always settle in a single transaction." }
+          },
+          {
+            "@type": "Question",
+            "name": "Is ERC-4626 audited?",
+            "acceptedAnswer": { "@type": "Answer", "text": "ERC-4626 is a standard, not an implementation. The standard has been reviewed by the Ethereum community since 2022 and has reference implementations from OpenZeppelin and Solmate. Individual ERC-4626 vaults still need their own audits." }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
+    <nav class="nav" aria-label="Primary">
+      <a href="/">Home</a>
+      <a href="https://docs.4626.fun">Docs</a>
+      <a href="/risks">Risks</a>
+      <a href="/security">Security</a>
+      <a href="/about">About</a>
+    </nav>
+  </header>
+  <main id="main" class="wrap">
+    <section class="page-hero">
+      <p class="eyebrow">Standards</p>
+      <h1>ERC-4626 — the tokenized vault standard.</h1>
+      <p class="lede">ERC-4626 defines a common interface for any vault that wraps a single ERC-20 underlying asset. Deposit, mint, withdraw, redeem, share accounting — every 4626 vault speaks the same language, so the rest of DeFi can integrate without bespoke adapters. 4626.fun applies the standard to <a href="/glossary/creator-vault">creator coins</a> on Base.</p>
+      <div class="notice">Reference implementations: <a href="https://docs.openzeppelin.com/contracts/5.x/erc4626">OpenZeppelin</a> · <a href="https://github.com/transmissions11/solmate">Solmate</a> · spec: <a href="https://eips.ethereum.org/EIPS/eip-4626">EIP-4626</a>.</div>
+      <div class="status-row" aria-label="Status summary">
+        <span>Finalized 2022</span>
+        <span>ERC-20 underlying</span>
+        <span>Composable shares</span>
+        <span>Audit-friendly</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="interface">
+      <h2 class="section-title" id="interface">The interface, in one breath</h2>
+      <div class="grid three">
+        <article class="card strong"><small>01</small><h2>Asset and shares</h2><p>Every 4626 vault has one underlying ERC-20 (<code>asset()</code>) and issues an ERC-20 share token (<code>balanceOf</code>, <code>transfer</code>, etc.). Shares represent a pro-rata claim on <code>totalAssets()</code>.</p></article>
+        <article class="card strong"><small>02</small><h2>Deposit and withdraw</h2><p><code>deposit(assets, receiver)</code> mints shares. <code>redeem(shares, receiver, owner)</code> burns shares and returns assets. <code>convertToShares</code> and <code>convertToAssets</code> express the current exchange rate.</p></article>
+        <article class="card strong"><small>03</small><h2>Limits and previews</h2><p><code>maxDeposit</code>, <code>maxWithdraw</code>, <code>previewDeposit</code>, <code>previewRedeem</code> let integrators reason about caps and round-trip values without simulating a full transaction.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="why-it-matters">
+      <h2 class="section-title" id="why-it-matters">Why it matters for creator coins</h2>
+      <div class="grid two">
+        <article class="card"><h2>Composability inherited free</h2><p>Wallets, portfolio trackers, aggregators, and downstream protocols already understand ERC-4626. A creator-coin vault built on the standard inherits that integration surface without writing a single bespoke adapter.</p></article>
+        <article class="card"><h2>Audit-friendly surface area</h2><p>The standard's narrow interface and well-known reference implementations mean auditors can focus on the strategy and accounting logic rather than re-deriving deposit-and-redeem semantics from scratch.</p></article>
+        <article class="card"><h2>Strategy modularity</h2><p>4626 vaults can route capital through any combination of DeFi primitives — lending, concentrated LP, cross-chain — while presenting a single uniform share to the depositor.</p></article>
+        <article class="card"><h2>Transferable receipts</h2><p>A vault share is just an ERC-20. It can be held, sent, used as collateral, or wrapped further — the position itself is portable, not locked inside a custom interface.</p></article>
+      </div>
+    </section>
+
+    <section aria-labelledby="async">
+      <h2 class="section-title" id="async">EIP-7540 — async deposits and redemptions</h2>
+      <p>Some vault strategies can't always settle in a single transaction — cross-chain bridges, concentrated LP unwinds, or auction-priced exits. <a href="https://eips.ethereum.org/EIPS/eip-7540">EIP-7540</a> extends ERC-4626 with a request-and-claim lifecycle so async withdrawals stay inside the standard's interface.</p>
+      <div class="table-list">
+        <div class="table-row"><b>requestDeposit / requestRedeem</b><span>Depositors signal intent. The vault may queue, batch, or schedule the actual settlement based on its strategy state.</span></div>
+        <div class="table-row"><b>pending → claimable</b><span>The vault transitions the request through a public on-chain state machine. Integrators can query <code>pendingDepositRequest</code> and <code>claimableDepositRequest</code>.</span></div>
+        <div class="table-row"><b>claim</b><span>Once claimable, the depositor (or anyone permitted) finalizes the deposit or redemption in a normal transaction. <a href="/glossary/eip-7540">More on EIP-7540 →</a></span></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="learn-more">
+      <h2 class="section-title" id="learn-more">Read more</h2>
+      <div class="grid three">
+        <article class="card"><h2><a href="/creator-vaults">Creator vaults</a></h2><p>How 4626.fun applies the standard to creator coins.</p></article>
+        <article class="card"><h2><a href="/glossary/cca">Continuous Clearing Auction</a></h2><p>How vault share tokens are distributed at launch via Uniswap V4.</p></article>
+        <article class="card"><h2><a href="/vs/yearn">Creator vaults vs. Yearn</a></h2><p>The difference between anonymous yield aggregation and creator-coin-first vault infrastructure.</p></article>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div>Official links: <a href="/">4626.fun</a> · <a href="https://docs.4626.fun">docs.4626.fun</a> · <a href="https://x.com/4626fun">@4626fun</a> · <a href="https://discord.com/invite/4626">Discord</a> · <a href="https://t.me/fun4626">Telegram</a> · <a href="mailto:hello@4626.fun">hello@4626.fun</a></div>
+    <div>4626.fun will never DM you first asking for seed phrases, private keys, or deposits. Always verify links from 4626.fun.</div>
+  </footer>
+</body>
+</html>

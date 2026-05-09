@@ -15,9 +15,17 @@ const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1'])
 
 const INDEXABLE_ROUTES: CanonicalRouteConfig[] = [
   { path: '/', changefreq: 'daily', priority: '1.0' },
+  { path: '/creator-vaults', changefreq: 'weekly', priority: '0.9' },
+  { path: '/erc-4626', changefreq: 'weekly', priority: '0.9' },
   { path: '/risks', changefreq: 'weekly', priority: '0.8' },
   { path: '/security', changefreq: 'weekly', priority: '0.7' },
   { path: '/about', changefreq: 'weekly', priority: '0.7' },
+  { path: '/vs/yearn', changefreq: 'weekly', priority: '0.6' },
+  { path: '/glossary/', changefreq: 'weekly', priority: '0.6' },
+  { path: '/glossary/creator-vault', changefreq: 'weekly', priority: '0.5' },
+  { path: '/glossary/erc-4626', changefreq: 'weekly', priority: '0.5' },
+  { path: '/glossary/eip-7540', changefreq: 'weekly', priority: '0.5' },
+  { path: '/glossary/cca', changefreq: 'weekly', priority: '0.5' },
   { path: '/terms', changefreq: 'weekly', priority: '0.5' },
   { path: '/privacy', changefreq: 'weekly', priority: '0.5' },
 ]
