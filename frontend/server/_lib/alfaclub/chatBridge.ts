@@ -67,6 +67,7 @@ const SOCKET_BACKOFF_CAP_MS = 60_000
 const LOG_ROLLUP_WINDOW_MS = 60_000
 const WS_CLOSE_CHURN_WINDOW_MS = 60_000
 const WS_CLOSE_CHURN_THRESHOLD = 5
+const FIRST_TICK_RECENT_COMMAND_WINDOW_MS = 60_000
 
 type AlfaClubRoomHistoryMessage = {
   id?: string
@@ -98,6 +99,7 @@ type AlfaClubOutboundFrame = {
     room: string
     text: string
     attachments: AlfaClubMessageAttachment[]
+    reply_id?: string
   }
 }
 
@@ -483,6 +485,7 @@ export function buildAlfaClubOutboundFrame(params: {
   roomId: string
   text: string
   attachments?: unknown
+  replyToMessageId?: string
 }): AlfaClubOutboundFrame {
   return {
     type: 'message',
@@ -490,6 +493,7 @@ export function buildAlfaClubOutboundFrame(params: {
       room: params.roomId,
       text: params.text,
       attachments: normalizeAlfaClubAttachments(params.attachments),
+      ...(params.replyToMessageId ? { reply_id: params.replyToMessageId } : {}),
     },
   }
 }
@@ -534,7 +538,7 @@ const BARE_GMEOW_TRUSTED_SENDERS: ReadonlySet<string> = new Set([
 
 function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boolean {
   if (!BARE_GMEOW_TRUSTED_SENDERS.has(senderLower)) return false
-  return rawText.trim().toLowerCase() === 'gmeow'
+  return /^gmeow+\b/.test(rawText.trim().toLowerCase())
 }
 
 /**
@@ -1160,6 +1164,7 @@ async function sendRoomMessageViaBotToken(params: {
   botToken: string
   roomId: string
   text: string
+  replyToMessageId?: string
   idempotencyKey: string
   timeoutMs: number
 }): Promise<void> {
@@ -1177,6 +1182,7 @@ async function sendRoomMessageViaBotToken(params: {
       },
       body: JSON.stringify({
         body: truncateAlfaClubBotMessage(params.text),
+        ...(params.replyToMessageId ? { reply_id: params.replyToMessageId } : {}),
       }),
       signal: controller.signal,
     })
@@ -1199,6 +1205,7 @@ async function sendRoomMessageViaWebSocket(params: {
   roomId: string
   text: string
   attachments?: unknown
+  replyToMessageId?: string
   timeoutMs: number
 }): Promise<void> {
   const WebSocketCtor = getBridgeWebSocketCtor()
@@ -1214,6 +1221,7 @@ async function sendRoomMessageViaWebSocket(params: {
       roomId: params.roomId,
       text: params.text,
       attachments: params.attachments,
+      replyToMessageId: params.replyToMessageId,
     }),
   )
 
@@ -2100,6 +2108,7 @@ async function executeCommandBatch(params: {
           botToken: params.flags.botToken,
           roomId: params.roomId,
           text: responseText,
+          replyToMessageId: command.id,
           idempotencyKey: buildBotMessageIdempotencyKey({
             roomId: params.roomId,
             messageId: command.id,
@@ -2113,6 +2122,7 @@ async function executeCommandBatch(params: {
           roomId: params.roomId,
           text: responseText,
           attachments,
+          replyToMessageId: command.id,
           timeoutMs: params.flags.sendTimeoutMs,
         })
       }
@@ -2410,14 +2420,33 @@ async function runBridgeTick(
   if (!bridgeState.seeded) {
     bridgeState.seeded = true
     if (seedHistoryOnlyOnFirstTick) {
+      const recentCutoffMs = Date.now() - FIRST_TICK_RECENT_COMMAND_WINDOW_MS
+      const recentMessages = unseenMessages.filter((message) => {
+        const date = Number(message.date)
+        return Number.isFinite(date) && date >= recentCutoffMs
+      })
+      const recentCommands = collectAlfaClubCommandMessages({
+        messages: recentMessages,
+        seenMessageIds: new Set<string>(),
+        selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
+      })
+      const recentBatch =
+        recentCommands.length > 0
+          ? await executeCommandBatch({
+              commands: recentCommands,
+              flags,
+              roomId,
+              jwt,
+            })
+          : { processed: 0, replied: 0, errors: [] as Array<{ messageId: string; error: string }> }
       return {
         seeded: true,
         roomId,
         fetched: fetchedMessages.length,
         unseen: unseenMessages.length,
-        processed: 0,
-        replied: 0,
-        errors: [],
+        processed: recentBatch.processed,
+        replied: recentBatch.replied,
+        errors: recentBatch.errors,
       }
     }
   }
@@ -2633,6 +2662,7 @@ export async function _sendRoomMessageViaBotTokenForTests(params: {
   botToken: string
   roomId: string
   text: string
+  replyToMessageId?: string
   idempotencyKey: string
   timeoutMs: number
 }): Promise<void> {

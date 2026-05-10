@@ -35,6 +35,7 @@ vi.mock('../../agent/core/executeDeterministicCommand.js', () => ({
 }))
 
 import {
+  collectAlfaClubCommandMessages,
   _ensureLiveCommandSocketForTests,
   _getBridgeAuthStateForTests,
   _resetAlfaClubChatBridgeStateForTests,
@@ -123,6 +124,15 @@ function mockHistoryStatus(status: number): void {
 function mockHistorySuccess(): void {
   globalThis.fetch = vi.fn(async () =>
     new Response(JSON.stringify({ messages: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }),
+  ) as unknown as typeof fetch
+}
+
+function mockHistoryMessages(messages: Array<{ id: string; date: number; sender: string; text: string }>): void {
+  globalThis.fetch = vi.fn(async () =>
+    new Response(JSON.stringify({ messages }), {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }),
@@ -378,5 +388,37 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
       latestCode: 1005,
       closesInWindow: 5,
     })
+  })
+
+  it('normalizes trusted sender bare gmeow variants into /gmeow', () => {
+    const commands = collectAlfaClubCommandMessages({
+      messages: [
+        {
+          id: 'm-gmeow',
+          date: Date.now(),
+          sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+          text: 'Gmeoww https://x.com/i/status/2053460215681695890',
+        },
+      ],
+      seenMessageIds: new Set<string>(),
+    })
+    expect(commands).toHaveLength(1)
+    expect(commands[0]?.text).toBe('/gmeow')
+  })
+
+  it('processes recent slash commands on first seed tick', async () => {
+    const nowMs = Date.now()
+    mockHistoryMessages([
+      {
+        id: 'm-recent-gmeow',
+        date: nowMs - 10_000,
+        sender: '0x64c3fb828bd2a8cde9cde14d0295d34916bb94e9',
+        text: '/gmeow',
+      },
+    ])
+
+    const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
+    expect(result.seeded).toBe(true)
+    expect(result.processed).toBe(1)
   })
 })

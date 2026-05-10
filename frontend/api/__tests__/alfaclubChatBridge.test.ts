@@ -296,7 +296,7 @@ describe('collectAlfaClubCommandMessages', () => {
       expect(commands).toHaveLength(0)
     })
 
-    it('does not trigger on bare gmeow with extra content even from Manito', () => {
+    it('triggers when trusted text starts with gmeow, but not when gmeow appears later', () => {
       const commands = collectAlfaClubCommandMessages({
         seenMessageIds: new Set<string>(),
         selfAddress: SELF,
@@ -306,7 +306,9 @@ describe('collectAlfaClubCommandMessages', () => {
           { id: 'm3', date: 102, sender: MANITO, text: 'gmeow!' },
         ],
       })
-      expect(commands).toHaveLength(0)
+      expect(commands).toHaveLength(2)
+      expect(commands[0]).toMatchObject({ id: 'm1', text: '/gmeow' })
+      expect(commands[1]).toMatchObject({ id: 'm3', text: '/gmeow' })
     })
 
     it('still routes a real /gmeow with args from any sender', () => {
@@ -446,6 +448,27 @@ describe('sendRoomMessageViaBotToken', () => {
     expect(request?.headers['Content-Type']).toBe('application/json')
     expect(request?.headers['Idempotency-Key']).toBe('alfaclub-bridge:1043:m-1')
     expect(JSON.parse(request?.body ?? '{}')).toEqual({ body: 'gmeow from Hermit' })
+  })
+
+  it('includes reply_id when responding to a triggering room message', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy(captured)
+    try {
+      await _sendRoomMessageViaBotTokenForTests({
+        apiBaseUrl: 'https://api.alfaclub.app',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'replying in thread',
+        replyToMessageId: 'origin-message-123',
+        idempotencyKey: 'alfaclub-bridge:1043:m-origin',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    const body = JSON.parse(captured[0]?.body ?? '{}')
+    expect(body).toEqual({ body: 'replying in thread', reply_id: 'origin-message-123' })
   })
 
   it('bounds message bodies to AlfaClub bot-token limits', async () => {
