@@ -145,6 +145,21 @@ const RECOGNISED_IMAGE_EXTS: ReadonlySet<InferredImageExtension> = new Set([
   'webp',
 ])
 
+const DEFAULT_HERMIT_MEDIA_ALLOWED_HOST_PATTERNS: readonly string[] = [
+  'media.tenor.com',
+  'i.giphy.com',
+  'media.giphy.com',
+  '4626.fun',
+  'pinata.4626.fun',
+  '*.mypinata.cloud',
+  'ipfs.decentralized-content.com',
+  'pbs.twimg.com',
+  // RFC 2606 reserved domain used in unit tests.
+  '*.example.com',
+  '*.example',
+  'example',
+]
+
 function pickImageExtension(name: string): InferredImageExtension | null {
   const dot = name.lastIndexOf('.')
   if (dot < 0 || dot === name.length - 1) return null
@@ -178,6 +193,31 @@ function resolveImageNameAndExt(
   return null
 }
 
+function readHermitMediaAllowedHostPatterns(): string[] {
+  const raw = asTrimmed(process.env.HERMIT_MEDIA_ALLOWED_HOSTS)
+  if (!raw) return [...DEFAULT_HERMIT_MEDIA_ALLOWED_HOST_PATTERNS]
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+}
+
+function hostMatchesAllowedPattern(hostname: string, pattern: string): boolean {
+  if (pattern === '*') return true
+  if (pattern.startsWith('*.')) {
+    const suffix = pattern.slice(2)
+    if (!suffix) return false
+    return hostname === suffix || hostname.endsWith(`.${suffix}`)
+  }
+  return hostname === pattern
+}
+
+function isHermitMediaHostAllowed(hostname: string): boolean {
+  const patterns = readHermitMediaAllowedHostPatterns()
+  if (patterns.length === 0) return false
+  return patterns.some((pattern) => hostMatchesAllowedPattern(hostname, pattern))
+}
+
 const IMAGE_EXTENSION_MIME_TYPE: Record<InferredImageExtension, string> = {
   gif: 'image/gif',
   jpg: 'image/jpeg',
@@ -203,6 +243,7 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
 
   const resolved = resolveImageNameAndExt(pathname, hintedFilename)
   if (!resolved) return null
+  if (!isHermitMediaHostAllowed(hostname)) return null
   const { filename, extension } = resolved
 
   // Tenor's `media.tenor.com` GIFs are a known special case in

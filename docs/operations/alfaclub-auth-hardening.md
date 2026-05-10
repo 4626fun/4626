@@ -177,6 +177,28 @@ Or via the web UI: **Repo → Settings → Secrets and variables → Actions
 the same `CRON_SECRET` configured on Vercel for
 `/api/v1/alfaclub/chat-auth-health`.
 
+## Quick `/gmeow` smoke check
+
+After Railway/Vercel deploys, run a room-level smoke check from the
+repo root to verify end-to-end command ingest and reply:
+
+```sh
+pnpm -C frontend exec tsx --env-file=.env scripts/alfaclub-chat-smoke.ts \
+  --jwt "<fresh alfaclub privy jwt>" \
+  --admin-address 0x<admin_wallet> \
+  --origin https://4626.fun \
+  --room 1043 \
+  --command "/gmeow" \
+  --expect-text "cat laugh"
+```
+
+Notes:
+
+- Use `--skip-rotate` if you only want to test with the currently active token.
+- `--expect-text` is optional; keep it for deterministic post-deploy checks.
+- Success means the script prints `✅ reply detected` and shows the new
+  non-command message rows.
+
 To override the URL (e.g. point the probe at a staging deploy), set a
 **repository variable** (not a secret) named `ALFACLUB_HEALTH_URL`.
 Default is `https://app.4626.fun/api/v1/alfaclub/chat-auth-health`.

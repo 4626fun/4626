@@ -86,16 +86,14 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
-    expect(result.reply).toContain('https://4626.fun/ipfs/')
-    // After widening `inferPublicMediaAttachment` to read the
-    // `?filename=` hint and to recognise generic GIFs, the catlaugh
-    // ipfs fixture now produces an inline media attachment so the
+    expect(result.reply).toContain('https://')
+    // /gmeow should still emit an inline media attachment so the
     // AlfaClub client renders it as an image rather than a hyperlink.
     expect(result.mediaAttachments).toEqual([
       {
-        url: expect.stringContaining('catlaugh.gif'),
+        url: expect.stringContaining('/giphy.gif'),
         type: 'photo',
-        filename: 'catlaugh.gif',
+        filename: 'giphy.gif',
         mime_type: 'image/gif',
       },
     ])
@@ -109,12 +107,12 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
-    expect(result.reply).toContain('https://4626.fun/ipfs/')
+    expect(result.reply).toContain('https://')
     expect(result.mediaAttachments).toEqual([
       {
-        url: expect.stringContaining('catlaugh.gif'),
+        url: expect.stringContaining('/giphy.gif'),
         type: 'photo',
-        filename: 'catlaugh.gif',
+        filename: 'giphy.gif',
         mime_type: 'image/gif',
       },
     ])

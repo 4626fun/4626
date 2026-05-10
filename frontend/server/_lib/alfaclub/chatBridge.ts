@@ -65,6 +65,8 @@ const BAD_JWT_TTL_MS = 30_000
 const SOCKET_BACKOFF_INITIAL_MS = 1_000
 const SOCKET_BACKOFF_CAP_MS = 60_000
 const LOG_ROLLUP_WINDOW_MS = 60_000
+const WS_CLOSE_CHURN_WINDOW_MS = 60_000
+const WS_CLOSE_CHURN_THRESHOLD = 5
 
 type AlfaClubRoomHistoryMessage = {
   id?: string
@@ -249,6 +251,34 @@ function parseOptionalPositiveInt(value: string | undefined, max: number): numbe
   return Math.min(n, max)
 }
 
+function parseTelegramChatRef(value: string | null): {
+  chatId: string | null
+  inferredThreadId: number | null
+} {
+  const raw = String(value ?? '').trim()
+  if (!raw) return { chatId: null, inferredThreadId: null }
+
+  const privateRoomUrlMatch = /^https?:\/\/t\.me\/c\/(\d+)(?:\/(\d+))?\/?$/i.exec(raw)
+  if (privateRoomUrlMatch) {
+    const roomDigits = privateRoomUrlMatch[1]
+    return {
+      chatId: `-100${roomDigits}`,
+      inferredThreadId: parseOptionalPositiveInt(privateRoomUrlMatch[2], 2_000_000_000),
+    }
+  }
+
+  const publicChatUrlMatch = /^https?:\/\/t\.me\/([A-Za-z0-9_]{5,})(?:\/(\d+))?\/?$/i.exec(raw)
+  if (publicChatUrlMatch) {
+    const handle = publicChatUrlMatch[1]
+    return {
+      chatId: `@${handle}`,
+      inferredThreadId: parseOptionalPositiveInt(publicChatUrlMatch[2], 2_000_000_000),
+    }
+  }
+
+  return { chatId: raw, inferredThreadId: null }
+}
+
 function normalizeApiBaseUrl(raw: string | undefined): string {
   const value = (raw ?? '').trim() || DEFAULT_API_BASE_URL
   try {
@@ -368,11 +398,20 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const roomIdRaw = (process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
   const groupIdRaw = (process.env.ALFACLUB_CHAT_GROUP_ID ?? '').trim()
-  const telegramRelayBotToken = (process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim() || null
-  const telegramRelayChatId =
-    (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '').trim() ||
-    (process.env.TELEGRAM_TARGET_CHAT_ID ?? '').trim() ||
+  const telegramRelayBotToken =
+    (process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim() ||
+    (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() ||
     null
+  const telegramRelayChatRef = parseTelegramChatRef(
+    (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '').trim() ||
+      (process.env.TELEGRAM_TARGET_CHAT_ID ?? '').trim() ||
+      null,
+  )
+  const telegramRelayChatId = telegramRelayChatRef.chatId
+  const telegramRelayThreadIdFromEnv = parseOptionalPositiveInt(
+    process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID,
+    2_000_000_000,
+  )
   const telegramRelayEnabledFallback = Boolean(telegramRelayBotToken && telegramRelayChatId)
 
   return {
@@ -425,10 +464,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     ),
     telegramRelayBotToken,
     telegramRelayChatId,
-    telegramRelayThreadId: parseOptionalPositiveInt(
-      process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID,
-      2_000_000_000,
-    ),
+    telegramRelayThreadId: telegramRelayThreadIdFromEnv ?? telegramRelayChatRef.inferredThreadId,
   }
 }
 
@@ -1277,6 +1313,8 @@ const bridgeAuthState = {
   wsErrorFlushTimer: null as RollupTimer,
   wsErrorRoomId: null as string | null,
   wsErrorLastMessage: null as string | null,
+  wsCloseAtMs: [] as number[],
+  wsCloseChurnLastLoggedAt: Number.NEGATIVE_INFINITY,
   cfChallengeRepeats: 0,
   cfChallengeFirstAt: 0,
   cfChallengeFirstCfRay: null as string | null,
@@ -1620,6 +1658,32 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   bridgeAuthState.wsErrorFlushTimer = timer
 }
 
+function noteWsCloseEvent(params: {
+  roomId: string
+  code: number | null
+  reason: string
+  now?: number
+}): void {
+  const now = params.now ?? Date.now()
+  const windowStart = now - WS_CLOSE_CHURN_WINDOW_MS
+  bridgeAuthState.wsCloseAtMs = bridgeAuthState.wsCloseAtMs.filter((value) => value >= windowStart)
+  bridgeAuthState.wsCloseAtMs.push(now)
+
+  const closesInWindow = bridgeAuthState.wsCloseAtMs.length
+  if (closesInWindow < WS_CLOSE_CHURN_THRESHOLD) return
+  if (now - bridgeAuthState.wsCloseChurnLastLoggedAt <= LOG_ROLLUP_WINDOW_MS) return
+
+  bridgeAuthState.wsCloseChurnLastLoggedAt = now
+  logger.warn('[alfaclub-chat] ws_close_churn', {
+    roomId: params.roomId,
+    closesInWindow,
+    windowMs: WS_CLOSE_CHURN_WINDOW_MS,
+    latestCode: params.code,
+    latestReason: params.reason.slice(0, 120),
+    socketBackoffMs: bridgeAuthState.socketBackoffMs,
+  })
+}
+
 function resetAuthFailureRollup(): void {
   if (bridgeAuthState.authFailFlushTimer) {
     clearTimeout(bridgeAuthState.authFailFlushTimer)
@@ -1935,10 +1999,17 @@ function ensureLiveCommandSocket(params: {
 
   const onClose = (event?: any): void => {
     applySocketBackoff()
+    const closeCode = typeof event?.code === 'number' ? event.code : null
+    const closeReason = typeof event?.reason === 'string' ? event.reason.slice(0, 120) : ''
     logger.warn('[alfaclub-chat] ws_close', {
       roomId: params.roomId,
-      code: typeof event?.code === 'number' ? event.code : null,
-      reason: typeof event?.reason === 'string' ? event.reason.slice(0, 120) : '',
+      code: closeCode,
+      reason: closeReason,
+    })
+    noteWsCloseEvent({
+      roomId: params.roomId,
+      code: closeCode,
+      reason: closeReason,
     })
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
@@ -2596,6 +2667,8 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  bridgeAuthState.wsCloseAtMs = []
+  bridgeAuthState.wsCloseChurnLastLoggedAt = Number.NEGATIVE_INFINITY
   if (bridgeAuthState.cfChallengeFlushTimer) {
     clearTimeout(bridgeAuthState.cfChallengeFlushTimer)
     bridgeAuthState.cfChallengeFlushTimer = null

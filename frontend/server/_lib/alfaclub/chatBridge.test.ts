@@ -39,6 +39,7 @@ import {
   _getBridgeAuthStateForTests,
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
+  readAlfaClubChatBridgeFlags,
   type AlfaClubChatBridgeFlags,
 } from './chatBridge.js'
 import {
@@ -292,5 +293,59 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
 
     expect(readBridgeAuthHealthSnapshot().consecutiveAuthFailures).toBe(0)
     expect(_getBridgeAuthStateForTests().lastBadJwt).toBeNull()
+  })
+
+  it('normalizes t.me/c URLs and falls back to TELEGRAM_BOT_TOKEN', () => {
+    const previousRelayChat = process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID
+    const previousRelayThread = process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID
+    const previousRelayBotToken = process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
+    const previousTelegramBotToken = process.env.TELEGRAM_BOT_TOKEN
+    try {
+      process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID = 'https://t.me/c/3709479662/2'
+      delete process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID
+      delete process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
+      process.env.TELEGRAM_BOT_TOKEN = 'fallback-token'
+
+      const flags = readAlfaClubChatBridgeFlags()
+      expect(flags.telegramRelayChatId).toBe('-1003709479662')
+      expect(flags.telegramRelayThreadId).toBe(2)
+      expect(flags.telegramRelayBotToken).toBe('fallback-token')
+    } finally {
+      if (typeof previousRelayChat === 'undefined') delete process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID
+      else process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID = previousRelayChat
+
+      if (typeof previousRelayThread === 'undefined') delete process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID
+      else process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID = previousRelayThread
+
+      if (typeof previousRelayBotToken === 'undefined') delete process.env.ALFACLUB_TELEGRAM_BOT_TOKEN
+      else process.env.ALFACLUB_TELEGRAM_BOT_TOKEN = previousRelayBotToken
+
+      if (typeof previousTelegramBotToken === 'undefined') delete process.env.TELEGRAM_BOT_TOKEN
+      else process.env.TELEGRAM_BOT_TOKEN = previousTelegramBotToken
+    }
+  })
+
+  it('warns when websocket closes churn inside 60 seconds', () => {
+    const flags = makeFlags()
+    for (let i = 0; i < 5; i += 1) {
+      _ensureLiveCommandSocketForTests({
+        websocketUrl: flags.websocketUrl,
+        roomId: '1043',
+        jwt: 'jwt-a',
+        flags,
+      })
+      latestFakeSocket()?.emit('close', { code: 1005, reason: '' })
+      vi.advanceTimersByTime(_getBridgeAuthStateForTests().socketBackoffMs + 1)
+    }
+
+    const churnWarnings = loggerMock.warn.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_close_churn',
+    )
+    expect(churnWarnings).toHaveLength(1)
+    expect(churnWarnings[0]?.[1]).toMatchObject({
+      roomId: '1043',
+      latestCode: 1005,
+      closesInWindow: 5,
+    })
   })
 })

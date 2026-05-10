@@ -23,7 +23,7 @@ const DEFAULT_MEMES: HermitMeme[] = [
   },
   {
     id: 'catlaugh-1',
-    url: 'https://4626.fun/ipfs/bafybeiaj73ww23xkpuvrptykhu5ukcykd6w3fe5juc3zl6elzfz7tbj2jq?filename=catlaugh.gif',
+    url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
     caption: 'cat laugh from the Hermit cave.',
     tags: ['laugh', 'cat', 'meme'],
   },

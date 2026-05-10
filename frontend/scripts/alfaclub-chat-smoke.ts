@@ -53,6 +53,7 @@ Optional:
   --api-url <url>           AlfaClub API URL (default https://api.alfaclub.app)
   --poll-ms <ms>            Poll interval for reply check (default 3000)
   --timeout-ms <ms>         Total wait for reply (default 30000)
+  --expect-text <value>     Require reply text to contain this substring (case-insensitive)
   --skip-rotate             Skip POST /api/v1/alfaclub/chat-token rotation
 
 Env requirements:
@@ -231,6 +232,7 @@ async function main(): Promise<void> {
   const apiUrl = getArg('--api-url', 'https://api.alfaclub.app')
   const pollMs = toPositiveInt(getArg('--poll-ms', '3000'), 3000)
   const timeoutMs = toPositiveInt(getArg('--timeout-ms', '30000'), 30000)
+  const expectText = getArg('--expect-text', '').trim().toLowerCase()
   const skipRotate = hasFlag('--skip-rotate')
 
   if (!jwt) throw new Error('Missing --jwt')
@@ -244,6 +246,9 @@ async function main(): Promise<void> {
     throw new Error('Command must start with "/" (e.g. /alfa status)')
   }
   process.stdout.write(`[alfaclub-smoke] origin=${appOrigin} room=${roomId} command=${JSON.stringify(command)}\n`)
+  if (expectText) {
+    process.stdout.write(`[alfaclub-smoke] expecting reply text containing ${JSON.stringify(expectText)}\n`)
+  }
 
   if (!skipRotate) {
     if (!isAddressLike(adminAddress)) {
@@ -320,9 +325,17 @@ async function main(): Promise<void> {
 
     const nonCommandFresh = fresh.filter((m) => !isCommandText(String(m.text ?? '')))
     if (nonCommandFresh.length > 0) {
+      const matching = !expectText
+        ? nonCommandFresh
+        : nonCommandFresh.filter((m) =>
+            String(m.text ?? '').toLowerCase().includes(expectText),
+          )
+      if (matching.length === 0) {
+        continue
+      }
       process.stdout.write('[alfaclub-smoke] ✅ reply detected\n')
       process.stdout.write(
-        `${nonCommandFresh
+        `${matching
           .slice(0, 3)
           .map((m) => `  - ${summarizeMessage(m)}`)
           .join('\n')}\n`,
@@ -332,7 +345,7 @@ async function main(): Promise<void> {
   }
 
   throw new Error(
-    `No non-command reply observed within ${timeoutMs}ms. Check Vercel cron logs for [alfaclub-chat] tick errors (or Railway logs if the long-lived in-process bridge is enabled).`,
+    `No matching non-command reply observed within ${timeoutMs}ms${expectText ? ` (expected text: ${expectText})` : ''}. Check Vercel cron logs for [alfaclub-chat] tick errors (or Railway logs if the long-lived in-process bridge is enabled).`,
   )
 }
 

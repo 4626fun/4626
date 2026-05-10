@@ -407,9 +407,9 @@ describe('/gmeow — attachment behavior unchanged by /meme work', () => {
     expect(result.kind).toBe('gmeow')
     expect(result.mediaAttachments).toEqual([
       {
-        url: expect.stringContaining('catlaugh.gif'),
+        url: expect.stringContaining('/giphy.gif'),
         type: 'photo',
-        filename: 'catlaugh.gif',
+        filename: 'giphy.gif',
         mime_type: 'image/gif',
       },
     ])
