@@ -5,20 +5,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 LOCAL_BATCHER_HELPER="$FRONTEND_DIR/scripts/deploy-local-batcher.ts"
-DEFAULT_PRESET_FILE="$FRONTEND_DIR/.env.deploy-dry-run.example"
 LOCAL_PRESET_FILE="$FRONTEND_DIR/.env.deploy-dry-run.local"
 PRESET_FILE="${DEPLOY_DRY_RUN_ENV_FILE:-}"
 
 if [[ -z "$PRESET_FILE" ]]; then
-  if [[ -f "$LOCAL_PRESET_FILE" ]]; then
-    PRESET_FILE="$LOCAL_PRESET_FILE"
-  else
-    PRESET_FILE="$DEFAULT_PRESET_FILE"
-  fi
+  PRESET_FILE="$LOCAL_PRESET_FILE"
 fi
 
 if [[ ! -f "$PRESET_FILE" ]]; then
   echo "Missing deploy dry-run preset: $PRESET_FILE" >&2
+  echo "Create it or set DEPLOY_DRY_RUN_ENV_FILE to an explicit env file path." >&2
   exit 1
 fi
 

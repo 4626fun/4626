@@ -49,8 +49,7 @@ type PendingUserkeyScore = {
 const USERKEY_BATCH_DELAY_MS = 12
 const pendingUserkeyScores = new Map<string, PendingUserkeyScore[]>()
 let userkeyBatchTimer: ReturnType<typeof setTimeout> | null = null
-const ETHOS_MARK_SRC =
-  'https://cdn.prod.website-files.com/6659e70ed26d2373ff8f8c3d/66a68f3c9c2b3076186315e6_ob-ow-framed-mark-sm.png'
+const ETHOS_MARK_SRC = '/assets/ethos-reserve-logo.png'
 const ETHOS_LEVEL_PALETTES: Record<string, EthosScorePalette> = {
   untrusted: {
     level: 'Untrusted',
@@ -298,8 +297,6 @@ export function fetchEthosScoreForUserkey(userkey: string): Promise<EthosScoreVa
 }
 
 function EthosMark({ className }: { className?: string }) {
-  const [imageLoaded, setImageLoaded] = useState(true)
-
   return (
     <span
       className={cn(
@@ -308,22 +305,13 @@ function EthosMark({ className }: { className?: string }) {
       )}
       aria-hidden="true"
     >
-      {imageLoaded ? (
-        <img
-          src={ETHOS_MARK_SRC}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-          onError={() => setImageLoaded(false)}
-        />
-      ) : (
-        <span className="grid h-2.5 w-2.5 place-items-center gap-[1px]">
-          <span className="h-[2px] w-2.5 rounded-full bg-zinc-200" />
-          <span className="h-[2px] w-2 rounded-full bg-zinc-200" />
-          <span className="h-[2px] w-2.5 rounded-full bg-zinc-200" />
-        </span>
-      )}
+      <img
+        src={ETHOS_MARK_SRC}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
     </span>
   )
 }

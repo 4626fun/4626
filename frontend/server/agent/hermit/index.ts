@@ -32,6 +32,16 @@ type RuntimeState = {
   lastError: string | null
 }
 
+type TickRollupState = {
+  windowStartedAtMs: number
+  ticks: number
+  processedTicks: number
+  processedMessages: number
+  erroredTicks: number
+}
+
+const TICK_ROLLUP_WINDOW_MS = 60_000
+
 const state: RuntimeState = {
   startedAt: new Date().toISOString(),
   bridgeStarted: false,
@@ -44,9 +54,46 @@ const state: RuntimeState = {
 
 let stopBridge: (() => void) | null = null
 let stopRefresher: (() => void) | null = null
+let tickRollup: TickRollupState = {
+  windowStartedAtMs: Date.now(),
+  ticks: 0,
+  processedTicks: 0,
+  processedMessages: 0,
+  erroredTicks: 0,
+}
 
 function asErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function resetTickRollup(nowMs: number): void {
+  tickRollup = {
+    windowStartedAtMs: nowMs,
+    ticks: 0,
+    processedTicks: 0,
+    processedMessages: 0,
+    erroredTicks: 0,
+  }
+}
+
+function flushTickRollup(nowMs: number, force = false): void {
+  const elapsedMs = nowMs - tickRollup.windowStartedAtMs
+  if (!force && elapsedMs < TICK_ROLLUP_WINDOW_MS) return
+  if (tickRollup.ticks === 0) {
+    resetTickRollup(nowMs)
+    return
+  }
+  if (tickRollup.processedTicks > 0 || tickRollup.erroredTicks > 0) {
+    logger.info('[hermit] AlfaClub chat tick:rollup', {
+      windowStartedAt: new Date(tickRollup.windowStartedAtMs).toISOString(),
+      windowElapsedMs: elapsedMs,
+      ticks: tickRollup.ticks,
+      processedTicks: tickRollup.processedTicks,
+      processedMessages: tickRollup.processedMessages,
+      erroredTicks: tickRollup.erroredTicks,
+    })
+  }
+  resetTickRollup(nowMs)
 }
 
 function startHealthServer(): void {
@@ -58,6 +105,15 @@ function startHealthServer(): void {
     if (method !== 'GET' && method !== 'HEAD') {
       res.writeHead(405, { 'content-type': 'application/json' })
       res.end(JSON.stringify({ ok: false, error: 'Method not allowed' }))
+      return
+    }
+
+    if (url === '/robots.txt') {
+      res.writeHead(200, {
+        'cache-control': 'public, max-age=3600',
+        'content-type': 'text/plain; charset=utf-8',
+      })
+      res.end('User-agent: *\nDisallow: /\n')
       return
     }
 
@@ -101,6 +157,8 @@ function startRuntime(): void {
   try {
     const bridge = startAlfaClubChatBridge({
       onTick: (result) => {
+        const nowMs = Date.now()
+        tickRollup.ticks += 1
         state.lastTickAt = new Date().toISOString()
         state.lastTick = {
           roomId: result.roomId,
@@ -116,15 +174,23 @@ function startRuntime(): void {
             fetched: result.fetched,
             unseen: result.unseen,
           })
+          flushTickRollup(nowMs)
           return
         }
 
-        if (result.processed === 0 && result.errors.length === 0) return
-        logger.info('[hermit] AlfaClub chat tick', state.lastTick)
+        if (result.processed > 0) {
+          tickRollup.processedTicks += 1
+          tickRollup.processedMessages += result.processed
+        }
+        if (result.errors.length > 0) {
+          tickRollup.erroredTicks += 1
+        }
+        flushTickRollup(nowMs)
       },
       onError: (error) => {
         const message = asErrorMessage(error)
         state.lastError = message
+        tickRollup.erroredTicks += 1
         logger.warn('[hermit] AlfaClub chat tick error', { error: message })
       },
     })
@@ -172,6 +238,7 @@ function startRuntime(): void {
 
 function shutdown(signal: string): void {
   logger.info('[hermit] shutting down', { signal })
+  flushTickRollup(Date.now(), true)
   try {
     stopRefresher?.()
   } catch {}

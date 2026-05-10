@@ -265,3 +265,5 @@ docs/seo/product-teardown_4626fun_2026-05-07.md
 docs/marketing/social_package.md
 .alfaclub-api-key
 .railway-token
+frontend/.env.deploy-dry-run.example
+frontend/.env.deploy-dry-run.example

@@ -33,7 +33,7 @@ This flow is local-fork-only, and `https://app.4626.fun` does not expose the dry
 
 ```bash
 cd frontend
-cp .env.deploy-dry-run.example .env.deploy-dry-run.local
+# create/update .env.deploy-dry-run.local
 # set BASE_FORK_UPSTREAM_RPC_URL in .env.deploy-dry-run.local
 pnpm -C frontend dev:deploy-dry-run
 ```
@@ -74,7 +74,7 @@ Several files share extensions but target different runtimes/tools:
 - `stale-chunk-recovery.js` - shared stale-chunk reload/cache-buster script used by both `index.html` and `app.html`.
 - `html-shells/` - source templates/partials for generated app + marketing shell HTML.
 - `.env.example` - primary local/server env template.
-- `.env.deploy-dry-run.example` - local Base-fork deploy dry-run preset template.
+- `.env.deploy-dry-run.local` - local Base-fork deploy dry-run preset.
 
 `index.html`, `app.html`, and `telegram-link.html` are generated from `html-shells/templates/*.tpl` via `pnpm generate:html-shells` (auto-run before `dev` and `build` scripts). Use `pnpm check:html-shells` to verify generated files are in sync.
 

@@ -328,4 +328,29 @@ describe('twitter commands', () => {
     const [_, init] = (fetch as any).mock.calls[1]
     expect(String(init?.headers?.Authorization ?? '')).toContain('oauth_consumer_key="hermit-key"')
   })
+
+  it('with HERMIT_TWITTER_STRICT enabled, ignores plain TWITTER_* fallback', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_TWITTER_STRICT: '1',
+      HERMIT_TWITTER_API_KEY: undefined,
+      HERMIT_TWITTER_API_SECRET: undefined,
+      HERMIT_TWITTER_ACCESS_TOKEN: undefined,
+      HERMIT_TWITTER_ACCESS_SECRET: undefined,
+      TWITTER_API_KEY: 'legacy-key',
+      TWITTER_API_SECRET: 'legacy-secret',
+      TWITTER_ACCESS_TOKEN: 'legacy-access-token',
+      TWITTER_ACCESS_SECRET: 'legacy-access-secret',
+    })
+
+    const result = await handleTwitterCommand({
+      groupId: 'group-hermit-strict',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x status',
+      role: 'ADMIN',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('HERMIT_TWITTER_API_KEY')
+    expect((fetch as any).mock.calls.length).toBe(0)
+  })
 })
