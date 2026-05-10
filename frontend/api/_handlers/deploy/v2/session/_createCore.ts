@@ -172,6 +172,9 @@ const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
   '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
+  // Active split Phase-1 batcher on Base mainnet also rejects non-zero
+  // ShareOFT salt overrides (SaltOverrideDisabled selector 0xe7fdf838).
+  '0x271ab2c53d79d52ddb14506a44133fe3fa395332',
 ])
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.current']))
@@ -1391,6 +1394,162 @@ function extractPhase2CoreInvariantInfo(data: Hex): {
   }
 }
 
+function isDeployPhase2CoreCall(call: Call): boolean {
+  try {
+    const decoded = decodeFunctionData({
+      abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      data: call.data,
+    })
+    return decoded.functionName === 'deployPhase2Core'
+  } catch {
+    return false
+  }
+}
+
+function normalizePhase2CoreCalls(calls: Call[]): { calls: Call[]; rewrote: boolean } {
+  if (!Array.isArray(calls) || calls.length === 0) return { calls: [], rewrote: false }
+  const normalized: Call[] = []
+  let seenDeployPhase2Core = false
+  let rewrote = false
+
+  for (const call of calls) {
+    if (!isDeployPhase2CoreCall(call)) {
+      normalized.push(call)
+      continue
+    }
+    if (seenDeployPhase2Core) {
+      rewrote = true
+      continue
+    }
+    seenDeployPhase2Core = true
+    normalized.push(call)
+  }
+
+  return { calls: normalized, rewrote }
+}
+
+function extractPhase1VersionFromCalls(calls: Call[]): string | null {
+  if (!Array.isArray(calls) || calls.length === 0) return null
+
+  for (const call of calls) {
+    const data = typeof call?.data === 'string' ? call.data.trim() : ''
+    if (!data.startsWith('0x') || data.length < 10) continue
+    const selector = data.slice(0, 10).toLowerCase()
+    try {
+      if (selector === PHASE1_SELECTOR_DEPLOY || selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi:
+            selector === PHASE1_SELECTOR_DEPLOY
+              ? CREATOR_VAULT_BATCHER_PHASE1_ABI
+              : CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const params = decoded.args?.[0] as { version?: string } | undefined
+        const version = typeof params?.version === 'string' ? params.version.trim() : ''
+        if (version) return version
+      }
+      if (selector === PHASE1_SELECTOR_CORE || selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi:
+            selector === PHASE1_SELECTOR_CORE
+              ? CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI
+              : CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const params = decoded.args?.[0] as { version?: string } | undefined
+        const version = typeof params?.version === 'string' ? params.version.trim() : ''
+        if (version) return version
+      }
+      if (selector === PHASE1_SELECTOR_FINALIZE || selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi:
+            selector === PHASE1_SELECTOR_FINALIZE
+              ? CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI
+              : CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const params = decoded.args?.[0] as { version?: string } | undefined
+        const version = typeof params?.version === 'string' ? params.version.trim() : ''
+        if (version) return version
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
+function normalizePhase2CallVersions(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+  targetVersion: string | null
+}): { phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[]; rewrote: boolean } {
+  const targetVersion = (params.targetVersion ?? '').trim()
+  if (!targetVersion) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  let rewrote = false
+
+  const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName !== 'deployPhase2Core') return call
+      const phase2Params = decoded.args?.[0] as Record<string, unknown> | undefined
+      const codeIds = decoded.args?.[1]
+      if (!phase2Params || !codeIds) return call
+      const currentVersion = typeof phase2Params.version === 'string' ? phase2Params.version.trim() : ''
+      if (currentVersion === targetVersion) return call
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+          functionName: 'deployPhase2Core',
+          args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName !== 'finalizePhase2') return call
+      const phase2Params = decoded.args?.[0] as Record<string, unknown> | undefined
+      if (!phase2Params) return call
+      const currentVersion = typeof phase2Params.version === 'string' ? phase2Params.version.trim() : ''
+      if (currentVersion === targetVersion) return call
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_ABI,
+          functionName: 'finalizePhase2',
+          args: [{ ...phase2Params, version: targetVersion } as any],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  return { phase2CoreCalls, phase2FinalizeCalls, rewrote }
+}
+
 function extractFinalizePhase2InvariantInfo(data: Hex): {
   creatorToken: Address
   shareToken: Address
@@ -2224,10 +2383,21 @@ export async function validateDeploySessionRequest(params: {
     await normalizePhase1SaltOverrideCalls(phase1EntrypointNormalizedCalls)
   const { calls: phase1Calls, rewrote: phase1CodeIdsRewritten } = normalizePhase1CodeIds(phase1SaltNormalizedCalls)
   const phase2CoreCallsRaw = Array.isArray(params.body.phase2CoreCalls) ? params.body.phase2CoreCalls : []
+  const { calls: phase2CoreCallsNormalized, rewrote: phase2CoreCallsRewritten } = normalizePhase2CoreCalls(phase2CoreCallsRaw)
   const phase2FinalizeCallsRaw = Array.isArray(params.body.phase2FinalizeCalls) ? params.body.phase2FinalizeCalls : []
-  const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
-    phase2CoreCalls: phase2CoreCallsRaw,
+  const { phase2CoreCalls: distributedPhase2CoreCalls, phase2FinalizeCalls: distributedPhase2FinalizeCalls } = distributePhase2FinalizeApprovals({
+    phase2CoreCalls: phase2CoreCallsNormalized,
     phase2FinalizeCalls: phase2FinalizeCallsRaw,
+  })
+  const phase1Version = extractPhase1VersionFromCalls(phase1Calls)
+  const {
+    phase2CoreCalls,
+    phase2FinalizeCalls,
+    rewrote: phase2VersionCallsRewritten,
+  } = normalizePhase2CallVersions({
+    phase2CoreCalls: distributedPhase2CoreCalls,
+    phase2FinalizeCalls: distributedPhase2FinalizeCalls,
+    targetVersion: phase1Version,
   })
   const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
   const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
@@ -2303,6 +2473,19 @@ export async function validateDeploySessionRequest(params: {
     console.warn('[deploy/v2/session/create] phase1_code_ids_rewritten', {
       smartWallet: smartWallet.toLowerCase(),
       creatorToken: creatorToken.toLowerCase(),
+    })
+  }
+  if (phase2CoreCallsRewritten) {
+    console.warn('[deploy/v2/session/create] phase2_core_calls_rewritten', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+    })
+  }
+  if (phase2VersionCallsRewritten) {
+    console.warn('[deploy/v2/session/create] phase2_version_calls_rewritten', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+      phase1Version,
     })
   }
   if (isDeployOvaultMeshPaywallEnabled() && solanaOvault?.enabled === true) {

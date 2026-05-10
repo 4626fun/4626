@@ -162,8 +162,8 @@ export function AmoeEntryCard(props: {
 
   const [credits, setCredits] = useState(0)
   const [creditsPerEntry, setCreditsPerEntry] = useState(100)
-  const [entriesAvailable, setEntriesAvailable] = useState(0)
-  const [nextEntryAtCredits, setNextEntryAtCredits] = useState(100)
+  const [, setEntriesAvailable] = useState(0)
+  const [, setNextEntryAtCredits] = useState(100)
   const [jackpotUsd, setJackpotUsd] = useState<string | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)

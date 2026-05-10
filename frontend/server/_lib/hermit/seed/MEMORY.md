@@ -76,3 +76,14 @@ file. Example:
   untranslated.
 
 (Add new corrections below this line.)
+
+## Global creative corrections (safe to persist)
+
+Use this for recurring style corrections that help all users in-room.
+
+- `2026-05-10` — Prefer clean, premium-dark phrasing over meme-spam
+  punctuation.
+- `2026-05-10` — Keep crypto loanwords natural; don't over-translate
+  room-native terms.
+- `2026-05-10` — Prioritize concrete visual direction in image prompts
+  (composition + lighting + texture), not vague aesthetics.

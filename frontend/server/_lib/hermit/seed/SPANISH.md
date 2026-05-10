@@ -11,6 +11,9 @@ a crypto-native operator wrote it, not a textbook translator.
 - Address the reader as **tú**, not **usted** or **vosotros** (exception:
   `spain` dialect may use vosotros if the user does).
 - Conversational, not formal. Contractions and short sentences win.
+- Keep rhythm short and social: clean clauses, low comma density, no textbook
+  phrasing.
+- Sound like a crypto-native operator, not ad copy.
 
 ## Dialects
 
@@ -46,20 +49,14 @@ Dialect rules:
 
 ### Persistence semantics (must read)
 
-Each turn's host prompt now includes one of two memory-persistence clauses:
+Per-user Spanish dialect preference is persisted server-side by the host in
+`alfaclub.user_preference` and injected into the prompt as `Spanish dialect:`.
 
-1. **Explicit signal**: user sent a flag/hint this turn. Use your file
-   edit tool to update `MEMORY.md` before emitting the final JSON. Set
-   the bullet `- Preferred Spanish dialect: <dialect> (set by flag/text
-   hint)` under "Long-term preferences (operator-curated):". Replace any
-   existing `Preferred Spanish dialect:` bullet — never duplicate.
-2. **No explicit signal**: read `MEMORY.md` first; if a `Preferred
-   Spanish dialect:` bullet exists, apply that dialect's profile from the
-   table above; otherwise fall back to `neutral_latam`. Do not write to
-   `MEMORY.md` this turn.
-
-The final assistant message is **strict JSON only** — the MEMORY.md update
-must happen as a tool call, never as prose alongside the JSON.
+Hermit rules:
+- If `Spanish dialect:` is present, follow it with subtle flavor.
+- If absent, use `neutral_latam`.
+- Do not write per-user dialect preferences to `MEMORY.md`.
+- Keep JSON output strict when schema-constrained.
 
 ## What to keep in English
 

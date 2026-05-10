@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   decodeFunctionData,
+  encodeFunctionData,
   formatUnits,
   getAddress,
   http,
@@ -86,6 +87,12 @@ const DRY_RUN_MIN_GAS_BUFFER = 100_000n
 const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
+const SELECTOR_PHASE1_DEPLOY = '0x3c51ca4e'
+const SELECTOR_PHASE1_CORE = '0x1331378b'
+const SELECTOR_PHASE1_FINALIZE = '0xa98ec9d8'
+const SELECTOR_PHASE1_DEPLOY_WITH_SALT = '0x297cb1e6'
+const SELECTOR_PHASE1_CORE_WITH_SALT = '0x4154f24e'
+const SELECTOR_PHASE1_FINALIZE_WITH_SALT = '0x3bc09a8b'
 
 const DRY_RUN_DEPLOY_PHASE2_CORE_ABI = [
   {
@@ -162,6 +169,107 @@ const DRY_RUN_FINALIZE_PHASE2_ABI = [
           },
         ],
       },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_PARAMS_COMPONENTS = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vaultName', type: 'string' },
+  { name: 'vaultSymbol', type: 'string' },
+  { name: 'shareName', type: 'string' },
+  { name: 'shareSymbol', type: 'string' },
+  { name: 'version', type: 'string' },
+] as const
+
+const DRY_RUN_PHASE1_CODE_IDS_COMPONENTS = [
+  { name: 'vault', type: 'bytes32' },
+  { name: 'wrapper', type: 'bytes32' },
+  { name: 'shareOFT', type: 'bytes32' },
+  { name: 'gauge', type: 'bytes32' },
+  { name: 'cca', type: 'bytes32' },
+  { name: 'oracle', type: 'bytes32' },
+  { name: 'oftBootstrap', type: 'bytes32' },
+] as const
+
+const DRY_RUN_PHASE1_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_CORE_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_FINALIZE_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_CORE_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1CoreWithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const DRY_RUN_PHASE1_FINALIZE_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: DRY_RUN_PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: DRY_RUN_PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
     ],
     outputs: [],
   },
@@ -352,6 +460,207 @@ function isDeployPhase2CoreCall(call: Call): boolean {
   }
 }
 
+function isPhase1BatcherCall(call: Call): boolean {
+  const selector = String(call.data ?? '').slice(0, 10).toLowerCase()
+  return (
+    selector === SELECTOR_PHASE1_DEPLOY ||
+    selector === SELECTOR_PHASE1_CORE ||
+    selector === SELECTOR_PHASE1_FINALIZE ||
+    selector === SELECTOR_PHASE1_DEPLOY_WITH_SALT ||
+    selector === SELECTOR_PHASE1_CORE_WITH_SALT ||
+    selector === SELECTOR_PHASE1_FINALIZE_WITH_SALT
+  )
+}
+
+function isFinalizePhase2Call(call: Call): boolean {
+  try {
+    const decoded = decodeFunctionData({
+      abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+      data: call.data,
+    })
+    return decoded.functionName === 'finalizePhase2'
+  } catch {
+    return false
+  }
+}
+
+function normalizePhase2TargetsToPhase1Batcher(params: {
+  phase1Calls: Call[]
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+}): { phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[]; rewrote: boolean; phase1Batcher: Address | null } {
+  const phase1Batcher = (() => {
+    const call = params.phase1Calls.find((entry) => isPhase1BatcherCall(entry))
+    if (!call) return null
+    try {
+      return getAddress(call.to as Address)
+    } catch {
+      return null
+    }
+  })()
+
+  if (!phase1Batcher) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+      phase1Batcher: null,
+    }
+  }
+
+  let rewrote = false
+  const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
+    if (!isDeployPhase2CoreCall(call)) return call
+    try {
+      const to = getAddress(call.to as Address)
+      if (to.toLowerCase() === phase1Batcher.toLowerCase()) return call
+      rewrote = true
+      return { ...call, to: phase1Batcher }
+    } catch {
+      return call
+    }
+  })
+
+  const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
+    if (!isFinalizePhase2Call(call)) return call
+    try {
+      const to = getAddress(call.to as Address)
+      if (to.toLowerCase() === phase1Batcher.toLowerCase()) return call
+      rewrote = true
+      return { ...call, to: phase1Batcher }
+    } catch {
+      return call
+    }
+  })
+
+  return { phase2CoreCalls, phase2FinalizeCalls, rewrote, phase1Batcher }
+}
+
+type PhaseIdentity = {
+  creatorToken: Address
+  owner: Address
+  version: string
+}
+
+function extractPhase1Identity(calls: Call[]): PhaseIdentity | null {
+  for (const call of calls) {
+    const selector = String(call.data ?? '').slice(0, 10).toLowerCase()
+    try {
+      let params: Record<string, unknown> | null = null
+      if (selector === SELECTOR_PHASE1_DEPLOY) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      } else if (selector === SELECTOR_PHASE1_CORE) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_CORE_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      } else if (selector === SELECTOR_PHASE1_FINALIZE) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_FINALIZE_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      } else if (selector === SELECTOR_PHASE1_DEPLOY_WITH_SALT) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_WITH_SALT_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      } else if (selector === SELECTOR_PHASE1_CORE_WITH_SALT) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_CORE_WITH_SALT_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      } else if (selector === SELECTOR_PHASE1_FINALIZE_WITH_SALT) {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_PHASE1_FINALIZE_WITH_SALT_ABI, data: call.data })
+        params = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      }
+      if (!params) continue
+      const creatorToken = getTupleAddress(params, 'creatorToken', 0)
+      const owner = getTupleAddress(params, 'owner', 1)
+      const versionRaw = params.version ?? params[6]
+      const version = typeof versionRaw === 'string' ? versionRaw.trim() : ''
+      if (creatorToken && owner && version) return { creatorToken, owner, version }
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
+function normalizePhase2IdentityToPhase1(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+  identity: PhaseIdentity | null
+}): { phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[]; rewrote: boolean } {
+  if (!params.identity) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  let rewrote = false
+  const { creatorToken, owner, version } = params.identity
+
+  const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_DEPLOY_PHASE2_CORE_ABI, data: call.data })
+      if (decoded.functionName !== 'deployPhase2Core') return call
+      const coreParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      const codeIds = decoded.args?.[1]
+      if (!coreParams || !codeIds) return call
+      const currentCreator = getTupleAddress(coreParams, 'creatorToken', 0)
+      const currentOwner = getTupleAddress(coreParams, 'owner', 1)
+      const currentVersionRaw = coreParams.version ?? coreParams[8]
+      const currentVersion = typeof currentVersionRaw === 'string' ? currentVersionRaw.trim() : ''
+      if (
+        currentCreator?.toLowerCase() === creatorToken.toLowerCase() &&
+        currentOwner?.toLowerCase() === owner.toLowerCase() &&
+        currentVersion === version
+      ) {
+        return call
+      }
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_DEPLOY_PHASE2_CORE_ABI,
+          functionName: 'deployPhase2Core',
+          args: [{ ...coreParams, creatorToken, owner, version } as any, codeIds as any],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      if (decoded.functionName !== 'finalizePhase2') return call
+      const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      if (!finalizeParams) return call
+      const currentCreator = getTupleAddress(finalizeParams, 'creatorToken', 0)
+      const currentOwner = getTupleAddress(finalizeParams, 'owner', 1)
+      const currentVersionRaw = finalizeParams.version ?? finalizeParams[8]
+      const currentVersion = typeof currentVersionRaw === 'string' ? currentVersionRaw.trim() : ''
+      if (
+        currentCreator?.toLowerCase() === creatorToken.toLowerCase() &&
+        currentOwner?.toLowerCase() === owner.toLowerCase() &&
+        currentVersion === version
+      ) {
+        return call
+      }
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+          functionName: 'finalizePhase2',
+          args: [{ ...finalizeParams, creatorToken, owner, version } as any],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  return { phase2CoreCalls, phase2FinalizeCalls, rewrote }
+}
+
 function extractFinalizePhase2CoreAddresses(calls: Call[]): {
   gaugeController: Address
   ccaStrategy: Address
@@ -383,9 +692,26 @@ async function preparePhase2CoreCalls(params: {
   finalizeCalls: Call[]
   getBytecode: (args: { address: Address }) => Promise<Hex | string | null | undefined>
 }): Promise<Call[]> {
-  if (!params.calls.some(isDeployPhase2CoreCall)) return params.calls
+  // Some clients can carry stale duplicate deployPhase2Core payloads during
+  // retries/resumes. On dry-run forks this commonly surfaces as:
+  // call #1 succeeds, call #2 reverts with Phase1Missing() because the second
+  // payload points at a different phase-1 tuple/version. Keep the first
+  // deployPhase2Core call and preserve any non-core calls.
+  const dedupedCalls: Call[] = []
+  let seenDeployPhase2Core = false
+  for (const call of params.calls) {
+    if (!isDeployPhase2CoreCall(call)) {
+      dedupedCalls.push(call)
+      continue
+    }
+    if (seenDeployPhase2Core) continue
+    seenDeployPhase2Core = true
+    dedupedCalls.push(call)
+  }
+
+  if (!dedupedCalls.some(isDeployPhase2CoreCall)) return dedupedCalls
   const addresses = extractFinalizePhase2CoreAddresses(params.finalizeCalls)
-  if (!addresses) return params.calls
+  if (!addresses) return dedupedCalls
 
   const entries = [
     ['gauge', addresses.gaugeController],
@@ -401,7 +727,7 @@ async function preparePhase2CoreCalls(params: {
   const allDeployed = deployed.every(Boolean)
   const anyDeployed = deployed.some(Boolean)
   if (allDeployed) {
-    return params.calls.filter((call) => !isDeployPhase2CoreCall(call))
+    return dedupedCalls.filter((call) => !isDeployPhase2CoreCall(call))
   }
   if (anyDeployed) {
     const state = entries.map(([label], index) => `${label}=${deployed[index] ? 'deployed' : 'missing'}`).join(', ')
@@ -410,7 +736,7 @@ async function preparePhase2CoreCalls(params: {
         'Reset the fork or bump the deployment version before retrying dry-run.',
     )
   }
-  return params.calls
+  return dedupedCalls
 }
 
 async function runDryRunPhase(params: {
@@ -574,10 +900,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     try {
       const phases: DryRunPhaseResult[] = []
+      const {
+        phase2CoreCalls: targetNormalizedPhase2CoreCalls,
+        phase2FinalizeCalls: targetNormalizedPhase2FinalizeCalls,
+        rewrote: rewrotePhase2Targets,
+        phase1Batcher,
+      } = normalizePhase2TargetsToPhase1Batcher({
+        phase1Calls,
+        phase2CoreCalls,
+        phase2FinalizeCalls,
+      })
+      const phase1Identity = extractPhase1Identity(phase1Calls)
+      const {
+        phase2CoreCalls: normalizedPhase2CoreCalls,
+        phase2FinalizeCalls: normalizedPhase2FinalizeCalls,
+        rewrote: rewrotePhase2Identity,
+      } = normalizePhase2IdentityToPhase1({
+        phase2CoreCalls: targetNormalizedPhase2CoreCalls,
+        phase2FinalizeCalls: targetNormalizedPhase2FinalizeCalls,
+        identity: phase1Identity,
+      })
+      if (rewrotePhase2Targets) {
+        console.warn('[deploy/v2/session/dry-run] phase2_targets_rewritten_to_phase1_batcher', {
+          smartWallet: smartWallet.toLowerCase(),
+          phase1Batcher: phase1Batcher?.toLowerCase() ?? null,
+        })
+      }
+      if (rewrotePhase2Identity) {
+        console.warn('[deploy/v2/session/dry-run] phase2_identity_rewritten_to_phase1', {
+          smartWallet: smartWallet.toLowerCase(),
+          phase1Identity: phase1Identity
+            ? {
+                creatorToken: phase1Identity.creatorToken.toLowerCase(),
+                owner: phase1Identity.owner.toLowerCase(),
+                version: phase1Identity.version,
+              }
+            : null,
+        })
+      }
       const phasePlan: Array<{ name: DryRunPhaseName; calls: Call[] }> = [
         { name: 'phase1', calls: phase1Calls },
-        { name: 'phase2Core', calls: phase2CoreCalls },
-        { name: 'phase2Finalize', calls: phase2FinalizeCalls },
+        { name: 'phase2Core', calls: normalizedPhase2CoreCalls },
+        { name: 'phase2Finalize', calls: normalizedPhase2FinalizeCalls },
         { name: 'phase3', calls: phase3Calls },
         { name: 'phase4', calls: phase4Calls },
       ]
@@ -588,7 +952,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           try {
             phaseCalls = await preparePhase2CoreCalls({
               calls: phaseEntry.calls,
-              finalizeCalls: phase2FinalizeCalls,
+              finalizeCalls: normalizedPhase2FinalizeCalls,
               getBytecode: (args) => publicClient.getBytecode(args as any),
             })
           } catch (error) {
@@ -608,6 +972,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 callIndex: 0,
                 to: failedCall ? getAddress(failedCall.to) : smartWallet,
                 error: formatDryRunError(error),
+              },
+            }
+            return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DryRunResponse>)
+          }
+          const deployPhase2CoreCount = phaseCalls.filter(isDeployPhase2CoreCall).length
+          if (deployPhase2CoreCount > 1) {
+            const toSet = Array.from(new Set(phaseCalls.map((call) => String(call.to).toLowerCase())))
+            console.warn('[deploy/v2/session/dry-run] phase2_core_duplicate_detected', {
+              smartWallet: smartWallet.toLowerCase(),
+              deployPhase2CoreCount,
+              totalPhase2CoreCalls: phaseCalls.length,
+              phase2CoreTargets: toSet,
+            })
+            const phase: DryRunPhaseResult = {
+              name: phaseEntry.name,
+              status: 'failed',
+              callCount: 0,
+            }
+            const phasesWithFailure = [...phases, phase]
+            const firstCall = phaseCalls.find(isDeployPhase2CoreCall) ?? phaseCalls[0]
+            const data: DryRunResponse = {
+              ok: false,
+              forkMode: forkMode.name,
+              phases: phasesWithFailure,
+              failure: {
+                phase: phaseEntry.name,
+                callIndex: 0,
+                to: firstCall ? getAddress(firstCall.to) : smartWallet,
+                error:
+                  `Invalid phase2Core payload: received ${deployPhase2CoreCount} deployPhase2Core calls. ` +
+                  'Regenerate a fresh deploy session from the current local UI and retry.',
               },
             }
             return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DryRunResponse>)
