@@ -26,6 +26,16 @@ else
   exit 1
 fi
 
+# Manual override for env-only rotations or operational rebuilds.
+# Usage: include "[force-vercel]" in the commit message.
+commit_message="${VERCEL_GIT_COMMIT_MESSAGE:-}"
+if [ -z "$commit_message" ]; then
+  commit_message="$(git log -1 --pretty=%B "$to" 2>/dev/null || true)"
+fi
+if printf '%s' "$commit_message" | rg -q '\[force-vercel\]'; then
+  exit 1
+fi
+
 changed="$(git diff --name-only "$from" "$to")"
 if [ -z "$changed" ]; then
   exit 0
