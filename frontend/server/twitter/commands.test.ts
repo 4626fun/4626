@@ -243,4 +243,89 @@ describe('twitter commands', () => {
     expect(String(init?.headers?.Authorization ?? '')).toMatch(/^OAuth /)
     expect(String(init?.body ?? '')).toContain('"text":"hello world"')
   })
+
+  it('uses HERMIT_TWITTER_* oauth1 env vars when present', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_TWITTER_API_KEY: 'hermit-key',
+      HERMIT_TWITTER_API_SECRET: 'hermit-secret',
+      HERMIT_TWITTER_ACCESS_TOKEN: 'hermit-access-token',
+      HERMIT_TWITTER_ACCESS_SECRET: 'hermit-access-secret',
+      TWITTER_API_KEY: undefined,
+      TWITTER_API_SECRET: undefined,
+      TWITTER_ACCESS_TOKEN: undefined,
+      TWITTER_ACCESS_SECRET: undefined,
+    })
+
+    ;(fetch as any).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'x-access-level' ? 'read-write' : null),
+      },
+      json: async () => ({
+        screen_name: 'keepr4626bot',
+        id_str: '1739288918867214336',
+      }),
+      text: async () => '',
+    })
+
+    const result = await handleTwitterCommand({
+      groupId: 'group-hermit-prefix-status',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x status',
+      role: 'ADMIN',
+    })
+
+    expect(result.ok).toBe(true)
+    expect((fetch as any).mock.calls.length).toBe(1)
+  })
+
+  it('prefers HERMIT_TWITTER_* over TWITTER_* when both are set', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_TWITTER_API_KEY: 'hermit-key',
+      HERMIT_TWITTER_API_SECRET: 'hermit-secret',
+      HERMIT_TWITTER_ACCESS_TOKEN: 'hermit-access-token',
+      HERMIT_TWITTER_ACCESS_SECRET: 'hermit-access-secret',
+      TWITTER_API_KEY: 'legacy-key',
+      TWITTER_API_SECRET: 'legacy-secret',
+      TWITTER_ACCESS_TOKEN: 'legacy-access-token',
+      TWITTER_ACCESS_SECRET: 'legacy-access-secret',
+    })
+
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'x-access-level' ? 'read-write' : null),
+        },
+        json: async () => ({
+          screen_name: 'keepr4626bot',
+          id_str: '1739288918867214336',
+        }),
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          data: {
+            id: '1900000000000000000',
+            text: 'gm',
+          },
+        }),
+        text: async () => '',
+      })
+
+    const result = await handleTwitterCommand({
+      groupId: 'group-hermit-prefix-post',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x post gm --confirm',
+      role: 'OWNER',
+    })
+
+    expect(result.ok).toBe(true)
+    const [_, init] = (fetch as any).mock.calls[1]
+    expect(String(init?.headers?.Authorization ?? '')).toContain('oauth_consumer_key="hermit-key"')
+  })
 })

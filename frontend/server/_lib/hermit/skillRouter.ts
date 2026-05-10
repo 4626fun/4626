@@ -54,6 +54,18 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function isLikelyPinataProviderErrorText(value: string): boolean {
+  const text = value.trim().toLowerCase()
+  if (!text) return false
+  return (
+    text.includes('agent failed before reply') ||
+    text.includes('oauth token refresh failed') ||
+    text.includes('failed to refresh oauth token') ||
+    text.includes('openai-codex') ||
+    text.includes('logs: openclaw logs')
+  )
+}
+
 function splitCommandAndArgs(input: string): { command: string; args: string } {
   const trimmed = input.trim()
   if (!trimmed) return { command: '', args: '' }
@@ -1238,8 +1250,9 @@ export async function executeHermitCommand(
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
     }
     const parsed = draft?.text ? parseLooseJsonObject(draft.text) : null
-    const draftedLine =
+    const draftedLineRaw =
       asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
+    const draftedLine = isLikelyPinataProviderErrorText(draftedLineRaw) ? '' : draftedLineRaw
     const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
     const result: HermitExecutionResult = {
       kind: 'gmeow',

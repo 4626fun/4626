@@ -141,11 +141,17 @@ type TwitterVerifiedAccount = {
   canWrite: boolean | null
 }
 
+function readEnvWithPrefix(baseKey: string): string {
+  const hermitScoped = String(process.env[`HERMIT_${baseKey}`] ?? '').trim()
+  if (hermitScoped) return hermitScoped
+  return String(process.env[baseKey] ?? '').trim()
+}
+
 function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
-  const apiKey = String(process.env.TWITTER_API_KEY ?? '').trim()
-  const apiSecret = String(process.env.TWITTER_API_SECRET ?? '').trim()
-  const accessToken = String(process.env.TWITTER_ACCESS_TOKEN ?? '').trim()
-  const accessSecret = String(process.env.TWITTER_ACCESS_SECRET ?? '').trim()
+  const apiKey = readEnvWithPrefix('TWITTER_API_KEY')
+  const apiSecret = readEnvWithPrefix('TWITTER_API_SECRET')
+  const accessToken = readEnvWithPrefix('TWITTER_ACCESS_TOKEN')
+  const accessSecret = readEnvWithPrefix('TWITTER_ACCESS_SECRET')
 
   const missing: string[] = []
   if (!apiKey) missing.push('TWITTER_API_KEY')
@@ -388,6 +394,7 @@ async function postTweet(params: {
       action: {
         action: 'twitter.posted',
         tweetId: id,
+        tweetUrl,
         text: tweetText,
         actor: params.senderWallet,
       },
@@ -396,6 +403,14 @@ async function postTweet(params: {
     logger.error('[x/post] tweet error', error)
     return { ok: false, response: 'Failed to post tweet due to a network/runtime error.' }
   }
+}
+
+export async function postTweetFromSystem(params: {
+  text: string
+  groupId: string
+  senderWallet: Address
+}): Promise<TwitterCommandResult> {
+  return postTweet(params)
 }
 
 function parseTwitterCommand(raw: string): { cmd: string; args: string[] } {

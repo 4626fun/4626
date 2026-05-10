@@ -5,6 +5,7 @@
  * an AlfaClub room (chatId starts with `alfaclub:`).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { applyEnv } from '../../api/__tests__/helpers'
 
 type HermitCallShape = {
   commandText: string
@@ -43,6 +44,18 @@ const listUserPreferencesMock = vi.fn(async () => [] as Array<{
   updatedAt: string
 }>)
 const clearUserPreferencesMock = vi.fn(async () => true)
+const postTweetFromSystemMock = vi.fn(async () => ({
+  ok: true as const,
+  response: 'Tweet posted.\n- id: 1\n- url: https://x.com/i/web/status/1',
+  action: {
+    action: 'twitter.posted',
+    tweetId: '1',
+    tweetUrl: 'https://x.com/i/web/status/1',
+    text: 'cat laugh',
+    actor: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  },
+}))
+let restoreEnv: (() => void) | null = null
 
 vi.mock('../_lib/hermit/policy.js', () => ({
   isHermitUserAllowed: isHermitUserAllowedMock,
@@ -57,6 +70,10 @@ vi.mock('../_lib/alfaclub/userPreferenceStore.js', () => ({
   upsertUserPreference: upsertUserPreferenceMock,
   listUserPreferences: listUserPreferencesMock,
   clearUserPreferences: clearUserPreferencesMock,
+}))
+
+vi.mock('../twitter/commands.js', () => ({
+  postTweetFromSystem: postTweetFromSystemMock,
 }))
 
 // Stub out unrelated families so we don't pull in DB/keepr code.
@@ -74,6 +91,8 @@ const ALICE = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 
 describe('executeCommand → Hermit per-(room, sender) wiring', () => {
   beforeEach(() => {
+    restoreEnv?.()
+    restoreEnv = null
     vi.clearAllMocks()
     readUserPreferenceMock.mockReset()
     upsertUserPreferenceMock.mockReset()
@@ -82,6 +101,18 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     listUserPreferencesMock.mockResolvedValue([])
     clearUserPreferencesMock.mockReset()
     clearUserPreferencesMock.mockResolvedValue(true)
+    postTweetFromSystemMock.mockReset()
+    postTweetFromSystemMock.mockResolvedValue({
+      ok: true,
+      response: 'Tweet posted.\n- id: 1\n- url: https://x.com/i/web/status/1',
+      action: {
+        action: 'twitter.posted',
+        tweetId: '1',
+        tweetUrl: 'https://x.com/i/web/status/1',
+        text: 'cat laugh',
+        actor: ALICE,
+      },
+    })
     executeHermitCommandMock.mockReset()
     executeHermitCommandMock.mockResolvedValue({
       kind: 'hermit',
@@ -133,6 +164,100 @@ describe('executeCommand → Hermit per-(room, sender) wiring', () => {
     expect(typeof call.persistPreference).toBe('function')
     expect(typeof call.listPreferences).toBe('function')
     expect(typeof call.clearPreferences).toBe('function')
+  })
+
+  it('when HERMIT_GMEOW_POST_TO_X_FIRST is enabled, /gmeow posts to X and returns tweet URL', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_GMEOW_POST_TO_X_FIRST: '1',
+    })
+    executeHermitCommandMock.mockResolvedValueOnce({
+      kind: 'gmeow',
+      provider: 'pinata',
+      reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+      meme: {
+        id: 'catlaugh-1',
+        caption: 'cat laugh from the Hermit cave.',
+        url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+        tags: ['laugh', 'cat'],
+      },
+      mediaAttachments: [
+        {
+          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+          type: 'image',
+        },
+      ],
+    })
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/gmeow',
+      chatId: 'alfaclub:1043',
+      userId: ALICE,
+    })
+
+    expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
+    expect(postTweetFromSystemMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'tg-room',
+        senderWallet: ALICE,
+      }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('Posted on X:')
+    expect(result.response).toContain('https://x.com/i/web/status/1')
+    expect(result.action).toBeUndefined()
+  })
+
+  it('when X post fails in /gmeow mode, it falls back to normal AlfaClub reply', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_GMEOW_POST_TO_X_FIRST: 'true',
+    })
+    executeHermitCommandMock.mockResolvedValueOnce({
+      kind: 'gmeow',
+      provider: 'pinata',
+      reply: 'cat laugh alpha unlocked.\nhttps://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+      meme: {
+        id: 'catlaugh-1',
+        caption: 'cat laugh from the Hermit cave.',
+        url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+        tags: ['laugh', 'cat'],
+      },
+      mediaAttachments: [
+        {
+          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+          type: 'image',
+        },
+      ],
+    })
+    postTweetFromSystemMock.mockResolvedValueOnce({
+      ok: false,
+      response: 'Twitter posting unavailable',
+    })
+
+    const { executeCommand } = await import('./execute.ts')
+    const result = await executeCommand({
+      groupId: 'tg-room',
+      senderWallet: ALICE,
+      text: '/gmeow',
+      chatId: 'alfaclub:1043',
+      userId: ALICE,
+    })
+
+    expect(postTweetFromSystemMock).toHaveBeenCalledTimes(1)
+    expect(result.ok).toBe(true)
+    expect(result.response).toContain('cat laugh alpha unlocked.')
+    expect(result.action).toEqual({
+      action: 'hermit.command',
+      kind: 'gmeow',
+      attachments: [
+        {
+          url: 'https://i.giphy.com/media/JIX9t2j0ZTN9S/giphy.gif',
+          type: 'image',
+        },
+      ],
+    })
   })
 
   it('the persistPreference closure delegates to upsertUserPreference with the right keys', async () => {

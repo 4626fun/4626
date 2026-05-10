@@ -139,6 +139,29 @@ describe('executeHermitCommand', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
+  it('/gmeow falls back to local caption when pinata returns provider auth error text', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        text: 'Agent failed before reply: OAuth token refresh failed for openai-codex',
+      }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('cat laugh')
+    expect(result.reply.toLowerCase()).not.toContain('oauth token refresh failed')
+  })
+
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',

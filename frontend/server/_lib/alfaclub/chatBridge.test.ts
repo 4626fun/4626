@@ -325,6 +325,37 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     }
   })
 
+  it('dequotes wrapped env values for proxy/base config', () => {
+    const previousBase = process.env.ALFACLUB_CHAT_API_BASE_URL
+    const previousProxyUrl = process.env.ALFACLUB_CHAT_API_PROXY_URL
+    const previousProxySecret = process.env.ALFACLUB_CHAT_API_PROXY_SECRET
+    const previousRoomId = process.env.ALFACLUB_CHAT_ROOM_ID
+    try {
+      process.env.ALFACLUB_CHAT_API_BASE_URL = '"https://api.alfaclub.app"'
+      process.env.ALFACLUB_CHAT_API_PROXY_URL = '"https://alfaclub-proxy.steep-dew-0c33.workers.dev"'
+      process.env.ALFACLUB_CHAT_API_PROXY_SECRET = '"proxy-secret"'
+      process.env.ALFACLUB_CHAT_ROOM_ID = '"1043"'
+
+      const flags = readAlfaClubChatBridgeFlags()
+      expect(flags.apiBaseUrl).toBe('https://api.alfaclub.app')
+      expect(flags.apiProxyUrl).toBe('https://alfaclub-proxy.steep-dew-0c33.workers.dev')
+      expect(flags.apiProxySecret).toBe('proxy-secret')
+      expect(flags.roomId).toBe('1043')
+    } finally {
+      if (typeof previousBase === 'undefined') delete process.env.ALFACLUB_CHAT_API_BASE_URL
+      else process.env.ALFACLUB_CHAT_API_BASE_URL = previousBase
+
+      if (typeof previousProxyUrl === 'undefined') delete process.env.ALFACLUB_CHAT_API_PROXY_URL
+      else process.env.ALFACLUB_CHAT_API_PROXY_URL = previousProxyUrl
+
+      if (typeof previousProxySecret === 'undefined') delete process.env.ALFACLUB_CHAT_API_PROXY_SECRET
+      else process.env.ALFACLUB_CHAT_API_PROXY_SECRET = previousProxySecret
+
+      if (typeof previousRoomId === 'undefined') delete process.env.ALFACLUB_CHAT_ROOM_ID
+      else process.env.ALFACLUB_CHAT_ROOM_ID = previousRoomId
+    }
+  })
+
   it('warns when websocket closes churn inside 60 seconds', () => {
     const flags = makeFlags()
     for (let i = 0; i < 5; i += 1) {

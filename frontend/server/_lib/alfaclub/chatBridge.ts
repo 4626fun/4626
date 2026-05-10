@@ -225,18 +225,18 @@ export type RunAlfaClubChatBridgeTickOnceResult =
     }
 
 function parseBool(value: string | undefined): boolean {
-  const raw = (value ?? '').trim().toLowerCase()
+  const raw = normalizeEnvScalar(value).toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
 function parseBoolWithDefault(value: string | undefined, fallback: boolean): boolean {
-  const raw = (value ?? '').trim()
+  const raw = normalizeEnvScalar(value)
   if (!raw) return fallback
   return parseBool(raw)
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
-  const raw = (value ?? '').trim()
+  const raw = normalizeEnvScalar(value)
   if (!/^\d+$/.test(raw)) return fallback
   const n = Number.parseInt(raw, 10)
   if (!Number.isFinite(n) || n <= 0) return fallback
@@ -244,11 +244,22 @@ function parsePositiveInt(value: string | undefined, fallback: number, max: numb
 }
 
 function parseOptionalPositiveInt(value: string | undefined, max: number): number | null {
-  const raw = (value ?? '').trim()
+  const raw = normalizeEnvScalar(value)
   if (!/^\d+$/.test(raw)) return null
   const n = Number.parseInt(raw, 10)
   if (!Number.isFinite(n) || n <= 0) return null
   return Math.min(n, max)
+}
+
+function normalizeEnvScalar(raw: string | undefined): string {
+  const value = String(raw ?? '').trim()
+  if (!value) return ''
+  const first = value[0]
+  const last = value[value.length - 1]
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    return value.slice(1, -1).trim()
+  }
+  return value
 }
 
 function parseTelegramChatRef(value: string | null): {
@@ -280,7 +291,7 @@ function parseTelegramChatRef(value: string | null): {
 }
 
 function normalizeApiBaseUrl(raw: string | undefined): string {
-  const value = (raw ?? '').trim() || DEFAULT_API_BASE_URL
+  const value = normalizeEnvScalar(raw) || DEFAULT_API_BASE_URL
   try {
     const url = new URL(value)
     return `${url.origin}`
@@ -296,7 +307,7 @@ function normalizeApiBaseUrl(raw: string | undefined): string {
  * cleartext relay is a hard rule.
  */
 function normalizeApiProxyUrl(raw: string | undefined): string | null {
-  const value = (raw ?? '').trim()
+  const value = normalizeEnvScalar(raw)
   if (!value) return null
   try {
     const url = new URL(value)
@@ -308,12 +319,12 @@ function normalizeApiProxyUrl(raw: string | undefined): string | null {
 }
 
 function normalizeApiProxySecret(raw: string | undefined): string | null {
-  const value = (raw ?? '').trim()
+  const value = normalizeEnvScalar(raw)
   return value || null
 }
 
 function normalizeAlfaClubBotToken(raw: string | undefined): string | null {
-  const value = (raw ?? '').trim()
+  const value = normalizeEnvScalar(raw)
   return value || null
 }
 
@@ -381,7 +392,7 @@ export function resolveAlfaClubFingerprintBaseUrl(flags: {
 }
 
 function normalizeWsUrl(raw: string | undefined): string {
-  const value = (raw ?? '').trim() || DEFAULT_WS_URL
+  const value = normalizeEnvScalar(raw) || DEFAULT_WS_URL
   try {
     const url = new URL(value)
     return `${url.protocol}//${url.host}${url.pathname || ''}`
@@ -395,16 +406,16 @@ function isHexAddress(value: string): value is `0x${string}` {
 }
 
 export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
-  const roomIdRaw = (process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
+  const roomIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_ROOM_ID)
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
-  const groupIdRaw = (process.env.ALFACLUB_CHAT_GROUP_ID ?? '').trim()
+  const groupIdRaw = normalizeEnvScalar(process.env.ALFACLUB_CHAT_GROUP_ID)
   const telegramRelayBotToken =
-    (process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim() ||
-    (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() ||
+    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_BOT_TOKEN) ||
+    normalizeEnvScalar(process.env.TELEGRAM_BOT_TOKEN) ||
     null
   const telegramRelayChatRef = parseTelegramChatRef(
-    (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '').trim() ||
-      (process.env.TELEGRAM_TARGET_CHAT_ID ?? '').trim() ||
+    normalizeEnvScalar(process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID) ||
+      normalizeEnvScalar(process.env.TELEGRAM_TARGET_CHAT_ID) ||
       null,
   )
   const telegramRelayChatId = telegramRelayChatRef.chatId
@@ -418,8 +429,8 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     killSwitch: parseBool(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
-    jwt: (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null,
-    ingestJwt: (process.env.ALFACLUB_CHAT_INGEST_JWT ?? '').trim() || null,
+    jwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_JWT) || null,
+    ingestJwt: normalizeEnvScalar(process.env.ALFACLUB_CHAT_INGEST_JWT) || null,
     botToken: normalizeAlfaClubBotToken(
       process.env.ALFACLUB_API_KEY ??
         process.env.alfaclub_api_key ??

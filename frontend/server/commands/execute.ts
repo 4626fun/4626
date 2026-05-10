@@ -17,6 +17,7 @@ import {
 import { executeSendCommandFamily } from './families/send.js'
 import { executeTwitterCommandFamily } from './families/twitter.js'
 import { executeWhoisCommandFamily } from './families/whois.js'
+import { postTweetFromSystem } from '../twitter/commands.js'
 
 function resolveVaultRole(params: {
   senderWallet: ExecuteCommandParams['senderWallet']
@@ -62,6 +63,51 @@ function parseAlfaClubRoomIdFromChatId(chatId: string | undefined): string | nul
  */
 function isAlfaClubChatId(chatId: string | undefined): boolean {
   return parseAlfaClubRoomIdFromChatId(chatId) !== null
+}
+
+function isGmeowPostToXFirstEnabled(): boolean {
+  const raw = String(process.env.HERMIT_GMEOW_POST_TO_X_FIRST ?? '')
+    .trim()
+    .toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value.trim())
+}
+
+function truncateWithEllipsis(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  if (maxLength <= 1) return '…'
+  return `${value.slice(0, maxLength - 1).trimEnd()}…`
+}
+
+function buildGmeowTweetText(params: {
+  reply: string
+  memeCaption?: string
+  memeUrl?: string
+}): string {
+  const lines = params.reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith('— Want me to remember your style?'))
+
+  const mediaUrl = params.memeUrl || lines.find((line) => isHttpUrl(line)) || ''
+  const textLine =
+    lines.find((line) => !isHttpUrl(line)) || params.memeCaption || 'cat laugh from the Hermit cave.'
+
+  if (!mediaUrl) return truncateWithEllipsis(textLine, 280)
+  const combined = `${textLine}\n${mediaUrl}`
+  if (combined.length <= 280) return combined
+
+  const maxTextLength = Math.max(1, 280 - mediaUrl.length - 1)
+  return `${truncateWithEllipsis(textLine, maxTextLength)}\n${mediaUrl}`
+}
+
+function extractTweetUrl(response: string): string | null {
+  const match = response.match(/https:\/\/x\.com\/i\/web\/status\/\d+/i)
+  return match?.[0] ?? null
 }
 
 type HermitRoomContext = {
@@ -310,15 +356,41 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
             ? { clearPreferences: hermitRoomContext.clearPreferences }
             : {}),
         })
+        let response = result.reply
+        let suppressMediaAttachments = false
+        if (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled()) {
+          const tweet = await postTweetFromSystem({
+            text: buildGmeowTweetText({
+              reply: result.reply,
+              memeCaption: result.meme?.caption,
+              memeUrl: result.meme?.url,
+            }),
+            groupId: params.groupId,
+            senderWallet: params.senderWallet,
+          })
+          if (tweet.ok) {
+            const tweetUrl =
+              typeof tweet.action?.tweetUrl === 'string'
+                ? tweet.action.tweetUrl
+                : extractTweetUrl(tweet.response)
+            if (tweetUrl) {
+              response = `Posted on X:\n${tweetUrl}`
+              suppressMediaAttachments = true
+            }
+          }
+        }
+        const mediaAttachments = suppressMediaAttachments
+          ? []
+          : (result.mediaAttachments ?? [])
         return {
           ok: true,
-          response: result.reply,
-          ...(result.mediaAttachments?.length
+          response,
+          ...(mediaAttachments.length
             ? {
                 action: {
                   action: 'hermit.command',
                   kind: result.kind,
-                  attachments: result.mediaAttachments,
+                  attachments: mediaAttachments,
                 },
               }
             : {}),

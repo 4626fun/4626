@@ -84,7 +84,7 @@ export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 export VITE_DEV_SERVER_HOST="localhost"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
-export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.9.4-dryrun}"
+export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.11.0-dryrun}"
 
 ANVIL_PID=""
 DEV_REDIRECT_PID=""
@@ -195,18 +195,24 @@ if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
+ALLOW_DEV_PORT_FALLBACK="${DEPLOY_DRY_RUN_ALLOW_PORT_FALLBACK:-0}"
 ORIG_DEV_PORT="$DEV_PORT"
 if port_in_use "$DEV_PORT"; then
-  for candidate in 5173 5174; do
-    if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
-      DEV_PORT="$candidate"
-      break
+  if [[ "$ALLOW_DEV_PORT_FALLBACK" == "1" ]]; then
+    for candidate in 5173 5174; do
+      if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
+        DEV_PORT="$candidate"
+        break
+      fi
+    done
+    if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
+      echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
+    else
+      echo "Port ${ORIG_DEV_PORT} is already in use and neither localhost:5173 nor localhost:5174 is available." >&2
+      exit 1
     fi
-  done
-  if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
-    echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
   else
-    echo "Port ${ORIG_DEV_PORT} is already in use and neither localhost:5173 nor localhost:5174 is available." >&2
+    echo "Port ${ORIG_DEV_PORT} is already in use. Free it or set DEPLOY_DRY_RUN_ALLOW_PORT_FALLBACK=1." >&2
     exit 1
   fi
 fi
