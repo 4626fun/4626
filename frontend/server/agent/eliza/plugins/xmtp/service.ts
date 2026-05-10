@@ -228,11 +228,74 @@ export type XmtpMessage = {
   sentAtMs: number
   isSelf: boolean
   conversationArchiveKey?: string | null
+  source: 'xmtp'
+  sourceHint: 'unknown' | 'zora_likely' | 'app_likely'
+  contentType: string | null
+  codec: string | null
+  clientHint: string | null
+  parseStatus: 'ok' | 'non_text_coerced'
 }
 
 export type OnMessageCallback = (msg: XmtpMessage) => Promise<string | null>
 
 type XmtpLifecycleState = 'idle' | 'starting' | 'running' | 'stopped' | 'error'
+
+function normalizeInboundText(content: unknown): {
+  text: string | null
+  parseStatus: 'ok' | 'non_text_coerced'
+} {
+  if (typeof content === 'string') {
+    return {
+      text: content,
+      parseStatus: 'ok',
+    }
+  }
+  if (content == null) {
+    return {
+      text: null,
+      parseStatus: 'non_text_coerced',
+    }
+  }
+  try {
+    const normalized = JSON.stringify(content)
+    if (typeof normalized !== 'string' || !normalized.trim()) {
+      return { text: null, parseStatus: 'non_text_coerced' }
+    }
+    return {
+      text: normalized.slice(0, 8_000),
+      parseStatus: 'non_text_coerced',
+    }
+  } catch {
+    return {
+      text: String(content).trim() ? String(content).slice(0, 8_000) : null,
+      parseStatus: 'non_text_coerced',
+    }
+  }
+}
+
+function pickFirstString(values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value !== 'string') continue
+    const trimmed = value.trim()
+    if (trimmed) return trimmed
+  }
+  return null
+}
+
+function deriveSourceHint(params: {
+  contentType: string | null
+  codec: string | null
+  clientHint: string | null
+}): 'unknown' | 'zora_likely' | 'app_likely' {
+  const fingerprint = [params.contentType, params.codec, params.clientHint]
+    .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+    .join(' ')
+    .toLowerCase()
+  if (!fingerprint) return 'unknown'
+  if (fingerprint.includes('zora')) return 'zora_likely'
+  if (fingerprint.includes('4626') || fingerprint.includes('keepr')) return 'app_likely'
+  return 'unknown'
+}
 
 // ---------------------------------------------------------------------------
 // Service
@@ -530,14 +593,35 @@ export class XmtpService {
       if (!this.agent) return
       if (filter.fromSelf(ctx.message, ctx.client)) return
 
-      const content = ctx.message.content
-      if (!content || typeof content !== 'string') return
+      const normalizedContent = normalizeInboundText((ctx.message as any).content)
+      const content = normalizedContent.text
+      if (!content) return
 
       const conversationId = ctx.conversation.id
       const senderInboxId = ctx.message.senderInboxId
       const conversationType = ctx.isDm() ? 'dm' : 'group'
       const sentAt = ctx.message.sentAt ?? new Date()
       const sentAtMs = sentAt.getTime()
+      const rawMessage = ctx.message as any
+      const contentType = pickFirstString([
+        rawMessage?.contentType?.typeId,
+        rawMessage?.contentType?.authorityId,
+        rawMessage?.contentType?.name,
+      ])
+      const codec = pickFirstString([
+        rawMessage?.contentCodec?.contentType?.typeId,
+        rawMessage?.contentCodec?.constructor?.name,
+      ])
+      const clientHint = pickFirstString([
+        rawMessage?.senderInstallationId,
+        rawMessage?.metadata?.client,
+        rawMessage?.metadata?.source,
+      ])
+      const sourceHint = deriveSourceHint({
+        contentType,
+        codec,
+        clientHint,
+      })
       const messageId =
         normalizeMessageId((ctx.message as any).id ?? (ctx.message as any).messageId) ??
         `fallback:${createHash('sha256')
@@ -571,6 +655,12 @@ export class XmtpService {
         sentAtMs,
         isSelf: false,
         conversationArchiveKey,
+        source: 'xmtp',
+        sourceHint,
+        contentType,
+        codec,
+        clientHint,
+        parseStatus: normalizedContent.parseStatus,
       }
 
       if (this.onMessage) {

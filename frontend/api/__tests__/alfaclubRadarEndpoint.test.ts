@@ -64,19 +64,6 @@ describe('GET/POST /api/v1/alfaclub/radar', () => {
     expect(res.statusCode).toBe(401)
   })
 
-  it('accepts CRON_SECRET_NEXT when CRON_SECRET is empty', async () => {
-    restoreEnv?.()
-    restoreEnv = applyEnv({ CRON_SECRET: '', CRON_SECRET_NEXT: 'next-secret' })
-    const req = createMockReq({
-      method: 'POST',
-      headers: { 'x-cron-secret': 'next-secret' },
-    })
-    const res = createMockRes()
-    await radarHandler(req, res)
-    expect(res.statusCode).toBe(200)
-    expect(runAlfaClubRadarMock).toHaveBeenCalledWith({ flags: FLAGS })
-  })
-
   it('runs radar when authorized', async () => {
     const req = createMockReq({
       method: 'POST',

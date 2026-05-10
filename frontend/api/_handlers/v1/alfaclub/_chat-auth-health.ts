@@ -56,9 +56,7 @@ function readCronSecret(req: VercelRequest): string {
 }
 
 function readConfiguredCronSecret(): string {
-  const primary = (process.env.CRON_SECRET ?? '').trim()
-  if (primary.length > 0) return primary
-  return (process.env.CRON_SECRET_NEXT ?? '').trim()
+  return (process.env.CRON_SECRET ?? '').trim()
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -73,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!configuredSecret) {
     return res.status(503).json({
       success: false,
-      error: 'CRON_SECRET (or CRON_SECRET_NEXT) is not configured',
+      error: 'CRON_SECRET is not configured',
     })
   }
 

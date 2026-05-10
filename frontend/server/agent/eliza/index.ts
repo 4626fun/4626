@@ -1144,7 +1144,14 @@ async function handleMessage(
     conversationId: string
     conversationType: string
     senderAddress: string | null
+    senderInboxId: string
     content: string
+    source: string
+    sourceHint: 'unknown' | 'zora_likely' | 'app_likely'
+    contentType: string | null
+    codec: string | null
+    clientHint: string | null
+    parseStatus: 'ok' | 'non_text_coerced'
     xmtpConversationKey?: string | null
     messageId?: string | null
     sentAtMs?: number | null
@@ -1156,6 +1163,7 @@ async function handleMessage(
 ): Promise<string | null> {
   const text = msg.content.trim()
   if (!text) return null
+  const startedAtMs = Date.now()
 
   if (text.length > MAX_INBOUND_MESSAGE_CHARS) {
     return `Message too long (${text.length} chars). Max supported length is ${MAX_INBOUND_MESSAGE_CHARS}.`
@@ -1165,9 +1173,42 @@ async function handleMessage(
     agentKey: ctx.agentKey,
     conversationId: msg.conversationId,
   })
+  const emitOutcome = (
+    outcome: string,
+    extra: Record<string, unknown> = {},
+  ): void => {
+    void emitTelemetryEvent('eliza_message_outcome', {
+      agentKey: ctx.agentKey,
+      conversationId: msg.conversationId,
+      conversationType: msg.conversationType,
+      senderAddress: msg.senderAddress,
+      senderInboxId: msg.senderInboxId,
+      source: msg.source,
+      sourceHint: msg.sourceHint,
+      contentType: msg.contentType,
+      codec: msg.codec,
+      clientHint: msg.clientHint,
+      parseStatus: msg.parseStatus,
+      messageId: msg.messageId ?? null,
+      correlationId,
+      latencyMs: Math.max(0, Date.now() - startedAtMs),
+      outcome,
+      ...extra,
+    })
+  }
   void emitTelemetryEvent('eliza_message_received', {
     agentKey: ctx.agentKey,
     conversationId: msg.conversationId,
+    conversationType: msg.conversationType,
+    senderAddress: msg.senderAddress,
+    senderInboxId: msg.senderInboxId,
+    source: msg.source,
+    sourceHint: msg.sourceHint,
+    contentType: msg.contentType,
+    codec: msg.codec,
+    clientHint: msg.clientHint,
+    parseStatus: msg.parseStatus,
+    messageId: msg.messageId ?? null,
     correlationId,
     length: text.length,
   })
@@ -1185,6 +1226,9 @@ async function handleMessage(
     reqLogger.warn('[eliza] inbound rate limited', {
       retryAfterMs: rate.retryAfterMs,
     })
+    emitOutcome('rate_limited', {
+      retryAfterMs: rate.retryAfterMs,
+    })
     return `Rate limit reached. Try again in ${Math.ceil(rate.retryAfterMs / 1000)}s.`
   }
 
@@ -1195,6 +1239,7 @@ async function handleMessage(
       messageId: msg.messageId ?? null,
       conversationId: msg.conversationId,
     })
+    emitOutcome('duplicate_message')
     return null
   }
   const state = await ctx.runtimeBridge.composeState(memory)
@@ -1224,6 +1269,7 @@ async function handleMessage(
     await ctx.runtimeBridge.runtime.createMemory(welcomeMemory as any, 'messages' as any)
     const isGreetingOnly = /^(hi|hello|hey|gm|good morning|help|\/help)$/i.test(text)
     if (isGreetingOnly) {
+      emitOutcome('welcome_greeting')
       return WELCOME_MESSAGE
     }
   }
@@ -1295,6 +1341,10 @@ async function handleMessage(
             chars: actionReply.length,
           })
         }
+        emitOutcome('action_reply', {
+          action: actionName,
+          score: candidate.score,
+        })
         return actionReply
       }
     } catch (error) {
@@ -1331,10 +1381,11 @@ async function handleMessage(
     reqLogger.warn('[eliza/vertical] keepr_status no_action_reply', {
       correlationId,
     })
+    emitOutcome('keepr_status_unavailable')
     return 'Keepr status is temporarily unavailable. Please try again shortly.'
   }
 
-  return handleXmtpFallbackResponse({
+  const fallbackReply = await handleXmtpFallbackResponse({
     text,
     conversationId: msg.conversationId,
     senderAddress: msg.senderAddress,
@@ -1343,6 +1394,8 @@ async function handleMessage(
     state: state as Record<string, unknown>,
     logger: reqLogger,
   })
+  emitOutcome('llm_fallback')
+  return fallbackReply
 }
 
 // ---------------------------------------------------------------------------
@@ -1477,7 +1530,14 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
+        senderInboxId: msg.senderInboxId,
         content: msg.content,
+        source: msg.source,
+        sourceHint: msg.sourceHint,
+        contentType: msg.contentType,
+        codec: msg.codec,
+        clientHint: msg.clientHint,
+        parseStatus: msg.parseStatus,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
         messageId: msg.messageId ?? null,
         sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
@@ -1684,7 +1744,14 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
+        senderInboxId: msg.senderInboxId,
         content: msg.content,
+        source: msg.source,
+        sourceHint: msg.sourceHint,
+        contentType: msg.contentType,
+        codec: msg.codec,
+        clientHint: msg.clientHint,
+        parseStatus: msg.parseStatus,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
         messageId: msg.messageId ?? null,
         sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
@@ -1768,7 +1835,14 @@ async function startSingleAgentCsw(params: {
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
         senderAddress: msg.senderAddress,
+        senderInboxId: msg.senderInboxId,
         content: msg.content,
+        source: msg.source,
+        sourceHint: msg.sourceHint,
+        contentType: msg.contentType,
+        codec: msg.codec,
+        clientHint: msg.clientHint,
+        parseStatus: msg.parseStatus,
         xmtpConversationKey: msg.conversationArchiveKey ?? null,
         messageId: msg.messageId ?? null,
         sentAtMs: msg.sentAtMs ?? msg.sentAt?.getTime?.() ?? null,
@@ -1815,7 +1889,14 @@ async function startSingleAgentCsw(params: {
             conversationId: m.conversationId,
             conversationType: m.conversationType,
             senderAddress: m.senderAddress,
+            senderInboxId: m.senderInboxId,
             content: m.content,
+            source: m.source,
+            sourceHint: m.sourceHint,
+            contentType: m.contentType,
+            codec: m.codec,
+            clientHint: m.clientHint,
+            parseStatus: m.parseStatus,
             xmtpConversationKey: m.conversationArchiveKey ?? null,
             messageId: m.messageId ?? null,
             sentAtMs: m.sentAtMs ?? m.sentAt?.getTime?.() ?? null,
