@@ -368,7 +368,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const roomIdRaw = (process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
   const groupIdRaw = (process.env.ALFACLUB_CHAT_GROUP_ID ?? '').trim()
-  const telegramRelayBotToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() || null
+  const telegramRelayBotToken = (process.env.ALFACLUB_TELEGRAM_BOT_TOKEN ?? '').trim() || null
   const telegramRelayChatId =
     (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '').trim() ||
     (process.env.TELEGRAM_TARGET_CHAT_ID ?? '').trim() ||
