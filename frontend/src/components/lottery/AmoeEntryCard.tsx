@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Gift, Loader2 } from 'lucide-react'
+import { ExternalLink, Gift } from 'lucide-react'
 import type { Address, Hex } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { Spinner } from '@/components/ui/Spinner'
 import { getMarketingBaseUrl } from '@/lib/env/host'
 
 // PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
@@ -495,7 +496,7 @@ export function AmoeEntryCard(props: {
               className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {entryBusy ? (
-                <span className="inline-flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</span>
+                <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Submitting…</span>
               ) : (
                 `Submit free jackpot entry (${selectedPoints.toLocaleString()} pts)`
               )}
@@ -508,7 +509,7 @@ export function AmoeEntryCard(props: {
             className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {checkinBusy ? (
-              <span className="inline-flex items-center justify-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Claiming…</span>
+              <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
             ) : (
               <span className="inline-flex items-center justify-center gap-1.5">
                 <XIcon className="h-3.5 w-3.5" /> {hasEnoughForFloor ? 'Post on X for a point' : 'Earn more points'}

@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, CircleAlert, CircleSlash, Loader2 } from 'lucide-react'
+import { CheckCircle2, CircleAlert, CircleSlash } from 'lucide-react'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { Spinner } from '@/components/ui/Spinner'
 
 /**
  * Public-facing, read-only infrastructure readiness badges shown at the top
@@ -82,7 +83,7 @@ function stateIcon(state: BadgeState) {
       return <CircleSlash className="w-3.5 h-3.5" />
     case 'loading':
     default:
-      return <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      return <Spinner size="sm" />
   }
 }
 

@@ -2,10 +2,11 @@ import { useCallback, useMemo, useState } from 'react'
 
 import { useAccount, usePublicClient, useWriteContract } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { Loader2, Wrench } from 'lucide-react'
+import { Wrench } from 'lucide-react'
 
 import { CONTRACTS } from '@/config/contracts'
 import { isAddressLike, type ResolvedStatusFixContext } from '@/features/status/statusShared'
+import { Spinner } from '@/components/ui/Spinner'
 
 const SHAREOFT_ADMIN_ABI = [
   { type: 'function', name: 'setVault', stateMutability: 'nonpayable', inputs: [{ name: '_vault', type: 'address' }], outputs: [] },
@@ -364,7 +365,7 @@ export default function StatusFixPanel(props: {
 
       {fixHash ? (
         <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <Spinner size="sm" />
           Waiting for transaction confirmation…
         </div>
       ) : null}

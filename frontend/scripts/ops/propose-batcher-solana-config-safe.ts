@@ -3,7 +3,10 @@
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
 import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
-import { isDeprecatedCreatorVaultBatcherAddress } from '../../src/config/contracts.defaults.js'
+import {
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  isDeprecatedCreatorVaultBatcherAddress,
+} from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 
 declare const process: {
@@ -76,10 +79,10 @@ Options:
 
 Examples:
   pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
-    --batcher 0x004684670d284EF607E1B2424fcf8ccBda8ef828
+    --batcher 0x271Ab2C53D79d52ddB14506a44133Fe3FA395332
 
   pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
-    --only-ovault-runtime --batcher 0x004684670d284EF607E1B2424fcf8ccBda8ef828 --ovault-hub-composer <address> --ovault-solana-eid 30168
+    --only-ovault-runtime --batcher 0x271Ab2C53D79d52ddB14506a44133Fe3FA395332 --ovault-hub-composer <address> --ovault-solana-eid 30168
 `)
 }
 
@@ -309,6 +312,14 @@ async function main() {
     : hasFlag('--no-ovault-runtime')
       ? false
       : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
+  if (includeOvaultRuntime) {
+    const canonicalOvaultBatcher = getAddress(SPLIT_PHASE1_DEPLOYMENT_BATCHER)
+    if (batcher.toLowerCase() !== canonicalOvaultBatcher.toLowerCase()) {
+      throw new Error(
+        `OVault runtime proposals require canonical deployment batcher ${canonicalOvaultBatcher}; received ${batcher}.`,
+      )
+    }
+  }
   const ovaultHubComposer = normalizeAddress(
     getArg('--ovault-hub-composer', process.env.OVAULT_HUB_COMPOSER || ''),
   )

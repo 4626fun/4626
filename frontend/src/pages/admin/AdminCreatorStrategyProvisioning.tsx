@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Clock, RefreshCw, X } from 'lucide-react'
+import { Spinner } from '@/components/ui/Spinner'
 
 /**
  * Operator triage dashboard for `creator_strategy_features`.
@@ -178,7 +179,7 @@ export function AdminCreatorStrategyProvisioning() {
           disabled={loading}
           className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/[0.04] disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
           Refresh
         </button>
       </header>

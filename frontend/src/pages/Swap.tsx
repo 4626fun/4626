@@ -17,6 +17,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
+import { Spinner } from '@/components/ui/Spinner'
 import { ExternalWalletOptions } from '@/components/account/ConnectButton'
 import { AmoeEntryCard, type AmoeSigningWalletClient } from '@/components/lottery/AmoeEntryCard'
 import { SwapCard } from '@/components/swap/SwapCard'
@@ -2486,7 +2487,7 @@ function LiquidityPanel(props: {
             className="rounded-full border border-white/10 p-1.5 text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
             aria-label="Refresh positions"
           >
-            <RefreshCw className={`h-3 w-3 ${props.positionsLoading ? 'animate-spin' : ''}`} />
+            {props.positionsLoading ? <Spinner size="sm" /> : <RefreshCw className="h-3 w-3" />}
           </button>
         </div>
 

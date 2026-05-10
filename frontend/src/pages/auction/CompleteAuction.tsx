@@ -12,7 +12,6 @@ import {
 import { formatUnits } from 'viem'
 import {
   CheckCircle2,
-  Loader2,
   AlertCircle,
   PartyPopper,
   Zap,
@@ -25,6 +24,7 @@ import {
 } from 'lucide-react'
 import { CONTRACTS, AKITA } from '@/config/contracts'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
+import { Spinner } from '@/components/ui/Spinner'
 
 // CCA Strategy ABI
 const CCA_STRATEGY_ABI = [
@@ -500,7 +500,7 @@ export function CompleteAuction() {
                     }`}
                   >
                     {isUnsoldSweeping || isUnsoldConfirming ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Spinner size="md" />
                     ) : isUnsoldSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
@@ -520,7 +520,7 @@ export function CompleteAuction() {
                       >
                         {isUnsoldSweeping || isUnsoldConfirming ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Spinner size="sm" />
                             {isUnsoldSweeping ? 'Confirming...' : 'Processing...'}
                           </>
                         ) : (
@@ -559,7 +559,7 @@ export function CompleteAuction() {
                     }`}
                   >
                     {isStrategySweeping || isStrategySweepConfirming ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Spinner size="md" />
                     ) : isStrategySweepSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
@@ -579,7 +579,7 @@ export function CompleteAuction() {
                       >
                         {isStrategySweeping || isStrategySweepConfirming ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Spinner size="sm" />
                             {isStrategySweeping ? 'Confirming...' : 'Processing...'}
                           </>
                         ) : (
@@ -624,7 +624,7 @@ export function CompleteAuction() {
                       : 'bg-brand-500/20 text-brand-400'
                   }`}>
                     {isSweeping || isSweepConfirming ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Spinner size="md" />
                     ) : isSweepSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
@@ -644,7 +644,7 @@ export function CompleteAuction() {
                       >
                         {isSweeping || isSweepConfirming ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Spinner size="sm" />
                             {isSweeping ? 'Confirming...' : 'Processing...'}
                           </>
                         ) : (
@@ -686,7 +686,7 @@ export function CompleteAuction() {
                       : 'bg-surface-800 text-surface-500'
                   }`}>
                     {isMigrating || isMigrateConfirming ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Spinner size="md" />
                     ) : isMigrateSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
@@ -706,7 +706,7 @@ export function CompleteAuction() {
                       >
                         {isMigrating || isMigrateConfirming ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Spinner size="sm" />
                             {isMigrating ? 'Confirming...' : 'Migrating...'}
                           </>
                         ) : (
@@ -748,7 +748,7 @@ export function CompleteAuction() {
                       : 'bg-surface-800 text-surface-500'
                   }`}>
                     {isConfiguring || isConfigConfirming ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <Spinner size="md" />
                     ) : isConfigSuccess ? (
                       <CheckCircle2 className="w-5 h-5" />
                     ) : (
@@ -782,7 +782,7 @@ export function CompleteAuction() {
                       >
                         {isConfiguring || isConfigConfirming ? (
                           <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <Spinner size="sm" />
                             {isConfiguring ? 'Confirming...' : 'Configuring...'}
                           </>
                         ) : (
@@ -871,7 +871,7 @@ export function CompleteAuction() {
                   >
                     {isActivating || isActivateConfirming ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Spinner size="sm" />
                         Activating…
                       </>
                     ) : isActivateSuccess ? (

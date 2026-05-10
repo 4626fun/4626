@@ -1,5 +1,6 @@
 import { Wallet } from 'lucide-react'
 
+import { Spinner } from '@/components/ui/Spinner'
 import type { SwapConnectGateResult } from '@/lib/swap/connectGate'
 
 type SwapConnectGateProps = {
@@ -40,11 +41,9 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
       </div>
 
       {gate.showSpinner ? (
-        <div
-          className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-white/70"
-          role="status"
-          aria-label={gate.spinnerLabel || 'Loading'}
-        />
+        <div role="status" aria-label={gate.spinnerLabel || 'Loading'}>
+          <Spinner className="text-white/80" size="lg" />
+        </div>
       ) : (
         <button
           type="button"

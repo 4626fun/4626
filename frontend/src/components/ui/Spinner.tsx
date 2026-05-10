@@ -1,4 +1,4 @@
-import { Spinner as CdsSpinner } from '@coinbase/cds-web/loaders'
+import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 
 interface SpinnerProps {
   size?: 'sm' | 'md' | 'lg'
@@ -6,15 +6,21 @@ interface SpinnerProps {
 }
 
 const SIZE_MAP: Record<NonNullable<SpinnerProps['size']>, number> = {
-  sm: 16,
-  md: 24,
-  lg: 32,
+  sm: 14,
+  md: 20,
+  lg: 26,
 }
 
 export function Spinner({ size = 'md', className }: SpinnerProps) {
   return (
     <span className={className} role="status" aria-label="Loading">
-      <CdsSpinner size={SIZE_MAP[size]} color="fgPrimary" />
+      <PixelWaveLoader
+        color="currentColor"
+        duration={860}
+        gridSize={5}
+        name="wave-diag"
+        size={SIZE_MAP[size]}
+      />
     </span>
   )
 }

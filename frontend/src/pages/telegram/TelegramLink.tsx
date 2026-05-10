@@ -76,6 +76,7 @@ import {
   type TelegramLinkCompleteData,
   type TelegramLinkReadyData,
 } from './telegramLinkHelpers'
+import { Spinner } from '@/components/ui/Spinner'
 
 type PrivyWithTelegramLink = ReturnType<typeof usePrivy> & {
   linkTelegram?: (params?: LinkTelegramParams) => Promise<unknown> | unknown
@@ -1742,7 +1743,7 @@ export function TelegramLink() {
                 className={PRIMARY_ACTION_BUTTON_CLASS}
                 disabled={ownerSetupHandoffBusy}
               >
-                {ownerSetupHandoffBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {ownerSetupHandoffBusy ? <Spinner size="sm" /> : null}
                 {ownerSetupHandoffBusy ? 'Opening setup…' : 'Continue setup'}
               </button>
               {ownerSetupHandoffError ? (
@@ -1775,7 +1776,7 @@ export function TelegramLink() {
                 className={PRIMARY_ACTION_BUTTON_CLASS}
                 disabled={ownerSetupHandoffBusy}
               >
-                {ownerSetupHandoffBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {ownerSetupHandoffBusy ? <Spinner size="sm" /> : null}
                 {ownerSetupHandoffBusy ? 'Opening setup…' : 'Continue setup'}
               </button>
               {ownerSetupHandoffError ? (
@@ -1972,7 +1973,7 @@ function StatusBlock(props: {
     <div className={`rounded-[18px] border ${props.compact ? 'px-3 py-2.5' : 'px-3.5 py-2.5'} ${toneClasses}`}>
       <div className={`flex items-start ${props.compact ? 'gap-2.5' : 'gap-3'}`}>
         <div className={`rounded-full border border-white/10 bg-white/[0.05] ${props.compact ? 'mt-0.5 p-1.25' : 'mt-0.5 p-1.5'}`}>
-          <Icon className={`${props.compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${props.spinning ? 'animate-spin' : ''}`} />
+          {props.spinning ? <Spinner size={props.compact ? 'sm' : 'md'} /> : <Icon className={props.compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}
         </div>
         <div className={`${props.compact ? 'text-[12.5px] leading-5' : 'text-[13px] leading-5'}`}>{props.body}</div>
       </div>

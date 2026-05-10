@@ -124,6 +124,11 @@ forge script script/AuthorizeSolanaAdapter.s.sol:AuthorizeSolanaAdapter \
   --broadcast
 ```
 
+OVault mesh runtime requirement:
+- if a deploy session enables `solanaOvault.enabled=true`, runtime config must be enabled on canonical batcher `0x271Ab2C53D79d52ddB14506a44133Fe3FA395332` (`getOVaultRuntimeConfig().enabled=true`, non-zero composer, non-zero Solana EID)
+- Safe proposal helper enforces the same constraint for OVault runtime ops:
+  - `pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts --only-ovault-runtime --batcher 0x271Ab2C53D79d52ddB14506a44133Fe3FA395332 --ovault-hub-composer <address> --ovault-solana-eid <eid>`
+
 Optional keeper setup (same script):
 - set `SOLANA_KEEPER_PUBKEY=0x<32-byte-solana-pubkey>` before running.
 

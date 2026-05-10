@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { CheckCircle, XCircle, AlertTriangle, Loader2, ExternalLink, ShieldCheck } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, ExternalLink, ShieldCheck } from 'lucide-react'
 import { AKITA } from '@/config/contracts'
 import {
   basescanAddressHref,
@@ -18,6 +18,7 @@ import {
 } from '@/features/status/statusShared'
 import { InfraReadinessBadges } from '@/features/status/InfraReadinessBadges'
 import { LoadingInline } from '@/components/ui/LoadingState'
+import { Spinner } from '@/components/ui/Spinner'
 
 const LazyStatusFixPanel = lazy(async () => {
   const [statusFixPanelModule, web3Module] = await Promise.all([
@@ -278,7 +279,7 @@ export function Status() {
                 title={!vaultInputAddress ? 'Enter a valid vault address' : 'Run checks'}
               >
                 <span className="inline-flex items-center gap-2">
-                  {vaultQuery.isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  {vaultQuery.isFetching ? <Spinner size="sm" /> : null}
                   {vaultQuery.isFetching ? 'Running…' : 'Run checks'}
                 </span>
               </button>
@@ -403,7 +404,7 @@ export function Status() {
           <div className="mt-8 space-y-4">
             {vaultQuery.isFetching ? (
               <div className="text-xs text-zinc-600 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Running vault checks…
+                <Spinner size="sm" /> Running vault checks…
               </div>
             ) : null}
             {vaultSections.map((s) => (

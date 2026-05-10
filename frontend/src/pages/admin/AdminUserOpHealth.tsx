@@ -4,6 +4,7 @@ import { RefreshCw, ShieldAlert, Activity, Clock, Zap, AlertTriangle } from 'luc
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { Spinner } from '@/components/ui/Spinner'
 
 type SignatureModeStat = { mode: string; count: number }
 type PaymasterModeStat = { mode: string; count: number }
@@ -259,7 +260,7 @@ export function AdminUserOpHealth() {
           disabled={telemetry.isFetching || infra.isFetching}
           className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-zinc-200 hover:border-white/20 hover:text-white transition-colors disabled:opacity-60"
         >
-          <RefreshCw className={`w-3.5 h-3.5 ${telemetry.isFetching || infra.isFetching ? 'animate-spin' : ''}`} /> Refresh
+          {telemetry.isFetching || infra.isFetching ? <Spinner size="sm" /> : <RefreshCw className="w-3.5 h-3.5" />} Refresh
         </button>
       </div>
 

@@ -14,7 +14,6 @@ import {
   Copy,
   CornerUpLeft,
   ExternalLink,
-  Loader2,
   MessageCircle,
   Minus,
   RotateCcw,
@@ -30,6 +29,7 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { useAccountContext } from '@/wallet/accountContext'
+import { Spinner } from '@/components/ui/Spinner'
 import { getAgentIdentity } from './agentIdentity'
 import { EthosAvatarScoreForAddress } from './EthosScorePill'
 import {
@@ -1280,7 +1280,7 @@ export function ChatWindow({
           >
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-5 h-5 text-zinc-500 animate-spin" />
+                <Spinner className="text-zinc-500" size="md" />
               </div>
             ) : messages.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-xs text-zinc-500">
@@ -1588,7 +1588,7 @@ export function ChatWindow({
               className="p-2 rounded-full bg-brand-primary/20 text-brand-primary hover:bg-brand-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
             >
               {sending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Spinner size="sm" />
               ) : (
                 <Send className="w-4 h-4" />
               )}

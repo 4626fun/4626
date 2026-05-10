@@ -2,8 +2,8 @@ import type { CSSProperties } from 'react'
 
 import { cn } from '@/lib/shared/utils'
 
-const DEFAULT_DURATION_MS = 600
-const DEFAULT_GRID_SIZE = 3
+const DEFAULT_DURATION_MS = 900
+const DEFAULT_GRID_SIZE = 5
 const DEFAULT_SIZE = 28
 const DEFAULT_COLOR = 'rgb(var(--brand-primary))'
 
@@ -51,15 +51,18 @@ function getGapValue(size: number | string | undefined, sizeValue: string, gridS
   return `clamp(1px, calc(${sizeValue} / ${Math.max(gridSize * 2.5, 6)}), 6px)`
 }
 
-// Clockwise ring order for a 3×3 grid (outer 8 cells in orbit; center echoes midpoint):
-//   step:  0  1  2
-//          7  4  3
-//          6  5  4
-const ORBIT_CW_3X3 = [
-  [0, 1, 2],
-  [7, 4, 3],
-  [6, 5, 4],
-] as const
+function getOrbitOffset(row: number, column: number, gridSize: number) {
+  const center = (gridSize - 1) / 2
+  const dx = column - center
+  const dy = row - center
+  const angle = Math.atan2(dy, dx)
+  const normalizedAngle = (angle + Math.PI * 2) % (Math.PI * 2)
+  const ringDistance = Math.round(Math.hypot(dx, dy) * 1000) / 1000
+  const maxDistance = Math.max(center, 1)
+  const ringWeight = Math.max(0, Math.min(1, ringDistance / maxDistance))
+
+  return normalizedAngle / (Math.PI * 2) + ringWeight
+}
 
 function getPresetOffset(name: string, row: number, column: number, gridSize: number) {
   switch (name) {
@@ -71,13 +74,8 @@ function getPresetOffset(name: string, row: number, column: number, gridSize: nu
       return gridSize - row - 1
     case 'wave-diag':
       return row + column
-    case 'wave-orbit-cw': {
-      if (gridSize === 3) {
-        return (ORBIT_CW_3X3[row] ?? [])[column] ?? 0
-      }
-      // Larger grids: approximate outer ring clockwise as diagonal
-      return row + column
-    }
+    case 'wave-orbit-cw':
+      return getOrbitOffset(row, column, gridSize)
     case 'wave-lr':
     default:
       return column
@@ -86,7 +84,7 @@ function getPresetOffset(name: string, row: number, column: number, gridSize: nu
 
 function createPresetDelays(name: string, gridSize: number, duration: number) {
   const cellCount = gridSize * gridSize
-  const stepMs = Math.max(70, Math.round(duration / Math.max(gridSize * 2, 1)))
+  const stepMs = Math.max(55, Math.round(duration / Math.max(gridSize * 2.2, 1)))
 
   return Array.from({ length: cellCount }, (_, index) => {
     const row = Math.floor(index / gridSize)
@@ -109,6 +107,15 @@ function normalizeDelays(delays: number[] | undefined, fallbackDelays: number[])
   })
 }
 
+function getDotScale(size: number | string | undefined, gridSize: number) {
+  if (typeof size === 'number') {
+    const slot = size / Math.max(gridSize, 1)
+    return Math.max(0.65, Math.min(1.6, slot / 4))
+  }
+
+  return Math.max(0.7, Math.min(1.4, 5 / Math.max(gridSize, 1)))
+}
+
 export function PixelWaveLoader({
   name = 'wave-lr',
   size = DEFAULT_SIZE,
@@ -122,32 +129,36 @@ export function PixelWaveLoader({
   const durationMs = normalizeDuration(duration)
   const sizeValue = normalizeSize(size)
   const resolvedDelays = normalizeDelays(delays, createPresetDelays(name, gridSize, durationMs))
+  const dotScale = getDotScale(size, gridSize)
 
-  const rootStyle: CSSProperties = {
+  const rootStyle: CSSProperties & Record<string, string | number> = {
     width: sizeValue,
     height: sizeValue,
     color,
     gap: getGapValue(size, sizeValue, gridSize),
     gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
     gridTemplateRows: `repeat(${gridSize}, minmax(0, 1fr))`,
+    '--dotm-wave-duration': `${durationMs}ms`,
+    '--dotm-wave-scale': dotScale,
   }
 
   return (
     <div
       aria-hidden="true"
-      className={cn('grid shrink-0 place-items-stretch', className)}
+      className={cn('dot-matrix-loader grid shrink-0 place-items-stretch', className)}
+      data-dot-matrix-loader="true"
       data-pixel-wave-loader="true"
       style={rootStyle}
     >
       {resolvedDelays.map((delay, index) => (
         <span
           key={index}
+          data-dot-matrix-cell="true"
           data-pixel-wave-cell="true"
-          className="pixel-wave-loader__cell block h-full w-full"
+          className="dot-matrix-loader__cell block h-full w-full rounded-[2px]"
           // Every cell runs the same fade loop. The per-cell delay array is the
           // entire sequencing mechanism, which keeps the motion simple and stable.
           style={{
-            animationDuration: `${durationMs}ms`,
             animationDelay: `${delay}ms`,
           }}
         />

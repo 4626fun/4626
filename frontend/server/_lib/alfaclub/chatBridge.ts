@@ -2103,18 +2103,63 @@ async function executeCommandBatch(params: {
       }
       const attachments = extractAlfaClubActionAttachments(result.action)
       if (params.flags.botToken) {
-        await sendRoomMessageViaBotToken({
-          apiBaseUrl: params.flags.apiBaseUrl,
-          botToken: params.flags.botToken,
+        const idempotencyKey = buildBotMessageIdempotencyKey({
           roomId: params.roomId,
-          text: responseText,
-          replyToMessageId: command.id,
-          idempotencyKey: buildBotMessageIdempotencyKey({
+          messageId: command.id,
+        })
+        let sent = false
+        try {
+          await sendRoomMessageViaBotToken({
+            apiBaseUrl: params.flags.apiBaseUrl,
+            botToken: params.flags.botToken,
+            roomId: params.roomId,
+            text: responseText,
+            replyToMessageId: command.id,
+            idempotencyKey,
+            timeoutMs: params.flags.sendTimeoutMs,
+          })
+          sent = true
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error)
+          logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
             roomId: params.roomId,
             messageId: command.id,
-          }),
-          timeoutMs: params.flags.sendTimeoutMs,
-        })
+            error: detail.slice(0, 180),
+          })
+        }
+
+        if (!sent) {
+          try {
+            await sendRoomMessageViaBotToken({
+              apiBaseUrl: params.flags.apiBaseUrl,
+              botToken: params.flags.botToken,
+              roomId: params.roomId,
+              text: responseText,
+              idempotencyKey,
+              timeoutMs: params.flags.sendTimeoutMs,
+            })
+            sent = true
+          } catch (error) {
+            const detail = error instanceof Error ? error.message : String(error)
+            logger.warn('[alfaclub-chat] bot_reply_without_reply_id_failed', {
+              roomId: params.roomId,
+              messageId: command.id,
+              error: detail.slice(0, 180),
+            })
+          }
+        }
+
+        if (!sent) {
+          await sendRoomMessageViaWebSocket({
+            websocketUrl: params.flags.websocketUrl,
+            jwt: params.jwt,
+            roomId: params.roomId,
+            text: responseText,
+            attachments,
+            replyToMessageId: command.id,
+            timeoutMs: params.flags.sendTimeoutMs,
+          })
+        }
       } else {
         await sendRoomMessageViaWebSocket({
           websocketUrl: params.flags.websocketUrl,

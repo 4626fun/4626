@@ -7,6 +7,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingInline } from '@/components/ui/LoadingState'
+import { Spinner } from '@/components/ui/Spinner'
 
 type PendingRequest = {
   id: number
@@ -177,7 +178,7 @@ export function AdminCreatorAccess() {
           disabled={isBusy}
           className="inline-flex items-center gap-2 rounded-lg bg-white/5 border border-white/10 px-4 py-2 text-xs text-zinc-300 hover:text-white hover:border-white/20 transition-colors disabled:opacity-60"
         >
-          <RefreshCw className={`w-4 h-4 ${listQuery.isFetching ? 'animate-spin' : ''}`} />
+          {listQuery.isFetching ? <Spinner size="sm" /> : <RefreshCw className="w-4 h-4" />}
           Refresh
         </button>
       </div>

@@ -29,7 +29,8 @@ import {
 } from 'wagmi';
 import { type Address, encodeFunctionData, parseAbi, formatUnits } from 'viem';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ExternalLink, CheckCircle, AlertCircle, ArrowRight, Wallet, Copy, Check } from 'lucide-react';
+import { ExternalLink, CheckCircle, AlertCircle, ArrowRight, Wallet, Copy, Check } from 'lucide-react';
+import { Spinner } from '@/components/ui/Spinner';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -531,7 +532,7 @@ export function ClaimPrizeToSolana({
                 : 'No funds'}
             </span>
           ) : (
-            <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            <Spinner className="text-gray-500" size="sm" />
           )}
         </div>
       </div>
@@ -639,7 +640,7 @@ export function ClaimPrizeToSolana({
       {/* Pending: Approve */}
       {(step === 'approve' || step === 'approve_pending') && (
         <div className="flex flex-col items-center gap-3 py-4">
-          <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
+          <Spinner className="text-indigo-400" size="lg" />
           <p className="text-sm text-gray-300">
             {step === 'approve' ? 'Confirm approval in your wallet...' : 'Waiting for approval confirmation...'}
           </p>
@@ -669,7 +670,7 @@ export function ClaimPrizeToSolana({
       {/* Pending: Bridge */}
       {(step === 'bridge' && bridgeTxHash) || step === 'bridge_pending' ? (
         <div className="flex flex-col items-center gap-3 py-4">
-          <Loader2 className="w-6 h-6 text-purple-400 animate-spin" />
+          <Spinner className="text-purple-400" size="lg" />
           <p className="text-sm text-gray-300">
             Bridging to Solana... This may take a few minutes.
           </p>

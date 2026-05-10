@@ -6,6 +6,7 @@ import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScop
 import { useRevokeSubAccount } from './useRevokeSubAccount'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
 import { useCswOwnerSigner } from './useCswOwnerSigner'
+import { Spinner } from '@/components/ui/Spinner'
 
 /**
  * `/accounts` "Execution scopes" card.
@@ -123,7 +124,7 @@ export function ExecutionScopeCard() {
             title={hasOwnerSigner ? undefined : 'Finish the owner-install step or connect an owner wallet first'}
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${reprovision.busy ? 'animate-spin' : ''}`} />
+            {reprovision.busy ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
             {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable in-chat commands'}
           </button>
           {!hasOwnerSigner && !ownerCheck.loading ? (
@@ -252,7 +253,7 @@ export function ExecutionScopeCard() {
             disabled={reprovision.busy}
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${reprovision.busy ? 'animate-spin' : ''}`} />
+            {reprovision.busy ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
             {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Re-provision'}
           </button>
         ) : null}

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWallets } from '@privy-io/react-auth'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
-import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, Loader2, AlertTriangle, Wallet, Zap } from 'lucide-react'
+import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, AlertTriangle, Wallet, Zap } from 'lucide-react'
 import { encodeFunctionData, getAddress } from 'viem'
 
 import {
@@ -21,6 +21,7 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { Spinner } from '@/components/ui/Spinner'
 
 export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
@@ -881,7 +882,7 @@ export function AdminAgentSetup() {
             disabled={publishMutation.isPending}
             className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-400/15 disabled:opacity-60"
           >
-            {publishMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+            {publishMutation.isPending ? <Spinner size="sm" /> : <Zap className="w-3.5 h-3.5" />}
             Publish Agent
           </button>
         </div>
@@ -921,7 +922,7 @@ export function AdminAgentSetup() {
           </div>
           <div className="ml-auto">
             {agentQuery.isLoading ? (
-              <Loader2 className="w-4 h-4 text-zinc-500 animate-spin" />
+              <Spinner className="text-zinc-500" size="sm" />
             ) : agent ? (
               <StatusBadge ok label={agent.agentType === 'csw' ? 'CSW Active' : 'Active'} />
             ) : (
@@ -1160,7 +1161,7 @@ export function AdminAgentSetup() {
                         disabled={oneClickMutation.isPending || !canonicalCswAddress}
                         className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[11px] text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-60"
                       >
-                        {oneClickMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                        {oneClickMutation.isPending ? <Spinner size="sm" /> : <Zap className="w-3.5 h-3.5" />}
                         {oneClickMutation.isPending ? 'Running…' : 'Run one-click'}
                       </button>
                     </div>
@@ -1228,7 +1229,7 @@ export function AdminAgentSetup() {
                           >
                             {enableMutation.isPending ? (
                               <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Activating...
+                                <Spinner size="sm" /> Activating...
                               </>
                             ) : (
                               <>
@@ -1250,7 +1251,7 @@ export function AdminAgentSetup() {
                           >
                             {addOwnerMutation.isPending ? (
                               <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending transaction...
+                                <Spinner size="sm" /> Sending transaction...
                               </>
                             ) : (
                               <>
@@ -1318,7 +1319,7 @@ export function AdminAgentSetup() {
                   >
                     {enableMutation.isPending ? (
                       <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Creating...
+                        <Spinner size="sm" /> Creating...
                       </>
                     ) : (
                       <>
@@ -1520,7 +1521,7 @@ export function AdminAgentSetup() {
           >
             {vaultMutation.isPending ? (
               <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…
+                <Spinner size="sm" /> Saving…
               </>
             ) : (
               'Save vault configuration'

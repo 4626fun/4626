@@ -1,14 +1,13 @@
-import { Spinner } from '@coinbase/cds-web/loaders'
-
 import { getLoadingIntentConfig, type LoadingIntent } from '@/components/layout/appLoadingIntents'
+import { Spinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/shared/utils'
 
 type LoadingSize = 'sm' | 'md' | 'lg'
 
-const INLINE_SIZE_MAP: Record<LoadingSize, number> = {
-  sm: 12,
-  md: 16,
-  lg: 20,
+const INLINE_SIZE_MAP: Record<LoadingSize, LoadingSize> = {
+  sm: 'sm',
+  md: 'sm',
+  lg: 'md',
 }
 
 const INLINE_TEXT_CLASS_MAP: Record<LoadingSize, string> = {
@@ -17,10 +16,10 @@ const INLINE_TEXT_CLASS_MAP: Record<LoadingSize, string> = {
   lg: 'text-sm',
 }
 
-const BLOCK_SIZE_MAP: Record<LoadingSize, number> = {
-  sm: 16,
-  md: 20,
-  lg: 28,
+const BLOCK_SIZE_MAP: Record<LoadingSize, LoadingSize> = {
+  sm: 'sm',
+  md: 'md',
+  lg: 'lg',
 }
 
 export type BaseLoadingProps = {
@@ -41,7 +40,7 @@ export function LoadingInline(props: LoadingInlineProps) {
 
   return (
     <span className={cn('inline-flex items-center gap-2 text-zinc-500', INLINE_TEXT_CLASS_MAP[size], className)} role="status" aria-live="polite">
-      <Spinner size={INLINE_SIZE_MAP[size]} color="fgPrimary" />
+      <Spinner size={INLINE_SIZE_MAP[size]} />
       {showLabel ? <span>{label}</span> : <span className="sr-only">{label}</span>}
     </span>
   )
@@ -67,7 +66,7 @@ export function LoadingBlock(props: LoadingBlockProps) {
 
   return (
     <div className={cn('flex items-center justify-center gap-3 rounded-xl border border-white/8 bg-black/20 px-4 py-6 text-zinc-400', minHeightClassName, className)} role="status" aria-live="polite">
-      <Spinner size={BLOCK_SIZE_MAP[size]} color="fgPrimary" />
+      <Spinner size={BLOCK_SIZE_MAP[size]} />
       <span className="text-sm">{label}</span>
     </div>
   )

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWallets } from '@privy-io/react-auth'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Bot, CheckCircle2, ExternalLink, Loader2, Shield, Sparkles, Zap } from 'lucide-react'
+import { Bot, CheckCircle2, ExternalLink, Shield, Sparkles, Zap } from 'lucide-react'
 import { encodeFunctionData, getAddress, isAddress, parseAbiItem, parseEventLogs, toHex, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -16,6 +16,7 @@ import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { signInWithSiwaAgent } from '@/lib/auth/siwaAgentAuth'
 import { ensureProviderOnBase, ensureWagmiChainOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { useZoraProfile } from '@/lib/zora/hooks'
+import { Spinner } from '@/components/ui/Spinner'
 
 const DEFAULT_ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 
@@ -827,7 +828,7 @@ export function AgentRegister() {
               disabled={!canSubmit}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-sm font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
             >
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {busy ? <Spinner size="sm" /> : null}
               {busy ? 'Registering…' : 'Register Agent'}
             </button>
           {isConnected && !canOperateCanonicalCsw ? (
@@ -935,7 +936,7 @@ export function AgentRegister() {
               disabled={!isConnected || publishMutation.isPending}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-primary/15 px-3 py-2 text-xs font-medium text-brand-primary hover:bg-brand-primary/20 disabled:opacity-50"
             >
-              {publishMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+              {publishMutation.isPending ? <Spinner size="sm" /> : <Zap className="h-4 w-4" />}
               Publish to Lens Grove
             </button>
             <Link
@@ -959,7 +960,7 @@ export function AgentRegister() {
               disabled={!isConnected || siwaMutation.isPending}
               className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-200 hover:text-white disabled:opacity-50"
             >
-              {siwaMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
+              {siwaMutation.isPending ? <Spinner size="sm" /> : <Shield className="h-4 w-4" />}
               Issue SIWA Receipt
             </button>
           </div>

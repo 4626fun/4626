@@ -1,6 +1,6 @@
 import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Coins, Loader2, CheckCircle2, Upload, AlertCircle } from 'lucide-react'
+import { Coins, CheckCircle2, Upload, AlertCircle } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useWallets } from '@privy-io/react-auth'
 import { usePublicClient, useWalletClient } from 'wagmi'
@@ -12,6 +12,7 @@ import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { logger } from '@/lib/observability/logger'
+import { Spinner } from '@/components/ui/Spinner'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 
@@ -604,7 +605,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       {/* Status */}
       {isBusy && (
         <div className="flex items-center gap-2 text-[12px] text-zinc-400">
-          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0052FF] shrink-0" />
+          <Spinner className="shrink-0 text-[#0052FF]" size="sm" />
           <span>{statusText}</span>
         </div>
       )}

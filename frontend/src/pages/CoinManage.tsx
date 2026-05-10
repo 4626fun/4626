@@ -4,11 +4,12 @@ import { motion } from 'framer-motion'
 import { useAccount, usePublicClient, useReadContract, useWalletClient } from 'wagmi'
 import { isAddress, type Address } from 'viem'
 import { base } from 'wagmi/chains'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 import { isLensGroveEnabled } from '@/lib/flags/flags'
 import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
+import { Spinner } from '@/components/ui/Spinner'
 
 const ZORA_COIN_READ_ABI = [
   {
@@ -310,7 +311,7 @@ export function CoinManage() {
                   >
                     {busy === 'payout' ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                        <Spinner className="mr-2 inline-flex" size="sm" />
                         Updating…
                       </>
                     ) : (
@@ -343,7 +344,7 @@ export function CoinManage() {
                   >
                     {busy === 'uri' ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                        <Spinner className="mr-2 inline-flex" size="sm" />
                         Updating…
                       </>
                     ) : (
@@ -426,7 +427,7 @@ export function CoinManage() {
                     >
                       {busy === 'upload' ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                          <Spinner className="mr-2 inline-flex" size="sm" />
                           Preparing…
                         </>
                       ) : (
