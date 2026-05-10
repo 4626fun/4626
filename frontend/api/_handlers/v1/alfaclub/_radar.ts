@@ -35,6 +35,12 @@ function readCronSecret(req: VercelRequest): string {
   return ''
 }
 
+function readConfiguredCronSecret(): string {
+  const primary = (process.env.CRON_SECRET ?? '').trim()
+  if (primary.length > 0) return primary
+  return (process.env.CRON_SECRET_NEXT ?? '').trim()
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
 
@@ -43,11 +49,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const configuredSecret = (process.env.CRON_SECRET ?? '').trim()
+  const configuredSecret = readConfiguredCronSecret()
   if (!configuredSecret) {
     return res.status(503).json({
       success: false,
-      error: 'CRON_SECRET is not configured',
+      error: 'CRON_SECRET (or CRON_SECRET_NEXT) is not configured',
     })
   }
 

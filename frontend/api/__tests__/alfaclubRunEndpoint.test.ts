@@ -62,14 +62,24 @@ describe('POST /api/v1/alfaclub/run', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns 503 when CRON_SECRET is not configured', async () => {
+  it('returns 503 when cron secret envs are not configured', async () => {
     restoreEnv?.()
     restoreEnv = applyEnv({})
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await runHandler(req, res)
     expect(res.statusCode).toBe(503)
-    expect(res.body?.error).toBe('CRON_SECRET is not configured')
+    expect(res.body?.error).toBe('CRON_SECRET (or CRON_SECRET_NEXT) is not configured')
+  })
+
+  it('accepts CRON_SECRET_NEXT when CRON_SECRET is empty', async () => {
+    restoreEnv?.()
+    restoreEnv = applyEnv({ CRON_SECRET: '', CRON_SECRET_NEXT: 'next-secret' })
+    const req = createMockReq({ method: 'POST', headers: { 'x-cron-secret': 'next-secret' } })
+    const res = createMockRes()
+    await runHandler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(runVigilanteMock).toHaveBeenCalledTimes(1)
   })
 
   it('returns 401 without a matching cron secret', async () => {

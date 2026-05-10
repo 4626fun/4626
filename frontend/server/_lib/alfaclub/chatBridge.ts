@@ -2087,9 +2087,17 @@ function earlyTickResult(params: {
   }
 }
 
+type RunBridgeTickOptions = {
+  // Continuous in-process bridge mode seeds first and skips historical replay.
+  // One-shot cron mode should process newly ingested commands immediately.
+  seedHistoryOnlyOnFirstTick?: boolean
+}
+
 async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
+  options: RunBridgeTickOptions = {},
 ): Promise<AlfaClubChatBridgeTickResult> {
+  const seedHistoryOnlyOnFirstTick = options.seedHistoryOnlyOnFirstTick ?? true
   const roomId = flags.roomId as string
   const resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
   const commandJwt = resolvedCommandJwt.jwt
@@ -2239,6 +2247,44 @@ async function runBridgeTick(
     throw new Error('room_history_failed:unknown')
   }
 
+  // Persist polled history rows to a DB-backed dedupe ledger so one-shot
+  // cron invocations can process newly arrived commands without relying on
+  // in-memory state surviving between serverless cold starts.
+  let newlyIngestedHistoryIds: Set<string> | null = null
+  try {
+    const inserted = await upsertAlfaClubIngestMessages(
+      fetchedMessages
+        .map((message) => {
+          const id = String(message.id ?? '').trim()
+          const sender = String(message.sender ?? '').trim().toLowerCase()
+          if (!id || !isHexAddress(sender)) return null
+          const date = Number(message.date)
+          const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
+          return {
+            roomId,
+            messageId: id,
+            senderAddress: sender,
+            text: String(message.text ?? ''),
+            dateMs,
+            source: 'history' as const,
+            rawPayloadText: null,
+          }
+        })
+        .filter((entry): entry is {
+          roomId: string
+          messageId: string
+          senderAddress: string
+          text: string
+          dateMs: number | null
+          source: 'history'
+          rawPayloadText: null
+        } => Boolean(entry)),
+    )
+    newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
+  } catch {
+    newlyIngestedHistoryIds = null
+  }
+
   clearBadJwt()
   resetAuthFailureRollup()
   if (bridgeAuthState.cfChallengeRepeats > 0 || bridgeAuthState.cfChallengeSustainedFlagged) {
@@ -2275,23 +2321,36 @@ async function runBridgeTick(
     if (id) rememberSeenMessageId(id)
   }
 
-  // First tick seeds the dedupe window and intentionally avoids replaying
-  // historical commands sent before the bridge started.
+  // First tick in long-running mode seeds the dedupe window and intentionally
+  // avoids replaying historical commands sent before the bridge started.
+  // In one-shot cron mode we continue so newly ingested commands are handled
+  // on the same invocation.
   if (!bridgeState.seeded) {
     bridgeState.seeded = true
-    return {
-      seeded: true,
-      roomId,
-      fetched: fetchedMessages.length,
-      unseen: unseenMessages.length,
-      processed: 0,
-      replied: 0,
-      errors: [],
+    if (seedHistoryOnlyOnFirstTick) {
+      return {
+        seeded: true,
+        roomId,
+        fetched: fetchedMessages.length,
+        unseen: unseenMessages.length,
+        processed: 0,
+        replied: 0,
+        errors: [],
+      }
     }
   }
 
+  const commandSourceMessages =
+    !seedHistoryOnlyOnFirstTick &&
+    newlyIngestedHistoryIds !== null &&
+    newlyIngestedHistoryIds.size > 0
+      ? unseenMessages.filter((message) =>
+          newlyIngestedHistoryIds?.has(String(message.id ?? '').trim()),
+        )
+      : unseenMessages
+
   const commands = collectAlfaClubCommandMessages({
-    messages: unseenMessages,
+    messages: commandSourceMessages,
     seenMessageIds: new Set<string>(),
     selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
   })
@@ -2340,7 +2399,7 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
     }
   }
 
-  const data = await runBridgeTick(flags)
+  const data = await runBridgeTick(flags, { seedHistoryOnlyOnFirstTick: false })
   return {
     ok: true,
     intervalMs: flags.pollIntervalMs,
