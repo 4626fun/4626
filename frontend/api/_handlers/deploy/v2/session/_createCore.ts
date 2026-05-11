@@ -106,6 +106,7 @@ export type CreateDeploySessionRequest = {
   expectedTradeFeeCollector?: Address
   expectedPayoutRecipientMode?: 'gauge' | 'payout_router'
   expectedPayoutRecipient?: Address
+  rolePolicyId?: number | string
 }
 
 type CreateDeploySessionResponse = {
@@ -147,6 +148,8 @@ export type ValidatedDeploySessionRequest = {
   hasPhase2Finalize: boolean
   version: string
   phase2InvariantExpectations: DeployPhase2InvariantExpectations | null
+  rolePolicyId: number | null
+  rolePolicySource: 'request' | 'creator_default' | 'global_default' | 'none'
 }
 
 type OwnershipCheck = {
@@ -432,6 +435,58 @@ const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
           { name: 'oftBootstrap', type: 'bytes32' },
         ],
       },
+    ],
+    outputs: [
+      {
+        name: 'out',
+        type: 'tuple',
+        components: [
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'auction', type: 'address' },
+        ],
+      },
+    ],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase2CoreWithRolePolicy',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'creatorTreasury', type: 'address' },
+          { name: 'payoutRecipient', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+      { name: 'rolePolicyId', type: 'uint256' },
     ],
     outputs: [
       {
@@ -1373,37 +1428,55 @@ function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | n
 function extractPhase2CoreInvariantInfo(data: Hex): {
   creatorToken: Address
   payoutRecipient: Address | null
+  rolePolicyId: bigint | null
 } | null {
-  try {
-    const decoded = decodeFunctionData({
-      abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-      data,
-    })
-    const params = (decoded.args?.[0] ?? null) as {
-      creatorToken?: string
-      payoutRecipient?: string
-    } | null
-    const creatorToken = normalizeAddressOrNull(params?.creatorToken)
-    if (!creatorToken) return null
-    return {
-      creatorToken,
-      payoutRecipient: normalizeAddressOrNull(params?.payoutRecipient),
+  for (const abi of [
+    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+  ] as const) {
+    try {
+      const decoded = decodeFunctionData({
+        abi,
+        data,
+      })
+      const params = (decoded.args?.[0] ?? null) as {
+        creatorToken?: string
+        payoutRecipient?: string
+      } | null
+      const creatorToken = normalizeAddressOrNull(params?.creatorToken)
+      if (!creatorToken) continue
+      const rolePolicyIdRaw = decoded.args?.[2]
+      const rolePolicyId = typeof rolePolicyIdRaw === 'bigint' ? rolePolicyIdRaw : null
+      return {
+        creatorToken,
+        payoutRecipient: normalizeAddressOrNull(params?.payoutRecipient),
+        rolePolicyId,
+      }
+    } catch {
+      continue
     }
-  } catch {
-    return null
   }
+  return null
 }
 
 function isDeployPhase2CoreCall(call: Call): boolean {
-  try {
-    const decoded = decodeFunctionData({
-      abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-      data: call.data,
-    })
-    return decoded.functionName === 'deployPhase2Core'
-  } catch {
-    return false
+  for (const abi of [
+    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+    CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+  ] as const) {
+    try {
+      const decoded = decodeFunctionData({
+        abi,
+        data: call.data,
+      })
+      if (decoded.functionName === 'deployPhase2Core' || decoded.functionName === 'deployPhase2CoreWithRolePolicy') {
+        return true
+      }
+    } catch {
+      continue
+    }
   }
+  return false
 }
 
 function normalizePhase2CoreCalls(calls: Call[]): { calls: Call[]; rewrote: boolean } {
@@ -1497,29 +1570,48 @@ function normalizePhase2CallVersions(params: {
   let rewrote = false
 
   const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
-    try {
-      const decoded = decodeFunctionData({
-        abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-        data: call.data,
-      })
-      if (decoded.functionName !== 'deployPhase2Core') return call
-      const phase2Params = decoded.args?.[0] as Record<string, unknown> | undefined
-      const codeIds = decoded.args?.[1]
-      if (!phase2Params || !codeIds) return call
-      const currentVersion = typeof phase2Params.version === 'string' ? phase2Params.version.trim() : ''
-      if (currentVersion === targetVersion) return call
-      rewrote = true
-      return {
-        ...call,
-        data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
-          functionName: 'deployPhase2Core',
-          args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any],
-        }) as Hex,
+    for (const abi of [
+      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+    ] as const) {
+      try {
+        const decoded = decodeFunctionData({
+          abi,
+          data: call.data,
+        })
+        if (decoded.functionName !== 'deployPhase2Core' && decoded.functionName !== 'deployPhase2CoreWithRolePolicy') {
+          continue
+        }
+        const phase2Params = decoded.args?.[0] as Record<string, unknown> | undefined
+        const codeIds = decoded.args?.[1]
+        if (!phase2Params || !codeIds) return call
+        const currentVersion = typeof phase2Params.version === 'string' ? phase2Params.version.trim() : ''
+        if (currentVersion === targetVersion) return call
+        rewrote = true
+        if (decoded.functionName === 'deployPhase2CoreWithRolePolicy') {
+          const rolePolicyId = decoded.args?.[2] as bigint | undefined
+          return {
+            ...call,
+            data: encodeFunctionData({
+              abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+              functionName: 'deployPhase2CoreWithRolePolicy',
+              args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any, rolePolicyId ?? 0n],
+            }) as Hex,
+          }
+        }
+        return {
+          ...call,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+            functionName: 'deployPhase2Core',
+            args: [{ ...phase2Params, version: targetVersion } as any, codeIds as any],
+          }) as Hex,
+        }
+      } catch {
+        continue
       }
-    } catch {
-      return call
     }
+    return call
   })
 
   const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
@@ -1548,6 +1640,156 @@ function normalizePhase2CallVersions(params: {
   })
 
   return { phase2CoreCalls, phase2FinalizeCalls, rewrote }
+}
+
+function readRequestedRolePolicyId(value: unknown): bigint | null {
+  if (value === undefined || value === null || value === '') return null
+  const parsed = parseBigIntLike(value)
+  if (parsed === null) return null
+  return parsed
+}
+
+type RolePolicySource = 'request' | 'creator_default' | 'global_default' | 'none'
+
+function readRolePolicyFromEnv(name: string): bigint | null {
+  const raw = String(process.env[name] ?? '').trim()
+  if (!raw) return null
+  const parsed = parseBigIntLike(raw)
+  if (parsed === null || parsed > 65_535n) return null
+  return parsed
+}
+
+function readCreatorRolePolicyMap(): Record<string, bigint> {
+  const raw = String(process.env.DEPLOY_ROLE_POLICY_BY_CREATOR_JSON ?? '').trim()
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, bigint> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      const creator = typeof key === 'string' && isAddress(key) ? getAddress(key as Address).toLowerCase() : ''
+      if (!creator) continue
+      const policyId = parseBigIntLike(value)
+      if (policyId === null || policyId > 65_535n) continue
+      out[creator] = policyId
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function resolveRolePolicyIdForSession(params: {
+  creatorToken: Address
+  requestedRolePolicyId: bigint | null
+}): { rolePolicyId: bigint | null; source: RolePolicySource } {
+  if (params.requestedRolePolicyId !== null) {
+    return {
+      rolePolicyId: params.requestedRolePolicyId,
+      source: 'request',
+    }
+  }
+
+  const creatorMap = readCreatorRolePolicyMap()
+  const creatorPolicy = creatorMap[params.creatorToken.toLowerCase()]
+  if (creatorPolicy !== undefined) {
+    return {
+      rolePolicyId: creatorPolicy,
+      source: 'creator_default',
+    }
+  }
+
+  const globalDefault = readRolePolicyFromEnv('DEPLOY_DEFAULT_ROLE_POLICY_ID')
+  if (globalDefault !== null) {
+    return {
+      rolePolicyId: globalDefault,
+      source: 'global_default',
+    }
+  }
+
+  return {
+    rolePolicyId: null,
+    source: 'none',
+  }
+}
+
+export function normalizePhase2RolePolicyCalls(params: {
+  phase2CoreCalls: Call[]
+  rolePolicyId: bigint | null
+}): { phase2CoreCalls: Call[]; rewrote: boolean } {
+  if (params.rolePolicyId === null || params.rolePolicyId === 0n) {
+    return { phase2CoreCalls: params.phase2CoreCalls, rewrote: false }
+  }
+  const activeRolePolicyId = params.rolePolicyId
+
+  let rewrote = false
+  const normalized = params.phase2CoreCalls.map((call) => {
+    for (const abi of [
+      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI,
+      CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+    ] as const) {
+      try {
+        const decoded = decodeFunctionData({
+          abi,
+          data: call.data,
+        })
+        if (decoded.functionName !== 'deployPhase2Core' && decoded.functionName !== 'deployPhase2CoreWithRolePolicy') {
+          continue
+        }
+
+        const phase2Params = decoded.args?.[0]
+        const codeIds = decoded.args?.[1]
+        const existingRolePolicyId = decoded.functionName === 'deployPhase2CoreWithRolePolicy'
+          ? (decoded.args?.[2] as bigint | undefined) ?? null
+          : null
+        if (!phase2Params || !codeIds) return call
+        if (existingRolePolicyId === activeRolePolicyId) return call
+
+        rewrote = true
+        return {
+          ...call,
+          data: encodeFunctionData({
+            abi: CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_WITH_ROLE_POLICY_ABI,
+            functionName: 'deployPhase2CoreWithRolePolicy',
+            args: [phase2Params as any, codeIds as any, activeRolePolicyId],
+          }),
+        }
+      } catch {
+        continue
+      }
+    }
+    return call
+  })
+
+  return {
+    phase2CoreCalls: normalized,
+    rewrote,
+  }
+}
+
+export function validatePhase2RolePolicyInput(params: {
+  phase2CoreCalls: Call[]
+  requestedRolePolicyId: bigint | null
+}) {
+  const observed = new Set<string>()
+  for (const call of params.phase2CoreCalls) {
+    const info = extractPhase2CoreInvariantInfo(call.data)
+    if (!info || info.rolePolicyId === null) continue
+    const rolePolicyId = info.rolePolicyId
+    if (rolePolicyId > 65_535n) {
+      throw new DeploySessionRequestError(400, 'rolePolicyId out of supported range (max 65535)')
+    }
+    observed.add(rolePolicyId.toString())
+  }
+  if (observed.size > 1) {
+    throw new DeploySessionRequestError(400, 'Multiple rolePolicyId values detected in phase2 core calls')
+  }
+  if (params.requestedRolePolicyId !== null && observed.size > 0) {
+    const observedValue = BigInt(Array.from(observed)[0]!)
+    if (observedValue !== params.requestedRolePolicyId) {
+      throw new DeploySessionRequestError(400, 'rolePolicyId request/body mismatch')
+    }
+  }
 }
 
 function extractFinalizePhase2InvariantInfo(data: Hex): {
@@ -2390,7 +2632,7 @@ export async function validateDeploySessionRequest(params: {
     phase2FinalizeCalls: phase2FinalizeCallsRaw,
   })
   const phase1Version = extractPhase1VersionFromCalls(phase1Calls)
-  const {
+  let {
     phase2CoreCalls,
     phase2FinalizeCalls,
     rewrote: phase2VersionCallsRewritten,
@@ -2560,6 +2802,32 @@ export async function validateDeploySessionRequest(params: {
     }
   }
   const version = String(params.body.version ?? '').trim()
+  const requestedRolePolicyId = readRequestedRolePolicyId(params.body.rolePolicyId)
+  if (requestedRolePolicyId !== null && requestedRolePolicyId > 65_535n) {
+    throw new DeploySessionRequestError(400, 'rolePolicyId out of supported range (max 65535)')
+  }
+  const rolePolicyResolution = resolveRolePolicyIdForSession({
+    creatorToken,
+    requestedRolePolicyId,
+  })
+  const resolvedRolePolicyId = rolePolicyResolution.rolePolicyId
+  const { phase2CoreCalls: phase2CoreCallsWithRolePolicy } = normalizePhase2RolePolicyCalls({
+    phase2CoreCalls,
+    rolePolicyId: resolvedRolePolicyId,
+  })
+  phase2CoreCalls = phase2CoreCallsWithRolePolicy
+  if (rolePolicyResolution.source !== 'none') {
+    console.info('[deploy/v2/session/create] role_policy_selected', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+      rolePolicyId: resolvedRolePolicyId?.toString() ?? null,
+      source: rolePolicyResolution.source,
+    })
+  }
+  validatePhase2RolePolicyInput({
+    phase2CoreCalls,
+    requestedRolePolicyId: resolvedRolePolicyId,
+  })
   const requestedExternalMode = inferPayoutRecipientMode(params.body.expectedPayoutRecipientMode)
   const requestedPayoutRecipient = normalizeAddressOrNull(params.body.expectedPayoutRecipient)
   const requestedTradeFeeCollector = normalizeAddressOrNull(params.body.expectedTradeFeeCollector)
@@ -2702,6 +2970,8 @@ export async function validateDeploySessionRequest(params: {
     hasPhase2Finalize,
     version,
     phase2InvariantExpectations,
+    rolePolicyId: resolvedRolePolicyId === null ? null : Number(resolvedRolePolicyId),
+    rolePolicySource: rolePolicyResolution.source,
   }
 }
 
@@ -2766,6 +3036,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasPhase2Finalize,
       version,
       phase2InvariantExpectations,
+      rolePolicyId,
+      rolePolicySource,
     } = await validateDeploySessionRequest({
       req,
       authAddress: getAddress(auth.address as Address),
@@ -2932,6 +3204,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2FinalizeCalls,
         phase3Calls,
         phase4Calls,
+        rolePolicyId,
+        rolePolicySource,
         ...(phase2InvariantExpectations ? phase2InvariantExpectations : {}),
         ...(solanaOvault ? { solanaOvault } : null),
         erc7712Grant,

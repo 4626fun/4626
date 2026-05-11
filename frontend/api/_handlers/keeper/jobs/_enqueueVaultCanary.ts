@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dedupeKey: `vault-${action}-canary:${vaultAddress}`,
         source: 'keeper-vault-canary',
         payload: {
-          path: `/api/cre/keeper/${action}`,
+          path: `/api/keeper/${action}`,
           body: { vaultAddress },
         },
         maxAttempts: 3,

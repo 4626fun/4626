@@ -248,6 +248,7 @@ function isDebugEnabled(): boolean {
 
 const AA_DEBUG = isDebugEnabled()
 setAaDebugMode(AA_DEBUG)
+const DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS = 60_000
 
 function resolveDeploymentVersionFromRuntime(): string {
   const envVersion = normalizeDeploymentVersion(import.meta.env.VITE_DEPLOYMENT_VERSION as string | undefined)
@@ -428,6 +429,64 @@ type DeployRuntimeConfigResponse = {
   payoutRouterZoraWethFee: number
   payoutRouterWethCreatorFee: number
 }
+
+type RolePolicyRuleLabel = 'any' | 'must_equal_owner' | 'must_be_allowlisted' | 'unknown'
+type RolePolicySourceLabel = 'request' | 'creator_default' | 'global_default' | 'none'
+type RolePolicyResolveData = {
+  creatorToken: Address
+  principalAddress: Address
+  creatorCoinOwner: Address | null
+  batcherAddress: Address | null
+  requestedRolePolicyId: number | null
+  effectiveResolution: {
+    rolePolicyId: number | null
+    source: RolePolicySourceLabel
+  }
+  onchainBatcherDefaults: {
+    rolePolicyManager: Address | null
+    rolePolicyId: number | null
+  }
+  effectivePolicyReadout: {
+    policyId: number
+    active: boolean
+    requireOwnerEoa: boolean
+    rules: {
+      management: RolePolicyRuleLabel
+      keeper: RolePolicyRuleLabel
+      emergencyAdmin: RolePolicyRuleLabel
+    }
+    ownerAllowlisted: {
+      management: boolean
+      keeper: boolean
+      emergencyAdmin: boolean
+    }
+    ownerTupleValidation: {
+      passes: boolean
+      error: string | null
+    }
+  } | null
+  batcherDefaultPolicyReadout: {
+    policyId: number
+    active: boolean
+    requireOwnerEoa: boolean
+    rules: {
+      management: RolePolicyRuleLabel
+      keeper: RolePolicyRuleLabel
+      emergencyAdmin: RolePolicyRuleLabel
+    }
+    ownerAllowlisted: {
+      management: boolean
+      keeper: boolean
+      emergencyAdmin: boolean
+    }
+    ownerTupleValidation: {
+      passes: boolean
+      error: string | null
+    }
+  } | null
+  generatedAt: string
+}
+
 type ServerDeployResponse = {
   userOpHash: string
   addresses: {
@@ -465,8 +524,9 @@ type DeploySessionCreateRequest = {
 }
 type DeploySessionDryRunPhase = {
   name: 'phase1' | 'phase2Core' | 'phase2Finalize' | 'phase3' | 'phase4'
-  status: 'passed' | 'failed'
+  status: 'passed' | 'failed' | 'skipped'
   callCount: number
+  reason?: string
 }
 type DeploySessionDryRunFailure = {
   phase: DeploySessionDryRunPhase['name']
@@ -543,12 +603,18 @@ function normalizeDryRunResponse(data: unknown): DeploySessionDryRunResponse | n
     const phase = entry as Record<string, unknown>
     const name = String(phase.name ?? '').trim() as DeploySessionDryRunPhase['name']
     if (!DRY_RUN_PHASE_NAMES.has(name)) continue
-    const status = phase.status === 'failed' ? 'failed' : 'passed'
+    const status =
+      phase.status === 'failed'
+        ? 'failed'
+        : phase.status === 'skipped'
+          ? 'skipped'
+          : 'passed'
     const parsedCallCount = Number(phase.callCount ?? 0)
     const callCount = Number.isFinite(parsedCallCount) && parsedCallCount >= 0
       ? Math.floor(parsedCallCount)
       : 0
-    phases.push({ name, status, callCount })
+    const reason = typeof phase.reason === 'string' && phase.reason.trim().length > 0 ? phase.reason.trim() : undefined
+    phases.push({ name, status, callCount, reason })
   }
 
   let failure: DeploySessionDryRunFailure | undefined
@@ -2181,6 +2247,32 @@ function AddressRow({
   )
 }
 
+function renderRolePolicyRuleLabel(rule: RolePolicyRuleLabel): string {
+  switch (rule) {
+    case 'any':
+      return 'Any'
+    case 'must_equal_owner':
+      return 'Must equal owner'
+    case 'must_be_allowlisted':
+      return 'Must be allowlisted'
+    default:
+      return 'Unknown'
+  }
+}
+
+function renderRolePolicySourceLabel(source: RolePolicySourceLabel): string {
+  switch (source) {
+    case 'request':
+      return 'Request override'
+    case 'creator_default':
+      return 'Creator default'
+    case 'global_default':
+      return 'Global default'
+    default:
+      return 'No policy selected'
+  }
+}
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -2415,6 +2507,53 @@ function DeployVaultBatcher({
   )
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const lastPolledStepRef = useRef<string>('')
+  const rolePolicyDiagnosticsQuery = useQuery({
+    queryKey: ['deployRolePolicyResolve', creatorToken],
+    enabled: Boolean(creatorToken),
+    staleTime: 30_000,
+    retry: 0,
+    queryFn: async () => {
+      const qs = new URLSearchParams({ creatorToken })
+      const res = await apiFetch(`/api/deploy/v2/session/role-policy/resolve?${qs.toString()}`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<RolePolicyResolveData> | null
+      if (!res.ok) {
+        const errorMessage = String(json?.error ?? `Role policy diagnostics request failed (${res.status})`)
+        throw new Error(errorMessage)
+      }
+      if (!json?.success || !json.data) {
+        throw new Error(String(json?.error ?? 'Role policy diagnostics unavailable'))
+      }
+      return json.data
+    },
+  })
+  const rolePolicyDiagnostics = rolePolicyDiagnosticsQuery.data ?? null
+  const rolePolicyStatus = useMemo(() => {
+    if (rolePolicyDiagnosticsQuery.isFetching) {
+      return { label: 'Checking', tone: 'text-zinc-400' }
+    }
+    if (rolePolicyDiagnosticsQuery.isError) {
+      return { label: 'Unavailable', tone: 'text-amber-300/80' }
+    }
+    const manager = rolePolicyDiagnostics?.onchainBatcherDefaults.rolePolicyManager ?? null
+    const effective = rolePolicyDiagnostics?.effectivePolicyReadout ?? null
+    const policyId = rolePolicyDiagnostics?.effectiveResolution.rolePolicyId ?? null
+    if (!manager || policyId === null) {
+      return { label: 'No enforcement', tone: 'text-zinc-400' }
+    }
+    if (!effective) {
+      return { label: 'Policy unresolved', tone: 'text-amber-300/80' }
+    }
+    if (!effective.active) {
+      return { label: 'Inactive policy', tone: 'text-amber-300/80' }
+    }
+    if (!effective.ownerTupleValidation.passes) {
+      return { label: 'Owner tuple fails', tone: 'text-red-300/90' }
+    }
+    return { label: 'Healthy', tone: 'text-emerald-300/90' }
+  }, [rolePolicyDiagnostics, rolePolicyDiagnosticsQuery.isError, rolePolicyDiagnosticsQuery.isFetching])
   const useServerContinue = useMemo(() => {
     // Keep server-continue enabled for both default and strict modes.
     // Strict policy is enforced by signer lanes (canonical/Privy), not by disabling continuation.
@@ -2503,12 +2642,16 @@ function DeployVaultBatcher({
       url: string
       body: unknown
       label: string
+      requestTimeoutMs?: number
+      parseTimeoutMs?: number
     }): Promise<ApiEnvelope<T>> => {
       return await postSessionRequest<T>({
         postJson: postJsonWithTimeout,
         url: params.url,
         body: params.body,
         label: params.label,
+        requestTimeoutMs: params.requestTimeoutMs,
+        parseTimeoutMs: params.parseTimeoutMs,
         ensurePaymasterSession,
       })
     },
@@ -6815,6 +6958,7 @@ function DeployVaultBatcher({
         url: '/api/deploy/v2/session/dry-run',
         body: plan.sessionCreateRequest,
         label: 'deploy session dry-run',
+        requestTimeoutMs: DEPLOY_SESSION_DRY_RUN_REQUEST_TIMEOUT_MS,
       })
       const normalized = normalizeDryRunResponse(json.data)
       if (!normalized) throw new Error('Dry-run failed (invalid response)')
@@ -7350,10 +7494,20 @@ function DeployVaultBatcher({
                 {(Array.isArray(dryRunResult.phases) ? dryRunResult.phases : []).map((phaseEntry) => (
                   <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
                     <div className="text-zinc-400">{DRY_RUN_PHASE_LABELS[phaseEntry.name] ?? phaseEntry.name}</div>
-                    <div className={phaseEntry.status === 'passed' ? 'text-green-400/80' : 'text-amber-300/80'}>
+                    <div
+                      className={
+                        phaseEntry.status === 'passed'
+                          ? 'text-green-400/80'
+                          : phaseEntry.status === 'skipped'
+                            ? 'text-zinc-400'
+                            : 'text-amber-300/80'
+                      }
+                    >
                       {phaseEntry.status === 'passed'
                         ? `passed (${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'})`
-                        : `failed after ${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'}`}
+                        : phaseEntry.status === 'skipped'
+                          ? `skipped (${phaseEntry.reason === 'known_local_fork_invariant' ? 'known local-fork invariant' : 'not executed'})`
+                          : `failed after ${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'}`}
                     </div>
                   </div>
                 ))}
@@ -7402,6 +7556,83 @@ function DeployVaultBatcher({
           </div>
         </div>
       ) : null}
+
+      <div className="rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-[10px] font-medium text-zinc-500">Role policy health</div>
+          <div className={`text-[11px] ${rolePolicyStatus.tone}`}>{rolePolicyStatus.label}</div>
+        </div>
+        <div className="space-y-1 text-[11px]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-zinc-500">Effective source</div>
+            <div className="text-zinc-300">
+              {rolePolicyDiagnostics
+                ? renderRolePolicySourceLabel(rolePolicyDiagnostics.effectiveResolution.source)
+                : rolePolicyDiagnosticsQuery.isFetching
+                  ? 'Loading...'
+                  : 'Unavailable'}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-zinc-500">Effective policy ID</div>
+            <div className="font-mono text-zinc-300">
+              {rolePolicyDiagnostics?.effectiveResolution.rolePolicyId ?? 'none'}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-zinc-500">Batcher default policy ID</div>
+            <div className="font-mono text-zinc-300">
+              {rolePolicyDiagnostics?.onchainBatcherDefaults.rolePolicyId ?? 'none'}
+            </div>
+          </div>
+          {rolePolicyDiagnostics?.effectivePolicyReadout ? (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-zinc-500">Owner tuple validation</div>
+                <div
+                  className={
+                    rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes
+                      ? 'text-emerald-300/90'
+                      : 'text-red-300/90'
+                  }
+                >
+                  {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes ? 'pass' : 'fail'}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-1 text-[10px] text-zinc-400">
+                <div className="flex items-center justify-between gap-3">
+                  <div>Management rule</div>
+                  <div className="text-zinc-300">
+                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.management)}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>Keeper rule</div>
+                  <div className="text-zinc-300">
+                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.keeper)}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div>Emergency admin rule</div>
+                  <div className="text-zinc-300">
+                    {renderRolePolicyRuleLabel(rolePolicyDiagnostics.effectivePolicyReadout.rules.emergencyAdmin)}
+                  </div>
+                </div>
+              </div>
+              {!rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.passes &&
+              rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error ? (
+                <div className="text-[10px] text-amber-300/90">
+                  {rolePolicyDiagnostics.effectivePolicyReadout.ownerTupleValidation.error}
+                </div>
+              ) : null}
+            </>
+          ) : rolePolicyDiagnosticsQuery.isError ? (
+            <div className="text-[10px] text-amber-300/80">
+              {(rolePolicyDiagnosticsQuery.error as Error | null)?.message ?? 'Role policy diagnostics are unavailable.'}
+            </div>
+          ) : null}
+        </div>
+      </div>
 
       {/* Show deploy button only if we have a valid ERC-4337 path */}
       {hasDeploySignerPath ? (

@@ -1,7 +1,6 @@
 import type { ApiHandler, ApiRouteLoaders } from './_routeLoader.js'
 import { authRouteLoaders } from './_routes.auth.js'
 import { cdpRouteLoaders } from './_routes.cdp.js'
-import { creRouteLoaders } from './_routes.cre.js'
 import { deployRouteLoaders } from './_routes.deploy.js'
 import { imageRouteLoaders } from './_routes.image.js'
 import { keeprRouteLoaders } from './_routes.keepr.js'
@@ -48,7 +47,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'wallet/confirm-owner': () => import('./wallet/_confirm-owner.js'),
   'wallet/prepare-add-rabby-owner': () => import('./wallet/_prepare-add-rabby-owner.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
-  'vaults/active': () => import('./vaults/_active.js'),
+  'vaults/active': () => import('./cre/vaults/_active.js'),
 
   'creator-allowlist': () => import('./creator-access/_allowlist.js'),
   'creator-access/request': () => import('./creator-access/_request.js'),
@@ -64,6 +63,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'deploy/v2/session/cancel': () => import('./deploy/v2/session/_cancel.js'),
   'deploy/v2/session/create': () => import('./deploy/v2/session/_create.js'),
   'deploy/v2/session/dry-run': () => import('./deploy/v2/session/_dryRun.js'),
+  'deploy/v2/session/role-policy/resolve': () => import('./deploy/v2/session/_rolePolicyResolve.js'),
   'deploy/v2/session/resume': () => import('./deploy/v2/session/_resume.js'),
   'deploy/v2/session/start': () => import('./deploy/v2/session/_start.js'),
   'deploy/v2/session/status': () => import('./deploy/v2/session/_status.js'),
@@ -84,6 +84,15 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/jobs/run': () => import('./keeper/jobs/_run.js'),
   'keeper/jobs/status': () => import('./keeper/jobs/_status.js'),
   'keeper/jobs/health': () => import('./keeper/jobs/_health.js'),
+  'keeper/tend': () => import('./cre/keeper/_tend.js'),
+  'keeper/report': () => import('./cre/keeper/_report.js'),
+  'keeper/sweep': () => import('./cre/keeper/_sweep.js'),
+  'keeper/bridge-integrity': () => import('./cre/keeper/_bridgeIntegrity.js'),
+  'keeper/mark-settled': () => import('./cre/keeper/_markSettled.js'),
+  'keeper/payout-router-harvest': () => import('./cre/keeper/_payoutRouterHarvest.js'),
+  'keeper/alert': () => import('./cre/keeper/_alert.js'),
+  'keeper/aiAssess': () => import('./cre/keeper/_aiAssess.js'),
+  'keeper/solana/reconcile': () => import('./cre/keeper/_solanaReconcile.js'),
 
   'flags/discover': () => import('./flags/_discover.js'),
   'flags/evaluate': () => import('./flags/_evaluate.js'),
@@ -142,7 +151,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cdp', cdpRouteLoaders),
-  ...prefixRouteLoaders('cre', creRouteLoaders),
   ...prefixRouteLoaders('deploy', deployRouteLoaders),
   ...prefixRouteLoaders('image', imageRouteLoaders),
   ...prefixRouteLoaders('keepr', keeprRouteLoaders),

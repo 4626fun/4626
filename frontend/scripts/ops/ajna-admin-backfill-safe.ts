@@ -76,7 +76,7 @@ Options:
   --help                     Show this help
 
 Required env:
-  KEEPR_API_KEY              Bearer token for /api/cre/vaults/active
+  KEEPR_API_KEY              Bearer token for /api/vaults/active
 
 Example (dry-run):
   pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled
@@ -141,7 +141,7 @@ async function fetchActiveVaultRows(params: {
   chainId: number
   keeprApiKey: string
 }): Promise<ActiveVaultRow[]> {
-  const url = new URL('/api/cre/vaults/active', params.origin)
+  const url = new URL('/api/vaults/active', params.origin)
   url.searchParams.set('chainId', String(params.chainId))
   url.searchParams.set('settled', 'false')
   const payload = await fetchJson<ActiveVaultsResponse>(String(url), {

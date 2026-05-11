@@ -303,7 +303,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
     function _withdrawFromStrategies(uint256 amountNeeded) internal returns (uint256 totalWithdrawn) {
         uint256 remaining = amountNeeded;
-        address[] memory queue = defaultQueue.length > 0 ? defaultQueue : strategyList;
+        address[] memory queue = useDefaultQueue && defaultQueue.length > 0 ? defaultQueue : strategyList;
         uint256 length = queue.length;
 
         for (uint256 i = 0; i < length && remaining > 0; i++) {

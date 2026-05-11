@@ -65,6 +65,11 @@ export type WorkspaceStrategyRow = {
   asset: `0x${string}` | null
   liquidityHint: string | null
   performanceHint: string | null
+  aprSignal: {
+    expectedAprBps: number | null
+    confidence: 'unknown' | 'low' | 'medium' | 'high'
+    source: 'keeper_report' | 'p0_placeholder' | 'none'
+  }
   lastRebalanceAt: string | null
   availableActions: string[]
 }
@@ -152,7 +157,7 @@ export type WorkspaceMonitoringResponse = {
 
 export type WorkspaceActivityItem = {
   id: string
-  source: 'workspace' | 'keepr' | 'chat' | 'cre'
+  source: 'workspace' | 'keepr' | 'chat'
   eventType: string
   title: string
   description: string | null

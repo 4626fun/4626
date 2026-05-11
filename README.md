@@ -1,6 +1,6 @@
 # 4626.fun
 
-4626.fun is a Base-native protocol and app stack for launching creator vault economies. The repository combines Solidity smart contracts for ERC-4626 vaults, gauge/lottery incentives, and LayerZero OFT share tokens under contracts/, a Vite/React frontend plus Vercel API handlers under frontend/, Chainlink CRE automation in cre/, and a Solana transfer-hook program in programs/creator-share-hook. Users deploy vaults, trade share tokens, and interact with fee-driven incentives and lottery mechanics; keepers and workflows orchestrate strategy tending and settlement.
+4626.fun is a Base-native protocol and app stack for launching creator vault economies. The repository combines Solidity smart contracts for ERC-4626 vaults, gauge/lottery incentives, and LayerZero OFT share tokens under `contracts/`, a Vite/React frontend plus Vercel API handlers under `frontend/`, and a Solana transfer-hook program in `programs/creator-share-hook`. Users deploy vaults, trade share tokens, and interact with fee-driven incentives and lottery mechanics; keeper endpoints and jobs orchestrate strategy tending and settlement.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636)](https://docs.soliditylang.org/)
@@ -41,7 +41,6 @@ This monorepo includes:
 
 - Smart contracts (`contracts/`) for vaults, gauges, lottery, wrappers, OFT, and deploy infra.
 - Frontend app (`frontend/`) using Vite + React with local/Vercel API handlers.
-- CRE automation workflows (`cre/`) for tending, reporting, settlement, and queue operations.
 - Docusaurus docs site (`apps/docs-site/`) fed by `docs/` content and generated references.
 
 ## Account Model
@@ -80,7 +79,7 @@ flowchart LR
 
   subgraph Control["Control Plane"]
     API["API Handlers (`frontend/api/_handlers`)"]
-    CRE["CRE Automation (`cre/`)"]
+    Keeper["Keeper Automation (`frontend/api` + `frontend/server`)"]
     Scripts["Foundry + Ops Scripts (`script/`)"]
   end
 
@@ -104,7 +103,7 @@ flowchart LR
 
   User -->|"configure + launch"| App
   App -->|"session + orchestration"| API
-  API -->|"job dispatch"| CRE
+  API -->|"job dispatch"| Keeper
   Scripts -->|"admin + migration ops"| Deployer
   API -->|"phased deploy calls"| Deployer
 
@@ -130,7 +129,7 @@ flowchart LR
   classDef protocol fill:#FEF3C7,stroke:#D97706,stroke-width:2px,color:#78350F;
   classDef external fill:#F3E8FF,stroke:#9333EA,stroke-width:2px,color:#581C87;
   class User,App user;
-  class API,CRE,Scripts control;
+  class API,Keeper,Scripts control;
   class Registry,Deployer,Vault,Wrapper,Share,Gauge,Lottery,Oracle,Strategies protocol;
   class LZ,VRF,DEX external;
 ```
@@ -154,7 +153,7 @@ flowchart TD
   P4 -->|Yes| Launch["Phase 4\nActivate deferred launch"]
   P4 -->|No| Ready["Deployment ready"]
   Launch --> Ready
-  Ready --> Ops["CRE keepers + API ops\n(tend/report/settle)"]
+  Ready --> Ops["Keeper jobs + API ops\n(tend/report/settle)"]
 
   Identity -. "fail with clear reason" .-> Blocked["Blocked (actionable error)"]
   Access -. "fail with clear reason" .-> Blocked
@@ -277,7 +276,6 @@ Source of truth: `docs/reference/chains.md`.
 
 - Node.js 20+
 - `pnpm` (root/frontend/docs)
-- `npm` (CRE package install and scripts)
 - Foundry (`forge`) for Solidity build/test
 
 ### 1) Clone and install
@@ -295,8 +293,6 @@ pnpm -C frontend install
 # docs (optional if app-only)
 pnpm -C apps/docs-site install
 
-# cre
-npm --prefix cre install
 ```
 
 ### 2) Configure local env files
@@ -308,8 +304,6 @@ cp .env.example .env
 # frontend
 cp frontend/.env.example frontend/.env
 
-# cre
-cp cre/secrets.example.env cre/.env
 ```
 
 Keep real secrets in local env files or your deployment secret manager; do not commit secrets.
@@ -320,8 +314,6 @@ Keep real secrets in local env files or your deployment secret manager; do not c
 # app (default: http://localhost:5173)
 pnpm -C frontend dev
 
-# cre workflows (optional)
-npm --prefix cre run start
 
 # docs site (optional, default: http://localhost:3000)
 pnpm -C apps/docs-site start
@@ -335,9 +327,8 @@ pnpm -C apps/docs-site start
 | -------------- | ------------------------------------------------------------------------------------ |
 | Agent workflow | `pnpm agent:verify-change -- <paths...>`                                             |
 | Frontend       | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
-| CRE            | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck`                         |
 | Contracts      | `forge build`<br/>`forge test -vvv`                                                  |
-| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
+| Security sweep | `pnpm security:local` — Forge tests, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
 | Frontend build | `pnpm -C frontend build`                                                             |
 | Docs build     | `pnpm -C apps/docs-site build`                                                       |
 
@@ -460,22 +451,21 @@ The swap surface has a few deliberate runtime constraints to keep the route stab
 | `AUTH_SESSION_SECRET`               | server | Auth session signing secret            |
 | `PRIVY_APP_ID` / `PRIVY_APP_SECRET` | server | Privy integration keys                 |
 
-### Core CRE variables (examples)
+### Core keeper variables (examples)
 
 | Variable             | Purpose                                     |
 | -------------------- | ------------------------------------------- |
-| `KEEPR_PRIVATE_KEY`  | Keeper signer for workflow-triggered writes |
-| `KEEPR_API_BASE_URL` | Target API base URL for keeper bridge       |
-| `KEEPR_API_KEY`      | Auth between CRE workflows and API          |
+| `KEEPR_PRIVATE_KEY`  | Keeper signer for API-triggered writes      |
+| `KEEPR_API_KEY`      | Auth between keeper clients and API         |
 
-For complete env references, see `frontend/README.md` and `cre/README.md`.
+For complete env references, see `frontend/README.md`.
 
 ## Security and Invariants
 
 - Frontend API routing and auth boundaries are enforced in `frontend/api` + `frontend/server/auth`.
 - Wallet/account invariants are documented in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - Deploy/session ownership + creator access checks are enforced server-side before phased execution.
-- CRE automation uses an HTTP bridge pattern; write execution happens through audited API surfaces.
+- Keeper automation uses authenticated API surfaces and internal job dispatch.
 - CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Audit index: [`docs/audits/README.md`](docs/audits/README.md). Trust-boundary rules: [`AGENTS.md`](AGENTS.md).
 
 ## Documentation Map
@@ -495,7 +485,6 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - **Canonical account model (read first for any account/wallet design)**: `docs/ACCOUNT_MODEL.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`
 - Telegram Mini App link/onboarding architecture: `frontend/docs/telegram-miniapp-link-architecture.md`
-- CRE guide: `cre/README.md`
 
 ## Cloud Agent Onboarding
 
@@ -517,7 +506,6 @@ Runbook:
 | `contracts/`      | Protocol smart contracts and related components       |
 | `script/`         | Foundry scripts for deploy/ops                        |
 | `frontend/`       | Vite React app + local/Vercel API handlers            |
-| `cre/`            | CRE workflow runners, scripts, and tests              |
 | `apps/docs-site/` | Docusaurus documentation site                         |
 | `docs/`           | Product, architecture, operations, and reference docs |
 | `deployments/`    | Deployment artifacts and addresses                    |
@@ -525,7 +513,7 @@ Runbook:
 ## Contributing
 
 1. Branch from `main`.
-2. Keep changes scoped (contracts, frontend, CRE, docs).
+2. Keep changes scoped (contracts, frontend, docs).
 3. Run relevant tests before opening a PR.
 4. Include migration or ops notes when behavior changes.
 

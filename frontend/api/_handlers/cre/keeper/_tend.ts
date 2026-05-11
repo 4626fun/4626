@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/tend
+ * POST /api/keeper/tend
  *
  * HTTP bridge endpoint for CRE workflows. Accepts a vault address and
  * executes the `tend()` call using the keeper wallet.

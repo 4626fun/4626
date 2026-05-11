@@ -156,6 +156,70 @@ contract MockPermit2Deployment is ISignatureTransfer {
     }
 }
 
+contract DeploymentBatcherHarness is DeploymentBatcher {
+    constructor(
+        address _registry,
+        address _bytecodeStore,
+        address _create2Deployer,
+        address _protocolTreasury,
+        address _poolManager,
+        address _taxHook,
+        address _chainlinkEthUsd,
+        address _vaultActivationBatcher,
+        address _lotteryManager,
+        address _permit2,
+        address _usdc,
+        address _uniswapV3Factory,
+        address _uniswapRouter,
+        address _ajnaFactory,
+        address _vaultCoreModule,
+        address _vaultStrategiesModule,
+        address _vaultAdminModule,
+        address _phase2Module
+    )
+        DeploymentBatcher(
+            _registry,
+            _bytecodeStore,
+            _create2Deployer,
+            _protocolTreasury,
+            _poolManager,
+            _taxHook,
+            _chainlinkEthUsd,
+            _vaultActivationBatcher,
+            _lotteryManager,
+            _permit2,
+            _usdc,
+            _uniswapV3Factory,
+            _uniswapRouter,
+            _ajnaFactory,
+            _vaultCoreModule,
+            _vaultStrategiesModule,
+            _vaultAdminModule,
+            _phase2Module
+        )
+    {}
+
+    function setPhase2ModuleForTest(DeploymentBatcherPhase2Module module_) external {
+        phase2Module = module_;
+    }
+
+    function seedPhase1StateForTest(
+        bytes32 baseSalt,
+        address vault_,
+        address wrapper_,
+        address shareOFT_,
+        bool coreDone_,
+        bool finalized_
+    ) external {
+        Phase1SplitState storage state = phase1SplitStates[baseSalt];
+        state.vault = vault_;
+        state.wrapper = wrapper_;
+        state.shareOFT = shareOFT_;
+        state.coreDone = coreDone_;
+        state.finalized = finalized_;
+    }
+}
+
 contract DeploymentBatcherPermit2Test is Test {
     address internal ownerAddr = makeAddr("owner");
 
@@ -167,7 +231,7 @@ contract DeploymentBatcherPermit2Test is Test {
     MockOwnableTransferPermit2 internal cca;
     MockOwnableTransferPermit2 internal oracle;
     MockPermit2Deployment internal permit2;
-    DeploymentBatcher internal batcher;
+    DeploymentBatcherHarness internal batcher;
 
     function setUp() public {
         vm.chainId(8453);
@@ -181,7 +245,7 @@ contract DeploymentBatcherPermit2Test is Test {
         oracle = new MockOwnableTransferPermit2();
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
-        batcher = new DeploymentBatcher(
+        batcher = new DeploymentBatcherHarness(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
@@ -212,22 +276,14 @@ contract DeploymentBatcherPermit2Test is Test {
             makeAddr("vaultActivationBatcher"),
             address(batcher)
         );
-        vm.store(address(batcher), bytes32(uint256(8)), bytes32(uint256(uint160(address(phase2Fixture)))));
+        batcher.setPhase2ModuleForTest(phase2Fixture);
 
         creatorToken.mint(ownerAddr, 100_000_000e18);
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
 
-        // FIX: F-01 requires phase1SplitStates to be finalized with matching addresses.
-        // Write Phase1SplitState directly into storage via vm.store.
-        // ReentrancyGuard=slot0, vaultAdminModule=slot1, pendingAuctions=slot2,
-        // hasActivePendingAuction=slot3, phase1SplitStates=slot4.
         bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
-        bytes32 base = keccak256(abi.encode(baseSalt, uint256(4)));
-        vm.store(address(batcher), bytes32(uint256(base) + 1), bytes32(uint256(uint160(address(vault)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 2), bytes32(uint256(uint160(address(wrapper)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 3), bytes32(uint256(uint160(address(shareOFT)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 7), bytes32(uint256(0x0101)));
+        batcher.seedPhase1StateForTest(baseSalt, address(vault), address(wrapper), address(shareOFT), true, true);
     }
 
     function test_finalizePhase2WithPermit2_pullsFundsViaPermit2_and_defersAuction() external {

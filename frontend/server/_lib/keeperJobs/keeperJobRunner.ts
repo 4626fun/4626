@@ -14,7 +14,7 @@ import {
 } from '../agentControl/trustZones.js'
 
 const ALLOWED_INTERNAL_API_PREFIXES = [
-  '/api/cre/keeper/',
+  '/api/keeper/',
   '/api/keepr/actions/',
 ] as const
 
@@ -201,7 +201,7 @@ function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unk
 
 async function enqueueFollowUpIfNeeded(job: KeeperJob, result: Record<string, unknown>): Promise<number | undefined> {
   const path = typeof job.payload.path === 'string' ? job.payload.path.trim() : ''
-  if (path !== '/api/cre/keeper/sweep') return undefined
+  if (path !== '/api/keeper/sweep') return undefined
   const markSettledBody = readSweepFollowUpMarkSettled(job, result)
   if (!markSettledBody) return undefined
 
@@ -210,7 +210,7 @@ async function enqueueFollowUpIfNeeded(job: KeeperJob, result: Record<string, un
     dedupeKey: `mark-settled:${String(markSettledBody.vaultAddress).toLowerCase()}`,
     source: 'keeper-sweep-follow-up',
     payload: {
-      path: '/api/cre/keeper/mark-settled',
+      path: '/api/keeper/mark-settled',
       body: markSettledBody,
     },
     maxAttempts: 3,

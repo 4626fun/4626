@@ -296,6 +296,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     error NotMinter();
     error NothingToFlush();
     error HubNotConfigured();
+    error HubGaugeControllerUnset();
     error NotHub();
     error InvalidCallback();
     error MissingLayerZeroEid(uint256 chainId);
@@ -557,7 +558,7 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      */
     function _sendFeesToGauge(uint256 amount) internal {
         address _gaugeController = gaugeController;
-        if (_gaugeController == address(0)) return;
+        if (_gaugeController == address(0)) revert HubGaugeControllerUnset();
 
         // Approve gauge controller to pull tokens
         _approve(address(this), _gaugeController, amount);

@@ -573,6 +573,16 @@ interface IERC4626StrategyAdapterAdmin {
     function setIdleBufferBps(uint256 newBps) external;
 }
 
+interface IVaultRolePolicyManager {
+    function validateRoleAssignments(
+        uint256 policyId,
+        address owner,
+        address management,
+        address keeper,
+        address emergencyAdmin
+    ) external view;
+}
+
 contract DeploymentBatcherPhase2Module {
     using SafeERC20 for IERC20;
 
@@ -981,6 +991,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error CharmVaultManagerMismatch(address expected, address actual);
     error InvalidTickSpacing();
     error InvalidPoolCurrencies();
+    error InvalidRolePolicyManager();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -997,6 +1008,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     address public immutable uniswapV3Factory;
     address public immutable uniswapRouter;
     address public immutable ajnaFactory;
+    address public vaultRolePolicyManager;
+    uint256 public vaultRolePolicyId;
 
     // CreatorOVault delegatecall modules (shared logic contracts).
     address public immutable vaultCoreModule;
@@ -1118,6 +1131,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
     event OVaultRuntimeConfigSet(address indexed hubComposer, uint32 indexed solanaEid, bool enabled);
+    event VaultRolePolicyConfigSet(address indexed manager, uint256 indexed policyId);
 
     constructor(
         address _registry,
@@ -1420,6 +1434,52 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
             revert ZeroAddress();
         }
+        _enforceRolePolicy(params.owner, params.owner, params.owner, params.owner, vaultRolePolicyId);
+        _requirePhase2CodeIds(codeIds);
+        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
+            revert Phase1Missing();
+        }
+
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
+        {
+            Phase1SplitState storage p1state = phase1SplitStates[baseSalt];
+            if (!p1state.finalized) revert Phase1Missing();
+            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
+                revert Phase1StateMismatch();
+            }
+        }
+        if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
+            revert InvalidCreatorTreasury(params.creatorTreasury);
+        }
+        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
+
+        string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
+        bytes memory outData = _delegatePhase2(
+            abi.encodeWithSelector(
+                DeploymentBatcherPhase2Module.deployPhase2Core.selector, params, codeIds, baseSalt, shareSymbolLower
+            )
+        );
+        out = abi.decode(outData, (Phase2Result));
+
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
+    }
+
+    /**
+     * @notice Optional policy-aware variant for deploy-session guarded flows.
+     * @dev Existing `deployPhase2Core` behavior remains unchanged and uses the
+     *      globally configured `vaultRolePolicyId`.
+     */
+    function deployPhase2CoreWithRolePolicy(
+        Phase2CoreParams calldata params,
+        CodeIds calldata codeIds,
+        uint256 rolePolicyId
+    ) external nonReentrant returns (Phase2Result memory out) {
+        _requireOwner(params.owner);
+        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
+        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
+            revert ZeroAddress();
+        }
+        _enforceRolePolicy(params.owner, params.owner, params.owner, params.owner, rolePolicyId);
         _requirePhase2CodeIds(codeIds);
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
             revert Phase1Missing();
@@ -1773,6 +1833,18 @@ contract DeploymentBatcher is ReentrancyGuard {
         return ovaultRuntimeConfig;
     }
 
+    /**
+     * @notice Configure optional role-policy validation for phase-2 deployment.
+     * @dev Set `manager = address(0)` to disable policy checks entirely.
+     */
+    function setVaultRolePolicyConfig(address manager, uint256 policyId) external {
+        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+        if (manager != address(0) && manager.code.length == 0) revert InvalidRolePolicyManager();
+        vaultRolePolicyManager = manager;
+        vaultRolePolicyId = policyId;
+        emit VaultRolePolicyConfigSet(manager, policyId);
+    }
+
     // FIX: F-26 — admin function to clear stuck Phase 1 state so (creatorToken, owner, version)
     // tuples are not permanently blocked by stale/abandoned deployments.
     function resetPhase1State(bytes32 baseSalt) external {
@@ -1853,5 +1925,19 @@ contract DeploymentBatcher is ReentrancyGuard {
     function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32) {
         bytes memory creationCode = bytecodeStore.get(codeId);
         return keccak256(bytes.concat(creationCode, constructorArgs));
+    }
+
+    function _enforceRolePolicy(
+        address owner,
+        address management,
+        address keeper_,
+        address emergencyAdmin,
+        uint256 rolePolicyIdOverride
+    ) internal view {
+        address manager = vaultRolePolicyManager;
+        if (manager == address(0)) return;
+        IVaultRolePolicyManager(manager).validateRoleAssignments(
+            rolePolicyIdOverride, owner, management, keeper_, emergencyAdmin
+        );
     }
 }

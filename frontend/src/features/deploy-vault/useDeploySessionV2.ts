@@ -17,6 +17,8 @@ export function useDeploySessionV2() {
       url: string
       body: unknown
       label: string
+      requestTimeoutMs?: number
+      parseTimeoutMs?: number
       maxAuthRetries?: number
     }): Promise<ApiEnvelope<T>> =>
       postDeploySessionRequestWithAuthRetry<T>({
@@ -25,6 +27,8 @@ export function useDeploySessionV2() {
         url: params.url,
         body: params.body,
         label: params.label,
+        requestTimeoutMs: params.requestTimeoutMs,
+        parseTimeoutMs: params.parseTimeoutMs,
         maxAuthRetries: params.maxAuthRetries,
       }),
     [],

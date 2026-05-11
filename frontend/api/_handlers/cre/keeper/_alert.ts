@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/alert
+ * POST /api/keeper/alert
  *
  * Receives alerts from CRE workflows (payout integrity failures, settlement
  * issues, etc.) and forwards them to the console + webhook alerting system.

@@ -44,7 +44,7 @@ function jobRow(overrides: Record<string, unknown> = {}) {
     kind: 'internal_api',
     status: 'pending',
     priority: 0,
-    payload: { path: '/api/cre/keeper/tend', body: { vaultAddress: '0x1111111111111111111111111111111111111111' } },
+    payload: { path: '/api/keeper/tend', body: { vaultAddress: '0x1111111111111111111111111111111111111111' } },
     result: null,
     source: 'test',
     dedupe_key: 'job:test',
@@ -104,7 +104,7 @@ describe('keeper job coordination handlers', () => {
         dedupeKey: 'job:test',
         source: 'test',
         payload: {
-          path: '/api/cre/keeper/tend',
+          path: '/api/keeper/tend',
           body: { vaultAddress: '0x1111111111111111111111111111111111111111' },
         },
       },
@@ -159,7 +159,7 @@ describe('keeper job coordination handlers', () => {
             kind: 'internal_api',
             dedupe_key: 'sweep-canary:0x1111111111111111111111111111111111111111',
             payload: {
-              path: '/api/cre/keeper/sweep',
+              path: '/api/keeper/sweep',
               body: {
                 ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
                 enforceInvariants: true,
@@ -258,7 +258,7 @@ describe('keeper job coordination handlers', () => {
               id: 101,
               dedupe_key: 'vault-tend-canary:0x5555555555555555555555555555555555555555',
               payload: {
-                path: '/api/cre/keeper/tend',
+                path: '/api/keeper/tend',
                 body: { vaultAddress: '0x5555555555555555555555555555555555555555' },
               },
             }),
@@ -271,7 +271,7 @@ describe('keeper job coordination handlers', () => {
               id: 102,
               dedupe_key: 'vault-report-canary:0x5555555555555555555555555555555555555555',
               payload: {
-                path: '/api/cre/keeper/report',
+                path: '/api/keeper/report',
                 body: { vaultAddress: '0x5555555555555555555555555555555555555555' },
               },
             }),
@@ -354,7 +354,7 @@ describe('keeper job coordination handlers', () => {
             id: 401,
             dedupe_key: 'bridge-integrity:default',
             payload: {
-              path: '/api/cre/keeper/bridge-integrity',
+              path: '/api/keeper/bridge-integrity',
               body: {},
             },
           }),
@@ -746,7 +746,7 @@ describe('keeper job coordination handlers', () => {
               status: 'claimed',
               claimed_by: 'test-cron-worker',
               payload: {
-                path: '/api/cre/keeper/sweep',
+                path: '/api/keeper/sweep',
                 body: {
                   ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
                   markSettled: {
@@ -769,7 +769,7 @@ describe('keeper job coordination handlers', () => {
               kind: 'internal_api',
               dedupe_key: 'mark-settled:0x5555555555555555555555555555555555555555',
               payload: {
-                path: '/api/cre/keeper/mark-settled',
+                path: '/api/keeper/mark-settled',
                 body: {
                   vaultAddress: '0x5555555555555555555555555555555555555555',
                   settlementStage: 'completed',

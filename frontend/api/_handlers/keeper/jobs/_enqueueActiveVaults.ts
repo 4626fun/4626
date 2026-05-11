@@ -164,7 +164,7 @@ function sweepPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   }
 
   return {
-    path: '/api/cre/keeper/sweep',
+    path: '/api/keeper/sweep',
     body: {
       ccaStrategyAddress,
       enforceInvariants: enforceInvariants(),
@@ -178,7 +178,7 @@ function vaultActionPayload(row: ActiveVaultRow, action: 'tend' | 'report'): Rec
   const vaultAddress = normalizeAddress(row.vault_address)
   if (!vaultAddress) return null
   return {
-    path: `/api/cre/keeper/${action}`,
+    path: `/api/keeper/${action}`,
     body: { vaultAddress },
   }
 }
@@ -189,7 +189,7 @@ function payoutPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   const creatorCoinAddress = normalizeAddress(row.creator_coin_address)
   if (!payoutRouterAddress || !creatorCoinAddress) return null
   return {
-    path: '/api/cre/keeper/payout-router-harvest',
+    path: '/api/keeper/payout-router-harvest',
     body: {
       payoutRouterAddress,
       creatorCoinAddress,

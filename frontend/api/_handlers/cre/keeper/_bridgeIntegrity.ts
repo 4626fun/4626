@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/bridge-integrity
+ * POST /api/keeper/bridge-integrity
  *
  * CRE-independent bridge integrity fallback. This endpoint is read-only:
  * it inspects the existing Solana infra status endpoint and returns a

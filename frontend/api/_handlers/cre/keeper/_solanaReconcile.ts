@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/solana/reconcile
+ * POST /api/keeper/solana/reconcile
  *
  * Idempotent bridge endpoint for CRE-managed Solana orchestration.
  * The endpoint stores workflow checkpoints in Postgres to ensure retries are safe.

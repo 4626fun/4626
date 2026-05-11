@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/mark-settled
+ * POST /api/keeper/mark-settled
  *
  * Records graduation and/or settlement timestamps for a vault in the DB.
  * Called by CRE workflows after detecting graduation or completing sweep.
@@ -20,7 +20,7 @@
  *
  * This guards against a bad CRE workflow version or a compromised
  * KEEPR_API_KEY writing `settled_at` without the completion state machine
- * passing in `/api/cre/keeper/sweep`. Invariants 1-4 (trade-fee collector,
+ * passing in `/api/keeper/sweep`. Invariants 1-4 (trade-fee collector,
  * creator-coin payout recipient mode, creator treasury, completion chain)
  * are still verified by `/sweep` and fail closed there; this endpoint is the
  * DB writer and must not contradict that gate.
@@ -93,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Audit §5.1 invariant 5: settledAt is only written when the completion
-  // state machine in /api/cre/keeper/sweep reports stage='completed'. Reject
+  // state machine in /api/keeper/sweep reports stage='completed'. Reject
   // any request that tries to write settledAt paired with a different stage,
   // or settledAt in the future, or a malformed timestamp.
   if (settledAt) {

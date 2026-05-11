@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/sweep
+ * POST /api/keeper/sweep
  *
  * HTTP bridge endpoint for CRE workflows. Accepts a CCA strategy address and
  * executes canonical completion phases:

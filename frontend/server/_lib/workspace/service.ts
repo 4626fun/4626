@@ -5,7 +5,6 @@ import { getKeeprVaultAutomationByVaultAddress } from '../keepr/keeprAutomation.
 import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../messaging/creatorXmtpAgents.js'
 import { getDb } from '../db/postgres.js'
 import { ensureTelegramTradingSchema } from '../messaging/telegramTrading.js'
-import { ensureCreRuntimeSchema } from '../cre/runtimeSchema.js'
 import {
   createActivityEvent,
   getWorkspaceCounts,
@@ -24,6 +23,7 @@ import {
   type WorkspaceStrategyTarget,
   type WorkspaceTaskItem,
 } from './repository.js'
+import { deriveStrategyAprSignal, type StrategyAprSignal } from './aprSignals.js'
 
 type CheckStatus = 'pass' | 'fail' | 'warn' | 'info'
 type Check = {
@@ -97,6 +97,7 @@ export type WorkspaceStrategyRow = {
   asset: `0x${string}` | null
   liquidityHint: string | null
   performanceHint: string | null
+  aprSignal: StrategyAprSignal
   lastRebalanceAt: string | null
   availableActions: string[]
 }
@@ -123,7 +124,7 @@ export type WorkspaceMonitoringResponse = {
 
 export type WorkspaceActivityItem = {
   id: string
-  source: 'workspace' | 'keepr' | 'chat' | 'cre'
+  source: 'workspace' | 'keepr' | 'chat'
   eventType: string
   title: string
   description: string | null
@@ -377,9 +378,8 @@ async function readTelegramRoomState(vaultAddress: `0x${string}`): Promise<Teleg
 async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string): Promise<WorkspaceActivityItem[]> {
   const db = await getDb()
   if (!db) return []
-  await ensureCreRuntimeSchema()
 
-  const [keeprLogs, chatEvents, creRecords] = await Promise.all([
+  const [keeprLogs, chatEvents] = await Promise.all([
     db.sql`
       SELECT id, event_type, details, actor_wallet, created_at
       FROM keepr_logs
@@ -391,14 +391,6 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
       SELECT id, event, payload, created_at
       FROM chat_command_center_events
       WHERE conversation_id = ${groupId}
-      ORDER BY created_at DESC
-      LIMIT 25;
-    `,
-    db.sql`
-      SELECT id, workflow, kind, payload_json, created_at
-      FROM cre_runtime_records
-      WHERE payload_json ->> 'vaultAddress' = ${vaultAddress}
-         OR payload_json ->> 'vault' = ${vaultAddress}
       ORDER BY created_at DESC
       LIMIT 25;
     `,
@@ -434,22 +426,7 @@ async function readSystemActivity(vaultAddress: `0x${string}`, groupId: string):
     }
   })
 
-  const creItems: WorkspaceActivityItem[] = (creRecords.rows ?? []).map((row) => {
-    const data = asObject(row)
-    return {
-      id: `cre-${String(data.id ?? '')}`,
-      source: 'cre',
-      eventType: String(data.kind ?? 'cre.record'),
-      title: `CRE: ${String(data.workflow ?? 'workflow')} / ${String(data.kind ?? 'record')}`,
-      description: null,
-      severity: 'info',
-      actorAddress: null,
-      createdAt: toIsoDate(data.created_at),
-      payload: asObject(data.payload_json),
-    }
-  })
-
-  return [...keeprItems, ...chatItems, ...creItems].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  return [...keeprItems, ...chatItems].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
 export async function resolveWorkspaceSummary(params: {
@@ -541,7 +518,10 @@ export async function resolveWorkspaceStrategies(params: {
   const targetByStrategy = new Map<string, WorkspaceStrategyTarget>(
     targets.map((target) => [target.strategyAddress.toLowerCase(), target]),
   )
-  const activities = await listActivityEvents({ vaultAddress, limit: 200 })
+  const [activities, monitoringSnapshots] = await Promise.all([
+    listActivityEvents({ vaultAddress, limit: 200 }),
+    listMonitoringSnapshots({ vaultAddress, limit: 24 }),
+  ])
 
   const strategies = (Array.isArray(strategyData?.strategies) ? strategyData?.strategies : [])
     .map((raw) => {
@@ -558,6 +538,14 @@ export async function resolveWorkspaceStrategies(params: {
       return {
         strategyAddress,
         kind,
+        aprSignal: deriveStrategyAprSignal({
+          kind,
+          isActive: typeof raw.isActive === 'boolean' ? raw.isActive : null,
+          strategyAddress,
+          nowIso: new Date().toISOString(),
+          activityEvents: activities,
+          monitoringSnapshots,
+        }),
         status: normalizeStrategyStatus({
           isActive: typeof raw.isActive === 'boolean' ? raw.isActive : null,
           kind,
