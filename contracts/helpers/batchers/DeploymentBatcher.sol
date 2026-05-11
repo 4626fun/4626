@@ -1775,8 +1775,12 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     // FIX: F-26 — admin function to clear stuck Phase 1 state so (creatorToken, owner, version)
     // tuples are not permanently blocked by stale/abandoned deployments.
-    function resetPhase1State(bytes32 baseSalt) external {
+    // The reset must be tuple-scoped so callers cannot accidentally clear an
+    // unrelated deployment state.
+    function resetPhase1State(address creatorToken, address owner, string calldata version) external {
         if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+        if (creatorToken == address(0) || owner == address(0)) revert ZeroAddress();
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(creatorToken, owner, block.chainid, version);
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
         // Only allow reset if Phase 1 was started but Phase 2 has not consumed it
         // (i.e., pending auction for this salt must not exist).
