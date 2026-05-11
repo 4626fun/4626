@@ -190,6 +190,7 @@ export const Portfolio = lazyNamed(() => import('../pages/Portfolio'), 'Portfoli
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
 export const AddOwnerPage = lazyNamed(() => import('../pages/AddOwner'), 'AddOwnerPage')
 export const RemoveOwnerPage = lazyNamed(() => import('../pages/RemoveOwner'), 'RemoveOwnerPage')
+export const CswFundingPage = lazyNamed(() => import('../pages/CswFunding'), 'CswFundingPage')
 export const ZoraConnectorProbe = lazyNamed(
   () => import('../pages/dev/ZoraConnectorProbe'),
   'ZoraConnectorProbe',

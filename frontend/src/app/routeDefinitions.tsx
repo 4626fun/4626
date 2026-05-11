@@ -5,6 +5,7 @@ import {
   AccountsPage,
   AddOwnerPage,
   RemoveOwnerPage,
+  CswFundingPage,
   AdminAgentSetup,
   AdminCreatorAccess,
   AdminCreatorStrategyProvisioning,
@@ -124,6 +125,18 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     element: (
       <SmartWalletRoute>
         <RemoveOwnerPage />
+      </SmartWalletRoute>
+    ),
+  },
+  // `/csw-funding` shows the three funding sources for CSW UserOps on Base
+  // (native ETH, EntryPoint deposit, RelayDepository total) and lets anyone
+  // top up the EntryPoint deposit via depositTo(csw) payable. Pure
+  // diagnostics + a single self-contained top-up form; no owner mutation.
+  {
+    path: '/csw-funding',
+    element: (
+      <SmartWalletRoute>
+        <CswFundingPage />
       </SmartWalletRoute>
     ),
   },

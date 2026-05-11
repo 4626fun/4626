@@ -1117,12 +1117,21 @@ export function RemoveOwnerPage() {
           </div>
         ) : null}
 
-        <div className="text-[11px] text-zinc-500">
-          Looking to install a signing key instead?{' '}
-          <Link to="/add-owner" className="underline underline-offset-2">
-            /add-owner
-          </Link>
-          .
+        <div className="text-[11px] text-zinc-500 space-y-1">
+          <div>
+            Looking to install a signing key instead?{' '}
+            <Link to="/add-owner" className="underline underline-offset-2">
+              /add-owner
+            </Link>
+            .
+          </div>
+          <div>
+            Need to fund the CSW before submitting?{' '}
+            <Link to="/csw-funding" className="underline underline-offset-2">
+              /csw-funding
+            </Link>
+            .
+          </div>
         </div>
       </div>
     </div>
