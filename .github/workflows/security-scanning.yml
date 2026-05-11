@@ -184,9 +184,6 @@ jobs:
       - name: Frontend lockfile audit
         run: pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/frontend-audit.txt"
 
-      - name: CRE lockfile audit
-        run: pnpm --dir cre install --frozen-lockfile && pnpm --dir cre audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/cre-audit.txt"
-
       - name: Docs site lockfile audit
         run: pnpm --dir apps/docs-site install --frozen-lockfile && pnpm --dir apps/docs-site audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/docs-site-audit.txt"
 
@@ -202,10 +199,6 @@ jobs:
           echo "### Frontend (\`frontend/pnpm-lock.yaml\`)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -60 "$RUNNER_TEMP/frontend-audit.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "### CRE (\`cre/pnpm-lock.yaml\`)" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          tail -60 "$RUNNER_TEMP/cre-audit.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "### Docs site (\`apps/docs-site/pnpm-lock.yaml\`)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
