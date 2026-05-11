@@ -611,6 +611,7 @@ contract CreatorShareOFTEdgeCasesTest is Test {
 
         vm.startPrank(owner);
         freshOFT.setRegistry(address(registry));
+        freshOFT.setHubConfig(true, 0, address(0));
         freshOFT.setLotteryEnabled(true);
         freshOFT.setFeesEnabled(true);
         // NOTE: Not setting gauge controller
@@ -621,14 +622,10 @@ contract CreatorShareOFTEdgeCasesTest is Test {
 
         lotteryManager.clearCalls();
 
-        // Transfer should work. In remote/default mode fees are still collected,
-        // while lottery is skipped because no hub lottery routing is configured.
+        // Hub mode with missing gauge controller should fail closed.
         vm.prank(address(aggregator));
+        vm.expectRevert(CreatorShareOFT.HubGaugeControllerUnset.selector);
         freshOFT.transfer(eoaUser, 100 ether);
-
-        // Fee is still applied even without gauge controller.
-        assertEq(freshOFT.balanceOf(eoaUser), 93.1 ether);
-        assertEq(lotteryManager.getCallCount(), 0);
     }
 
     function test_State_NoLotteryManager_NoRevert() public {

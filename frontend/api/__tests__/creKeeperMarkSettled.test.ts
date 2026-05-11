@@ -40,7 +40,7 @@ vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
 
 import creKeeperMarkSettledHandler from '../_handlers/cre/keeper/_markSettled.ts'
 
-describe('/api/cre/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
+describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   let restoreEnv: (() => void) | null = null
 
   beforeEach(() => {

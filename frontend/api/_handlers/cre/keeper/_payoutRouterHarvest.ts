@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/payout-router-harvest
+ * POST /api/keeper/payout-router-harvest
  *
  * CRE-independent HTTP bridge for the payout-router harvest lane.
  * Processes a single payout router using the keeper wallet:

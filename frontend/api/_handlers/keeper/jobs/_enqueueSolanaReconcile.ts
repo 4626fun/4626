@@ -88,7 +88,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         dedupeKey: `solana-reconcile:${workflow}:${checkpointKey}`,
         source: 'keeper-solana-reconcile',
         payload: {
-          path: '/api/cre/keeper/solana/reconcile',
+          path: '/api/keeper/solana/reconcile',
           body: {
             workflow,
             action,

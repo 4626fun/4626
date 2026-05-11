@@ -267,4 +267,34 @@ fi
 
 echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
 cd "$FRONTEND_DIR"
-exec pnpm exec vite --host localhost --port "$DEV_PORT" --strictPort
+VITE_BOOTSTRAP_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-vite-bootstrap.log"
+MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-2}"
+vite_attempt=0
+
+while true; do
+  vite_attempt=$((vite_attempt + 1))
+  : > "$VITE_BOOTSTRAP_LOG_FILE"
+
+  set +e
+  pnpm exec vite --host localhost --port "$DEV_PORT" --strictPort 2>&1 | tee "$VITE_BOOTSTRAP_LOG_FILE"
+  vite_exit_code=${PIPESTATUS[0]}
+  set -e
+
+  if [[ "$vite_exit_code" -eq 0 ]]; then
+    exit 0
+  fi
+
+  if [[ "$vite_attempt" -gt "$MAX_VITE_EPIPE_RETRIES" ]]; then
+    echo "Vite exited with code ${vite_exit_code} after ${MAX_VITE_EPIPE_RETRIES} retry attempts."
+    exit "$vite_exit_code"
+  fi
+
+  if grep -q "The service was stopped: write EPIPE" "$VITE_BOOTSTRAP_LOG_FILE"; then
+    echo "Detected transient Vite/esbuild EPIPE during dependency optimization; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
+    rm -rf "$FRONTEND_DIR/node_modules/.vite"
+    sleep 1
+    continue
+  fi
+
+  exit "$vite_exit_code"
+done

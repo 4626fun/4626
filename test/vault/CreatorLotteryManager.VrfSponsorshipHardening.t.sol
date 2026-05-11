@@ -215,6 +215,38 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
         assertEq(address(lotteryManager).balance, 0, "caller fee should be refunded on send failure");
     }
 
+    function test_adminWrapper_revertsForNonOwner_setVrfSponsorshipPolicy() public {
+        vm.prank(authorizedSwap);
+        vm.expectRevert();
+        lotteryManager.setVrfSponsorshipPolicy(true, 1 ether, 2 ether, 1 days);
+    }
+
+    function test_adminWrapper_ownerCanSetVrfSponsorshipPolicy() public {
+        vm.prank(owner);
+        lotteryManager.setVrfSponsorshipPolicy(true, 1 ether, 2 ether, 1 days);
+
+        (bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration,,) =
+            lotteryManager.vrfSponsorshipPolicy();
+        assertTrue(enabled, "policy should be enabled");
+        assertEq(maxFeePerMessage, 1 ether, "max fee mismatch");
+        assertEq(budgetPerEpoch, 2 ether, "budget mismatch");
+        assertEq(epochDuration, 1 days, "epoch duration mismatch");
+    }
+
+    function test_adminWrapper_revertsForNonOwner_setAuthorizedSwapContract() public {
+        vm.prank(buyer);
+        vm.expectRevert();
+        lotteryManager.setAuthorizedSwapContract(makeAddr("rogueSwap"), true);
+    }
+
+    function test_adminWrapper_ownerCanSetAuthorizedSwapContract() public {
+        address newSwap = makeAddr("newSwap");
+        vm.prank(owner);
+        lotteryManager.setAuthorizedSwapContract(newSwap, true);
+
+        assertTrue(lotteryManager.authorizedSwapContracts(newSwap), "swap authorization not updated");
+    }
+
     function _configureCrossChain(address integratorAddr) internal {
         vm.startPrank(owner);
         lotteryManager.setVRFIntegrator(integratorAddr);

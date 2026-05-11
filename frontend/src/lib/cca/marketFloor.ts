@@ -8,6 +8,7 @@ import { currencyPerTokenBaseUnitsToQ96 } from '@/lib/cca/q96'
 
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as const
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
+const DEFAULT_MARKET_FLOOR_DISCOUNT_BPS = 9_500 // 5% safety buffer from reference price
 
 // Uniswap V4 PoolManager state reads use `extsload` (see v4-core StateLibrary).
 const V4_EXTSLOAD_ABI = [
@@ -425,7 +426,7 @@ export async function computeMarketFloorQuote(params: {
   // Uniswap v3 `observe()` frequently cannot serve very long windows unless the pool has
   // sufficient observation history. Keep this shorter and separate from the v4 sampling window.
   const zoraEthTwapDurationSec = params.zoraEthTwapDurationSec ?? 1800
-  const discountBps = params.discountBps ?? 8000
+  const discountBps = params.discountBps ?? DEFAULT_MARKET_FLOOR_DISCOUNT_BPS
 
   if (!isAddress(creatorCoin) || creatorCoin === ZERO_ADDRESS) throw new Error('Invalid creator coin address')
   if (discountBps <= 0 || discountBps > 10_000) throw new Error('Invalid discountBps')

@@ -236,8 +236,10 @@ contract CreatorShareOFTRemoteLotteryFundingTest is Test {
     }
 
     function test_HubMode_StillUsesLocalLotteryManager() public {
+        MockRemoteGaugeController localGauge = new MockRemoteGaugeController();
         vm.startPrank(owner);
-        shareOFT.setHubConfig(true, 0, address(0));
+        shareOFT.setGaugeController(address(localGauge));
+        shareOFT.setHubConfig(true, 0, address(localGauge));
         shareOFT.setLotteryEnabled(true);
         vm.stopPrank();
 

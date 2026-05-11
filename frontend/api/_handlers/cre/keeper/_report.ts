@@ -1,5 +1,5 @@
 /**
- * POST /api/cre/keeper/report
+ * POST /api/keeper/report
  *
  * HTTP bridge endpoint for CRE workflows. Accepts a vault address and
  * executes the `report()` call using the keeper wallet.

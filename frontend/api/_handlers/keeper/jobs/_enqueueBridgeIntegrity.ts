@@ -48,7 +48,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dedupeKey: 'bridge-integrity:default',
     source: 'keeper-bridge-integrity',
     payload: {
-      path: '/api/cre/keeper/bridge-integrity',
+      path: '/api/keeper/bridge-integrity',
       body: {},
     },
     maxAttempts: 3,

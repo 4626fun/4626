@@ -131,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dedupeKey: `sweep-canary:${ccaStrategyAddress}`,
     source: 'keeper-sweep-canary',
     payload: {
-      path: '/api/cre/keeper/sweep',
+      path: '/api/keeper/sweep',
       body,
     },
     maxAttempts: 3,

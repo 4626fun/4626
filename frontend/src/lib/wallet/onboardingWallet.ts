@@ -512,15 +512,46 @@ export async function sendPreparedOwnerTx(params: {
           } else if (preferSponsoredFirst) {
             await trySponsoredPreferredFallback()
           } else {
-            emitOwnerApprovalStage(onStageEvent, {
-              runId: effectiveApprovalRunId,
-              stage: 'send_calls',
-              status: 'start',
-              attempt: 0,
-              executionMode,
-              signerAddress,
-              canonicalCswAddress: canonicalSmartWalletAddress,
-            })
+            const signerMatchesCanonical =
+              Boolean(canonicalSmartWalletAddress) &&
+              Boolean(signerAddress) &&
+              signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
+            const preferDirectSelfAuthSendFirst =
+              effectiveOwnerInstallIntent === 'embeddedOwner' && signerMatchesCanonical
+            if (preferDirectSelfAuthSendFirst) {
+              try {
+                txHash = await submitDirectSelfAuthTx()
+              } catch (directSelfAuthError) {
+                if (isUserRejectedWalletAction(directSelfAuthError)) throw directSelfAuthError
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'send_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(directSelfAuthError).code,
+                  message:
+                    directSelfAuthError instanceof Error
+                      ? directSelfAuthError.message
+                      : String(directSelfAuthError ?? ''),
+                })
+                throw new Error(
+                  'Canonical Base Account self-auth approval failed. Reopen this in Base App and retry the approval there.',
+                )
+              }
+            }
+            if (!txHash) {
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                status: 'start',
+                attempt: 0,
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+              })
+            }
             const expectedAddOwnerAddress =
               effectiveOwnerInstallIntent === 'embeddedOwner'
                 ? ownerIndexLookupAddress ?? null
@@ -545,7 +576,9 @@ export async function sendPreparedOwnerTx(params: {
               !preferReplayablePreparedCallsFirst &&
               !preferSelfBuiltRelayFirst
             try {
-              if (preferReplayablePreparedCallsFirst) {
+              if (txHash) {
+                // Direct self-auth send succeeded above; skip fallback lanes.
+              } else if (preferReplayablePreparedCallsFirst) {
                 const innerSelector = txRequest.data.slice(0, 10).toLowerCase()
                 if (!REPLAYABLE_INNER_SELECTORS.has(innerSelector)) {
                   throw new Error(`Prepared owner install selector ${innerSelector} cannot use the replayable self-auth lane.`)

@@ -1,5 +1,5 @@
 /**
- * GET /api/cre/vaults/active
+ * GET /api/vaults/active
  *
  * Returns all registered vaults with their contract addresses for CRE workflows.
  * Protected by KEEPR_API_KEY Bearer token.

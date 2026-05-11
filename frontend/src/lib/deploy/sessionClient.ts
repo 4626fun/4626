@@ -46,6 +46,8 @@ export async function postDeploySessionRequestWithAuthRetry<T>(params: {
   body: unknown
   label: string
   ensurePaymasterSession: () => Promise<void>
+  requestTimeoutMs?: number
+  parseTimeoutMs?: number
   maxAuthRetries?: number
   shouldRetryAuth?: (message: string) => boolean
 }): Promise<ApiEnvelope<T>> {
@@ -58,6 +60,8 @@ export async function postDeploySessionRequestWithAuthRetry<T>(params: {
       url: params.url,
       body: params.body,
       label: params.label,
+      requestTimeoutMs: params.requestTimeoutMs,
+      parseTimeoutMs: params.parseTimeoutMs,
     })
     if (response.ok && json?.success) return json
 

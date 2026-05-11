@@ -518,3 +518,67 @@ contract PartialTransferThenRevertTest is Test {
         vaultBalBefore; // silence
     }
 }
+
+contract QueueToggleBehaviorTest is Test {
+    MockHostileCoin internal coin;
+    CreatorOVault internal vault;
+    HealthyStrategy internal strategyA;
+    HealthyStrategy internal strategyB;
+    address internal alice = makeAddr("alice");
+
+    function setUp() public {
+        coin = new MockHostileCoin();
+        vault = new CreatorOVault(address(coin), address(this), "Creator OVault", "ovCR8R");
+        vault.setModulesOnce(
+            address(new CreatorOVaultCoreModule()),
+            address(new CreatorOVaultStrategiesModule()),
+            address(new CreatorOVaultAdminModule())
+        );
+
+        strategyA = new HealthyStrategy(address(coin));
+        strategyB = new HealthyStrategy(address(coin));
+
+        // Strategy list order stays [A, B].
+        vault.addStrategy(address(strategyA), 5_000, false);
+        vault.addStrategy(address(strategyB), 5_000, false);
+        vault.setFlashLoanProtection(0, type(uint256).max, 1);
+
+        uint256 depositAmount = vault.MINIMUM_FIRST_DEPOSIT() * 2;
+        coin.mint(alice, depositAmount + 500_000e18);
+        vm.prank(alice);
+        coin.approve(address(vault), type(uint256).max);
+        vm.prank(alice);
+        vault.deposit(depositAmount, alice);
+
+        address[] memory queue = new address[](2);
+        queue[0] = address(strategyB);
+        queue[1] = address(strategyA);
+        vault.setDefaultQueue(queue);
+        vault.forceDeployToStrategies();
+
+        assertGt(strategyA.trackedAssets(), 10_000e18, "strategy A underfunded");
+        assertGt(strategyB.trackedAssets(), 10_000e18, "strategy B underfunded");
+    }
+
+    function test_withdraw_usesDefaultQueue_whenEnabled() external {
+        vault.setUseDefaultQueue(true);
+        uint256 ask = vault.coinBalance() + 1_000e18;
+
+        vm.prank(alice);
+        vault.withdraw(ask, alice, alice);
+
+        assertEq(strategyB.withdrawCalls(), 1, "default-queue first strategy not used");
+        assertEq(strategyA.withdrawCalls(), 0, "strategy list should not be used first");
+    }
+
+    function test_withdraw_usesStrategyList_whenDefaultQueueDisabled() external {
+        vault.setUseDefaultQueue(false);
+        uint256 ask = vault.coinBalance() + 1_000e18;
+
+        vm.prank(alice);
+        vault.withdraw(ask, alice, alice);
+
+        assertEq(strategyA.withdrawCalls(), 1, "strategy-list first strategy not used");
+        assertEq(strategyB.withdrawCalls(), 0, "default queue should be bypassed");
+    }
+}

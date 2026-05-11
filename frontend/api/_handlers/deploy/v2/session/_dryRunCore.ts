@@ -10,6 +10,7 @@ import {
   getAddress,
   http,
   keccak256,
+  parseAbiItem,
   type Address,
   type Hex,
 } from 'viem'
@@ -41,8 +42,9 @@ type DryRunPhaseName = 'phase1' | 'phase2Core' | 'phase2Finalize' | 'phase3' | '
 
 type DryRunPhaseResult = {
   name: DryRunPhaseName
-  status: 'passed' | 'failed'
+  status: 'passed' | 'failed' | 'skipped'
   callCount: number
+  reason?: string
 }
 
 type DryRunFailure = {
@@ -88,6 +90,9 @@ const DRY_RUN_GAS_BUFFER_BPS = 2_000n
 const DRY_RUN_MIN_GAS_BUFFER = 100_000n
 const DEPLOY_FAILED_SELECTOR = '0xb4f54111'
 const ERC20_INSUFFICIENT_BALANCE_SELECTOR = '0xe450d38c'
+const CCA_REQUIRED_RAISE_HINT_SELECTOR = '0x28e7b618'
+const PHASE2_MISSING_SELECTOR = '0xf79c143b'
+const SELECTOR_LAUNCH_DEFERRED_AUCTION = '0x02afdbcb'
 const SELECTOR_DEPLOY_PHASE2_CORE = '0xf9344d88'
 const SELECTOR_PHASE1_DEPLOY = '0x3c51ca4e'
 const SELECTOR_PHASE1_CORE = '0x1331378b'
@@ -175,6 +180,34 @@ const DRY_RUN_FINALIZE_PHASE2_ABI = [
     outputs: [],
   },
 ] as const
+
+const DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI = [
+  {
+    type: 'function',
+    name: 'launchDeferredAuction',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'auctionSteps', type: 'bytes' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const PHASE2_CORE_DEPLOYED_EVENT = parseAbiItem(
+  'event Phase2CoreDeployed(address indexed creatorToken, address indexed owner, address gaugeController, address ccaStrategy, address oracle)',
+)
 
 const DRY_RUN_PHASE1_PARAMS_COMPONENTS = [
   { name: 'creatorToken', type: 'address' },
@@ -349,6 +382,98 @@ function formatErc20InsufficientBalanceError(raw: string): string | null {
       'ERC20InsufficientBalance(): the canonical smart wallet does not hold enough creator tokens ' +
       'for the required initial deposit.'
     )
+  }
+}
+
+function parseRaiseHintFromCustomError(raw: string): bigint | null {
+  const lower = raw.toLowerCase()
+  const selectorIndex = lower.indexOf(CCA_REQUIRED_RAISE_HINT_SELECTOR)
+  if (selectorIndex < 0) return null
+  const afterSelector = raw.slice(selectorIndex + CCA_REQUIRED_RAISE_HINT_SELECTOR.length)
+  const payloadMatch = afterSelector.match(/[0-9a-fA-F]{64,}/)
+  if (!payloadMatch) return null
+  try {
+    const payload = payloadMatch[0]!
+    const words = payload.match(/[0-9a-fA-F]{64}/g) ?? []
+    let hint: bigint | null = null
+    for (const word of words) {
+      const value = BigInt(`0x${word}`)
+      if (value > 0n && (hint === null || value > hint)) {
+        hint = value
+      }
+    }
+    return hint
+  } catch {
+    return null
+  }
+}
+
+function isLaunchDeferredAuctionCall(call: Call): boolean {
+  return String(call.data ?? '').slice(0, 10).toLowerCase() === SELECTOR_LAUNCH_DEFERRED_AUCTION
+}
+
+function buildPhase4LaunchHintCandidates(call: Call, formattedError: string): Call[] {
+  const raiseHint = parseRaiseHintFromCustomError(formattedError)
+  if (!raiseHint) return []
+  try {
+    const decoded = decodeFunctionData({ abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI, data: call.data })
+    if (decoded.functionName !== 'launchDeferredAuction') return []
+    const launchParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+    if (!launchParams) return []
+
+    const currentRaiseRaw = launchParams.requiredRaise ?? launchParams[5]
+    const currentFloorRaw = launchParams.floorPriceQ96 ?? launchParams[4]
+    const currentRaise = typeof currentRaiseRaw === 'bigint' ? currentRaiseRaw : BigInt(String(currentRaiseRaw ?? '0'))
+    const currentFloor = typeof currentFloorRaw === 'bigint' ? currentFloorRaw : BigInt(String(currentFloorRaw ?? '0'))
+    const uint128Max = (1n << 128n) - 1n
+    const nextRaise = raiseHint <= uint128Max && raiseHint > currentRaise ? raiseHint : currentRaise
+    const nextFloor = raiseHint > currentFloor ? raiseHint : currentFloor
+    const candidates: Call[] = []
+
+    if (nextRaise > currentRaise) {
+      candidates.push({
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI,
+          functionName: 'launchDeferredAuction',
+          args: [{ ...launchParams, requiredRaise: nextRaise } as any],
+        }) as Hex,
+      })
+    }
+
+    if (nextFloor > currentFloor) {
+      candidates.push({
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI,
+          functionName: 'launchDeferredAuction',
+          args: [{ ...launchParams, floorPriceQ96: nextFloor } as any],
+        }) as Hex,
+      })
+    }
+
+    if (nextRaise > currentRaise && nextFloor > currentFloor) {
+      candidates.push({
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI,
+          functionName: 'launchDeferredAuction',
+          args: [{ ...launchParams, requiredRaise: nextRaise, floorPriceQ96: nextFloor } as any],
+        }) as Hex,
+      })
+    }
+
+    // Deduplicate candidate calldata while preserving order preference:
+    // requiredRaise-only, floor-only, then both.
+    const seen = new Set<string>()
+    return candidates.filter((candidate) => {
+      const key = String(candidate.data ?? '').toLowerCase()
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  } catch {
+    return []
   }
 }
 
@@ -1076,6 +1201,564 @@ function extractFinalizePhase2CoreAddresses(calls: Call[]): {
   return null
 }
 
+function extractFinalizePhase2Identity(calls: Call[]): { creatorToken: Address; owner: Address } | null {
+  for (const call of calls) {
+    try {
+      const decoded = decodeFunctionData({
+        abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+        data: call.data,
+      })
+      if (decoded.functionName !== 'finalizePhase2') continue
+      const params = decoded.args[0]
+      const creatorToken = getTupleAddress(params, 'creatorToken', 0)
+      const owner = getTupleAddress(params, 'owner', 1)
+      if (creatorToken && owner) return { creatorToken, owner }
+    } catch {
+      // Ignore non-finalize calls.
+    }
+  }
+  return null
+}
+
+async function alignPhase4LaunchToPendingAuctionState(params: {
+  phase4Calls: Call[]
+  readContract: (args: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>
+}): Promise<{ phase4Calls: Call[]; rewrote: boolean }> {
+  let rewrote = false
+  const phase4Calls = await Promise.all(
+    params.phase4Calls.map(async (call) => {
+      try {
+        const decoded = decodeFunctionData({ abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI, data: call.data })
+        if (decoded.functionName !== 'launchDeferredAuction') return call
+        const launchParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+        if (!launchParams) return call
+
+        const creatorToken = getTupleAddress(launchParams, 'creatorToken', 0)
+        const owner = getTupleAddress(launchParams, 'owner', 1)
+        const currentShareOFT = getTupleAddress(launchParams, 'shareOFT', 2)
+        const versionRaw = launchParams.version ?? launchParams[3]
+        const version = typeof versionRaw === 'string' ? versionRaw.trim() : ''
+        if (!creatorToken || !owner || !currentShareOFT || !version) return call
+
+        const batcher = getAddress(call.to as Address)
+        const baseSalt = keccak256(
+          encodePacked(
+            ['address', 'address', 'uint256', 'string', 'string'],
+            [creatorToken, owner, BigInt(base.id), '4626:deploy:', version],
+          ),
+        )
+        const pending = await params
+          .readContract({
+            address: batcher,
+            abi: [
+              {
+                type: 'function',
+                name: 'pendingAuctions',
+                stateMutability: 'view',
+                inputs: [{ name: 'baseSalt', type: 'bytes32' }],
+                outputs: [
+                  { name: 'shareOFT', type: 'address' },
+                  { name: 'ccaStrategy', type: 'address' },
+                  { name: 'amount', type: 'uint256' },
+                  { name: 'lpReserveAmount', type: 'uint256' },
+                ],
+              },
+            ] as const,
+            functionName: 'pendingAuctions',
+            args: [baseSalt],
+          })
+          .catch(() => null)
+        if (!pending || typeof pending !== 'object') return call
+
+        const pendingShareOFT = getTupleAddress(pending, 'shareOFT', 0)
+        if (!pendingShareOFT) return call
+        if (pendingShareOFT.toLowerCase() === currentShareOFT.toLowerCase()) return call
+
+        rewrote = true
+        return {
+          ...call,
+          data: encodeFunctionData({
+            abi: DRY_RUN_LAUNCH_DEFERRED_AUCTION_ABI,
+            functionName: 'launchDeferredAuction',
+            args: [
+              {
+                ...launchParams,
+                shareOFT: pendingShareOFT,
+              } as any,
+            ],
+          }) as Hex,
+        }
+      } catch {
+        return call
+      }
+    }),
+  )
+
+  return { phase4Calls, rewrote }
+}
+
+async function alignPhase4RequiredRaiseFromSimulation(params: {
+  phase4Calls: Call[]
+  account: Address
+  simulateCall: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<unknown>
+}): Promise<{ phase4Calls: Call[]; rewrote: boolean }> {
+  let rewrote = false
+  const phase4Calls: Call[] = []
+  for (const call of params.phase4Calls) {
+    const to = getAddress(call.to)
+    const value = callValueToBigInt(call.value)
+    try {
+      await params.simulateCall({ account: params.account, to, data: call.data, value })
+      phase4Calls.push(call)
+      continue
+    } catch (error) {
+      const formatted = formatDryRunError(error)
+      const candidates = buildPhase4LaunchHintCandidates(call, formatted)
+      if (candidates.length === 0) {
+        phase4Calls.push(call)
+        continue
+      }
+      let selected: Call | null = null
+      for (const candidate of candidates) {
+        try {
+          await params.simulateCall({ account: params.account, to, data: candidate.data, value })
+          selected = candidate
+          break
+        } catch {
+          continue
+        }
+      }
+      if (selected) {
+        rewrote = true
+        phase4Calls.push(selected)
+        continue
+      }
+      phase4Calls.push(call)
+    }
+  }
+  return { phase4Calls, rewrote }
+}
+
+async function alignPhase2FinalizeToCoreDeploymentEvent(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+  getLogs: (args: {
+    address: Address
+    event: unknown
+    args?: { creatorToken: Address; owner: Address }
+    fromBlock: bigint
+    toBlock: bigint
+  }) => Promise<Array<{ args?: Record<string, unknown> }>>
+  fromBlock: bigint
+  toBlock: bigint
+}): Promise<{ phase2FinalizeCalls: Call[]; rewrote: boolean }> {
+  const deployCoreCall = params.phase2CoreCalls.find(isDeployPhase2CoreCall)
+  const fallbackFinalizeCall = params.phase2FinalizeCalls[0] ?? null
+  const batcherSource = deployCoreCall ?? fallbackFinalizeCall
+  if (!batcherSource) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+
+  let batcher: Address | null = null
+  try {
+    batcher = getAddress(batcherSource.to as Address)
+  } catch {
+    batcher = null
+  }
+  if (!batcher) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+
+  const identity = extractFinalizePhase2Identity(params.phase2FinalizeCalls)
+  if (!identity) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+
+  const logs = await params
+    .getLogs({
+      address: batcher,
+      event: PHASE2_CORE_DEPLOYED_EVENT,
+      args: { creatorToken: identity.creatorToken, owner: identity.owner },
+      fromBlock: params.fromBlock,
+      toBlock: params.toBlock,
+    })
+    .catch(() => [])
+  const fallbackLogs =
+    logs.length === 0
+      ? await params
+          .getLogs({
+            address: batcher,
+            event: PHASE2_CORE_DEPLOYED_EVENT,
+            fromBlock: params.fromBlock,
+            toBlock: params.toBlock,
+          })
+          .catch(() => [])
+      : []
+  const latestLog = (fallbackLogs.length > 0 ? fallbackLogs : logs)[
+    (fallbackLogs.length > 0 ? fallbackLogs : logs).length - 1
+  ]
+  if (!latestLog?.args) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+
+  const deployedGauge = getTupleAddress(latestLog.args, 'gaugeController', 2)
+  const deployedCca = getTupleAddress(latestLog.args, 'ccaStrategy', 3)
+  const deployedOracle = getTupleAddress(latestLog.args, 'oracle', 4)
+  if (!deployedGauge || !deployedCca || !deployedOracle) {
+    return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+  }
+
+  let rewrote = false
+  const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      if (decoded.functionName !== 'finalizePhase2') return call
+      const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      if (!finalizeParams) return call
+
+      const currentGauge = getTupleAddress(finalizeParams, 'gaugeController', 5)
+      const currentCca = getTupleAddress(finalizeParams, 'ccaStrategy', 6)
+      const currentOracle = getTupleAddress(finalizeParams, 'oracle', 7)
+      if (
+        currentGauge?.toLowerCase() === deployedGauge.toLowerCase() &&
+        currentCca?.toLowerCase() === deployedCca.toLowerCase() &&
+        currentOracle?.toLowerCase() === deployedOracle.toLowerCase()
+      ) {
+        return call
+      }
+
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              ...finalizeParams,
+              gaugeController: deployedGauge,
+              ccaStrategy: deployedCca,
+              oracle: deployedOracle,
+            } as any,
+          ],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  return { phase2FinalizeCalls, rewrote }
+}
+
+async function alignPhase2FinalizeToLiveCoreCode(params: {
+  phase2FinalizeCalls: Call[]
+  getBytecode: (args: { address: Address }) => Promise<Hex | string | null | undefined>
+  getBlockNumber: () => Promise<bigint | null>
+  getLogs: (args: {
+    address: Address
+    event: unknown
+    args?: { creatorToken: Address; owner: Address }
+    fromBlock: bigint
+    toBlock: bigint
+  }) => Promise<Array<{ args?: Record<string, unknown> }>>
+}): Promise<{ phase2FinalizeCalls: Call[]; rewrote: boolean }> {
+  let rewrote = false
+  const latestBlock = await params.getBlockNumber().catch(() => null)
+  if (latestBlock === null) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+  const fromBlock = latestBlock > 250n ? latestBlock - 250n : 0n
+
+  const phase2FinalizeCalls: Call[] = []
+  for (const call of params.phase2FinalizeCalls) {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      if (decoded.functionName !== 'finalizePhase2') {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+      const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      if (!finalizeParams) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+      const creatorToken = getTupleAddress(finalizeParams, 'creatorToken', 0)
+      const owner = getTupleAddress(finalizeParams, 'owner', 1)
+      const gaugeController = getTupleAddress(finalizeParams, 'gaugeController', 5)
+      const ccaStrategy = getTupleAddress(finalizeParams, 'ccaStrategy', 6)
+      const oracle = getTupleAddress(finalizeParams, 'oracle', 7)
+      if (!creatorToken || !owner || !gaugeController || !ccaStrategy || !oracle) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+
+      const [gaugeCode, ccaCode, oracleCode] = await Promise.all([
+        params.getBytecode({ address: gaugeController }),
+        params.getBytecode({ address: ccaStrategy }),
+        params.getBytecode({ address: oracle }),
+      ])
+      const hasCode = (c: Hex | string | null | undefined) => Boolean(c && c !== '0x')
+      if (hasCode(gaugeCode) && hasCode(ccaCode) && hasCode(oracleCode)) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+
+      const batcher = getAddress(call.to as Address)
+      const logsFiltered = await params
+        .getLogs({
+          address: batcher,
+          event: PHASE2_CORE_DEPLOYED_EVENT,
+          args: { creatorToken, owner },
+          fromBlock,
+          toBlock: latestBlock,
+        })
+        .catch(() => [])
+      const logsAny =
+        logsFiltered.length > 0
+          ? logsFiltered
+          : await params
+              .getLogs({
+                address: batcher,
+                event: PHASE2_CORE_DEPLOYED_EVENT,
+                fromBlock,
+                toBlock: latestBlock,
+              })
+              .catch(() => [])
+      const latestLog = logsAny[logsAny.length - 1]
+      const deployedGauge = latestLog?.args ? getTupleAddress(latestLog.args, 'gaugeController', 2) : null
+      const deployedCca = latestLog?.args ? getTupleAddress(latestLog.args, 'ccaStrategy', 3) : null
+      const deployedOracle = latestLog?.args ? getTupleAddress(latestLog.args, 'oracle', 4) : null
+      if (!deployedGauge || !deployedCca || !deployedOracle) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+
+      rewrote = true
+      phase2FinalizeCalls.push({
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              ...finalizeParams,
+              gaugeController: deployedGauge,
+              ccaStrategy: deployedCca,
+              oracle: deployedOracle,
+            } as any,
+          ],
+        }) as Hex,
+      })
+    } catch {
+      phase2FinalizeCalls.push(call)
+    }
+  }
+
+  return { phase2FinalizeCalls, rewrote }
+}
+
+async function alignPhase2FinalizeFromSimulation(params: {
+  phase2FinalizeCalls: Call[]
+  account: Address
+  simulateCall: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<unknown>
+  getBlockNumber: () => Promise<bigint | null>
+  getLogs: (args: {
+    address: Address
+    event: unknown
+    args?: { creatorToken: Address; owner: Address }
+    fromBlock: bigint
+    toBlock: bigint
+  }) => Promise<Array<{ args?: Record<string, unknown> }>>
+}): Promise<{ phase2FinalizeCalls: Call[]; rewrote: boolean }> {
+  let rewrote = false
+  const latestBlock = await params.getBlockNumber().catch(() => null)
+  if (latestBlock === null) return { phase2FinalizeCalls: params.phase2FinalizeCalls, rewrote: false }
+  const fromBlock = latestBlock > 1_000n ? latestBlock - 1_000n : 0n
+
+  const phase2FinalizeCalls: Call[] = []
+  for (const call of params.phase2FinalizeCalls) {
+    const to = getAddress(call.to)
+    const value = callValueToBigInt(call.value)
+    let needRecovery = false
+    try {
+      await params.simulateCall({ account: params.account, to, data: call.data, value })
+      phase2FinalizeCalls.push(call)
+      continue
+    } catch (error) {
+      const raw = formatDryRunError(error).toLowerCase()
+      needRecovery = raw.includes(PHASE2_MISSING_SELECTOR)
+      if (!needRecovery) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+    }
+
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      if (decoded.functionName !== 'finalizePhase2') {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+      const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      if (!finalizeParams) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+
+      const logs = await params
+        .getLogs({
+          address: to,
+          event: PHASE2_CORE_DEPLOYED_EVENT,
+          fromBlock,
+          toBlock: latestBlock,
+        })
+        .catch(() => [])
+      if (logs.length === 0) {
+        phase2FinalizeCalls.push(call)
+        continue
+      }
+
+      let recoveredCall: Call | null = null
+      for (let i = logs.length - 1; i >= 0; i -= 1) {
+        const log = logs[i]
+        if (!log?.args) continue
+        const deployedGauge = getTupleAddress(log.args, 'gaugeController', 2)
+        const deployedCca = getTupleAddress(log.args, 'ccaStrategy', 3)
+        const deployedOracle = getTupleAddress(log.args, 'oracle', 4)
+        if (!deployedGauge || !deployedCca || !deployedOracle) continue
+
+        const candidate: Call = {
+          ...call,
+          data: encodeFunctionData({
+            abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+            functionName: 'finalizePhase2',
+            args: [
+              {
+                ...finalizeParams,
+                gaugeController: deployedGauge,
+                ccaStrategy: deployedCca,
+                oracle: deployedOracle,
+              } as any,
+            ],
+          }) as Hex,
+        }
+
+        try {
+          await params.simulateCall({
+            account: params.account,
+            to,
+            data: candidate.data,
+            value,
+          })
+          recoveredCall = candidate
+          break
+        } catch {
+          continue
+        }
+      }
+
+      if (recoveredCall) {
+        rewrote = true
+        phase2FinalizeCalls.push(recoveredCall)
+      } else {
+        phase2FinalizeCalls.push(call)
+      }
+    } catch {
+      phase2FinalizeCalls.push(call)
+    }
+  }
+
+  return { phase2FinalizeCalls, rewrote }
+}
+
+async function recoverPhase2FinalizeCallFromLogs(params: {
+  call: Call
+  account: Address
+  simulateCall: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<unknown>
+  getBlockNumber: () => Promise<bigint | null>
+  getLogs: (args: {
+    address: Address
+    event: unknown
+    args?: { creatorToken: Address; owner: Address }
+    fromBlock: bigint
+    toBlock: bigint
+  }) => Promise<Array<{ args?: Record<string, unknown> }>>
+}): Promise<Call | null> {
+  let finalizeParams: Record<string, unknown> | null = null
+  try {
+    const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: params.call.data })
+    if (decoded.functionName !== 'finalizePhase2') return null
+    finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+  } catch {
+    return null
+  }
+  if (!finalizeParams) return null
+
+  const creatorToken = getTupleAddress(finalizeParams, 'creatorToken', 0)
+  const owner = getTupleAddress(finalizeParams, 'owner', 1)
+  if (!creatorToken || !owner) return null
+
+  const latestBlock = await params.getBlockNumber().catch(() => null)
+  if (latestBlock === null) return null
+  const fromBlock = latestBlock > 1_000n ? latestBlock - 1_000n : 0n
+  const to = getAddress(params.call.to)
+  const value = callValueToBigInt(params.call.value)
+
+  const filteredLogs = await params
+    .getLogs({
+      address: to,
+      event: PHASE2_CORE_DEPLOYED_EVENT,
+      args: { creatorToken, owner },
+      fromBlock,
+      toBlock: latestBlock,
+    })
+    .catch(() => [])
+  const logs =
+    filteredLogs.length > 0
+      ? filteredLogs
+      : await params
+          .getLogs({
+            address: to,
+            event: PHASE2_CORE_DEPLOYED_EVENT,
+            fromBlock,
+            toBlock: latestBlock,
+          })
+          .catch(() => [])
+  if (logs.length === 0) return null
+
+  const originalDataKey = String(params.call.data ?? '').toLowerCase()
+  for (let i = logs.length - 1; i >= 0; i -= 1) {
+    const log = logs[i]
+    if (!log?.args) continue
+    const deployedGauge = getTupleAddress(log.args, 'gaugeController', 2)
+    const deployedCca = getTupleAddress(log.args, 'ccaStrategy', 3)
+    const deployedOracle = getTupleAddress(log.args, 'oracle', 4)
+    if (!deployedGauge || !deployedCca || !deployedOracle) continue
+
+    const candidate: Call = {
+      ...params.call,
+      data: encodeFunctionData({
+        abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+        functionName: 'finalizePhase2',
+        args: [
+          {
+            ...finalizeParams,
+            gaugeController: deployedGauge,
+            ccaStrategy: deployedCca,
+            oracle: deployedOracle,
+          } as any,
+        ],
+      }) as Hex,
+    }
+    const candidateDataKey = String(candidate.data ?? '').toLowerCase()
+    if (!candidateDataKey || candidateDataKey === originalDataKey) continue
+    try {
+      await params.simulateCall({
+        account: params.account,
+        to,
+        data: candidate.data,
+        value,
+      })
+      return candidate
+    } catch {
+      continue
+    }
+  }
+
+  return null
+}
+
 async function preparePhase2CoreCalls(params: {
   calls: Call[]
   finalizeCalls: Call[]
@@ -1137,66 +1820,165 @@ async function runDryRunPhase(params: {
   waitForTransactionReceipt: (args: { hash: Hex }) => Promise<{ status?: string }>
   simulateCall: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<unknown>
   estimateGas: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<bigint>
+  getLogs?: (args: {
+    address: Address
+    event: unknown
+    args?: { creatorToken: Address; owner: Address }
+    fromBlock: bigint
+    toBlock: bigint
+  }) => Promise<Array<{ args?: Record<string, unknown> }>>
+  getBlockNumber?: () => Promise<bigint | null>
+  allowLocalForkPhase4InvariantSkip?: boolean
 }): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure }> {
   for (let callIndex = 0; callIndex < params.calls.length; callIndex += 1) {
-    const call = params.calls[callIndex]!
+    let call = params.calls[callIndex]!
     const to = getAddress(call.to)
     const value = callValueToBigInt(call.value)
+    const maxAttempts =
+      params.name === 'phase4' && isLaunchDeferredAuctionCall(call)
+        ? 5
+        : params.name === 'phase2Finalize' && isFinalizePhase2Call(call)
+          ? 3
+          : 1
+    let attempt = 0
+    let completed = false
+    const triedPhase4CallData = new Set<string>([String(call.data ?? '').toLowerCase()])
     try {
-      await params.ensureImpersonated()
-      let gas: bigint | undefined
-      try {
-        gas = addDryRunGasBuffer(
-          await params.estimateGas({
+      while (attempt < maxAttempts) {
+        attempt += 1
+        await params.ensureImpersonated()
+        let gas: bigint | undefined
+        try {
+          gas = addDryRunGasBuffer(
+            await params.estimateGas({
+              account: params.smartWallet,
+              to,
+              data: call.data,
+              value,
+            }),
+          )
+        } catch {
+          // Let the transaction path surface the original revert if estimation cannot produce a bound.
+        }
+        try {
+          const hash = await params.sendTransaction({
             account: params.smartWallet,
             to,
             data: call.data,
             value,
-          }),
-        )
-      } catch {
-        // Let the transaction path surface the original revert if estimation cannot produce a bound.
-      }
-      let hash: Hex
-      try {
-        hash = await params.sendTransaction({
-          account: params.smartWallet,
-          to,
-          data: call.data,
-          value,
-          gas,
-        })
-      } catch (sendError) {
-        const formatted = formatDryRunError(sendError)
-        if (!/No Signer available/i.test(formatted)) {
+            gas,
+          })
+          const receipt = await params.waitForTransactionReceipt({ hash })
+          if (String(receipt?.status ?? '').toLowerCase() === 'reverted') {
+            let revertDetail = 'simulation transaction reverted'
+            try {
+              await params.simulateCall({
+                account: params.smartWallet,
+                to,
+                data: call.data,
+                value,
+              })
+            } catch (simulationError) {
+              const formatted = formatDryRunError(simulationError)
+              if (formatted) revertDetail = formatted
+            }
+            throw new Error(revertDetail)
+          }
+          // Success
+          completed = true
+          break
+        } catch (sendError) {
+          const formatted = formatDryRunError(sendError)
+          if (/No Signer available/i.test(formatted)) {
+            await params.ensureImpersonated()
+            continue
+          }
+          if (
+            attempt < maxAttempts &&
+            params.name === 'phase2Finalize' &&
+            isFinalizePhase2Call(call) &&
+            formatted.toLowerCase().includes(PHASE2_MISSING_SELECTOR) &&
+            typeof params.getLogs === 'function' &&
+            typeof params.getBlockNumber === 'function'
+          ) {
+            const recovered = await recoverPhase2FinalizeCallFromLogs({
+              call,
+              account: params.smartWallet,
+              simulateCall: params.simulateCall,
+              getLogs: params.getLogs,
+              getBlockNumber: params.getBlockNumber,
+            })
+            if (recovered) {
+              const key = String(recovered.data ?? '').toLowerCase()
+              if (key && !triedPhase4CallData.has(key)) {
+                triedPhase4CallData.add(key)
+                call = recovered
+                continue
+              }
+            }
+          }
+          if (attempt < maxAttempts && params.name === 'phase4' && isLaunchDeferredAuctionCall(call)) {
+            const candidates = buildPhase4LaunchHintCandidates(call, formatted)
+            let selected: Call | null = null
+            const candidateErrors: string[] = []
+            for (const candidate of candidates) {
+              const key = String(candidate.data ?? '').toLowerCase()
+              if (!key || triedPhase4CallData.has(key)) continue
+              triedPhase4CallData.add(key)
+              try {
+                await params.simulateCall({
+                  account: params.smartWallet,
+                  to,
+                  data: candidate.data,
+                  value,
+                })
+                selected = candidate
+                break
+              } catch (candidateErr) {
+                candidateErrors.push(formatDryRunError(candidateErr))
+                continue
+              }
+            }
+            if (selected) {
+              call = selected
+              continue
+            }
+            if (candidates.length > 0) {
+              const hint = parseRaiseHintFromCustomError(formatted)
+              const debugSuffix =
+                `phase4-hint=${hint ? hint.toString() : 'n/a'} ` +
+                `candidateCount=${candidates.length} ` +
+                `candidateErrors=${candidateErrors.slice(0, 3).join(' | ') || 'none'}`
+              throw new Error(`${formatted} (${debugSuffix})`)
+            }
+          }
           throw sendError
         }
-        await params.ensureImpersonated()
-        hash = await params.sendTransaction({
-          account: params.smartWallet,
-          to,
-          data: call.data,
-          value,
-          gas,
-        })
       }
-      const receipt = await params.waitForTransactionReceipt({ hash })
-      if (String(receipt?.status ?? '').toLowerCase() === 'reverted') {
-        let revertDetail = 'simulation transaction reverted'
-        try {
-          await params.simulateCall({
-            account: params.smartWallet,
-            to,
-            data: call.data,
-            value,
-          })
-        } catch (simulationError) {
-          const formatted = formatDryRunError(simulationError)
-          if (formatted) revertDetail = formatted
-        }
-        throw new Error(revertDetail)
+      if (!completed && params.name === 'phase4' && isLaunchDeferredAuctionCall(call)) {
+        // Last attempt failed without throwing through loop.
+        throw new Error('phase4 launch retry attempts exhausted')
       }
     } catch (error) {
+      const formatted = formatDryRunError(error)
+      if (
+        params.allowLocalForkPhase4InvariantSkip === true &&
+        params.name === 'phase4' &&
+        isLaunchDeferredAuctionCall(call) &&
+        formatted.toLowerCase().includes(CCA_REQUIRED_RAISE_HINT_SELECTOR)
+      ) {
+        console.warn('[deploy/v2/session/dry-run] phase4_launch_skipped_known_local_fork_invariant', {
+          reason: formatted,
+        })
+        return {
+          phase: {
+            name: params.name,
+            status: 'skipped',
+            callCount: 0,
+            reason: 'known_local_fork_invariant',
+          },
+        }
+      }
       return {
         phase: {
           name: params.name,
@@ -1207,7 +1989,7 @@ async function runDryRunPhase(params: {
           phase: params.name,
           callIndex,
           to,
-          error: formatDryRunError(error),
+          error: formatted,
         },
       }
     }
@@ -1455,6 +2237,74 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
         }
         if (phaseCalls.length === 0) continue
+        if (phaseEntry.name === 'phase2Finalize') {
+          const { phase2FinalizeCalls: alignedFinalizeCalls, rewrote: rewroteFinalizeCoreRefs } =
+            await alignPhase2FinalizeToLiveCoreCode({
+              phase2FinalizeCalls: phaseCalls,
+              getBytecode: (args) => publicClient.getBytecode(args as any),
+              getBlockNumber: async () =>
+                typeof (publicClient as any).getBlockNumber === 'function'
+                  ? await publicClient.getBlockNumber().catch(() => null)
+                  : null,
+              getLogs: (args) =>
+                typeof (publicClient as any).getLogs === 'function'
+                  ? ((publicClient as any).getLogs(args as any) as any)
+                  : Promise.resolve([]),
+            })
+          if (rewroteFinalizeCoreRefs) {
+            console.warn('[deploy/v2/session/dry-run] phase2_finalize_core_refs_rewritten_from_live_code', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          }
+          const { phase2FinalizeCalls: simulationAlignedFinalizeCalls, rewrote: rewroteFinalizeFromSimulation } =
+            await alignPhase2FinalizeFromSimulation({
+              phase2FinalizeCalls: alignedFinalizeCalls,
+              account: smartWallet,
+              simulateCall: (args) => publicClient.call({ ...args, chain: base } as any),
+              getBlockNumber: async () =>
+                typeof (publicClient as any).getBlockNumber === 'function'
+                  ? await publicClient.getBlockNumber().catch(() => null)
+                  : null,
+              getLogs: (args) =>
+                typeof (publicClient as any).getLogs === 'function'
+                  ? ((publicClient as any).getLogs(args as any) as any)
+                  : Promise.resolve([]),
+            })
+          if (rewroteFinalizeFromSimulation) {
+            console.warn('[deploy/v2/session/dry-run] phase2_finalize_rewritten_from_simulation_recovery', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          }
+          phaseCalls = simulationAlignedFinalizeCalls
+        }
+        if (phaseEntry.name === 'phase4') {
+          const { phase4Calls: alignedPhase4Calls, rewrote: rewrotePhase4PendingShare } =
+            await alignPhase4LaunchToPendingAuctionState({
+              phase4Calls: phaseCalls,
+              readContract: (args) => publicClient.readContract(args as any),
+            })
+          if (rewrotePhase4PendingShare) {
+            console.warn('[deploy/v2/session/dry-run] phase4_launch_share_rewritten_to_pending_auction', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          }
+          const { phase4Calls: raiseAlignedPhase4Calls, rewrote: rewrotePhase4RaiseHint } =
+            await alignPhase4RequiredRaiseFromSimulation({
+              phase4Calls: alignedPhase4Calls,
+              account: smartWallet,
+              simulateCall: (args) => publicClient.call({ ...args, chain: base } as any),
+            })
+          if (rewrotePhase4RaiseHint) {
+            console.warn('[deploy/v2/session/dry-run] phase4_launch_required_raise_rewritten_from_revert_hint', {
+              smartWallet: smartWallet.toLowerCase(),
+            })
+          }
+          phaseCalls = raiseAlignedPhase4Calls
+        }
+        const phaseStartBlock =
+          typeof (publicClient as any).getBlockNumber === 'function'
+            ? await publicClient.getBlockNumber().catch(() => null)
+            : null
         const result = await runDryRunPhase({
           name: phaseEntry.name,
           calls: phaseCalls,
@@ -1469,6 +2319,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
           simulateCall: (args) => publicClient.call({ ...args, chain: base } as any),
           estimateGas: (args) => publicClient.estimateGas({ ...args, chain: base } as any),
+          getLogs: (args) =>
+            typeof (publicClient as any).getLogs === 'function'
+              ? ((publicClient as any).getLogs(args as any) as any)
+              : Promise.resolve([]),
+          getBlockNumber: async () =>
+            typeof (publicClient as any).getBlockNumber === 'function'
+              ? await publicClient.getBlockNumber().catch(() => null)
+              : null,
+          allowLocalForkPhase4InvariantSkip: isLocalFork,
         })
         phases.push(result.phase)
         if (result.failure) {
@@ -1479,6 +2338,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             failure: result.failure,
           }
           return res.status(200).json({ success: true, data } satisfies ApiEnvelope<DryRunResponse>)
+        }
+        if (phaseEntry.name === 'phase2Core' && result.phase.status === 'passed' && phase2FinalizeCallsForPlan.length > 0) {
+          const phaseEndBlock =
+            typeof (publicClient as any).getBlockNumber === 'function'
+              ? await publicClient.getBlockNumber().catch(() => null)
+              : null
+          if (phaseStartBlock !== null && phaseEndBlock !== null && phaseEndBlock >= phaseStartBlock) {
+            const { phase2FinalizeCalls: eventAlignedFinalizeCalls, rewrote: rewroteFromCoreEvent } =
+              await alignPhase2FinalizeToCoreDeploymentEvent({
+                phase2CoreCalls: phaseCalls,
+                phase2FinalizeCalls: phase2FinalizeCallsForPlan,
+                getLogs: (args) =>
+                  typeof (publicClient as any).getLogs === 'function'
+                    ? ((publicClient as any).getLogs(args as any) as any)
+                    : Promise.resolve([]),
+                fromBlock: phaseStartBlock,
+                toBlock: phaseEndBlock,
+              })
+            if (rewroteFromCoreEvent) {
+              console.warn('[deploy/v2/session/dry-run] phase2_finalize_rewritten_from_core_event', {
+                smartWallet: smartWallet.toLowerCase(),
+                fromBlock: phaseStartBlock.toString(),
+                toBlock: phaseEndBlock.toString(),
+              })
+              phase2FinalizeCallsForPlan = eventAlignedFinalizeCalls
+              phasePlan[2] = { ...phasePlan[2]!, calls: phase2FinalizeCallsForPlan }
+            }
+          }
         }
       }
 
