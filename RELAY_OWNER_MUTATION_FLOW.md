@@ -228,34 +228,53 @@ absent. The funder-EOA lane MUST pass `recipient: cswLower` explicitly so
 Relay routes the multicall execution back to the CSW rather than to the
 funder.
 
-## Third lane: CSW self-call (Base App native)
+## Removed lane: CSW self-call via direct eth_sendTransaction
 
-Added in PR #579 after re-reading session `248b841e`'s notes:
+**Tried in PR #580. Reverted in PR #583.**
 
-> "Base App's native handler signs locally with the on-device passkey — no
-> popup, no keys.coinbase.com round-trip. This is the only path that works
-> inside the Base App in-app browser (webviews block the popup that
-> wallet_prepareCalls requires)."
+The theory (from session `248b841e` notes): when the connected wallet IS the
+CSW (self-auth), a plain `eth_sendTransaction` where `from === to === CSW`
+and `data === executeWithoutChainIdValidation([...])` would be recognised by
+Base App's native handler, signed locally with the on-device passkey, and
+submitted via its own bundler with no popup.
 
-When the connected wallet IS the CSW (self-auth session), `/remove-owner`
-now takes a third path: a plain `eth_sendTransaction` where `from === to ===
-CSW` and `data === executeWithoutChainIdValidation([...])`. Base App's
-native handler recognises the self-call shape, signs locally with the
-on-device passkey, and submits via its own bundler. The CSW pays its own gas.
+The reality, verified on-chain by `eth_call` simulation on 2026-05-11:
 
-When this works: Base App native signing succeeds, the inner
-`executeWithoutChainIdValidation` payload runs as a UserOp under the hood,
-the owner mutation executes in one on-chain tx, and the CSW's native ETH
-balance is decremented by gas. No Relay, no `wallet_prepareCalls`, no funder.
+```
+eth_call({from: CSW, to: CSW, data: executeWithoutChainIdValidation([…])})
+  → revert 0x82b42900  // selector for Unauthorized()
+```
 
-When this fails (per the same notes): Base App may fall back to an
-"ephemeral session key it generates locally" instead of using the canonical
-passkey, wrapping the SignatureWrapper at the wrong `ownerIndex` and
-reverting with `AA24` inside the bundler. The lane returns the funder tx
-hash either way so Basescan / Tenderly can show the bundler revert.
+The CSW's `executeWithoutChainIdValidation` is `onlyEntryPoint`-gated:
 
-The page picks the lane automatically: self-auth gets CSW self-call,
-external-signer gets the funder-EOA two-step Relay flow.
+```solidity
+function executeWithoutChainIdValidation(bytes[] calldata calls)
+  public payable onlyEntryPoint { … }
+
+modifier onlyEntryPoint() {
+  if (msg.sender != entryPoint()) revert Unauthorized();
+  _;
+}
+```
+
+When the CSW broadcasts a tx to itself, `msg.sender === csw ≠ entryPoint`,
+so the modifier reverts. Base App's gas estimator catches this revert during
+pre-simulation and surfaces it as the misleading "make sure you have enough
+funds" warning (the wallet can't compute a gas estimate for a tx that always
+reverts, so it falls back to a generic insufficient-funds string).
+
+The other `execute` / `executeBatch` methods on CSW are
+`onlyEntryPointOrOwner`-gated, which checks `_isOwner(msg.sender)` — i.e.
+the call must come from a stored owner. The CSW is NOT one of its own owners
+unless explicitly added (verified: owners[0..3] on our reference CSW are a
+passkey + 3 EOAs, none equal to the CSW itself). So `executeBatch` from CSW
+to itself reverts identically.
+
+**The only way to reach any of these methods is via a UserOp through the
+EntryPoint.** That means a bundler. Which means `wallet_prepareCalls` (blocked
+in-app) or the funder-EOA Relay lane.
+
+Do not re-attempt this lane.
 
 ## Open questions for future work
 
