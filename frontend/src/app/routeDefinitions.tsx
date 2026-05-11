@@ -4,6 +4,7 @@ import { Route } from 'react-router-dom'
 import {
   AccountsPage,
   AddOwnerPage,
+  RemoveOwnerPage,
   AdminAgentSetup,
   AdminCreatorAccess,
   AdminCreatorStrategyProvisioning,
@@ -110,6 +111,19 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     element: (
       <SmartWalletRoute>
         <AddOwnerPage />
+      </SmartWalletRoute>
+    ),
+  },
+  // `/remove-owner` is the sibling surface for removing an owner from the
+  // canonical CSW. Routes through _submitOwnerViaSelfBuiltUserOp directly
+  // (bypassing sendPreparedOwnerTx) so the submission goes through Relay's
+  // /execute/call endpoint. Surfaces live on-chain owner-slot diagnostics
+  // so users can see whether the signing path will validate before signing.
+  {
+    path: '/remove-owner',
+    element: (
+      <SmartWalletRoute>
+        <RemoveOwnerPage />
       </SmartWalletRoute>
     ),
   },

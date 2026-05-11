@@ -1,0 +1,753 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { useWalletClient } from 'wagmi'
+import { base } from 'viem/chains'
+import { createPublicClient, formatEther, http, type Hex } from 'viem'
+
+import { PageMeta } from '@/components/seo/PageMeta'
+import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
+import { apiFetch } from '@/lib/api/apiBase'
+import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
+
+// Relay Protocol's depository on Base. Reference tx where this CSW deposited:
+// https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
+// (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
+const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
+
+type RemoveOwnerPreview = {
+  txRequest: {
+    chainId: 8453
+    to: `0x${string}`
+    data: `0x${string}`
+    value: '0x0'
+  }
+  preflight: {
+    selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
+    selectedBy: 'heuristic' | 'simulation'
+    targetOwnerIndex: number
+    targetOwnerBytes: `0x${string}`
+    targetOwnerAddress: `0x${string}` | null
+    highestPopulatedOwnerIndex: number
+    ownerCount: number
+    nextOwnerIndex: number
+    simulation: {
+      ok: boolean
+      error: string | null
+      removeOwnerAtIndex: { ok: boolean; error: string | null }
+      removeLastOwner: { ok: boolean; error: string | null }
+    }
+  }
+}
+
+type OnchainOwnerRow = {
+  index: number
+  ownerBytes: `0x${string}`
+  ownerAddress: `0x${string}` | null
+  type: 'EOA' | 'passkey' | 'empty' | 'unknown'
+}
+
+type LiveDiagnostics = {
+  status: 'loading' | 'ready' | 'error'
+  ownerCount: number | null
+  nextOwnerIndex: number | null
+  owners: OnchainOwnerRow[]
+  cswEthBalance: bigint | null
+  relayDepositoryEthBalance: bigint | null
+  error: string | null
+}
+
+const INITIAL_DIAGNOSTICS: LiveDiagnostics = {
+  status: 'loading',
+  ownerCount: null,
+  nextOwnerIndex: null,
+  owners: [],
+  cswEthBalance: null,
+  relayDepositoryEthBalance: null,
+  error: null,
+}
+
+const CSW_OWNER_ABI = [
+  {
+    type: 'function',
+    name: 'ownerCount',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'nextOwnerIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'ownerAtIndex',
+    stateMutability: 'view',
+    inputs: [{ type: 'uint256' }],
+    outputs: [{ type: 'bytes' }],
+  },
+] as const
+
+function classifyOwnerBytes(ownerBytes: `0x${string}`): OnchainOwnerRow['type'] {
+  const lenBytes = (ownerBytes.length - 2) / 2
+  if (lenBytes === 0) return 'empty'
+  if (lenBytes === 32) return 'EOA'
+  if (lenBytes === 64) return 'passkey'
+  return 'unknown'
+}
+
+function decodeOwnerAddress(ownerBytes: `0x${string}`): `0x${string}` | null {
+  const lenBytes = (ownerBytes.length - 2) / 2
+  if (lenBytes !== 32) return null
+  // 32-byte slot = abi-encoded address (left-padded). Address is last 20 bytes.
+  const tail = ownerBytes.slice(-40)
+  if (!/^[0-9a-fA-F]{40}$/.test(tail)) return null
+  return (`0x${tail}` as `0x${string}`)
+}
+
+/**
+ * `/remove-owner` — Relay-sponsored owner-remove lane for the canonical CSW.
+ *
+ * Calls `_submitOwnerViaSelfBuiltUserOp` (which submits via
+ * `/api/relay/execute` → Relay's `/execute/call` endpoint) with a
+ * preview-remove-owner-produced `removeOwnerAtIndex` or `removeLastOwner`
+ * inner call.
+ *
+ * Live on-chain diagnostics are surfaced before the user submits so they
+ * can see whether the lane will actually validate. Specifically:
+ *
+ *   - Owner slot map: index, bytes length, decoded address, slot empty?
+ *   - CSW ETH balance on Base (for any direct funding lane the user might
+ *     try elsewhere)
+ *   - RelayDepository ETH balance attributed to this CSW (for visibility;
+ *     Relay's solver may require a pre-deposit before executing handleOps)
+ *
+ * Reference txs that defined this lane:
+ *   - https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
+ *     (CSW UserOp executeBatch → RelayDepository.depositNative; pre-fund step)
+ *   - https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
+ *     (Relay solver → RelayRouter.multicall → EntryPoint.handleOps → CSW
+ *      addOwnerAddress; the owner-mutation half of the flow)
+ *
+ * If the deposit step is needed and you don't have a depository balance,
+ * this page does NOT fund it for you. Fund Relay separately (or via a
+ * future Step 1 button) and retry.
+ */
+export function RemoveOwnerPage() {
+  const controller = useAccountSetupController({ zoraReturnPath: '/remove-owner' })
+  const {
+    canonicalCswAddress,
+    loading,
+    privyAuthed,
+    login,
+    ownerSignerAddress,
+  } = controller
+  const { data: walletClient } = useWalletClient()
+
+  const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
+  const externalUrl = useMemo(() => externalBrowserUrlFor('/remove-owner'), [])
+
+  const [diagnostics, setDiagnostics] = useState<LiveDiagnostics>(INITIAL_DIAGNOSTICS)
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
+  const [preview, setPreview] = useState<RemoveOwnerPreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  // Monotonically-increasing request id. Each call to fetchPreview captures
+  // the id assigned to it; responses ignore themselves if a newer request has
+  // since started. Protects against an earlier (slow) response overwriting a
+  // later (faster) one and submitting the wrong removal target.
+  const previewRequestIdRef = useRef(0)
+  const [busy, setBusy] = useState(false)
+  const [pageError, setPageError] = useState<string | null>(null)
+  const [pageNotice, setPageNotice] = useState<string | null>(null)
+  const [txHash, setTxHash] = useState<string | null>(null)
+  const [eventLog, setEventLog] = useState<string[]>([])
+
+  const publicClient = useMemo(
+    () => createPublicClient({ chain: base, transport: http() }),
+    [],
+  )
+
+  // Live on-chain diagnostics: refresh whenever the canonical CSW changes.
+  useEffect(() => {
+    let cancelled = false
+    if (!canonicalCswAddress) {
+      setDiagnostics(INITIAL_DIAGNOSTICS)
+      return () => {
+        cancelled = true
+      }
+    }
+    setDiagnostics({ ...INITIAL_DIAGNOSTICS, status: 'loading' })
+    void (async () => {
+      try {
+        const cswAddress = canonicalCswAddress as `0x${string}`
+        const [ownerCountRaw, nextOwnerIndexRaw, cswBalance, depositoryBalance] = await Promise.all([
+          publicClient.readContract({
+            address: cswAddress,
+            abi: CSW_OWNER_ABI,
+            functionName: 'ownerCount',
+          }),
+          publicClient.readContract({
+            address: cswAddress,
+            abi: CSW_OWNER_ABI,
+            functionName: 'nextOwnerIndex',
+          }),
+          publicClient.getBalance({ address: cswAddress }),
+          publicClient.getBalance({ address: RELAY_DEPOSITORY_BASE }),
+        ])
+        const nextOwnerIndex = Number(nextOwnerIndexRaw)
+        // CSW owner indices are monotonic and can grow past 16 after add/remove
+        // churn. Use the full nextOwnerIndex so all populated slots are visible.
+        // A SCAN_HARD_CEILING guards against pathological / corrupted state from
+        // ever loading thousands of slots; well above any realistic CSW (the
+        // public Coinbase Smart Wallet implementation has never been observed
+        // beyond two-digit owner indices).
+        const SCAN_HARD_CEILING = 256
+        const rawScanLimit = Math.max(nextOwnerIndex, Number(ownerCountRaw))
+        const scanLimit = Math.min(rawScanLimit, SCAN_HARD_CEILING)
+        const owners: OnchainOwnerRow[] = []
+        for (let idx = 0; idx < scanLimit; idx += 1) {
+          try {
+            const ownerBytes = (await publicClient.readContract({
+              address: cswAddress,
+              abi: CSW_OWNER_ABI,
+              functionName: 'ownerAtIndex',
+              args: [BigInt(idx)],
+            })) as `0x${string}`
+            const type = classifyOwnerBytes(ownerBytes)
+            const ownerAddress = decodeOwnerAddress(ownerBytes)
+            owners.push({ index: idx, ownerBytes, ownerAddress, type })
+          } catch (err) {
+            owners.push({
+              index: idx,
+              ownerBytes: '0x',
+              ownerAddress: null,
+              type: 'empty',
+            })
+          }
+        }
+        if (cancelled) return
+        setDiagnostics({
+          status: 'ready',
+          ownerCount: Number(ownerCountRaw),
+          nextOwnerIndex,
+          owners,
+          cswEthBalance: cswBalance,
+          // Note: this is the RelayDepository's aggregate ETH balance, not
+          // the per-depositor accounting. Per-depositor balance requires a
+          // depository-side view we don't have a stable ABI for yet.
+          relayDepositoryEthBalance: depositoryBalance,
+          error: null,
+        })
+      } catch (err: any) {
+        if (cancelled) return
+        setDiagnostics({
+          ...INITIAL_DIAGNOSTICS,
+          status: 'error',
+          error: typeof err?.message === 'string' ? err.message : 'Failed to load on-chain diagnostics.',
+        })
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [canonicalCswAddress, publicClient])
+
+  const isSelfAuthSession = useMemo(() => {
+    if (!canonicalCswAddress || !ownerSignerAddress) return false
+    return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, ownerSignerAddress])
+
+  const appendEvent = (row: string) => {
+    setEventLog((prev) => [...prev, row].slice(-40))
+  }
+
+  const fetchPreview = async (index: number) => {
+    if (!canonicalCswAddress || !ownerSignerAddress) {
+      setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
+      return
+    }
+    const requestId = ++previewRequestIdRef.current
+    setPreviewLoading(true)
+    setPageError(null)
+    setPageNotice(null)
+    setPreview(null)
+    setTxHash(null)
+    try {
+      const res = await apiFetch('/api/onboarding/preview-remove-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cswAddress: canonicalCswAddress,
+          connectedAddress: ownerSignerAddress,
+          ownerIndex: index,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as {
+        success?: boolean
+        error?: string
+        data?: RemoveOwnerPreview
+      } | null
+      // Drop the response if a newer fetchPreview has started in the meantime
+      // so we never display or submit a stale payload for the wrong owner.
+      if (requestId !== previewRequestIdRef.current) return
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(json?.error ?? `preview-remove-owner failed (${res.status})`)
+      }
+      setPreview(json.data)
+    } catch (err: any) {
+      if (requestId !== previewRequestIdRef.current) return
+      setPageError(typeof err?.message === 'string' ? err.message : 'Failed to build remove-owner preview.')
+    } finally {
+      if (requestId === previewRequestIdRef.current) {
+        setPreviewLoading(false)
+      }
+    }
+  }
+
+  const handleSelectIndex = (index: number) => {
+    setSelectedIndex(index)
+    void fetchPreview(index)
+  }
+
+  const handleRemove = async () => {
+    if (!preview || !canonicalCswAddress || !walletClient) {
+      setPageError('Connect your wallet and select an owner index first.')
+      return
+    }
+    // Belt-and-suspenders: refuse to submit if the displayed preview doesn't
+    // match the currently-selected slot. With the fetchPreview request-id
+    // guard this should be impossible, but if React batches a stale render
+    // we'd rather abort than execute the wrong removal.
+    if (selectedIndex !== preview.preflight.targetOwnerIndex) {
+      setPageError(
+        `Preview is for index ${preview.preflight.targetOwnerIndex} but selection is ${selectedIndex ?? 'none'}. Re-click the owner row and retry.`,
+      )
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+      return
+    }
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    setTxHash(null)
+    setEventLog([])
+    appendEvent('lane:relay_self_built_userop_handleOps')
+    appendEvent(`target:function=${preview.preflight.selectedFunction}`)
+    appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
+    appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
+    appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
+    try {
+      const result = await _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData: preview.txRequest.data as Hex,
+        // Don't force WebAuthn: Coinbase wallet self-auth may return either a
+        // passkey signature (owner[0]) or a session-key 65-byte ECDSA
+        // signature (owner index varies per wallet client-state). Accept
+        // whichever the wallet returns and rely on on-chain validation.
+        requireWebAuthnOwnerSignature: false,
+        sessionKind: isSelfAuthSession ? 'self_auth' : 'external_signer',
+        quoteRelayBeforeSubmit: true,
+        onTelemetry: (event) => {
+          try {
+            const detail =
+              typeof event.detail === 'string'
+                ? event.detail
+                : JSON.stringify(event.detail)
+            appendEvent(`${event.step}: ${detail.slice(0, 240)}`)
+          } catch {
+            appendEvent(`${event.step}: <unloggable>`)
+          }
+        },
+      })
+      if (!result.txHash) {
+        throw new Error('Relay /execute did not return a transaction hash for the owner-remove UserOp.')
+      }
+      setTxHash(result.txHash)
+      setPageNotice(
+        `Removed owner at index ${preview.preflight.targetOwnerIndex} via ${preview.preflight.selectedFunction}.`,
+      )
+      setPreview(null)
+      setSelectedIndex(null)
+    } catch (err: any) {
+      setPageError(typeof err?.message === 'string' ? err.message : 'Failed to remove owner.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-black text-white">
+      <PageMeta
+        title="Remove owner"
+        description="Remove an owner from your canonical Coinbase Smart Wallet via the Relay-sponsored UserOp lane, with live on-chain diagnostics."
+        canonicalPath="/remove-owner"
+      />
+      <div className="mx-auto w-full max-w-2xl px-6 py-16 space-y-6">
+        <div className="space-y-2">
+          <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
+            Account setup
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight">Remove owner</h1>
+          <p className="text-sm text-zinc-400">
+            Remove an owner from your canonical Coinbase Smart Wallet via the
+            Relay-sponsored UserOp lane (
+            <code className="font-mono text-zinc-300">/api/relay/execute</code> →
+            Relay&apos;s <code className="font-mono text-zinc-300">/execute/call</code> →
+            <code className="font-mono text-zinc-300"> EntryPoint.handleOps</code>).
+            Live on-chain diagnostics below show which owner slots are populated and
+            whether Relay&apos;s depository has a balance for your CSW so you can
+            anticipate whether validation will pass before signing.
+          </p>
+        </div>
+
+        {!privyAuthed ? (
+          <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
+            <p className="text-sm text-zinc-300">
+              Sign in to manage owners on your wallet.
+            </p>
+            <button
+              type="button"
+              onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)}
+              className="btn-accent btn-no-icon inline-flex"
+            >
+              Sign in / Continue
+            </button>
+          </div>
+        ) : null}
+
+        {privyAuthed && loading ? (
+          <div className="rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
+            Loading your account…
+          </div>
+        ) : null}
+
+        {inAppEnv?.isAnyWalletInApp ? (
+          <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6 space-y-4 text-amber-100">
+            <div className="space-y-1">
+              <div className="text-[11px] uppercase tracking-[0.2em] text-amber-300/80">
+                Open in your browser
+              </div>
+              <div className="text-sm font-semibold">
+                {inAppEnv.isCoinbaseInApp
+                  ? "Coinbase Wallet's in-app browser can block the passkey popup"
+                  : 'This in-app browser can block the passkey popup'}
+              </div>
+            </div>
+            <p className="text-xs leading-relaxed text-amber-100/85">
+              Removing an owner requires the same passkey or EOA owner signature
+              that owner installs use. In-app browsers can block or replace that
+              signing context.
+            </p>
+            <a
+              href={externalUrl}
+              target="_blank"
+              rel="noopener noreferrer external"
+              className="inline-flex items-center justify-center rounded-xl bg-amber-300 px-4 py-2 text-xs font-semibold text-black hover:bg-amber-200"
+            >
+              Open 4626.fun/remove-owner in browser
+            </a>
+          </div>
+        ) : null}
+
+        {privyAuthed && !loading ? (
+          <div className="space-y-4">
+            {!canonicalCswAddress ? (
+              <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
+                <div>No canonical Coinbase Smart Wallet is linked yet.</div>
+                <div className="mt-2 text-xs text-zinc-500">
+                  Connect your CSW first — head to{' '}
+                  <Link to="/accounts" className="underline underline-offset-2">
+                    /accounts
+                  </Link>
+                  .
+                </div>
+              </div>
+            ) : (
+              <>
+                {/* Identity + balances */}
+                <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
+                  <dl className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                      <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Canonical CSW
+                      </dt>
+                      <dd className="mt-1 break-all font-mono text-zinc-300">
+                        {canonicalCswAddress}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                      <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Connected signer
+                      </dt>
+                      <dd className="mt-1 break-all font-mono text-zinc-300">
+                        {ownerSignerAddress ?? 'not connected'}
+                        {isSelfAuthSession ? (
+                          <span className="ml-2 text-[10px] text-emerald-300">
+                            self-auth
+                          </span>
+                        ) : null}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                      <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        CSW ETH balance
+                      </dt>
+                      <dd className="mt-1 font-mono text-zinc-300">
+                        {diagnostics.cswEthBalance == null
+                          ? '—'
+                          : `${formatEther(diagnostics.cswEthBalance)} ETH`}
+                      </dd>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+                      <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Relay depository (aggregate)
+                      </dt>
+                      <dd className="mt-1 font-mono text-zinc-300">
+                        {diagnostics.relayDepositoryEthBalance == null
+                          ? '—'
+                          : `${formatEther(diagnostics.relayDepositoryEthBalance)} ETH`}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {/* Live owner slot diagnostics */}
+                <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                      On-chain owner slots
+                    </div>
+                    {diagnostics.status === 'loading' ? (
+                      <div className="text-[10px] text-zinc-500">loading…</div>
+                    ) : diagnostics.status === 'error' ? (
+                      <div className="text-[10px] text-rose-300">error</div>
+                    ) : (
+                      <div className="text-[10px] text-zinc-500">
+                        count={diagnostics.ownerCount ?? '—'} · next=
+                        {diagnostics.nextOwnerIndex ?? '—'}
+                      </div>
+                    )}
+                  </div>
+
+                  {diagnostics.status === 'error' ? (
+                    <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100">
+                      {diagnostics.error}
+                    </div>
+                  ) : null}
+
+                  {diagnostics.owners.length > 0 ? (
+                    <ul className="space-y-1">
+                      {diagnostics.owners.map((owner) => {
+                        const isSelected = selectedIndex === owner.index
+                        const isEmpty = owner.type === 'empty'
+                        const label =
+                          owner.ownerAddress ??
+                          (owner.type === 'passkey'
+                            ? `passkey ${owner.ownerBytes.slice(0, 30)}…`
+                            : isEmpty
+                              ? '(empty slot)'
+                              : owner.ownerBytes.slice(0, 36) + '…')
+                        return (
+                          <li key={owner.index}>
+                            <button
+                              type="button"
+                              disabled={isEmpty}
+                              onClick={() => !isEmpty && handleSelectIndex(owner.index)}
+                              className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-mono ${
+                                isEmpty
+                                  ? 'border-white/5 bg-black/20 text-zinc-600 cursor-not-allowed'
+                                  : isSelected
+                                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                    : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/25'
+                              }`}
+                            >
+                              <span>
+                                <span className="text-[10px] mr-2">[{owner.index}]</span>
+                                <span>{label}</span>
+                              </span>
+                              <span className="text-[10px] text-zinc-500">
+                                {owner.type}
+                              </span>
+                            </button>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  ) : diagnostics.status === 'ready' ? (
+                    <div className="text-xs text-zinc-500">No owner slots found.</div>
+                  ) : null}
+
+                  <p className="text-[11px] leading-relaxed text-zinc-500">
+                    Coinbase Wallet&apos;s self-auth <code className="font-mono">
+                    personal_sign</code> returns a signature wrapped at a specific
+                    owner index based on its client-side session state. If that
+                    index points at an empty slot above, the UserOp will fail
+                    on-chain validation regardless of which lane submits it.
+                  </p>
+                </div>
+
+                {/* Preview + submit */}
+                <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
+                  {previewLoading ? (
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-400">
+                      Building remove preview…
+                    </div>
+                  ) : null}
+
+                  {preview ? (
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Preview
+                      </div>
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                            Selected function
+                          </dt>
+                          <dd className="mt-0.5 font-mono text-zinc-200">
+                            {preview.preflight.selectedFunction}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                            Chosen by
+                          </dt>
+                          <dd className="mt-0.5 font-mono text-zinc-200">
+                            {preview.preflight.selectedBy ?? 'heuristic'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                            Target index
+                          </dt>
+                          <dd className="mt-0.5 font-mono text-zinc-200">
+                            {preview.preflight.targetOwnerIndex}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                            Simulation
+                          </dt>
+                          <dd className="mt-0.5 font-mono">
+                            {preview.preflight.simulation.ok ? (
+                              <span className="text-emerald-300">ok</span>
+                            ) : (
+                              <span className="text-rose-300">
+                                reverted:{' '}
+                                {preview.preflight.simulation.error ?? 'unknown'}
+                              </span>
+                            )}
+                          </dd>
+                        </div>
+                      </dl>
+                      {preview.preflight.targetOwnerAddress ? (
+                        <div className="text-[11px] text-zinc-400 break-all">
+                          Removing:{' '}
+                          <span className="font-mono text-zinc-300">
+                            {preview.preflight.targetOwnerAddress}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        !preview ||
+                        previewLoading ||
+                        (inAppEnv?.isAnyWalletInApp ?? false) ||
+                        (preview ? !preview.preflight.simulation.ok : false)
+                      }
+                      onClick={() => void handleRemove()}
+                      className="btn-accent btn-no-icon inline-flex"
+                    >
+                      {busy
+                        ? 'Removing via Relay UserOp…'
+                        : inAppEnv?.isAnyWalletInApp
+                          ? 'Open in browser to remove'
+                          : !preview
+                            ? 'Select an owner above first'
+                            : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
+                    </button>
+                    <p className="text-[11px] leading-relaxed text-zinc-500">
+                      Signs an{' '}
+                      <code className="font-mono text-zinc-400">
+                        executeWithoutChainIdValidation
+                      </code>{' '}
+                      UserOp, wraps in{' '}
+                      <code className="font-mono text-zinc-400">
+                        EntryPoint.handleOps
+                      </code>
+                      , and submits via Relay&apos;s /execute/call so Relay&apos;s
+                      solver pays gas.
+                    </p>
+                  </div>
+
+                  {txHash ? (
+                    <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100 break-all">
+                      Submitted:{' '}
+                      <a
+                        href={`https://basescan.org/tx/${txHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono underline"
+                      >
+                        {txHash}
+                      </a>
+                    </div>
+                  ) : null}
+
+                  {pageNotice ? (
+                    <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                      {pageNotice}
+                    </div>
+                  ) : null}
+
+                  {pageError ? (
+                    <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">
+                      {pageError}
+                    </div>
+                  ) : null}
+
+                  {eventLog.length > 0 ? (
+                    <details className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300">
+                      <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Lane events ({eventLog.length})
+                      </summary>
+                      <div className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px]">
+                        {eventLog.join('\n')}
+                      </div>
+                    </details>
+                  ) : null}
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
+
+        <div className="text-[11px] text-zinc-500">
+          Looking to install a signing key instead?{' '}
+          <Link to="/add-owner" className="underline underline-offset-2">
+            /add-owner
+          </Link>
+          .
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default RemoveOwnerPage
