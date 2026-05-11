@@ -41,6 +41,8 @@
  *     the failure via Basescan / Tenderly if it doesn't go through.
  */
 
+import { encodeExecuteWithoutChainIdValidation } from './onboardingWalletReplayable'
+
 const EXECUTE_WITHOUT_CHAIN_ID_VALIDATION_SELECTOR = '0x2c2abd1e'
 
 export type CswSelfCallTelemetry = {
@@ -63,14 +65,24 @@ export type SubmitViaCswSelfCallParams = {
    */
   csw: `0x${string}`
   /**
-   * The fully-wrapped inner call: typically
-   *   executeWithoutChainIdValidation([removeOwnerAtIndex(idx, ownerBytes)])
-   *   executeWithoutChainIdValidation([addOwnerAddress(eoa)])
-   *   etc.
-   * The first 4 bytes MUST be the executeWithoutChainIdValidation selector
-   * (0x2c2abd1e) so the CSW uses the replayable validation path; otherwise
-   * regular validateUserOp would be invoked, which embeds the chainId and
-   * would force a re-sign per chain.
+   * The inner call. Two shapes are accepted:
+   *
+   *   1. RAW inner action calldata (e.g. `removeOwnerAtIndex(idx, ownerBytes)`
+   *      or `addOwnerAddress(eoa)`). The helper wraps it in
+   *      `executeWithoutChainIdValidation([...])` for you.
+   *
+   *   2. Pre-wrapped `executeWithoutChainIdValidation([...])` calldata
+   *      (selector 0x2c2abd1e). The helper passes it through unchanged.
+   *
+   * Either way, the final transaction data uses the replayable validation
+   * path so the signature isn't chain-id-bound (allowing the same signed
+   * UserOp to be replayed across chains if needed).
+   *
+   * Why we accept both: the `/api/onboarding/preview-{add,remove}-owner`
+   * endpoints return the RAW inner action calldata, but other call sites
+   * (e.g. `_submitOwnerViaSelfBuiltUserOp` internals) already wrap.
+   * Accepting both prevents a class of bugs where the caller forgets to
+   * wrap and the CSW falls back to chain-id-bound validation.
    */
   innerCallData: `0x${string}`
   onTelemetry?: (event: CswSelfCallTelemetry) => void
@@ -87,19 +99,23 @@ export async function _submitOwnerViaCswSelfCall(params: SubmitViaCswSelfCallPar
     }
   }
 
-  // Sanity check: the inner calldata must use executeWithoutChainIdValidation.
-  // If it doesn't, Base App's bundler will fall back to the chain-id-bound
-  // validateUserOp path which signs a *different* hash than what
-  // /add-owner / /remove-owner have configured the CSW to recognise.
-  if (
-    !params.innerCallData ||
-    !params.innerCallData.startsWith(EXECUTE_WITHOUT_CHAIN_ID_VALIDATION_SELECTOR)
-  ) {
+  if (!params.innerCallData || !params.innerCallData.startsWith('0x')) {
     throw new Error(
-      `Inner calldata must start with the executeWithoutChainIdValidation selector ` +
-        `${EXECUTE_WITHOUT_CHAIN_ID_VALIDATION_SELECTOR}, got ${params.innerCallData?.slice(0, 10) ?? '(empty)'}.`,
+      `innerCallData must be 0x-prefixed hex, got ${params.innerCallData?.slice(0, 16) ?? '(empty)'}.`,
     )
   }
+
+  // Accept both raw inner action calldata (e.g. removeOwnerAtIndex(...)) and
+  // pre-wrapped executeWithoutChainIdValidation calldata. The page's preview
+  // endpoint returns the raw form; some library call sites pre-wrap. Either
+  // way the final transaction data MUST go through the replayable validation
+  // path so the signature isn't chain-id-bound.
+  const isAlreadyWrapped = params.innerCallData.startsWith(
+    EXECUTE_WITHOUT_CHAIN_ID_VALIDATION_SELECTOR,
+  )
+  const wrappedData = isAlreadyWrapped
+    ? params.innerCallData
+    : encodeExecuteWithoutChainIdValidation(params.innerCallData)
 
   // Confirm the connected wallet is actually the CSW. If `eth_accounts`
   // returns something else we'd be signing from the wrong address and Base
@@ -119,8 +135,11 @@ export async function _submitOwnerViaCswSelfCall(params: SubmitViaCswSelfCallPar
       csw: cswLower,
       connectedAccounts: accounts.map((a) => a.toLowerCase()),
       accountMatches,
-      innerCallSelector: params.innerCallData.slice(0, 10),
-      innerCallLengthBytes: (params.innerCallData.length - 2) / 2,
+      innerCallSelectorIn: params.innerCallData.slice(0, 10),
+      innerCallLengthBytesIn: (params.innerCallData.length - 2) / 2,
+      wrappedAlready: isAlreadyWrapped,
+      wrappedDataSelector: wrappedData.slice(0, 10),
+      wrappedDataLengthBytes: (wrappedData.length - 2) / 2,
     },
   })
 
@@ -141,7 +160,7 @@ export async function _submitOwnerViaCswSelfCall(params: SubmitViaCswSelfCallPar
   const txParams = {
     from: params.csw,
     to: params.csw,
-    data: params.innerCallData,
+    data: wrappedData,
     value: '0x0',
   }
 
@@ -150,8 +169,8 @@ export async function _submitOwnerViaCswSelfCall(params: SubmitViaCswSelfCallPar
     detail: {
       from: params.csw,
       to: params.csw,
-      data: params.innerCallData.slice(0, 30) + '\u2026',
-      dataLengthBytes: (params.innerCallData.length - 2) / 2,
+      data: wrappedData.slice(0, 30) + '…',
+      dataLengthBytes: (wrappedData.length - 2) / 2,
     },
   })
 
