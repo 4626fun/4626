@@ -853,13 +853,37 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       parsedBody = rawText ? JSON.parse(rawText) : null
     } catch {}
     const errMessage = await resolveApiErrorMessage(fetchResult, 'Relay /execute proxy failed')
+    // Extract the deepest revert/error data so the AA error code surfaces in
+    // the lane event log (Relay nests it under data.tx, data.message, etc.).
+    let revertReason: string | null = null
+    let revertData: string | null = null
+    let relayTx: unknown = null
+    try {
+      const root = (parsedBody ?? {}) as Record<string, unknown>
+      const data = (root.data ?? {}) as Record<string, unknown>
+      const tx = (data.tx ?? {}) as Record<string, unknown>
+      relayTx = data.tx ?? null
+      revertReason =
+        (typeof data.message === 'string' && data.message) ||
+        (typeof tx.message === 'string' && (tx.message as string)) ||
+        (typeof root.error === 'string' && (root.error as string)) ||
+        null
+      revertData =
+        (typeof tx.data === 'string' && (tx.data as string)) ||
+        (typeof tx.revertData === 'string' && (tx.revertData as string)) ||
+        (typeof tx.error === 'string' && (tx.error as string)) ||
+        null
+    } catch {}
     emit({
       step: 'error',
       detail: {
         stage: 'submit_relay',
         status: fetchResult.status,
         message: errMessage,
-        rawBodyFirst500: rawText.slice(0, 500),
+        revertReason,
+        revertData,
+        relayTx,
+        rawBodyFirst2000: rawText.slice(0, 2000),
         rawBodyTotalLen: rawText.length,
         parsedBody,
       },

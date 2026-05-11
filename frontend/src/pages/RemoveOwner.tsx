@@ -169,6 +169,12 @@ export function RemoveOwnerPage() {
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
+  const [lastErrorDetail, setLastErrorDetail] = useState<{
+    revertReason: string | null
+    revertData: string | null
+    relayTx: unknown
+    rawBody: string | null
+  } | null>(null)
 
   // Use the wagmi-configured public client so we hit the project's own Base
   // RPC (with multicall batching and any auth tokens) rather than viem's
@@ -298,6 +304,7 @@ export function RemoveOwnerPage() {
     const requestId = ++previewRequestIdRef.current
     setPreviewLoading(true)
     setPageError(null)
+    setLastErrorDetail(null)
     setPageNotice(null)
     setPreview(null)
     setTxHash(null)
@@ -362,6 +369,7 @@ export function RemoveOwnerPage() {
     }
     setBusy(true)
     setPageError(null)
+    setLastErrorDetail(null)
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
@@ -389,7 +397,20 @@ export function RemoveOwnerPage() {
               typeof event.detail === 'string'
                 ? event.detail
                 : JSON.stringify(event.detail)
-            appendEvent(`${event.step}: ${detail.slice(0, 240)}`)
+            // For `error` events keep the full body so the AA error code
+            // survives in the visible event log. For everything else keep the
+            // 240-char preview to stay readable on mobile.
+            const cap = event.step === 'error' ? 4000 : 240
+            appendEvent(`${event.step}: ${detail.slice(0, cap)}`)
+            if (event.step === 'error' && event.detail && typeof event.detail === 'object') {
+              const d = event.detail as Record<string, unknown>
+              setLastErrorDetail({
+                revertReason: (d.revertReason as string | null) ?? null,
+                revertData: (d.revertData as string | null) ?? null,
+                relayTx: d.relayTx ?? null,
+                rawBody: (d.rawBodyFirst2000 as string | null) ?? null,
+              })
+            }
           } catch {
             appendEvent(`${event.step}: <unloggable>`)
           }
@@ -767,6 +788,42 @@ export function RemoveOwnerPage() {
                   {pageError ? (
                     <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">
                       {pageError}
+                    </div>
+                  ) : null}
+
+                  {lastErrorDetail ? (
+                    <div className="rounded-xl border border-rose-400/25 bg-rose-500/5 p-3 text-[11px] text-rose-100 space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-rose-200/70">
+                        Relay revert detail
+                      </div>
+                      {lastErrorDetail.revertReason ? (
+                        <div>
+                          <div className="text-[10px] text-rose-200/60">reason</div>
+                          <div className="font-mono break-all">{lastErrorDetail.revertReason}</div>
+                        </div>
+                      ) : null}
+                      {lastErrorDetail.revertData ? (
+                        <div>
+                          <div className="text-[10px] text-rose-200/60">revert data (first 4 bytes = AA selector)</div>
+                          <div className="font-mono break-all">{lastErrorDetail.revertData}</div>
+                        </div>
+                      ) : null}
+                      {lastErrorDetail.relayTx ? (
+                        <details>
+                          <summary className="cursor-pointer text-[10px] text-rose-200/60">relay tx blob</summary>
+                          <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[10px]">
+{JSON.stringify(lastErrorDetail.relayTx, null, 2)}
+                          </pre>
+                        </details>
+                      ) : null}
+                      {lastErrorDetail.rawBody ? (
+                        <details>
+                          <summary className="cursor-pointer text-[10px] text-rose-200/60">raw response (first 2k chars)</summary>
+                          <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[10px]">
+{lastErrorDetail.rawBody}
+                          </pre>
+                        </details>
+                      ) : null}
                     </div>
                   ) : null}
 
