@@ -8,7 +8,8 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { apiFetch } from '@/lib/api/apiBase'
-import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
+import { _submitOwnerViaRelayQuotedPreparedCalls } from '@/lib/wallet/relayQuotedPreparedCalls'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
@@ -393,65 +394,66 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:relay_self_built_userop_handleOps')
+    appendEvent('lane:relay_quoted_prepared_calls')
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
+    appendEvent(`signing:wallet_prepareCalls`)
+    void requirePasskey // The new lane delegates signing to wallet_prepareCalls,
+    // which natively prompts the passkey when needed; the legacy
+    // requireWebAuthnOwnerSignature flag does not apply here.
     try {
-      const result = await _submitOwnerViaSelfBuiltUserOp({
+      const paymasterEnv = (import.meta.env as Record<string, string | undefined>)
+        .VITE_CDP_PAYMASTER_URL
+      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      const result = await _submitOwnerViaRelayQuotedPreparedCalls({
         walletRequest: async (args) => await request(args),
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
-        innerCallData: preview.txRequest.data as Hex,
-        // Force WebAuthn passkey signing by default (owner[0]). Self-auth
-        // session-key ECDSA returns signatures from rotated keys that are no
-        // longer installed on the CSW, causing AA24 inside Relay's solver.
-        // The user can opt out via the toggle below (sets requirePasskey=false).
-        requireWebAuthnOwnerSignature: requirePasskey,
+        innerTx: {
+          to: preview.txRequest.to,
+          data: preview.txRequest.data as Hex,
+          value: preview.txRequest.value,
+        },
+        paymasterUrl,
+        approvalRunId: `remove-owner-${Date.now()}`,
+        signerAddress: ownerSignerAddress ?? null,
         sessionKind: isSelfAuthSession ? 'self_auth' : 'external_signer',
-        quoteRelayBeforeSubmit: true,
         onTelemetry: (event) => {
           try {
             const detail =
               typeof event.detail === 'string'
                 ? event.detail
                 : JSON.stringify(event.detail)
-            // For `error` events keep the full body so the AA error code
-            // survives in the visible event log. For everything else keep the
-            // 240-char preview to stay readable on mobile.
-            const cap = event.step === 'error' ? 4000 : 240
+            const cap = event.step.includes('error') ? 4000 : 240
             appendEvent(`${event.step}: ${detail.slice(0, cap)}`)
-            if (event.step === 'error' && event.detail && typeof event.detail === 'object') {
+            if (event.step === 'quote_error' && event.detail && typeof event.detail === 'object') {
               const d = event.detail as Record<string, unknown>
               setLastErrorDetail({
-                revertReason: (d.revertReason as string | null) ?? null,
-                revertData: (d.revertData as string | null) ?? null,
-                relayTx: d.relayTx ?? null,
-                rawBody: (d.rawBodyFirst2000 as string | null) ?? null,
+                revertReason: null,
+                revertData: null,
+                relayTx: null,
+                rawBody:
+                  typeof d.body === 'string'
+                    ? (d.body as string)
+                    : d.body
+                      ? JSON.stringify(d.body)
+                      : null,
               })
             }
-            // Detect the session-key-not-installed case from signature_preflight
-            // so we can show a clear remediation hint before the Relay submit.
-            if (event.step === 'signature_preflight' && event.detail && typeof event.detail === 'object') {
+            if (
+              event.step === 'prepare_calls_error' &&
+              event.detail &&
+              typeof event.detail === 'object'
+            ) {
               const d = event.detail as Record<string, unknown>
-              const outcome = d.outcome as string | undefined
-              const ownerRecoveryKind = d.ownerRecoveryKind as string | undefined
-              // Warn if either the accepted outcome is the not-installed lane,
-              // or if the underlying recovery surfaced a mismatch even when a
-              // session-key signature was accepted (which Relay will then
-              // reject with AA24).
-              if (
-                outcome === 'session_key_not_installed' ||
-                ownerRecoveryKind === 'mismatch' ||
-                ownerRecoveryKind === 'skipped_self_auth_session_key'
-              ) {
-                setSignerMismatch({
-                  recoveredRaw: (d.recoveredRawAddress as string | null) ?? null,
-                  recoveredEip191: (d.recoveredEip191Address as string | null) ?? null,
-                  claimedOwnerIndex: (d.ownerIndex as number | null) ?? null,
-                })
-              }
+              setLastErrorDetail({
+                revertReason: (d.error as string | null) ?? null,
+                revertData: null,
+                relayTx: null,
+                rawBody: null,
+              })
             }
           } catch {
             appendEvent(`${event.step}: <unloggable>`)
@@ -459,7 +461,9 @@ export function RemoveOwnerPage() {
         },
       })
       if (!result.txHash) {
-        throw new Error('Relay /execute did not return a transaction hash for the owner-remove UserOp.')
+        throw new Error(
+          'wallet_sendPreparedCalls did not return a transaction hash for the owner-remove call.',
+        )
       }
       setTxHash(result.txHash)
       setPageNotice(
