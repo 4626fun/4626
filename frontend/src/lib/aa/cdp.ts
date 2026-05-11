@@ -25,7 +25,7 @@ function normalizePaymasterUrl(value: string, origin: string | null): string {
 
 export function resolveCdpPaymasterUrl(paymaster: string | null | undefined): string | null {
   const origin = getWindowOrigin()
-  const forceProxy = Boolean(origin && import.meta.env.PROD && paymaster)
+  const forceProxy = Boolean(origin && paymaster)
   if (forceProxy && origin) {
     return `${origin}${PAYMASTER_PROXY_PATH}`
   }

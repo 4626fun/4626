@@ -54,6 +54,7 @@ import {
   formatTelegramHandle,
   getEmailSubmitAssessment,
   getErrorTitle,
+  getErrorGuidance,
   getFlowDescription,
   getFlowHeadline,
   getFlowProgressIndex,
@@ -1651,9 +1652,7 @@ export function TelegramLink() {
             <div className="rounded-[18px] bg-white/[0.03] px-4 py-3">
               <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-[#666666]">{getErrorTitle(state.error)}</div>
               <div className="mt-2 text-sm leading-6 text-[#EDEDED]">
-                {state.error.recoverable
-                  ? 'This failure is recoverable. Retry resumes from the last explicit machine checkpoint.'
-                  : 'This flow must be re-opened from Telegram to obtain a fresh session proof.'}
+                {getErrorGuidance(state.error)}
               </div>
             </div>
           </div>
@@ -1973,7 +1972,7 @@ function StatusBlock(props: {
     <div className={`rounded-[18px] border ${props.compact ? 'px-3 py-2.5' : 'px-3.5 py-2.5'} ${toneClasses}`}>
       <div className={`flex items-start ${props.compact ? 'gap-2.5' : 'gap-3'}`}>
         <div className={`rounded-full border border-white/10 bg-white/[0.05] ${props.compact ? 'mt-0.5 p-1.25' : 'mt-0.5 p-1.5'}`}>
-          {props.spinning ? <Spinner size={props.compact ? 'sm' : 'md'} /> : <Icon className={props.compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}
+          {props.spinning ? <Spinner size="sm" /> : <Icon className={props.compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />}
         </div>
         <div className={`${props.compact ? 'text-[12.5px] leading-5' : 'text-[13px] leading-5'}`}>{props.body}</div>
       </div>

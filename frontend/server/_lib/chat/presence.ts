@@ -3,6 +3,10 @@ import { createHash } from 'node:crypto'
 import { getDb } from '../db/postgres.js'
 import { ensureChatSchema } from './schema.js'
 import { getCachedEthosScoreByAddress } from './ethosClient.js'
+import {
+  ethosCanonicalReadEnabled,
+  getCanonicalEthosScoresByUserkeys,
+} from '../identity/ethosCanonicalScores.js'
 
 export type ChatAvailabilityUser = {
   address: `0x${string}`
@@ -72,10 +76,22 @@ export async function recordPresenceHeartbeat(params: {
   `
 
   let score: Awaited<ReturnType<typeof getCachedEthosScoreByAddress>> = null
-  try {
-    score = await getCachedEthosScoreByAddress(params.address)
-  } catch {
-    score = null
+  if (ethosCanonicalReadEnabled()) {
+    try {
+      const mapped = await getCanonicalEthosScoresByUserkeys({
+        db,
+        userkeys: [`address:${params.address}`],
+      })
+      score = mapped.get(`address:${params.address}`) ?? null
+    } catch {
+      score = null
+    }
+  } else {
+    try {
+      score = await getCachedEthosScoreByAddress(params.address)
+    } catch {
+      score = null
+    }
   }
 
   await db.sql`

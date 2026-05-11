@@ -256,10 +256,20 @@ export function buildOtpVerifyError(error: unknown): FlowError {
 }
 
 export function buildTelegramSessionError(error: string, statusCode: number): FlowError {
+  const normalizedError = error.trim().toUpperCase()
   if (statusCode === 410 || /expired|revoked/i.test(error)) {
     return createFlowError({
       code: 'EXPIRED_TELEGRAM_SESSION',
       message: 'Telegram session expired. Reopen the Mini App from Telegram and verify again.',
+    })
+  }
+  if (
+    statusCode === 503 &&
+    (normalizedError === 'TELEGRAM_BOT_NOT_CONFIGURED' || /telegram bot is not configured/i.test(error))
+  ) {
+    return createFlowError({
+      code: 'TELEGRAM_BOT_NOT_CONFIGURED',
+      message: 'Telegram bot is not configured on the server. Ask the team to configure it, then retry.',
     })
   }
   return createFlowError({
@@ -383,6 +393,8 @@ export function getErrorTitle(error: FlowError): string {
       return 'Invalid Telegram Context'
     case 'EXPIRED_TELEGRAM_SESSION':
       return 'Telegram Session Expired'
+    case 'TELEGRAM_BOT_NOT_CONFIGURED':
+      return 'Telegram Bot Unavailable'
     case 'STALE_TELEGRAM_LAUNCH_PARAMS':
       return 'Launch Parameters Expired'
     case 'PRIVY_SYNC_FAILED':
@@ -393,6 +405,22 @@ export function getErrorTitle(error: FlowError): string {
       return 'Telegram Bind Failed'
     default:
       return 'Flow Error'
+  }
+}
+
+export function getErrorGuidance(error: FlowError): string {
+  if (error.recoverable) {
+    return 'This failure is recoverable. Retry resumes from the last explicit machine checkpoint.'
+  }
+  switch (error.code) {
+    case 'TELEGRAM_BOT_NOT_CONFIGURED':
+      return 'This is a server configuration issue and cannot be fixed by reopening the Mini App.'
+    case 'INVALID_TELEGRAM_CONTEXT':
+    case 'EXPIRED_TELEGRAM_SESSION':
+    case 'STALE_TELEGRAM_LAUNCH_PARAMS':
+      return 'This flow must be re-opened from Telegram to obtain a fresh session proof.'
+    default:
+      return 'This flow cannot continue in the current session.'
   }
 }
 

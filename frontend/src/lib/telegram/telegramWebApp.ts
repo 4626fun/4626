@@ -68,6 +68,8 @@ declare global {
 
 type MiniAppSessionEnvelope = {
   success: boolean
+  code?: string
+  hint?: string
   data?: {
     sessionToken: string
     expiresAt: string
@@ -490,9 +492,11 @@ export async function ensureTelegramMiniAppSession(params?: {
     const json = (await response.json().catch(() => null)) as MiniAppSessionEnvelope | null
     if (!response.ok || !json?.success || !json.data) {
       clearTelegramMiniAppSession()
+      const errorCode = asTrimmed(json?.code ?? '')
+      const errorMessage = asTrimmed(json?.error ?? '')
       return {
         ok: false,
-        error: asTrimmed(json?.error ?? '') || 'telegram_miniapp_session_failed',
+        error: errorCode || errorMessage || 'telegram_miniapp_session_failed',
         statusCode: response.status || 500,
       }
     }

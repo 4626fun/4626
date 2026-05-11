@@ -184,6 +184,11 @@ function startRuntime(): void {
         }
         if (result.errors.length > 0) {
           tickRollup.erroredTicks += 1
+          logger.warn('[hermit] AlfaClub command errors', {
+            roomId: result.roomId,
+            count: result.errors.length,
+            errors: result.errors.slice(0, 5),
+          })
         }
         flushTickRollup(nowMs)
       },

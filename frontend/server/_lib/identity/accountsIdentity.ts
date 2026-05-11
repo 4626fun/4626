@@ -548,28 +548,9 @@ async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountSco
   if (profileIds.length === 0) return { points: 0, tier: 0 }
 
   const totalResult = await db.sql`
-    SELECT COALESCE(
-      ROUND(
-        SUM(
-          CASE
-            WHEN p.source = 'amoe_entry_spend' THEN p.amount
-            WHEN p.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN p.amount * 1.00
-            WHEN p.source IN ('waitlist_signup', 'referral_passthrough') THEN p.amount * 1.00
-            WHEN p.source = 'csw_link' THEN p.amount * 1.00
-            WHEN p.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN p.amount * 0.60
-            WHEN p.source LIKE 'social_%' THEN p.amount * 0.50
-            WHEN p.source LIKE 'bonus_%' OR p.source = 'task' THEN p.amount * 0.30
-            WHEN p.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN p.amount * 0.40
-            WHEN p.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-              THEN p.amount * 0.60
-            ELSE p.amount * 0.30
-          END
-        )
-      ),
-      0
-    )::INT AS points
-    FROM points p
-    WHERE p.signup_id IN (
+    SELECT COALESCE(SUM(b.credits), 0)::INT AS points
+    FROM points_amoe_eligible_balance b
+    WHERE b.signup_id IN (
       -- Resolver mirrors listProfileIdsForPrivyUser: alias first, then
       -- direct privy_user_id, chased through tombstone pointers.
       WITH direct AS (

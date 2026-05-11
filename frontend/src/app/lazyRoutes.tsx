@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
+import { SmartWalletsRouteProvider as SmartWalletsRouteProviderComponent } from '@/lib/privy/SmartWalletsRouteProvider'
 import { Swap as SwapPage } from '../pages/Swap'
 
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
@@ -99,10 +100,10 @@ export function LazyGuardedOutlet(props: { guard: LazyRouteComponent }) {
   )
 }
 
-export const SmartWalletsRouteProvider = lazyNamed(
-  () => import('@/lib/privy/SmartWalletsRouteProvider'),
-  'SmartWalletsRouteProvider',
-)
+// Keep this route-scoped provider eagerly imported in local dev.
+// Lazy-loading can race with Vite HMR updates and leave a rejected dynamic
+// import promise in the root boundary.
+export const SmartWalletsRouteProvider = SmartWalletsRouteProviderComponent
 
 export const Vault = lazyNamed(() => import('../pages/Vault'), 'Vault')
 export const CompleteAuction = lazyNamed(() => import('../pages/auction/CompleteAuction'), 'CompleteAuction')

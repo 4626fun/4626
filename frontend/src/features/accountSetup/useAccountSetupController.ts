@@ -63,6 +63,12 @@ function parseChainId(value: string | number | null | undefined): number | null 
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function resolveDirectPreparedCallsPaymasterUrl(): string | null {
+  const direct = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
+  if (/^https?:\/\//i.test(direct)) return direct
+  return null
+}
+
 function isPrivyExternalEthereumWallet(wallet: any): boolean {
   if (!wallet || typeof wallet !== 'object') return false
   const chainType = String(wallet.chainType ?? wallet.chain_type ?? wallet.type ?? '').toLowerCase().trim()
@@ -1079,9 +1085,12 @@ export function useAccountSetupController(params: {
       if (chainId !== base.id && typeof switchChainAsync === 'function') {
         await switchChainAsync({ chainId: base.id })
       }
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const paymasterUrl =
-        (typeof paymasterEnv === 'string' && paymasterEnv.trim() ? paymasterEnv.trim() : null) ?? null
+      const paymasterUrl = resolveDirectPreparedCallsPaymasterUrl()
+      if (!paymasterUrl) {
+        throw new Error(
+          'Sponsored owner approval requires `VITE_CDP_SENDCALLS_PAYMASTER_URL` to be set to a direct CDP RPC URL.',
+        )
+      }
       const runId = ++ownerApprovalRunIdRef.current
       const approvalRunId = `eoa-owner-approval-${Date.now()}-${runId}`
       return await _submitOwnerViaPreparedCallsWithEoaOwner({

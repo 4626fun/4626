@@ -6,6 +6,7 @@ export const telegramRouteLoaders: ApiRouteLoaders = {
   'link/complete': () => import('./telegram/_link-complete.js'),
   'link/ready': () => import('./telegram/_link-ready.js'),
   'link/telemetry': () => import('./telegram/_link-telemetry.js'),
+  'miniapp/status': () => import('./telegram/_miniapp-status.js'),
   'miniapp/session': () => import('./telegram/_miniapp-session.js'),
   'metrics': () => import('./telegram/_metrics.js'),
   'portfolio': () => import('./telegram/_portfolio.js'),

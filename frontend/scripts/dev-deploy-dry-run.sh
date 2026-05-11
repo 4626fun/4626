@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 LOCAL_BATCHER_HELPER="$FRONTEND_DIR/scripts/deploy-local-batcher.ts"
 LOCAL_PRESET_FILE="$FRONTEND_DIR/.env.deploy-dry-run.local"
+DEFAULT_ENV_FILE="$FRONTEND_DIR/.env"
 PRESET_FILE="${DEPLOY_DRY_RUN_ENV_FILE:-}"
 
 if [[ -z "$PRESET_FILE" ]]; then
@@ -64,6 +65,12 @@ if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
 fi
 
 set -a
+# Load default frontend env as a fallback baseline for dry-run.
+if [[ -f "$DEFAULT_ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$DEFAULT_ENV_FILE"
+fi
+# Overlay the dry-run preset so explicit dry-run values win.
 # shellcheck disable=SC1090
 source "$PRESET_FILE"
 set +a

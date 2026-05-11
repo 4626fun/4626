@@ -133,6 +133,23 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function resolvePreparedCallsPaymasterUrl(paymasterUrl: string | null): string | null {
+  const directEnv = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
+  if (/^https?:\/\//i.test(directEnv)) {
+    return directEnv.replace(
+      'https://api.developer.coinbase.com/',
+      'https://api.cdp.coinbase.com/',
+    )
+  }
+  if (!paymasterUrl) return null
+  const normalized = String(paymasterUrl).trim()
+  if (!/^https?:\/\//i.test(normalized)) return null
+  return normalized.replace(
+    'https://api.developer.coinbase.com/',
+    'https://api.cdp.coinbase.com/',
+  )
+}
+
 function emitOwnerApprovalStage(
   callback: ((event: OwnerApprovalStageEvent) => void) | null | undefined,
   event: OwnerApprovalStageEvent,
@@ -307,13 +324,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
   })
 
   const capabilities: Record<string, unknown> = {}
-  if (params.paymasterUrl) {
-    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
-      'https://api.developer.coinbase.com/',
-      'https://api.cdp.coinbase.com/',
-    )
-    capabilities.paymasterService = { url: paymasterUrlStr }
-  }
+  const paymasterUrlStr = resolvePreparedCallsPaymasterUrl(params.paymasterUrl)
+  if (paymasterUrlStr) capabilities.paymasterService = { url: paymasterUrlStr }
   const prepareCallsPayload: Record<string, unknown> = {
     version: '1.0',
     from: params.sender,
@@ -571,14 +583,8 @@ export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
     canonicalCswAddress: params.canonicalCswAddress,
   })
   const capabilities: Record<string, unknown> = {}
-  if (params.paymasterUrl) {
-    capabilities.paymasterService = {
-      url: String(params.paymasterUrl).trim().replace(
-        'https://api.developer.coinbase.com/',
-        'https://api.cdp.coinbase.com/',
-      ),
-    }
-  }
+  const paymasterUrlStr = resolvePreparedCallsPaymasterUrl(params.paymasterUrl)
+  if (paymasterUrlStr) capabilities.paymasterService = { url: paymasterUrlStr }
   const prepareResult = await params.walletRequest({
     method: 'wallet_prepareCalls',
     params: [{
@@ -792,13 +798,8 @@ export async function _submitOwnerViaPreparedCallsWithEoaOwner(params: {
   })
 
   const capabilities: Record<string, unknown> = {}
-  if (params.paymasterUrl) {
-    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
-      'https://api.developer.coinbase.com/',
-      'https://api.cdp.coinbase.com/',
-    )
-    capabilities.paymasterService = { url: paymasterUrlStr }
-  }
+  const paymasterUrlStr = resolvePreparedCallsPaymasterUrl(params.paymasterUrl)
+  if (paymasterUrlStr) capabilities.paymasterService = { url: paymasterUrlStr }
   const prepareCallsPayload: Record<string, unknown> = {
     version: '1.0',
     from: params.sender,

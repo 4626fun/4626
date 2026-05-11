@@ -46,6 +46,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'chat/availability': () => import('./v1/chat/_availability.js'),
   'chat/presence/heartbeat': () => import('./v1/chat/_presenceHeartbeat.js'),
   'chat/search': () => import('./v1/chat/_search.js'),
+  'chat/ethos-sync': () => import('./v1/chat/_ethosSync.js'),
   'chat/agents': () => import('./v1/chat/_agents.js'),
   'chat/hermit': () => import('./v1/chat/_hermit.js'),
   'chat/hermit/memes/save': () => import('./v1/chat/_hermit-meme-save.js'),

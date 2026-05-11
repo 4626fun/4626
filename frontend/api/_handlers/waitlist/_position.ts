@@ -167,26 +167,12 @@ export default async function handler(req: any, res: any) {
 
   const pointsAgg = await db.sql`
     SELECT
-      COALESCE(
-        ROUND(
-          SUM(
-            CASE
-              WHEN source = 'amoe_entry_spend' THEN amount
-              WHEN source IN ('amoe_twitter_daily', 'amoe_checkin') THEN amount * 1.00
-              WHEN source IN ('waitlist_signup', 'referral_passthrough') THEN amount * 1.00
-              WHEN source = 'csw_link' THEN amount * 1.00
-              WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-              WHEN source LIKE 'social_%' THEN amount * 0.50
-              WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-              WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-              WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                THEN amount * 0.60
-              ELSE amount * 0.30
-            END
-          )
-        ),
-        0
-      )::int AS total,
+      (
+        SELECT COALESCE(credits, 0)::int
+        FROM points_amoe_eligible_balance
+        WHERE signup_id = ${signupId}
+        LIMIT 1
+      ) AS total,
       COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
       COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
       COALESCE(ROUND(SUM(CASE WHEN source = 'task' THEN amount * 0.30 ELSE 0 END)), 0)::int AS tasks,
@@ -247,26 +233,7 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
-                WHEN l.source = 'csw_link' THEN l.amount * 1.00
-                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
-                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
-                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
-                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                  THEN l.amount * 0.60
-                ELSE l.amount * 0.30
-              END
-            )
-          ),
-          0
-        )::int AS total_points,
+        COALESCE(MAX(b.credits), 0)::int AS total_points,
         COALESCE(
           ROUND(SUM(
             CASE
@@ -279,6 +246,7 @@ export default async function handler(req: any, res: any) {
         COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
+      LEFT JOIN points_amoe_eligible_balance b ON b.signup_id = e.id
       GROUP BY e.id
     ),
     ranked AS (
@@ -303,26 +271,7 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
-                WHEN l.source = 'csw_link' THEN l.amount * 1.00
-                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
-                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
-                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
-                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                  THEN l.amount * 0.60
-                ELSE l.amount * 0.30
-              END
-            )
-          ),
-          0
-        )::int AS total_points,
+        COALESCE(MAX(b.credits), 0)::int AS total_points,
         COALESCE(
           ROUND(SUM(
             CASE
@@ -335,6 +284,7 @@ export default async function handler(req: any, res: any) {
         COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
+      LEFT JOIN points_amoe_eligible_balance b ON b.signup_id = e.id
       GROUP BY e.id
     ),
     ranked AS (

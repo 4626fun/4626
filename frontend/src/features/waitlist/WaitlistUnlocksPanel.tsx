@@ -1,7 +1,10 @@
+import { useEffect, useState } from 'react'
 import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { ReferralShareBlock } from './ReferralShareBlock'
 import { useMyReferralCode } from './useMyReferralCode'
 import { computeProgress } from './waitlistTiers'
@@ -17,9 +20,36 @@ export function WaitlistUnlocksPanel({
   email,
   className = '',
 }: WaitlistUnlocksPanelProps) {
-  const points = typeof score?.points === 'number' ? score.points : 0
+  const [amoeEligiblePoints, setAmoeEligiblePoints] = useState<number | null>(null)
+  const fallbackPoints = typeof score?.points === 'number' ? score.points : 0
+  const points = amoeEligiblePoints ?? fallbackPoints
   const progress = computeProgress(points)
   const referral = useMyReferralCode(email)
+
+  useEffect(() => {
+    let cancelled = false
+    const loadAmoePoints = async () => {
+      try {
+        // Keep waitlist points in sync with `/swap` by using the same
+        // AMOE eligibility endpoint and weighting rules.
+        const response = await apiFetch('/api/v1/lottery/amoe/credits', {
+          method: 'GET',
+          withCredentials: true,
+        })
+        const payload = (await response.json().catch(() => null)) as ApiEnvelope<{ credits?: number }> | null
+        if (!response.ok || !payload?.success) return
+        const credits = Number(payload.data?.credits ?? 0)
+        if (!Number.isFinite(credits)) return
+        if (!cancelled) setAmoeEligiblePoints(Math.max(0, Math.floor(credits)))
+      } catch {
+        // Fall back to unified waitlist score when credits are unavailable.
+      }
+    }
+    void loadAmoePoints()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   return (
     <div className={`space-y-3.5 ${className}`}>

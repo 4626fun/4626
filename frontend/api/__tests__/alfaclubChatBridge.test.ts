@@ -491,6 +491,28 @@ describe('sendRoomMessageViaBotToken', () => {
     expect(body.body).toHaveLength(2_000)
     expect(body.body.endsWith('...')).toBe(true)
   })
+
+  it('includes proxy secret header when proxy path is configured', async () => {
+    const captured: CapturedRequest[] = []
+    const restore = installFetchSpy(captured)
+    try {
+      await _sendRoomMessageViaBotTokenForTests({
+        apiBaseUrl: 'https://proxy.example.internal',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'proxy lane test',
+        proxySecret: 'proxy-secret-1',
+        idempotencyKey: 'alfaclub-bridge:1043:m-proxy',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      restore()
+    }
+
+    const request = captured[0]
+    expect(request?.url).toBe('https://proxy.example.internal/api/room/1043/message')
+    expect(request?.headers['x-proxy-secret']).toBe('proxy-secret-1')
+  })
 })
 
 describe('extractAlfaClubWsMessagesForTest', () => {

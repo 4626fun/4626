@@ -2487,7 +2487,7 @@ function LiquidityPanel(props: {
             className="rounded-full border border-white/10 p-1.5 text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
             aria-label="Refresh positions"
           >
-            {props.positionsLoading ? <Spinner size="sm" /> : <RefreshCw className="h-3 w-3" />}
+            {props.positionsLoading ? <Spinner size="xs" /> : <RefreshCw className="h-3 w-3" />}
           </button>
         </div>
 

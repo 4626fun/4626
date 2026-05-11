@@ -156,26 +156,12 @@ export async function getWaitlistLeaderboardData(params: {
         w.primary_smart_wallet,
         w.referral_code,
         w.border_tier,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
-                WHEN l.source = 'csw_link' THEN l.amount * 1.00
-                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
-                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
-                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
-                WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-                WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                  THEN l.amount * 0.60
-                ELSE l.amount * 0.30
-              END
-            )
-          ),
-          0
-        )::int AS total_points,
+        (
+          SELECT COALESCE(SUM(b.credits), 0)::int
+          FROM eligible_with_key e2
+          JOIN points_amoe_eligible_balance b ON b.signup_id = e2.id
+          WHERE e2.wallet_key = w.wallet_key
+        ) AS total_points,
         COALESCE(
           ROUND(SUM(
             CASE
@@ -279,26 +265,12 @@ export async function getWaitlistLeaderboardData(params: {
         w.primary_smart_wallet,
         w.referral_code,
         w.border_tier,
-            COALESCE(
-              ROUND(
-                SUM(
-                  CASE
-                    WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                    WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                    WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
-                    WHEN l.source = 'csw_link' THEN l.amount * 1.00
-                    WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
-                    WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
-                    WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
-                    WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
-                    WHEN l.source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                      THEN l.amount * 0.60
-                    ELSE l.amount * 0.30
-                  END
-                )
-              ),
-              0
-            )::int AS total_points,
+            (
+              SELECT COALESCE(SUM(b.credits), 0)::int
+              FROM eligible_with_key e2
+              JOIN points_amoe_eligible_balance b ON b.signup_id = e2.id
+              WHERE e2.wallet_key = w.wallet_key
+            ) AS total_points,
             COALESCE(
               ROUND(SUM(
                 CASE

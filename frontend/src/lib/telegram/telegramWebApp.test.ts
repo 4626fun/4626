@@ -185,6 +185,28 @@ describe('telegramWebApp mini app session bootstrap', () => {
     })
   })
 
+  it('prefers machine-readable API error codes when mini app bootstrap fails', async () => {
+    restoreWindow = installMockWindow('auth_date=1710002222&user=%7B%22id%22%3A42%7D&hash=config')
+    const fetcher = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        success: false,
+        error: 'Telegram bot is not configured',
+        code: 'TELEGRAM_BOT_NOT_CONFIGURED',
+        hint: 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.',
+      }),
+    })
+
+    const result = await ensureTelegramMiniAppSession({ fetcher })
+
+    expect(result).toEqual({
+      ok: false,
+      error: 'TELEGRAM_BOT_NOT_CONFIGURED',
+      statusCode: 503,
+    })
+  })
+
   it('clears timed-out bootstrap state so a retry can succeed', async () => {
     restoreWindow = installMockWindow('auth_date=1710002222&user=%7B%22id%22%3A42%7D&hash=retry')
     const timeoutFetcher = vi.fn().mockImplementation(

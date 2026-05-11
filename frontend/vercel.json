@@ -85,6 +85,10 @@
       "schedule": "*/30 * * * *"
     },
     {
+      "path": "/api/v1/chat/ethos-sync",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/keeper/jobs/run",
       "schedule": "*/5 * * * *"
     },

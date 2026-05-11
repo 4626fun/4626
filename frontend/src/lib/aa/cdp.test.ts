@@ -33,11 +33,18 @@ describe('resolveCdpPaymasterUrl', () => {
     expect(resolveCdpPaymasterUrl('/api/paymaster')).toBe(`${ORIGIN}/api/paymaster`)
   })
 
-  it('preserves non-proxy URL when not forcing production proxy', async () => {
+  it('preserves non-proxy URL outside the browser', async () => {
     vi.unstubAllGlobals()
     setProdEnv(false)
     const { resolveCdpPaymasterUrl } = await import('./cdp')
     expect(resolveCdpPaymasterUrl('https://bundler.invalid')).toBe('https://bundler.invalid/')
+  })
+
+  it('forces same-origin proxy in browser even outside production', async () => {
+    setWindowOrigin(ORIGIN)
+    setProdEnv(false)
+    const { resolveCdpPaymasterUrl } = await import('./cdp')
+    expect(resolveCdpPaymasterUrl('https://bundler.invalid')).toBe(`${ORIGIN}/api/paymaster`)
   })
 
   it('returns null for empty input', async () => {

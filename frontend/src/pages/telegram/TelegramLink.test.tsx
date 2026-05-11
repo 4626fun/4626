@@ -269,6 +269,22 @@ beforeEach(() => {
 })
 
 describe('TelegramLink UI flow', () => {
+  it('shows server-configuration guidance when mini-app session fails because bot config is missing', async () => {
+    ensureSessionMock.mockResolvedValueOnce({
+      ok: false,
+      error: 'Telegram bot is not configured',
+      statusCode: 503,
+    })
+
+    renderFlow()
+
+    await screen.findByRole('heading', { name: 'Reconnect Telegram' })
+    expect(screen.getByText('Telegram Bot Unavailable')).toBeTruthy()
+    expect(screen.getByText('Telegram bot is not configured on the server. Ask the team to configure it, then retry.')).toBeTruthy()
+    expect(screen.getByText('This is a server configuration issue and cannot be fixed by reopening the Mini App.')).toBeTruthy()
+    expect(screen.queryByText('This flow must be re-opened from Telegram to obtain a fresh session proof.')).toBeNull()
+  })
+
   it('keeps collect_email stable while typing and only enables Send Code for a normalized valid email', async () => {
     const user = userEvent.setup()
     renderFlow()

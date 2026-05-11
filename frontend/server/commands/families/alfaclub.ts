@@ -8,6 +8,7 @@ import {
   type MetricsSnapshotRow,
   type PublicationRecord,
 } from '../../_lib/alfaclub/publicationLedger.js'
+import { buildAlfaRoomChart } from '../../_lib/alfaclub/roomCharts.js'
 import { SCORECARD_DISCLAIMER } from '../../_lib/alfaclub/scorecard.js'
 import {
   readVigilanteFlags,
@@ -195,6 +196,7 @@ function parseSubcommand(text: string): {
     | 'creator'
     | 'status'
     | 'help'
+    | 'chart'
     | 'buy-key'
     | 'quote-key'
     | 'create-room'
@@ -202,6 +204,8 @@ function parseSubcommand(text: string): {
   tokenId: bigint | null
   amount: bigint | null
   payloadRaw: string | null
+  chartKindRaw: string | null
+  limit: number | null
 } {
   const cleaned = text.trim().replace(/^\/alfa(?:club)?\s*/i, '').trim()
   if (!cleaned) {
@@ -211,6 +215,8 @@ function parseSubcommand(text: string): {
       tokenId: null,
       amount: null,
       payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
     }
   }
 
@@ -224,6 +230,8 @@ function parseSubcommand(text: string): {
       tokenId: null,
       amount: null,
       payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
     }
   }
   if (first === 'status' || first === 'flags' || first === 'health') {
@@ -233,10 +241,45 @@ function parseSubcommand(text: string): {
       tokenId: null,
       amount: null,
       payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
     }
   }
   if (first === 'help' || first === '?') {
-    return { sub: 'help', address: null, tokenId: null, amount: null, payloadRaw: null }
+    return {
+      sub: 'help',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
+  }
+  if (first === 'chart' || first === 'charts') {
+    const args = parts.slice(1)
+    let kindRaw: string | null = null
+    let limit: number | null = null
+    for (const tokenRaw of args) {
+      const token = tokenRaw.trim()
+      if (!token) continue
+      if (limit === null && /^\d+$/.test(token)) {
+        limit = Number.parseInt(token, 10)
+        continue
+      }
+      if (kindRaw === null) {
+        kindRaw = token
+      }
+    }
+    return {
+      sub: 'chart',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+      chartKindRaw: kindRaw,
+      limit,
+    }
   }
   if (first === 'create-room' || first === 'createroom') {
     return {
@@ -245,17 +288,35 @@ function parseSubcommand(text: string): {
       tokenId: null,
       amount: null,
       payloadRaw: parts.slice(1).join(' ').trim() || null,
+      chartKindRaw: null,
+      limit: null,
     }
   }
   if (first === 'quote-key' || first === 'quotekey' || first === 'quote') {
     const tokenId = parsePositiveBigInt(parts[1])
     const amount = parts[2] ? parsePositiveBigInt(parts[2]) : 1n
-    return { sub: 'quote-key', address: null, tokenId, amount, payloadRaw: null }
+    return {
+      sub: 'quote-key',
+      address: null,
+      tokenId,
+      amount,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
   }
   if (first === 'buy-key' || first === 'buykey' || first === 'buy') {
     const tokenId = parsePositiveBigInt(parts[1])
     const amount = parts[2] ? parsePositiveBigInt(parts[2]) : 1n
-    return { sub: 'buy-key', address: null, tokenId, amount, payloadRaw: null }
+    return {
+      sub: 'buy-key',
+      address: null,
+      tokenId,
+      amount,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
   }
   if (first === 'creator' || first === 'wallet' || first === 'addr') {
     return {
@@ -264,14 +325,32 @@ function parseSubcommand(text: string): {
       tokenId: null,
       amount: null,
       payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
     }
   }
   const addr = parseAddressFromText(cleaned)
   if (addr) {
-    return { sub: 'creator', address: addr, tokenId: null, amount: null, payloadRaw: null }
+    return {
+      sub: 'creator',
+      address: addr,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+      chartKindRaw: null,
+      limit: null,
+    }
   }
 
-  return { sub: 'help', address: null, tokenId: null, amount: null, payloadRaw: null }
+  return {
+    sub: 'help',
+    address: null,
+    tokenId: null,
+    amount: null,
+    payloadRaw: null,
+    chartKindRaw: null,
+    limit: null,
+  }
 }
 
 function formatFlagsLine(flags: VigilanteFlags): string {
@@ -308,10 +387,15 @@ function formatHelp(): string {
     '  `/alfa` — top-N leaderboard',
     '  `/alfa <address>` — detail for a specific creator address',
     '  `/alfa creator <address>` — same, explicit form',
+    '  `/alfa chart [kind] [limit]` — render a room analytics chart',
     '  `/alfa status` — pipeline phase flag status',
     '  `/alfa quote-key <tokenId> [amount]` — preview room key cost',
     '  `/alfa buy-key <tokenId> [amount]` — buy a room key through your CSW',
     '  `/alfa create-room <json-or-base64>` — register a room using signed payload',
+    '',
+    'Chart kinds:',
+    '  `top-volume` · `tier-mix` · `pnl-distribution`',
+    '  charts render natively and serve from the 4626 IPFS gateway',
     '',
     SCORECARD_DISCLAIMER,
   ].join('\n')
@@ -994,6 +1078,28 @@ export async function executeAlfaclubCommandFamily(params: {
       tokenId: parsed.tokenId,
       amount: parsed.amount,
     })
+  }
+  if (parsed.sub === 'chart') {
+    const chartResult = await buildAlfaRoomChart({
+      kindRaw: parsed.chartKindRaw,
+      limit: parsed.limit,
+    })
+    if (!chartResult.ok) {
+      return { ok: false, response: chartResult.error }
+    }
+    return {
+      ok: true,
+      response: [
+        `AlfaClub chart: ${chartResult.chart.title}`,
+        '',
+        chartResult.chart.summary,
+      ].join('\n'),
+      action: {
+        action: 'alfaclub.message.attachments',
+        kind: chartResult.chart.kind,
+        attachments: [chartResult.chart.attachment],
+      },
+    }
   }
   if (parsed.sub === 'help') {
     return { ok: true, response: formatHelp() }

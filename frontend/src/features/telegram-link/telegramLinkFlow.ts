@@ -3,6 +3,7 @@ import type { TelegramMiniAppLinkContext } from '@/lib/telegram/telegramMiniAppL
 export type FlowErrorCode =
   | 'INVALID_TELEGRAM_CONTEXT'
   | 'EXPIRED_TELEGRAM_SESSION'
+  | 'TELEGRAM_BOT_NOT_CONFIGURED'
   | 'OTP_SEND_FAILED'
   | 'OTP_VERIFY_FAILED'
   | 'PRIVY_SYNC_FAILED'

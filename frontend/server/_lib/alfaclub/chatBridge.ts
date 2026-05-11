@@ -1151,6 +1151,90 @@ function truncateAlfaClubBotMessage(text: string): string {
   return `${trimmed.slice(0, 1_997)}...`
 }
 
+type BotSendResultSummary = {
+  status: number
+  messageId: string | null
+  roomId: string | null
+  authorId: string | null
+  replyId: string | null
+  deduped: boolean | null
+  created: boolean | null
+  responseKeys: string[]
+  responseBodyHead: string | null
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
+}
+
+function pickStringFromCandidates(
+  payload: Record<string, unknown>,
+  candidates: readonly string[],
+): string | null {
+  for (const key of candidates) {
+    const value = payload[key]
+    if (typeof value !== 'string') continue
+    const trimmed = value.trim()
+    if (trimmed) return trimmed
+  }
+  return null
+}
+
+function pickBooleanFromCandidates(
+  payload: Record<string, unknown>,
+  candidates: readonly string[],
+): boolean | null {
+  for (const key of candidates) {
+    const value = payload[key]
+    if (typeof value === 'boolean') return value
+  }
+  return null
+}
+
+function summarizeBotSendResponse(params: {
+  status: number
+  parsedBody: unknown
+  bodyText: string
+}): BotSendResultSummary {
+  const payload = asRecord(params.parsedBody)
+  const keys = payload ? Object.keys(payload).sort().slice(0, 16) : []
+  const messageId = payload
+    ? pickStringFromCandidates(payload, ['messageId', 'message_id', 'id'])
+    : null
+  const roomId = payload
+    ? pickStringFromCandidates(payload, ['roomId', 'room_id', 'room'])
+    : null
+  const authorId = payload
+    ? pickStringFromCandidates(payload, ['authorId', 'author_id', 'sender', 'senderId', 'sender_id'])
+    : null
+  const replyId = payload
+    ? pickStringFromCandidates(payload, ['replyId', 'reply_id'])
+    : null
+  const deduped = payload ? pickBooleanFromCandidates(payload, ['deduped', 'isDeduped']) : null
+  const created =
+    payload && pickBooleanFromCandidates(payload, ['created', 'isCreated']) !== null
+      ? pickBooleanFromCandidates(payload, ['created', 'isCreated'])
+      : deduped === null
+        ? null
+        : !deduped
+  const responseBodyHead = params.bodyText
+    ? redactForDiagnostics(params.bodyText.replace(/\s+/g, ' ').slice(0, 220))
+    : null
+  return {
+    status: params.status,
+    messageId,
+    roomId,
+    authorId,
+    replyId,
+    deduped,
+    created,
+    responseKeys: keys,
+    responseBodyHead: responseBodyHead || null,
+  }
+}
+
 function buildBotMessageIdempotencyKey(params: {
   roomId: string
   messageId: string
@@ -1165,9 +1249,10 @@ async function sendRoomMessageViaBotToken(params: {
   roomId: string
   text: string
   replyToMessageId?: string
+  proxySecret?: string | null
   idempotencyKey: string
   timeoutMs: number
-}): Promise<void> {
+}): Promise<BotSendResultSummary> {
   const url = new URL(`/api/room/${encodeURIComponent(params.roomId)}/message`, params.apiBaseUrl)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
@@ -1179,6 +1264,9 @@ async function sendRoomMessageViaBotToken(params: {
         Authorization: `Bearer ${params.botToken}`,
         'Content-Type': 'application/json',
         'Idempotency-Key': params.idempotencyKey,
+        ...((params.proxySecret ?? '').trim()
+          ? { 'x-proxy-secret': String(params.proxySecret).trim() }
+          : {}),
       },
       body: JSON.stringify({
         body: truncateAlfaClubBotMessage(params.text),
@@ -1192,11 +1280,22 @@ async function sendRoomMessageViaBotToken(params: {
   } finally {
     clearTimeout(timeout)
   }
+  const bodyText = await response.text().catch(() => '')
+  let parsedBody: unknown = null
+  try {
+    parsedBody = bodyText ? JSON.parse(bodyText) : null
+  } catch {
+    parsedBody = null
+  }
   if (!response.ok) {
-    const bodyText = await response.text().catch(() => '')
     const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
     throw new Error(`bot_message_failed:${response.status}${detail ? `:${detail}` : ''}`)
   }
+  return summarizeBotSendResponse({
+    status: response.status,
+    parsedBody,
+    bodyText,
+  })
 }
 
 async function sendRoomMessageViaWebSocket(params: {
@@ -2068,6 +2167,13 @@ async function executeCommandBatch(params: {
   let replied = 0
 
   for (const command of params.commands) {
+    const commandHead = command.text.trim().split(/\s+/, 1)[0] ?? command.text.trim()
+    logger.info('[alfaclub-chat] command_execute_start', {
+      roomId: params.roomId,
+      messageId: command.id,
+      sender: command.sender,
+      command: commandHead,
+    })
     try {
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
@@ -2109,16 +2215,24 @@ async function executeCommandBatch(params: {
         })
         let sent = false
         try {
-          await sendRoomMessageViaBotToken({
-            apiBaseUrl: params.flags.apiBaseUrl,
+          const sendResult = await sendRoomMessageViaBotToken({
+            apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
             botToken: params.flags.botToken,
             roomId: params.roomId,
             text: responseText,
             replyToMessageId: command.id,
+            proxySecret: resolveAlfaClubProxySecret(params.flags),
             idempotencyKey,
             timeoutMs: params.flags.sendTimeoutMs,
           })
           sent = true
+          logger.info('[alfaclub-chat] command_reply_sent', {
+            roomId: params.roomId,
+            messageId: command.id,
+            sender: command.sender,
+            lane: 'bot_token_with_reply_id',
+            sendResult,
+          })
         } catch (error) {
           const detail = error instanceof Error ? error.message : String(error)
           logger.warn('[alfaclub-chat] bot_reply_with_reply_id_failed', {
@@ -2130,15 +2244,23 @@ async function executeCommandBatch(params: {
 
         if (!sent) {
           try {
-            await sendRoomMessageViaBotToken({
-              apiBaseUrl: params.flags.apiBaseUrl,
+            const sendResult = await sendRoomMessageViaBotToken({
+              apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
               botToken: params.flags.botToken,
               roomId: params.roomId,
               text: responseText,
+              proxySecret: resolveAlfaClubProxySecret(params.flags),
               idempotencyKey,
               timeoutMs: params.flags.sendTimeoutMs,
             })
             sent = true
+            logger.info('[alfaclub-chat] command_reply_sent', {
+              roomId: params.roomId,
+              messageId: command.id,
+              sender: command.sender,
+              lane: 'bot_token_without_reply_id',
+              sendResult,
+            })
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error)
             logger.warn('[alfaclub-chat] bot_reply_without_reply_id_failed', {
@@ -2159,6 +2281,12 @@ async function executeCommandBatch(params: {
             replyToMessageId: command.id,
             timeoutMs: params.flags.sendTimeoutMs,
           })
+          logger.info('[alfaclub-chat] command_reply_sent', {
+            roomId: params.roomId,
+            messageId: command.id,
+            sender: command.sender,
+            lane: 'websocket_fallback',
+          })
         }
       } else {
         await sendRoomMessageViaWebSocket({
@@ -2169,6 +2297,12 @@ async function executeCommandBatch(params: {
           attachments,
           replyToMessageId: command.id,
           timeoutMs: params.flags.sendTimeoutMs,
+        })
+        logger.info('[alfaclub-chat] command_reply_sent', {
+          roomId: params.roomId,
+          messageId: command.id,
+          sender: command.sender,
+          lane: 'websocket_primary',
         })
       }
       replied += 1
@@ -2182,9 +2316,17 @@ async function executeCommandBatch(params: {
         timeoutMs: params.flags.requestTimeoutMs,
       })
     } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
       errors.push({
         messageId: command.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: detail,
+      })
+      logger.warn('[alfaclub-chat] command_execute_failed', {
+        roomId: params.roomId,
+        messageId: command.id,
+        sender: command.sender,
+        command: commandHead,
+        error: detail.slice(0, 220),
       })
     }
   }
@@ -2510,6 +2652,14 @@ async function runBridgeTick(
     seenMessageIds: new Set<string>(),
     selfAddress: TARGET_CANONICAL_CSW_ADDRESS,
   })
+  if (commands.length > 0) {
+    logger.info('[alfaclub-chat] command_batch_detected', {
+      roomId,
+      count: commands.length,
+      ids: commands.map((entry) => entry.id).slice(0, 8),
+      commands: commands.map((entry) => entry.text.trim().split(/\s+/, 1)[0] ?? entry.text.trim()).slice(0, 8),
+    })
+  }
   const batch = await executeCommandBatch({
     commands,
     flags,
@@ -2708,9 +2858,10 @@ export async function _sendRoomMessageViaBotTokenForTests(params: {
   roomId: string
   text: string
   replyToMessageId?: string
+  proxySecret?: string | null
   idempotencyKey: string
   timeoutMs: number
-}): Promise<void> {
+}): Promise<BotSendResultSummary> {
   return sendRoomMessageViaBotToken(params)
 }
 

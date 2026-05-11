@@ -424,9 +424,12 @@ export function AmoeEntryCard(props: {
         <div className="space-y-3 rounded-[22px] bg-[linear-gradient(150deg,rgba(255,255,255,0.075),rgba(255,255,255,0.025))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_40px_-30px_rgba(0,0,0,0.9)]">
           <div className="flex items-start justify-between gap-3 text-xs">
             <div>
-              <div className="text-zinc-500">Your points</div>
+              <div className="text-zinc-500">Your AMOE-eligible points</div>
               <div className="mt-0.5 text-lg font-semibold text-zinc-100">
                 {credits.toLocaleString()}
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Waitlist total can be higher than AMOE-eligible points.
               </div>
             </div>
             {jackpotUsdDisplay ? (

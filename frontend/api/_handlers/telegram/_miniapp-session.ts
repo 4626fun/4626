@@ -38,6 +38,11 @@ type MiniAppSessionData = {
   chatInstance: string | null
 }
 
+type MiniAppSessionErrorEnvelope = ApiEnvelope<never> & {
+  code?: string
+  hint?: string
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -59,7 +64,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const config = getTelegramWebhookConfig()
   const botToken = asTrimmed(config.botToken)
   if (!botToken) {
-    return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
+    await trackTelegramLinkEvent({
+      event: 'telegram_link_miniapp_session_result',
+      source: 'telegram-miniapp-session',
+      flowId: '',
+      phase: 'verify_telegram_session',
+      status: 'failed',
+      payload: {
+        reason: 'bot_not_configured',
+        code: 'TELEGRAM_BOT_NOT_CONFIGURED',
+        hint: 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.',
+      },
+    })
+    return res.status(503).json({
+      success: false,
+      error: 'Telegram bot is not configured',
+      code: 'TELEGRAM_BOT_NOT_CONFIGURED',
+      hint: 'Set TELEGRAM_BOT_TOKEN on the server and redeploy.',
+    } satisfies MiniAppSessionErrorEnvelope)
   }
 
   let body: MiniAppSessionBody

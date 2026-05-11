@@ -1,16 +1,14 @@
 # 4626 Outreach — Looker Studio Community Connector
 
-Live-queries the Supabase outreach tables (`zora_profiles`, optionally
-`zora_csw_owner_class`) from Looker Studio. Eliminates the CSV
-export → Google Sheets import step — the dashboard refreshes on demand
-against the current database state.
+Live-queries Supabase from Looker Studio for high-volume Zora analytics.
+This connector now defaults to `v_looker_zora_profiles_ethos`, a flattened
+view that joins `zora_profiles` with cached Ethos scores from
+`zora_csw_owner_class`.
 
 ## Files
 
-- `Code.gs.js` — connector logic. Drop this into the Apps Script editor
-  as `Code.gs` (the editor auto-renames `.gs.js` to `.gs`).
-- `appsscript.json` — manifest. Declares the data-source name, OAuth
-  scope, and Looker Studio integration metadata.
+- `Code.gs.js` - Apps Script connector logic
+- `appsscript.json` - Apps Script manifest with Data Studio metadata
 
 ## Deploy (one-time, ~5 minutes)
 
@@ -45,15 +43,18 @@ against the current database state.
      - *Service-role key (token field)*: your Supabase service-role
        API key. Use service-role (not anon) because RLS rules on
        `zora_profiles` may block anon reads.
-   - Pick the data source: **`zora_profiles`** (default) or
-     **`zora_csw_owner_class`**.
+   - In connector config, pick source:
+     - **`v_looker_zora_profiles_ethos`** (recommended default)
+     - `zora_profiles`
+     - `zora_csw_owner_class`
+   - Optional: set **Row limit per query** (recommended 2000-10000).
    - Click **Connect** → schema appears → **Create report**.
 
 5. **Build the dashboard**
    - See `docs/operations/looker-studio-widget-recipe.md` in the repo
      for the exact widget + field config. Six widgets; ~5 minutes.
 
-## Refresh behaviour
+## Refresh behavior
 
 - Looker Studio caches query results for 12 hours by default. To force
   a fresh pull, click the refresh icon (circular arrow) in the report
@@ -61,24 +62,24 @@ against the current database state.
 - Set the cache TTL per data source in Looker Studio: **Data source →
   Edit → Data freshness** → choose 15 min / 1 hour / 4 hours / 12 hours.
 
-## What about the XMTP reachability data?
+## Data model for 1.5M+ rows
 
-V1 of this connector exposes only columns that live in `zora_profiles`.
-The XMTP reach probe output currently lives in
-`indexer/exports/xmtp-reach-*.json` — not queryable from Looker Studio.
+Use the migration-backed view:
 
-To surface XMTP reachability in the dashboard, you need to:
+- `frontend/db/migrations/041_v_looker_zora_profiles_ethos.sql`
 
-1. Create a `zora_profile_xmtp_reach` table in Supabase (migration TBD).
-2. Update `indexer/src/probeXmtpReachability.ts` to upsert its results
-   into that table (in addition to writing the JSON export).
-3. Add fields to `zoraProfilesSchema()` in `Code.gs.js` that read from
-   a Supabase view joining the two tables (recommended) or add a new
-   `source` option in `getConfig()`.
+It resolves a single score wallet per profile:
 
-Until that work lands, the CSV-backed Google Sheets dashboard remains
-the source of truth for XMTP dimensions. Looker Studio gives you
-everything else — live.
+1. `signing_eoa`
+2. `primary_wallet`
+3. `payout_recipient`
+
+Then left-joins Ethos cache fields:
+
+- `ethos_userkey`
+- `ethos_score`
+- `ethos_level`
+- `ethos_score_updated_at`
 
 ## Development
 
@@ -92,9 +93,7 @@ everything else — live.
 ## Security notes
 
 - The service-role key is stored in the user's Looker Studio credential
-  store (via `USER_TOKEN` auth), not in the connector code. A user who
-  deploys this connector for their own workspace never exposes the
-  key to other viewers.
+  store (via `USER_TOKEN` auth), not in connector source code.
 - Report viewers with no authorisation to Supabase can still view the
   dashboard because cached data is served from Looker Studio — they
   never hit Supabase directly.

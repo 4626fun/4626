@@ -1,14 +1,15 @@
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 
 interface SpinnerProps {
-  size?: 'sm' | 'md' | 'lg'
+  size?: 'xs' | 'sm' | 'md' | 'lg'
   className?: string
 }
 
 const SIZE_MAP: Record<NonNullable<SpinnerProps['size']>, number> = {
+  xs: 12,
   sm: 14,
   md: 20,
-  lg: 26,
+  lg: 24,
 }
 
 export function Spinner({ size = 'md', className }: SpinnerProps) {

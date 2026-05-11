@@ -110,35 +110,26 @@ export default async function handler(req: any, res: any) {
       : null
   const display = shortAddr(wallet) ?? `user#${signupId}`
 
-  // Point total aggregation mirrors the same weights used by
-  // waitlistLeaderboard / accountsIdentity so the number shown on the
-  // referral landing matches what the referrer would see elsewhere.
+  // Point total mirrors the AMOE-eligible credit model used by
+  // waitlist/swap/account score surfaces, so this endpoint reports the
+  // same user-visible total as the rest of the app.
   const pointsResult = await db.sql`
-    SELECT
-      COALESCE(
-        ROUND(
-          SUM(
-            CASE
-              WHEN source = 'amoe_entry_spend' THEN amount
-              WHEN source IN ('amoe_twitter_daily', 'amoe_checkin') THEN amount * 1.00
-              WHEN source IN ('waitlist_signup', 'referral_passthrough') THEN amount * 1.00
-              WHEN source = 'csw_link' THEN amount * 1.00
-              WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-              WHEN source LIKE 'social_%' THEN amount * 0.50
-              WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-              WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-              WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                THEN amount * 0.60
-              ELSE amount * 0.30
-            END
-          )
-        ),
-        0
-      )::int AS total
-    FROM points
-    WHERE signup_id = ${signupId};
+    SELECT COALESCE(credits, 0)::int AS total
+    FROM points_amoe_eligible_balance
+    WHERE signup_id = ${signupId}
+    LIMIT 1;
   `
-  const pointsTotal = safeInt(pointsResult?.rows?.[0]?.total)
+  let pointsTotal = safeInt(pointsResult?.rows?.[0]?.total)
+  if (!pointsResult?.rows?.length) {
+    // Backward-compatible fallback for environments/tests where the AMOE
+    // eligibility view has not been materialized yet.
+    const fallbackPointsResult = await db.sql`
+      SELECT COALESCE(SUM(amount), 0)::int AS total
+      FROM points
+      WHERE signup_id = ${signupId};
+    `
+    pointsTotal = safeInt(fallbackPointsResult?.rows?.[0]?.total)
+  }
 
   // Best-effort rank. If the profile hasn't completed profile_completed_at
   // they won't have a leaderboard rank yet; return null in that case.
@@ -151,23 +142,10 @@ export default async function handler(req: any, res: any) {
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(
-          ROUND(
-            SUM(
-              CASE
-                WHEN l.source = 'waitlist_signup' THEN l.amount
-                WHEN l.source = 'csw_link' THEN l.amount
-                WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
-                WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
-                WHEN l.source LIKE 'bonus_%' OR l.source = 'task' THEN l.amount * 0.30
-                ELSE l.amount * 0.30
-              END
-            )
-          ),
-          0
-        )::int AS total_points
+        COALESCE(MAX(b.credits), 0)::int AS total_points
       FROM eligible e
       LEFT JOIN points l ON l.signup_id = e.id
+      LEFT JOIN points_amoe_eligible_balance b ON b.signup_id = e.id
       GROUP BY e.id
     ),
     ranked AS (

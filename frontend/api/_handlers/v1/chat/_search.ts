@@ -18,6 +18,11 @@ import {
   getCachedEthosScoresByUserkeys,
   normalizeEthosUserkey,
 } from '../../../../server/_lib/chat/ethosClient.js'
+import { getDb } from '../../../../server/_lib/db/postgres.js'
+import {
+  ethosCanonicalReadEnabled,
+  getCanonicalEthosScoresByUserkeys,
+} from '../../../../server/_lib/identity/ethosCanonicalScores.js'
 import { normalizeChatAddress } from '../../../../server/_lib/chat/presence.js'
 
 const MAX_BULK_USERKEYS = 100
@@ -59,10 +64,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     let scores = new Map<string, Awaited<ReturnType<typeof getCachedEthosScoreByUserkey>>>()
-    try {
-      scores = await getCachedEthosScoresByUserkeys(userkeys)
-    } catch {
-      scores = new Map()
+    if (ethosCanonicalReadEnabled()) {
+      try {
+        const db = await getDb()
+        if (db) scores = await getCanonicalEthosScoresByUserkeys({ db, userkeys })
+      } catch {
+        scores = new Map()
+      }
+    } else {
+      try {
+        scores = await getCachedEthosScoresByUserkeys(userkeys)
+      } catch {
+        scores = new Map()
+      }
     }
 
     return res.status(200).json({
@@ -92,11 +106,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data: { users: [], agents: [], vaults: [] } })
   }
 
+  const canonicalReadsEnabled = ethosCanonicalReadEnabled()
   let ethos = null
   let profile = null
   try {
-    ethos = address ? await getCachedEthosScoreByAddress(address) : await getCachedEthosScoreByUserkey(userkey)
-    if (includeProfile) profile = await getCachedEthosProfileByUserkey(userkey)
+    if (canonicalReadsEnabled) {
+      const db = await getDb()
+      if (db) {
+        const mapped = await getCanonicalEthosScoresByUserkeys({ db, userkeys: [userkey] })
+        ethos = mapped.get(userkey) ?? null
+      }
+      // Canonical read mode avoids live Ethos API calls on request paths.
+      profile = null
+    } else {
+      ethos = address ? await getCachedEthosScoreByAddress(address) : await getCachedEthosScoreByUserkey(userkey)
+      if (includeProfile) profile = await getCachedEthosProfileByUserkey(userkey)
+    }
   } catch {
     ethos = null
     profile = null
