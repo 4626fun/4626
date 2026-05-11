@@ -18,7 +18,7 @@ import { base } from 'viem/chains'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import {
-  encodeExecuteWithoutChainIdValidation,
+  _submitOwnerViaSelfBuiltUserOp,
   unwrapDoubleHexEncodedHash,
 } from '@/lib/wallet/onboardingWallet'
 import { detectSignatureShape, type SignatureShape } from '@/lib/wallet/signatureShape'
@@ -216,32 +216,6 @@ type RemoveOwnerPreview = {
   }
 }
 
-type RelayQuoteEnvelope = {
-  success?: boolean
-  error?: string
-  data?: {
-    steps?: Array<{
-      id?: string
-      kind?: string
-      requestId?: string
-      items?: Array<{
-        status?: string
-        data?: {
-          from?: string
-          to?: string
-          data?: string
-          value?: string
-          chainId?: number
-        }
-        check?: {
-          endpoint?: string
-          method?: string
-        }
-      }>
-    }>
-  }
-}
-
 function describeError(error: unknown): string {
   if (error instanceof Error) return error.message
   return String(error ?? 'unknown error')
@@ -291,31 +265,6 @@ function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
 }
 
-// Relay returns step.items[].data.value as either a decimal string ("0",
-// "1000000000000000000") or already-hex ("0x0"). eth_sendTransaction strictly
-// requires a 0x-prefixed quantity, so normalize before forwarding. Also
-// tolerates undefined/null and numeric/bigint inputs.
-function toEthHexQuantity(value: unknown): `0x${string}` {
-  if (value === null || value === undefined || value === '') return '0x0'
-  if (typeof value === 'string') {
-    const trimmed = value.trim()
-    if (/^0x[0-9a-fA-F]+$/.test(trimmed)) return trimmed as `0x${string}`
-    if (/^[0-9]+$/.test(trimmed)) {
-      try {
-        return `0x${BigInt(trimmed).toString(16)}` as `0x${string}`
-      } catch {
-        return '0x0'
-      }
-    }
-  }
-  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-    return `0x${Math.floor(value).toString(16)}` as `0x${string}`
-  }
-  if (typeof value === 'bigint' && value >= 0n) {
-    return `0x${value.toString(16)}` as `0x${string}`
-  }
-  return '0x0'
-}
 
 type ParsedWalletSignature = {
   kind:
@@ -1288,7 +1237,16 @@ export function CswSignatureProbe() {
     }
   }
 
-  async function runRelayQuotedDepositForOwnerAdd() {
+  // Working Relay UserOp lane — matches the architecture proven by tx
+  // 0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
+  // on Base. Builds a CSW UserOp targeting executeWithoutChainIdValidation,
+  // signs it via the connected owner (passkey or EOA), wraps in
+  // EntryPoint.handleOps([userOp], beneficiary), and submits via
+  // /api/relay/execute so Relay's solver pays gas through their multicall
+  // router. Replaces the broken /api/relay/quote-based lanes which targeted
+  // the CSW directly from Relay's router (Relay's router isn't an owner
+  // so direct calls always reverted with Unauthorized).
+  async function runOwnerAddViaRelayUserOp() {
     const ownerToAddRaw = String(ownerToAddInput ?? '').trim()
     if (!walletClient || !connectedAddress) {
       setPreparedCallsState({ kind: 'err', label: 'connect wallet first' })
@@ -1298,11 +1256,21 @@ export function CswSignatureProbe() {
       setPreparedCallsState({ kind: 'err', label: 'invalid CSW address' })
       return
     }
-    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+    const isSelfAuthSession =
+      connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+    // _submitOwnerViaSelfBuiltUserOp hard-codes params.csw as the personal_sign
+    // signer address, which is correct for Base-App passkey self-auth (the CSW
+    // signs via ERC-1271) but will be rejected by EOA wallets as an
+    // account/address mismatch. External-signer support requires a signer
+    // override on the library entrypoint — not in scope here.
+    if (!isSelfAuthSession) {
       setPreparedCallsState({
         kind: 'err',
-        label: 'connected wallet must be the CSW itself',
-        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail:
+          `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}. ` +
+          'This lane signs the UserOp with the CSW address via Base App passkey self-auth. ' +
+          'External-EOA owner signing is not yet wired in the library.',
       })
       return
     }
@@ -1317,88 +1285,71 @@ export function CswSignatureProbe() {
       setPreparedCallsState({
         kind: 'err',
         label: 'wallet request() unavailable',
-        detail: 'This wallet client cannot submit the quoted Relay deposit transaction.',
+        detail: 'This wallet client cannot submit AA UserOps.',
       })
       return
     }
     const ownerToAdd = getAddress(ownerToAddRaw)
-    const addOwnerData = encodeFunctionData({
+    const innerCallData = encodeFunctionData({
       abi: CSW_OWNER_MUTATION_ABI,
       functionName: 'addOwnerAddress',
       args: [ownerToAdd],
     })
-    const wrappedData = encodeExecuteWithoutChainIdValidation(addOwnerData)
     const appendEvent = (row: string) => {
       setPreparedCallEventLog((prev) => [...prev, row].slice(-30))
     }
+    const formatEventDetail = (detail: unknown): string => {
+      if (detail == null) return ''
+      if (typeof detail === 'string') return detail
+      try {
+        return JSON.stringify(detail)
+      } catch {
+        return String(detail)
+      }
+    }
     setPreparedCallsTxHash(null)
     setPreparedCallEventLog([])
-    setPreparedCallsState({ kind: 'pending', label: 'fetching Relay quote deposit step…' })
+    setPreparedCallsState({
+      kind: 'pending',
+      label: `submitting addOwnerAddress(${ownerToAdd}) via Relay UserOp…`,
+    })
     try {
       appendEvent('session:self_auth')
-      appendEvent('lane:relay_quote_deposit_step_first')
-      const quoteResponse = await fetch('/api/relay/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chainId: base.id,
-          user: normalizedCswAddress,
-          to: normalizedCswAddress,
-          data: wrappedData,
-          value: '0',
-          amount: '0',
-        }),
+      appendEvent('lane:relay_userop_handleOps')
+      appendEvent('step:sign replayable executeWithoutChainIdValidation UserOp')
+      appendEvent('step:submit EntryPoint.handleOps through /api/relay/execute')
+      const relayResult = await _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        csw: normalizedCswAddress,
+        innerCallData,
+        expectedOwnerAddress: ownerToAdd,
+        requireWebAuthnOwnerSignature: true,
+        sessionKind: 'self_auth',
+        quoteRelayBeforeSubmit: true,
+        onTelemetry: (event) => {
+          appendEvent(formatEventDetail(event).slice(0, 2000))
+        },
       })
-      const quoteJson = await quoteResponse.json().catch(() => null) as RelayQuoteEnvelope | null
-      appendEvent(JSON.stringify({ step: 'relay_quote_response', ok: quoteResponse.ok, status: quoteResponse.status, data: quoteJson }).slice(0, 2000))
-      if (!quoteResponse.ok || !quoteJson?.success || !quoteJson.data?.steps) {
-        throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteResponse.status})`)
+      if (!relayResult.txHash) {
+        throw new Error('Relay /execute did not return a transaction hash for the owner-add UserOp.')
       }
-      // Relay labels same-chain call routes with id='swap' and cross-chain routes with id='deposit'.
-      // Both arrive as kind:'transaction' items — filter by kind, not by id.
-      const depositStep = quoteJson.data.steps.find(
-        (step) => step.kind === 'transaction' && step.items?.some((item) => item.status === 'incomplete' && item.data?.to && item.data?.data),
-      )
-      const depositItem = depositStep?.items?.find((item) => item.status === 'incomplete' && item.data?.to && item.data?.data)
-        ?? depositStep?.items?.find((item) => item.data?.to && item.data?.data)
-      const tx = depositItem?.data
-      if (!tx?.to || !tx.data) {
-        throw new Error(`Relay quote did not return a transaction item (steps: ${quoteJson.data.steps.map((s) => `${s.id}/${s.kind}`).join(',') || 'none'}).`)
-      }
-      appendEvent(JSON.stringify({
-        step: 'relay_deposit_tx',
-        requestId: depositStep?.requestId,
-        to: tx.to,
-        value: tx.value ?? '0',
-        selector: tx.data.slice(0, 10),
-      }))
-      setPreparedCallsState({ kind: 'pending', label: 'submitting quoted Relay deposit step…' })
-      const txHashRaw = await request({
-        method: 'eth_sendTransaction',
-        params: [{
-          from: normalizedCswAddress,
-          to: tx.to,
-          data: tx.data,
-          value: toEthHexQuantity(tx.value),
-        }],
-      })
-      if (!isTxHash(txHashRaw)) throw new Error('eth_sendTransaction did not return a transaction hash for Relay deposit.')
-      setPreparedCallsTxHash(txHashRaw)
+      setPreparedCallsTxHash(relayResult.txHash)
       setPreparedCallsState({
         kind: 'ok',
-        label: 'quoted Relay deposit submitted',
-        detail: txHashRaw,
+        label: 'Relay UserOp owner add submitted',
+        detail: relayResult.txHash,
       })
     } catch (error) {
       setPreparedCallsState({
         kind: 'err',
-        label: 'quoted Relay deposit failed',
+        label: 'Relay UserOp owner add failed',
         detail: describeError(error),
       })
     }
   }
 
-  async function runRelayQuotedDepositForOwnerRemove() {
+  async function runOwnerRemoveViaRelayUserOp() {
     if (!walletClient || !connectedAddress) {
       setOwnerRemoveDepositState({ kind: 'err', label: 'connect wallet first' })
       return
@@ -1407,11 +1358,18 @@ export function CswSignatureProbe() {
       setOwnerRemoveDepositState({ kind: 'err', label: 'invalid CSW address' })
       return
     }
-    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+    const isSelfAuthSession =
+      connectedAddress.toLowerCase() === normalizedCswAddress.toLowerCase()
+    // Same self-auth gate as the add lane — _submitOwnerViaSelfBuiltUserOp
+    // signs with params.csw as the signer address.
+    if (!isSelfAuthSession) {
       setOwnerRemoveDepositState({
         kind: 'err',
-        label: 'connected wallet must be the CSW itself',
-        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+        label: 'connected wallet must be the CSW itself (self-auth session)',
+        detail:
+          `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}. ` +
+          'This lane signs the UserOp with the CSW address via Base App passkey self-auth. ' +
+          'External-EOA owner signing is not yet wired in the library.',
       })
       return
     }
@@ -1427,22 +1385,31 @@ export function CswSignatureProbe() {
       setOwnerRemoveDepositState({
         kind: 'err',
         label: 'wallet request() unavailable',
-        detail: 'This wallet client cannot submit the quoted Relay deposit transaction.',
+        detail: 'This wallet client cannot submit AA UserOps.',
       })
       return
     }
     const appendEvent = (row: string) => {
       setOwnerRemoveEventLog((prev) => [...prev, row].slice(-30))
     }
+    const formatEventDetail = (detail: unknown): string => {
+      if (detail == null) return ''
+      if (typeof detail === 'string') return detail
+      try {
+        return JSON.stringify(detail)
+      } catch {
+        return String(detail)
+      }
+    }
     setOwnerRemoveDepositTxHash(null)
     setOwnerRemoveEventLog([])
     setOwnerRemoveDepositState({
       kind: 'pending',
-      label: `building remove-owner preview for deposit quote (index ${removeIndex})…`,
+      label: `building remove-owner preview for Relay UserOp (index ${removeIndex})…`,
     })
     try {
       appendEvent('session:self_auth')
-      appendEvent('lane:owner_remove_relay_quote_deposit')
+      appendEvent('lane:owner_remove_relay_userop_handleOps')
       const previewResponse = await fetch('/api/onboarding/preview-remove-owner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1464,77 +1431,37 @@ export function CswSignatureProbe() {
       setOwnerRemovePreview(preview)
       appendEvent(`target:function=${preview.preflight.selectedFunction}`)
       appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
-      const wrappedData = encodeExecuteWithoutChainIdValidation(preview.txRequest.data as Hex)
-      setOwnerRemoveDepositState({ kind: 'pending', label: 'fetching Relay quote deposit step…' })
-      const quoteResponse = await fetch('/api/relay/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chainId: base.id,
-          user: normalizedCswAddress,
-          to: normalizedCswAddress,
-          data: wrappedData,
-          value: '0',
-          amount: '0',
-        }),
+      appendEvent('step:sign replayable executeWithoutChainIdValidation UserOp')
+      appendEvent('step:submit EntryPoint.handleOps through /api/relay/execute')
+      setOwnerRemoveDepositState({
+        kind: 'pending',
+        label: `submitting ${preview.preflight.selectedFunction}(${removeIndex}) via Relay UserOp…`,
       })
-      const quoteJson = await quoteResponse.json().catch(() => null) as RelayQuoteEnvelope | null
-      appendEvent(
-        JSON.stringify({
-          step: 'relay_quote_response',
-          ok: quoteResponse.ok,
-          status: quoteResponse.status,
-          data: quoteJson,
-        }).slice(0, 2000),
-      )
-      if (!quoteResponse.ok || !quoteJson?.success || !quoteJson.data?.steps) {
-        throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteResponse.status})`)
-      }
-      // Relay labels same-chain call routes with id='swap' and cross-chain routes with id='deposit'.
-      // Both arrive as kind:'transaction' items — filter by kind, not by id.
-      const depositStep = quoteJson.data.steps.find(
-        (step) => step.kind === 'transaction' && step.items?.some((item) => item.status === 'incomplete' && item.data?.to && item.data?.data),
-      )
-      const depositItem = depositStep?.items?.find((item) => item.status === 'incomplete' && item.data?.to && item.data?.data)
-        ?? depositStep?.items?.find((item) => item.data?.to && item.data?.data)
-      const tx = depositItem?.data
-      if (!tx?.to || !tx.data) {
-        throw new Error(`Relay quote did not return a transaction item (steps: ${quoteJson.data.steps.map((s) => `${s.id}/${s.kind}`).join(',') || 'none'}).`)
-      }
-      appendEvent(
-        JSON.stringify({
-          step: 'relay_deposit_tx',
-          requestId: depositStep?.requestId,
-          to: tx.to,
-          value: tx.value ?? '0',
-          selector: tx.data.slice(0, 10),
-        }),
-      )
-      setOwnerRemoveDepositState({ kind: 'pending', label: 'submitting quoted Relay deposit step…' })
-      const txHashRaw = await request({
-        method: 'eth_sendTransaction',
-        params: [
-          {
-            from: normalizedCswAddress,
-            to: tx.to,
-            data: tx.data,
-            value: toEthHexQuantity(tx.value),
-          },
-        ],
+      const relayResult = await _submitOwnerViaSelfBuiltUserOp({
+        walletRequest: async (args) => await request(args),
+        chainId: base.id,
+        csw: normalizedCswAddress,
+        innerCallData: preview.txRequest.data as Hex,
+        requireWebAuthnOwnerSignature: true,
+        sessionKind: 'self_auth',
+        quoteRelayBeforeSubmit: true,
+        onTelemetry: (event) => {
+          appendEvent(formatEventDetail(event).slice(0, 2000))
+        },
       })
-      if (!isTxHash(txHashRaw)) {
-        throw new Error('eth_sendTransaction did not return a transaction hash for Relay deposit.')
+      if (!relayResult.txHash) {
+        throw new Error('Relay /execute did not return a transaction hash for the owner-remove UserOp.')
       }
-      setOwnerRemoveDepositTxHash(txHashRaw)
+      setOwnerRemoveDepositTxHash(relayResult.txHash)
       setOwnerRemoveDepositState({
         kind: 'ok',
-        label: 'quoted Relay deposit for remove submitted',
-        detail: txHashRaw,
+        label: `Relay UserOp ${preview.preflight.selectedFunction} submitted`,
+        detail: relayResult.txHash,
       })
     } catch (error) {
       setOwnerRemoveDepositState({
         kind: 'err',
-        label: 'quoted Relay deposit for remove failed',
+        label: 'Relay UserOp owner remove failed',
         detail: describeError(error),
       })
     }
@@ -1942,13 +1869,15 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-          Self-call owner add (Relay-quoted deposit)
+          Self-call owner add (Relay-sponsored UserOp)
         </div>
         <div className="text-xs text-zinc-500">
-          Only the Relay-quoted same-chain call lane is exposed here. Other lanes
-          (bundler UserOp, wallet_sendCalls, executeBatch, direct passkey UserOp,
-          direct replayable self-call) proved unreliable in production and have been
-          removed.
+          Builds a CSW UserOp targeting executeWithoutChainIdValidation(addOwnerAddress),
+          signs via the Base App passkey self-auth session (the CSW signs via
+          ERC-1271, so the connected wallet must be the CSW itself), wraps in
+          EntryPoint.handleOps, and submits via Relay&apos;s /execute/call
+          so Relay&apos;s solver pays gas. Matches the on-chain pattern in
+          {' '}<a href="https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36" target="_blank" rel="noreferrer" className="underline">reference tx 0xa9a06340</a>.
         </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner address to add</div>
@@ -1963,10 +1892,10 @@ export function CswSignatureProbe() {
           <button
             type="button"
             className="rounded border border-purple-500/60 px-3 py-1.5 text-xs text-purple-200 hover:border-purple-400"
-            onClick={runRelayQuotedDepositForOwnerAdd}
-            title="Fetch a Relay quote for the wrapped executeWithoutChainIdValidation(addOwnerAddress) call and submit the resulting transaction step."
+            onClick={runOwnerAddViaRelayUserOp}
+            title="Build a signed UserOp for addOwnerAddress(target), wrap in EntryPoint.handleOps, submit via Relay /execute so Relay sponsors gas."
           >
-            fetch Relay quote and submit deposit step
+            add owner via Relay UserOp
           </button>
         </div>
         <StatusRow title="prepared add-owner lane" state={preparedCallsState} />
@@ -1983,14 +1912,16 @@ export function CswSignatureProbe() {
 
       <section className="space-y-3 rounded border border-zinc-800 bg-zinc-950 p-4">
         <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">
-          Self-call owner remove (Relay-quoted deposit)
+          Self-call owner remove (Relay-sponsored UserOp)
         </div>
         <div className="text-xs text-zinc-500">
-          Calls `/api/onboarding/preview-remove-owner` to pick removeOwnerAtIndex /
-          removeLastOwner, wraps the call with executeWithoutChainIdValidation, then
-          fetches a Relay quote and submits the resulting transaction step. The
-          wallet_sendCalls and bundler-UserOp remove lanes have been removed as they
-          were unreliable in production.
+          Calls /api/onboarding/preview-remove-owner to pick removeOwnerAtIndex /
+          removeLastOwner, builds a CSW UserOp wrapping that call with
+          executeWithoutChainIdValidation, signs via the Base App passkey
+          self-auth session, wraps in EntryPoint.handleOps, and submits via
+          Relay&apos;s /execute/call. Matches
+          the on-chain pattern in
+          {' '}<a href="https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36" target="_blank" rel="noreferrer" className="underline">reference tx 0xa9a06340</a>.
         </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner index to remove</div>
@@ -2018,10 +1949,10 @@ export function CswSignatureProbe() {
           <button
             type="button"
             className="rounded border border-purple-500/60 px-3 py-1.5 text-xs text-purple-200 hover:border-purple-400"
-            onClick={runRelayQuotedDepositForOwnerRemove}
-            title="Build a preview-remove-owner preflight and submit the Relay-quoted same-chain call that executes the resulting remove."
+            onClick={runOwnerRemoveViaRelayUserOp}
+            title="Run preview-remove-owner, build a signed UserOp for the selected remove call, wrap in EntryPoint.handleOps, submit via Relay /execute so Relay sponsors gas."
           >
-            relay quote + submit remove
+            remove owner via Relay UserOp
           </button>
         </div>
         <StatusRow title="owner remove deposit lane" state={ownerRemoveDepositState} />
