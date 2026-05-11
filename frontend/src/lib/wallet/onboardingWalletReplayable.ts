@@ -663,7 +663,17 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     ]
   let signature: `0x${string}` | null = null
   let webAuthnOwnerCheck: ReturnType<typeof classifyWebAuthnOwnerSignature> | null = null
-  let acceptedSignatureKind: 'webauthn_owner' | 'ecdsa_owner_recovered' | null = null
+  let acceptedSignatureKind:
+    | 'webauthn_owner'
+    | 'ecdsa_owner_recovered'
+    | 'session_key_not_installed'
+    | null = null
+  // Track the recovered ECDSA addresses from the *last* preflight so we can
+  // emit them in signature_preflight. The UI uses these to render an explicit
+  // "signer not installed" warning instead of letting Relay revert with AA24.
+  let lastRecoveredRawAddress: `0x${string}` | null = null
+  let lastRecoveredEip191Address: `0x${string}` | null = null
+  let lastOwnerRecoveryKind: string | null = null
   for (const candidate of signatureCandidates) {
     try {
       const maybeSignature = (await params.walletRequest({
@@ -694,13 +704,25 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
           sessionKind: params.sessionKind ?? 'external_signer',
         })
         ownerRecoveryOutcome = ownerRecovery.kind
+        lastOwnerRecoveryKind = ownerRecovery.kind
+        // Capture recovered addresses (when present in the recovery result) so
+        // the page UI can render an explicit signer-not-installed remediation.
+        if ('recoveredRawAddress' in ownerRecovery) {
+          lastRecoveredRawAddress = ownerRecovery.recoveredRawAddress ?? null
+        }
+        if ('recoveredEip191Address' in ownerRecovery) {
+          lastRecoveredEip191Address = ownerRecovery.recoveredEip191Address ?? null
+        }
         if (
           ownerRecovery.kind === 'ok' ||
           (!requireWebAuthnOwnerSignature && ownerRecovery.kind === 'skipped_self_auth_session_key')
         ) {
           signature = maybeSignature
           webAuthnOwnerCheck = classification
-          acceptedSignatureKind = 'ecdsa_owner_recovered'
+          acceptedSignatureKind =
+            ownerRecovery.kind === 'ok'
+              ? 'ecdsa_owner_recovered'
+              : 'session_key_not_installed'
         }
       }
       signAttempts.push({
@@ -790,6 +812,9 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
       ownerIndex: webAuthnOwnerCheck.ownerIndex,
       innerSignatureKind: webAuthnOwnerCheck.innerSignatureKind,
       signatureLengthBytes: webAuthnOwnerCheck.signatureLengthBytes,
+      recoveredRawAddress: lastRecoveredRawAddress,
+      recoveredEip191Address: lastRecoveredEip191Address,
+      ownerRecoveryKind: lastOwnerRecoveryKind,
       intendedAddOwnerTarget: addOwnerTarget,
     },
   })

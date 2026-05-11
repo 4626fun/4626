@@ -175,6 +175,24 @@ export function RemoveOwnerPage() {
     relayTx: unknown
     rawBody: string | null
   } | null>(null)
+  // Default to passkey-only signing. Self-auth ECDSA via Coinbase Wallet's
+  // `personal_sign` is documented to silently return signatures from rotated
+  // session keys that are no longer installed as owners on the CSW — the
+  // SignatureWrapper claims an ownerIndex but the ECDSA actually recovers to
+  // an address that doesn't match the bytes stored at that slot, so EntryPoint
+  // reverts with AA24 inside Relay's solver simulation. Passkey (owner[0])
+  // signs via WebAuthn, which the CSW validates with stored credentialId bytes
+  // — no session-key drift possible. The user can opt back into session-key
+  // mode if they explicitly want to (e.g. when no passkey is available).
+  const [requirePasskey, setRequirePasskey] = useState(true)
+  // When the signature recovers to an address that's not installed on the
+  // CSW, we capture the recovered candidate(s) here so the page can suggest
+  // an explicit recovery action (e.g. "install this address as an owner first").
+  const [signerMismatch, setSignerMismatch] = useState<{
+    recoveredRaw: string | null
+    recoveredEip191: string | null
+    claimedOwnerIndex: number | null
+  } | null>(null)
 
   // Use the wagmi-configured public client so we hit the project's own Base
   // RPC (with multicall batching and any auth tokens) rather than viem's
@@ -305,6 +323,7 @@ export function RemoveOwnerPage() {
     setPreviewLoading(true)
     setPageError(null)
     setLastErrorDetail(null)
+    setSignerMismatch(null)
     setPageNotice(null)
     setPreview(null)
     setTxHash(null)
@@ -370,6 +389,7 @@ export function RemoveOwnerPage() {
     setBusy(true)
     setPageError(null)
     setLastErrorDetail(null)
+    setSignerMismatch(null)
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
@@ -384,11 +404,11 @@ export function RemoveOwnerPage() {
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
         innerCallData: preview.txRequest.data as Hex,
-        // Don't force WebAuthn: Coinbase wallet self-auth may return either a
-        // passkey signature (owner[0]) or a session-key 65-byte ECDSA
-        // signature (owner index varies per wallet client-state). Accept
-        // whichever the wallet returns and rely on on-chain validation.
-        requireWebAuthnOwnerSignature: false,
+        // Force WebAuthn passkey signing by default (owner[0]). Self-auth
+        // session-key ECDSA returns signatures from rotated keys that are no
+        // longer installed on the CSW, causing AA24 inside Relay's solver.
+        // The user can opt out via the toggle below (sets requirePasskey=false).
+        requireWebAuthnOwnerSignature: requirePasskey,
         sessionKind: isSelfAuthSession ? 'self_auth' : 'external_signer',
         quoteRelayBeforeSubmit: true,
         onTelemetry: (event) => {
@@ -410,6 +430,28 @@ export function RemoveOwnerPage() {
                 relayTx: d.relayTx ?? null,
                 rawBody: (d.rawBodyFirst2000 as string | null) ?? null,
               })
+            }
+            // Detect the session-key-not-installed case from signature_preflight
+            // so we can show a clear remediation hint before the Relay submit.
+            if (event.step === 'signature_preflight' && event.detail && typeof event.detail === 'object') {
+              const d = event.detail as Record<string, unknown>
+              const outcome = d.outcome as string | undefined
+              const ownerRecoveryKind = d.ownerRecoveryKind as string | undefined
+              // Warn if either the accepted outcome is the not-installed lane,
+              // or if the underlying recovery surfaced a mismatch even when a
+              // session-key signature was accepted (which Relay will then
+              // reject with AA24).
+              if (
+                outcome === 'session_key_not_installed' ||
+                ownerRecoveryKind === 'mismatch' ||
+                ownerRecoveryKind === 'skipped_self_auth_session_key'
+              ) {
+                setSignerMismatch({
+                  recoveredRaw: (d.recoveredRawAddress as string | null) ?? null,
+                  recoveredEip191: (d.recoveredEip191Address as string | null) ?? null,
+                  claimedOwnerIndex: (d.ownerIndex as number | null) ?? null,
+                })
+              }
             }
           } catch {
             appendEvent(`${event.step}: <unloggable>`)
@@ -731,6 +773,34 @@ export function RemoveOwnerPage() {
                   ) : null}
 
                   <div className="space-y-3">
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300 space-y-2">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={requirePasskey}
+                          onChange={(e) => {
+                            setRequirePasskey(e.target.checked)
+                            setSignerMismatch(null)
+                          }}
+                          disabled={busy}
+                        />
+                        <span>
+                          <span className="text-zinc-200 font-medium">
+                            Sign with passkey (owner[0])
+                          </span>
+                          <span className="block text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
+                            Recommended. Self-auth ECDSA via Coinbase
+                            Wallet&apos;s personal_sign can return signatures from
+                            rotated session keys that aren&apos;t installed on the
+                            CSW, which makes the EntryPoint reject the UserOp
+                            with AA24. Uncheck to fall back to the session-key
+                            ECDSA path at your own risk.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+
                     <button
                       type="button"
                       disabled={
@@ -744,7 +814,9 @@ export function RemoveOwnerPage() {
                       className="btn-accent btn-no-icon inline-flex"
                     >
                       {busy
-                        ? 'Removing via Relay UserOp…'
+                        ? requirePasskey
+                          ? 'Removing via passkey + Relay UserOp…'
+                          : 'Removing via session-key + Relay UserOp…'
                         : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
                           ? 'Open in browser to remove'
                           : !preview
@@ -788,6 +860,48 @@ export function RemoveOwnerPage() {
                   {pageError ? (
                     <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">
                       {pageError}
+                    </div>
+                  ) : null}
+
+                  {signerMismatch ? (
+                    <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-[11px] text-amber-100 space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200/80">
+                        Signer not installed on CSW
+                      </div>
+                      <p className="leading-relaxed">
+                        The signature your wallet returned recovers to an
+                        address that&apos;s not stored at any owner slot on this
+                        CSW. Coinbase Wallet&apos;s self-auth session key has
+                        likely rotated and the new key isn&apos;t installed. The
+                        EntryPoint will reject this UserOp with{' '}
+                        <code className="font-mono">AA24 signature error</code>.
+                      </p>
+                      <div className="space-y-1 font-mono break-all">
+                        {signerMismatch.recoveredRaw ? (
+                          <div>
+                            <span className="text-[10px] text-amber-200/60">recovered (raw): </span>
+                            {signerMismatch.recoveredRaw}
+                          </div>
+                        ) : null}
+                        {signerMismatch.recoveredEip191 ? (
+                          <div>
+                            <span className="text-[10px] text-amber-200/60">recovered (eip-191): </span>
+                            {signerMismatch.recoveredEip191}
+                          </div>
+                        ) : null}
+                        {signerMismatch.claimedOwnerIndex != null ? (
+                          <div>
+                            <span className="text-[10px] text-amber-200/60">wrapper claimed ownerIndex: </span>
+                            {signerMismatch.claimedOwnerIndex}
+                          </div>
+                        ) : null}
+                      </div>
+                      <p className="text-[10px] text-amber-200/80 leading-relaxed">
+                        Recommended fix: enable the “Sign with passkey” toggle
+                        above and retry. Owner[0] is a passkey, which uses
+                        WebAuthn (not personal_sign) and is unaffected by
+                        session-key rotation.
+                      </p>
                     </div>
                   ) : null}
 
