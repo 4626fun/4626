@@ -1,0 +1,45 @@
+{
+  "title": "4626 Core Architecture",
+  "nodes": [
+    { "id": "creator", "label": "Creator/User", "subtitle": "Actor", "type": "actor", "row": 0 },
+    { "id": "keeper", "label": "Keeper", "subtitle": "Ops Actor", "type": "actor", "row": 0 },
+    { "id": "owner", "label": "Protocol Owner", "subtitle": "Admin", "type": "actor", "row": 0 },
+    { "id": "batcher", "label": "DeploymentBatcher", "subtitle": "Phase Orchestrator", "type": "protocol", "row": 1 },
+    { "id": "vault", "label": "CreatorOVault", "subtitle": "ERC4626 Core", "type": "protocol", "row": 1 },
+    { "id": "strategies", "label": "Strategy Layer", "subtitle": "CCA / Charm / Ajna / Solana", "type": "protocol", "row": 1 },
+    { "id": "gauge", "label": "CreatorGaugeController", "subtitle": "Fee Split", "type": "protocol", "row": 2 },
+    { "id": "shareoft", "label": "CreatorShareOFT", "subtitle": "LZ Share Token", "type": "protocol", "row": 2 },
+    { "id": "lottery", "label": "CreatorLotteryManager", "subtitle": "Jackpot + VRF", "type": "protocol", "row": 2 },
+    { "id": "oracle", "label": "CreatorOracle", "subtitle": "Price Hub", "type": "protocol", "row": 2 },
+    { "id": "solanaBridge", "label": "SolanaBridgeAdapter", "subtitle": "Bridge Adapter", "type": "protocol", "row": 2 },
+    { "id": "lz", "label": "LayerZero Endpoint", "subtitle": "Cross-Chain", "type": "external", "row": 3 },
+    { "id": "uniswap", "label": "Uniswap Pools/Routers", "subtitle": "DEX Liquidity", "type": "external", "row": 3 },
+    { "id": "chainlink", "label": "Chainlink", "subtitle": "Feeds + VRF", "type": "external", "row": 3 },
+    { "id": "baseBridge", "label": "Base Bridge Stack", "subtitle": "Token Bridge", "type": "external", "row": 3 }
+  ],
+  "edges": [
+    { "from": "creator", "to": "batcher", "label": "phase deploy" },
+    { "from": "creator", "to": "vault", "label": "deposit/withdraw" },
+    { "from": "keeper", "to": "vault", "label": "report/tend" },
+    { "from": "owner", "to": "batcher", "label": "set config" },
+    { "from": "batcher", "to": "vault", "label": "deploy vault" },
+    { "from": "vault", "to": "strategies", "label": "allocate assets" },
+    { "from": "shareoft", "to": "gauge", "label": "route fees" },
+    { "from": "gauge", "to": "lottery", "label": "jackpot path" },
+    { "from": "gauge", "to": "vault", "label": "burn stream" },
+    { "from": "vault", "to": "oracle", "label": "price inputs" },
+    { "from": "strategies", "to": "solanaBridge", "label": "bridge flow" },
+    { "from": "shareoft", "to": "lz", "label": "OFT messaging" },
+    { "from": "lottery", "to": "lz", "label": "winner relay" },
+    { "from": "oracle", "to": "lz", "label": "price relay" },
+    { "from": "strategies", "to": "uniswap", "label": "swap/liquidity" },
+    { "from": "oracle", "to": "chainlink", "label": "price reads" },
+    { "from": "lottery", "to": "chainlink", "label": "vrf requests" },
+    { "from": "solanaBridge", "to": "baseBridge", "label": "bridge tx" }
+  ],
+  "groups": [
+    { "label": "User + Ops", "nodes": ["creator", "keeper", "owner"] },
+    { "label": "Core Deployment/Vault", "nodes": ["batcher", "vault", "strategies"] },
+    { "label": "Messaging & Distribution", "nodes": ["gauge", "shareoft", "lottery", "oracle", "solanaBridge"] }
+  ]
+}
