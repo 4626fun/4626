@@ -49,6 +49,66 @@ export type PreparedCallsSignRequestMode =
   | 'personal_sign_address_data'
   | 'eth_sign_address_data'
 
+/**
+ * Convert a native-value input (hex `0x...` or decimal `"123"`, or undefined)
+ * into the 0x-prefixed hex string `wallet_prepareCalls` expects. Empty / null
+ * / non-numeric inputs collapse to `'0x0'`.
+ */
+export function normalizePreparedCallValueToHex(value: string | number | bigint | undefined | null): `0x${string}` {
+  if (value === undefined || value === null || value === '') return '0x0'
+  if (typeof value === 'bigint') return `0x${value.toString(16)}`
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return '0x0'
+    return `0x${BigInt(Math.trunc(value)).toString(16)}`
+  }
+  const trimmed = value.trim()
+  if (!trimmed) return '0x0'
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
+    // Already hex; canonicalize to lowercase and strip any leading-zero pad.
+    try {
+      return `0x${BigInt(trimmed).toString(16)}`
+    } catch {
+      return '0x0'
+    }
+  }
+  if (/^[0-9]+$/.test(trimmed)) {
+    try {
+      return `0x${BigInt(trimmed).toString(16)}`
+    } catch {
+      return '0x0'
+    }
+  }
+  return '0x0'
+}
+
+/**
+ * Convert a native-value input (hex `0x...` or decimal `"123"`, or undefined)
+ * into a plain decimal string. Used when forwarding to upstream APIs (like
+ * Relay `/quote/v2`) that only accept decimal integers in their `amount` and
+ * `value` fields.
+ */
+export function normalizePreparedCallValueToDecimal(
+  value: string | number | bigint | undefined | null,
+): string {
+  if (value === undefined || value === null || value === '') return '0'
+  if (typeof value === 'bigint') return value.toString(10)
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) return '0'
+    return BigInt(Math.trunc(value)).toString(10)
+  }
+  const trimmed = value.trim()
+  if (!trimmed) return '0'
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
+    try {
+      return BigInt(trimmed).toString(10)
+    } catch {
+      return '0'
+    }
+  }
+  if (/^[0-9]+$/.test(trimmed)) return trimmed
+  return '0'
+}
+
 function emitPreparedCallsDebug(params: {
   runId: string
   hypothesisId: string
@@ -302,6 +362,15 @@ export async function _submitOwnerViaPreparedCalls(params: {
   sender: `0x${string}`
   to: `0x${string}`
   data: `0x${string}`
+  /**
+   * Optional native-currency value to forward with the prepared call. Defaults
+   * to `'0x0'` for backwards compatibility with the original owner-install
+   * call sites that always passed zero. Callers that lift a tx from a Relay
+   * `/quote/v2` step item (which may include a non-zero value for depository
+   * top-ups) should forward it here so the prepared UserOp matches Relay's
+   * quoted shape. Accepts a hex string (`0x...`) or a decimal string.
+   */
+  value?: string
   paymasterUrl: string | null
   approvalRunId: string
   executionMode: OwnerApprovalExecutionMode
@@ -326,11 +395,14 @@ export async function _submitOwnerViaPreparedCalls(params: {
   const capabilities: Record<string, unknown> = {}
   const paymasterUrlStr = resolvePreparedCallsPaymasterUrl(params.paymasterUrl)
   if (paymasterUrlStr) capabilities.paymasterService = { url: paymasterUrlStr }
+  // Normalize value to a 0x-prefixed hex string. wallet_prepareCalls expects
+  // hex for native value. Accept either hex or decimal input from callers.
+  const valueHex = normalizePreparedCallValueToHex(params.value)
   const prepareCallsPayload: Record<string, unknown> = {
     version: '1.0',
     from: params.sender,
     chainId: chainIdHex,
-    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    calls: [{ to: params.to, data: params.data, value: valueHex }],
     capabilities,
   }
 

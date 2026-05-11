@@ -36,7 +36,10 @@
  */
 
 import { apiFetch } from '../api/apiBase'
-import { _submitOwnerViaPreparedCalls } from './onboardingWalletPrepared'
+import {
+  _submitOwnerViaPreparedCalls,
+  normalizePreparedCallValueToDecimal,
+} from './onboardingWalletPrepared'
 
 const RELAY_QUOTE_ENDPOINT = '/api/relay/quote'
 
@@ -175,12 +178,18 @@ export async function _submitOwnerViaRelayQuotedPreparedCalls(
   // explicit so the telemetry log shows what we actually sent).
   const cswLower = params.csw.toLowerCase() as `0x${string}`
 
+  // The /api/relay/quote proxy validates that `value` (and `amount`, which it
+  // derives from `value` when not explicitly provided) is a plain decimal
+  // integer (regex /^[0-9]+$/). The remove-owner preview payload passes
+  // `'0x0'` for value, which trips that check and returns 400 before any tx
+  // is prepared. Normalize to decimal here.
+  const innerValueDecimal = normalizePreparedCallValueToDecimal(params.innerTx.value)
   const quoteBody = {
     chainId: params.chainId,
     user: cswLower,
     to: params.innerTx.to,
     data: params.innerTx.data,
-    value: params.innerTx.value ?? '0',
+    value: innerValueDecimal,
   }
   emit({ step: 'quote_request', detail: quoteBody })
 
@@ -266,33 +275,20 @@ export async function _submitOwnerViaRelayQuotedPreparedCalls(
 
   let txHash: `0x${string}`
   try {
-    // NB: `_submitOwnerViaPreparedCalls` hardcodes the inner call value to
-    // '0x0' today. Relay's quote may include a non-zero value (e.g. for the
-    // depository top-up portion), but in observed Base-mainnet quotes for our
-    // owner-mutation lane the value has always been '0' because Relay pays
-    // itself out of the inner UserOp's prefund. If a future quote returns a
-    // non-zero value we'll need to widen the helper \u2014 capture that in
-    // telemetry so we notice.
-    if (stepTx.value !== '0' && stepTx.value !== '0x0') {
-      // Don't throw \u2014 still attempt the submission so we get a clear bundler
-      // error rather than failing on a heuristic.
-      emit({
-        step: 'prepare_calls_error',
-        detail: {
-          stage: 'value_mismatch_warning',
-          message:
-            'Relay step value is non-zero but _submitOwnerViaPreparedCalls hardcodes value=0x0. ' +
-            'Proceeding anyway; if this reverts, widen the helper to forward value.',
-          relayValue: stepTx.value,
-        },
-      })
-    }
+    // Forward Relay's quoted native value verbatim. For typical owner-mutation
+    // quotes on Base the value is '0' (Relay pays itself out of the inner
+    // UserOp's prefund), but quotes that bundle a depository top-up may return
+    // a non-zero value that MUST match the on-chain call exactly or the
+    // bundler / EntryPoint will reject the prepared UserOp.
+    // `_submitOwnerViaPreparedCalls` accepts either hex (`0x...`) or decimal
+    // strings and normalizes internally.
     txHash = await _submitOwnerViaPreparedCalls({
       walletRequest: params.walletRequest,
       chainId: params.chainId,
       sender: params.csw,
       to: stepTx.to,
       data: stepTx.data,
+      value: stepTx.value,
       paymasterUrl: params.paymasterUrl,
       approvalRunId: params.approvalRunId,
       executionMode: 'canonicalSmartWallet',
