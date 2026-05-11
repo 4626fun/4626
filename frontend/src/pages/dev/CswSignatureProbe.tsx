@@ -589,6 +589,8 @@ export function CswSignatureProbe() {
   const [ownerToRemoveIndexInput, setOwnerToRemoveIndexInput] = useState('2')
   const [ownerRemoveState, setOwnerRemoveState] = useState<StepState>(INITIAL_STEP)
   const [ownerRemoveTxHash, setOwnerRemoveTxHash] = useState<string | null>(null)
+  const [ownerRemoveDepositState, setOwnerRemoveDepositState] = useState<StepState>(INITIAL_STEP)
+  const [ownerRemoveDepositTxHash, setOwnerRemoveDepositTxHash] = useState<string | null>(null)
   const [ownerRemoveEventLog, setOwnerRemoveEventLog] = useState<string[]>([])
   const [ownerRemovePreview, setOwnerRemovePreview] = useState<RemoveOwnerPreview | null>(null)
   const [ownerRemoveUserOpState, setOwnerRemoveUserOpState] = useState<StepState>(INITIAL_STEP)
@@ -2818,6 +2820,145 @@ export function CswSignatureProbe() {
     }
   }
 
+  async function runRelayQuotedDepositForOwnerRemove() {
+    if (!walletClient || !connectedAddress) {
+      setOwnerRemoveDepositState({ kind: 'err', label: 'connect wallet first' })
+      return
+    }
+    if (!normalizedCswAddress) {
+      setOwnerRemoveDepositState({ kind: 'err', label: 'invalid CSW address' })
+      return
+    }
+    if (connectedAddress.toLowerCase() !== normalizedCswAddress.toLowerCase()) {
+      setOwnerRemoveDepositState({
+        kind: 'err',
+        label: 'connected wallet must be the CSW itself',
+        detail: `Connected: ${connectedAddress}. CSW: ${normalizedCswAddress}.`,
+      })
+      return
+    }
+    const removeIndex = Number(ownerToRemoveIndexInput)
+    if (!Number.isInteger(removeIndex) || removeIndex < 0) {
+      setOwnerRemoveDepositState({ kind: 'err', label: 'invalid owner index to remove' })
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setOwnerRemoveDepositState({
+        kind: 'err',
+        label: 'wallet request() unavailable',
+        detail: 'This wallet client cannot submit the quoted Relay deposit transaction.',
+      })
+      return
+    }
+    const appendEvent = (row: string) => {
+      setOwnerRemoveEventLog((prev) => [...prev, row].slice(-30))
+    }
+    setOwnerRemoveDepositTxHash(null)
+    setOwnerRemoveEventLog([])
+    setOwnerRemoveDepositState({
+      kind: 'pending',
+      label: `building remove-owner preview for deposit quote (index ${removeIndex})…`,
+    })
+    try {
+      appendEvent('session:self_auth')
+      appendEvent('lane:owner_remove_relay_quote_deposit')
+      const previewResponse = await fetch('/api/onboarding/preview-remove-owner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cswAddress: normalizedCswAddress,
+          connectedAddress,
+          ownerIndex: removeIndex,
+        }),
+      })
+      const previewJson = await previewResponse.json().catch(() => null) as {
+        success?: boolean
+        error?: string
+        data?: RemoveOwnerPreview
+      } | null
+      if (!previewResponse.ok || !previewJson?.success || !previewJson.data) {
+        throw new Error(previewJson?.error ?? `preview-remove-owner failed (${previewResponse.status})`)
+      }
+      const preview = previewJson.data
+      setOwnerRemovePreview(preview)
+      appendEvent(`target:function=${preview.preflight.selectedFunction}`)
+      appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
+      const wrappedData = encodeExecuteWithoutChainIdValidation(preview.txRequest.data as Hex)
+      setOwnerRemoveDepositState({ kind: 'pending', label: 'fetching Relay quote deposit step…' })
+      const quoteResponse = await fetch('/api/relay/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chainId: base.id,
+          user: normalizedCswAddress,
+          to: normalizedCswAddress,
+          data: wrappedData,
+          value: '0',
+          amount: '0',
+        }),
+      })
+      const quoteJson = await quoteResponse.json().catch(() => null) as RelayQuoteEnvelope | null
+      appendEvent(
+        JSON.stringify({
+          step: 'relay_quote_response',
+          ok: quoteResponse.ok,
+          status: quoteResponse.status,
+          data: quoteJson,
+        }).slice(0, 2000),
+      )
+      if (!quoteResponse.ok || !quoteJson?.success || !quoteJson.data?.steps) {
+        throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteResponse.status})`)
+      }
+      const depositStep = quoteJson.data.steps.find(
+        (step) => step.id === 'deposit' && step.kind === 'transaction',
+      )
+      const depositItem = depositStep?.items?.find((item) => item.data?.to && item.data?.data)
+      const tx = depositItem?.data
+      if (!tx?.to || !tx.data) {
+        throw new Error('Relay quote did not return a deposit transaction item.')
+      }
+      appendEvent(
+        JSON.stringify({
+          step: 'relay_deposit_tx',
+          requestId: depositStep?.requestId,
+          to: tx.to,
+          value: tx.value ?? '0',
+          selector: tx.data.slice(0, 10),
+        }),
+      )
+      setOwnerRemoveDepositState({ kind: 'pending', label: 'submitting quoted Relay deposit step…' })
+      const txHashRaw = await request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: normalizedCswAddress,
+            to: tx.to,
+            data: tx.data,
+            value: tx.value ?? '0x0',
+          },
+        ],
+      })
+      if (!isTxHash(txHashRaw)) {
+        throw new Error('eth_sendTransaction did not return a transaction hash for Relay deposit.')
+      }
+      setOwnerRemoveDepositTxHash(txHashRaw)
+      setOwnerRemoveDepositState({
+        kind: 'ok',
+        label: 'quoted Relay deposit for remove submitted',
+        detail: txHashRaw,
+      })
+    } catch (error) {
+      setOwnerRemoveDepositState({
+        kind: 'err',
+        label: 'quoted Relay deposit for remove failed',
+        detail: describeError(error),
+      })
+    }
+  }
+
   async function loadCreate2AuthorizationStatus() {
     if (!publicClient) {
       setCreate2ReadState({ kind: 'err', label: 'Base client unavailable', detail: 'Reload and retry.' })
@@ -3361,6 +3502,11 @@ export function CswSignatureProbe() {
         <div className="text-xs text-zinc-500">
           Dev-only helper that first calls `/api/onboarding/preview-remove-owner`, then submits the returned remove transaction through `wallet_sendCalls`.
         </div>
+        <div className="rounded border border-purple-500/30 bg-purple-500/10 p-2 text-[11px] text-purple-100">
+          Recommended sequence: (1) load owner slots, (2) if bundler lane says unfunded or
+          simulate-validation error, run relay quote deposit, then (3) retry bundler remove or
+          use wallet_sendCalls.
+        </div>
         <label className="space-y-1">
           <div className="font-mono text-[11px] uppercase tracking-wide text-zinc-400">Owner index to remove</div>
           <input
@@ -3389,7 +3535,15 @@ export function CswSignatureProbe() {
             className="rounded border border-rose-500/60 px-3 py-1.5 text-xs text-rose-200 hover:border-rose-400"
             onClick={runSelfBuiltOwnerRemove}
           >
-            run remove via wallet_sendCalls
+            remove via wallet_sendCalls
+          </button>
+          <button
+            type="button"
+            className="rounded border border-purple-500/60 px-3 py-1.5 text-xs text-purple-200 hover:border-purple-400"
+            onClick={runRelayQuotedDepositForOwnerRemove}
+            title="Fetch Relay quote for this remove-owner call and submit only the depositNative step to pre-fund the lane."
+          >
+            relay quote + deposit (prefund)
           </button>
           <button
             type="button"
@@ -3398,12 +3552,14 @@ export function CswSignatureProbe() {
             disabled={Boolean(bundlerUserOpConfigError)}
             title={bundlerUserOpConfigError ?? 'Submit remove through direct bundler UserOp lane (self-funded).'}
           >
-            run remove via bundler userop
+            remove via bundler userop
           </button>
         </div>
         {bundlerUserOpConfigError ? (
           <div className="text-[11px] text-amber-300">{bundlerUserOpConfigError}</div>
         ) : null}
+        <StatusRow title="owner remove deposit lane" state={ownerRemoveDepositState} />
+        {ownerRemoveDepositTxHash ? <KeyValue label="ownerRemoveDepositTxHash" value={ownerRemoveDepositTxHash} /> : null}
         <StatusRow title="owner remove lane" state={ownerRemoveState} />
         {ownerRemoveTxHash ? <KeyValue label="ownerRemoveTxHash" value={ownerRemoveTxHash} /> : null}
         <StatusRow title="owner remove userop lane" state={ownerRemoveUserOpState} />
