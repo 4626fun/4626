@@ -32,6 +32,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   // to isolate the heavy @xmtp/node-bindings (~214 MB) from the catch-all bundle.
   // 'agent/process': () => import('./agent/_process.js'),
   'token/image': () => import('./token/_image.js'),
+  'token/hermit-avatar': () => import('./token/_hermitAvatar.js'),
   'telegram/webhook': () => import('./telegram/_webhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),

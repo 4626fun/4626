@@ -1,25 +1,4 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, resolve } from 'node:path'
 import { h, type SatoriNode } from './satoriRenderer.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const HERMIT_AVATAR_PATH = resolve(__dirname, 'assets/hermit-avatar.png')
-
-let hermitAvatarDataUrlCache: string | null = null
-
-function getHermitAvatarDataUrl(): string {
-  if (hermitAvatarDataUrlCache !== null) return hermitAvatarDataUrlCache
-  try {
-    const buf = readFileSync(HERMIT_AVATAR_PATH)
-    hermitAvatarDataUrlCache = `data:image/png;base64,${buf.toString('base64')}`
-  } catch (err) {
-    console.warn('[alfa/charts] hermit avatar load failed:', err)
-    hermitAvatarDataUrlCache = ''
-  }
-  return hermitAvatarDataUrlCache
-}
 
 const PALETTE = {
   bg: '#07080c',
@@ -61,6 +40,7 @@ type ShellInput = {
   context?: string
   chart: SatoriNode
   source: string
+  avatarDataUrl?: string
 }
 
 function formatCompactUsd(value: number): string {
@@ -92,15 +72,14 @@ function truncate(value: string, max: number): string {
 }
 
 function buildShell(input: ShellInput): SatoriNode {
-  const { eyebrow, heroValue, heroCaption, context, chart, source } = input
+  const { eyebrow, heroValue, heroCaption, context, chart, source, avatarDataUrl } = input
 
-  const avatarUrl = getHermitAvatarDataUrl()
   const avatarSize = 52
-  const avatarMark: SatoriNode = avatarUrl
+  const avatarMark: SatoriNode = avatarDataUrl
     ? ({
         type: 'img',
         props: {
-          src: avatarUrl,
+          src: avatarDataUrl,
           width: avatarSize,
           height: avatarSize,
           style: {
@@ -347,6 +326,7 @@ function buildShell(input: ShellInput): SatoriNode {
 export type TopVolumeInput = {
   rows: Array<{ name: string; volume: number; subtitle?: string }>
   totalVolume: number
+  avatarDataUrl?: string
 }
 
 export function buildTopVolumeTree(input: TopVolumeInput): SatoriNode {
@@ -486,12 +466,14 @@ export function buildTopVolumeTree(input: TopVolumeInput): SatoriNode {
       ...rows,
     ),
     source: 'public.alfaclub_rooms_snapshot · order by volume desc',
+    avatarDataUrl: input.avatarDataUrl,
   })
 }
 
 export type TierMixInput = {
   segments: Array<{ label: string; rooms: number }>
   totalRooms: number
+  avatarDataUrl?: string
 }
 
 export function buildTierMixTree(input: TierMixInput): SatoriNode {
@@ -625,6 +607,7 @@ export function buildTierMixTree(input: TierMixInput): SatoriNode {
       ...columns,
     ),
     source: 'public.alfaclub_rooms_snapshot · grouped by room_type, tier',
+    avatarDataUrl: input.avatarDataUrl,
   })
 }
 
@@ -633,6 +616,7 @@ export type PnlBucket = { bucketStart: number; bucketEnd: number; rooms: number 
 export type PnlDistributionInput = {
   buckets: PnlBucket[]
   totalRooms: number
+  avatarDataUrl?: string
 }
 
 function monotoneCubicPath(points: Array<{ x: number; y: number }>): string {
@@ -916,6 +900,7 @@ export function buildPnlDistributionTree(input: PnlDistributionInput): SatoriNod
       xAxisRow,
     ),
     source: 'public.alfaclub_rooms_snapshot · width_bucket(pnlPercentageAllTime, -100, 300, 10)',
+    avatarDataUrl: input.avatarDataUrl,
   })
 }
 

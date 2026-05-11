@@ -2,6 +2,7 @@ import { getDb } from '../db/postgres.js'
 import { getGroveChainId, tryUploadImmutableFile } from '../lens/lensGrove.js'
 import { resolveHermitGatewayUrl } from '../hermit/policy.js'
 import { renderSatoriPng } from './satoriRenderer.js'
+import { renderHermitAvatarDataUrl } from './hermitAvatar.js'
 import {
   buildTopVolumeTree,
   buildTierMixTree,
@@ -9,6 +10,17 @@ import {
   CHART_CANVAS,
   type PnlBucket,
 } from './chartTemplates.js'
+
+const HERMIT_AVATAR_RENDER_SIZE = 256
+
+async function safeHermitAvatarDataUrl(): Promise<string | undefined> {
+  try {
+    return await renderHermitAvatarDataUrl({ size: HERMIT_AVATAR_RENDER_SIZE })
+  } catch (err) {
+    console.warn('[alfa/charts] hermit avatar render failed; falling back to default mark:', err)
+    return undefined
+  }
+}
 
 export type AlfaRoomChartKind = 'top-volume' | 'tier-mix' | 'pnl-distribution'
 
@@ -215,7 +227,11 @@ const VOLUME_SCALE = 1_000_000
 
 async function renderTopVolumeChart(rows: TopVolumeRow[]): Promise<AlfaRoomChartResult | null> {
   if (rows.length === 0) return null
-  const totalCatalog = (await loadTotalCatalogVolume()) / VOLUME_SCALE
+  const [totalCatalogRaw, avatarDataUrl] = await Promise.all([
+    loadTotalCatalogVolume(),
+    safeHermitAvatarDataUrl(),
+  ])
+  const totalCatalog = totalCatalogRaw / VOLUME_SCALE
   const tree = buildTopVolumeTree({
     rows: rows.map((row) => {
       const name = row.room_name?.trim() || `Room #${row.room_id}`
@@ -227,6 +243,7 @@ async function renderTopVolumeChart(rows: TopVolumeRow[]): Promise<AlfaRoomChart
       }
     }),
     totalVolume: totalCatalog,
+    avatarDataUrl,
   })
   const bytes = await renderSatoriPng(tree, { width: CHART_CANVAS.width, height: CHART_CANVAS.height })
   const attachment = await uploadPng({ bytes, filename: 'alfaclub-top-volume.png' })
@@ -254,7 +271,8 @@ async function renderTierMixChart(rows: TierMixRow[]): Promise<AlfaRoomChartResu
     rooms: Number(row.rooms),
   }))
   const totalRooms = segments.reduce((acc, s) => acc + s.rooms, 0)
-  const tree = buildTierMixTree({ segments, totalRooms })
+  const avatarDataUrl = await safeHermitAvatarDataUrl()
+  const tree = buildTierMixTree({ segments, totalRooms, avatarDataUrl })
   const bytes = await renderSatoriPng(tree, { width: CHART_CANVAS.width, height: CHART_CANVAS.height })
   const attachment = await uploadPng({ bytes, filename: 'alfaclub-tier-mix.png' })
   if (!attachment) return null
@@ -280,7 +298,8 @@ async function renderPnlDistributionChart(rows: PnlBucketRow[]): Promise<AlfaRoo
     return { bucketStart: start, bucketEnd: end, rooms: Number(row.rooms) }
   })
   const totalRooms = buckets.reduce((acc, b) => acc + b.rooms, 0)
-  const tree = buildPnlDistributionTree({ buckets, totalRooms })
+  const avatarDataUrl = await safeHermitAvatarDataUrl()
+  const tree = buildPnlDistributionTree({ buckets, totalRooms, avatarDataUrl })
   const bytes = await renderSatoriPng(tree, { width: CHART_CANVAS.width, height: CHART_CANVAS.height })
   const attachment = await uploadPng({ bytes, filename: 'alfaclub-pnl-distribution.png' })
   if (!attachment) return null

@@ -7,12 +7,14 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const TEMPLATES_PATH = resolve(__dirname, '../server/_lib/alfaclub/chartTemplates.ts')
 const RENDERER_PATH = resolve(__dirname, '../server/_lib/alfaclub/satoriRenderer.ts')
+const AVATAR_PATH = resolve(__dirname, '../server/_lib/alfaclub/hermitAvatar.ts')
 
 async function loadModules() {
   const tsx = await import('tsx/esm/api')
   const tpl = await tsx.tsImport(TEMPLATES_PATH, import.meta.url)
   const rdr = await tsx.tsImport(RENDERER_PATH, import.meta.url)
-  return { tpl, rdr }
+  const avatar = await tsx.tsImport(AVATAR_PATH, import.meta.url)
+  return { tpl, rdr, avatar }
 }
 
 const TOP_VOLUME_FIXTURE = {
@@ -57,13 +59,14 @@ const PNL_FIXTURE = {
 async function main() {
   const outDir = process.argv[2] || `/tmp/alfa-charts-${Date.now()}`
   await mkdir(outDir, { recursive: true })
-  const { tpl, rdr } = await loadModules()
+  const { tpl, rdr, avatar } = await loadModules()
   const canvas = tpl.CHART_CANVAS
+  const avatarDataUrl = await avatar.renderHermitAvatarDataUrl({ size: 256 })
 
   const jobs = [
-    { name: 'top-volume.png', tree: tpl.buildTopVolumeTree(TOP_VOLUME_FIXTURE) },
-    { name: 'tier-mix.png', tree: tpl.buildTierMixTree(TIER_MIX_FIXTURE) },
-    { name: 'pnl-distribution.png', tree: tpl.buildPnlDistributionTree(PNL_FIXTURE) },
+    { name: 'top-volume.png', tree: tpl.buildTopVolumeTree({ ...TOP_VOLUME_FIXTURE, avatarDataUrl }) },
+    { name: 'tier-mix.png', tree: tpl.buildTierMixTree({ ...TIER_MIX_FIXTURE, avatarDataUrl }) },
+    { name: 'pnl-distribution.png', tree: tpl.buildPnlDistributionTree({ ...PNL_FIXTURE, avatarDataUrl }) },
   ]
 
   for (const job of jobs) {
