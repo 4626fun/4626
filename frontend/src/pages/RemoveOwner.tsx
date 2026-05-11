@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useWalletClient } from 'wagmi'
+import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { createPublicClient, formatEther, http, type Hex } from 'viem'
+import { formatEther, type Hex, type PublicClient } from 'viem'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
@@ -44,7 +44,12 @@ type OnchainOwnerRow = {
   index: number
   ownerBytes: `0x${string}`
   ownerAddress: `0x${string}` | null
-  type: 'EOA' | 'passkey' | 'empty' | 'unknown'
+  // 'unreadable' = the on-chain read for this slot threw; we don't actually
+  // know whether it's empty or populated. Don't gate the UI on this state
+  // alone — surface the error so the user can retry or fall back to
+  // typing an index manually.
+  type: 'EOA' | 'passkey' | 'empty' | 'unknown' | 'unreadable'
+  readError?: string | null
 }
 
 type LiveDiagnostics = {
@@ -165,15 +170,18 @@ export function RemoveOwnerPage() {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
 
-  const publicClient = useMemo(
-    () => createPublicClient({ chain: base, transport: http() }),
-    [],
-  )
+  // Use the wagmi-configured public client so we hit the project's own Base
+  // RPC (with multicall batching and any auth tokens) rather than viem's
+  // unauthenticated default endpoint. mainnet.base.org is heavily rate-
+  // limited and would silently fail later-in-batch reads, marking real
+  // owner slots as empty.
+  const wagmiPublicClient = usePublicClient({ chainId: base.id })
+  const publicClient = wagmiPublicClient as PublicClient | undefined
 
   // Live on-chain diagnostics: refresh whenever the canonical CSW changes.
   useEffect(() => {
     let cancelled = false
-    if (!canonicalCswAddress) {
+    if (!canonicalCswAddress || !publicClient) {
       setDiagnostics(INITIAL_DIAGNOSTICS)
       return () => {
         cancelled = true
@@ -207,27 +215,45 @@ export function RemoveOwnerPage() {
         const SCAN_HARD_CEILING = 256
         const rawScanLimit = Math.max(nextOwnerIndex, Number(ownerCountRaw))
         const scanLimit = Math.min(rawScanLimit, SCAN_HARD_CEILING)
-        const owners: OnchainOwnerRow[] = []
-        for (let idx = 0; idx < scanLimit; idx += 1) {
-          try {
-            const ownerBytes = (await publicClient.readContract({
+        // Fan out the per-slot reads in parallel — the wagmi public client
+        // batches them through multicall, so this is one round-trip with
+        // proper error attribution per slot instead of a serial loop where
+        // an early throttle silently nukes later reads.
+        const slotResults = await Promise.allSettled(
+          Array.from({ length: scanLimit }, (_, idx) =>
+            publicClient.readContract({
               address: cswAddress,
               abi: CSW_OWNER_ABI,
               functionName: 'ownerAtIndex',
               args: [BigInt(idx)],
-            })) as `0x${string}`
-            const type = classifyOwnerBytes(ownerBytes)
-            const ownerAddress = decodeOwnerAddress(ownerBytes)
-            owners.push({ index: idx, ownerBytes, ownerAddress, type })
-          } catch (err) {
-            owners.push({
+            }),
+          ),
+        )
+        const owners: OnchainOwnerRow[] = slotResults.map((result, idx) => {
+          if (result.status === 'rejected') {
+            const message =
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason ?? 'read failed')
+            // Don't claim "empty" — we don't know. Mark as unreadable so the
+            // UI surfaces the error and the slot is still selectable.
+            return {
               index: idx,
               ownerBytes: '0x',
               ownerAddress: null,
-              type: 'empty',
-            })
+              type: 'unreadable',
+              readError: message,
+            }
           }
-        }
+          const ownerBytes = result.value as `0x${string}`
+          return {
+            index: idx,
+            ownerBytes,
+            ownerAddress: decodeOwnerAddress(ownerBytes),
+            type: classifyOwnerBytes(ownerBytes),
+            readError: null,
+          }
+        })
         if (cancelled) return
         setDiagnostics({
           status: 'ready',
@@ -431,7 +457,7 @@ export function RemoveOwnerPage() {
           </div>
         ) : null}
 
-        {inAppEnv?.isAnyWalletInApp ? (
+        {inAppEnv?.isAnyWalletInApp && !isSelfAuthSession ? (
           <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6 space-y-4 text-amber-100">
             <div className="space-y-1">
               <div className="text-[11px] uppercase tracking-[0.2em] text-amber-300/80">
@@ -444,9 +470,10 @@ export function RemoveOwnerPage() {
               </div>
             </div>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              Removing an owner requires the same passkey or EOA owner signature
-              that owner installs use. In-app browsers can block or replace that
-              signing context.
+              You&apos;re connected as an external signer (not the CSW itself).
+              Removing an owner needs the same passkey or EOA signature owner
+              installs use, and in-app browsers can block or replace that signing
+              context. Open in a regular browser for the best chance of success.
             </p>
             <a
               href={externalUrl}
@@ -456,6 +483,14 @@ export function RemoveOwnerPage() {
             >
               Open 4626.fun/remove-owner in browser
             </a>
+          </div>
+        ) : null}
+
+        {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
+            In-app browser detected, but this is a CSW self-auth session — the
+            signature comes from the connected session-key EOA owner, not a
+            passkey popup, so you can stay in this browser.
           </div>
         ) : null}
 
@@ -550,13 +585,16 @@ export function RemoveOwnerPage() {
                       {diagnostics.owners.map((owner) => {
                         const isSelected = selectedIndex === owner.index
                         const isEmpty = owner.type === 'empty'
+                        const isUnreadable = owner.type === 'unreadable'
                         const label =
                           owner.ownerAddress ??
                           (owner.type === 'passkey'
                             ? `passkey ${owner.ownerBytes.slice(0, 30)}…`
                             : isEmpty
                               ? '(empty slot)'
-                              : owner.ownerBytes.slice(0, 36) + '…')
+                              : isUnreadable
+                                ? '(read failed — RPC error, slot may still be populated)'
+                                : owner.ownerBytes.slice(0, 36) + '…')
                         return (
                           <li key={owner.index}>
                             <button
@@ -566,19 +604,29 @@ export function RemoveOwnerPage() {
                               className={`flex w-full items-center justify-between gap-2 rounded-xl border px-3 py-2 text-xs font-mono ${
                                 isEmpty
                                   ? 'border-white/5 bg-black/20 text-zinc-600 cursor-not-allowed'
-                                  : isSelected
-                                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                                    : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/25'
+                                  : isUnreadable
+                                    ? isSelected
+                                      ? 'border-amber-400/40 bg-amber-500/10 text-amber-100'
+                                      : 'border-amber-400/25 bg-amber-500/5 text-amber-100/80 hover:border-amber-300/60'
+                                    : isSelected
+                                      ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                                      : 'border-white/10 bg-black/30 text-zinc-300 hover:border-white/25'
                               }`}
+                              title={owner.readError ?? undefined}
                             >
-                              <span>
+                              <span className="min-w-0 truncate">
                                 <span className="text-[10px] mr-2">[{owner.index}]</span>
                                 <span>{label}</span>
                               </span>
-                              <span className="text-[10px] text-zinc-500">
+                              <span className="text-[10px] text-zinc-500 shrink-0">
                                 {owner.type}
                               </span>
                             </button>
+                            {isUnreadable && owner.readError ? (
+                              <div className="mt-1 text-[10px] text-amber-200/70 px-1">
+                                read error: {owner.readError.slice(0, 120)}
+                              </div>
+                            ) : null}
                           </li>
                         )
                       })}
@@ -668,7 +716,7 @@ export function RemoveOwnerPage() {
                         busy ||
                         !preview ||
                         previewLoading ||
-                        (inAppEnv?.isAnyWalletInApp ?? false) ||
+                        ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession) ||
                         (preview ? !preview.preflight.simulation.ok : false)
                       }
                       onClick={() => void handleRemove()}
@@ -676,7 +724,7 @@ export function RemoveOwnerPage() {
                     >
                       {busy
                         ? 'Removing via Relay UserOp…'
-                        : inAppEnv?.isAnyWalletInApp
+                        : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
                           ? 'Open in browser to remove'
                           : !preview
                             ? 'Select an owner above first'
