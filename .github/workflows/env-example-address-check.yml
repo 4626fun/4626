@@ -13,8 +13,6 @@ on:
   pull_request:
     paths:
       - '.env.example'
-      - 'cre/secrets.example.env'
-      - 'cre/cre-workflows/.env.example'
       - 'frontend/.env.example'
       - 'indexer/.env.example'
       - '.github/workflows/env-example-address-check.yml'
@@ -32,8 +30,6 @@ jobs:
 
           FILES=(
             ".env.example"
-            "cre/secrets.example.env"
-            "cre/cre-workflows/.env.example"
             "frontend/.env.example"
             "indexer/.env.example"
           )
