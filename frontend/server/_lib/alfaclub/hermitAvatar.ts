@@ -8,16 +8,16 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 
 const HERMIT_SOURCE_PATH = resolve(__dirname, 'assets/hermit-source.png')
+const HERMIT_CUTOUT_PATH = resolve(__dirname, 'assets/hermit-cutout.png')
 
 const DEFAULT_SIZE = 512
 const MIN_SIZE = 64
 const MAX_SIZE = 1024
-const DEFAULT_SIGNATURE = 'hermit'
+const DEFAULT_SIGNATURE = 'hermit4626'
 const MAX_SIGNATURE_LENGTH = 24
 
-// `renderBackgroundCard` uses cardRadius = round(size * 0.16); we mirror the
-// same ratio when masking corners so the post-processed edge lines up exactly
-// with the rounded card the renderer drew.
+// renderBackgroundCard uses cardRadius = round(size * 0.16); we mirror it so
+// the rounded-corner mask we apply lines up exactly with the rendered card.
 const CARD_RADIUS_RATIO = 0.16
 
 export type HermitAvatarOptions = {
@@ -26,6 +26,7 @@ export type HermitAvatarOptions = {
 }
 
 let sourceBytesPromise: Promise<Uint8Array> | null = null
+let cutoutBytesPromise: Promise<Uint8Array | null> | null = null
 
 async function loadSourceBytes(): Promise<Uint8Array> {
   if (!sourceBytesPromise) {
@@ -35,6 +36,18 @@ async function loadSourceBytes(): Promise<Uint8Array> {
     })
   }
   return sourceBytesPromise
+}
+
+async function loadCutoutBytes(): Promise<Uint8Array | null> {
+  if (!cutoutBytesPromise) {
+    cutoutBytesPromise = readFile(HERMIT_CUTOUT_PATH)
+      .then((buf) => new Uint8Array(buf) as Uint8Array | null)
+      .catch((err) => {
+        console.warn('[alfa/hermit-avatar] cutout load failed; breakout disabled this render:', err)
+        return null
+      })
+  }
+  return cutoutBytesPromise
 }
 
 const renderCache = new Map<string, Buffer>()
@@ -73,18 +86,22 @@ export async function renderHermitAvatarBuffer(opts: HermitAvatarOptions = {}): 
   const cacheKey = `${size}:${signatureText}`
   const cached = renderCache.get(cacheKey)
   if (cached) return cached
-  const sourceBytes = await loadSourceBytes()
-  // Production-style call: pass the opaque source only and let the renderer's
-  // own runtime segmentation path (rembg) build the breakout mask. The hat
-  // breaks above the bezel via the same path that produces token icon breakout
-  // in production. We then mask the rounded-card corners so the avatar blends
-  // into chart backgrounds instead of carrying a square black backdrop.
+  const [sourceBytes, cutoutBytes] = await Promise.all([loadSourceBytes(), loadCutoutBytes()])
+  // Pass the opaque source for chamber composition AND the hand-curated alpha
+  // cutout as the heroCutout source. The opt-in flag bypasses the pixelArt-only
+  // gate in renderBreakoutLayer so the hat pokes above the bezel for the 3D
+  // effect this avatar is built around. Existing token icon callers don't pass
+  // this flag and stay on the conservative path.
   const opaque = await renderPremiumTokenIcon({
     size,
     sourceImage: sourceBytes,
+    heroCutoutSourceImage: cutoutBytes ?? undefined,
+    allowHeroCutoutBreakoutForNonPixelArt: true,
     symbol: signatureText,
     signatureText,
   })
+  // Mask the rounded-card corners so the avatar blends onto chart backgrounds
+  // instead of carrying a square black backdrop.
   const transparent = await applyTransparentCorners(opaque, size)
   renderCache.set(cacheKey, transparent)
   return transparent

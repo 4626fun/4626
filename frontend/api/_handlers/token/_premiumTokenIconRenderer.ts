@@ -16,6 +16,13 @@ export type PremiumTokenIconParams = {
   sourceImage?: Uint8Array
   heroCutoutSourceImage?: Uint8Array
   suppressBreakout?: boolean
+  // Opt-in: allow the heroCutout breakout layer for non-pixelArt sources.
+  // The default safety gate (added in commit af17f3d61 to suppress occasional
+  // glitches on generic token cutouts) is bypassed only when callers pass a
+  // hand-curated heroCutoutSourceImage that they trust. Token icon renders MUST
+  // leave this off; opt-in is for caller-owned avatars that want the 3D hat /
+  // top-of-frame breakout the heroCutout path is designed to produce.
+  allowHeroCutoutBreakoutForNonPixelArt?: boolean
   symbol?: string
   signatureText?: string
   renderPreset?: RenderPreset
@@ -3427,12 +3434,21 @@ export async function renderBreakoutLayer(params: {
   scale?: number
   topBiasPx?: number
   sourceClass?: SourceClass
+  // Opt-in escape hatch: skip the pixelArt-only guard for callers passing a
+  // hand-curated heroCutout source. Token icons must NOT pass this; it is for
+  // caller-owned avatars (e.g. hermit) that want the original 3D top-of-frame
+  // breakout the heroCutout pipeline is designed to produce.
+  allowHeroCutoutBreakoutForNonPixelArt?: boolean
 }): Promise<Buffer> {
   const { size, layout } = params
   if (!params.sourceImage || params.sourceImage.length === 0) {
     return createTransparentCanvas(size).png().toBuffer()
   }
-  if (params.subjectMaskKind === 'heroCutout' && params.sourceClass !== 'pixelArt') {
+  if (
+    params.subjectMaskKind === 'heroCutout' &&
+    params.sourceClass !== 'pixelArt' &&
+    !params.allowHeroCutoutBreakoutForNonPixelArt
+  ) {
     return createTransparentCanvas(size).png().toBuffer()
   }
 
@@ -4296,6 +4312,7 @@ export async function renderPremiumTokenIcon(params: PremiumTokenIconParams): Pr
             opacity: breakoutOpacity,
             scale: breakoutScale,
             topBiasPx: breakoutTopBiasPx,
+            allowHeroCutoutBreakoutForNonPixelArt: params.allowHeroCutoutBreakoutForNonPixelArt,
             sourceClass: analysis.sourceClass,
           })
           if (breakoutLayer && !await hasVisibleAlpha(breakoutLayer)) {
