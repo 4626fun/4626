@@ -8,8 +8,8 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { apiFetch } from '@/lib/api/apiBase'
-import { _submitOwnerViaRelayQuotedPreparedCalls } from '@/lib/wallet/relayQuotedPreparedCalls'
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
+import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
+import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
@@ -394,32 +394,71 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:relay_quoted_prepared_calls')
+    appendEvent('lane:relay_funder_eoa_two_step')
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
-    appendEvent(`signing:wallet_prepareCalls`)
-    void requirePasskey // The new lane delegates signing to wallet_prepareCalls,
-    // which natively prompts the passkey when needed; the legacy
-    // requireWebAuthnOwnerSignature flag does not apply here.
+    appendEvent(`signing:require_passkey=${requirePasskey}`)
     try {
-      const paymasterEnv = (import.meta.env as Record<string, string | undefined>)
-        .VITE_CDP_PAYMASTER_URL
-      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const result = await _submitOwnerViaRelayQuotedPreparedCalls({
+      // Step 1: have the connected wallet sign the inner CSW UserOp (passkey or
+      // session-key, depending on requirePasskey + wallet capabilities).
+      // signOnly=true means we DO NOT submit to /api/relay/execute — we just
+      // capture the signed handleOps calldata for the funder step.
+      appendEvent('step1:sign_userop_start')
+      const signResult = await _submitOwnerViaSelfBuiltUserOp({
         walletRequest: async (args) => await request(args),
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
-        innerTx: {
-          to: preview.txRequest.to,
-          data: preview.txRequest.data as Hex,
-          value: preview.txRequest.value,
-        },
-        paymasterUrl,
-        approvalRunId: `remove-owner-${Date.now()}`,
-        signerAddress: ownerSignerAddress ?? null,
+        innerCallData: preview.txRequest.data as Hex,
+        requireWebAuthnOwnerSignature: requirePasskey,
         sessionKind: isSelfAuthSession ? 'self_auth' : 'external_signer',
+        signOnly: true,
+        onTelemetry: (event) => {
+          try {
+            const detail =
+              typeof event.detail === 'string'
+                ? event.detail
+                : JSON.stringify(event.detail)
+            const cap = event.step === 'error' ? 4000 : 240
+            appendEvent(`step1.${event.step}: ${detail.slice(0, cap)}`)
+            if (
+              event.step === 'signature_preflight' &&
+              event.detail &&
+              typeof event.detail === 'object'
+            ) {
+              const d = event.detail as Record<string, unknown>
+              const ownerRecoveryKind = d.ownerRecoveryKind as string | undefined
+              if (
+                ownerRecoveryKind === 'mismatch' ||
+                ownerRecoveryKind === 'skipped_self_auth_session_key'
+              ) {
+                setSignerMismatch({
+                  recoveredRaw: (d.recoveredRawAddress as string | null) ?? null,
+                  recoveredEip191: (d.recoveredEip191Address as string | null) ?? null,
+                  claimedOwnerIndex: (d.ownerIndex as number | null) ?? null,
+                })
+              }
+            }
+          } catch {
+            appendEvent(`step1.${event.step}: <unloggable>`)
+          }
+        },
+      })
+      appendEvent(`step1:sign_userop_done (handleOps=${signResult.handleOpsCalldata.length - 2} hex chars)`)
+
+      // Step 2: ask Relay for a quote with the funder EOA as `user` and the
+      // CSW as `recipient`. The funder broadcasts the returned tx via plain
+      // eth_sendTransaction — no wallet_prepareCalls required, so this works
+      // from inside Coinbase Wallet's in-app browser.
+      const funderEoa = (ownerSignerAddress ?? canonicalCswAddress) as `0x${string}`
+      appendEvent(`step2:funder=${funderEoa}`)
+      const submitResult = await _submitOwnerViaFunderEoa({
+        walletRequest: async (args) => await request(args),
+        funderEoa,
+        csw: canonicalCswAddress as `0x${string}`,
+        handleOpsCalldata: signResult.handleOpsCalldata,
+        chainId: base.id,
         onTelemetry: (event) => {
           try {
             const detail =
@@ -427,8 +466,12 @@ export function RemoveOwnerPage() {
                 ? event.detail
                 : JSON.stringify(event.detail)
             const cap = event.step.includes('error') ? 4000 : 240
-            appendEvent(`${event.step}: ${detail.slice(0, cap)}`)
-            if (event.step === 'quote_error' && event.detail && typeof event.detail === 'object') {
+            appendEvent(`step2.${event.step}: ${detail.slice(0, cap)}`)
+            if (
+              event.step === 'quote_error' &&
+              event.detail &&
+              typeof event.detail === 'object'
+            ) {
               const d = event.detail as Record<string, unknown>
               setLastErrorDetail({
                 revertReason: null,
@@ -443,7 +486,7 @@ export function RemoveOwnerPage() {
               })
             }
             if (
-              event.step === 'prepare_calls_error' &&
+              event.step === 'broadcast_error' &&
               event.detail &&
               typeof event.detail === 'object'
             ) {
@@ -456,18 +499,16 @@ export function RemoveOwnerPage() {
               })
             }
           } catch {
-            appendEvent(`${event.step}: <unloggable>`)
+            appendEvent(`step2.${event.step}: <unloggable>`)
           }
         },
       })
-      if (!result.txHash) {
-        throw new Error(
-          'wallet_sendPreparedCalls did not return a transaction hash for the owner-remove call.',
-        )
-      }
-      setTxHash(result.txHash)
+      setTxHash(submitResult.funderTxHash)
       setPageNotice(
-        `Removed owner at index ${preview.preflight.targetOwnerIndex} via ${preview.preflight.selectedFunction}.`,
+        `Broadcast removal tx for owner[${preview.preflight.targetOwnerIndex}] via Relay. ` +
+          (submitResult.statusCheckEndpoint
+            ? 'Relay solver will pick up the request and execute the owner mutation on Base shortly.'
+            : ''),
       )
       setPreview(null)
       setSelectedIndex(null)

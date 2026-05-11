@@ -560,6 +560,14 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
   rpcUrl?: string
   beneficiary?: `0x${string}`
   quoteRelayBeforeSubmit?: boolean
+  /**
+   * If true, sign and encode the handleOps calldata but do NOT submit to
+   * `/api/relay/execute`. The returned `txHash` is `null` and `relayResponse`
+   * is `null`. Use this when a separate funder wallet will broadcast the tx
+   * (see RELAY_OWNER_MUTATION_FLOW.md) so the CSW's owner signature is
+   * captured client-side and handed off to a different wallet session.
+   */
+  signOnly?: boolean
   onTelemetry?: (event: SelfBuiltUserOpLaneTelemetry) => void
 }): Promise<{
   userOp: V06UserOpFields
@@ -859,6 +867,21 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
           error: error instanceof Error ? error.message : String(error ?? ''),
         },
       })
+    }
+  }
+  if (params.signOnly) {
+    emit({
+      step: 'success',
+      detail: { signOnly: true, handleOpsCalldata, signature, hashSigned: hashToSign },
+    })
+    return {
+      userOp: signedUserOp,
+      hashSigned: hashToSign,
+      signature,
+      handleOpsCalldata,
+      relayQuoteResponse,
+      relayResponse: null,
+      txHash: null,
     }
   }
   emit({ step: 'submit_relay', detail: { stage: 'request', relayBody } })
