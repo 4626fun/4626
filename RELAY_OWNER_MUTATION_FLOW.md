@@ -217,6 +217,46 @@ Lessons from the broken iterations:
   wallet (passkey) and the funding wallet (ETH-holding EOA) are different
   contexts with different security models. Separating them is the architecture.
 
+## /api/relay/quote proxy contract (updated in PR #578 follow-up)
+
+The proxy at `frontend/api/_handlers/relay/_quote.ts` previously hard-coded
+`recipient: body.user`, which silently overrode any client-side `recipient`.
+It now accepts optional `recipient`, `originChainId`, and `destinationChainId`
+fields and forwards them to Relay, while keeping the legacy default behavior
+(`recipient = user`, `origin = destination = chainId`) when those fields are
+absent. The funder-EOA lane MUST pass `recipient: cswLower` explicitly so
+Relay routes the multicall execution back to the CSW rather than to the
+funder.
+
+## Third lane: CSW self-call (Base App native)
+
+Added in PR #579 after re-reading session `248b841e`'s notes:
+
+> "Base App's native handler signs locally with the on-device passkey — no
+> popup, no keys.coinbase.com round-trip. This is the only path that works
+> inside the Base App in-app browser (webviews block the popup that
+> wallet_prepareCalls requires)."
+
+When the connected wallet IS the CSW (self-auth session), `/remove-owner`
+now takes a third path: a plain `eth_sendTransaction` where `from === to ===
+CSW` and `data === executeWithoutChainIdValidation([...])`. Base App's
+native handler recognises the self-call shape, signs locally with the
+on-device passkey, and submits via its own bundler. The CSW pays its own gas.
+
+When this works: Base App native signing succeeds, the inner
+`executeWithoutChainIdValidation` payload runs as a UserOp under the hood,
+the owner mutation executes in one on-chain tx, and the CSW's native ETH
+balance is decremented by gas. No Relay, no `wallet_prepareCalls`, no funder.
+
+When this fails (per the same notes): Base App may fall back to an
+"ephemeral session key it generates locally" instead of using the canonical
+passkey, wrapping the SignatureWrapper at the wrong `ownerIndex` and
+reverting with `AA24` inside the bundler. The lane returns the funder tx
+hash either way so Basescan / Tenderly can show the bundler revert.
+
+The page picks the lane automatically: self-auth gets CSW self-call,
+external-signer gets the funder-EOA two-step Relay flow.
+
 ## Open questions for future work
 
 - The first iteration of PR #578 implements Mode 2 fully but Mode 1 only via

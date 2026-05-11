@@ -10,6 +10,7 @@ import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAp
 import { apiFetch } from '@/lib/api/apiBase'
 import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
+import { _submitOwnerViaCswSelfCall } from '@/lib/wallet/cswSelfCallSubmit'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
@@ -394,14 +395,72 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:relay_funder_eoa_two_step')
+    appendEvent(`lane:${isSelfAuthSession ? 'csw_self_call' : 'relay_funder_eoa_two_step'}`)
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
     appendEvent(`signing:require_passkey=${requirePasskey}`)
     try {
-      // Step 1: have the connected wallet sign the inner CSW UserOp (passkey or
+      // Branch on session kind.
+      //
+      // SELF-AUTH lane: the connected wallet IS the CSW itself (e.g. Base App
+      // signed in as the smart wallet). We use a plain eth_sendTransaction
+      // from CSW to CSW with the inner executeWithoutChainIdValidation
+      // payload. Base App's native handler recognises the self-call shape,
+      // signs locally with the on-device passkey, and submits via its own
+      // bundler — no wallet_prepareCalls popup, no keys.coinbase.com round
+      // trip. The CSW pays its own gas from its native balance.
+      //
+      // EXTERNAL-SIGNER lane: a distinct EOA wallet is connected (e.g. via
+      // WalletConnect from a hot wallet that owns the CSW). We sign the
+      // inner UserOp client-side, then route through Relay's quote +
+      // funder-EOA broadcast so the connected wallet pays gas as a normal
+      // EOA tx.
+      if (isSelfAuthSession) {
+        appendEvent('csw_self_call:start')
+        const selfCallResult = await _submitOwnerViaCswSelfCall({
+          walletRequest: async (args) => await request(args),
+          csw: canonicalCswAddress as `0x${string}`,
+          innerCallData: preview.txRequest.data as Hex,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string'
+                  ? event.detail
+                  : JSON.stringify(event.detail)
+              const cap = event.step.includes('error') ? 4000 : 240
+              appendEvent(`csw_self_call.${event.step}: ${detail.slice(0, cap)}`)
+              if (
+                event.step === 'broadcast_error' &&
+                event.detail &&
+                typeof event.detail === 'object'
+              ) {
+                const d = event.detail as Record<string, unknown>
+                setLastErrorDetail({
+                  revertReason: (d.error as string | null) ?? null,
+                  revertData: null,
+                  relayTx: null,
+                  rawBody: null,
+                })
+              }
+            } catch {
+              appendEvent(`csw_self_call.${event.step}: <unloggable>`)
+            }
+          },
+        })
+        setTxHash(selfCallResult.funderTxHash)
+        setPageNotice(
+          `Submitted self-call to remove owner[${preview.preflight.targetOwnerIndex}]. ` +
+            `Tx broadcast by Base App; the CSW pays its own gas. Watch Basescan for confirmation.`,
+        )
+        setPreview(null)
+        setSelectedIndex(null)
+        return
+      }
+
+      // Step 1 (external-signer lane only): have the connected wallet sign
+      // the inner CSW UserOp (passkey or
       // session-key, depending on requirePasskey + wallet capabilities).
       // signOnly=true means we DO NOT submit to /api/relay/execute — we just
       // capture the signed handleOps calldata for the funder step.
@@ -447,11 +506,24 @@ export function RemoveOwnerPage() {
       })
       appendEvent(`step1:sign_userop_done (handleOps=${signResult.handleOpsCalldata.length - 2} hex chars)`)
 
-      // Step 2: ask Relay for a quote with the funder EOA as `user` and the
-      // CSW as `recipient`. The funder broadcasts the returned tx via plain
-      // eth_sendTransaction — no wallet_prepareCalls required, so this works
-      // from inside Coinbase Wallet's in-app browser.
-      const funderEoa = (ownerSignerAddress ?? canonicalCswAddress) as `0x${string}`
+      // Step 2 (external-signer lane only): ask Relay for a quote with the
+      // funder EOA as `user` and the CSW as `recipient`. The funder
+      // broadcasts the returned tx via plain eth_sendTransaction — no
+      // wallet_prepareCalls required.
+      //
+      // Because we early-returned for self-auth above, ownerSignerAddress is
+      // guaranteed here to be a distinct address from the CSW. But still
+      // guard defensively.
+      if (
+        !ownerSignerAddress ||
+        ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
+      ) {
+        throw new Error(
+          'External-signer lane requires a distinct funder EOA; the current connected address matches the CSW. ' +
+            'Reconnect with an EOA wallet that holds ETH on Base and retry.',
+        )
+      }
+      const funderEoa = ownerSignerAddress as `0x${string}`
       appendEvent(`step2:funder=${funderEoa}`)
       const submitResult = await _submitOwnerViaFunderEoa({
         walletRequest: async (args) => await request(args),
@@ -596,9 +668,10 @@ export function RemoveOwnerPage() {
 
         {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
-            In-app browser detected, but this is a CSW self-auth session — the
-            signature comes from the connected session-key EOA owner, not a
-            passkey popup, so you can stay in this browser.
+            In-app browser detected with a CSW self-auth session. This page will
+            submit a plain eth_sendTransaction from the CSW to itself; Base
+            App&apos;s native handler signs locally with the on-device passkey,
+            no popup needed.
           </div>
         ) : null}
 
@@ -846,6 +919,26 @@ export function RemoveOwnerPage() {
                       </label>
                     </div>
 
+                    {isSelfAuthSession ? (
+                      <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
+                          CSW self-call lane
+                        </div>
+                        <p className="leading-relaxed">
+                          This session is signed in as the CSW itself, so the
+                          submit will be a plain eth_sendTransaction from the
+                          CSW to itself. Base App&apos;s native handler signs
+                          locally with the on-device passkey — no popup, no
+                          keys.coinbase.com round trip. The CSW pays its own
+                          gas from its native balance ({
+                            diagnostics.cswEthBalance == null
+                              ? '—'
+                              : `${formatEther(diagnostics.cswEthBalance)} ETH`
+                          }).
+                        </p>
+                      </div>
+                    ) : null}
+
                     <button
                       type="button"
                       disabled={
@@ -859,26 +952,48 @@ export function RemoveOwnerPage() {
                       className="btn-accent btn-no-icon inline-flex"
                     >
                       {busy
-                        ? requirePasskey
-                          ? 'Removing via passkey + Relay UserOp…'
-                          : 'Removing via session-key + Relay UserOp…'
-                        : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
-                          ? 'Open in browser to remove'
-                          : !preview
-                            ? 'Select an owner above first'
-                            : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
+                        ? isSelfAuthSession
+                          ? 'Submitting CSW self-call…'
+                          : requirePasskey
+                            ? 'Removing via passkey + Relay UserOp…'
+                            : 'Removing via session-key + Relay UserOp…'
+                        : isSelfAuthSession
+                          ? `Remove owner at index ${preview?.preflight.targetOwnerIndex ?? '?'} via CSW self-call`
+                          : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
+                            ? 'Open in browser to remove'
+                            : !preview
+                              ? 'Select an owner above first'
+                              : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
                     </button>
                     <p className="text-[11px] leading-relaxed text-zinc-500">
-                      Signs an{' '}
-                      <code className="font-mono text-zinc-400">
-                        executeWithoutChainIdValidation
-                      </code>{' '}
-                      UserOp, wraps in{' '}
-                      <code className="font-mono text-zinc-400">
-                        EntryPoint.handleOps
-                      </code>
-                      , and submits via Relay&apos;s /execute/call so Relay&apos;s
-                      solver pays gas.
+                      {isSelfAuthSession ? (
+                        <>
+                          Sends a plain{' '}
+                          <code className="font-mono text-zinc-400">
+                            eth_sendTransaction
+                          </code>{' '}
+                          from the CSW to itself with the inner{' '}
+                          <code className="font-mono text-zinc-400">
+                            executeWithoutChainIdValidation
+                          </code>{' '}
+                          payload. Base App&apos;s native handler signs locally
+                          with the on-device passkey; the CSW pays its own gas.
+                        </>
+                      ) : (
+                        <>
+                          Signs an{' '}
+                          <code className="font-mono text-zinc-400">
+                            executeWithoutChainIdValidation
+                          </code>{' '}
+                          UserOp client-side, then has the connected funder EOA
+                          broadcast the Relay-quoted{' '}
+                          <code className="font-mono text-zinc-400">
+                            RelayRouterV3.multicall
+                          </code>{' '}
+                          tx. Relay&apos;s solver picks up the deposit and
+                          executes the inner UserOp on Base.
+                        </>
+                      )}
                     </p>
                   </div>
 

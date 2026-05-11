@@ -29,6 +29,18 @@ type RelayQuoteRequest = {
   value?: unknown
   user?: unknown
   amount?: unknown
+  /**
+   * Optional. When omitted, defaults to `user` (the legacy single-wallet
+   * shape used by /remove-owner's earlier prepareCalls lane). When provided,
+   * forwarded to Relay so the quote uses a distinct recipient (e.g. funder
+   * EOA pays, CSW receives the executed call). See RELAY_OWNER_MUTATION_FLOW.md
+   * for the two-wallet architecture.
+   */
+  recipient?: unknown
+  /** Optional. Defaults to `chainId` (same-chain) when omitted. */
+  originChainId?: unknown
+  /** Optional. Defaults to `chainId` (same-chain) when omitted. */
+  destinationChainId?: unknown
 }
 
 function isAddressString(value: unknown): value is string {
@@ -108,11 +120,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'amount must be a decimal integer string' } satisfies ApiEnvelope<never>)
   }
 
+  // recipient defaults to user (legacy single-wallet behavior). When the
+  // caller wants the funder/recipient split (see RELAY_OWNER_MUTATION_FLOW.md),
+  // they pass `recipient` explicitly and we forward it. Validate it's a real
+  // address before trusting it.
+  let recipient: string = body.user
+  if (body.recipient !== undefined && body.recipient !== null && body.recipient !== '') {
+    if (!isAddressString(body.recipient)) {
+      return res.status(400).json({
+        success: false,
+        error: 'recipient must be a 20-byte address when provided',
+      } satisfies ApiEnvelope<never>)
+    }
+    recipient = body.recipient
+  }
+  // origin / destination chain ids default to the same `chainId` for the
+  // legacy same-chain shape. Cross-chain callers can override.
+  const originChainId =
+    typeof body.originChainId === 'number' && Number.isFinite(body.originChainId)
+      ? body.originChainId
+      : chainId
+  const destinationChainId =
+    typeof body.destinationChainId === 'number' && Number.isFinite(body.destinationChainId)
+      ? body.destinationChainId
+      : chainId
   const upstreamPayload = {
     user: body.user,
-    recipient: body.user,
-    originChainId: chainId,
-    destinationChainId: chainId,
+    recipient,
+    originChainId,
+    destinationChainId,
     originCurrency: NATIVE_CURRENCY,
     destinationCurrency: NATIVE_CURRENCY,
     amount: amountRaw,
