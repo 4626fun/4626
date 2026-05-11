@@ -4,10 +4,12 @@ import {
   createPublicClient,
   createWalletClient,
   decodeFunctionData,
+  encodePacked,
   encodeFunctionData,
   formatUnits,
   getAddress,
   http,
+  keccak256,
   type Address,
   type Hex,
 } from 'viem'
@@ -661,6 +663,170 @@ function normalizePhase2IdentityToPhase1(params: {
   return { phase2CoreCalls, phase2FinalizeCalls, rewrote }
 }
 
+async function normalizePhase2AddressesToPhase1State(params: {
+  phase2CoreCalls: Call[]
+  phase2FinalizeCalls: Call[]
+  phase1Batcher: Address | null
+  identity: PhaseIdentity | null
+  readContract: (args: { address: Address; abi: readonly unknown[]; functionName: string; args: readonly unknown[] }) => Promise<unknown>
+}): Promise<{ phase2CoreCalls: Call[]; phase2FinalizeCalls: Call[]; rewrote: boolean }> {
+  const phase1Batcher = params.phase1Batcher
+  const identity = params.identity
+  if (!phase1Batcher || !identity) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  const baseSalt = keccak256(
+    encodePacked(
+      ['address', 'address', 'uint256', 'string', 'string'],
+      [identity.creatorToken, identity.owner, BigInt(base.id), '4626:deploy:', identity.version],
+    ),
+  )
+
+  const phase1State = await params
+    .readContract({
+      address: phase1Batcher,
+      abi: [
+        {
+          type: 'function',
+          name: 'phase1SplitStates',
+          stateMutability: 'view',
+          inputs: [{ name: '', type: 'bytes32' }],
+          outputs: [
+            { name: 'oftBootstrapRegistry', type: 'address' },
+            { name: 'vault', type: 'address' },
+            { name: 'wrapper', type: 'address' },
+            { name: 'shareOFT', type: 'address' },
+            { name: 'shareOftSalt', type: 'bytes32' },
+            { name: 'paramsHash', type: 'bytes32' },
+            { name: 'codeIdsHash', type: 'bytes32' },
+            { name: 'coreDone', type: 'bool' },
+            { name: 'finalized', type: 'bool' },
+          ],
+        },
+      ] as const,
+      functionName: 'phase1SplitStates',
+      args: [baseSalt],
+    })
+    .catch(() => null)
+
+  if (!phase1State || typeof phase1State !== 'object') {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  const finalizedRaw = (phase1State as Record<string | number, unknown>).finalized ?? (phase1State as Record<string | number, unknown>)[8]
+  if (finalizedRaw !== true) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  const canonicalVault = getTupleAddress(phase1State, 'vault', 1)
+  const canonicalWrapper = getTupleAddress(phase1State, 'wrapper', 2)
+  const canonicalShareOFT = getTupleAddress(phase1State, 'shareOFT', 3)
+  if (!canonicalVault || !canonicalWrapper || !canonicalShareOFT) {
+    return {
+      phase2CoreCalls: params.phase2CoreCalls,
+      phase2FinalizeCalls: params.phase2FinalizeCalls,
+      rewrote: false,
+    }
+  }
+
+  let rewrote = false
+
+  const phase2CoreCalls = params.phase2CoreCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_DEPLOY_PHASE2_CORE_ABI, data: call.data })
+      if (decoded.functionName !== 'deployPhase2Core') return call
+      const coreParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      const codeIds = decoded.args?.[1]
+      if (!coreParams || !codeIds) return call
+
+      const currentVault = getTupleAddress(coreParams, 'vault', 4)
+      const currentWrapper = getTupleAddress(coreParams, 'wrapper', 5)
+      const currentShareOFT = getTupleAddress(coreParams, 'shareOFT', 6)
+      if (
+        currentVault?.toLowerCase() === canonicalVault.toLowerCase() &&
+        currentWrapper?.toLowerCase() === canonicalWrapper.toLowerCase() &&
+        currentShareOFT?.toLowerCase() === canonicalShareOFT.toLowerCase()
+      ) {
+        return call
+      }
+
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_DEPLOY_PHASE2_CORE_ABI,
+          functionName: 'deployPhase2Core',
+          args: [
+            {
+              ...coreParams,
+              vault: canonicalVault,
+              wrapper: canonicalWrapper,
+              shareOFT: canonicalShareOFT,
+            } as any,
+            codeIds as any,
+          ],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  const phase2FinalizeCalls = params.phase2FinalizeCalls.map((call) => {
+    try {
+      const decoded = decodeFunctionData({ abi: DRY_RUN_FINALIZE_PHASE2_ABI, data: call.data })
+      if (decoded.functionName !== 'finalizePhase2') return call
+      const finalizeParams = (decoded.args?.[0] ?? null) as Record<string, unknown> | null
+      if (!finalizeParams) return call
+
+      const currentVault = getTupleAddress(finalizeParams, 'vault', 2)
+      const currentWrapper = getTupleAddress(finalizeParams, 'wrapper', 3)
+      const currentShareOFT = getTupleAddress(finalizeParams, 'shareOFT', 4)
+      if (
+        currentVault?.toLowerCase() === canonicalVault.toLowerCase() &&
+        currentWrapper?.toLowerCase() === canonicalWrapper.toLowerCase() &&
+        currentShareOFT?.toLowerCase() === canonicalShareOFT.toLowerCase()
+      ) {
+        return call
+      }
+
+      rewrote = true
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: DRY_RUN_FINALIZE_PHASE2_ABI,
+          functionName: 'finalizePhase2',
+          args: [
+            {
+              ...finalizeParams,
+              vault: canonicalVault,
+              wrapper: canonicalWrapper,
+              shareOFT: canonicalShareOFT,
+            } as any,
+          ],
+        }) as Hex,
+      }
+    } catch {
+      return call
+    }
+  })
+
+  return { phase2CoreCalls, phase2FinalizeCalls, rewrote }
+}
+
 function extractFinalizePhase2CoreAddresses(calls: Call[]): {
   gaugeController: Address
   ccaStrategy: Address
@@ -920,6 +1086,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phase2FinalizeCalls: targetNormalizedPhase2FinalizeCalls,
         identity: phase1Identity,
       })
+      const {
+        phase2CoreCalls: phase1StateAlignedPhase2CoreCalls,
+        phase2FinalizeCalls: phase1StateAlignedPhase2FinalizeCalls,
+        rewrote: rewrotePhase2Phase1State,
+      } = await normalizePhase2AddressesToPhase1State({
+        phase2CoreCalls: normalizedPhase2CoreCalls,
+        phase2FinalizeCalls: normalizedPhase2FinalizeCalls,
+        phase1Batcher,
+        identity: phase1Identity,
+        readContract: (args) => publicClient.readContract(args as any),
+      })
       if (rewrotePhase2Targets) {
         console.warn('[deploy/v2/session/dry-run] phase2_targets_rewritten_to_phase1_batcher', {
           smartWallet: smartWallet.toLowerCase(),
@@ -938,10 +1115,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : null,
         })
       }
+      if (rewrotePhase2Phase1State) {
+        console.warn('[deploy/v2/session/dry-run] phase2_phase1_state_addresses_rewritten', {
+          smartWallet: smartWallet.toLowerCase(),
+          phase1Batcher: phase1Batcher?.toLowerCase() ?? null,
+        })
+      }
       const phasePlan: Array<{ name: DryRunPhaseName; calls: Call[] }> = [
         { name: 'phase1', calls: phase1Calls },
-        { name: 'phase2Core', calls: normalizedPhase2CoreCalls },
-        { name: 'phase2Finalize', calls: normalizedPhase2FinalizeCalls },
+        { name: 'phase2Core', calls: phase1StateAlignedPhase2CoreCalls },
+        { name: 'phase2Finalize', calls: phase1StateAlignedPhase2FinalizeCalls },
         { name: 'phase3', calls: phase3Calls },
         { name: 'phase4', calls: phase4Calls },
       ]
