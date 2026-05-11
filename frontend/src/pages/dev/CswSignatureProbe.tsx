@@ -291,6 +291,32 @@ function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
 }
 
+// Relay returns step.items[].data.value as either a decimal string ("0",
+// "1000000000000000000") or already-hex ("0x0"). eth_sendTransaction strictly
+// requires a 0x-prefixed quantity, so normalize before forwarding. Also
+// tolerates undefined/null and numeric/bigint inputs.
+function toEthHexQuantity(value: unknown): `0x${string}` {
+  if (value === null || value === undefined || value === '') return '0x0'
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (/^0x[0-9a-fA-F]+$/.test(trimmed)) return trimmed as `0x${string}`
+    if (/^[0-9]+$/.test(trimmed)) {
+      try {
+        return `0x${BigInt(trimmed).toString(16)}` as `0x${string}`
+      } catch {
+        return '0x0'
+      }
+    }
+  }
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return `0x${Math.floor(value).toString(16)}` as `0x${string}`
+  }
+  if (typeof value === 'bigint' && value >= 0n) {
+    return `0x${value.toString(16)}` as `0x${string}`
+  }
+  return '0x0'
+}
+
 type ParsedWalletSignature = {
   kind:
     | 'raw-ecdsa'
@@ -1353,7 +1379,7 @@ export function CswSignatureProbe() {
           from: normalizedCswAddress,
           to: tx.to,
           data: tx.data,
-          value: tx.value ?? '0x0',
+          value: toEthHexQuantity(tx.value),
         }],
       })
       if (!isTxHash(txHashRaw)) throw new Error('eth_sendTransaction did not return a transaction hash for Relay deposit.')
@@ -1492,7 +1518,7 @@ export function CswSignatureProbe() {
             from: normalizedCswAddress,
             to: tx.to,
             data: tx.data,
-            value: tx.value ?? '0x0',
+            value: toEthHexQuantity(tx.value),
           },
         ],
       })
