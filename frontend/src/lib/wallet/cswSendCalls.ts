@@ -46,6 +46,20 @@ export type CswSendCallsTelemetry = {
   detail: unknown
 }
 
+/**
+ * One EIP-5792 call entry. Mirrors the shape the backend preview handler
+ * returns and the shape EIP-5792 wallets accept in wallet_sendCalls.calls[].
+ */
+export type SendCallsCall = {
+  to: `0x${string}`
+  data: Hex
+  /**
+   * Native value to send with this specific call. Accepts either a bigint
+   * (which we'll hex-encode here) or a pre-hex-encoded string. Defaults to 0.
+   */
+  value?: bigint | `0x${string}`
+}
+
 export type SubmitViaSendCallsParams = {
   /**
    * Wallet provider RPC bridge. For Base App self-auth sessions this is the
@@ -56,27 +70,32 @@ export type SubmitViaSendCallsParams = {
   /** The CSW address (used as `from` in the EIP-5792 payload). */
   csw: `0x${string}`
   /**
-   * The target of the inner call. For owner mutations this is the CSW itself
-   * (the CSW calls its own `executeBatch` / `addOwnerAddress` etc.) \u2014 the
-   * EIP-5792 standard wraps it in a UserOp where the EntryPoint is the
-   * msg.sender of the CSW call, so `onlyEntryPoint` and `onlyEntryPointOrOwner`
-   * are satisfied.
+   * Ordered list of calls to dispatch in this single wallet_sendCalls. For
+   * the two-part Relay owner-mutation flow this is exactly 2 entries:
+   *
+   *   [0] depositNative → RelayDepository (Part 1, pre-fund)
+   *   [1] removeOwnerAtIndex → CSW          (Part 2, mutation)
+   *
+   * EIP-5792 wallets either bundle both into one UserOp's executeBatch OR
+   * submit them as two sequential UserOps in the same block; either is
+   * fine because the on-chain outcome matches the May 5 reference flow.
    */
-  to: `0x${string}`
-  /**
-   * The RAW inner action calldata (e.g. `removeOwnerAtIndex(idx, ownerBytes)`).
-   * EIP-5792 wallets construct the UserOp's outer callData themselves;
-   * we don't need to (and must not) pre-wrap with `executeBatch` or
-   * `executeWithoutChainIdValidation`.
-   */
-  data: Hex
-  /** Native value to send with the call. Defaults to 0. */
-  value?: bigint
+  calls: SendCallsCall[]
   /** Target chain id. Currently Base mainnet (8453). */
   chainId: number
   /** Optional. Defaults to true so Base App treats the calls as a single bundle. */
   atomicRequired?: boolean
   onTelemetry?: (event: CswSendCallsTelemetry) => void
+}
+
+function encodeValue(value: SendCallsCall['value']): `0x${string}` {
+  if (value === undefined) return '0x0'
+  if (typeof value === 'bigint') return `0x${value.toString(16)}` as `0x${string}`
+  if (typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)) return value
+  // Defensive fallback so a malformed value never silently sends a wrong amount.
+  throw new Error(
+    `Invalid SendCallsCall.value: expected bigint or 0x-prefixed hex string, got ${String(value)}`,
+  )
 }
 
 export async function _submitOwnerViaSendCalls(
@@ -102,6 +121,22 @@ export async function _submitOwnerViaSendCalls(
   const cswLower = params.csw.toLowerCase()
   const accountsLower = accounts.map((a) => a.toLowerCase())
 
+  // Normalize calls to the EIP-5792 wire shape and capture a summary for the
+  // telemetry event. Each call's value can arrive as bigint or hex string;
+  // encodeValue() turns both into a 0x-prefixed hex wei string.
+  const normalizedCalls = params.calls.map((c) => ({
+    to: getAddress(c.to),
+    data: c.data,
+    value: encodeValue(c.value),
+  }))
+
+  const callsSummary = normalizedCalls.map((c, idx) => ({
+    index: idx,
+    to: c.to,
+    valueHex: c.value,
+    dataLengthBytes: (c.data.length - 2) / 2,
+  }))
+
   emit({
     step: 'preflight',
     detail: {
@@ -109,13 +144,19 @@ export async function _submitOwnerViaSendCalls(
       connectedAccounts: accountsLower,
       cswIsConnected: accountsLower.includes(cswLower),
       chainId: params.chainId,
-      target: params.to,
-      dataLengthBytes: (params.data.length - 2) / 2,
-      value: (params.value ?? 0n).toString(),
+      callCount: normalizedCalls.length,
+      calls: callsSummary,
     },
   })
 
-  const valueHex = `0x${(params.value ?? 0n).toString(16)}`
+  if (normalizedCalls.length === 0) {
+    emit({
+      step: 'broadcast_error',
+      detail: { error: 'wallet_sendCalls: calls array is empty' },
+    })
+    throw new Error('wallet_sendCalls: must provide at least one call.')
+  }
+
   const chainIdHex = `0x${params.chainId.toString(16)}`
 
   // EIP-5792 wallet_sendCalls payload. Spec:
@@ -125,13 +166,7 @@ export async function _submitOwnerViaSendCalls(
     from: getAddress(params.csw),
     chainId: chainIdHex,
     atomicRequired: params.atomicRequired ?? true,
-    calls: [
-      {
-        to: getAddress(params.to),
-        value: valueHex,
-        data: params.data,
-      },
-    ],
+    calls: normalizedCalls,
   }
 
   emit({
@@ -139,10 +174,9 @@ export async function _submitOwnerViaSendCalls(
     detail: {
       method: 'wallet_sendCalls',
       from: payload.from,
-      to: payload.calls[0]?.to,
-      value: valueHex,
       chainId: chainIdHex,
-      dataLengthBytes: (params.data.length - 2) / 2,
+      callCount: normalizedCalls.length,
+      calls: callsSummary,
     },
   })
 

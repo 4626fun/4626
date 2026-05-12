@@ -17,13 +17,40 @@ import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSe
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 
+/** One EIP-5792 call. Shape matches what the backend preview returns. */
+type Eip5792Call = {
+  to: `0x${string}`
+  data: `0x${string}`
+  value: `0x${string}`
+}
+
+/**
+ * Relay-orchestrated submission metadata. When present, the single `userCall`
+ * (a deposit-into-RelayRouter tx) is what the wallet should submit; Relay's
+ * solver runs the destination mutation off-chain.
+ */
+type PreviewRelayFlow = {
+  requestId: `0x${string}`
+  userCall: Eip5792Call
+  feeUsd: string | null
+}
+
 type RemoveOwnerPreview = {
+  /** Legacy: raw mutation calldata. Only used in the funder-EOA fallback lane. */
   txRequest: {
     chainId: 8453
     to: `0x${string}`
     data: `0x${string}`
     value: '0x0'
   }
+  /**
+   * EIP-5792 calls to pass to wallet_sendCalls. When relay is present, this
+   * is exactly the Relay-orchestrated user transaction; otherwise it's the
+   * raw mutation call (which only the funder-EOA lane can actually dispatch).
+   */
+  calls: Eip5792Call[]
+  /** Relay quote details, null if the upstream quote failed. */
+  relay: PreviewRelayFlow | null
   preflight: {
     selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
     selectedBy: 'heuristic' | 'simulation'
@@ -39,6 +66,7 @@ type RemoveOwnerPreview = {
       removeOwnerAtIndex: { ok: boolean; error: string | null }
       removeLastOwner: { ok: boolean; error: string | null }
     }
+    relayQuoteError: string | null
   }
 }
 
@@ -404,18 +432,48 @@ export function RemoveOwnerPage() {
     try {
       // Self-auth lane: use EIP-5792 wallet_sendCalls. Base App's wallet
       // builds the UserOp internally, signs it locally with the on-device
-      // passkey, and submits via its built-in bundler. The CSW pays gas
-      // from its EntryPoint deposit. Reference (working): UserOp
-      // 0xa6b54357...b4c3 in bundle 0x34edd28d... (submitted by public
-      // bundler 0x54e2acab..., paymaster=0x0, CSW paid 0.00000106 ETH from
-      // its EntryPoint deposit).
+      // passkey, and submits via its built-in bundler.
+      //
+      // The actual on-chain pattern (re-derived 2026-05-11 from the May 5
+      // owner[3] reference flow) is two transactions in the same Base block:
+      //   Part 1 — CSW → RelayRouterV3 (deposit, multicalls into depository)
+      //   Part 2 — Relay solver bundler → EntryPoint → CSW destination mutation
+      //
+      // The user only signs Part 1. Relay's solver pre-signs and dispatches
+      // Part 2 from its own infrastructure when it sees the deposit event.
+      // So `calls[]` here is exactly ONE entry: the Relay-router deposit tx.
+      //
+      // When the Relay quote failed (preview.relay is null), `calls[]` falls
+      // back to the raw mutation calldata — but Base App's self-auth lane
+      // cannot actually dispatch that without Relay's solver, so the page
+      // surfaces relayQuoteError before letting the user submit.
       if (isSelfAuthSession) {
+        if (!preview.relay) {
+          const reason =
+            preview.preflight.relayQuoteError ??
+            'Relay quote unavailable; the self-auth lane requires Relay orchestration.'
+          appendEvent(`csw_wallet_sendcalls:abort relay_quote_missing reason=${reason.slice(0, 200)}`)
+          setPageError(
+            `Cannot dispatch via wallet_sendCalls without a Relay quote. ${reason}`,
+          )
+          setBusy(false)
+          return
+        }
         appendEvent('csw_wallet_sendcalls:start')
+        appendEvent(`relay:request_id=${preview.relay.requestId}`)
+        appendEvent(`relay:user_call_to=${preview.relay.userCall.to}`)
+        appendEvent(`relay:user_call_value=${preview.relay.userCall.value}`)
+        if (preview.relay.feeUsd) {
+          appendEvent(`relay:fee_usd=${preview.relay.feeUsd}`)
+        }
         const sendCallsResult = await _submitOwnerViaSendCalls({
           walletRequest: async (args) => await request(args),
           csw: canonicalCswAddress as `0x${string}`,
-          to: preview.txRequest.to,
-          data: preview.txRequest.data as Hex,
+          calls: preview.calls.map((c) => ({
+            to: c.to,
+            data: c.data as Hex,
+            value: c.value,
+          })),
           chainId: base.id,
           onTelemetry: (event) => {
             try {
@@ -470,9 +528,10 @@ export function RemoveOwnerPage() {
         if (resolution.transactionHash) {
           setTxHash(resolution.transactionHash)
           setPageNotice(
-            `Submitted wallet_sendCalls to remove owner[${preview.preflight.targetOwnerIndex}]. ` +
-              `Base App built, signed, and submitted the UserOp; the CSW pays its own gas via its EntryPoint deposit. ` +
-              `Watch Basescan for confirmation.`,
+            `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+              `Relay's solver will now dispatch Part 2 (the actual removeOwner mutation) from its bundler, ` +
+              `usually within the same block. Watch the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
+              `request id ${preview.relay.requestId.slice(0, 10)}… can also be tracked via Relay /intents/status.`,
           )
         } else {
           // Bundle id resolved no tx hash within the poll window. Don't show
@@ -481,10 +540,10 @@ export function RemoveOwnerPage() {
           // status manually.
           setTxHash(null)
           setPageNotice(
-            `Submitted wallet_sendCalls to remove owner[${preview.preflight.targetOwnerIndex}]. ` +
-              `Wallet returned bundle id ${sendCallsResult.callBundleId} but did not surface an on-chain ` +
-              `transactionHash within 60s. Check Base App for status; the lane event log below has the ` +
-              `latest wallet_getCallsStatus response.`,
+            `Part 1 submitted via wallet_sendCalls (bundle id ${sendCallsResult.callBundleId}). ` +
+              `Wallet did not surface an on-chain tx hash within 60s. ` +
+              `Relay request id ${preview.relay.requestId.slice(0, 10)}… can be polled at ` +
+              `/intents/status?requestId=${preview.relay.requestId} for status.`,
           )
         }
         setPreview(null)
