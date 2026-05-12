@@ -256,5 +256,24 @@ function shutdown(signal: string): void {
 process.on('SIGINT', () => shutdown('SIGINT'))
 process.on('SIGTERM', () => shutdown('SIGTERM'))
 
+// Hermit is a long-lived chat bridge. Background failures (Supabase pooler
+// TLS timeouts, transient Pinata/Privy errors, etc.) must never tear down the
+// process — Railway will restart us in a tight loop and the bot goes dark.
+// Surface them as warnings and let the per-feature retry/circuit-breaker
+// logic recover on the next tick.
+process.on('unhandledRejection', (reason: unknown) => {
+  const message = reason instanceof Error ? reason.message : String(reason)
+  const stack = reason instanceof Error ? reason.stack : undefined
+  state.lastError = message
+  logger.warn('[hermit] unhandledRejection (swallowed)', { error: message, stack })
+})
+process.on('uncaughtException', (error: Error) => {
+  state.lastError = error.message
+  logger.warn('[hermit] uncaughtException (swallowed)', {
+    error: error.message,
+    stack: error.stack,
+  })
+})
+
 startHealthServer()
 startRuntime()

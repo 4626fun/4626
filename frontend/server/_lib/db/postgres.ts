@@ -384,6 +384,22 @@ export async function getDb(): Promise<DbPool | null> {
             maxUses,
             allowExitOnIdle: true,
           })
+          // node-postgres emits an `error` event on the pool when an idle/
+          // connecting client errors out (e.g. TLS handshake timeout against
+          // the Supabase pooler). Without a listener Node treats it as an
+          // unhandled error and crashes the process — which is exactly what
+          // takes down the hermit Railway service. Attach a handler that logs
+          // the failure and lets the pool reconnect on the next query.
+          pool.on('error', (err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err)
+            const code = String((err as any)?.code ?? '').trim() || undefined
+            console.warn('[postgres] pool client error (background)', { code, message })
+            // If the pool has been emitting failures for an idle client,
+            // drop the cached pool so the next getDb() call rebuilds it.
+            if (cachedRawPool === pool) {
+              resetCachedPool()
+            }
+          })
           cachedRawPool = pool
           const queryRetries = getQueryRetryCount()
           const db: DbPool = {
