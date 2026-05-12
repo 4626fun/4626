@@ -222,6 +222,26 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
       sender_address    TEXT NOT NULL,
       message_text      TEXT NOT NULL DEFAULT '',
       message_date      TIMESTAMPTZ,
+      username          TEXT,
+      avatar_url        TEXT,
+      is_bot            BOOLEAN,
+      is_edited         BOOLEAN,
+      edit_deadline     TIMESTAMPTZ,
+      deleted_at        TIMESTAMPTZ,
+      deleted_by        TEXT,
+      deleted_by_username TEXT,
+      reply_id          TEXT,
+      reply_date        TIMESTAMPTZ,
+      reply_text        TEXT,
+      reply_sender      TEXT,
+      reply_username    TEXT,
+      keys_count        INT,
+      primary_tag       TEXT,
+      primary_tag_variant TEXT,
+      attachments_json  JSONB,
+      reply_attachments_json JSONB,
+      reactions_json    JSONB,
+      message_payload_json JSONB,
       source            TEXT NOT NULL DEFAULT 'ws-live',
       raw_payload_text  TEXT,
       ingested_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -255,6 +275,30 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   }
   await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_room_date_idx ON alfaclub.chat_ingest(room_id, message_date DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_ingested_idx ON alfaclub.chat_ingest(ingested_at DESC);`
+  try {
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS username TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS avatar_url TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS is_bot BOOLEAN;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS is_edited BOOLEAN;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS edit_deadline TIMESTAMPTZ;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS deleted_by TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS deleted_by_username TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_id TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_date TIMESTAMPTZ;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_text TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_sender TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_username TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS keys_count INT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS primary_tag TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS primary_tag_variant TEXT;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS attachments_json JSONB;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reply_attachments_json JSONB;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS reactions_json JSONB;`
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ADD COLUMN IF NOT EXISTS message_payload_json JSONB;`
+  } catch {
+    // Ignore additive column failures in restricted runtime environments.
+  }
 
   // ── alfaclub.radar_dispatch ──
   // Dedupe ledger for Telegram radar digests so scheduled runs do not repost
