@@ -87,8 +87,17 @@ export type AmoeRelayRequest = {
 export type AmoeRelayFn = (params: AmoeRelayRequest) => Promise<`0x${string}`>
 
 export function hasAmoeRelayConfig(): boolean {
-  if (readAmoeRelaySmartWallet() && readAmoeRelayBundlerUrl()) return true
-  return readAmoeRelayPrivateKey() !== null || readAmoeRelayOwnerPrivateKey() !== null
+  // Direct EOA lane: either relay key can submit plain transactions.
+  if (readAmoeRelayPrivateKey() !== null || readAmoeRelayOwnerPrivateKey() !== null) {
+    return true
+  }
+
+  // ERC-4337 lane needs both transport config and an actual signer tuple.
+  const hasSmartWalletTransport =
+    readAmoeRelaySmartWallet() !== null && readAmoeRelayBundlerUrl() !== null
+  if (!hasSmartWalletTransport) return false
+
+  return readAmoeRelayPrivyWalletId() !== null && readAmoeRelayOwnerAddress() !== null
 }
 
 export function createAmoeRelay(): AmoeRelayFn | null {
