@@ -509,6 +509,7 @@ type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
   ownerAddress: Address
+  rolePolicyId?: number
   preflightOnly?: boolean
   phase1Calls: DeploySessionCall[]
   phase2CoreCalls: DeploySessionCall[]
@@ -2273,6 +2274,19 @@ function renderRolePolicySourceLabel(source: RolePolicySourceLabel): string {
   }
 }
 
+function parseRolePolicyOverrideInput(raw: string): { value: number | null; error: string | null } {
+  const trimmed = raw.trim()
+  if (!trimmed) return { value: null, error: null }
+  if (!/^\d+$/.test(trimmed)) {
+    return { value: null, error: 'Role policy override must be a whole number (0-65535).' }
+  }
+  const parsed = Number(trimmed)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0 || parsed > 65_535) {
+    return { value: null, error: 'Role policy override must be between 0 and 65535.' }
+  }
+  return { value: parsed, error: null }
+}
+
 function DeployVaultBatcher({
   creatorToken,
   owner,
@@ -2505,15 +2519,23 @@ function DeployVaultBatcher({
     () => isLocalForkRpcUrl(String(import.meta.env.VITE_BASE_RPC ?? '')),
     [],
   )
+  const [rolePolicyOverrideInput, setRolePolicyOverrideInput] = useState('')
+  const rolePolicyOverride = useMemo(
+    () => parseRolePolicyOverrideInput(rolePolicyOverrideInput),
+    [rolePolicyOverrideInput],
+  )
   const expectedRef = useRef<ServerDeployResponse['addresses'] | null>(null)
   const lastPolledStepRef = useRef<string>('')
   const rolePolicyDiagnosticsQuery = useQuery({
-    queryKey: ['deployRolePolicyResolve', creatorToken],
+    queryKey: ['deployRolePolicyResolve', creatorToken, rolePolicyOverride.value],
     enabled: Boolean(creatorToken),
     staleTime: 30_000,
     retry: 0,
     queryFn: async () => {
       const qs = new URLSearchParams({ creatorToken })
+      if (rolePolicyOverride.value !== null) {
+        qs.set('rolePolicyId', String(rolePolicyOverride.value))
+      }
       const res = await apiFetch(`/api/deploy/v2/session/role-policy/resolve?${qs.toString()}`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
@@ -5971,6 +5993,7 @@ function DeployVaultBatcher({
           smartWallet: owner,
           creatorToken,
           ownerAddress: owner,
+          ...(rolePolicyOverride.value !== null ? { rolePolicyId: rolePolicyOverride.value } : {}),
           phase1Calls: serializeSessionCalls(phase1Calls),
           phase2CoreCalls: serializeSessionCalls(
             phase2CoreNeeded ? [...phase2ApproveCalls, phase2CoreCall] : [...phase2ApproveCalls],
@@ -6990,6 +7013,8 @@ function DeployVaultBatcher({
   const disabledReason =
     busy
       ? 'Deployment in progress…'
+      : rolePolicyOverride.error
+        ? rolePolicyOverride.error
       : expectedQuery.isLoading
         ? 'Computing deployment addresses…'
         : !expected
@@ -7573,6 +7598,34 @@ function DeployVaultBatcher({
                   : 'Unavailable'}
             </div>
           </div>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="role-policy-override" className="text-zinc-500">
+              Canary override
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                id="role-policy-override"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={rolePolicyOverrideInput}
+                onChange={(event) => setRolePolicyOverrideInput(event.target.value)}
+                placeholder="none"
+                className="w-24 rounded border border-white/10 bg-black/20 px-2 py-1 text-[11px] font-mono text-zinc-200 outline-hidden focus:border-blue-400/60"
+              />
+              {rolePolicyOverrideInput.trim().length > 0 ? (
+                <button
+                  type="button"
+                  className="text-[10px] text-zinc-400 hover:text-zinc-200 underline underline-offset-2"
+                  onClick={() => setRolePolicyOverrideInput('')}
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </div>
+          {rolePolicyOverride.error ? (
+            <div className="text-[10px] text-amber-300/90">{rolePolicyOverride.error}</div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <div className="text-zinc-500">Effective policy ID</div>
             <div className="font-mono text-zinc-300">

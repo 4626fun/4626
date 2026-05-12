@@ -2668,8 +2668,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         ajnaAuth: ajnaAdminAlignment.ajnaAuthAddress,
         ajnaPool: ajnaAdminAlignment.ajnaPool,
         ownerAddress: phase3DeployInfo.owner,
-        bufferRatioBps: ajnaAdminAlignment.ajnaBufferRatioBps,
-        minBucketIndex: ajnaAdminAlignment.ajnaMinBucketIndex,
+        bufferRatioBps: ajnaAdminAlignment.ajnaBufferRatioBps ?? null,
+        minBucketIndex: ajnaAdminAlignment.ajnaMinBucketIndex ?? null,
         metadata: {
           source: 'deploy_session_phase3_confirm',
           deploySessionId: rec.id,
