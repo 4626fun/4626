@@ -46,6 +46,18 @@ function readClipboardJsonBlock(input: string): string {
   return trimmed.slice(start, end + 1)
 }
 
+function tryNormalizeJsObjectLiteralToJson(input: string): string {
+  const withQuotedKeys = input.replace(
+    /([{,]\s*)([A-Za-z_$][A-Za-z0-9_$]*)(\s*:)/g,
+    '$1"$2"$3',
+  )
+  // DevTools object-copy often uses single-quoted strings; convert these to JSON strings.
+  return withQuotedKeys.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, group: string) => {
+    const escaped = group.replace(/"/g, '\\"')
+    return `"${escaped}"`
+  })
+}
+
 function parseHex(value: unknown, field: string): Hex {
   if (typeof value !== 'string' || !/^0x[0-9a-fA-F]+$/.test(value)) {
     throw new Error(`Invalid ${field}: expected 0x-prefixed hex string.`)
@@ -111,13 +123,20 @@ export function generateKeysCoinbasePasteSnippet(hash: Hex): string {
 }
 
 export function parseKeysCoinbasePasteResponse(text: string): KeysCoinbasePasteResponse {
+  const block = readClipboardJsonBlock(text)
   let payload: Record<string, unknown>
   try {
-    payload = JSON.parse(readClipboardJsonBlock(text)) as Record<string, unknown>
+    payload = JSON.parse(block) as Record<string, unknown>
   } catch (error) {
-    throw new Error(
-      error instanceof Error ? `Could not parse pasted JSON: ${error.message}` : 'Could not parse pasted JSON.',
-    )
+    try {
+      payload = JSON.parse(tryNormalizeJsObjectLiteralToJson(block)) as Record<string, unknown>
+    } catch {
+      throw new Error(
+        error instanceof Error
+          ? `Could not parse pasted JSON: ${error.message}. Copy the JSON.stringify(payload, null, 2) output from the keys snippet.`
+          : 'Could not parse pasted JSON. Copy the JSON.stringify(payload, null, 2) output from the keys snippet.',
+      )
+    }
   }
 
   const challengeHex =
