@@ -11,8 +11,8 @@
  * Failure path: calls finalizeFailedAuction() when the auction ended without
  * graduating.
  *
- * Canonical completion truth lives in `/api/cre/keeper/sweep` (see
- * `frontend/api/_handlers/cre/keeper/_sweep.ts`). That endpoint enforces the
+ * Canonical completion truth lives in `/api/keeper/sweep` (see
+ * `frontend/api/_handlers/keeper/_sweep.ts`). That endpoint enforces the
  * full multi-stage state machine:
  *   sweep → migrate → hook fee-plane configuration → invariant gate → completed.
  * It is the only path permitted to write DB `settledAt`.

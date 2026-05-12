@@ -87,14 +87,10 @@ Workspace tables are bootstrapped by `ensureWorkspaceSchema()`:
 
 Normalizer hooks:
 
-- CRE ingest (`runtime record`) -> `workspace_activity_events` (+ alert/task for warn/critical)
-- CRE decisions -> `workspace_activity_events` + task (+ approval when required)
 - Keepr action status updates -> `workspace_activity_events` (+ alert/task on failed/retry)
 
 Entry points:
 
-- `frontend/api/_handlers/cre/runtime/_ingest.ts`
-- `frontend/api/_handlers/cre/runtime/_decisions.ts`
 - `frontend/api/_handlers/keepr/actions/_updateStatus.ts`
 
 ## Notification Adapters

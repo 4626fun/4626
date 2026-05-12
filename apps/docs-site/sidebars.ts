@@ -216,8 +216,6 @@ const sidebars: SidebarsConfig = {
             'operations/automation/quick-start',
             'operations/automation/full-automation',
             'operations/automation/completion-options',
-            'operations/automation/cre-runtime-api',
-            'operations/automation/cre-runtime-hardening-checklist',
           ],
         },
         {

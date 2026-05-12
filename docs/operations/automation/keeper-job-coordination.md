@@ -5,14 +5,13 @@ sidebar_position: 5
 
 # Keeper Job Coordination
 
-The keeper job queue is the CRE-independent fallback lane for operational work that must remain live even when the Chainlink CRE path is unavailable or constrained.
+The keeper job queue is the fallback lane for operational work that must remain live even when the primary path is unavailable or constrained.
 
 ## Boundary
 
 - **Queue/API:** `/api/keeper/jobs/*` stores, leases, and finalizes durable jobs.
 - **Worker:** `pnpm -C frontend keeper:jobs:worker` claims due jobs and executes allowlisted internal API calls.
 - **Privileged execution:** stays behind existing machine-auth endpoints. The worker does not introduce a new wallet/signing authority.
-- **CRE:** can still run in parallel, but production liveness does not depend on CRE being responsive.
 
 ## Database
 
@@ -56,7 +55,7 @@ curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/enqueue" \
     "kind": "internal_api",
     "dedupeKey": "sweep:0xvault",
     "payload": {
-      "path": "/api/cre/keeper/sweep",
+      "path": "/api/keeper/sweep",
       "body": { "vaultAddress": "0x0000000000000000000000000000000000000000" }
     }
   }'
@@ -97,7 +96,7 @@ pnpm -C frontend keeper:jobs:worker
 
 Schedule the worker with your preferred runtime cron. The worker only executes `kind: "internal_api"` jobs whose paths start with:
 
-- `/api/cre/keeper/`
+- `/api/keeper/`
 - `/api/keepr/actions/`
 
 It also supports `kind: "noop"` for smoke tests. Unsupported kinds or paths fail closed. Retryable internal API failures are marked `retry` with the configured delay.
@@ -131,7 +130,7 @@ Optional mark-settled chaining:
 KEEPER_SWEEP_CANARY_VAULT_ADDRESS=0x...
 ```
 
-When `KEEPER_SWEEP_CANARY_VAULT_ADDRESS` is set and `/api/cre/keeper/sweep` returns `completed: true` with `completionStage: "completed"`, the runner enqueues a second deduped `internal_api` job for `/api/cre/keeper/mark-settled`. This keeps DB settlement writes behind the existing `mark-settled` invariant gate instead of writing DB state directly from the queue worker.
+When `KEEPER_SWEEP_CANARY_VAULT_ADDRESS` is set and `/api/keeper/sweep` returns `completed: true` with `completionStage: "completed"`, the runner enqueues a second deduped `internal_api` job for `/api/keeper/mark-settled`. This keeps DB settlement writes behind the existing `mark-settled` invariant gate instead of writing DB state directly from the queue worker.
 
 When `KEEPER_SWEEP_CANARY_ENFORCE_INVARIANTS` is unset or `true`, also set:
 
@@ -157,7 +156,7 @@ The enqueued job is:
   "kind": "internal_api",
   "dedupeKey": "sweep-canary:<ccaStrategyAddress>",
   "payload": {
-    "path": "/api/cre/keeper/sweep",
+    "path": "/api/keeper/sweep",
     "body": {
       "ccaStrategyAddress": "0x...",
       "enforceInvariants": true,
@@ -185,7 +184,7 @@ Start with either `report` or `tend`, not both, unless you intentionally want bo
   "kind": "internal_api",
   "dedupeKey": "vault-report-canary:<vaultAddress>",
   "payload": {
-    "path": "/api/cre/keeper/report",
+    "path": "/api/keeper/report",
     "body": { "vaultAddress": "0x..." }
   }
 }
@@ -193,7 +192,7 @@ Start with either `report` or `tend`, not both, unless you intentionally want bo
 
 ## Active Vault Discovery
 
-The broader CRE replacement path is `/api/keeper/jobs/enqueue-active-vaults`, called by Vercel every 30 minutes. It is disabled by default.
+The broader replacement path is `/api/keeper/jobs/enqueue-active-vaults`, called by Vercel every 30 minutes. It is disabled by default.
 
 Enable it only after the single-vault canaries are stable:
 
@@ -208,16 +207,16 @@ KEEPER_ACTIVE_VAULT_PAYOUT_RECIPIENT_MODE=gauge
 
 Supported workflows are:
 
-- `sweep` — enqueues `/api/cre/keeper/sweep` for unsettled vaults with `contracts.ccaStrategy`.
-- `tend` — enqueues `/api/cre/keeper/tend` for each discovered vault.
-- `report` — enqueues `/api/cre/keeper/report` for each discovered vault.
-- `payout` — enqueues `/api/cre/keeper/payout-router-harvest` for vaults with `contracts.payoutRouter`.
+- `sweep` — enqueues `/api/keeper/sweep` for unsettled vaults with `contracts.ccaStrategy`.
+- `tend` — enqueues `/api/keeper/tend` for each discovered vault.
+- `report` — enqueues `/api/keeper/report` for each discovered vault.
+- `payout` — enqueues `/api/keeper/payout-router-harvest` for vaults with `contracts.payoutRouter`.
 
-Discovery reads `keepr_vaults` directly and embeds addresses in the queued payloads. The worker still only executes POST jobs, so it does not need to call `/api/cre/vaults/active` at runtime.
+Discovery reads `keepr_vaults` directly and embeds addresses in the queued payloads. The worker still only executes POST jobs, so it does not need to call `/api/vaults/active` at runtime.
 
 ## Keepr Action Queue Processing
 
-Vercel also calls `/api/keeper/jobs/process-keepr-actions` every 5 minutes. This replaces the CRE `keepr-action-queue` loop when enabled:
+Vercel also calls `/api/keeper/jobs/process-keepr-actions` every 5 minutes. This replaces the `keepr-action-queue` loop when enabled:
 
 ```bash
 KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED=1
@@ -229,13 +228,13 @@ It fetches `/api/keepr/actions/pending`, claims one action with `updateStatus: e
 
 ## Bridge Integrity Monitor
 
-Vercel also calls `/api/keeper/jobs/enqueue-bridge-integrity` every 15 minutes. This replaces the CRE bridge-integrity monitor when enabled:
+Vercel also calls `/api/keeper/jobs/enqueue-bridge-integrity` every 15 minutes. This replaces the bridge-integrity monitor when enabled:
 
 ```bash
 KEEPER_BRIDGE_INTEGRITY_ENQUEUE_ENABLED=1
 ```
 
-It enqueues `/api/cre/keeper/bridge-integrity`, a read-only keeper endpoint that evaluates the existing `/api/deploy/solanaInfraStatus` response and reports `ok`, `warning`, or `critical` findings. It does not mutate bridge contracts.
+It enqueues `/api/keeper/bridge-integrity`, a read-only keeper endpoint that evaluates the existing `/api/deploy/solanaInfraStatus` response and reports `ok`, `warning`, or `critical` findings. It does not mutate bridge contracts.
 
 ## Ajna/Charm Strategy Canaries
 
@@ -288,7 +287,7 @@ Only `strategy.ajna.rebucket` and `strategy.charm.rebalance` are accepted. Execu
 
 ## Solana Reconcile Fallback
 
-Vercel also calls `/api/keeper/jobs/enqueue-solana-reconcile` every 15 minutes. This is disabled by default and enqueues checkpointed calls to `/api/cre/keeper/solana/reconcile`:
+Vercel also calls `/api/keeper/jobs/enqueue-solana-reconcile` every 15 minutes. This is disabled by default and enqueues checkpointed calls to `/api/keeper/solana/reconcile`:
 
 ```bash
 KEEPER_SOLANA_RECONCILE_ENABLED=1

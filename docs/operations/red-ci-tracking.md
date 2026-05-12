@@ -30,7 +30,6 @@ gitleaks detect --config gitleaks.toml --report-path /tmp/leaks.json
 | Rule | File (path at time of commit) | Commit |
 |---|---|---|
 | `generic-api-key` | `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` | `04b38d6` |
-| `generic-api-key` | `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md` | `34af04d` |
 | `generic-api-key` | `cre/secrets.example.env` (`CRE_ERC4337_OWNER_PRIVATE_KEY=`) | `0d3710c` |
 | `jwt` + `generic-api-key` | `frontend/abis/frontend/.env.{backup,production,vars}` (`VERCEL_OIDC_TOKEN`, `VITE_ETHERSCAN_API_KEY`) | `fcf7532` |
 | `jwt` + `generic-api-key` | `frontend/.env.{backup,production,vars}` (same secrets) | `b393633` |

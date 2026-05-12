@@ -103,7 +103,7 @@ function normalizeAddress(value: unknown): string | undefined {
 // M-17 (4626-326): validate that any authAdmin embedded in a manual payload is
 // in the workflow's configured registry of authorized admins. Without this
 // check, an attacker with a leaked manual auth token could pass an arbitrary
-// authAdmin/smartWallet pair through to /cre/keeper/solana/reconcile. The
+// authAdmin/smartWallet pair through to /keeper/solana/reconcile. The
 // registry is intentionally required on Config (may be empty) so that an
 // unset registry is a loud deployment bug rather than a silent allow-all.
 function validatePayloadAuthAdmin(
@@ -181,7 +181,7 @@ function runReconciliation(runtime: Runtime<Config>, manual?: ManualPayload): So
           nr,
           httpClient,
           apiKey,
-          "/cre/keeper/solana/reconcile",
+          "/keeper/solana/reconcile",
           {
             workflow: workflowName,
             action,

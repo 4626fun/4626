@@ -26,7 +26,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   RATE_LIMITS: { creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 60 } },
 }))
 
-import markSettledHandler from '../_handlers/cre/keeper/_markSettled.ts'
+import markSettledHandler from '../_handlers/keeper/_markSettled.ts'
 
 describe('CRE explicit intent: claim/execute race settlement gate', () => {
   const VAULT = '0x1111111111111111111111111111111111111111'

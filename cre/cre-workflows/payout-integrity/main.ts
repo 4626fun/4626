@@ -12,7 +12,7 @@
  *   7. Burn stream health — activeShares dripping, not stale
  *   8. GaugeController balance — holds vault shares, lastDistribution not stale
  *
- * On failure: alerts via POST /cre/keeper/alert
+ * On failure: alerts via POST /keeper/alert
  *
  * CRE Quota Budget per execution (1 vault):
  *   - 1 HTTP (fetch vaults)
@@ -182,7 +182,7 @@ function fetchVaults(
     nodeRuntime,
     httpClient,
     apiKey,
-    `/cre/vaults/active?chainId=${chainId}`,
+    `/vaults/active?chainId=${chainId}`,
   )
   return body.success && body.data ? body.data.vaults : []
 }
@@ -197,7 +197,7 @@ function sendAlert(
     nodeRuntime,
     httpClient,
     apiKey,
-    "/cre/keeper/alert",
+    "/keeper/alert",
     alert,
   )
   return body.success
@@ -235,7 +235,7 @@ function requestAiAssessment(
     nodeRuntime,
     httpClient,
     apiKey,
-    "/cre/keeper/aiAssess",
+    "/keeper/aiAssess",
     sanitizedRequest,
   )
 

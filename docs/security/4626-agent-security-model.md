@@ -40,14 +40,12 @@ This rollout does not introduce a separate secure-agent service. The control pla
 
 - Telegram callback tokens, replay nonces, and legacy action audit:
   - [`frontend/server/_lib/messaging/telegramTrading.ts`](../../frontend/server/_lib/messaging/telegramTrading.ts)
-- CRE runtime authentication plus idempotent decision storage:
-  - [`frontend/server/_lib/cre/runtimeBridge.ts`](../../frontend/server/_lib/cre/runtimeBridge.ts)
 - Control-plane audit stream:
   - [`frontend/server/_lib/agentControl/audit.ts`](../../frontend/server/_lib/agentControl/audit.ts)
 
 ### Automation, scheduling, and execution
 
-- Local CRE runner:
+- Local runner:
   - [`cre/runner.ts`](../../cre/runner.ts)
 - Main workflow:
   - [`cre/workflows/4626.workflow.ts`](../../cre/workflows/4626.workflow.ts)
@@ -93,8 +91,8 @@ Signing and execution split across two distinct tracks — see [4626 Connection 
   - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
 - OpenAI image generation and evaluation:
   - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
-- CRE keeper AI assessment:
-  - [`frontend/api/_handlers/cre/keeper/_aiAssess.ts`](../../frontend/api/_handlers/cre/keeper/_aiAssess.ts)
+- Keeper AI assessment:
+  - [`frontend/api/_handlers/keeper/_aiAssess.ts`](../../frontend/api/_handlers/keeper/_aiAssess.ts)
 
 ### Environment, secrets, and machine auth
 
@@ -217,7 +215,7 @@ Remote-AI egress is intentionally centralized around [`frontend/server/_lib/agen
 - [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
 - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
 - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
-- [`frontend/api/_handlers/cre/keeper/_aiAssess.ts`](../../frontend/api/_handlers/cre/keeper/_aiAssess.ts)
+- [`frontend/api/_handlers/keeper/_aiAssess.ts`](../../frontend/api/_handlers/keeper/_aiAssess.ts)
 
 ## Verified Assumptions
 
@@ -235,7 +233,7 @@ Remote-AI egress is intentionally centralized around [`frontend/server/_lib/agen
 ## Expected Missing Pieces
 
 - There is still no standalone secure-agent service.
-- There is still no unified audit query surface across Telegram, keepr, CRE, and deploy operations.
+- There is still no unified audit query surface across Telegram, keepr, and deploy operations.
 - There is still no shared capability store outside the local integrations that create capabilities on demand.
 
 These are known follow-ups, not accidental omissions.

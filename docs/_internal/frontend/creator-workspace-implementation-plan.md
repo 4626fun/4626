@@ -7,7 +7,7 @@ sidebar_position: 2
 
 ## Scope
 
-Implement a production-ready creator workspace directly on the existing vault route (`/vault/:address`) without breaking deposit/withdraw behavior. Reuse existing Keepr, CRE, Telegram, and XMTP infrastructure and add a typed workspace API + read model.
+Implement a production-ready creator workspace directly on the existing vault route (`/vault/:address`) without breaking deposit/withdraw behavior. Reuse existing Keepr, Telegram, and XMTP infrastructure and add a typed workspace API + read model.
 
 ## Delivery Phases
 
@@ -26,8 +26,6 @@ Implement a production-ready creator workspace directly on the existing vault ro
 3. **Event Normalization + Notifications**
    - Add normalizer in `frontend/server/_lib/workspace/normalizer.ts`
    - Wire normalizer into:
-     - `frontend/api/_handlers/cre/runtime/_ingest.ts`
-     - `frontend/api/_handlers/cre/runtime/_decisions.ts`
      - `frontend/api/_handlers/keepr/actions/_updateStatus.ts`
    - Add adapters:
      - `frontend/server/_lib/workspace/telegramTransport.ts`

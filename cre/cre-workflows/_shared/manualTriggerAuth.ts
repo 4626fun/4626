@@ -4,10 +4,8 @@
 // -------
 // 4626-300 / SEV-001 / SEV-010 (audit 2026-04-22). The workflows at
 //   cre/cre-workflows/charm-rebalance-manager/main.ts
-//   cre/cre-workflows/runtime-orchestrator/main.ts
-//   cre/cre-workflows/runtime-indexer-block/main.ts
-// expose an `HTTPCapability` trigger that can enqueue rebalance / orchestrator
-// actions or seed the runtime ingest pipeline. The audit finding was that the
+// expose an `HTTPCapability` trigger that can enqueue rebalance actions.
+// The audit finding was that the
 // fix existed in docs but not in code; the initial fix shipped in PR #318
 // (commit 847fee0) inside each workflow's `onHttpTrigger`.
 //

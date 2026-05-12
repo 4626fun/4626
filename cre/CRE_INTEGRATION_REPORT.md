@@ -82,8 +82,8 @@ EVMLogTrigger -----/         |                                         |
      - Cron backfill path (missed-event recovery)
 
 5. **Solana orchestration boundary**
-   - Added `solana-orchestrator` workflow (cron + HTTP) that posts idempotent checkpoints to:
-     - `frontend/api/_handlers/cre/keeper/_solanaReconcile.ts`
+  - Added `solana-orchestrator` workflow (cron + HTTP) that posts idempotent checkpoints to:
+    - `frontend/api/_handlers/keeper/_solanaReconcile.ts`
    - Added route registration in `frontend/api/_handlers/_routes.ts`.
 
 6. **Native write-path prototype**

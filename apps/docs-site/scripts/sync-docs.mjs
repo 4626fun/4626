@@ -4,7 +4,7 @@
  * Merges documentation from multiple first-party sources:
  * 1. docs/              - Manual documentation (source of truth)
  * 2. docs/_generated/   - Auto-generated API docs (forge doc, typedoc)
- * 3. cre/               - CRE automation workflows (README + docs)
+ * 3. cre/               - automation workflows (README + docs)
  * 4. frontend/docs/     - Frontend design docs & guides
  * 5. frontend/README.md - Frontend overview
  * 6. repo root docs      - Root README/security/deployment docs
@@ -62,7 +62,7 @@ const SOURCES = {
       '**/*.ts', '**/*.js', '**/*.mjs', '**/*.json', '**/*.yaml', '**/*.yml',
       '**/*.env*', '**/patches/**', '**/dist/**', '**/.cre/**', '**/*.wasm',
     ],
-    label: 'CRE workflows',
+    label: 'Automation workflows',
   },
   frontendDocs: {
     dir: path.join(REPO_ROOT, 'frontend'),
@@ -759,7 +759,7 @@ async function sync() {
   console.log(`   Manual docs:     ${stats.bySource.manual}`);
   console.log(`   Contract API:    ${stats.bySource.contracts}`);
   console.log(`   Frontend API:    ${stats.bySource.frontend}`);
-  console.log(`   CRE workflows:   ${stats.bySource.cre}`);
+  console.log(`   Automation flows: ${stats.bySource.cre}`);
   console.log(`   Frontend docs:   ${stats.bySource.frontendDocs}`);
   console.log(`   Repository docs: ${stats.bySource.rootMeta}`);
   console.log(`   Runtime skills:  ${stats.bySource.runtimeSkills}`);

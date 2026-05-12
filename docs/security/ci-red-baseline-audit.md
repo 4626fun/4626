@@ -174,7 +174,6 @@ All of these except the bAlanciaga set are deleted on current `main` but still i
 | `docs/llms/developers-ethos-network.md` | `generic-api-key` | Firebase Storage URL token in an `<img>` tag |
 | `circuits/amoe/ceremony/v2/ceremony_transcript_v2.txt` ×4 | `generic-api-key` | zkey SHA-256 hashes (these are *intended* to be public) |
 | `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` | `generic-api-key` | Matched on the literal text "REDACTED gates" — false positive on prose |
-| `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md` | `generic-api-key` | UUID `idempotencyKey` example in a runbook |
 | `docs/LAYERZERO_SOLANA_SETUP.md` | `generic-api-key` | SPL token mint address (public, not a secret) |
 
 All five still exist on `main` and should be allowlisted by path or stopword.

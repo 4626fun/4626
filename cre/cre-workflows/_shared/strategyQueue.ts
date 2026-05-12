@@ -134,7 +134,7 @@ export function fetchActiveVaults<Config extends StrategyWorkflowConfig>(
     nodeRuntime,
     httpClient,
     apiKey,
-    `/cre/vaults/active?chainId=${chainId}`,
+    `/vaults/active?chainId=${chainId}`,
   )
   return body.success && body.data ? sanitizeActiveVaults(body.data.vaults) : []
 }

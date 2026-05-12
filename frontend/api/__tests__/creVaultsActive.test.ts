@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import creHandler from '../_handlers/cre/vaults/_active.ts'
+import creHandler from '../_handlers/vaults/_activeProtected.ts'
 import publicHandler from '../_handlers/vaults/_active.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 

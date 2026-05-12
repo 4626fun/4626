@@ -38,6 +38,7 @@ Optional sync tuning:
 Deploy migration:
 
 - `frontend/db/migrations/040_ethos_canonical_score_cache.sql`
+- `frontend/db/migrations/044_schedule_zora_owner_ethos_projection.sql`
 
 Verify tables exist:
 
@@ -120,4 +121,22 @@ If projection results drift or sync fails:
   - `ETHOS_CANONICAL_SCORE_SYNC_ENABLED=0`
 
 This returns reads to legacy request-time Ethos behavior without schema rollback.
+
+## 7) Zora owner projection automation
+
+`044_schedule_zora_owner_ethos_projection.sql` adds:
+
+- `public.run_zora_owner_ethos_projection(p_limit integer default 20000)`
+- `public.v_zora_owner_ethos_sync_health` (single-row health snapshot)
+- a best-effort `pg_cron` schedule named `zora_owner_ethos_projection_5m`
+
+Run manually if needed:
+
+```sql
+select * from public.run_zora_owner_ethos_projection(20000);
+select * from public.v_zora_owner_ethos_sync_health;
+```
+
+If `pg_cron` is unavailable in the target environment, the migration keeps going
+and emits a NOTICE; schedule this function from your existing ops cron lane.
 

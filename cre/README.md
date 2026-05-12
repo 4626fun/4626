@@ -16,26 +16,15 @@ Core CRE workflow files:
 - `cre/cre-workflows/cca-finalization/workflow.yaml`
 - `cre/cre-workflows/payout-integrity/main.ts`
 - `cre/cre-workflows/payout-integrity/workflow.yaml`
-- `cre/cre-workflows/runtime-indexer-block/main.ts`
-- `cre/cre-workflows/runtime-indexer-block/workflow.yaml`
-- `cre/cre-workflows/runtime-indexer-data-fetch/main.ts`
-- `cre/cre-workflows/runtime-indexer-data-fetch/workflow.yaml`
-- `cre/cre-workflows/runtime-reference-feeds/main.ts`
-- `cre/cre-workflows/runtime-reference-feeds/workflow.yaml`
-- `cre/cre-workflows/runtime-orchestrator/main.ts`
-- `cre/cre-workflows/runtime-orchestrator/workflow.yaml`
 
 CRE-to-app orchestration bridge files:
-- `frontend/api/_handlers/cre/vaults/_active.ts`
-- `frontend/api/_handlers/cre/keeper/_tend.ts`
-- `frontend/api/_handlers/cre/keeper/_report.ts`
-- `frontend/api/_handlers/cre/keeper/_sweep.ts`
-- `frontend/api/_handlers/cre/keeper/_markSettled.ts`
-- `frontend/api/_handlers/cre/keeper/_alert.ts`
-- `frontend/api/_handlers/cre/keeper/_aiAssess.ts`
-- `frontend/api/_handlers/cre/runtime/_ingest.ts`
-- `frontend/api/_handlers/cre/runtime/_decisions.ts`
-- `frontend/api/_handlers/cre/runtime/_trigger.ts`
+- `frontend/api/_handlers/vaults/_activeProtected.ts`
+- `frontend/api/_handlers/keeper/_tend.ts`
+- `frontend/api/_handlers/keeper/_report.ts`
+- `frontend/api/_handlers/keeper/_sweep.ts`
+- `frontend/api/_handlers/keeper/_markSettled.ts`
+- `frontend/api/_handlers/keeper/_alert.ts`
+- `frontend/api/_handlers/keeper/_aiAssess.ts`
 - `frontend/api/_handlers/_routes.ts`
 - `frontend/server/agent/eliza/llm.ts`
 
@@ -114,7 +103,6 @@ This CRE layer solves that by making execution deterministic, auditable, and ide
 | Product | Strength | Where used |
 |---|---|---|
 | **CRE** | Verified offchain computation with deterministic trigger/capability orchestration | `cre/cre-workflows/**` |
-| **Data Feeds + MVR** | Reliable, tamper-resistant oracle data for strategy and risk inputs | `cre/cre-workflows/runtime-reference-feeds/main.ts` |
 | **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
 
 ## Roadmap (Including Rebalance Direction)
@@ -139,7 +127,7 @@ A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
 | **Burn Stream** | Active epoch not stale (>24h without `drip()`) | Warning |
 | **Gauge Balance** | GaugeController holds shares and `lastDistribution` is fresh | Warning |
 
-Alerts are sent to `POST /api/cre/keeper/alert` and forwarded to the configured webhook.
+Alerts are sent to `POST /api/keeper/alert` and forwarded to the configured webhook.
 
 ### Settlement Tracking
 
@@ -292,19 +280,19 @@ Chainlink DON
     │
     ├── vault-keeper (every 5m)
     │       ├── EVMClient → read vault state (Base)
-    │       └── HTTPClient → POST /cre/keeper/tend|report
+    │       └── HTTPClient → POST /keeper/tend|report
     │
     ├── cca-finalization (hourly, unsettled vaults only)
-    │       ├── HTTPClient → GET /cre/vaults/active?settled=false
+    │       ├── HTTPClient → GET /vaults/active?settled=false
     │       ├── EVMClient → currentAuction, isGraduated, sweepCurrencyBlock
-    │       ├── HTTPClient → POST /cre/keeper/sweep
-    │       └── HTTPClient → POST /cre/keeper/mark-settled
+    │       ├── HTTPClient → POST /keeper/sweep
+    │       └── HTTPClient → POST /keeper/mark-settled
     │
     └── payout-integrity (every 30m)
-            ├── HTTPClient → GET /cre/vaults/active
+            ├── HTTPClient → GET /vaults/active
             ├── EVMClient → creatorCoinPayoutRecipient, tradeFeeCollector, BPS x4,
             │                vault, lastDistribution, burnStream x3, balanceOf
-            └── HTTPClient → POST /cre/keeper/alert (on failure)
+            └── HTTPClient → POST /keeper/alert (on failure)
 ```
 
 The CRE stack now has two write models:
@@ -551,16 +539,13 @@ WantedBy=multi-user.target
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/cre/vaults/active` | GET | Returns all registered vaults (supports `?settled=false` filter) |
-| `/api/cre/keeper/tend` | POST | HTTP bridge — calls `tend()` on a vault |
-| `/api/cre/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
-| `/api/cre/keeper/sweep` | POST | HTTP bridge — canonical completion attempt (`sweepCurrency`, `migrate`, optional hook config, best-effort `sweepUnsoldTokens`) |
-| `/api/cre/keeper/mark-settled` | POST | Records `graduated_at`, `settled_at`, and `settlement_stage` in DB |
-| `/api/cre/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
-| `/api/cre/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
-| `/api/cre/runtime/ingest` | POST/GET | Receives runtime workflow outputs and returns latest indexed snapshots |
-| `/api/cre/runtime/decisions` | POST | Stores runtime orchestration decisions, optional queue enqueue |
-| `/api/cre/runtime/trigger` | POST | App-to-CRE HTTP trigger dispatch (JSON-RPC + JWT auth) |
+| `/api/vaults/active` | GET | Returns all registered vaults (supports `?settled=false` filter) |
+| `/api/keeper/tend` | POST | HTTP bridge — calls `tend()` on a vault |
+| `/api/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
+| `/api/keeper/sweep` | POST | HTTP bridge — canonical completion attempt (`sweepCurrency`, `migrate`, optional hook config, best-effort `sweepUnsoldTokens`) |
+| `/api/keeper/mark-settled` | POST | Records `graduated_at`, `settled_at`, and `settlement_stage` in DB |
+| `/api/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
+| `/api/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
 | `/api/keepr/actions/enqueue` | POST | Enqueues deduped strategy/XMTP actions |
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
 | `/api/keepr/actions/updateStatus` | POST | Updates action status |
@@ -630,7 +615,7 @@ report-and-forwarder model). Instead, those workflows delegate writes to
 Vercel API endpoints:
 
 ```
-CRE Workflow → HTTPClient.sendRequest(POST /cre/keeper/tend) → Vercel API → viem writeContract → Base
+CRE Workflow → HTTPClient.sendRequest(POST /keeper/tend) → Vercel API → viem writeContract → Base
 ```
 
 The bridge endpoints authenticate with `KEEPR_API_KEY` and use the shared

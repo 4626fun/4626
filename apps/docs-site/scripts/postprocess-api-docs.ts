@@ -423,7 +423,7 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
       }
     );
 
-    // Pattern 1d: Frontend and CRE README references from repo root docs.
+    // Pattern 1d: Frontend and automation README references from repo root docs.
     content = content.replace(/\]\(frontend\/README\.md\)/g, () => {
       fileRewrites++;
       return '](/frontend/overview)';

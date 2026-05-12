@@ -27,7 +27,7 @@ const MAX_ACTION_LENGTH = 220;
 //
 // Alert fields (message, details) flow from on-chain data that is partially
 // attacker-controllable (addresses, BPS values, error strings) into an LLM
-// prompt at /cre/keeper/aiAssess. We sanitize before POST so the AI cannot be
+// prompt at /keeper/aiAssess. We sanitize before POST so the AI cannot be
 // steered by embedded directives or unprintable control characters.
 //
 // INVARIANT (do NOT regress): the AI verdict is advisory. Alerts fire iff
