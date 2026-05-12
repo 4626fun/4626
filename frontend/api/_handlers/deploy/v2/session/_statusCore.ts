@@ -35,6 +35,8 @@ import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/
 import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
+import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
+import { isDbConfigured } from '../../../../../server/_lib/db/postgres.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -67,6 +69,11 @@ type Phase3AjnaAdminAlignment = {
   expectedAjnaAuthAdmin: Address | null
   ajnaAuthAdmin: Address | null
   ajnaAuthAdminMatchesOwner: boolean | null
+  ajnaStrategyAdapter?: Address | null
+  ajnaInnerVault?: Address | null
+  ajnaPool?: Address | null
+  ajnaBufferRatioBps?: number | null
+  ajnaMinBucketIndex?: number | null
 }
 
 type LaunchImageStatus = {
@@ -100,12 +107,27 @@ function readPhase3AjnaAdminAlignment(value: unknown): Phase3AjnaAdminAlignment 
   const ajnaAuthAdmin = normalizeAddress(raw?.ajnaAuthAdmin)
   const ajnaAuthAdminMatchesOwner =
     typeof raw?.ajnaAuthAdminMatchesOwner === 'boolean' ? raw.ajnaAuthAdminMatchesOwner : null
-  return {
+  const ajnaStrategyAdapter = normalizeAddress(raw?.ajnaStrategyAdapter)
+  const ajnaInnerVault = normalizeAddress(raw?.ajnaInnerVault)
+  const ajnaPool = normalizeAddress(raw?.ajnaPool)
+  const ajnaBufferRatioRaw = Number(raw?.ajnaBufferRatioBps)
+  const ajnaBufferRatioBps =
+    Number.isFinite(ajnaBufferRatioRaw) && ajnaBufferRatioRaw >= 0 ? Math.trunc(ajnaBufferRatioRaw) : null
+  const ajnaMinBucketRaw = Number(raw?.ajnaMinBucketIndex)
+  const ajnaMinBucketIndex =
+    Number.isFinite(ajnaMinBucketRaw) && ajnaMinBucketRaw >= 0 ? Math.trunc(ajnaMinBucketRaw) : null
+  const base: Phase3AjnaAdminAlignment = {
     ajnaAuthAddress,
     expectedAjnaAuthAdmin,
     ajnaAuthAdmin,
     ajnaAuthAdminMatchesOwner,
   }
+  if (ajnaStrategyAdapter) base.ajnaStrategyAdapter = ajnaStrategyAdapter
+  if (ajnaInnerVault) base.ajnaInnerVault = ajnaInnerVault
+  if (ajnaPool) base.ajnaPool = ajnaPool
+  if (ajnaBufferRatioBps !== null) base.ajnaBufferRatioBps = ajnaBufferRatioBps
+  if (ajnaMinBucketIndex !== null) base.ajnaMinBucketIndex = ajnaMinBucketIndex
+  return base
 }
 
 function readLaunchImageStatus(value: unknown): LaunchImageStatus {
@@ -636,6 +658,20 @@ const AJNA_AUTH_VIEW_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'bufferRatio',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'minBucketIndex',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
   },
 ] as const
 
@@ -1337,6 +1373,8 @@ async function verifyPhase3PostState(params: {
   let ajnaAuthAddress: Address | null = null
   let expectedAjnaAuthAdmin: Address | null = null
   let ajnaAuthAdmin: Address | null = null
+  let ajnaBufferRatioBps: number | null = null
+  let ajnaMinBucketIndex: number | null = null
   if (info.ajnaWeightBps > 0n) {
     ajna =
       remaining.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
@@ -1366,14 +1404,36 @@ async function verifyPhase3PostState(params: {
     ajnaAuthAddress = ajna.ajna.auth
     expectedAjnaAuthAdmin = info.owner
     if (ajnaAuthAddress) {
-      const ajnaAuthAdminRaw = await params.publicClient
-        .readContract({
-          address: ajnaAuthAddress,
-          abi: AJNA_AUTH_VIEW_ABI,
-          functionName: 'admin',
-        })
-        .catch(() => null)
+      const [ajnaAuthAdminRaw, ajnaBufferRatioRaw, ajnaMinBucketRaw] = await Promise.all([
+        params.publicClient
+          .readContract({
+            address: ajnaAuthAddress,
+            abi: AJNA_AUTH_VIEW_ABI,
+            functionName: 'admin',
+          })
+          .catch(() => null),
+        params.publicClient
+          .readContract({
+            address: ajnaAuthAddress,
+            abi: AJNA_AUTH_VIEW_ABI,
+            functionName: 'bufferRatio',
+          })
+          .catch(() => null),
+        params.publicClient
+          .readContract({
+            address: ajnaAuthAddress,
+            abi: AJNA_AUTH_VIEW_ABI,
+            functionName: 'minBucketIndex',
+          })
+          .catch(() => null),
+      ])
       ajnaAuthAdmin = normalizeAddress(ajnaAuthAdminRaw)
+      if (ajnaBufferRatioRaw != null && Number.isFinite(Number(ajnaBufferRatioRaw))) {
+        ajnaBufferRatioBps = Number(ajnaBufferRatioRaw)
+      }
+      if (ajnaMinBucketRaw != null && Number.isFinite(Number(ajnaMinBucketRaw))) {
+        ajnaMinBucketIndex = Number(ajnaMinBucketRaw)
+      }
     }
   }
 
@@ -1439,6 +1499,11 @@ async function verifyPhase3PostState(params: {
       ajnaAuthAdmin && expectedAjnaAuthAdmin
         ? ajnaAuthAdmin.toLowerCase() === expectedAjnaAuthAdmin.toLowerCase()
         : null,
+    ajnaStrategyAdapter: ajna?.strategy ?? null,
+    ajnaInnerVault: ajna?.ajna.innerVault ?? null,
+    ajnaPool: ajna?.ajna.ajnaPool ?? null,
+    ajnaBufferRatioBps,
+    ajnaMinBucketIndex,
   }
 }
 
@@ -2586,6 +2651,38 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       publicClient,
       phase3Calls,
     })
+    const phase3DeployInfo = extractPhase3DeployInfo(phase3Calls)
+    if (
+      phase3DeployInfo &&
+      ajnaAdminAlignment.ajnaStrategyAdapter &&
+      ajnaAdminAlignment.ajnaInnerVault &&
+      ajnaAdminAlignment.ajnaAuthAddress &&
+      ajnaAdminAlignment.ajnaPool
+    ) {
+      const row = await upsertAjnaVaultRegistryEntry({
+        chainId: DEFAULT_CHAIN_ID,
+        creatorToken: phase3DeployInfo.creatorToken,
+        creatorVault: phase3DeployInfo.vault,
+        strategyAdapter: ajnaAdminAlignment.ajnaStrategyAdapter,
+        innerAjnaVault: ajnaAdminAlignment.ajnaInnerVault,
+        ajnaAuth: ajnaAdminAlignment.ajnaAuthAddress,
+        ajnaPool: ajnaAdminAlignment.ajnaPool,
+        ownerAddress: phase3DeployInfo.owner,
+        bufferRatioBps: ajnaAdminAlignment.ajnaBufferRatioBps,
+        minBucketIndex: ajnaAdminAlignment.ajnaMinBucketIndex,
+        metadata: {
+          source: 'deploy_session_phase3_confirm',
+          deploySessionId: rec.id,
+        },
+      })
+      if (isDbConfigured() && !row) {
+        console.warn('[deploy/session/status] ajna registry write unavailable', {
+          sessionId: rec.id,
+          creatorToken: phase3DeployInfo.creatorToken,
+          strategyAdapter: ajnaAdminAlignment.ajnaStrategyAdapter,
+        })
+      }
+    }
     const confirmed = await transitionDeploySession({
       id: rec.id,
       fromStep: 'phase3_sent',
