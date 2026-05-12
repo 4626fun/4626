@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    defaults:
+      run:
+        working-directory: cloudflare-workers/alfaclub-proxy
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,16 +23,18 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+          cache: pnpm
+          cache-dependency-path: cloudflare-workers/alfaclub-proxy/pnpm-lock.yaml
+      - name: Enable pnpm via Corepack
+        run: corepack enable
+      - name: Verify toolchain
+        run: |
+          node --version
+          pnpm --version
       - name: Install dependencies
-        working-directory: cloudflare-workers/alfaclub-proxy
         run: pnpm install --frozen-lockfile
       - name: Deploy Worker
-        working-directory: cloudflare-workers/alfaclub-proxy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler deploy
+        run: pnpm exec wrangler deploy
