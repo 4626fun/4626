@@ -38,6 +38,15 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 function readClipboardJsonBlock(input: string): string {
   const trimmed = input.trim()
   if (!trimmed) throw new Error('Pasted response is empty.')
+  if (
+    trimmed.includes('const challengeHex') ||
+    trimmed.includes('navigator.credentials.get') ||
+    trimmed.includes('console.log(JSON.stringify(payload, null, 2))')
+  ) {
+    throw new Error(
+      'You pasted the keys snippet script, not the signed payload JSON. Run the snippet on keys.coinbase.com and paste the JSON.stringify(payload, null, 2) output.',
+    )
+  }
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
   if (fenced?.[1]) return fenced[1].trim()
   const start = trimmed.indexOf('{')
