@@ -26,6 +26,27 @@ import { getRelayQuote } from '../../../server/_lib/relay/getQuote.js'
 
 const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 
+// RelayDepository on Base mainnet. Smart-wallet flows MUST call this directly
+// (not via RelayRouterV3) because the router's user-transaction shape that
+// /quote/v2 returns is the EOA path — it requires the caller to be an EOA and
+// fails Base App's UserOp simulation. The May 5 owner[3] flow confirmed this:
+// the working Part 1 was a CSW UserOp whose executeBatch called
+// RelayDepository.depositNative(CSW, requestId) directly with value attached.
+const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
+
+const RELAY_DEPOSITORY_ABI = [
+  {
+    type: 'function',
+    name: 'depositNative',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'depositor', type: 'address' },
+      { name: 'id', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
+
 const CSW_OWNER_ABI = [
   {
     type: 'function',
@@ -404,13 +425,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (quote.ok) {
         const e = quote.extract
         if (e.requestId && e.userTransaction) {
-          const valueBig = BigInt(e.userTransaction.value)
+          // Relay's /quote returns a router-targeted user transaction designed
+          // for EOA submission. That path fails Base App's UserOp simulation
+          // (the wallet shows "error generating transaction"). For CSW flows
+          // we MUST call RelayDepository.depositNative directly instead, the
+          // way the May 5 reference flow did it.
+          //
+          // We take the requestId from Relay's quote (so their solver can
+          // still match the deposit event), use the value Relay quoted (so
+          // their fee math is satisfied), and construct our own depositNative
+          // calldata against the canonical depository address.
+          const depositValueBig = BigInt(e.userTransaction.value)
+          const depositNativeData = encodeFunctionData({
+            abi: RELAY_DEPOSITORY_ABI,
+            functionName: 'depositNative',
+            args: [cswAddress, e.requestId],
+          })
           relay = {
             requestId: e.requestId,
             userCall: {
-              to: e.userTransaction.to,
-              data: e.userTransaction.data,
-              value: `0x${valueBig.toString(16)}` as `0x${string}`,
+              to: RELAY_DEPOSITORY_BASE,
+              data: depositNativeData,
+              value: `0x${depositValueBig.toString(16)}` as `0x${string}`,
             },
             feeUsd: e.feeUsd,
           }
