@@ -2,6 +2,7 @@ name = "alfaclub-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
 workers_dev = true
 # Bump observability so you can grep cf-ray in the dashboard.
 [observability]
