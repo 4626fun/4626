@@ -461,17 +461,11 @@ describe('auth / profile gating', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Relay-missing short-circuit (Codex review on PR #444 — fix #1)
+// Relay availability
 // ---------------------------------------------------------------------------
 
 describe('relay-missing short-circuit', () => {
-  // Codex review on PR #444 found the previous handler always passed
-  // `relay: __testHooks.relay` (undefined in production) which made
-  // `retrySubmissionById` throw `amoe_retry_relay_missing` → 500.
-  // The fix is to short-circuit with a 200 `state: no_relay_configured`
-  // — same shape as the cron handler — so ops gets an actionable
-  // metric instead of a hard error.
-  it('returns 200 no_relay_configured when no relay is configured', async () => {
+  it('returns 503 amoe_retry_relay_missing when no relay is configured', async () => {
     const restore = setEnabledEnv()
     try {
       // Default `beforeEach` installs a stub relay; clear it for this
@@ -481,15 +475,9 @@ describe('relay-missing short-circuit', () => {
       const req = createMockReq({ method: 'POST', body: validBody() })
       const res = createMockRes()
       await handler(req, res)
-      expect(res.statusCode).toBe(200)
-      expect(res.body?.success).toBe(true)
-      expect(res.body?.data).toMatchObject({
-        submissionId: VALID_SUBMISSION_ID,
-        state: 'no_relay_configured',
-      })
-      // Critically, the orchestrator must NOT have been entered —
-      // otherwise we'd be re-incurring the original `amoe_retry_relay_missing`
-      // 500 inside `retrySubmissionById`.
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.success).toBe(false)
+      expect(res.body?.error).toBe('amoe_retry_relay_missing')
       expect(retrySubmissionByIdMock).not.toHaveBeenCalled()
     } finally {
       restore()

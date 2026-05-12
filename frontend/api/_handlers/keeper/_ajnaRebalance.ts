@@ -80,6 +80,12 @@ function parseChainId(value: unknown): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : base.id
 }
 
+function resolveChainContext(chainId: number): { chain: typeof base; rpcUrl: string } | null {
+  if (chainId !== base.id) return null
+  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
+  return { chain: base, rpcUrl }
+}
+
 async function loadRebalanceConfig(params: {
   publicClient: any
   row: AjnaVaultRegistryRow
@@ -173,8 +179,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RebalanceResponse>)
   }
 
-  const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-  const publicClient = createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
+  const chainContext = resolveChainContext(chainId)
+  if (!chainContext) {
+    return res.status(400).json({
+      success: false,
+      error: `unsupported_chain:${chainId}`,
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const { chain, rpcUrl } = chainContext
+  const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
   const { bufferRatioBps, minBucketIndex } = await loadRebalanceConfig({ publicClient, row })
   const [bufferAssetsRaw, totalAssetsRaw] = await Promise.all([
     publicClient.readContract({
@@ -273,13 +287,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
+    const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl, { timeout: 30_000 }) })
     const txHash = await walletClient.writeContract({
       address: row.innerAjnaVault,
       abi: AJNA_INNER_VAULT_REBALANCE_ABI as unknown as Abi,
       functionName: 'moveFromBuffer',
       args: [BigInt(minBucketIndex), moveAssets],
-      chain: base,
+      chain,
       account,
     })
     await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })

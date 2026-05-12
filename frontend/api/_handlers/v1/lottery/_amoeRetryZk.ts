@@ -44,8 +44,7 @@ import {
   retrySubmissionById,
   type RetrySubmissionRelay,
 } from '../../../../server/_lib/lottery/amoeReplayRetry.js'
-
-declare const process: { env: Record<string, string | undefined> }
+import { createAmoeRelay } from '../../../../server/_lib/lottery/amoeRelay.js'
 
 type RetryZkBody = {
   submissionId?: string
@@ -145,20 +144,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new AmoeAuthorityError('amoe_profile_unresolved')
     }
 
-    // Production relay is wired through `__testHooks.relay` today.
-    // Until the production relay wrapper lands (PR 5 sibling), short-
-    // circuit with a 200 response carrying `tick: 'no_relay_configured'`
-    // — same shape as the cron handler. This avoids a hard 500 from
-    // `retrySubmissionById` (which throws `amoe_retry_relay_missing`)
-    // and gives ops an actionable metric (Codex review on PR #444).
-    const relay = __testHooks.relay
+    const relay = __testHooks.relay ?? createAmoeRelay()
     if (!relay) {
-      return res.status(200).json({
-        success: true,
-        data: {
-          submissionId,
-          state: 'no_relay_configured',
-        },
+      return res.status(503).json({
+        success: false,
+        error: 'amoe_retry_relay_missing',
       })
     }
 

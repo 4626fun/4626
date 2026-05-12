@@ -33,8 +33,8 @@ import {
   type RetrySubmissionOutcome,
 } from '../../../../server/_lib/lottery/amoeReplayRetry.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
+import { createAmoeRelay } from '../../../../server/_lib/lottery/amoeRelay.js'
 
-declare const process: { env: Record<string, string | undefined> }
 
 /**
  * Test seam \u2014 inject a relay so the integration test can drive the
@@ -84,20 +84,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ ok: false, error: 'Lottery manager not configured' })
   }
 
-  const relay = __testHooks.relay
+  const relay = __testHooks.relay ?? createAmoeRelay()
   if (!relay) {
-    // Production callers must supply a relay. We don't bake a default
-    // in here because the relay path depends on viem + bundler env that
-    // is wired in the submit handler. PR 5 will hoist this into a
-    // shared module; for now, the cron is gated by the test hook in
-    // CI and a thin production wrapper that supplies the same relay.
-    //
-    // To avoid breaking the cron schedule before the production
-    // wrapper lands, we no-op (200 OK with `relay_unavailable`) so the
-    // schedule keeps ticking and we get an actionable metric.
-    return res.status(200).json({
-      ok: true,
-      tick: 'no_relay_configured',
+    return res.status(503).json({
+      ok: false,
+      error: 'amoe_retry_relay_missing',
       pickedCount: 0,
       reclaimedCount: 0,
       gcCount: 0,

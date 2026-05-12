@@ -62,6 +62,12 @@ function parseHex(value: unknown): Hex | null {
   return /^0x[a-fA-F0-9]{64}$/.test(raw) ? (raw as Hex) : null
 }
 
+function parseNullableNumber(value: unknown): number | null {
+  if (value == null || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function parseRow(row: any): AjnaVaultRegistryRow | null {
   const creatorToken = typeof row.creator_token === 'string' && isAddress(row.creator_token)
     ? normalizeAddressLower(row.creator_token)
@@ -103,8 +109,8 @@ function parseRow(row: any): AjnaVaultRegistryRow | null {
 
   const bufferRatioRaw = row.buffer_ratio_bps
   const minBucketRaw = row.min_bucket_index
-  const bufferRatioBps = Number.isFinite(Number(bufferRatioRaw)) ? Number(bufferRatioRaw) : null
-  const minBucketIndex = Number.isFinite(Number(minBucketRaw)) ? Number(minBucketRaw) : null
+  const bufferRatioBps = parseNullableNumber(bufferRatioRaw)
+  const minBucketIndex = parseNullableNumber(minBucketRaw)
   const maxAssetsRaw = row.max_assets_per_move
   const maxAssetsPerMove = maxAssetsRaw == null ? null : BigInt(maxAssetsRaw)
 

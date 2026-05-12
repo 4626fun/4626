@@ -41,7 +41,7 @@ import {
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
 } from './authHealthStore.js'
-import { upsertAlfaClubIngestMessages } from './chatIngestStore.js'
+import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 
@@ -2531,33 +2531,26 @@ async function runBridgeTick(
   // in-memory state surviving between serverless cold starts.
   let newlyIngestedHistoryIds: Set<string> | null = null
   try {
+    const historyIngestRows: AlfaClubIngestMessage[] = fetchedMessages.flatMap((message) => {
+      const id = String(message.id ?? '').trim()
+      const sender = String(message.sender ?? '').trim().toLowerCase()
+      if (!id || !isHexAddress(sender)) return []
+      const date = Number(message.date)
+      const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
+      return [
+        {
+          roomId,
+          messageId: id,
+          senderAddress: sender,
+          text: String(message.text ?? ''),
+          dateMs,
+          source: 'history',
+          rawPayloadText: null,
+        },
+      ]
+    })
     const inserted = await upsertAlfaClubIngestMessages(
-      fetchedMessages
-        .map((message) => {
-          const id = String(message.id ?? '').trim()
-          const sender = String(message.sender ?? '').trim().toLowerCase()
-          if (!id || !isHexAddress(sender)) return null
-          const date = Number(message.date)
-          const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
-          return {
-            roomId,
-            messageId: id,
-            senderAddress: sender,
-            text: String(message.text ?? ''),
-            dateMs,
-            source: 'history' as const,
-            rawPayloadText: null,
-          }
-        })
-        .filter((entry): entry is {
-          roomId: string
-          messageId: string
-          senderAddress: string
-          text: string
-          dateMs: number | null
-          source: 'history'
-          rawPayloadText: null
-        } => Boolean(entry)),
+      historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
   } catch {
