@@ -448,28 +448,78 @@ export function RemoveOwnerPage() {
       // cannot actually dispatch that without Relay's solver, so the page
       // surfaces relayQuoteError before letting the user submit.
       if (isSelfAuthSession) {
-        if (!preview.relay) {
+        // ─────────────────────────────────────────────────────────────────────
+        // RAW-CSW-CALL MODE (?raw=1 in the URL)
+        //
+        // Debug toggle that bypasses Relay entirely and sends the raw mutation
+        // call (e.g. removeOwnerAtIndex) directly to the CSW via
+        // wallet_sendCalls. Base App's wallet may recognize this as an
+        // owner-management call and route it through its internal SDK —
+        // producing a passkey-signed UserOp on the replayable channel,
+        // matching the May 5 Part 2 wire format (see
+        // 4626_csw_owner_mutation_compiled.html sections 5-6 for why this
+        // is theoretically valid: CSW._isValidSignature dispatches on
+        // wrapper.ownerIndex, and ownerIndex=0 routes to WebAuthn).
+        //
+        // If Base App's SDK has no special handling for owner mutations,
+        // this will either fail loudly or produce a non-replayable UserOp
+        // that hits the onlyEntryPoint guard. Either way it's a clean
+        // signal we can read from the event log.
+        // ─────────────────────────────────────────────────────────────────────
+        const rawModeEnabled =
+          typeof window !== 'undefined' &&
+          new URLSearchParams(window.location.search).get('raw') === '1'
+
+        if (!rawModeEnabled && !preview.relay) {
           const reason =
             preview.preflight.relayQuoteError ??
             'Relay quote unavailable; the self-auth lane requires Relay orchestration.'
           appendEvent(`csw_wallet_sendcalls:abort relay_quote_missing reason=${reason.slice(0, 200)}`)
           setPageError(
-            `Cannot dispatch via wallet_sendCalls without a Relay quote. ${reason}`,
+            `Cannot dispatch via wallet_sendCalls without a Relay quote. ${reason} ` +
+              `(Append ?raw=1 to the URL to bypass Relay and send the raw mutation call.)`,
           )
           setBusy(false)
           return
         }
         appendEvent('csw_wallet_sendcalls:start')
-        appendEvent(`relay:request_id=${preview.relay.requestId}`)
-        appendEvent(`relay:user_call_to=${preview.relay.userCall.to}`)
-        appendEvent(`relay:user_call_value=${preview.relay.userCall.value}`)
-        if (preview.relay.feeUsd) {
-          appendEvent(`relay:fee_usd=${preview.relay.feeUsd}`)
+        let sendCallsCalls: Eip5792Call[]
+        if (rawModeEnabled) {
+          // Build the raw mutation call: just the destination call, no Relay
+          // deposit wrapper. preview.txRequest.{to,data,value} carries the
+          // raw mutation calldata the page would have used in the funder-EOA
+          // lane; reuse it here.
+          appendEvent('csw_wallet_sendcalls:mode=raw_csw_call')
+          appendEvent(`raw:target=${preview.txRequest.to}`)
+          appendEvent(`raw:selector=${preview.txRequest.data.slice(0, 10)}`)
+          appendEvent(`raw:data_length=${(preview.txRequest.data.length - 2) / 2}`)
+          sendCallsCalls = [
+            {
+              to: preview.txRequest.to,
+              data: preview.txRequest.data,
+              value: preview.txRequest.value,
+            },
+          ]
+        } else {
+          appendEvent('csw_wallet_sendcalls:mode=relay_orchestrated')
+          // Non-null here because of the rawModeEnabled-aware guard above.
+          const relay = preview.relay!
+          appendEvent(`relay:request_id=${relay.requestId}`)
+          appendEvent(`relay:user_call_to=${relay.userCall.to}`)
+          appendEvent(`relay:user_call_value=${relay.userCall.value}`)
+          if (relay.feeUsd) {
+            appendEvent(`relay:fee_usd=${relay.feeUsd}`)
+          }
+          sendCallsCalls = preview.calls.map((c) => ({
+            to: c.to,
+            data: c.data,
+            value: c.value,
+          }))
         }
         const sendCallsResult = await _submitOwnerViaSendCalls({
           walletRequest: async (args) => await request(args),
           csw: canonicalCswAddress as `0x${string}`,
-          calls: preview.calls.map((c) => ({
+          calls: sendCallsCalls.map((c) => ({
             to: c.to,
             data: c.data as Hex,
             value: c.value,
@@ -527,24 +577,42 @@ export function RemoveOwnerPage() {
         })
         if (resolution.transactionHash) {
           setTxHash(resolution.transactionHash)
-          setPageNotice(
-            `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
-              `Relay's solver will now dispatch Part 2 (the actual removeOwner mutation) from its bundler, ` +
-              `usually within the same block. Watch the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
-              `request id ${preview.relay.requestId.slice(0, 10)}… can also be tracked via Relay /intents/status.`,
-          )
+          if (rawModeEnabled) {
+            setPageNotice(
+              `Raw-mode wallet_sendCalls submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+                `Watch Basescan for the RemoveOwnerAtIndex / AddOwner event on the CSW. ` +
+                `If the tx reverted with Unauthorized() (0x82b42900) Base App's SDK did not route this through ` +
+                `the EntryPoint as a UserOp \u2014 we'll need the funder-EOA lane instead.`,
+            )
+          } else {
+            const rid = preview.relay!.requestId.slice(0, 10)
+            setPageNotice(
+              `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+                `Relay's solver will now dispatch Part 2 (the actual removeOwner mutation) from its bundler, ` +
+                `usually within the same block. Watch the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
+                `request id ${rid}… can also be tracked via Relay /intents/status.`,
+            )
+          }
         } else {
           // Bundle id resolved no tx hash within the poll window. Don't show
           // it as a Basescan link (that would 404); instead surface a clear
           // notice with the bundle id so the user can check Base App for
           // status manually.
           setTxHash(null)
-          setPageNotice(
-            `Part 1 submitted via wallet_sendCalls (bundle id ${sendCallsResult.callBundleId}). ` +
-              `Wallet did not surface an on-chain tx hash within 60s. ` +
-              `Relay request id ${preview.relay.requestId.slice(0, 10)}… can be polled at ` +
-              `/intents/status?requestId=${preview.relay.requestId} for status.`,
-          )
+          if (rawModeEnabled) {
+            setPageNotice(
+              `Raw-mode wallet_sendCalls submitted (bundle id ${sendCallsResult.callBundleId}). ` +
+                `Wallet did not surface an on-chain tx hash within 60s. Check Base App for status.`,
+            )
+          } else {
+            const rid = preview.relay!.requestId
+            setPageNotice(
+              `Part 1 submitted via wallet_sendCalls (bundle id ${sendCallsResult.callBundleId}). ` +
+                `Wallet did not surface an on-chain tx hash within 60s. ` +
+                `Relay request id ${rid.slice(0, 10)}… can be polled at ` +
+                `/intents/status?requestId=${rid} for status.`,
+            )
+          }
         }
         setPreview(null)
         setSelectedIndex(null)
