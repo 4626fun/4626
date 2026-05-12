@@ -210,6 +210,7 @@ export function RemoveOwnerPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [depositTxHash, setDepositTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<{
     revertReason: string | null
@@ -377,6 +378,7 @@ export function RemoveOwnerPage() {
     setPasteFlow(null)
     setPasteResponse('')
     setTxHash(null)
+    setDepositTxHash(null)
     try {
       const res = await apiFetch('/api/onboarding/preview-remove-owner', {
         method: 'POST',
@@ -448,6 +450,7 @@ export function RemoveOwnerPage() {
       setPageNotice(
         'Copy the snippet, run it at keys.coinbase.com, authenticate with your passkey, then paste the returned JSON below.',
       )
+      setDepositTxHash(null)
     } catch (err: any) {
       setPageError(err?.message ?? 'Failed to prepare keys.coinbase.com signing flow.')
     } finally {
@@ -460,8 +463,23 @@ export function RemoveOwnerPage() {
       setPageError('Canonical CSW not available.')
       return
     }
+    if (!preview) {
+      setPageError('Select an owner index and prepare a preview first.')
+      return
+    }
     if (!pasteFlow) {
       setPageError('Prepare the keys.coinbase.com signing snippet first.')
+      return
+    }
+    if (!walletClient) {
+      setPageError('Connect your wallet first.')
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
       return
     }
     setBusy(true)
@@ -482,6 +500,37 @@ export function RemoveOwnerPage() {
       })
       appendEvent(`paste_submit.signature_len=${(signature.length - 2) / 2}`)
       appendEvent(`paste_submit.handle_ops_len=${(handleOpsCalldata.length - 2) / 2}`)
+
+      if (!preview.relay?.userCall) {
+        throw new Error(
+          `Relay funding step is unavailable: ${preview.preflight.relayQuoteError ?? 'missing relay quote'}.`,
+        )
+      }
+      if (!depositTxHash) {
+        appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
+        const depositResult = (await request({
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from: ownerSignerAddress ?? undefined,
+              to: preview.relay.userCall.to,
+              data: preview.relay.userCall.data,
+              value: preview.relay.userCall.value,
+            },
+          ],
+        })) as string
+        if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
+          throw new Error('Wallet did not return a valid Relay depository tx hash.')
+        }
+        setDepositTxHash(depositResult)
+        appendEvent(`paste_submit.deposit.tx=${depositResult}`)
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
+          appendEvent('paste_submit.deposit.confirmed')
+        }
+      } else {
+        appendEvent(`paste_submit.deposit.reuse=${depositTxHash}`)
+      }
 
       const res = await apiFetch('/api/relay/execute', {
         method: 'POST',
@@ -520,7 +569,7 @@ export function RemoveOwnerPage() {
         null
       if (maybeHash) setTxHash(maybeHash)
       setPageNotice(
-        'Submitted signed owner-remove UserOp via Relay. Watch the canonical CSW owner list for removal confirmation.',
+        'Submitted relay funding + signed owner-remove UserOp. Watch the canonical CSW owner list for removal confirmation.',
       )
       setPreview(null)
       setSelectedIndex(null)
@@ -1368,6 +1417,20 @@ export function RemoveOwnerPage() {
                         className="font-mono underline"
                       >
                         {txHash}
+                      </a>
+                    </div>
+                  ) : null}
+
+                  {depositTxHash ? (
+                    <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3 text-xs text-emerald-100 break-all">
+                      Relay depository funding tx:{' '}
+                      <a
+                        href={`https://basescan.org/tx/${depositTxHash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-mono underline"
+                      >
+                        {depositTxHash}
                       </a>
                     </div>
                   ) : null}
