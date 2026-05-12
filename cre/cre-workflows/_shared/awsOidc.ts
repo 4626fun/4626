@@ -25,7 +25,8 @@
  *   - Role permission policy can pin bucket + key prefix tightly so an
  *     overbroad config cannot exfiltrate unrelated objects.
  *
- * See docs/operations/aws-oidc-setup.md for the matching infra.
+ * See docs/operations/automation/cre-runtime-api.md (retired archive)
+ * for the historical matching infra context.
  */
 
 import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"

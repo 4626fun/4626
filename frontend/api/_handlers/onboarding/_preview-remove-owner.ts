@@ -22,8 +22,30 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import { getRelayQuote } from '../../../server/_lib/relay/getQuote.js'
 
 const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
+
+// RelayDepository on Base mainnet. Smart-wallet flows MUST call this directly
+// (not via RelayRouterV3) because the router's user-transaction shape that
+// /quote/v2 returns is the EOA path — it requires the caller to be an EOA and
+// fails Base App's UserOp simulation. The May 5 owner[3] flow confirmed this:
+// the working Part 1 was a CSW UserOp whose executeBatch called
+// RelayDepository.depositNative(CSW, requestId) directly with value attached.
+const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
+
+const RELAY_DEPOSITORY_ABI = [
+  {
+    type: 'function',
+    name: 'depositNative',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'depositor', type: 'address' },
+      { name: 'id', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
 
 const CSW_OWNER_ABI = [
   {
@@ -69,13 +91,63 @@ const CSW_OWNER_ABI = [
   },
 ] as const
 
+/**
+ * One EIP-5792 call. Mirrors the shape passed to wallet_sendCalls.calls[].
+ * All fields are 0x-prefixed hex; value is hex wei.
+ */
+type Eip5792Call = {
+  to: `0x${string}`
+  data: `0x${string}`
+  value: `0x${string}`
+}
+
+/**
+ * The Relay-orchestrated submission spec. When present, the page submits the
+ * single `userCall` via wallet_sendCalls; Relay's solver handles the actual
+ * mutation execution from its own bundler. This re-creates the exact May 5
+ * pattern: ONE user signature (Part 1 deposit), and Relay's pre-signed Part 2
+ * lands in the same Base block, dispatched by Relay's solver bundler.
+ */
+type RelayFlow = {
+  /** Relay's request id for this quote (status polling + diagnostics). */
+  requestId: `0x${string}`
+  /**
+   * The single transaction the user must sign + submit. Goes to RelayRouterV3
+   * (e.g. 0xb92fe925…fff4f on Base), which internally multicalls into
+   * RelayDepository.depositNative(user, requestId) + cleanupNative. The user
+   * never signs the destination mutation — Relay handles that off-chain.
+   */
+  userCall: Eip5792Call
+  /** Relay's USD-decimal quoted fee, informational. */
+  feeUsd: string | null
+}
+
 type RemoveOwnerPreviewResponse = {
+  /**
+   * Legacy single-call shape kept for backward compatibility. This is the
+   * raw destination-call (Part 2) calldata; only useful for the funder-EOA
+   * fallback lane where the page hand-builds the UserOp itself.
+   */
   txRequest: {
     chainId: 8453
     to: `0x${string}`
     data: `0x${string}`
     value: '0x0'
   }
+  /**
+   * The EIP-5792 call array to pass to wallet_sendCalls. When `relay` is
+   * present this is exactly one entry: the Relay-router deposit transaction.
+   * Relay's solver runs the destination mutation behind the scenes. When the
+   * Relay quote failed, this falls back to the raw mutation call (useful only
+   * for the funder-EOA lane, which can't actually dispatch it without Relay).
+   */
+  calls: Eip5792Call[]
+  /**
+   * Relay quote metadata. Null when the upstream /quote call failed. The page
+   * should surface the failure (no Relay-orchestrated lane available) and
+   * offer the funder-EOA fallback (which itself depends on Relay being up).
+   */
+  relay: RelayFlow | null
   preflight: {
     selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
     selectedBy: 'heuristic' | 'simulation'
@@ -91,6 +163,7 @@ type RemoveOwnerPreviewResponse = {
       removeOwnerAtIndex: { ok: boolean; error: string | null }
       removeLastOwner: { ok: boolean; error: string | null }
     }
+    relayQuoteError: string | null
   }
 }
 
@@ -297,6 +370,111 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const selectedSimulation =
       selectedFunction === 'removeLastOwner' ? removeLastOwnerSimulation : removeOwnerAtIndexSimulation
 
+    // ─────────────────────────────────────────────────────────────────────
+    // RELAY QUOTE — single user transaction, two-part on-chain flow
+    //
+    // We ask Relay's /quote/v2 to orchestrate executing our mutation calldata
+    // on Base. Relay returns ONE transaction the user must submit (a deposit
+    // into RelayRouterV3, which multicalls RelayDepository.depositNative).
+    // After that single tx lands, Relay's solver picks up the deposit event,
+    // pre-signs and submits Part 2 (our destination mutation) from its own
+    // bundler infrastructure, in the same block.
+    //
+    // Reference May 5 flow:
+    //   Part 1 — tx 0x34edd28d…2aadf (CSW → router → depository, signed by CSW)
+    //   Part 2 — tx 0xa9a06340…9a36 (Relay's solver bundler → EntryPoint →
+    //                                   CSW.executeWithoutChainIdValidation,
+    //                                   signed off-chain by session-key)
+    // Both in block 45,600,637.
+    //
+    // If the quote fails (rate limit, Relay downtime, unsupported pair), we
+    // still return a single-call response containing just the raw mutation
+    // calldata so the page can fall back to the funder-EOA lane.
+    // ─────────────────────────────────────────────────────────────────────
+    let relay: RelayFlow | null = null
+    let relayQuoteError: string | null = null
+    try {
+      // We pass a non-zero EXACT_OUTPUT amount to size the deposit. With
+      // amount=0, Relay correctly returns a zero-value step ("buy 0 wei")
+      // and Base App then refuses to dispatch with "error generating
+      // transaction" because the tx has no value and no obvious purpose.
+      //
+      // 20,000,000,000,000 wei (≈0.00002 ETH, ≈$0.05 at current price) is
+      // a small flat amount that comfortably covers Relay's solver gas
+      // for the Part 2 destination call. The May 5 owner[3] reference
+      // flow deposited 18,871,666,861,048 wei (the exact value Relay's
+      // solver computed at that time). The destination tx itself sends
+      // 0 wei — only Relay's deposit step carries ETH.
+      const RELAY_DEPOSIT_OUTPUT_WEI = '20000000000000'
+      const quote = await getRelayQuote({
+        user: cswAddress,
+        recipient: cswAddress,
+        originChainId: 8453,
+        destinationChainId: 8453,
+        amount: RELAY_DEPOSIT_OUTPUT_WEI,
+        tradeType: 'EXACT_OUTPUT',
+        txs: [
+          {
+            to: cswAddress,
+            data,
+            value: '0',
+          },
+        ],
+        txsGasLimit: 250_000,
+      })
+      if (quote.ok) {
+        const e = quote.extract
+        if (e.requestId && e.userTransaction) {
+          // Relay's /quote returns a router-targeted user transaction designed
+          // for EOA submission. That path fails Base App's UserOp simulation
+          // (the wallet shows "error generating transaction"). For CSW flows
+          // we MUST call RelayDepository.depositNative directly instead, the
+          // way the May 5 reference flow did it.
+          //
+          // We take the requestId from Relay's quote (so their solver can
+          // still match the deposit event), use the value Relay quoted (so
+          // their fee math is satisfied), and construct our own depositNative
+          // calldata against the canonical depository address.
+          const depositValueBig = BigInt(e.userTransaction.value)
+          const depositNativeData = encodeFunctionData({
+            abi: RELAY_DEPOSITORY_ABI,
+            functionName: 'depositNative',
+            args: [cswAddress, e.requestId],
+          })
+          relay = {
+            requestId: e.requestId,
+            userCall: {
+              to: RELAY_DEPOSITORY_BASE,
+              data: depositNativeData,
+              value: `0x${depositValueBig.toString(16)}` as `0x${string}`,
+            },
+            feeUsd: e.feeUsd,
+          }
+        } else {
+          relayQuoteError =
+            'Relay quote returned no requestId or user transaction; cannot orchestrate the flow.'
+        }
+      } else {
+        relayQuoteError = quote.error
+      }
+    } catch (error) {
+      relayQuoteError = `Relay quote threw: ${errorMessage(error)}`
+    }
+
+    // Build the EIP-5792 calls array. When we have a working relay quote we
+    // emit just the Relay-router deposit transaction; Relay's solver runs the
+    // destination mutation off-chain. When the quote failed, fall back to the
+    // raw mutation calldata so the funder-EOA lane can still proceed.
+    const calls: Eip5792Call[] = relay
+      ? [relay.userCall]
+      : [
+          {
+            to: cswAddress,
+            data,
+            value: '0x0',
+          },
+        ]
+
     const response: RemoveOwnerPreviewResponse = {
       txRequest: {
         chainId: 8453,
@@ -304,6 +482,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data,
         value: '0x0',
       },
+      calls,
+      relay,
       preflight: {
         selectedFunction,
         selectedBy,
@@ -319,6 +499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           removeOwnerAtIndex: removeOwnerAtIndexSimulation,
           removeLastOwner: removeLastOwnerSimulation,
         },
+        relayQuoteError,
       },
     }
 

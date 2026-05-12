@@ -6,9 +6,9 @@
  * Vercel API HTTP bridge.
  *
  * CRE Quota Budget per execution:
- *   - 1 HTTP call: GET /cre/vaults/active (fetch active vault set)
+ *   - 1 HTTP call: GET /vaults/active (fetch active vault set)
  *   - Up to 10 EVM reads: vault state fields (coinBalance, deploymentThreshold, etc.)
- *   - Up to 2 HTTP calls: POST /cre/keeper/tend and/or POST /cre/keeper/report
+ *   - Up to 2 HTTP calls: POST /keeper/tend and/or POST /keeper/report
  *   Total: 3 HTTP calls + 10 EVM reads (within CRE limits)
  *
  * Processes 1 rotating vault per execution. Runs every 5 minutes.
@@ -164,7 +164,7 @@ function fetchVaults(
     nodeRuntime,
     httpClient,
     apiKey,
-    `/cre/vaults/active?chainId=${chainId}`,
+    `/vaults/active?chainId=${chainId}`,
   )
   return body.success && body.data ? body.data.vaults : []
 }
@@ -184,7 +184,7 @@ function sendBridgeRequest(
     nodeRuntime,
     httpClient,
     apiKey,
-    `/cre/keeper/${endpoint}`,
+    `/keeper/${endpoint}`,
     payload,
   )
   return body.success

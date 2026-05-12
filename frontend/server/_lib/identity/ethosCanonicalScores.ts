@@ -14,10 +14,10 @@ const SCORE_ERROR_TTL_MS = 60 * 60 * 1000
 
 const ETHOS_IDENTITY_PRIORITY: Record<string, number> = {
   profile_id: 10,
-  x_id: 20,
+  address_canonical_smart_wallet: 20,
   address_external_eoa: 30,
   address_embedded_eoa: 40,
-  address_canonical_smart_wallet: 50,
+  x_id: 50,
   x_username: 60,
   farcaster: 70,
   telegram: 80,
@@ -593,6 +593,18 @@ export async function materializeCanonicalEthosScores(params: {
         ROW_NUMBER() OVER (
           PARTITION BY k.canonical_user_id
           ORDER BY
+            CASE k.identity_type
+              WHEN 'profile_id' THEN 10
+              WHEN 'address_canonical_smart_wallet' THEN 20
+              WHEN 'address_external_eoa' THEN 30
+              WHEN 'address_embedded_eoa' THEN 40
+              WHEN 'x_id' THEN 50
+              WHEN 'x_username' THEN 60
+              WHEN 'farcaster' THEN 70
+              WHEN 'telegram' THEN 80
+              WHEN 'discord' THEN 90
+              ELSE 999
+            END ASC,
             k.priority ASC,
             s.score DESC NULLS LAST,
             k.ethos_userkey ASC

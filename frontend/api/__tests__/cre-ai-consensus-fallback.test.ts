@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes } from './helpers'
-import handler from '../_handlers/cre/keeper/_aiAssess.ts'
+import handler from '../_handlers/keeper/_aiAssess.ts'
 
 const { getElizaLlmServiceMock, getAvailableProvidersMock, generateResponseMock } = vi.hoisted(() => ({
   getElizaLlmServiceMock: vi.fn(),

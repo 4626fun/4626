@@ -19,11 +19,6 @@ export const redirects: ClientRedirect[] = [
   { from: '/current-contract-inventory', to: '/reference/current-contract-inventory' },
   { from: '/token-image', to: '/reference/token-image' },
 
-  { from: '/cre-runtime-api', to: '/operations/automation/cre-runtime-api' },
-  {
-    from: '/cre-runtime-hardening-checklist',
-    to: '/operations/automation/cre-runtime-hardening-checklist',
-  },
   {
     from: '/telegram-canonical-link-preservation',
     to: '/operations/telegram-canonical-link-preservation',

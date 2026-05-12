@@ -10,19 +10,47 @@ import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAp
 import { apiFetch } from '@/lib/api/apiBase'
 import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
+import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 
+/** One EIP-5792 call. Shape matches what the backend preview returns. */
+type Eip5792Call = {
+  to: `0x${string}`
+  data: `0x${string}`
+  value: `0x${string}`
+}
+
+/**
+ * Relay-orchestrated submission metadata. When present, the single `userCall`
+ * (a deposit-into-RelayRouter tx) is what the wallet should submit; Relay's
+ * solver runs the destination mutation off-chain.
+ */
+type PreviewRelayFlow = {
+  requestId: `0x${string}`
+  userCall: Eip5792Call
+  feeUsd: string | null
+}
+
 type RemoveOwnerPreview = {
+  /** Legacy: raw mutation calldata. Only used in the funder-EOA fallback lane. */
   txRequest: {
     chainId: 8453
     to: `0x${string}`
     data: `0x${string}`
     value: '0x0'
   }
+  /**
+   * EIP-5792 calls to pass to wallet_sendCalls. When relay is present, this
+   * is exactly the Relay-orchestrated user transaction; otherwise it's the
+   * raw mutation call (which only the funder-EOA lane can actually dispatch).
+   */
+  calls: Eip5792Call[]
+  /** Relay quote details, null if the upstream quote failed. */
+  relay: PreviewRelayFlow | null
   preflight: {
     selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
     selectedBy: 'heuristic' | 'simulation'
@@ -38,6 +66,7 @@ type RemoveOwnerPreview = {
       removeOwnerAtIndex: { ok: boolean; error: string | null }
       removeLastOwner: { ok: boolean; error: string | null }
     }
+    relayQuoteError: string | null
   }
 }
 
@@ -394,14 +423,135 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:relay_funder_eoa_two_step')
+    appendEvent(`lane:${isSelfAuthSession ? 'csw_wallet_sendcalls' : 'relay_funder_eoa_two_step'}`)
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
     appendEvent(`signing:require_passkey=${requirePasskey}`)
     try {
-      // Step 1: have the connected wallet sign the inner CSW UserOp (passkey or
+      // Self-auth lane: use EIP-5792 wallet_sendCalls. Base App's wallet
+      // builds the UserOp internally, signs it locally with the on-device
+      // passkey, and submits via its built-in bundler.
+      //
+      // The actual on-chain pattern (re-derived 2026-05-11 from the May 5
+      // owner[3] reference flow) is two transactions in the same Base block:
+      //   Part 1 — CSW → RelayRouterV3 (deposit, multicalls into depository)
+      //   Part 2 — Relay solver bundler → EntryPoint → CSW destination mutation
+      //
+      // The user only signs Part 1. Relay's solver pre-signs and dispatches
+      // Part 2 from its own infrastructure when it sees the deposit event.
+      // So `calls[]` here is exactly ONE entry: the Relay-router deposit tx.
+      //
+      // When the Relay quote failed (preview.relay is null), `calls[]` falls
+      // back to the raw mutation calldata — but Base App's self-auth lane
+      // cannot actually dispatch that without Relay's solver, so the page
+      // surfaces relayQuoteError before letting the user submit.
+      if (isSelfAuthSession) {
+        if (!preview.relay) {
+          const reason =
+            preview.preflight.relayQuoteError ??
+            'Relay quote unavailable; the self-auth lane requires Relay orchestration.'
+          appendEvent(`csw_wallet_sendcalls:abort relay_quote_missing reason=${reason.slice(0, 200)}`)
+          setPageError(
+            `Cannot dispatch via wallet_sendCalls without a Relay quote. ${reason}`,
+          )
+          setBusy(false)
+          return
+        }
+        appendEvent('csw_wallet_sendcalls:start')
+        appendEvent(`relay:request_id=${preview.relay.requestId}`)
+        appendEvent(`relay:user_call_to=${preview.relay.userCall.to}`)
+        appendEvent(`relay:user_call_value=${preview.relay.userCall.value}`)
+        if (preview.relay.feeUsd) {
+          appendEvent(`relay:fee_usd=${preview.relay.feeUsd}`)
+        }
+        const sendCallsResult = await _submitOwnerViaSendCalls({
+          walletRequest: async (args) => await request(args),
+          csw: canonicalCswAddress as `0x${string}`,
+          calls: preview.calls.map((c) => ({
+            to: c.to,
+            data: c.data as Hex,
+            value: c.value,
+          })),
+          chainId: base.id,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string'
+                  ? event.detail
+                  : JSON.stringify(event.detail)
+              const cap = event.step.includes('error') ? 4000 : 240
+              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+              if (
+                event.step === 'broadcast_error' &&
+                event.detail &&
+                typeof event.detail === 'object'
+              ) {
+                const d = event.detail as Record<string, unknown>
+                setLastErrorDetail({
+                  revertReason: (d.error as string | null) ?? null,
+                  revertData: null,
+                  relayTx: null,
+                  rawBody: null,
+                })
+              }
+            } catch {
+              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+            }
+          },
+        })
+        // wallet_sendCalls returns a CALL-BUNDLE ID, not a tx hash. Poll
+        // wallet_getCallsStatus until the wallet reports a real on-chain
+        // transactionHash so the UI's Basescan link is valid. If the wallet
+        // doesn't support getCallsStatus or we time out, fall back to
+        // surfacing the bundle id with a note (no broken explorer link).
+        appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
+        const resolution = await waitForCallsTxHash({
+          walletRequest: async (args) => await request(args),
+          callBundleId: sendCallsResult.callBundleId,
+          timeoutMs: 60_000,
+          intervalMs: 1_500,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string'
+                  ? event.detail
+                  : JSON.stringify(event.detail)
+              const cap = event.step.includes('error') ? 4000 : 320
+              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+            } catch {
+              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+            }
+          },
+        })
+        if (resolution.transactionHash) {
+          setTxHash(resolution.transactionHash)
+          setPageNotice(
+            `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+              `Relay's solver will now dispatch Part 2 (the actual removeOwner mutation) from its bundler, ` +
+              `usually within the same block. Watch the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
+              `request id ${preview.relay.requestId.slice(0, 10)}… can also be tracked via Relay /intents/status.`,
+          )
+        } else {
+          // Bundle id resolved no tx hash within the poll window. Don't show
+          // it as a Basescan link (that would 404); instead surface a clear
+          // notice with the bundle id so the user can check Base App for
+          // status manually.
+          setTxHash(null)
+          setPageNotice(
+            `Part 1 submitted via wallet_sendCalls (bundle id ${sendCallsResult.callBundleId}). ` +
+              `Wallet did not surface an on-chain tx hash within 60s. ` +
+              `Relay request id ${preview.relay.requestId.slice(0, 10)}… can be polled at ` +
+              `/intents/status?requestId=${preview.relay.requestId} for status.`,
+          )
+        }
+        setPreview(null)
+        setSelectedIndex(null)
+        return
+      }
+
+      // External-signer lane: sign the inner CSW UserOp (passkey or
       // session-key, depending on requirePasskey + wallet capabilities).
       // signOnly=true means we DO NOT submit to /api/relay/execute — we just
       // capture the signed handleOps calldata for the funder step.
@@ -608,15 +758,14 @@ export function RemoveOwnerPage() {
         ) : null}
 
         {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
-          <div className="rounded-2xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100">
-            In-app browser detected with a CSW self-auth session. Note: this
-            page cannot submit owner mutations from a self-auth session because
-            <code className="mx-1 font-mono">executeWithoutChainIdValidation</code>
-            is <code className="font-mono">onlyEntryPoint</code>-gated, and a
-            plain <code className="font-mono">eth_sendTransaction</code> from
-            the CSW to itself reverts with <code className="font-mono">Unauthorized()</code>.
-            Connect a separate EOA funder wallet that holds a small amount of
-            ETH on Base, then retry.
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
+            In-app browser detected with a CSW self-auth session. This page
+            will submit via EIP-5792{' '}
+            <code className="font-mono">wallet_sendCalls</code>: Base App
+            builds the UserOp internally, signs it locally with the on-device
+            passkey, and submits via its built-in bundler. The CSW pays its
+            own gas from its EntryPoint deposit — no popup, no external
+            funder.
           </div>
         ) : null}
 
@@ -865,23 +1014,20 @@ export function RemoveOwnerPage() {
                     </div>
 
                     {isSelfAuthSession ? (
-                      <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-[11px] text-amber-100 space-y-1">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200/80">
-                          Funder wallet required
+                      <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
+                          EIP-5792 wallet_sendCalls lane
                         </div>
                         <p className="leading-relaxed">
-                          This session is signed in as the CSW itself. The CSW
-                          cannot directly broadcast its own owner-mutation tx
-                          (the underlying CSW method is{' '}
-                          <code className="font-mono">onlyEntryPoint</code>
-                          -gated, so a direct{' '}
-                          <code className="font-mono">eth_sendTransaction</code>{' '}
-                          from the CSW reverts with{' '}
-                          <code className="font-mono">Unauthorized()</code>).
-                          Connect a separate EOA wallet that holds a small
-                          amount of ETH on Base (e.g. a hot wallet via
-                          WalletConnect) and retry; the funder EOA broadcasts
-                          the Relay-quoted multicall on the CSW&apos;s behalf.
+                          Base App builds the UserOp from this call, signs it
+                          locally with the on-device passkey, and submits via
+                          its built-in bundler. The CSW pays its own gas from
+                          its EntryPoint deposit. No popup, no external funder,
+                          no Relay round-trip. View / top up the deposit at{' '}
+                          <Link to="/csw-funding" className="underline underline-offset-2">
+                            /csw-funding
+                          </Link>
+                          .
                         </p>
                       </div>
                     ) : null}
@@ -893,18 +1039,19 @@ export function RemoveOwnerPage() {
                         !preview ||
                         previewLoading ||
                         ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession) ||
-                        isSelfAuthSession ||
                         (preview ? !preview.preflight.simulation.ok : false)
                       }
                       onClick={() => void handleRemove()}
                       className="btn-accent btn-no-icon inline-flex"
                     >
                       {busy
-                        ? requirePasskey
-                          ? 'Removing via passkey + Relay UserOp…'
-                          : 'Removing via session-key + Relay UserOp…'
+                        ? isSelfAuthSession
+                          ? 'Submitting via wallet_sendCalls…'
+                          : requirePasskey
+                            ? 'Removing via passkey + Relay UserOp…'
+                            : 'Removing via session-key + Relay UserOp…'
                         : isSelfAuthSession
-                          ? 'Connect a funder EOA to remove'
+                          ? `Remove owner at index ${preview?.preflight.targetOwnerIndex ?? '?'} via wallet_sendCalls`
                           : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
                             ? 'Open in browser to remove'
                             : !preview
@@ -912,17 +1059,32 @@ export function RemoveOwnerPage() {
                               : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
                     </button>
                     <p className="text-[11px] leading-relaxed text-zinc-500">
-                      Signs an{' '}
-                      <code className="font-mono text-zinc-400">
-                        executeWithoutChainIdValidation
-                      </code>{' '}
-                      UserOp client-side, then has the connected funder EOA
-                      broadcast the Relay-quoted{' '}
-                      <code className="font-mono text-zinc-400">
-                        RelayRouterV3.multicall
-                      </code>{' '}
-                      tx. Relay&apos;s solver picks up the deposit and executes
-                      the inner UserOp on Base.
+                      {isSelfAuthSession ? (
+                        <>
+                          Calls{' '}
+                          <code className="font-mono text-zinc-400">
+                            wallet_sendCalls
+                          </code>{' '}
+                          (EIP-5792). Base App builds the UserOp from the
+                          inner action, signs it locally with the passkey, and
+                          submits via its built-in bundler. The CSW pays its
+                          own gas from its EntryPoint deposit.
+                        </>
+                      ) : (
+                        <>
+                          Signs an{' '}
+                          <code className="font-mono text-zinc-400">
+                            executeWithoutChainIdValidation
+                          </code>{' '}
+                          UserOp client-side, then has the connected funder EOA
+                          broadcast the Relay-quoted{' '}
+                          <code className="font-mono text-zinc-400">
+                            RelayRouterV3.multicall
+                          </code>{' '}
+                          tx. Relay&apos;s solver picks up the deposit and
+                          executes the inner UserOp on Base.
+                        </>
+                      )}
                     </p>
                   </div>
 

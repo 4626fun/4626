@@ -188,42 +188,39 @@ Generated from `docs/operations/action-matrix.csv`.
 | `strategy_charm_rebalance` | `actionType=strategy.charm.rebalance` | keepr action queue + onchain auth       | automated | Executes rebalance         | `frontend/server/keepr/xmtpQueueExecutor.ts` |
 
 
-## cre_bridge
+## bridge
 
 
 | Action                    | Endpoint / Method                       | Permission           | Mode      | Notes                         | Source                                         |
 | ------------------------- | --------------------------------------- | -------------------- | --------- | ----------------------------- | ---------------------------------------------- |
-| `list_active_vaults`      | `GET /api/cre/vaults/active`            | Bearer KEEPR_API_KEY | automated | CRE vault registry view       | `frontend/api/_handlers/_routes.cre.ts`        |
-| `keeper_tend`             | `POST /api/cre/keeper/tend`             | Bearer KEEPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/cre/keeper/_tend.ts`   |
-| `keeper_report`           | `POST /api/cre/keeper/report`           | Bearer KEEPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/cre/keeper/_report.ts` |
-| `keeper_sweep`            | `POST /api/cre/keeper/sweep`            | Bearer KEEPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/cre/keeper/_sweep.ts`  |
-| `keeper_mark_settled`     | `POST /api/cre/keeper/mark-settled`     | Bearer KEEPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.cre.ts`        |
-| `keeper_alert`            | `POST /api/cre/keeper/alert`            | Bearer KEEPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.cre.ts`        |
-| `keeper_ai_assess`        | `POST /api/cre/keeper/aiAssess`         | Bearer KEEPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.cre.ts`        |
-| `keeper_solana_reconcile` | `POST /api/cre/keeper/solana/reconcile` | Bearer KEEPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.cre.ts`        |
-| `runtime_ingest`          | `POST /api/cre/runtime/ingest`          | Bearer KEEPR_API_KEY | automated | Runtime ingest                | `frontend/api/_handlers/_routes.cre.ts`        |
-| `runtime_decisions`       | `POST /api/cre/runtime/decisions`       | Bearer KEEPR_API_KEY | automated | Runtime decisions persistence | `frontend/api/_handlers/_routes.cre.ts`        |
-| `runtime_trigger`         | `POST /api/cre/runtime/trigger`         | Bearer KEEPR_API_KEY | automated | Runtime trigger endpoint      | `frontend/api/_handlers/_routes.cre.ts`        |
+| `list_active_vaults`      | `GET /api/vaults/active`                | Bearer KEEPR_API_KEY | automated | Vault registry view           | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_tend`             | `POST /api/keeper/tend`                 | Bearer KEEPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/keeper/_tend.ts`       |
+| `keeper_report`           | `POST /api/keeper/report`               | Bearer KEEPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/keeper/_report.ts`     |
+| `keeper_sweep`            | `POST /api/keeper/sweep`                | Bearer KEEPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/keeper/_sweep.ts`      |
+| `keeper_mark_settled`     | `POST /api/keeper/mark-settled`         | Bearer KEEPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_alert`            | `POST /api/keeper/alert`                | Bearer KEEPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_ai_assess`        | `POST /api/keeper/aiAssess`             | Bearer KEEPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_solana_reconcile` | `POST /api/keeper/solana/reconcile`     | Bearer KEEPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.ts`            |
 
 
-## cre_workflow
+## workflow
 
 
 | Action                     | Endpoint / Method                                      | Permission                             | Mode      | Notes                                   | Source                                                 |
 | -------------------------- | ------------------------------------------------------ | -------------------------------------- | --------- | --------------------------------------- | ------------------------------------------------------ |
-| `unified_4626`             | `cre/workflows/4626.workflow.ts`                       | CRE env+secrets                        | automated | Runs all core protocol automation tasks | `cre/workflows/4626.workflow.ts`                       |
-| `vault_keeper`             | `cre/workflows/vault-keeper.workflow.ts`               | keeper authorization                   | automated | tend/report loop                        | `cre/workflows/vault-keeper.workflow.ts`               |
-| `payout_router_harvest`   | `cre/workflows/payout-router-harvest.workflow.ts`      | keeper authorization                   | automated | claim and convertAndQueue               | `cre/workflows/payout-router-harvest.workflow.ts`      |
-| `ajna_bucket_manager`      | `cre/workflows/ajna-bucket-manager.workflow.ts`        | canonical Ajna context                 | automated | setMinBucketIndex policy loop           | `cre/workflows/ajna-bucket-manager.workflow.ts`        |
-| `charm_rebalance_manager`  | `cre/workflows/charm-rebalance-manager.workflow.ts`    | onchain auth checks                    | automated | rebalance threshold loop                | `cre/workflows/charm-rebalance-manager.workflow.ts`    |
-| `cca_finalization`        | `cre/workflows/cca-finalization.workflow.ts`           | permissionless strategy calls + checks | automated | sweep/migrate/sweepUnsold path          | `cre/workflows/cca-finalization.workflow.ts`           |
-| `keepr_action_queue`      | `cre/workflows/keepr-action-queue.workflow.ts`         | queue API key + XMTP creds             | automated | consume/execute/retry queue actions     | `cre/workflows/keepr-action-queue.workflow.ts`         |
-| `strategy_signal_listener` | `cre/workflows/strategy-signal-listener.workflow.ts`  | ws rpc + queue auth                    | automated | Enqueues deduped Ajna/Charm actions     | `cre/workflows/strategy-signal-listener.workflow.ts`   |
-| `bridge_integrity_monitor` | `cre/workflows/bridge-integrity-monitor.workflow.ts`   | monitor config                         | automated | Signer/route/scalar/liveness integrity  | `cre/workflows/bridge-integrity-monitor.workflow.ts`   |
-| `solana_relay_entries`     | `cre/workflows/keepr-solana-relay-entries.workflow.ts` | solana+base creds                      | automated | Relay Solana entries to Base            | `cre/workflows/keepr-solana-relay-entries.workflow.ts` |
-| `solana_settle_fees`       | `cre/workflows/keepr-solana-settle-fees.workflow.ts`   | solana+base creds                      | automated | Settle fees to Base gauge               | `cre/workflows/keepr-solana-settle-fees.workflow.ts`   |
-| `solana_winner_relay`      | `cre/workflows/keepr-solana-winner-relay.workflow.ts`  | solana+base creds                      | automated | Relay winners Base to Solana            | `cre/workflows/keepr-solana-winner-relay.workflow.ts`  |
-| `solana_graduation_sync`   | `cre/workflows/keepr-solana-graduation.workflow.ts`    | solana+base creds                      | automated | Close Alpha vault after graduation      | `cre/workflows/keepr-solana-graduation.workflow.ts`    |
+| `unified_4626`             | `workflows/4626.workflow.ts`                       | workflow env+secrets                   | automated | Runs all core protocol automation tasks | `workflows/4626.workflow.ts`                       |
+| `vault_keeper`             | `workflows/vault-keeper.workflow.ts`               | keeper authorization                   | automated | tend/report loop                        | `workflows/vault-keeper.workflow.ts`               |
+| `payout_router_harvest`   | `workflows/payout-router-harvest.workflow.ts`      | keeper authorization                   | automated | claim and convertAndQueue               | `workflows/payout-router-harvest.workflow.ts`      |
+| `ajna_bucket_manager`      | `workflows/ajna-bucket-manager.workflow.ts`        | canonical Ajna context                 | automated | setMinBucketIndex policy loop           | `workflows/ajna-bucket-manager.workflow.ts`        |
+| `charm_rebalance_manager`  | `workflows/charm-rebalance-manager.workflow.ts`    | onchain auth checks                    | automated | rebalance threshold loop                | `workflows/charm-rebalance-manager.workflow.ts`    |
+| `cca_finalization`        | `workflows/cca-finalization.workflow.ts`           | permissionless strategy calls + checks | automated | sweep/migrate/sweepUnsold path          | `workflows/cca-finalization.workflow.ts`           |
+| `keepr_action_queue`      | `workflows/keepr-action-queue.workflow.ts`         | queue API key + XMTP creds             | automated | consume/execute/retry queue actions     | `workflows/keepr-action-queue.workflow.ts`         |
+| `strategy_signal_listener` | `workflows/strategy-signal-listener.workflow.ts`  | ws rpc + queue auth                    | automated | Enqueues deduped Ajna/Charm actions     | `workflows/strategy-signal-listener.workflow.ts`   |
+| `bridge_integrity_monitor` | `workflows/bridge-integrity-monitor.workflow.ts`   | monitor config                         | automated | Signer/route/scalar/liveness integrity  | `workflows/bridge-integrity-monitor.workflow.ts`   |
+| `solana_relay_entries`     | `workflows/keepr-solana-relay-entries.workflow.ts` | solana+base creds                      | automated | Relay Solana entries to Base            | `workflows/keepr-solana-relay-entries.workflow.ts` |
+| `solana_settle_fees`       | `workflows/keepr-solana-settle-fees.workflow.ts`   | solana+base creds                      | automated | Settle fees to Base gauge               | `workflows/keepr-solana-settle-fees.workflow.ts`   |
+| `solana_winner_relay`      | `workflows/keepr-solana-winner-relay.workflow.ts`  | solana+base creds                      | automated | Relay winners Base to Solana            | `workflows/keepr-solana-winner-relay.workflow.ts`  |
+| `solana_graduation_sync`   | `workflows/keepr-solana-graduation.workflow.ts`    | solana+base creds                      | automated | Close Alpha vault after graduation      | `workflows/keepr-solana-graduation.workflow.ts`    |
 | `solana_price_monitor`     | `cre/workflows/keepr-solana-price-monitor.workflow.ts` | solana+base creds                      | automated | Price deviation monitor/recenter        | `cre/workflows/keepr-solana-price-monitor.workflow.ts` |
 
 

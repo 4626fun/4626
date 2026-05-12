@@ -13,7 +13,7 @@ This site publishes curated documentation from multiple sources across the monor
 | **Manual docs** | `docs/` | `/` (root) | Human-written documentation (source of truth) |
 | **Contract API** | `docs/_generated/contracts/` | `/api/contracts/` | Solidity NatSpec (forge doc) |
 | **Frontend API** | `docs/_generated/frontend/` | `/api/frontend/` | TypeScript TSDoc (typedoc) |
-| **CRE workflows** | `cre/` | `/operations/cre/` | Automation docs (README + guides) |
+| **Automation workflows** | `cre/` | `/operations/cre/` | Automation docs (README + guides) |
 | **Frontend docs** | `frontend/` | `/frontend/` | Frontend guides, architecture notes, overview |
 
 ### Key Rules

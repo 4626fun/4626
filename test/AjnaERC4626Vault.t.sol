@@ -191,7 +191,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setSwapper(keeper);
+        auth.setKeeper(keeper, true);
 
         vm.prank(keeper);
         vault.moveFromBuffer(4_156, 90e18);
@@ -205,7 +205,7 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setSwapper(keeper);
+        auth.setKeeper(keeper, true);
         auth.setBufferRatio(2_000);
 
         vm.prank(keeper);
@@ -274,10 +274,31 @@ contract AjnaERC4626VaultTest is Test {
         vm.prank(user);
         vault.deposit(100e18, user);
 
-        auth.setSwapper(keeper);
+        auth.setKeeper(keeper, true);
 
         vm.prank(keeper);
         vm.expectRevert();
         vault.moveFromBuffer(7_389, 10e18);
+    }
+
+    function testNonKeeperCannotCallMoveFunctions() public {
+        vm.prank(user);
+        vault.deposit(100e18, user);
+
+        vm.prank(keeper);
+        vm.expectRevert(AjnaERC4626Vault.NotAuthorized.selector);
+        vault.moveFromBuffer(4_156, 10e18);
+    }
+
+    function testMoveFunctionsRespectPauseGuardForKeeper() public {
+        vm.prank(user);
+        vault.deposit(100e18, user);
+
+        auth.setKeeper(keeper, true);
+        auth.pause();
+
+        vm.prank(keeper);
+        vm.expectRevert(AjnaERC4626Vault.VaultPaused.selector);
+        vault.moveFromBuffer(4_156, 10e18);
     }
 }

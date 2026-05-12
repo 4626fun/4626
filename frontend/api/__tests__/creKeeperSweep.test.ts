@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../_handlers/cre/keeper/_sweep.ts'
+import handler from '../_handlers/keeper/_sweep.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const {

@@ -6,10 +6,10 @@
  * have NOT been marked as settled in the DB.
  *
  * Flow:
- *   1. HTTP: GET /cre/vaults/active?settled=false&chainId=<configured-chain>
+ *   1. HTTP: GET /vaults/active?settled=false&chainId=<configured-chain>
  *   2. EVM:  currentAuction(), isGraduated(), sweepCurrencyBlock()
- *   3. HTTP: POST /cre/keeper/sweep (canonical completion attempt + invariant gate)
- *   4. HTTP: POST /cre/keeper/mark-settled (record timestamps + settlement stage)
+ *   3. HTTP: POST /keeper/sweep (canonical completion attempt + invariant gate)
+ *   4. HTTP: POST /keeper/mark-settled (record timestamps + settlement stage)
  *
  * CRE Quota Budget per execution:
  *   - 1 HTTP (fetch unsettled vaults)
@@ -139,7 +139,7 @@ function fetchUnsettledVaults(
     nodeRuntime,
     httpClient,
     apiKey,
-    `/cre/vaults/active?settled=false&chainId=${chainId}`,
+    `/vaults/active?settled=false&chainId=${chainId}`,
   )
   return JSON.stringify(body.success && body.data ? body.data.vaults : [])
 }
@@ -157,7 +157,7 @@ function sendSweepRequest(
     nodeRuntime,
     httpClient,
     apiKey,
-    "/cre/keeper/sweep",
+    "/keeper/sweep",
     { ccaStrategyAddress, attemptHookConfig, enforceInvariants, invariants },
   )
   return {
@@ -184,7 +184,7 @@ function markSettled(
     nodeRuntime,
     httpClient,
     apiKey,
-    "/cre/keeper/mark-settled",
+    "/keeper/mark-settled",
     payload,
   )
   return body.success

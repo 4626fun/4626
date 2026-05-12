@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import handler from '../_handlers/cre/vaults/_active.ts'
+import handler from '../_handlers/vaults/_activeProtected.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const ORIGINAL_KEEPR_API_KEY = process.env.KEEPR_API_KEY

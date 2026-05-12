@@ -23,13 +23,13 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 
 import syncCreatorMetricsHandler from '../_handlers/zora/_sync-creator-metrics.ts'
 import creatorAccessRequestHandler from '../_handlers/creator-access/_request.ts'
-import creKeeperAiAssessHandler from '../_handlers/cre/keeper/_aiAssess.ts'
-import creKeeperAlertHandler from '../_handlers/cre/keeper/_alert.ts'
-import creKeeperMarkSettledHandler from '../_handlers/cre/keeper/_markSettled.ts'
-import creKeeperReportHandler from '../_handlers/cre/keeper/_report.ts'
-import creKeeperSolanaReconcileHandler from '../_handlers/cre/keeper/_solanaReconcile.ts'
-import creKeeperSweepHandler from '../_handlers/cre/keeper/_sweep.ts'
-import creKeeperTendHandler from '../_handlers/cre/keeper/_tend.ts'
+import creKeeperAiAssessHandler from '../_handlers/keeper/_aiAssess.ts'
+import creKeeperAlertHandler from '../_handlers/keeper/_alert.ts'
+import creKeeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
+import creKeeperReportHandler from '../_handlers/keeper/_report.ts'
+import creKeeperSolanaReconcileHandler from '../_handlers/keeper/_solanaReconcile.ts'
+import creKeeperSweepHandler from '../_handlers/keeper/_sweep.ts'
+import creKeeperTendHandler from '../_handlers/keeper/_tend.ts'
 
 describe('ops endpoint rate-limit hardening', () => {
   let restoreEnv: (() => void) | null = null
@@ -73,7 +73,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/aiAssess when limited', async () => {
+  it('returns 429 for /keeper/aiAssess when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -86,7 +86,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/alert when limited', async () => {
+  it('returns 429 for /keeper/alert when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -99,7 +99,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/mark-settled when limited', async () => {
+  it('returns 429 for /keeper/mark-settled when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -112,7 +112,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/report when limited', async () => {
+  it('returns 429 for /keeper/report when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -125,7 +125,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/solana/reconcile when limited', async () => {
+  it('returns 429 for /keeper/solana/reconcile when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -138,7 +138,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/sweep when limited', async () => {
+  it('returns 429 for /keeper/sweep when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },
@@ -151,7 +151,7 @@ describe('ops endpoint rate-limit hardening', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
-  it('returns 429 for /cre/keeper/tend when limited', async () => {
+  it('returns 429 for /keeper/tend when limited', async () => {
     const req = createMockReq({
       method: 'POST',
       headers: { authorization: 'Bearer test-keepr-key' },

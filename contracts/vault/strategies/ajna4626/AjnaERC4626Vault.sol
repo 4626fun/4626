@@ -58,6 +58,11 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         _;
     }
 
+    modifier onlySwapperOrKeeper() {
+        if (msg.sender != AUTH.swapper() && !AUTH.isKeeper(msg.sender)) revert NotAuthorized();
+        _;
+    }
+
     constructor(address pool_, IERC20 asset_, string memory name_, string memory symbol_, AjnaVaultAuth auth_)
         ERC20(name_, symbol_)
         ERC4626(asset_)
@@ -317,7 +322,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function moveFromBuffer(uint256 toIndex, uint256 assets)
         external
-        onlyAdapterAuthorized
+        onlySwapperOrKeeper
+        notPaused
         nonReentrant
         returns (uint256 movedAssets, uint256 mintedBucketLp)
     {
@@ -345,7 +351,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function moveToBuffer(uint256 fromIndex, uint256 bucketLpAmount)
         external
-        onlyAdapterAuthorized
+        onlySwapperOrKeeper
+        notPaused
         nonReentrant
         returns (uint256 pulledAssets, uint256 burnedBucketLp)
     {
@@ -362,7 +369,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function move(uint256 fromIndex, uint256 toIndex, uint256 bucketLpAmount)
         external
-        onlyAdapterAuthorized
+        onlySwapperOrKeeper
+        notPaused
         nonReentrant
         returns (uint256 fromBucketLp, uint256 toBucketLp)
     {

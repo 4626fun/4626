@@ -38,7 +38,7 @@ vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-import creKeeperMarkSettledHandler from '../_handlers/cre/keeper/_markSettled.ts'
+import creKeeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
 
 describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   let restoreEnv: (() => void) | null = null

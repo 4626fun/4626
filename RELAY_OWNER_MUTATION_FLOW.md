@@ -228,53 +228,80 @@ absent. The funder-EOA lane MUST pass `recipient: cswLower` explicitly so
 Relay routes the multicall execution back to the CSW rather than to the
 funder.
 
-## Removed lane: CSW self-call via direct eth_sendTransaction
+## The actual working self-auth lane: EIP-5792 `wallet_sendCalls`
 
-**Tried in PR #580. Reverted in PR #583.**
+**Built in PR #580 (broken), reverted in PR #584, rebuilt correctly in PR #585.**
 
-The theory (from session `248b841e` notes): when the connected wallet IS the
-CSW (self-auth), a plain `eth_sendTransaction` where `from === to === CSW`
-and `data === executeWithoutChainIdValidation([...])` would be recognised by
-Base App's native handler, signed locally with the on-device passkey, and
-submitted via its own bundler with no popup.
+The historical working pre-fund UserOp
+[0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3](https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf)
+fully decoded on 2026-05-11:
 
-The reality, verified on-chain by `eth_call` simulation on 2026-05-11:
+- `sender: 0x4beAbD0AfbCC2F0440CDEF1c3c745D43fAe704EF` (CSW)
+- `paymaster: 0x0000000000000000000000000000000000000000` (none — CSW paid its own gas)
+- `nonce: 41 (0x29)` (sequential, regular `validateUserOp`)
+- `success: true`
+- `gasCost: 0.00000106 ETH` (drawn from the CSW's EntryPoint deposit)
+- bundled by `tx.from = 0x54e2acab04c89a3fe02852bf8dd69ee8f526bc75`
+  (a public ERC-4337 bundler, not the CSW, not the user, not Relay)
+- batched with 10 other UserOps from unrelated CSWs in the same
+  `EntryPoint.handleOps` tx
 
-```
-eth_call({from: CSW, to: CSW, data: executeWithoutChainIdValidation([…])})
-  → revert 0x82b42900  // selector for Unauthorized()
-```
+**What did the user do to produce this UserOp?** They opened Base App,
+signed in as the CSW, and tapped a button that triggered
+`wallet_sendCalls`. Base App's wallet:
 
-The CSW's `executeWithoutChainIdValidation` is `onlyEntryPoint`-gated:
+1. Received the `{ from: CSW, calls: [{ to, value, data }] }` payload
+2. Built a UserOp internally from those calls (filled in `callData`,
+   `callGasLimit`, `verificationGasLimit`, `preVerificationGas`,
+   `maxFeePerGas`, nonce, etc.)
+3. Computed the user-op hash
+4. **Signed it locally with the on-device passkey** (the passkey is RP-bound
+   to keys.coinbase.com, but Base App accesses it via its native module —
+   not via WebAuthn popup, not via `keys.coinbase.com` redirect)
+5. Submitted via `eth_sendUserOperation` to Base App's bundler RPC
+6. The bundler EOA broadcast `EntryPoint.handleOps` with this UserOp
+   batched alongside others
 
-```solidity
-function executeWithoutChainIdValidation(bytes[] calldata calls)
-  public payable onlyEntryPoint { … }
+From the dapp side this is one RPC: `wallet_sendCalls`. The wallet does
+steps 1–6 internally.
 
-modifier onlyEntryPoint() {
-  if (msg.sender != entryPoint()) revert Unauthorized();
-  _;
-}
-```
+### What we got wrong in PR #580
 
-When the CSW broadcasts a tx to itself, `msg.sender === csw ≠ entryPoint`,
-so the modifier reverts. Base App's gas estimator catches this revert during
-pre-simulation and surfaces it as the misleading "make sure you have enough
-funds" warning (the wallet can't compute a gas estimate for a tx that always
-reverts, so it falls back to a generic insufficient-funds string).
+We tried `eth_sendTransaction({from: CSW, to: CSW, data: executeWithoutChainIdValidation([…])})`.
+That's a regular EOA transaction broadcast, where the CSW would have to
+first be a transaction-sender (it's a contract, can't sign EOA txs) AND the
+calldata target is `onlyEntryPoint`-gated. Both wrong. The wallet correctly
+refused.
 
-The other `execute` / `executeBatch` methods on CSW are
-`onlyEntryPointOrOwner`-gated, which checks `_isOwner(msg.sender)` — i.e.
-the call must come from a stored owner. The CSW is NOT one of its own owners
-unless explicitly added (verified: owners[0..3] on our reference CSW are a
-passkey + 3 EOAs, none equal to the CSW itself). So `executeBatch` from CSW
-to itself reverts identically.
+The right call is `wallet_sendCalls` (EIP-5792), which the wallet wraps in
+a UserOp under the hood. `onlyEntryPoint` and `onlyEntryPointOrOwner` are
+satisfied because the EntryPoint becomes the `msg.sender` of the inner CSW
+call.
 
-**The only way to reach any of these methods is via a UserOp through the
-EntryPoint.** That means a bundler. Which means `wallet_prepareCalls` (blocked
-in-app) or the funder-EOA Relay lane.
+### Implementation in PR #585
 
-Do not re-attempt this lane.
+`frontend/src/lib/wallet/cswSendCalls.ts` exports
+`_submitOwnerViaSendCalls({ walletRequest, csw, to, data, value, chainId })`.
+It builds the EIP-5792 payload (`{ version, chainId, atomicRequired, from,
+calls: [{ to, value, data }] }`), calls `wallet_sendCalls`, and returns the
+call-bundle id.
+
+`RemoveOwner.tsx` routes self-auth sessions through this helper. The page
+passes the RAW inner action calldata (`removeOwnerAtIndex(...)`) as `data`
+and the CSW as `to` — the wallet wraps it in a UserOp itself, so the dapp
+must NOT pre-wrap with `executeBatch` or `executeWithoutChainIdValidation`.
+
+### Required state for this lane to succeed
+
+- The CSW must have a non-zero **EntryPoint deposit** so the paymasterless
+  UserOp can pay its own gas. Top up via `/csw-funding` (calls
+  `EntryPoint.depositTo(csw)` payable). The reference UserOp consumed
+  0.00000106 ETH; budget 10× that for safety.
+- The CSW's connected passkey (owner[0]) must be reachable to Base App's
+  native key store. If the passkey has rotated or been removed, this lane
+  fails with a signature error at validation time.
+- The user must currently be signed in to Base App as the CSW (self-auth).
+  External-signer sessions get routed to the funder-EOA Relay lane instead.
 
 ## Open questions for future work
 

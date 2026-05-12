@@ -1,11 +1,7 @@
 #!/usr/bin/env node
 /**
- * H-02 (audit 2026-04-25) lint complement.
- *
  * Walks every cre/cre-workflows/<workflow>/config.{staging,production}.json
- * and refuses any top-level key that starts with `mock`. The runtime guard in
- * cre/cre-workflows/_shared/mockGuard.ts catches misses at runtime; this lint
- * catches them at PR time so a misconfigured config never gets deployed.
+ * and refuses any top-level key that starts with `mock`.
  *
  * Run from the repo root:
  *   node cre/scripts/check-no-mock-in-non-local-config.mjs
@@ -91,5 +87,5 @@ console.error("[check-no-mock-in-non-local-config] forbidden mock* fields found:
 for (const v of violations) {
   console.error(`  ${v.file}: ${v.offender}`)
 }
-console.error("\nMock data is only permitted in config.local-simulation.json with workflowName ending in `-local-simulation` AND allowMockData=true. See cre/cre-workflows/_shared/mockGuard.ts.")
+console.error("\nMock data is only permitted in config.local-simulation.json with workflowName ending in `-local-simulation` AND allowMockData=true.")
 process.exit(1)

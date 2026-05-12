@@ -123,7 +123,7 @@ export async function fetchActiveVaults(chainId?: number): Promise<VaultConfig[]
   const baseUrl = process.env.KEEPR_API_BASE_URL || 'https://4626.fun/api';
   const secret = requireEnv('KEEPR_API_KEY');
 
-  const url = new URL(`${baseUrl}/cre/vaults/active`);
+  const url = new URL(`${baseUrl}/vaults/active`);
   if (chainId) {
     url.searchParams.set('chainId', String(chainId));
   }
