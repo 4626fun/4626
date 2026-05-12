@@ -373,15 +373,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     try {
+      // We pass a non-zero EXACT_OUTPUT amount to size the deposit. With
+      // amount=0, Relay correctly returns a zero-value step ("buy 0 wei")
+      // and Base App then refuses to dispatch with "error generating
+      // transaction" because the tx has no value and no obvious purpose.
+      //
+      // 20,000,000,000,000 wei (≈0.00002 ETH, ≈$0.05 at current price) is
+      // a small flat amount that comfortably covers Relay's solver gas
+      // for the Part 2 destination call. The May 5 owner[3] reference
+      // flow deposited 18,871,666,861,048 wei (the exact value Relay's
+      // solver computed at that time). The destination tx itself sends
+      // 0 wei — only Relay's deposit step carries ETH.
+      const RELAY_DEPOSIT_OUTPUT_WEI = '20000000000000'
       const quote = await getRelayQuote({
         user: cswAddress,
         recipient: cswAddress,
         originChainId: 8453,
         destinationChainId: 8453,
-        // EXACT_OUTPUT with amount=0 wei: the destination call sends 0 ETH; we
-        // only need Relay to cover its own solver gas. Relay computes the
-        // origin deposit amount to cover its fees.
-        amount: '0',
+        amount: RELAY_DEPOSIT_OUTPUT_WEI,
         tradeType: 'EXACT_OUTPUT',
         txs: [
           {
