@@ -11,11 +11,23 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
+import {
+  buildWebAuthnSignatureWrapper,
+  generateKeysCoinbasePasteSnippet,
+  parseKeysCoinbasePasteResponse,
+  verifyChallengeMatchesHash,
+} from '@/lib/wallet/keysCoinbasePasteFlow'
+import {
+  finalizeReplayableOwnerUserOp,
+  prepareReplayableOwnerUserOpForExternalSignature,
+  type V06UserOpFields,
+} from '@/lib/wallet/onboardingWalletReplayable'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
+const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 
 /** One EIP-5792 call. Shape matches what the backend preview returns. */
 type Eip5792Call = {
@@ -205,6 +217,12 @@ export function RemoveOwnerPage() {
     relayTx: unknown
     rawBody: string | null
   } | null>(null)
+  const [pasteFlow, setPasteFlow] = useState<{
+    userOp: V06UserOpFields
+    hashToSign: Hex
+    snippet: string
+  } | null>(null)
+  const [pasteResponse, setPasteResponse] = useState('')
   // Default to passkey-only signing. Self-auth ECDSA via Coinbase Wallet's
   // `personal_sign` is documented to silently return signatures from rotated
   // session keys that are no longer installed as owners on the CSW — the
@@ -356,6 +374,8 @@ export function RemoveOwnerPage() {
     setSignerMismatch(null)
     setPageNotice(null)
     setPreview(null)
+    setPasteFlow(null)
+    setPasteResponse('')
     setTxHash(null)
     try {
       const res = await apiFetch('/api/onboarding/preview-remove-owner', {
@@ -392,6 +412,125 @@ export function RemoveOwnerPage() {
   const handleSelectIndex = (index: number) => {
     setSelectedIndex(index)
     void fetchPreview(index)
+  }
+
+  const handlePrepareKeysCoinbasePaste = async () => {
+    if (!preview || !canonicalCswAddress) {
+      setPageError('Select an owner index first.')
+      return
+    }
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    setLastErrorDetail(null)
+    try {
+      const prepared = await prepareReplayableOwnerUserOpForExternalSignature({
+        csw: canonicalCswAddress as `0x${string}`,
+        innerCallData: preview.txRequest.data as Hex,
+        onTelemetry: (event) => {
+          try {
+            const detail =
+              typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+            appendEvent(`paste_prepare.${event.step}: ${detail.slice(0, 320)}`)
+          } catch {
+            appendEvent(`paste_prepare.${event.step}: <unloggable>`)
+          }
+        },
+      })
+      const snippet = generateKeysCoinbasePasteSnippet(prepared.hashToSign)
+      setPasteFlow({
+        userOp: prepared.userOp,
+        hashToSign: prepared.hashToSign,
+        snippet,
+      })
+      setPasteResponse('')
+      appendEvent(`paste_prepare:hash=${prepared.hashToSign}`)
+      setPageNotice(
+        'Copy the snippet, run it at keys.coinbase.com, authenticate with your passkey, then paste the returned JSON below.',
+      )
+    } catch (err: any) {
+      setPageError(err?.message ?? 'Failed to prepare keys.coinbase.com signing flow.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSubmitKeysCoinbasePaste = async () => {
+    if (!canonicalCswAddress) {
+      setPageError('Canonical CSW not available.')
+      return
+    }
+    if (!pasteFlow) {
+      setPageError('Prepare the keys.coinbase.com signing snippet first.')
+      return
+    }
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    setLastErrorDetail(null)
+    setSignerMismatch(null)
+    try {
+      const parsed = parseKeysCoinbasePasteResponse(pasteResponse)
+      const challengeError = verifyChallengeMatchesHash(parsed, pasteFlow.hashToSign)
+      if (challengeError) throw new Error(challengeError)
+
+      const signature = buildWebAuthnSignatureWrapper(parsed, 0)
+      const { handleOpsCalldata } = finalizeReplayableOwnerUserOp({
+        userOp: pasteFlow.userOp,
+        signature,
+        beneficiary: canonicalCswAddress as `0x${string}`,
+      })
+      appendEvent(`paste_submit.signature_len=${(signature.length - 2) / 2}`)
+      appendEvent(`paste_submit.handle_ops_len=${(handleOpsCalldata.length - 2) / 2}`)
+
+      const res = await apiFetch('/api/relay/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chainId: base.id,
+          to: ENTRY_POINT_V06_ADDRESS,
+          data: handleOpsCalldata,
+          value: '0',
+          user: canonicalCswAddress,
+        }),
+      })
+      const json = (await res.json().catch(() => null)) as
+        | {
+            success?: boolean
+            error?: string
+            status?: number
+            data?: {
+              txHash?: string
+              transactionHash?: string
+              hash?: string
+            } | null
+            txHash?: string
+            transactionHash?: string
+          }
+        | null
+      if (!res.ok || !json?.success) {
+        throw new Error(json?.error ?? `Relay execute failed (${res.status})`)
+      }
+      const maybeHash =
+        json?.data?.txHash ??
+        json?.data?.transactionHash ??
+        json?.data?.hash ??
+        json?.txHash ??
+        json?.transactionHash ??
+        null
+      if (maybeHash) setTxHash(maybeHash)
+      setPageNotice(
+        'Submitted signed owner-remove UserOp via Relay. Watch the canonical CSW owner list for removal confirmation.',
+      )
+      setPreview(null)
+      setSelectedIndex(null)
+      setPasteFlow(null)
+      setPasteResponse('')
+    } catch (err: any) {
+      setPageError(err?.message ?? 'Failed to submit pasted passkey signature.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const handleRemove = async () => {
@@ -1053,6 +1192,69 @@ export function RemoveOwnerPage() {
                   ) : null}
 
                   <div className="space-y-3">
+                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
+                            Recommended
+                          </div>
+                          <div className="text-xs font-medium text-emerald-100">
+                            Keys passkey paste-sign lane
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!preview || busy || previewLoading || !preview?.preflight.simulation.ok}
+                          onClick={() => void handlePrepareKeysCoinbasePaste()}
+                          className="btn-accent btn-no-icon inline-flex"
+                        >
+                          {busy ? 'Preparing...' : 'Sign with passkey at keys.coinbase.com'}
+                        </button>
+                      </div>
+                      <p className="leading-relaxed text-emerald-100/85">
+                        This path signs the exact replayable UserOp hash with your Coinbase passkey and submits
+                        <code className="mx-1 font-mono text-emerald-100">handleOps</code>
+                        through Relay. It avoids Base App self-call simulation issues.
+                      </p>
+                      {pasteFlow ? (
+                        <div className="space-y-2">
+                          <label className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
+                            Keys snippet
+                          </label>
+                          <textarea
+                            readOnly
+                            rows={10}
+                            value={pasteFlow.snippet}
+                            className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[10px] text-zinc-200"
+                          />
+                          <button
+                            type="button"
+                            className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35"
+                            onClick={() => {
+                              void navigator.clipboard.writeText(pasteFlow.snippet).catch(() => {})
+                            }}
+                          >
+                            Copy keys.coinbase.com snippet
+                          </button>
+                          <textarea
+                            rows={7}
+                            value={pasteResponse}
+                            onChange={(e) => setPasteResponse(e.target.value)}
+                            placeholder="Paste the JSON output from keys.coinbase.com here"
+                            className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-500"
+                          />
+                          <button
+                            type="button"
+                            disabled={busy || !pasteResponse.trim()}
+                            onClick={() => void handleSubmitKeysCoinbasePaste()}
+                            className="btn-accent btn-no-icon inline-flex"
+                          >
+                            {busy ? 'Submitting...' : 'Submit signed owner removal'}
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+
                     <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300 space-y-2">
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
@@ -1110,7 +1312,7 @@ export function RemoveOwnerPage() {
                         (preview ? !preview.preflight.simulation.ok : false)
                       }
                       onClick={() => void handleRemove()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {busy
                         ? isSelfAuthSession
