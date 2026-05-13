@@ -4,6 +4,7 @@ import { Route } from 'react-router-dom'
 import {
   AccountsPage,
   AddOwnerPage,
+  AmoeQuickTasks,
   RemoveOwnerPage,
   CswFundingPage,
   AdminAgentSetup,
@@ -187,6 +188,7 @@ export const EXPLORE_ROUTES: PathRouteDef[] = [
 ]
 
 export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
+  { path: '/amoe/tasks', element: <AmoeQuickTasks /> },
   { path: '/swap', element: <Swap /> },
   { path: '/portfolio', element: <Portfolio /> },
   { path: '/portfolio/:address', element: <Portfolio /> },
