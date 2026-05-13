@@ -213,7 +213,7 @@
       "picomatch@4": "4.0.4",
       "brace-expansion": "5.0.5",
       "elliptic": "6.6.1",
-      "langsmith": "0.5.19",
+      "langsmith": "0.6.0",
       "serialize-javascript": "7.0.5",
       "svix>uuid": "10.0.0",
       "@coinbase/cds-web>react": "$react",
