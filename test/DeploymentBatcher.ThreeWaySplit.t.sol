@@ -80,7 +80,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function test_resetPhase1State_reverts_nonProtocolTreasury() public {
         (,,, bytes32 baseSalt) = _seedPhase1State();
         vm.expectRevert(DeploymentBatcher.NotProtocolTreasury.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
     }
 
     function test_resetPhase1State_reverts_unknownSalt() public {
@@ -88,13 +88,13 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vm.prank(protocolTreasury);
         vm.expectRevert(DeploymentBatcher.Phase1StateNotStuck.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("unknownCreatorToken"), makeAddr("unknownOwner"), "v1");
     }
 
     function test_resetPhase1State_reverts_mismatchedTupleContext() public {
         bytes32 baseSalt = _seedPhase1StateWithFinalized(false);
         vm.prank(protocolTreasury);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorTokenNonFinalized"), makeAddr("phase1OwnerNonFinalized"), "v1");
 
         (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");
@@ -107,13 +107,13 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
 
         vm.prank(protocolTreasury);
         vm.expectRevert(DeploymentBatcher.AuctionAlreadyPending.selector);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
     }
 
     function test_resetPhase1State_succeeds_withMatchedTupleContext() public {
         (,,, bytes32 baseSalt) = _seedPhase1State();
         vm.prank(protocolTreasury);
-        batcher.resetPhase1State(baseSalt);
+        batcher.resetPhase1State(makeAddr("phase1CreatorToken"), makeAddr("phase1Owner"), "v1");
 
         (address oftBootstrapRegistry, address clearedVault,,,,,,,) = batcher.phase1SplitStates(baseSalt);
         assertEq(oftBootstrapRegistry, address(0), "phase1 oft bootstrap not cleared");

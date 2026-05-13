@@ -14,6 +14,7 @@ import {
   checkRateLimit,
   RATE_LIMITS,
   rateLimitKey,
+  isDbConfigured,
 } from '../../../../../packages/server-core/src/index.js'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
@@ -36,7 +37,6 @@ import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedToken
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
-import { isDbConfigured } from '../../../../../server/_lib/db/postgres.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }

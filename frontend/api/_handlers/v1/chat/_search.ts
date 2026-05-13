@@ -10,6 +10,7 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
+  getDb,
 } from '../../../../packages/server-core/src/index.js'
 import {
   getCachedEthosScoreByAddress,
@@ -18,7 +19,6 @@ import {
   getCachedEthosScoresByUserkeys,
   normalizeEthosUserkey,
 } from '../../../../server/_lib/chat/ethosClient.js'
-import { getDb } from '../../../../server/_lib/db/postgres.js'
 import {
   ethosCanonicalReadEnabled,
   getCanonicalEthosScoresByUserkeys,
