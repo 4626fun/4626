@@ -109,6 +109,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'paymaster': () => import('./paymaster/_paymaster.js'),
   'relay/execute': () => import('./relay/_execute.js'),
+  'relay/index': () => import('./relay/_index.js'),
   'relay/quote': () => import('./relay/_quote.js'),
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),

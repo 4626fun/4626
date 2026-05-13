@@ -65,20 +65,62 @@ type RelayStatusCheckResult = {
   raw: unknown
 }
 
-function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`): string {
-  return `https://api.relay.link/intents/status?requestId=${encodeURIComponent(requestId)}`
+type RelayTwoLegStatus =
+  | 'quoted'
+  | 'deposit_submitted'
+  | 'execution_pending'
+  | 'execution_succeeded'
+  | 'execution_failed'
+  | 'status_timeout'
+
+type RelayTwoLegDiagnostics = {
+  requestId: `0x${string}`
+  statusEndpoint: string
+  depositTxHash: `0x${string}` | null
+  executionTxHash: `0x${string}` | null
+  status: RelayTwoLegStatus
+  statusText: string | null
 }
 
-function relayQuoteAmountFromPreviewWei(preview: RemoveOwnerPreview | null): string {
-  const valueHex = preview?.relay?.userCall?.value
-  if (typeof valueHex !== 'string' || !/^0x[0-9a-fA-F]+$/.test(valueHex)) {
-    return '1'
-  }
+function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`): string {
+  return `https://api.relay.link/intents/status/v3?requestId=${encodeURIComponent(requestId)}`
+}
+
+function normalizeRelayStatusEndpoint(rawEndpoint: string | null, requestId: `0x${string}`): string {
+  const fallback = buildRelayStatusEndpointFromRequestId(requestId)
+  const trimmed = typeof rawEndpoint === 'string' ? rawEndpoint.trim() : ''
+  if (!trimmed) return fallback
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (trimmed.startsWith('/')) return `https://api.relay.link${trimmed}`
+  return fallback
+}
+
+function extractRelayStatusText(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const value = typeof obj.status === 'string' ? obj.status : typeof obj.state === 'string' ? obj.state : null
+  return value ? value.trim() || null : null
+}
+
+const RELAY_QUOTE_DEFAULT_GAS_LIMIT = 250_000n
+const RELAY_QUOTE_MULTIPLIER = 6n
+const RELAY_QUOTE_MIN_WEI = 1_000_000_000_000n
+const RELAY_QUOTE_MAX_WEI = 200_000_000_000_000n
+
+async function deriveRelayQuoteSeedAmountWei(publicClient: PublicClient | undefined): Promise<string> {
+  if (!publicClient) return RELAY_QUOTE_MIN_WEI.toString(10)
   try {
-    const value = BigInt(valueHex)
-    return value > 0n ? value.toString(10) : '1'
+    const gasPrice = await publicClient.getGasPrice()
+    const seeded = gasPrice * RELAY_QUOTE_DEFAULT_GAS_LIMIT * RELAY_QUOTE_MULTIPLIER
+    const clamped =
+      seeded < RELAY_QUOTE_MIN_WEI
+        ? RELAY_QUOTE_MIN_WEI
+        : seeded > RELAY_QUOTE_MAX_WEI
+          ? RELAY_QUOTE_MAX_WEI
+          : seeded
+    return clamped.toString(10)
   } catch {
-    return '1'
+    return RELAY_QUOTE_MIN_WEI.toString(10)
   }
 }
 
@@ -579,6 +621,7 @@ export function RemoveOwnerPage() {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [depositTxHash, setDepositTxHash] = useState<string | null>(null)
   const [aaDepositDiagnostics, setAaDepositDiagnostics] = useState<AADepositDiagnostics | null>(null)
+  const [relayTwoLegDiagnostics, setRelayTwoLegDiagnostics] = useState<RelayTwoLegDiagnostics | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<{
     revertReason: string | null
@@ -1124,6 +1167,7 @@ export function RemoveOwnerPage() {
     setLastErrorDetail(null)
     setSignerMismatch(null)
     setAaDepositDiagnostics(null)
+    setRelayTwoLegDiagnostics(null)
     try {
       const parsed = parseKeysCoinbasePasteResponse(pasteResponse)
       const challengeError = verifyChallengeMatchesHash(parsed, pasteFlow.hashToSign)
@@ -1146,8 +1190,8 @@ export function RemoveOwnerPage() {
         entryPoint: ENTRY_POINT_V06_ADDRESS,
       })
       appendEvent('paste_submit.quote.start')
-      const relayQuoteAmountWei = relayQuoteAmountFromPreviewWei(preview)
-      appendEvent(`paste_submit.quote.amount_wei=${relayQuoteAmountWei}`)
+      const relayQuoteAmountWei = await deriveRelayQuoteSeedAmountWei(publicClient)
+      appendEvent(`paste_submit.quote.seed_amount_wei=${relayQuoteAmountWei}`)
       const quoteRes = await apiFetch('/api/relay/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1175,18 +1219,21 @@ export function RemoveOwnerPage() {
       }
       appendEvent(`paste_submit.quote.request_id=${quotePayload.requestId}`)
       appendEvent(`paste_submit.quote.tx_value_wei=${quotePayload.txValueWei}`)
+      const statusEndpoint = normalizeRelayStatusEndpoint(
+        quotePayload.statusEndpoint,
+        quotePayload.requestId,
+      )
+      setRelayTwoLegDiagnostics({
+        requestId: quotePayload.requestId,
+        statusEndpoint,
+        depositTxHash: null,
+        executionTxHash: null,
+        status: 'quoted',
+        statusText: null,
+      })
 
       const depositValueHex = `0x${BigInt(quotePayload.txValueWei).toString(16)}` as `0x${string}`
-      const depositCallData = preview.relay?.userCall?.data
-      const quotedDepositCallData =
-        typeof depositCallData === 'string' &&
-        /^0x[0-9a-fA-F]+$/.test(depositCallData) &&
-        depositCallData.startsWith('0x49290c1c')
-          ? (`0x49290c1c000000000000000000000000${canonicalCswAddress.slice(2).toLowerCase()}${quotePayload.requestId.slice(2)}` as `0x${string}`)
-          : preview.relay?.userCall?.data
-      if (!quotedDepositCallData) {
-        throw new Error('Missing Relay depository calldata for request-bound execution.')
-      }
+      const quotedDepositCallData = (`0x49290c1c000000000000000000000000${canonicalCswAddress.slice(2).toLowerCase()}${quotePayload.requestId.slice(2)}` as `0x${string}`)
 
       appendEvent('paste_submit.deposit.execute_from_quote.start')
       const sendCallsResult = await _submitOwnerViaSendCalls({
@@ -1245,37 +1292,97 @@ export function RemoveOwnerPage() {
       appendEvent('paste_submit.execute.shape_check=ok')
       setDepositTxHash(resolution.transactionHash)
       setTxHash(null)
+      setRelayTwoLegDiagnostics({
+        requestId: quotePayload.requestId,
+        statusEndpoint,
+        depositTxHash: resolution.transactionHash as `0x${string}`,
+        executionTxHash: null,
+        status: 'deposit_submitted',
+        statusText: null,
+      })
+      try {
+        const indexRes = await apiFetch('/api/relay/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            txHash: resolution.transactionHash,
+            chainId: base.id,
+          }),
+        })
+        const indexJson = (await indexRes.json().catch(() => null)) as
+          | {
+              success?: boolean
+              error?: string
+            }
+          | null
+        if (indexRes.ok && indexJson?.success) {
+          appendEvent('paste_submit.indexing.accepted')
+        } else {
+          appendEvent(`paste_submit.indexing.failed=${indexJson?.error ?? indexRes.status}`)
+        }
+      } catch {
+        appendEvent('paste_submit.indexing.failed=fetch_error')
+      }
       setPageNotice(
         `Submitted request-bound Relay depository deposit via CSW sendCalls (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
           `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…`,
       )
-      const statusEndpoint =
-        quotePayload.statusEndpoint && quotePayload.statusEndpoint.trim()
-          ? quotePayload.statusEndpoint.trim()
-          : buildRelayStatusEndpointFromRequestId(quotePayload.requestId)
-      if (!quotePayload.statusEndpoint) {
+      if (!quotePayload.statusEndpoint || quotePayload.statusEndpoint.trim().startsWith('/')) {
         appendEvent(`paste_submit.status.poll.fallback_endpoint=${statusEndpoint}`)
       }
       if (statusEndpoint) {
         appendEvent(`paste_submit.status.poll.start endpoint=${statusEndpoint}`)
+        setRelayTwoLegDiagnostics({
+          requestId: quotePayload.requestId,
+          statusEndpoint,
+          depositTxHash: resolution.transactionHash as `0x${string}`,
+          executionTxHash: null,
+          status: 'execution_pending',
+          statusText: null,
+        })
         const statusResult = await pollRelayStatusEndpoint({
           statusEndpoint,
           timeoutMs: 90_000,
           intervalMs: 2_000,
           onTick: (message) => appendEvent(`paste_submit.${message}`),
         })
+        const statusText = extractRelayStatusText(statusResult.raw)
         if (!statusResult.done) {
+          setRelayTwoLegDiagnostics({
+            requestId: quotePayload.requestId,
+            statusEndpoint,
+            depositTxHash: resolution.transactionHash as `0x${string}`,
+            executionTxHash: null,
+            status: 'status_timeout',
+            statusText,
+          })
           throw new Error(
             `Request-bound deposit succeeded, but Relay execution did not finalize within 90s. ` +
               `Check status endpoint: ${statusEndpoint}`,
           )
         }
         if (!statusResult.success) {
+          setRelayTwoLegDiagnostics({
+            requestId: quotePayload.requestId,
+            statusEndpoint,
+            depositTxHash: resolution.transactionHash as `0x${string}`,
+            executionTxHash: statusResult.txHash,
+            status: 'execution_failed',
+            statusText,
+          })
           throw new Error(
             `Request-bound deposit succeeded, but Relay execution reported failure for request ${quotePayload.requestId}.`,
           )
         }
         appendEvent('paste_submit.status.poll.success')
+        setRelayTwoLegDiagnostics({
+          requestId: quotePayload.requestId,
+          statusEndpoint,
+          depositTxHash: resolution.transactionHash as `0x${string}`,
+          executionTxHash: statusResult.txHash,
+          status: 'execution_succeeded',
+          statusText,
+        })
         if (statusResult.txHash) {
           setTxHash(statusResult.txHash)
           setPageNotice(
@@ -1547,7 +1654,7 @@ export function RemoveOwnerPage() {
               `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
                 `Relay will now dispatch Part 2 via EntryPoint.handleOps (solver/bundler lane), ` +
                 `usually within the same block. Watch EntryPoint txs and the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
-                `request id ${rid}… can also be tracked via Relay /intents/status.`,
+                `request id ${rid}… can also be tracked via Relay /intents/status/v3.`,
             )
           }
         } else {
@@ -1567,7 +1674,7 @@ export function RemoveOwnerPage() {
               `Part 1 submitted via wallet_sendCalls (bundle id ${sendCallsResult.callBundleId}). ` +
                 `Wallet did not surface an on-chain tx hash within 60s. ` +
                 `Relay request id ${rid.slice(0, 10)}… can be polled at ` +
-                `/intents/status?requestId=${rid} for status.`,
+                `/intents/status/v3?requestId=${rid} for status.`,
             )
           }
         }
@@ -2284,6 +2391,68 @@ export function RemoveOwnerPage() {
                       >
                         {depositTxHash}
                       </a>
+                    </div>
+                  ) : null}
+
+                  {relayTwoLegDiagnostics ? (
+                    <div className="rounded-xl border border-violet-400/25 bg-violet-500/5 p-3 text-[11px] text-violet-100 space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-violet-200/80">
+                        Relay Two-Leg Status
+                      </div>
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-[10px] text-violet-200/70">requestId</dt>
+                          <dd className="font-mono break-all">{relayTwoLegDiagnostics.requestId}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-violet-200/70">status</dt>
+                          <dd className="font-mono">{relayTwoLegDiagnostics.status}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-violet-200/70">deposit tx (leg 1)</dt>
+                          <dd className="font-mono break-all">
+                            {relayTwoLegDiagnostics.depositTxHash ? (
+                              <a
+                                href={`https://basescan.org/tx/${relayTwoLegDiagnostics.depositTxHash}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline"
+                              >
+                                {relayTwoLegDiagnostics.depositTxHash}
+                              </a>
+                            ) : (
+                              'pending'
+                            )}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-violet-200/70">execution tx (leg 2)</dt>
+                          <dd className="font-mono break-all">
+                            {relayTwoLegDiagnostics.executionTxHash ? (
+                              <a
+                                href={`https://basescan.org/tx/${relayTwoLegDiagnostics.executionTxHash}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline"
+                              >
+                                {relayTwoLegDiagnostics.executionTxHash}
+                              </a>
+                            ) : (
+                              'pending'
+                            )}
+                          </dd>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <dt className="text-[10px] text-violet-200/70">status endpoint</dt>
+                          <dd className="font-mono break-all">{relayTwoLegDiagnostics.statusEndpoint}</dd>
+                        </div>
+                        {relayTwoLegDiagnostics.statusText ? (
+                          <div className="sm:col-span-2">
+                            <dt className="text-[10px] text-violet-200/70">relay status text</dt>
+                            <dd className="font-mono">{relayTwoLegDiagnostics.statusText}</dd>
+                          </div>
+                        ) : null}
+                      </dl>
                     </div>
                   ) : null}
 
