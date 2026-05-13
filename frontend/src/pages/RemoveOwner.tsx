@@ -569,27 +569,81 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     try {
       appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
-      const depositResult = (await request({
-        method: 'eth_sendTransaction',
-        params: [
-          {
-            from: ownerSignerAddress ?? undefined,
-            to: preview.relay.userCall.to,
-            data: preview.relay.userCall.data,
-            value: preview.relay.userCall.value,
+      if (isSelfAuthSession && canonicalCswAddress) {
+        appendEvent('paste_submit.deposit.mode=wallet_sendCalls')
+        const sendCallsResult = await _submitOwnerViaSendCalls({
+          walletRequest: async (args) => await request(args),
+          csw: canonicalCswAddress as `0x${string}`,
+          calls: [
+            {
+              to: preview.relay.userCall.to,
+              data: preview.relay.userCall.data as Hex,
+              value: preview.relay.userCall.value,
+            },
+          ],
+          chainId: base.id,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+              appendEvent(`paste_submit.deposit.${event.step}: ${detail.slice(0, 280)}`)
+            } catch {
+              appendEvent(`paste_submit.deposit.${event.step}: <unloggable>`)
+            }
           },
-        ],
-      })) as string
-      if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
-        throw new Error('Wallet did not return a valid Relay depository tx hash.')
+        })
+        appendEvent(`paste_submit.deposit.bundle_id=${sendCallsResult.callBundleId}`)
+        const resolution = await waitForCallsTxHash({
+          walletRequest: async (args) => await request(args),
+          callBundleId: sendCallsResult.callBundleId,
+          timeoutMs: 60_000,
+          intervalMs: 1_500,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+              appendEvent(`paste_submit.deposit.${event.step}: ${detail.slice(0, 280)}`)
+            } catch {
+              appendEvent(`paste_submit.deposit.${event.step}: <unloggable>`)
+            }
+          },
+        })
+        if (!resolution.transactionHash) {
+          throw new Error(
+            `wallet_sendCalls deposit did not surface an on-chain tx hash yet (bundle: ${sendCallsResult.callBundleId}).`,
+          )
+        }
+        setDepositTxHash(resolution.transactionHash)
+        appendEvent(`paste_submit.deposit.tx=${resolution.transactionHash}`)
+        setPageNotice(
+          'Relay depository funding submitted via CSW wallet_sendCalls (EntryPoint path). Continue to step 5.',
+        )
+      } else {
+        appendEvent('paste_submit.deposit.mode=eth_sendTransaction_fallback')
+        const depositResult = (await request({
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from: ownerSignerAddress ?? undefined,
+              to: preview.relay.userCall.to,
+              data: preview.relay.userCall.data,
+              value: preview.relay.userCall.value,
+            },
+          ],
+        })) as string
+        if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
+          throw new Error('Wallet did not return a valid Relay depository tx hash.')
+        }
+        setDepositTxHash(depositResult)
+        appendEvent(`paste_submit.deposit.tx=${depositResult}`)
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
+          appendEvent('paste_submit.deposit.confirmed')
+        }
+        setPageNotice(
+          'Relay depository funding transaction sent via direct wallet tx fallback. Continue to step 5.',
+        )
       }
-      setDepositTxHash(depositResult)
-      appendEvent(`paste_submit.deposit.tx=${depositResult}`)
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
-        appendEvent('paste_submit.deposit.confirmed')
-      }
-      setPageNotice('Relay depository funding transaction sent. Continue to step 5 to submit owner removal.')
     } catch (error) {
       setPageError(
         error instanceof Error ? error.message : 'Failed to fund Relay depository for paste-sign lane.',
