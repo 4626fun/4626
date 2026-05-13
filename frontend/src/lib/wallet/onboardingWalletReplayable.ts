@@ -15,7 +15,7 @@ import { base } from 'viem/chains'
 
 import { detectSignatureShape, type SignatureShape } from './signatureShape'
 
-const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
+export const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 const REPLAYABLE_NONCE_KEY = 8453n
 const ADD_OWNER_ADDRESS_SELECTOR = '0x0f0f3f24'
 
@@ -56,6 +56,14 @@ export type V06UserOpFields = {
   maxPriorityFeePerGas: bigint
   paymasterAndData: `0x${string}`
   signature: `0x${string}`
+}
+
+export type RelayExecuteRequestBody = {
+  chainId: number
+  to: `0x${string}`
+  data: `0x${string}`
+  value: '0'
+  user: `0x${string}`
 }
 
 type PreflightOutcome =
@@ -618,6 +626,21 @@ export function finalizeReplayableOwnerUserOp(params: {
   }
 }
 
+export function buildRelayExecuteRequestBody(params: {
+  chainId: number
+  csw: `0x${string}`
+  handleOpsCalldata: `0x${string}`
+  entryPoint?: `0x${string}`
+}): RelayExecuteRequestBody {
+  return {
+    chainId: params.chainId,
+    to: params.entryPoint ?? ENTRY_POINT_V06_ADDRESS,
+    data: params.handleOpsCalldata,
+    value: '0',
+    user: params.csw,
+  }
+}
+
 export async function _submitOwnerViaSelfBuiltUserOp(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -900,13 +923,11 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
     },
   })
 
-  const relayBody = {
+  const relayBody = buildRelayExecuteRequestBody({
     chainId: params.chainId,
-    to: ENTRY_POINT_V06_ADDRESS,
-    data: handleOpsCalldata,
-    value: '0',
-    user: params.csw,
-  }
+    csw: params.csw,
+    handleOpsCalldata,
+  })
   let relayQuoteResponse: unknown = null
   if (params.quoteRelayBeforeSubmit) {
     emit({ step: 'quote_relay', detail: { stage: 'request', relayBody } })

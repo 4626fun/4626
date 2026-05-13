@@ -18,6 +18,8 @@ import {
   verifyChallengeMatchesHash,
 } from '@/lib/wallet/keysCoinbasePasteFlow'
 import {
+  buildRelayExecuteRequestBody,
+  ENTRY_POINT_V06_ADDRESS,
   finalizeReplayableOwnerUserOp,
   prepareReplayableOwnerUserOpForExternalSignature,
   type V06UserOpFields,
@@ -27,8 +29,6 @@ import {
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
-const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
-
 /** One EIP-5792 call. Shape matches what the backend preview returns. */
 type Eip5792Call = {
   to: `0x${string}`
@@ -222,14 +222,16 @@ export function RemoveOwnerPage() {
     userOp: V06UserOpFields
     hashToSign: Hex
     snippet: string
+    signerOwnerIndex: number
   } | null>(null)
   const [pasteResponse, setPasteResponse] = useState('')
+  const [signingOwnerIndex, setSigningOwnerIndex] = useState(0)
   // Default to passkey-only signing. Self-auth ECDSA via Coinbase Wallet's
   // `personal_sign` is documented to silently return signatures from rotated
   // session keys that are no longer installed as owners on the CSW — the
   // SignatureWrapper claims an ownerIndex but the ECDSA actually recovers to
   // an address that doesn't match the bytes stored at that slot, so EntryPoint
-  // reverts with AA24 inside Relay's solver simulation. Passkey (owner[0])
+  // reverts with AA24 inside Relay's solver simulation. Passkey signing
   // signs via WebAuthn, which the CSW validates with stored credentialId bytes
   // — no session-key drift possible. The user can opt back into session-key
   // mode if they explicitly want to (e.g. when no passkey is available).
@@ -354,6 +356,19 @@ export function RemoveOwnerPage() {
     }
   }, [canonicalCswAddress, publicClient])
 
+  useEffect(() => {
+    if (diagnostics.owners.length === 0) return
+    const passkeyOwner = diagnostics.owners.find((owner) => owner.type === 'passkey')
+    if (passkeyOwner) {
+      setSigningOwnerIndex((current) => {
+        if (current === passkeyOwner.index) return current
+        const currentRow = diagnostics.owners.find((owner) => owner.index === current)
+        if (currentRow?.type === 'passkey') return current
+        return passkeyOwner.index
+      })
+    }
+  }, [diagnostics.owners])
+
   const isSelfAuthSession = useMemo(() => {
     if (!canonicalCswAddress || !ownerSignerAddress) return false
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
@@ -373,6 +388,50 @@ export function RemoveOwnerPage() {
       }
     }
   }, [pasteFlow, pasteResponse])
+
+  const signerOwnerIndexValidation = useMemo(() => {
+    if (diagnostics.owners.length === 0 && diagnostics.status !== 'ready') {
+      return {
+        ok: true as const,
+        message: `Owner slot scan is not ready yet; using signer owner index ${signingOwnerIndex}.`,
+      }
+    }
+    const row = diagnostics.owners.find((owner) => owner.index === signingOwnerIndex)
+    if (!row) {
+      return {
+        ok: false as const,
+        message: `Signer owner index ${signingOwnerIndex} is not present in scanned owner slots.`,
+      }
+    }
+    if (row.type === 'empty') {
+      return {
+        ok: false as const,
+        message: `Signer owner index ${signingOwnerIndex} is empty.`,
+      }
+    }
+    if (row.type === 'EOA') {
+      return {
+        ok: false as const,
+        message: `Signer owner index ${signingOwnerIndex} is an EOA owner. The keys.coinbase.com lane requires a passkey owner slot.`,
+      }
+    }
+    if (row.type === 'unreadable') {
+      return {
+        ok: true as const,
+        message: `Signer owner index ${signingOwnerIndex} could not be read from RPC, but will be attempted.`,
+      }
+    }
+    if (row.type === 'passkey') {
+      return {
+        ok: true as const,
+        message: `Using passkey owner slot [${signingOwnerIndex}] for signature wrapper.`,
+      }
+    }
+    return {
+      ok: true as const,
+      message: `Using owner slot [${signingOwnerIndex}] for signature wrapper.`,
+    }
+  }, [diagnostics.owners, diagnostics.status, signingOwnerIndex])
 
   const appendEvent = (row: string) => {
     setEventLog((prev) => [...prev, row].slice(-40))
@@ -436,6 +495,10 @@ export function RemoveOwnerPage() {
       setPageError('Select an owner index first.')
       return
     }
+    if (!signerOwnerIndexValidation.ok) {
+      setPageError(signerOwnerIndexValidation.message)
+      return
+    }
     setBusy(true)
     setPageError(null)
     setPageNotice(null)
@@ -459,11 +522,12 @@ export function RemoveOwnerPage() {
         userOp: prepared.userOp,
         hashToSign: prepared.hashToSign,
         snippet,
+        signerOwnerIndex: signingOwnerIndex,
       })
       setPasteResponse('')
       appendEvent(`paste_prepare:hash=${prepared.hashToSign}`)
       setPageNotice(
-        'Copy the snippet, run it at keys.coinbase.com, authenticate with your passkey, then paste the returned JSON below.',
+        `Copy the snippet, run it at keys.coinbase.com, authenticate with passkey owner slot [${signingOwnerIndex}], then paste the returned JSON below.`,
       )
       setDepositTxHash(null)
     } catch (err: any) {
@@ -556,15 +620,8 @@ export function RemoveOwnerPage() {
       setPageError('Pasted payload is invalid. Fix step 3 before submitting owner removal.')
       return
     }
-    if (!walletClient) {
-      setPageError('Connect your wallet first.')
-      return
-    }
-    const request = (walletClient as any).request as
-      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
-      | undefined
-    if (!request) {
-      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+    if (!signerOwnerIndexValidation.ok) {
+      setPageError(signerOwnerIndexValidation.message)
       return
     }
     setBusy(true)
@@ -577,27 +634,28 @@ export function RemoveOwnerPage() {
       const challengeError = verifyChallengeMatchesHash(parsed, pasteFlow.hashToSign)
       if (challengeError) throw new Error(challengeError)
 
-      const signature = buildWebAuthnSignatureWrapper(parsed, 0)
+      const signature = buildWebAuthnSignatureWrapper(parsed, pasteFlow.signerOwnerIndex)
       const { handleOpsCalldata } = finalizeReplayableOwnerUserOp({
         userOp: pasteFlow.userOp,
         signature,
         beneficiary: canonicalCswAddress as `0x${string}`,
       })
       appendEvent(`paste_submit.signature_len=${(signature.length - 2) / 2}`)
+      appendEvent(`paste_submit.signer_owner_index=${pasteFlow.signerOwnerIndex}`)
       appendEvent(`paste_submit.handle_ops_len=${(handleOpsCalldata.length - 2) / 2}`)
 
       appendEvent(`paste_submit.deposit.reuse=${depositTxHash}`)
 
+      const relayBody = buildRelayExecuteRequestBody({
+        chainId: base.id,
+        csw: canonicalCswAddress as `0x${string}`,
+        handleOpsCalldata,
+        entryPoint: ENTRY_POINT_V06_ADDRESS,
+      })
       const res = await apiFetch('/api/relay/execute', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chainId: base.id,
-          to: ENTRY_POINT_V06_ADDRESS,
-          data: handleOpsCalldata,
-          value: '0',
-          user: canonicalCswAddress,
-        }),
+        body: JSON.stringify(relayBody),
       })
       const json = (await res.json().catch(() => null)) as
         | {
@@ -1297,32 +1355,38 @@ export function RemoveOwnerPage() {
                   ) : null}
 
                   <div className="space-y-3">
-                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 space-y-3">
+                    <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 space-y-2">
                       <div>
                         <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
-                          Recommended guided lane
+                          Recommended lane
                         </div>
                         <div className="text-xs font-medium text-emerald-100">
-                          Keys passkey flow (fastest path)
+                          Keys passkey flow
                         </div>
                       </div>
-                      <p className="leading-relaxed text-emerald-100/85">
-                        Follow these steps in order. Step 5 stays locked until payload validation and relay deposit are complete.
+                      <p className="text-[10px] text-emerald-100/80">
+                        Complete steps in order. Submit unlocks after payload validation and relay deposit.
                       </p>
-                      <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-3">
+                      <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-2.5">
                         <div className="flex items-center justify-between text-xs">
                           <span>Step 1. Select owner slot</span>
                           <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>
                             {preview ? 'done' : 'pending'}
                           </span>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                           <span>Step 2. Generate keys snippet</span>
                           <button
                             type="button"
-                            disabled={!preview || busy || previewLoading || !preview?.preflight.simulation.ok}
+                            disabled={
+                              !preview ||
+                              busy ||
+                              previewLoading ||
+                              !preview?.preflight.simulation.ok ||
+                              !signerOwnerIndexValidation.ok
+                            }
                             onClick={() => void handlePrepareKeysCoinbasePaste()}
-                            className="btn-accent btn-no-icon inline-flex"
+                            className="btn-accent btn-no-icon inline-flex w-full sm:w-auto"
                           >
                             {busy ? 'Preparing...' : 'Generate snippet'}
                           </button>
@@ -1345,14 +1409,61 @@ export function RemoveOwnerPage() {
                                 : 'invalid'}
                           </span>
                         </div>
+                        <div className="rounded-lg border border-white/10 bg-black/35 p-2 space-y-2">
+                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                            Passkey signer slot
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <label className="text-[10px] text-zinc-400">Owner index used in signature wrapper</label>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              value={signingOwnerIndex}
+                              onChange={(e) => {
+                                const parsed = Number(e.target.value)
+                                if (!Number.isFinite(parsed) || parsed < 0) return
+                                setSigningOwnerIndex(Math.floor(parsed))
+                              }}
+                              className="w-24 rounded-lg border border-white/15 bg-black/40 px-2 py-1 font-mono text-[11px] text-zinc-200"
+                            />
+                            <select
+                              value={signingOwnerIndex}
+                              onChange={(e) => setSigningOwnerIndex(Number(e.target.value))}
+                              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1 text-[11px] text-zinc-200"
+                            >
+                              {diagnostics.owners.filter((owner) => owner.type !== 'empty').length === 0 ? (
+                                <option value={signingOwnerIndex}>[{signingOwnerIndex}] manual</option>
+                              ) : null}
+                              {diagnostics.owners
+                                .filter((owner) => owner.type !== 'empty')
+                                .map((owner) => (
+                                  <option key={owner.index} value={owner.index}>
+                                    [{owner.index}] {owner.type}
+                                    {owner.ownerAddress ? ` ${owner.ownerAddress.slice(0, 8)}…` : ''}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          <div
+                            className={`text-[10px] ${
+                              signerOwnerIndexValidation.ok ? 'text-emerald-300' : 'text-rose-300'
+                            }`}
+                          >
+                            {signerOwnerIndexValidation.message}
+                          </div>
+                        </div>
                         {pasteFlow ? (
                           <>
                             <label className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
                               Keys snippet
                             </label>
+                            <div className="text-[10px] text-zinc-400">
+                              Prepared for signer owner slot [{pasteFlow.signerOwnerIndex}].
+                            </div>
                             <textarea
                               readOnly
-                              rows={10}
+                              rows={7}
                               value={pasteFlow.snippet}
                               className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[10px] text-zinc-200"
                             />
@@ -1366,7 +1477,7 @@ export function RemoveOwnerPage() {
                               Copy keys.coinbase.com snippet
                             </button>
                             <textarea
-                              rows={7}
+                              rows={5}
                               value={pasteResponse}
                               onChange={(e) => setPasteResponse(e.target.value)}
                               placeholder="Paste the JSON output from keys.coinbase.com here"
@@ -1385,7 +1496,7 @@ export function RemoveOwnerPage() {
                             ) : null}
                           </>
                         ) : null}
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                           <span>Step 4. Send relay depository tx</span>
                           <button
                             type="button"
@@ -1394,21 +1505,28 @@ export function RemoveOwnerPage() {
                               !preview?.relay?.userCall ||
                               !pasteFlow ||
                               !pasteValidation?.ok ||
+                              !signerOwnerIndexValidation.ok ||
                               Boolean(depositTxHash)
                             }
                             onClick={() => void handleFundRelayDepositForPasteLane()}
-                            className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35 disabled:opacity-60"
+                            className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35 disabled:opacity-60 w-full sm:w-auto"
                           >
                             {depositTxHash ? 'Deposit sent' : busy ? 'Sending...' : 'Send deposit tx'}
                           </button>
                         </div>
-                        <div className="flex items-center justify-between text-xs">
+                        <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
                           <span>Step 5. Submit owner removal</span>
                           <button
                             type="button"
-                            disabled={busy || !pasteFlow || !pasteValidation?.ok || !depositTxHash}
+                            disabled={
+                              busy ||
+                              !pasteFlow ||
+                              !pasteValidation?.ok ||
+                              !depositTxHash ||
+                              !signerOwnerIndexValidation.ok
+                            }
                             onClick={() => void handleSubmitKeysCoinbasePaste()}
-                            className="btn-accent btn-no-icon inline-flex"
+                            className="btn-accent btn-no-icon inline-flex w-full sm:w-auto"
                           >
                             {busy ? 'Submitting...' : 'Submit owner removal'}
                           </button>
@@ -1434,15 +1552,10 @@ export function RemoveOwnerPage() {
                         />
                         <span>
                           <span className="text-zinc-200 font-medium">
-                            Sign with passkey (owner[0])
+                            Sign with passkey owner slot
                           </span>
-                          <span className="block text-[10px] text-zinc-500 mt-0.5 leading-relaxed">
-                            Recommended. Self-auth ECDSA via Coinbase
-                            Wallet&apos;s personal_sign can return signatures from
-                            rotated session keys that aren&apos;t installed on the
-                            CSW, which makes the EntryPoint reject the UserOp
-                            with AA24. Uncheck to fall back to the session-key
-                            ECDSA path at your own risk.
+                          <span className="block text-[10px] text-zinc-500 mt-0.5">
+                            Keeps signature checks strict for this fallback path.
                           </span>
                         </span>
                         </label>
