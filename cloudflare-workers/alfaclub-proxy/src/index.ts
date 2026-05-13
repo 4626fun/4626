@@ -29,6 +29,18 @@ interface Env {
   PROXY_SHARED_SECRET: string
 }
 
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void
+  passThroughOnException(): void
+}
+
+type CfRequestInit = RequestInit & {
+  cf?: {
+    cacheTtl?: number
+    cacheEverything?: boolean
+  }
+}
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -73,6 +85,17 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
   })
 }
 
+function normalizeSharedSecret(value: unknown): string {
+  const normalized = String(value ?? '').trim()
+  if (!normalized) return ''
+  const first = normalized[0]
+  const last = normalized[normalized.length - 1]
+  if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+    return normalized.slice(1, -1).trim()
+  }
+  return normalized
+}
+
 function isAllowedPath(pathname: string, allowed: string[]): boolean {
   return allowed.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}?`) || pathname.startsWith(`${prefix}/`))
 }
@@ -108,7 +131,7 @@ function buildResponseHeaders(upstream: Response, requestId: string): Headers {
 }
 
 export default {
-  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: WorkerExecutionContext): Promise<Response> {
     const url = new URL(req.url)
 
     // Health probe — useful during deploy.
@@ -126,8 +149,8 @@ export default {
     // Shared-secret gate. Constant-time compare to avoid timing leaks
     // (Workers' default string compare is fine for this length, but
     // we use a manual XOR for clarity).
-    const presented = req.headers.get('x-proxy-secret') ?? ''
-    const expected = env.PROXY_SHARED_SECRET ?? ''
+    const presented = normalizeSharedSecret(req.headers.get('x-proxy-secret'))
+    const expected = normalizeSharedSecret(env.PROXY_SHARED_SECRET)
     if (!expected) {
       return jsonResponse(503, { error: 'proxy_misconfigured:no_secret' })
     }
@@ -164,14 +187,15 @@ export default {
 
     let upstream: Response
     try {
-      upstream = await fetch(upstreamRequest, {
+      const init: CfRequestInit = {
         // Skip Cloudflare's edge cache for chat history. Stale data
         // here would directly cause `/gmeow` to be missed.
         cf: {
           cacheTtl: Number(env.EDGE_CACHE_TTL_SECONDS) || 0,
           cacheEverything: false,
         },
-      })
+      }
+      upstream = await fetch(upstreamRequest, init)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return jsonResponse(502, {

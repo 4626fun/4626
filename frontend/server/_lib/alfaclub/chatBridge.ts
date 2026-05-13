@@ -41,7 +41,7 @@ import {
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
 } from './authHealthStore.js'
-import { upsertAlfaClubIngestMessages } from './chatIngestStore.js'
+import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
 
@@ -74,6 +74,23 @@ type AlfaClubRoomHistoryMessage = {
   date?: number
   sender?: string
   text?: string
+  username?: string
+  avatar?: string
+  isBot?: boolean
+  is_edited?: boolean
+  edit_deadline?: number
+  deleted_at?: number | string | null
+  deleted_by?: string | null
+  deleted_by_username?: string | null
+  reply_id?: string | null
+  reply_date?: number | null
+  reply_text?: string | null
+  reply_sender?: string | null
+  reply_username?: string | null
+  keys?: number | null
+  primary_tag?: string | null
+  primary_tag_variant?: string | null
+  reactions?: unknown
   attachments?: unknown
   reply_attachments?: unknown
 }
@@ -1958,6 +1975,15 @@ async function ingestLiveMessages(
       senderAddress: message.sender,
       text: message.text,
       dateMs: message.date,
+      attachmentsJson: message.attachments,
+      replyAttachmentsJson: message.replyAttachments,
+      messagePayloadJson: message.rawPayloadText ? (() => {
+        try {
+          return JSON.parse(message.rawPayloadText)
+        } catch {
+          return null
+        }
+      })() : null,
       source: 'ws-live',
       rawPayloadText: message.rawPayloadText,
     })),
@@ -2531,33 +2557,69 @@ async function runBridgeTick(
   // in-memory state surviving between serverless cold starts.
   let newlyIngestedHistoryIds: Set<string> | null = null
   try {
+    const historyIngestRows: AlfaClubIngestMessage[] = fetchedMessages.flatMap((message) => {
+      const id = String(message.id ?? '').trim()
+      const sender = String(message.sender ?? '').trim().toLowerCase()
+      if (!id || !isHexAddress(sender)) return []
+      const date = Number(message.date)
+      const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
+      const editDeadlineRaw = Number(message.edit_deadline)
+      const editDeadlineMs = Number.isFinite(editDeadlineRaw) && editDeadlineRaw > 0
+        ? Math.floor(editDeadlineRaw)
+        : null
+      const replyDateRaw = Number(message.reply_date)
+      const replyDateMs = Number.isFinite(replyDateRaw) && replyDateRaw > 0
+        ? Math.floor(replyDateRaw)
+        : null
+      const deletedAtRaw = message.deleted_at
+      const deletedAtMs = (() => {
+        if (deletedAtRaw == null) return null
+        const asNumber = Number(deletedAtRaw)
+        if (Number.isFinite(asNumber) && asNumber > 0) return Math.floor(asNumber)
+        const parsed = Date.parse(String(deletedAtRaw))
+        return Number.isFinite(parsed) ? parsed : null
+      })()
+      const payloadJson = message as Record<string, unknown>
+      return [
+        {
+          roomId,
+          messageId: id,
+          senderAddress: sender,
+          text: String(message.text ?? ''),
+          dateMs,
+          username: typeof message.username === 'string' ? message.username : null,
+          avatarUrl: typeof message.avatar === 'string' ? message.avatar : null,
+          isBot: typeof message.isBot === 'boolean' ? message.isBot : null,
+          isEdited: typeof message.is_edited === 'boolean' ? message.is_edited : null,
+          editDeadlineMs,
+          deletedAtMs,
+          deletedBy: typeof message.deleted_by === 'string' ? message.deleted_by : null,
+          deletedByUsername: typeof message.deleted_by_username === 'string' ? message.deleted_by_username : null,
+          replyId: typeof message.reply_id === 'string' ? message.reply_id : null,
+          replyDateMs,
+          replyText: typeof message.reply_text === 'string' ? message.reply_text : null,
+          replySender: typeof message.reply_sender === 'string' ? message.reply_sender : null,
+          replyUsername: typeof message.reply_username === 'string' ? message.reply_username : null,
+          keysCount: typeof message.keys === 'number' ? Math.floor(message.keys) : null,
+          primaryTag: typeof message.primary_tag === 'string' ? message.primary_tag : null,
+          primaryTagVariant: typeof message.primary_tag_variant === 'string' ? message.primary_tag_variant : null,
+          attachmentsJson: message.attachments ?? null,
+          replyAttachmentsJson: message.reply_attachments ?? null,
+          reactionsJson: message.reactions ?? null,
+          messagePayloadJson: payloadJson,
+          source: 'history',
+          rawPayloadText: (() => {
+            try {
+              return JSON.stringify(message)
+            } catch {
+              return null
+            }
+          })(),
+        },
+      ]
+    })
     const inserted = await upsertAlfaClubIngestMessages(
-      fetchedMessages
-        .map((message) => {
-          const id = String(message.id ?? '').trim()
-          const sender = String(message.sender ?? '').trim().toLowerCase()
-          if (!id || !isHexAddress(sender)) return null
-          const date = Number(message.date)
-          const dateMs = Number.isFinite(date) && date > 0 ? Math.floor(date) : null
-          return {
-            roomId,
-            messageId: id,
-            senderAddress: sender,
-            text: String(message.text ?? ''),
-            dateMs,
-            source: 'history' as const,
-            rawPayloadText: null,
-          }
-        })
-        .filter((entry): entry is {
-          roomId: string
-          messageId: string
-          senderAddress: string
-          text: string
-          dateMs: number | null
-          source: 'history'
-          rawPayloadText: null
-        } => Boolean(entry)),
+      historyIngestRows,
     )
     newlyIngestedHistoryIds = new Set(inserted.map((row) => row.messageId))
   } catch {

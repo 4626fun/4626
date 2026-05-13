@@ -9,7 +9,7 @@
 //   5. Cron auth — `CRON_SECRET` and `AMOE_CRON_SECRET` fallback both work.
 //   6. Cron auth — accepts both `Bearer <secret>` and bare `<secret>`.
 //   7. Lottery router env unset → 503 `Lottery manager not configured`.
-//   8. No relay configured → 200 with `tick: 'no_relay_configured'`.
+//   8. No relay configured → 503 `amoe_retry_relay_missing`.
 //   9. Happy path — picks rows, calls `retrySubmissionByIdAsCron` per
 //      row, returns aggregated outcomes; reclaim + GC also invoked.
 //  10. Per-row throw is caught and surfaced as `outcome: 'error'` with
@@ -21,8 +21,7 @@
 //   * `amoeReplayStore` row picker + reclaim + GC.
 //   * `amoeReplayRetry` per-row retry function.
 //   * Use the handler's `__setAmoeRetryCronHandlerHooksForTest` to inject
-//     a relay (the production cron currently no-ops without one — the
-//     hook lets us drive the processed path in tests).
+//     a relay for deterministic processed-path tests.
 
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -348,7 +347,7 @@ describe('lottery router env', () => {
 // ---------------------------------------------------------------------------
 
 describe('relay availability', () => {
-  it('returns 200 no_relay_configured when no relay is wired in', async () => {
+  it('returns 503 amoe_retry_relay_missing when no relay is wired in', async () => {
     const restore = setEnabledEnv()
     try {
       // Leave hooks untouched — no relay injected.
@@ -356,10 +355,10 @@ describe('relay availability', () => {
       const req = authReq({ authHeader: `Bearer ${VALID_SECRET}` })
       const res = createMockRes()
       await handler(req, res)
-      expect(res.statusCode).toBe(200)
+      expect(res.statusCode).toBe(503)
       expect(res.body).toMatchObject({
-        ok: true,
-        tick: 'no_relay_configured',
+        ok: false,
+        error: 'amoe_retry_relay_missing',
         pickedCount: 0,
         reclaimedCount: 0,
         gcCount: 0,
