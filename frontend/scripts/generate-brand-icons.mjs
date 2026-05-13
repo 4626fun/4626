@@ -50,7 +50,7 @@ const requiredKitIconAssets = [
   'assets/maskable-icon-192x192.png',
   'assets/maskable-icon-512x512.png',
   'assets/mstile-150x150.png',
-  'assets/safari-pinned-tab-v2.svg',
+  'assets/safari-pinned-tab.svg',
 ]
 
 async function verifyCanonicalKitIconAssets() {

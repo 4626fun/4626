@@ -2,8 +2,8 @@ import { TELEGRAM_LINK_DESCRIPTION } from '@/lib/seo/siteMeta'
 
 export const PAGE_META = {
   home: {
-    title: '4626.fun - ERC-4626 Creator Vaults on Base',
-    description: 'ERC-4626 creator vaults on Base.',
+    title: '4626.fun — ERC-4626 Creator Vaults on Base',
+    description: 'Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi.',
   },
   waitlist: {
     title: 'Join the Waitlist — 4626.fun',

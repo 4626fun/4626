@@ -58,6 +58,25 @@ type RelayQuoteExecutePayload = {
   statusEndpoint: string | null
 }
 
+type AADepositDiagnostics = {
+  txHash: `0x${string}`
+  blockNumber: bigint
+  userOpHash: `0x${string}` | null
+  userOpNonce: bigint | null
+  userOpSuccess: boolean | null
+  actualGasCostWei: bigint | null
+  actualGasUsed: bigint | null
+  relayDepositFrom: `0x${string}` | null
+  relayDepositAmountWei: bigint | null
+  relayDepositRequestId: `0x${string}` | null
+  expectedRequestId: `0x${string}`
+  checks: {
+    hasEntryPointUserOpForCsw: boolean
+    hasRelayDepositForCsw: boolean
+    requestIdMatches: boolean
+  }
+}
+
 type RemoveOwnerPreview = {
   /** Legacy: raw mutation calldata. Only used in the funder-EOA fallback lane. */
   txRequest: {
@@ -164,7 +183,10 @@ async function verifyAARelayDepositShape(params: {
   txHash: `0x${string}`
   cswAddress: `0x${string}`
   expectedRequestId: `0x${string}`
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+}): Promise<
+  | { ok: true; diagnostics: AADepositDiagnostics }
+  | { ok: false; reason: string; diagnostics?: AADepositDiagnostics }
+> {
   if (!params.publicClient) {
     return { ok: false, reason: 'Public client unavailable; cannot verify AA relay deposit shape.' }
   }
@@ -172,6 +194,14 @@ async function verifyAARelayDepositShape(params: {
   const expectedCsw = params.cswAddress.toLowerCase()
   const expectedRequestIdTopic = toHex32Topic(params.expectedRequestId)
 
+  let userOpHash: `0x${string}` | null = null
+  let userOpNonce: bigint | null = null
+  let userOpSuccess: boolean | null = null
+  let actualGasCostWei: bigint | null = null
+  let actualGasUsed: bigint | null = null
+  let relayDepositFrom: `0x${string}` | null = null
+  let relayDepositAmountWei: bigint | null = null
+  let relayDepositRequestId: `0x${string}` | null = null
   let hasEntryPointUserOpForCsw = false
   let hasRelayDepositForCsw = false
   let hasMatchingRequestId = false
@@ -187,6 +217,25 @@ async function verifyAARelayDepositShape(params: {
       if (senderTopicAddress && senderTopicAddress.toLowerCase() === expectedCsw) {
         hasEntryPointUserOpForCsw = true
       }
+      const opHashTopic = log.topics?.[1]
+      if (typeof opHashTopic === 'string' && /^0x[0-9a-fA-F]{64}$/.test(opHashTopic)) {
+        userOpHash = opHashTopic as `0x${string}`
+      }
+      try {
+        const [nonce, success, actualGasCost, gasUsed] = decodeAbiParameters(
+          [
+            { type: 'uint256' },
+            { type: 'bool' },
+            { type: 'uint256' },
+            { type: 'uint256' },
+          ],
+          log.data,
+        )
+        userOpNonce = nonce as bigint
+        userOpSuccess = success as boolean
+        actualGasCostWei = actualGasCost as bigint
+        actualGasUsed = gasUsed as bigint
+      } catch {}
       continue
     }
     if (
@@ -201,6 +250,9 @@ async function verifyAARelayDepositShape(params: {
         if (String(from).toLowerCase() === expectedCsw) {
           hasRelayDepositForCsw = true
         }
+        relayDepositFrom = String(from).toLowerCase() as `0x${string}`
+        relayDepositAmountWei = _amount as bigint
+        relayDepositRequestId = requestId as `0x${string}`
         if ((requestId as string).toLowerCase() === expectedRequestIdTopic.toLowerCase()) {
           hasMatchingRequestId = true
         }
@@ -210,11 +262,31 @@ async function verifyAARelayDepositShape(params: {
     }
   }
 
+  const diagnostics: AADepositDiagnostics = {
+    txHash: params.txHash,
+    blockNumber: receipt.blockNumber,
+    userOpHash,
+    userOpNonce,
+    userOpSuccess,
+    actualGasCostWei,
+    actualGasUsed,
+    relayDepositFrom,
+    relayDepositAmountWei,
+    relayDepositRequestId,
+    expectedRequestId: params.expectedRequestId,
+    checks: {
+      hasEntryPointUserOpForCsw,
+      hasRelayDepositForCsw,
+      requestIdMatches: hasMatchingRequestId,
+    },
+  }
+
   if (!hasEntryPointUserOpForCsw) {
     return {
       ok: false,
       reason:
         'Deposit tx missing EntryPoint UserOperationEvent for canonical CSW (no CSW -> EntryPoint leg).',
+      diagnostics,
     }
   }
   if (!hasRelayDepositForCsw) {
@@ -222,6 +294,7 @@ async function verifyAARelayDepositShape(params: {
       ok: false,
       reason:
         'Deposit tx missing RelayNativeDeposit for canonical CSW (no CSW -> RelayDepository leg).',
+      diagnostics,
     }
   }
   if (!hasMatchingRequestId) {
@@ -229,9 +302,10 @@ async function verifyAARelayDepositShape(params: {
       ok: false,
       reason:
         'Deposit tx RelayNativeDeposit requestId does not match the expected request-bound Relay quote.',
+      diagnostics,
     }
   }
-  return { ok: true }
+  return { ok: true, diagnostics }
 }
 
 type OnchainOwnerRow = {
@@ -363,6 +437,7 @@ export function RemoveOwnerPage() {
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [depositTxHash, setDepositTxHash] = useState<string | null>(null)
+  const [aaDepositDiagnostics, setAaDepositDiagnostics] = useState<AADepositDiagnostics | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<{
     revertReason: string | null
@@ -585,6 +660,32 @@ export function RemoveOwnerPage() {
     }
   }, [diagnostics.owners, diagnostics.status, signingOwnerIndex])
 
+  const patternLockStatus = useMemo(() => {
+    const checks = aaDepositDiagnostics?.checks
+    const locked = Boolean(
+      checks?.hasEntryPointUserOpForCsw && checks?.hasRelayDepositForCsw && checks?.requestIdMatches,
+    )
+    if (locked) {
+      return {
+        state: 'locked' as const,
+        label: 'Pattern lock: locked',
+        detail: 'EntryPoint UserOp + Relay deposit + requestId match verified.',
+      }
+    }
+    if (aaDepositDiagnostics) {
+      return {
+        state: 'unlocked' as const,
+        label: 'Pattern lock: unlocked',
+        detail: 'Deposit transaction does not satisfy the required AA pattern.',
+      }
+    }
+    return {
+      state: 'pending' as const,
+      label: 'Pattern lock: awaiting verification',
+      detail: 'Submit/fund once to verify the EntryPoint + Relay deposit shape.',
+    }
+  }, [aaDepositDiagnostics])
+
   const appendEvent = (row: string) => {
     setEventLog((prev) => [...prev, row].slice(-40))
   }
@@ -605,6 +706,7 @@ export function RemoveOwnerPage() {
     setPasteResponse('')
     setTxHash(null)
     setDepositTxHash(null)
+    setAaDepositDiagnostics(null)
     try {
       const res = await apiFetch('/api/onboarding/preview-remove-owner', {
         method: 'POST',
@@ -719,6 +821,7 @@ export function RemoveOwnerPage() {
     setBusy(true)
     setPageError(null)
     setPageNotice(null)
+    setAaDepositDiagnostics(null)
     try {
       appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
       if (isSelfAuthSession && canonicalCswAddress) {
@@ -772,8 +875,10 @@ export function RemoveOwnerPage() {
           expectedRequestId: preview.relay.requestId,
         })
         if (!shape.ok) {
+          setAaDepositDiagnostics(shape.diagnostics ?? null)
           throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
         }
+        setAaDepositDiagnostics(shape.diagnostics)
         appendEvent('paste_submit.deposit.shape_check=ok')
         setDepositTxHash(resolution.transactionHash)
         appendEvent(`paste_submit.deposit.tx=${resolution.transactionHash}`)
@@ -803,8 +908,10 @@ export function RemoveOwnerPage() {
           expectedRequestId: preview.relay.requestId,
         })
         if (!shape.ok) {
+          setAaDepositDiagnostics(shape.diagnostics ?? null)
           throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
         }
+        setAaDepositDiagnostics(shape.diagnostics)
         appendEvent('paste_submit.deposit.shape_check=ok')
         setDepositTxHash(depositResult)
         appendEvent(`paste_submit.deposit.tx=${depositResult}`)
@@ -862,6 +969,7 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setLastErrorDetail(null)
     setSignerMismatch(null)
+    setAaDepositDiagnostics(null)
     try {
       const parsed = parseKeysCoinbasePasteResponse(pasteResponse)
       const challengeError = verifyChallengeMatchesHash(parsed, pasteFlow.hashToSign)
@@ -973,8 +1081,10 @@ export function RemoveOwnerPage() {
         expectedRequestId: quotePayload.requestId,
       })
       if (!shape.ok) {
+        setAaDepositDiagnostics(shape.diagnostics ?? null)
         throw new Error(`Request-bound deposit transaction shape check failed: ${shape.reason}`)
       }
+      setAaDepositDiagnostics(shape.diagnostics)
       appendEvent('paste_submit.execute.shape_check=ok')
       setDepositTxHash(resolution.transactionHash)
       setTxHash(null)
@@ -1036,13 +1146,14 @@ export function RemoveOwnerPage() {
       //
       // The actual on-chain pattern (re-derived 2026-05-11 from the May 5
       // owner[3] reference flow) is two transactions in the same Base block:
-      //   Part 1 — CSW → RelayRouterV3 (deposit, multicalls into depository)
-      //   Part 2 — RelayRouterV3.multicall(...) containing EntryPoint.handleOps
-      //            for the destination mutation
+      //   Part 1 — CSW UserOp (wallet_sendCalls) -> EntryPoint.handleOps ->
+      //            CSW.executeBatch -> RelayDepository.depositNative
+      //   Part 2 — Relay solver/bundler dispatches destination mutation via
+      //            EntryPoint.handleOps for the same request id
       //
       // The user only signs Part 1. Relay infrastructure then dispatches
-      // Part 2 as a router multicall when it sees the deposit event.
-      // So `calls[]` here is exactly ONE entry: the Relay-router deposit tx.
+      // Part 2 when it sees the request-bound depository event.
+      // So `calls[]` here is exactly ONE entry: the depository deposit tx.
       //
       // When the Relay quote failed (preview.relay is null), `calls[]` falls
       // back to the raw mutation calldata — but Base App's self-auth lane
@@ -1187,10 +1298,22 @@ export function RemoveOwnerPage() {
             )
           } else {
             const rid = preview.relay!.requestId.slice(0, 10)
+            const shape = await verifyAARelayDepositShape({
+              publicClient,
+              txHash: resolution.transactionHash as `0x${string}`,
+              cswAddress: canonicalCswAddress as `0x${string}`,
+              expectedRequestId: preview.relay!.requestId,
+            })
+            if (!shape.ok) {
+              setAaDepositDiagnostics(shape.diagnostics ?? null)
+              throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
+            }
+            setAaDepositDiagnostics(shape.diagnostics)
+            appendEvent('csw_wallet_sendcalls.shape_check=ok')
             setPageNotice(
               `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
-                `Relay will now dispatch Part 2 as RelayRouterV3.multicall containing EntryPoint.handleOps, ` +
-                `usually within the same block. Watch the router tx and the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
+                `Relay will now dispatch Part 2 via EntryPoint.handleOps (solver/bundler lane), ` +
+                `usually within the same block. Watch EntryPoint txs and the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
                 `request id ${rid}… can also be tracked via Relay /intents/status.`,
             )
           }
@@ -1367,9 +1490,9 @@ export function RemoveOwnerPage() {
           <p className="text-sm text-zinc-400">
             Remove an owner from your canonical Coinbase Smart Wallet via the
             Relay-sponsored UserOp lane (
-            <code className="font-mono text-zinc-300">/api/relay/execute</code> →
-            Relay&apos;s <code className="font-mono text-zinc-300">/execute/call</code> →
-            <code className="font-mono text-zinc-300"> EntryPoint.handleOps</code>).
+            <code className="font-mono text-zinc-300">wallet_sendCalls</code> →
+            <code className="font-mono text-zinc-300"> EntryPoint.handleOps</code> →
+            <code className="font-mono text-zinc-300"> RelayDepository.depositNative</code>).
             Live on-chain diagnostics below show which owner slots are populated and
             whether Relay&apos;s depository has a balance for your CSW so you can
             anticipate whether validation will pass before signing.
@@ -1927,6 +2050,134 @@ export function RemoveOwnerPage() {
                       >
                         {depositTxHash}
                       </a>
+                    </div>
+                  ) : null}
+
+                  <div
+                    className={`rounded-xl border p-3 text-xs ${
+                      patternLockStatus.state === 'locked'
+                        ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-100'
+                        : patternLockStatus.state === 'unlocked'
+                          ? 'border-rose-400/30 bg-rose-500/10 text-rose-100'
+                          : 'border-white/10 bg-black/30 text-zinc-300'
+                    }`}
+                  >
+                    <div className="text-[10px] uppercase tracking-[0.18em] opacity-80">AA Pattern</div>
+                    <div className="mt-1 font-semibold">{patternLockStatus.label}</div>
+                    <div className="mt-1 text-[11px] opacity-90">{patternLockStatus.detail}</div>
+                  </div>
+
+                  {aaDepositDiagnostics ? (
+                    <div className="rounded-xl border border-cyan-400/25 bg-cyan-500/5 p-3 text-[11px] text-cyan-100 space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/80">
+                        AA Deposit Diagnostics
+                      </div>
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">tx hash</dt>
+                          <dd className="font-mono break-all">{aaDepositDiagnostics.txHash}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">block</dt>
+                          <dd className="font-mono">{aaDepositDiagnostics.blockNumber.toString()}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">userOp hash</dt>
+                          <dd className="font-mono break-all">{aaDepositDiagnostics.userOpHash ?? 'n/a'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">userOp nonce</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.userOpNonce != null
+                              ? aaDepositDiagnostics.userOpNonce.toString()
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">userOp success</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.userOpSuccess == null
+                              ? 'n/a'
+                              : aaDepositDiagnostics.userOpSuccess
+                                ? 'true'
+                                : 'false'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">actual gas used</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.actualGasUsed != null
+                              ? aaDepositDiagnostics.actualGasUsed.toString()
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">actual gas cost (wei)</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.actualGasCostWei != null
+                              ? aaDepositDiagnostics.actualGasCostWei.toString()
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">actual gas cost (ETH)</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.actualGasCostWei != null
+                              ? formatEther(aaDepositDiagnostics.actualGasCostWei)
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">relay deposit from</dt>
+                          <dd className="font-mono break-all">{aaDepositDiagnostics.relayDepositFrom ?? 'n/a'}</dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">relay deposit amount (wei)</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.relayDepositAmountWei != null
+                              ? aaDepositDiagnostics.relayDepositAmountWei.toString()
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">relay deposit amount (ETH)</dt>
+                          <dd className="font-mono">
+                            {aaDepositDiagnostics.relayDepositAmountWei != null
+                              ? formatEther(aaDepositDiagnostics.relayDepositAmountWei)
+                              : 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">requestId (deposit)</dt>
+                          <dd className="font-mono break-all">
+                            {aaDepositDiagnostics.relayDepositRequestId ?? 'n/a'}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-[10px] text-cyan-200/70">requestId (expected)</dt>
+                          <dd className="font-mono break-all">{aaDepositDiagnostics.expectedRequestId}</dd>
+                        </div>
+                      </dl>
+                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+                        <div className="font-mono text-[10px]">
+                          entrypoint userOp:{' '}
+                          <span className={aaDepositDiagnostics.checks.hasEntryPointUserOpForCsw ? 'text-emerald-300' : 'text-rose-300'}>
+                            {aaDepositDiagnostics.checks.hasEntryPointUserOpForCsw ? 'ok' : 'missing'}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[10px]">
+                          relay deposit:{' '}
+                          <span className={aaDepositDiagnostics.checks.hasRelayDepositForCsw ? 'text-emerald-300' : 'text-rose-300'}>
+                            {aaDepositDiagnostics.checks.hasRelayDepositForCsw ? 'ok' : 'missing'}
+                          </span>
+                        </div>
+                        <div className="font-mono text-[10px]">
+                          request match:{' '}
+                          <span className={aaDepositDiagnostics.checks.requestIdMatches ? 'text-emerald-300' : 'text-rose-300'}>
+                            {aaDepositDiagnostics.checks.requestIdMatches ? 'ok' : 'mismatch'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   ) : null}
 

@@ -13,7 +13,7 @@
 
 ## Product-photo variations
 
-The generated product-photo files live in `product/`:
+The generated product-photo files live in `assets/product/`:
 
 - `hero-rimlight.png`
 - `matte-card.png`

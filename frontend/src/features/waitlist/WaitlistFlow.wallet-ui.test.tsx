@@ -312,10 +312,14 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
-    expect(screen.getByText(/finish 4626 signing setup/i)).toBeTruthy()
+    expect(screen.getAllByText(/enable 4626 signing/i).length).toBeGreaterThan(0)
     // Completed setup stage still displays the verified identity row.
     expect(screen.getByText(/0x1111…1111/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /switch wallet to current owner|reconnect via base account|approve signing access|connect owner wallet/i })).toBeTruthy()
+    expect(
+      screen.getByRole('button', {
+        name: /switch wallet to current owner|reconnect via base account|enable 4626 signing|connect owner wallet/i,
+      }),
+    ).toBeTruthy()
     expect(screen.getByRole('button', { name: /^reset$/i })).toBeTruthy()
   })
 

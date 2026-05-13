@@ -1,17 +1,12 @@
 {
   "name": "4626.fun",
   "short_name": "4626",
-  "description": "ERC-4626 creator vaults on Base",
-  "id": "/",
+  "description": "ERC-4626 creator vaults on Base.",
   "start_url": "/",
   "scope": "/",
-  "lang": "en-US",
   "display": "standalone",
-  "display_override": ["standalone", "browser"],
-  "categories": ["finance", "productivity"],
   "background_color": "#020204",
   "theme_color": "#020204",
-  "orientation": "portrait-primary",
   "icons": [
     {
       "src": "/assets/android-chrome-192x192.png",

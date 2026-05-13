@@ -145,6 +145,7 @@ export function AccountSetupWorkspaceView(props: {
     busyProvider,
     canonicalCswAddress,
     connectedOwnerReady,
+    connectedCanonicalWalletSelected,
     connectedSignerDetail,
     connectedSignerLabel,
     connectOwnerWallet,
@@ -187,48 +188,9 @@ export function AccountSetupWorkspaceView(props: {
     }
   }, [notice])
 
-  // ── Waitlist auto-trigger for 4626 signing install ──────────────────
-  // Once Step 1 (Zora link + canonical CSW) is satisfied AND the user has a
-  // connected signer that is a current owner of the canonical CSW, kick off
-  // `onEnable4626Signing` automatically so the user does not have to expand
-  // Step 2 / Advanced settings and click a button. We fire at most once per
-  // mounted session (`autoSignTriggeredRef`); user can still trigger manually
-  // via the button or clear via Reset, which re-mounts state in the controller
-  // but keeps this ref so we don't immediately re-fire after a deliberate
-  // reset. The guard set is intentionally conservative — we never auto-fire
-  // when there is an active error, when an embedded wallet is still settling,
-  // when a Base App reconnect is required, or when the controller is busy.
-  const autoSignTriggeredRef = useRef(false)
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
-  const signingStepCompleteForAuto =
-    me?.accountSignals.executionTrack === 'legacy-owner-install' ||
-    me?.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
-    /4626 signing is enabled|already enabled/i.test(notice ?? '')
-  useEffect(() => {
-    if (context !== 'waitlist') return
-    if (autoSignTriggeredRef.current) return
-    if (!stepOneComplete) return
-    if (signingStepCompleteForAuto) return
-    if (!connectedOwnerReady) return
-    if (advancedBusy) return
-    if (needsBaseAccountReconnect) return
-    if (needsEmbeddedWallet) return
-    if (error) return
-    autoSignTriggeredRef.current = true
-    void onEnable4626Signing()
-  }, [
-    advancedBusy,
-    connectedOwnerReady,
-    context,
-    error,
-    needsBaseAccountReconnect,
-    needsEmbeddedWallet,
-    onEnable4626Signing,
-    signingStepCompleteForAuto,
-    stepOneComplete,
-  ])
 
   if (loading && !me) {
     return (
@@ -265,10 +227,11 @@ export function AccountSetupWorkspaceView(props: {
     const resolvedOpen: 1 | 2 =
       openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
     const ownerWalletConnecting = busyProvider === 'owner_wallet'
+    const canSubmitSigningApproval = connectedOwnerReady || connectedCanonicalWalletSelected
     const primarySigningLabel = needsBaseAccountReconnect
       ? 'Reconnect via Base Account'
-      : connectedOwnerReady
-        ? 'Approve signing access'
+      : canSubmitSigningApproval
+        ? 'Enable 4626 signing'
         : hasConnectedSigner
           ? 'Switch wallet to current owner'
         : ownerWalletConnecting
@@ -507,9 +470,9 @@ export function AccountSetupWorkspaceView(props: {
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-sm font-medium text-white">Finish 4626 signing setup</span>
+                    <span className="text-sm font-medium text-white">Enable 4626 signing</span>
                     {s === 'done' ? (
-                      <p className="mt-0.5 text-[11px] text-zinc-500">Signing access approved</p>
+                      <p className="mt-0.5 text-[11px] text-zinc-500">Signing enabled on your canonical wallet</p>
                     ) : null}
                   </div>
                 </div>
@@ -527,7 +490,13 @@ export function AccountSetupWorkspaceView(props: {
                       <button
                         type="button"
                         disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
-                        onClick={() => (needsBaseAccountReconnect ? connectOwnerWallet() : connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
+                        onClick={() =>
+                          needsBaseAccountReconnect
+                            ? connectOwnerWallet()
+                            : canSubmitSigningApproval
+                              ? void onEnable4626Signing()
+                              : connectOwnerWallet()
+                        }
                         className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {primarySigningActionLabel}
@@ -563,6 +532,11 @@ export function AccountSetupWorkspaceView(props: {
                     {providerCollision.shouldDisableInjectedConnector ? (
                       <p className="text-xs text-zinc-600">Coinbase/Base is the most reliable option when a wallet collision is detected.</p>
                     ) : null}
+                    {advancedBusy ? (
+                      <p className="text-xs text-zinc-500">
+                        Waiting for wallet confirmation. If no prompt appears, click Reset and try again.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -570,8 +544,8 @@ export function AccountSetupWorkspaceView(props: {
           })()}
         </div>
 
-        {/* Arch B enrollment — delegation consent card. Shown after linking, before execution-ready. */}
-        <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} />
+        {/* Optional post-activation delegation consent. Keep out of core setup flow. */}
+        {allDone ? <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} /> : null}
 
         {/* Advanced — identities + co-owner management. Collapsed by default. */}
         <WaitlistAdvancedSection controller={controller} />

@@ -1,15 +1,32 @@
 User-agent: *
 Allow: /
+Allow: /creator-vaults
+Allow: /erc-4626
 Allow: /risks
 Allow: /security
 Allow: /about
+Allow: /vs/yearn
+Allow: /glossary/
+Allow: /glossary/creator-vault
+Allow: /glossary/erc-4626
+Allow: /glossary/eip-7540
+Allow: /glossary/cca
 Allow: /terms
 Allow: /privacy
+Disallow: /explore/
+Disallow: /swap
+Disallow: /positions
+Disallow: /portfolio
+Disallow: /vault/
+Disallow: /deploy
+Disallow: /leaderboard
+Disallow: /waitlist
+Disallow: /accounts
+Disallow: /faq
+Disallow: /auction/
+Disallow: /coin/
+Disallow: /status
+Disallow: /agents
+Disallow: /admin
 
-# Sitemaps
 Sitemap: https://4626.fun/sitemap.xml
-
-# Disallow internal/API routes
-Disallow: /api/
-Disallow: /_next/
-Disallow: /auth/

@@ -267,3 +267,4 @@ docs/marketing/social_package.md
 .railway-token
 frontend/.env.deploy-dry-run.example
 frontend/.env.deploy-dry-run.example
+.env*.local
