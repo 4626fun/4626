@@ -92,6 +92,10 @@ async function loadRebalanceConfig(params: {
 }): Promise<{ bufferRatioBps: number; minBucketIndex: number }> {
   let bufferRatioBps = params.row.bufferRatioBps
   let minBucketIndex = params.row.minBucketIndex
+  if (typeof minBucketIndex === 'number' && Number.isFinite(minBucketIndex) && minBucketIndex <= 0) {
+    // `0` is an unset/invalid sentinel for Ajna bucket index.
+    minBucketIndex = null
+  }
 
   if (bufferRatioBps === null || minBucketIndex === null) {
     const [bufferRatioRaw, minBucketRaw] = await Promise.all([
@@ -190,6 +194,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { chain, rpcUrl } = chainContext
   const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 30_000 }) }) as any
   const { bufferRatioBps, minBucketIndex } = await loadRebalanceConfig({ publicClient, row })
+  if (minBucketIndex < 1) {
+    await recordAjnaVaultManagerRun({
+      chainId,
+      creatorToken,
+      strategyAdapter,
+      error: 'ajna_invalid_min_bucket_index',
+      metadataPatch: {
+        lastAction: 'none',
+        reason: 'invalid_min_bucket_index',
+      },
+    })
+    return res.status(200).json({
+      success: true,
+      data: {
+        mode: 'skipped',
+        action: 'none',
+        reason: 'invalid_min_bucket_index',
+        chainId,
+        creatorToken,
+        strategyAdapter,
+        innerAjnaVault: row.innerAjnaVault,
+        auth: row.ajnaAuth,
+        plan: {
+          minBucketIndex,
+          bufferRatioBps,
+          bufferAssets: '0',
+          totalAssets: '0',
+          targetBufferAssets: '0',
+          moveAssets: '0',
+        },
+      } satisfies RebalanceResponse,
+    } satisfies ApiEnvelope<RebalanceResponse>)
+  }
   const [bufferAssetsRaw, totalAssetsRaw] = await Promise.all([
     publicClient.readContract({
       address: row.innerAjnaVault,
@@ -204,7 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ])
   const bufferAssets = BigInt(bufferAssetsRaw ?? 0n)
   const totalAssets = BigInt(totalAssetsRaw ?? 0n)
-  const targetBufferAssets = (totalAssets * BigInt(bufferRatioBps)) / 10_000n
+  const targetBufferAssets = (totalAssets * BigInt(bufferRatioBps) + 9_999n) / 10_000n
   const excessBufferAssets = bufferAssets > targetBufferAssets ? bufferAssets - targetBufferAssets : 0n
   const maxAssetsPerMove = row.maxAssetsPerMove ?? excessBufferAssets
   const moveAssets = excessBufferAssets > maxAssetsPerMove ? maxAssetsPerMove : excessBufferAssets
