@@ -359,6 +359,21 @@ export function RemoveOwnerPage() {
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, ownerSignerAddress])
 
+  const pasteValidation = useMemo(() => {
+    if (!pasteFlow || !pasteResponse.trim()) return null
+    try {
+      const parsed = parseKeysCoinbasePasteResponse(pasteResponse)
+      const challengeError = verifyChallengeMatchesHash(parsed, pasteFlow.hashToSign)
+      if (challengeError) return { ok: false as const, message: challengeError }
+      return { ok: true as const, message: 'Payload valid for current UserOp hash.' }
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : 'Could not parse pasted payload.',
+      }
+    }
+  }, [pasteFlow, pasteResponse])
+
   const appendEvent = (row: string) => {
     setEventLog((prev) => [...prev, row].slice(-40))
   }
@@ -458,6 +473,68 @@ export function RemoveOwnerPage() {
     }
   }
 
+  const handleFundRelayDepositForPasteLane = async () => {
+    if (!preview?.relay?.userCall) {
+      setPageError(
+        `Relay funding step is unavailable: ${preview?.preflight.relayQuoteError ?? 'missing relay quote'}.`,
+      )
+      return
+    }
+    if (!walletClient) {
+      setPageError('Connect your wallet first.')
+      return
+    }
+    if (!pasteFlow) {
+      setPageError('Prepare the keys.coinbase.com snippet first.')
+      return
+    }
+    if (!pasteValidation?.ok) {
+      setPageError('Paste and validate the signed payload before funding the relay depository.')
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+      return
+    }
+
+    setBusy(true)
+    setPageError(null)
+    setPageNotice(null)
+    try {
+      appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
+      const depositResult = (await request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: ownerSignerAddress ?? undefined,
+            to: preview.relay.userCall.to,
+            data: preview.relay.userCall.data,
+            value: preview.relay.userCall.value,
+          },
+        ],
+      })) as string
+      if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
+        throw new Error('Wallet did not return a valid Relay depository tx hash.')
+      }
+      setDepositTxHash(depositResult)
+      appendEvent(`paste_submit.deposit.tx=${depositResult}`)
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
+        appendEvent('paste_submit.deposit.confirmed')
+      }
+      setPageNotice('Relay depository funding transaction sent. Continue to step 5 to submit owner removal.')
+    } catch (error) {
+      setPageError(
+        error instanceof Error ? error.message : 'Failed to fund Relay depository for paste-sign lane.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleSubmitKeysCoinbasePaste = async () => {
     if (!canonicalCswAddress) {
       setPageError('Canonical CSW not available.')
@@ -469,6 +546,14 @@ export function RemoveOwnerPage() {
     }
     if (!pasteFlow) {
       setPageError('Prepare the keys.coinbase.com signing snippet first.')
+      return
+    }
+    if (!depositTxHash) {
+      setPageError('Complete step 4 and send the Relay depository funding transaction first.')
+      return
+    }
+    if (!pasteValidation?.ok) {
+      setPageError('Pasted payload is invalid. Fix step 3 before submitting owner removal.')
       return
     }
     if (!walletClient) {
@@ -501,36 +586,7 @@ export function RemoveOwnerPage() {
       appendEvent(`paste_submit.signature_len=${(signature.length - 2) / 2}`)
       appendEvent(`paste_submit.handle_ops_len=${(handleOpsCalldata.length - 2) / 2}`)
 
-      if (!preview.relay?.userCall) {
-        throw new Error(
-          `Relay funding step is unavailable: ${preview.preflight.relayQuoteError ?? 'missing relay quote'}.`,
-        )
-      }
-      if (!depositTxHash) {
-        appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
-        const depositResult = (await request({
-          method: 'eth_sendTransaction',
-          params: [
-            {
-              from: ownerSignerAddress ?? undefined,
-              to: preview.relay.userCall.to,
-              data: preview.relay.userCall.data,
-              value: preview.relay.userCall.value,
-            },
-          ],
-        })) as string
-        if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
-          throw new Error('Wallet did not return a valid Relay depository tx hash.')
-        }
-        setDepositTxHash(depositResult)
-        appendEvent(`paste_submit.deposit.tx=${depositResult}`)
-        if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
-          appendEvent('paste_submit.deposit.confirmed')
-        }
-      } else {
-        appendEvent(`paste_submit.deposit.reuse=${depositTxHash}`)
-      }
+      appendEvent(`paste_submit.deposit.reuse=${depositTxHash}`)
 
       const res = await apiFetch('/api/relay/execute', {
         method: 'POST',
@@ -1242,70 +1298,130 @@ export function RemoveOwnerPage() {
 
                   <div className="space-y-3">
                     <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
-                            Recommended
-                          </div>
-                          <div className="text-xs font-medium text-emerald-100">
-                            Keys passkey paste-sign lane
-                          </div>
+                      <div>
+                        <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
+                          Recommended guided lane
                         </div>
-                        <button
-                          type="button"
-                          disabled={!preview || busy || previewLoading || !preview?.preflight.simulation.ok}
-                          onClick={() => void handlePrepareKeysCoinbasePaste()}
-                          className="btn-accent btn-no-icon inline-flex"
-                        >
-                          {busy ? 'Preparing...' : 'Sign with passkey at keys.coinbase.com'}
-                        </button>
+                        <div className="text-xs font-medium text-emerald-100">
+                          Keys passkey flow (fastest path)
+                        </div>
                       </div>
                       <p className="leading-relaxed text-emerald-100/85">
-                        This path signs the exact replayable UserOp hash with your Coinbase passkey and submits
-                        <code className="mx-1 font-mono text-emerald-100">handleOps</code>
-                        through Relay. It avoids Base App self-call simulation issues.
+                        Follow these steps in order. Step 5 stays locked until payload validation and relay deposit are complete.
                       </p>
-                      {pasteFlow ? (
-                        <div className="space-y-2">
-                          <label className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
-                            Keys snippet
-                          </label>
-                          <textarea
-                            readOnly
-                            rows={10}
-                            value={pasteFlow.snippet}
-                            className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[10px] text-zinc-200"
-                          />
+                      <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-3">
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Step 1. Select owner slot</span>
+                          <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>
+                            {preview ? 'done' : 'pending'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Step 2. Generate keys snippet</span>
                           <button
                             type="button"
-                            className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35"
-                            onClick={() => {
-                              void navigator.clipboard.writeText(pasteFlow.snippet).catch(() => {})
-                            }}
+                            disabled={!preview || busy || previewLoading || !preview?.preflight.simulation.ok}
+                            onClick={() => void handlePrepareKeysCoinbasePaste()}
+                            className="btn-accent btn-no-icon inline-flex"
                           >
-                            Copy keys.coinbase.com snippet
+                            {busy ? 'Preparing...' : 'Generate snippet'}
                           </button>
-                          <textarea
-                            rows={7}
-                            value={pasteResponse}
-                            onChange={(e) => setPasteResponse(e.target.value)}
-                            placeholder="Paste the JSON output from keys.coinbase.com here"
-                            className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-500"
-                          />
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Step 3. Paste signed JSON payload</span>
+                          <span
+                            className={
+                              pasteValidation == null
+                                ? 'text-zinc-500'
+                                : pasteValidation.ok
+                                  ? 'text-emerald-300'
+                                  : 'text-rose-300'
+                            }
+                          >
+                            {pasteValidation == null
+                              ? 'pending'
+                              : pasteValidation.ok
+                                ? 'valid'
+                                : 'invalid'}
+                          </span>
+                        </div>
+                        {pasteFlow ? (
+                          <>
+                            <label className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">
+                              Keys snippet
+                            </label>
+                            <textarea
+                              readOnly
+                              rows={10}
+                              value={pasteFlow.snippet}
+                              className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[10px] text-zinc-200"
+                            />
+                            <button
+                              type="button"
+                              className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(pasteFlow.snippet).catch(() => {})
+                              }}
+                            >
+                              Copy keys.coinbase.com snippet
+                            </button>
+                            <textarea
+                              rows={7}
+                              value={pasteResponse}
+                              onChange={(e) => setPasteResponse(e.target.value)}
+                              placeholder="Paste the JSON output from keys.coinbase.com here"
+                              className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 font-mono text-[11px] text-zinc-200 placeholder:text-zinc-500"
+                            />
+                            {pasteValidation ? (
+                              <div
+                                className={`rounded-lg border px-2 py-1 text-[10px] ${
+                                  pasteValidation.ok
+                                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200'
+                                    : 'border-rose-400/30 bg-rose-500/10 text-rose-200'
+                                }`}
+                              >
+                                {pasteValidation.message}
+                              </div>
+                            ) : null}
+                          </>
+                        ) : null}
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Step 4. Send relay depository tx</span>
                           <button
                             type="button"
-                            disabled={busy || !pasteResponse.trim()}
+                            disabled={
+                              busy ||
+                              !preview?.relay?.userCall ||
+                              !pasteFlow ||
+                              !pasteValidation?.ok ||
+                              Boolean(depositTxHash)
+                            }
+                            onClick={() => void handleFundRelayDepositForPasteLane()}
+                            className="rounded-lg border border-white/20 bg-black/30 px-3 py-1.5 text-[11px] text-zinc-200 hover:border-white/35 disabled:opacity-60"
+                          >
+                            {depositTxHash ? 'Deposit sent' : busy ? 'Sending...' : 'Send deposit tx'}
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span>Step 5. Submit owner removal</span>
+                          <button
+                            type="button"
+                            disabled={busy || !pasteFlow || !pasteValidation?.ok || !depositTxHash}
                             onClick={() => void handleSubmitKeysCoinbasePaste()}
                             className="btn-accent btn-no-icon inline-flex"
                           >
-                            {busy ? 'Submitting...' : 'Submit signed owner removal'}
+                            {busy ? 'Submitting...' : 'Submit owner removal'}
                           </button>
                         </div>
-                      ) : null}
+                      </div>
                     </div>
 
-                    <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300 space-y-2">
-                      <label className="flex items-start gap-2 cursor-pointer">
+                    <details className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300">
+                      <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+                        Advanced troubleshooting lanes
+                      </summary>
+                      <div className="mt-3 space-y-3">
+                        <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="checkbox"
                           className="mt-0.5"
@@ -1329,82 +1445,50 @@ export function RemoveOwnerPage() {
                             ECDSA path at your own risk.
                           </span>
                         </span>
-                      </label>
-                    </div>
+                        </label>
 
-                    {isSelfAuthSession ? (
-                      <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
-                        <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
-                          EIP-5792 wallet_sendCalls lane
-                        </div>
-                        <p className="leading-relaxed">
-                          Base App builds the UserOp from this call, signs it
-                          locally with the on-device passkey, and submits via
-                          its built-in bundler. The CSW pays its own gas from
-                          its EntryPoint deposit. No popup, no external funder,
-                          no Relay round-trip. View / top up the deposit at{' '}
-                          <Link to="/csw-funding" className="underline underline-offset-2">
-                            /csw-funding
-                          </Link>
-                          .
-                        </p>
+                        {isSelfAuthSession ? (
+                          <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
+                            <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
+                              EIP-5792 wallet_sendCalls lane
+                            </div>
+                            <p className="leading-relaxed">
+                              Base App builds the UserOp from this call, signs it
+                              locally with the on-device passkey, and submits via
+                              its built-in bundler. The CSW pays its own gas from
+                              its EntryPoint deposit.
+                            </p>
+                          </div>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          disabled={
+                            busy ||
+                            !preview ||
+                            previewLoading ||
+                            ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession) ||
+                            (preview ? !preview.preflight.simulation.ok : false)
+                          }
+                          onClick={() => void handleRemove()}
+                          className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {busy
+                            ? isSelfAuthSession
+                              ? 'Submitting via wallet_sendCalls…'
+                              : requirePasskey
+                                ? 'Removing via passkey + Relay UserOp…'
+                                : 'Removing via session-key + Relay UserOp…'
+                            : isSelfAuthSession
+                              ? `Remove owner at index ${preview?.preflight.targetOwnerIndex ?? '?'} via wallet_sendCalls`
+                              : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
+                                ? 'Open in browser to remove'
+                                : !preview
+                                  ? 'Select an owner above first'
+                                  : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
+                        </button>
                       </div>
-                    ) : null}
-
-                    <button
-                      type="button"
-                      disabled={
-                        busy ||
-                        !preview ||
-                        previewLoading ||
-                        ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession) ||
-                        (preview ? !preview.preflight.simulation.ok : false)
-                      }
-                      onClick={() => void handleRemove()}
-                      className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {busy
-                        ? isSelfAuthSession
-                          ? 'Submitting via wallet_sendCalls…'
-                          : requirePasskey
-                            ? 'Removing via passkey + Relay UserOp…'
-                            : 'Removing via session-key + Relay UserOp…'
-                        : isSelfAuthSession
-                          ? `Remove owner at index ${preview?.preflight.targetOwnerIndex ?? '?'} via wallet_sendCalls`
-                          : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
-                            ? 'Open in browser to remove'
-                            : !preview
-                              ? 'Select an owner above first'
-                              : `Remove owner at index ${preview.preflight.targetOwnerIndex} via Relay UserOp`}
-                    </button>
-                    <p className="text-[11px] leading-relaxed text-zinc-500">
-                      {isSelfAuthSession ? (
-                        <>
-                          Calls{' '}
-                          <code className="font-mono text-zinc-400">
-                            wallet_sendCalls
-                          </code>{' '}
-                          (EIP-5792). Base App builds the UserOp from the
-                          inner action, signs it locally with the passkey, and
-                          submits via its built-in bundler. The CSW pays its
-                          own gas from its EntryPoint deposit.
-                        </>
-                      ) : (
-                        <>
-                          Signs an{' '}
-                          <code className="font-mono text-zinc-400">
-                            executeWithoutChainIdValidation
-                          </code>{' '}
-                          UserOp client-side, then has the connected funder EOA
-                          broadcast the Relay-quoted{' '}
-                          <code className="font-mono text-zinc-400">
-                            RelayRouterV3.multicall
-                          </code>{' '}
-                          tx. Relay&apos;s solver picks up the deposit and
-                          executes the inner UserOp on Base.
-                        </>
-                      )}
-                    </p>
+                    </details>
                   </div>
 
                   {txHash ? (
