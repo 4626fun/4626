@@ -32,7 +32,8 @@ declare const process: { env: Record<string, string | undefined> }
 const AMOE_NONCE_TTL_SECONDS = 10 * 60 // 10m
 const AMOE_MESSAGE_TITLE = '4626 Lottery AMOE Entry' as const
 export const AMOE_CREDITS_PER_ENTRY = 100
-export const AMOE_DAILY_TWITTER_CREDIT = 1
+// Temporary promo boost: increase the daily X check-in award.
+export const AMOE_DAILY_TWITTER_CREDIT = 100
 
 // PR 2 — AMOE Linear Parity (variable points amount).
 //

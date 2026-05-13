@@ -86,6 +86,7 @@ export type VigilanteFlags = {
   feedbackEnabled: boolean
   topN: number
   cooldownHours: number
+  maxCreatorsPerRun: number | null
 }
 
 const DEFAULT_TOP_N = 20
@@ -104,6 +105,15 @@ function parsePositiveIntEnv(key: string, fallback: number, max = 500): number {
   return Math.min(n, max)
 }
 
+function parseOptionalPositiveIntEnv(key: string, max = 10_000): number | null {
+  const raw = (process.env[key] ?? '').trim()
+  if (!raw) return null
+  if (!/^\d+$/.test(raw)) return null
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.min(n, max)
+}
+
 export function readVigilanteFlags(): VigilanteFlags {
   return {
     killSwitch: parseBoolFlag(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
@@ -112,6 +122,7 @@ export function readVigilanteFlags(): VigilanteFlags {
     feedbackEnabled: parseBoolFlag(process.env.ALFACLUB_VIGILANTE_FEEDBACK_ENABLED),
     topN: parsePositiveIntEnv('ALFACLUB_VIGILANTE_TOP_N', DEFAULT_TOP_N, 200),
     cooldownHours: parsePositiveIntEnv('ALFACLUB_VIGILANTE_POST_COOLDOWN_HOURS', DEFAULT_COOLDOWN_HOURS, 720),
+    maxCreatorsPerRun: parseOptionalPositiveIntEnv('ALFACLUB_VIGILANTE_MAX_CREATORS_PER_RUN'),
   }
 }
 
@@ -535,8 +546,13 @@ export async function runVigilante(
     return empty('no_creators')
   }
 
+  const boundedCreators =
+    flags.maxCreatorsPerRun && creators.length > flags.maxCreatorsPerRun
+      ? creators.slice(0, flags.maxCreatorsPerRun)
+      : creators
+
   // 2. Capture metrics.
-  const metrics = await captureMetricsForCreators(creators, client, {
+  const metrics = await captureMetricsForCreators(boundedCreators, client, {
     skipHyperliquid: opts.skipHyperliquid,
     getHyperliquid: opts.getHyperliquid,
   })
