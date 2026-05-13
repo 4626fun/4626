@@ -38,6 +38,7 @@ import {
   recordBridgeCfChallenge,
   recordBridgeCfChallengeRecovered,
   recordBridgeHistorySuccess,
+  recordBridgeProxyFallbackDirect,
   recordBridgeSocketBackoff,
   recordBridgeSuppressedSocketAttempt,
 } from './authHealthStore.js'
@@ -130,7 +131,9 @@ export type AlfaClubChatBridgeFlags = {
   apiBaseUrl: string
   /**
    * Optional proxy origin for AlfaClub HTTP API calls
-   * (`/api/websocket/room_history_paginate` + `/api/websocket/update_read_msg`).
+   * (`/api/websocket/room_history_paginate` +
+   * `/api/websocket/update_read_msg` + optional
+   * `/api/room/:roomId/message` passthrough).
    *
    * Why this exists: AlfaClub's API origin is fronted by Cloudflare,
    * which has been observed to 403 (CF error 1010) requests from
@@ -149,9 +152,10 @@ export type AlfaClubChatBridgeFlags = {
    *     `Sec-Fetch-Site` headers) to `https://api.alfaclub.app`.
    *   - Return the upstream response unchanged (status, headers,
    *     JSON body).
-   *   - The proxy MUST NOT consume the AlfaClub command/reply path
-   *     (no posting back into the room). Vercel remains the
-   *     canonical command processor.
+   *   - Command replies still execute on Vercel. Proxies MAY
+   *     passthrough `/api/room/:roomId/message`; if not, the bridge
+   *     falls back to direct upstream sends when it sees
+   *     `path_not_allowed`.
    *
    * Routing-vs-fingerprint contract: even when this proxy is set,
    * the bridge keeps the upstream AlfaClub browser-fingerprint
@@ -1315,6 +1319,59 @@ async function sendRoomMessageViaBotToken(params: {
   })
 }
 
+function isProxyPathNotAllowedError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const message = error.message
+  return message.includes('bot_message_failed:404') && message.includes('"error":"path_not_allowed"')
+}
+
+async function sendRoomMessageViaBotTokenWithProxyFallback(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<BotSendResultSummary> {
+  try {
+    return await sendRoomMessageViaBotToken({
+      apiBaseUrl: params.apiBaseUrl,
+      botToken: params.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: params.proxySecret,
+      idempotencyKey: params.idempotencyKey,
+      timeoutMs: params.timeoutMs,
+    })
+  } catch (error) {
+    const usingProxy = params.apiBaseUrl !== params.directApiBaseUrl
+    if (!usingProxy || !isProxyPathNotAllowedError(error)) {
+      throw error
+    }
+    logger.warn('[alfaclub-chat] bot_reply_proxy_path_not_allowed:retry_direct', {
+      roomId: params.roomId,
+      apiBaseUrl: params.apiBaseUrl,
+      directApiBaseUrl: params.directApiBaseUrl,
+    })
+    recordBridgeProxyFallbackDirect()
+    return sendRoomMessageViaBotToken({
+      apiBaseUrl: params.directApiBaseUrl,
+      botToken: params.botToken,
+      roomId: params.roomId,
+      text: params.text,
+      replyToMessageId: params.replyToMessageId,
+      // Direct upstream call must not include proxy auth.
+      proxySecret: null,
+      idempotencyKey: params.idempotencyKey,
+      timeoutMs: params.timeoutMs,
+    })
+  }
+}
+
 async function sendRoomMessageViaWebSocket(params: {
   websocketUrl: string
   jwt: string
@@ -2241,8 +2298,9 @@ async function executeCommandBatch(params: {
         })
         let sent = false
         try {
-          const sendResult = await sendRoomMessageViaBotToken({
+          const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
             apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+            directApiBaseUrl: params.flags.apiBaseUrl,
             botToken: params.flags.botToken,
             roomId: params.roomId,
             text: responseText,
@@ -2270,8 +2328,9 @@ async function executeCommandBatch(params: {
 
         if (!sent) {
           try {
-            const sendResult = await sendRoomMessageViaBotToken({
+            const sendResult = await sendRoomMessageViaBotTokenWithProxyFallback({
               apiBaseUrl: resolveAlfaClubApiCallBaseUrl(params.flags),
+              directApiBaseUrl: params.flags.apiBaseUrl,
               botToken: params.flags.botToken,
               roomId: params.roomId,
               text: responseText,
@@ -2925,6 +2984,20 @@ export async function _sendRoomMessageViaBotTokenForTests(params: {
   timeoutMs: number
 }): Promise<BotSendResultSummary> {
   return sendRoomMessageViaBotToken(params)
+}
+
+export async function _sendRoomMessageViaBotTokenWithProxyFallbackForTests(params: {
+  apiBaseUrl: string
+  directApiBaseUrl: string
+  botToken: string
+  roomId: string
+  text: string
+  replyToMessageId?: string
+  proxySecret?: string | null
+  idempotencyKey: string
+  timeoutMs: number
+}): Promise<BotSendResultSummary> {
+  return sendRoomMessageViaBotTokenWithProxyFallback(params)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {

@@ -139,7 +139,8 @@ export default {
       return jsonResponse(200, { ok: true, upstream: env.UPSTREAM_API_BASE })
     }
 
-    // Method allowlist. The bridge sends GET (history) and POST (mark-read);
+    // Method allowlist. The bridge sends GET (history) and POST
+    // (mark-read + bot reply send);
     // HEAD/OPTIONS are bodyless probes and preflight-style requests.
     const bodylessMethod = req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS'
     if (!bodylessMethod && req.method !== 'POST') {
@@ -176,8 +177,9 @@ export default {
     const requestId = req.headers.get('cf-ray') ?? crypto.randomUUID()
     const upstreamHeaders = buildUpstreamHeaders(req)
 
-    // Streaming body passthrough. POST `/update_read_msg` carries a
-    // small JSON body; never read it here, just forward.
+    // Streaming body passthrough. POST `/update_read_msg` and
+    // `/api/room/:roomId/message` both carry small JSON bodies;
+    // never read them here, just forward.
     const upstreamRequest = new Request(upstreamUrl.toString(), {
       method: req.method,
       headers: upstreamHeaders,

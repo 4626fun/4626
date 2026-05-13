@@ -4,7 +4,7 @@ A Cloudflare Worker that the 4626 chat bridge calls instead of `https://api.alfa
 
 ## What it does
 
-- Accepts `GET /api/websocket/room_history_paginate` and `POST /api/websocket/update_read_msg`.
+- Accepts `GET /api/websocket/room_history_paginate`, `POST /api/websocket/update_read_msg`, and `POST /api/room/:roomId/message`.
 - Forwards them to `UPSTREAM_API_BASE` (default `https://api.alfaclub.app`) on a clean Cloudflare-egress IP.
 - Strips Cloudflare-injected headers (`cf-connecting-ip`, `cf-ray`, `cdn-loop`, etc.) so the upstream WAF sees a clean fingerprint.
 - Preserves the bridge's `Authorization: Bearer <jwt>`, `Origin`, `Referer`, `User-Agent`, and `sec-ch-ua*` headers.
@@ -103,7 +103,7 @@ In Cloudflare Workers logs (`pnpm logs` or dashboard → **Logs**), you'll see o
 - **Cache TTL** is `0` by design. Stale chat history would mask new `/gmeow` messages.
 - **Rotation:** to rotate `PROXY_SHARED_SECRET`, generate a new one, run `wrangler secret put PROXY_SHARED_SECRET`, then update `ALFACLUB_CHAT_API_PROXY_SECRET` in Vercel and redeploy. The Worker only ever reads the latest secret, so you'll get a brief 401 window — fine for a 30-second swap, but if you need zero-downtime, add a second secret slot first.
 - **Removing the proxy:** unset `ALFACLUB_CHAT_API_PROXY_URL` in Vercel and redeploy. The bridge falls back to direct calls. You can leave the Worker live or `wrangler delete`.
-- **WS traffic** still goes direct (`ALFACLUB_CHAT_WS_URL` → `wss://api.alfaclub.app/...`). The Cloudflare challenge fires on HTTP, not WS, so this is fine for now. If WS starts getting challenged later, you can add a separate WS-tunnel Worker; this one stays HTTP-only.
+- **WS traffic** still goes direct (`ALFACLUB_CHAT_WS_URL` → `wss://api.alfaclub.app/...`). The Cloudflare challenge usually fires on HTTP first, and command replies use the HTTP bot-token path (`/api/room/:roomId/message`) through this Worker. If WS starts getting challenged later, you can add a separate WS-tunnel Worker; this one stays HTTP-only.
 - **Logging:** the Worker never logs request bodies, JWTs, or full URLs. It logs status code + cf-ray + path prefix only (via Workers' built-in observability).
 
 ## Files

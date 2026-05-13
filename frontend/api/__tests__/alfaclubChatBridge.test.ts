@@ -9,6 +9,7 @@ const {
   recordBridgeCfChallengeMock,
   recordBridgeCfChallengeRecoveredMock,
   recordBridgeHistorySuccessMock,
+  recordBridgeProxyFallbackDirectMock,
   recordBridgeSocketBackoffMock,
   recordBridgeSuppressedSocketAttemptMock,
   requestImmediatePrivyRefreshMock,
@@ -19,6 +20,7 @@ const {
   recordBridgeCfChallengeMock: vi.fn(),
   recordBridgeCfChallengeRecoveredMock: vi.fn(),
   recordBridgeHistorySuccessMock: vi.fn(),
+  recordBridgeProxyFallbackDirectMock: vi.fn(),
   recordBridgeSocketBackoffMock: vi.fn(),
   recordBridgeSuppressedSocketAttemptMock: vi.fn(),
   requestImmediatePrivyRefreshMock: vi.fn(async () => undefined),
@@ -52,6 +54,7 @@ vi.mock('../../server/_lib/alfaclub/authHealthStore.js', async () => {
     recordBridgeCfChallenge: recordBridgeCfChallengeMock,
     recordBridgeCfChallengeRecovered: recordBridgeCfChallengeRecoveredMock,
     recordBridgeHistorySuccess: recordBridgeHistorySuccessMock,
+    recordBridgeProxyFallbackDirect: recordBridgeProxyFallbackDirectMock,
     recordBridgeSocketBackoff: recordBridgeSocketBackoffMock,
     recordBridgeSuppressedSocketAttempt: recordBridgeSuppressedSocketAttemptMock,
   }
@@ -78,6 +81,7 @@ import {
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
   _sendRoomMessageViaBotTokenForTests,
+  _sendRoomMessageViaBotTokenWithProxyFallbackForTests,
   _shouldSuppressDeterministicReplyForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
@@ -512,6 +516,67 @@ describe('sendRoomMessageViaBotToken', () => {
     const request = captured[0]
     expect(request?.url).toBe('https://proxy.example.internal/api/room/1043/message')
     expect(request?.headers['x-proxy-secret']).toBe('proxy-secret-1')
+  })
+
+  it('retries direct upstream when proxy rejects room message path_not_allowed', async () => {
+    type CapturedRequest = {
+      url: string
+      method: string
+      headers: Record<string, string>
+      body: string
+    }
+    const captured: CapturedRequest[] = []
+    const original = (globalThis as { fetch?: typeof fetch }).fetch
+    ;(globalThis as { fetch?: typeof fetch }).fetch = vi.fn(
+      async (input: unknown, init?: { method?: string; headers?: Record<string, string>; body?: unknown }) => {
+        captured.push({
+          url: typeof input === 'string' ? input : String(input),
+          method: init?.method ?? 'GET',
+          headers: (init?.headers ?? {}) as Record<string, string>,
+          body: String(init?.body ?? ''),
+        })
+        const isProxyAttempt = String(input).includes('proxy.example.internal')
+        if (isProxyAttempt) {
+          return new Response(JSON.stringify({ error: 'path_not_allowed', path: '/api/room/1043/message' }), {
+            status: 404,
+            headers: { 'content-type': 'application/json' },
+          })
+        }
+        return new Response(JSON.stringify({ ok: true, messageId: '6a7dccc8-0000-4000-8000-000000000000', deduped: false }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      },
+    ) as unknown as typeof fetch
+    try {
+      await _sendRoomMessageViaBotTokenWithProxyFallbackForTests({
+        apiBaseUrl: 'https://proxy.example.internal',
+        directApiBaseUrl: 'https://api.alfaclub.app',
+        botToken: 'alfa_bot_test',
+        roomId: '1043',
+        text: 'fallback lane test',
+        proxySecret: 'proxy-secret-1',
+        idempotencyKey: 'alfaclub-bridge:1043:m-proxy-fallback',
+        timeoutMs: 5_000,
+      })
+    } finally {
+      ;(globalThis as { fetch?: typeof fetch }).fetch = original
+    }
+
+    expect(captured).toHaveLength(2)
+    expect(captured[0]?.url).toBe('https://proxy.example.internal/api/room/1043/message')
+    expect(captured[0]?.headers['x-proxy-secret']).toBe('proxy-secret-1')
+    expect(captured[1]?.url).toBe('https://api.alfaclub.app/api/room/1043/message')
+    expect(captured[1]?.headers['x-proxy-secret']).toBeUndefined()
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      '[alfaclub-chat] bot_reply_proxy_path_not_allowed:retry_direct',
+      expect.objectContaining({
+        roomId: '1043',
+        apiBaseUrl: 'https://proxy.example.internal',
+        directApiBaseUrl: 'https://api.alfaclub.app',
+      }),
+    )
+    expect(recordBridgeProxyFallbackDirectMock).toHaveBeenCalledTimes(1)
   })
 })
 

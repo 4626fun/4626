@@ -11,8 +11,8 @@ enabled = true
 [vars]
 UPSTREAM_API_BASE = "https://api.alfaclub.app"
 # Comma-separated path prefix allowlist. Anything outside this set returns 404.
-# Default: only the two endpoints the bridge actually hits.
-ALLOWED_PATH_PREFIXES = "/api/websocket/room_history_paginate,/api/websocket/update_read_msg"
+# Default: history + mark-read + bot-token reply send.
+ALLOWED_PATH_PREFIXES = "/api/websocket/room_history_paginate,/api/websocket/update_read_msg,/api/room"
 # Cache GET responses for at most N seconds at the Worker edge (0 = no cache).
 # Keep at 0 for chat history — staleness would mask new /gmeow messages.
 EDGE_CACHE_TTL_SECONDS = "0"

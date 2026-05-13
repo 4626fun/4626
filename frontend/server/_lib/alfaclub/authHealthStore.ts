@@ -54,6 +54,8 @@ export type AlfaClubBridgeAuthHealthSnapshot = {
   lastCfChallengeAt: string | null
   consecutiveCfChallenges: number
   cfChallengeSustained: boolean
+  proxyFallbackDirectCount: number
+  lastProxyFallbackDirectAt: string | null
   suppressedSocketAttempts: number
   socketBackoffMs: number
 }
@@ -73,6 +75,8 @@ const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
   lastCfChallengeAt: null,
   consecutiveCfChallenges: 0,
   cfChallengeSustained: false,
+  proxyFallbackDirectCount: 0,
+  lastProxyFallbackDirectAt: null,
   suppressedSocketAttempts: 0,
   socketBackoffMs: 0,
 }
@@ -454,6 +458,12 @@ export function recordBridgeSocketBackoff(socketBackoffMs: number): void {
   void persistBridgeSnapshot()
 }
 
+export function recordBridgeProxyFallbackDirect(at = new Date().toISOString()): void {
+  bridgeAuthHealth.proxyFallbackDirectCount += 1
+  bridgeAuthHealth.lastProxyFallbackDirectAt = at
+  void persistBridgeSnapshot()
+}
+
 /**
  * Synchronous, in-memory snapshot. Used by the bridge itself (same
  * process as the writes) and by tests. Cross-process readers should use
@@ -484,6 +494,15 @@ function isAlfaClubBridgeAuthHealthSnapshot(
       v.cfChallengeSustained === undefined ||
       typeof v.cfChallengeSustained === 'boolean'
     ) &&
+    (
+      v.proxyFallbackDirectCount === undefined ||
+      typeof v.proxyFallbackDirectCount === 'number'
+    ) &&
+    (
+      v.lastProxyFallbackDirectAt === undefined ||
+      v.lastProxyFallbackDirectAt === null ||
+      typeof v.lastProxyFallbackDirectAt === 'string'
+    ) &&
     typeof v.suppressedSocketAttempts === 'number' &&
     typeof v.socketBackoffMs === 'number'
   )
@@ -509,6 +528,11 @@ export async function readBridgeAuthHealthSnapshotFromStorage(): Promise<AlfaClu
         Math.floor(parsed.consecutiveCfChallenges ?? 0),
       ),
       cfChallengeSustained: parsed.cfChallengeSustained ?? false,
+      proxyFallbackDirectCount: Math.max(
+        0,
+        Math.floor(parsed.proxyFallbackDirectCount ?? 0),
+      ),
+      lastProxyFallbackDirectAt: parsed.lastProxyFallbackDirectAt ?? null,
       suppressedSocketAttempts: Math.max(0, Math.floor(parsed.suppressedSocketAttempts)),
       socketBackoffMs: Math.max(0, Math.floor(parsed.socketBackoffMs)),
     }
@@ -634,6 +658,8 @@ export function _resetBridgeAuthHealthForTests(): void {
   bridgeAuthHealth.lastCfChallengeAt = null
   bridgeAuthHealth.consecutiveCfChallenges = 0
   bridgeAuthHealth.cfChallengeSustained = false
+  bridgeAuthHealth.proxyFallbackDirectCount = 0
+  bridgeAuthHealth.lastProxyFallbackDirectAt = null
   bridgeAuthHealth.suppressedSocketAttempts = 0
   bridgeAuthHealth.socketBackoffMs = 0
   bridgeStorageWarnLogged = false
