@@ -1,10 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useWalletClient } from 'wagmi'
+import { base } from 'viem/chains'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { addOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
 
 /**
  * `/add-owner` — single-purpose surface for installing the Privy embedded EOA
@@ -43,8 +46,14 @@ export function AddOwnerPage() {
     login,
     onchainEoaOwnerCandidates: rawOnchainEoaOwnerCandidates,
     connectedOnchainEoaOwner,
+    ownerSignerAddress,
   } = controller
+  const { data: walletClient } = useWalletClient()
   const onchainEoaOwnerCandidates = rawOnchainEoaOwnerCandidates ?? []
+  const [selfAuthBusy, setSelfAuthBusy] = useState(false)
+  const [selfAuthError, setSelfAuthError] = useState<string | null>(null)
+  const [selfAuthNotice, setSelfAuthNotice] = useState<string | null>(null)
+  const [selfAuthTxHash, setSelfAuthTxHash] = useState<string | null>(null)
 
   // Detect whether the Privy embedded EOA is already installed. Use the
   // shared `pickPrivyEmbeddedEoaWallet` helper so we accept all embedded
@@ -68,6 +77,10 @@ export function AddOwnerPage() {
         owner.ownerAddress.toLowerCase() === privyEmbeddedEoaAddress,
     )
   }, [cswOwnersState.owners, privyEmbeddedEoaAddress])
+  const isSelfAuthSession = useMemo(() => {
+    if (!canonicalCswAddress || !ownerSignerAddress) return false
+    return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
+  }, [canonicalCswAddress, ownerSignerAddress])
 
   // Coinbase/Base in-app browsers can block or substitute the popup signing
   // context. Recovery requires an external browser so keys.coinbase.com can
@@ -77,6 +90,39 @@ export function AddOwnerPage() {
   const externalAddOwnerUrl = useMemo(() => externalBrowserUrlFor('/add-owner'), [])
 
   const handleInstall = async () => {
+    setSelfAuthError(null)
+    setSelfAuthNotice(null)
+    setSelfAuthTxHash(null)
+    const request = (walletClient as any)?.request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (isSelfAuthSession && request && canonicalCswAddress && privyEmbeddedEoaAddress) {
+      setSelfAuthBusy(true)
+      try {
+        const submitted = await addOwnerViaBaseAppSendCalls({
+          walletRequest: async (args) => await request(args),
+          csw: canonicalCswAddress as `0x${string}`,
+          ownerToAdd: privyEmbeddedEoaAddress as `0x${string}`,
+          chainId: base.id,
+        })
+        setSelfAuthTxHash(submitted.transactionHash ?? null)
+        setSelfAuthNotice(
+          submitted.transactionHash
+            ? `Add-owner submitted via Base App send-calls (tx ${submitted.transactionHash.slice(0, 10)}…).`
+            : `Add-owner submitted via Base App send-calls (bundle id ${submitted.callBundleId}).`,
+        )
+        return
+      } catch (error) {
+        setSelfAuthError(
+          error instanceof Error
+            ? error.message
+            : 'Failed to submit add-owner via Base App send-calls.',
+        )
+        return
+      } finally {
+        setSelfAuthBusy(false)
+      }
+    }
     await onEnable4626Signing()
   }
 
@@ -122,7 +168,7 @@ export function AddOwnerPage() {
           </div>
         ) : null}
 
-        {inAppEnv?.isAnyWalletInApp && installedAsOwner !== true ? (
+        {inAppEnv?.isAnyWalletInApp && !isSelfAuthSession && installedAsOwner !== true ? (
           <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6 space-y-4 text-amber-100">
             <div className="space-y-1">
               <div className="text-[11px] uppercase tracking-[0.2em] text-amber-300/80">
@@ -167,6 +213,15 @@ export function AddOwnerPage() {
                 </div>
               </div>
             </details>
+          </div>
+        ) : null}
+
+        {inAppEnv?.isAnyWalletInApp && isSelfAuthSession && installedAsOwner !== true ? (
+          <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
+            Base App self-auth session detected. This page will use{' '}
+            <code className="font-mono">wallet_sendCalls</code> to submit
+            <code className="mx-1 font-mono">addOwnerAddress(privyEoa)</code>
+            through the CSW UserOp path.
           </div>
         ) : null}
 
@@ -254,17 +309,18 @@ export function AddOwnerPage() {
                     type="button"
                     disabled={
                       advancedBusy ||
+                      selfAuthBusy ||
                       installedAsOwner === true ||
-                      (inAppEnv?.isAnyWalletInApp ?? false)
+                      ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession)
                     }
                     onClick={() => void handleInstall()}
                     className="btn-accent btn-no-icon inline-flex"
                   >
-                    {advancedBusy
+                    {advancedBusy || selfAuthBusy
                       ? 'Installing…'
                       : installedAsOwner === true
                         ? 'Already installed'
-                        : inAppEnv?.isAnyWalletInApp
+                        : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
                           ? 'Open in browser to install'
                           : 'Install signing key'}
                   </button>
@@ -284,6 +340,26 @@ export function AddOwnerPage() {
                   </div>
                 ) : null}
 
+                {selfAuthNotice ? (
+                  <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100">
+                    {selfAuthNotice}
+                  </div>
+                ) : null}
+
+                {selfAuthTxHash ? (
+                  <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3 text-xs text-emerald-100 break-all">
+                    Submitted:{' '}
+                    <a
+                      href={`https://basescan.org/tx/${selfAuthTxHash}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-mono underline"
+                    >
+                      {selfAuthTxHash}
+                    </a>
+                  </div>
+                ) : null}
+
                 {error ? (
                   <div className="space-y-2">
                     <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100">
@@ -296,6 +372,12 @@ export function AddOwnerPage() {
                     >
                       Reset and retry
                     </button>
+                  </div>
+                ) : null}
+
+                {selfAuthError ? (
+                  <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100">
+                    {selfAuthError}
                   </div>
                 ) : null}
               </>

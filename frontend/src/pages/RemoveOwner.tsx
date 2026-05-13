@@ -11,6 +11,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { _submitOwnerViaSelfBuiltUserOp } from '@/lib/wallet/onboardingWallet'
 import { _submitOwnerViaFunderEoa } from '@/lib/wallet/relayFunderEoaSubmit'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
+import { removeOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
 import {
   buildWebAuthnSignatureWrapper,
   generateKeysCoinbasePasteSnippet,
@@ -1195,7 +1196,6 @@ export function RemoveOwnerPage() {
           return
         }
         appendEvent('csw_wallet_sendcalls:start')
-        let sendCallsCalls: Eip5792Call[]
         if (rawModeEnabled) {
           // Build the raw mutation call: just the destination call, no Relay
           // deposit wrapper. preview.txRequest.{to,data,value} carries the
@@ -1205,13 +1205,47 @@ export function RemoveOwnerPage() {
           appendEvent(`raw:target=${preview.txRequest.to}`)
           appendEvent(`raw:selector=${preview.txRequest.data.slice(0, 10)}`)
           appendEvent(`raw:data_length=${(preview.txRequest.data.length - 2) / 2}`)
-          sendCallsCalls = [
-            {
-              to: preview.txRequest.to,
-              data: preview.txRequest.data,
-              value: preview.txRequest.value,
+          const rawResult = await removeOwnerViaBaseAppSendCalls({
+            walletRequest: async (args) => await request(args),
+            csw: canonicalCswAddress as `0x${string}`,
+            ownerIndex: preview.preflight.targetOwnerIndex,
+            ownerBytes: preview.preflight.targetOwnerBytes,
+            selectedFunction: preview.preflight.selectedFunction,
+            chainId: base.id,
+            timeoutMs: 60_000,
+            intervalMs: 1_500,
+            onTelemetry: (event) => {
+              try {
+                const detail =
+                  typeof event.detail === 'string'
+                    ? event.detail
+                    : JSON.stringify(event.detail)
+                const cap = event.step.includes('error') ? 4000 : 320
+                appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+              } catch {
+                appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+              }
             },
-          ]
+          })
+          appendEvent(`csw_wallet_sendcalls:bundle_id=${rawResult.callBundleId}`)
+          if (rawResult.transactionHash) {
+            setTxHash(rawResult.transactionHash)
+            setPageNotice(
+              `Raw-mode wallet_sendCalls submitted on-chain (tx ${rawResult.transactionHash.slice(0, 10)}…). ` +
+                `Watch Basescan for the RemoveOwnerAtIndex / AddOwner event on the CSW. ` +
+                `If the tx reverted with Unauthorized() (0x82b42900) Base App's SDK did not route this through ` +
+                `the EntryPoint as a UserOp — we'll need the funder-EOA lane instead.`,
+            )
+          } else {
+            setTxHash(null)
+            setPageNotice(
+              `Raw-mode wallet_sendCalls submitted (bundle id ${rawResult.callBundleId}). ` +
+                `Wallet did not surface an on-chain tx hash within 60s. Check Base App for status.`,
+            )
+          }
+          setPreview(null)
+          setSelectedIndex(null)
+          return
         } else {
           appendEvent('csw_wallet_sendcalls:mode=relay_orchestrated')
           // Non-null here because of the rawModeEnabled-aware guard above.
@@ -1222,71 +1256,70 @@ export function RemoveOwnerPage() {
           if (relay.feeUsd) {
             appendEvent(`relay:fee_usd=${relay.feeUsd}`)
           }
-          sendCallsCalls = preview.calls.map((c) => ({
+          const sendCallsCalls = preview.calls.map((c) => ({
             to: c.to,
             data: c.data,
             value: c.value,
           }))
-        }
-        const sendCallsResult = await _submitOwnerViaSendCalls({
-          walletRequest: async (args) => await request(args),
-          csw: canonicalCswAddress as `0x${string}`,
-          calls: sendCallsCalls.map((c) => ({
-            to: c.to,
-            data: c.data as Hex,
-            value: c.value,
-          })),
-          chainId: base.id,
-          onTelemetry: (event) => {
-            try {
-              const detail =
-                typeof event.detail === 'string'
-                  ? event.detail
-                  : JSON.stringify(event.detail)
-              const cap = event.step.includes('error') ? 4000 : 240
-              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-              if (
-                event.step === 'broadcast_error' &&
-                event.detail &&
-                typeof event.detail === 'object'
-              ) {
-                const d = event.detail as Record<string, unknown>
-                setLastErrorDetail({
-                  revertReason: (d.error as string | null) ?? null,
-                  revertData: null,
-                  relayTx: null,
-                  rawBody: null,
-                })
+          const sendCallsResult = await _submitOwnerViaSendCalls({
+            walletRequest: async (args) => await request(args),
+            csw: canonicalCswAddress as `0x${string}`,
+            calls: sendCallsCalls.map((c) => ({
+              to: c.to,
+              data: c.data as Hex,
+              value: c.value,
+            })),
+            chainId: base.id,
+            onTelemetry: (event) => {
+              try {
+                const detail =
+                  typeof event.detail === 'string'
+                    ? event.detail
+                    : JSON.stringify(event.detail)
+                const cap = event.step.includes('error') ? 4000 : 240
+                appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+                if (
+                  event.step === 'broadcast_error' &&
+                  event.detail &&
+                  typeof event.detail === 'object'
+                ) {
+                  const d = event.detail as Record<string, unknown>
+                  setLastErrorDetail({
+                    revertReason: (d.error as string | null) ?? null,
+                    revertData: null,
+                    relayTx: null,
+                    rawBody: null,
+                  })
+                }
+              } catch {
+                appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
               }
-            } catch {
-              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-            }
-          },
-        })
-        // wallet_sendCalls returns a CALL-BUNDLE ID, not a tx hash. Poll
-        // wallet_getCallsStatus until the wallet reports a real on-chain
-        // transactionHash so the UI's Basescan link is valid. If the wallet
-        // doesn't support getCallsStatus or we time out, fall back to
-        // surfacing the bundle id with a note (no broken explorer link).
-        appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
-        const resolution = await waitForCallsTxHash({
-          walletRequest: async (args) => await request(args),
-          callBundleId: sendCallsResult.callBundleId,
-          timeoutMs: 60_000,
-          intervalMs: 1_500,
-          onTelemetry: (event) => {
-            try {
-              const detail =
-                typeof event.detail === 'string'
-                  ? event.detail
-                  : JSON.stringify(event.detail)
-              const cap = event.step.includes('error') ? 4000 : 320
-              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-            } catch {
-              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-            }
-          },
-        })
+            },
+          })
+          // wallet_sendCalls returns a CALL-BUNDLE ID, not a tx hash. Poll
+          // wallet_getCallsStatus until the wallet reports a real on-chain
+          // transactionHash so the UI's Basescan link is valid. If the wallet
+          // doesn't support getCallsStatus or we time out, fall back to
+          // surfacing the bundle id with a note (no broken explorer link).
+          appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
+          const resolution = await waitForCallsTxHash({
+            walletRequest: async (args) => await request(args),
+            callBundleId: sendCallsResult.callBundleId,
+            timeoutMs: 60_000,
+            intervalMs: 1_500,
+            onTelemetry: (event) => {
+              try {
+                const detail =
+                  typeof event.detail === 'string'
+                    ? event.detail
+                    : JSON.stringify(event.detail)
+                const cap = event.step.includes('error') ? 4000 : 320
+                appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+              } catch {
+                appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+              }
+            },
+          })
         if (resolution.transactionHash) {
           setTxHash(resolution.transactionHash)
           if (rawModeEnabled) {
@@ -1341,6 +1374,7 @@ export function RemoveOwnerPage() {
         setPreview(null)
         setSelectedIndex(null)
         return
+        }
       }
 
       // External-signer lane: sign the inner CSW UserOp (passkey or
