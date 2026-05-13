@@ -33,6 +33,10 @@ const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 // the working Part 1 was a CSW UserOp whose executeBatch called
 // RelayDepository.depositNative(CSW, requestId) directly with value attached.
 const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
+const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
+const RELAY_QUOTE_GAS_MULTIPLIER = 6n
+const RELAY_QUOTE_MIN_WEI = 1_000_000_000_000n
+const RELAY_QUOTE_MAX_WEI = 200_000_000_000_000n
 
 const RELAY_DEPOSITORY_ABI = [
   {
@@ -204,6 +208,25 @@ function errorMessage(error: unknown): string {
   }
   if (error instanceof Error) return error.message
   return String(error ?? 'unknown error')
+}
+
+async function deriveRelayQuoteAmountWei(params: {
+  publicClient: any
+  txsGasLimit?: bigint
+}): Promise<string> {
+  const gasLimit = params.txsGasLimit ?? DEFAULT_RELAY_QUOTE_GAS_LIMIT
+  try {
+    const gasPrice = await params.publicClient.getGasPrice()
+    const seeded = gasPrice * gasLimit * RELAY_QUOTE_GAS_MULTIPLIER
+    const clamped = seeded < RELAY_QUOTE_MIN_WEI
+      ? RELAY_QUOTE_MIN_WEI
+      : seeded > RELAY_QUOTE_MAX_WEI
+        ? RELAY_QUOTE_MAX_WEI
+        : seeded
+    return clamped.toString(10)
+  } catch {
+    return RELAY_QUOTE_MIN_WEI.toString(10)
+  }
 }
 
 async function simulateRemoveCall(params: {
@@ -395,23 +418,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relayQuoteError: string | null = null
     try {
       // We pass a non-zero EXACT_OUTPUT amount to size the deposit. With
-      // amount=0, Relay correctly returns a zero-value step ("buy 0 wei")
-      // and Base App then refuses to dispatch with "error generating
-      // transaction" because the tx has no value and no obvious purpose.
-      //
-      // 20,000,000,000,000 wei (≈0.00002 ETH, ≈$0.05 at current price) is
-      // a small flat amount that comfortably covers Relay's solver gas
-      // for the Part 2 destination call. The May 5 owner[3] reference
-      // flow deposited 18,871,666,861,048 wei (the exact value Relay's
-      // solver computed at that time). The destination tx itself sends
-      // 0 wei — only Relay's deposit step carries ETH.
-      const RELAY_DEPOSIT_OUTPUT_WEI = '20000000000000'
+      // amount=0, Relay returns a zero-value user tx and Base App can reject
+      // it as a no-op. Seed this quote with a gas-price-derived amount so it
+      // adapts with Base network conditions instead of using a flat constant.
+      const relayQuoteAmountWei = await deriveRelayQuoteAmountWei({
+        publicClient,
+        txsGasLimit: DEFAULT_RELAY_QUOTE_GAS_LIMIT,
+      })
       const quote = await getRelayQuote({
         user: cswAddress,
         recipient: cswAddress,
         originChainId: 8453,
         destinationChainId: 8453,
-        amount: RELAY_DEPOSIT_OUTPUT_WEI,
+        amount: relayQuoteAmountWei,
         tradeType: 'EXACT_OUTPUT',
         txs: [
           {
@@ -420,7 +439,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             value: '0',
           },
         ],
-        txsGasLimit: 250_000,
+        txsGasLimit: Number(DEFAULT_RELAY_QUOTE_GAS_LIMIT),
       })
       if (quote.ok) {
         const e = quote.extract

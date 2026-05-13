@@ -30,7 +30,6 @@ import {
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
-const RELAY_EXECUTION_QUOTE_AMOUNT_WEI = '20000000000000'
 const ENTRY_POINT_USER_OPERATION_EVENT_TOPIC =
   '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f' as const
 const RELAY_NATIVE_DEPOSIT_EVENT_TOPIC =
@@ -68,6 +67,19 @@ type RelayStatusCheckResult = {
 
 function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`): string {
   return `https://api.relay.link/intents/status?requestId=${encodeURIComponent(requestId)}`
+}
+
+function relayQuoteAmountFromPreviewWei(preview: RemoveOwnerPreview | null): string {
+  const valueHex = preview?.relay?.userCall?.value
+  if (typeof valueHex !== 'string' || !/^0x[0-9a-fA-F]+$/.test(valueHex)) {
+    return '1'
+  }
+  try {
+    const value = BigInt(valueHex)
+    return value > 0n ? value.toString(10) : '1'
+  } catch {
+    return '1'
+  }
 }
 
 type AADepositDiagnostics = {
@@ -1134,12 +1146,14 @@ export function RemoveOwnerPage() {
         entryPoint: ENTRY_POINT_V06_ADDRESS,
       })
       appendEvent('paste_submit.quote.start')
+      const relayQuoteAmountWei = relayQuoteAmountFromPreviewWei(preview)
+      appendEvent(`paste_submit.quote.amount_wei=${relayQuoteAmountWei}`)
       const quoteRes = await apiFetch('/api/relay/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...relayBody,
-          amount: RELAY_EXECUTION_QUOTE_AMOUNT_WEI,
+          amount: relayQuoteAmountWei,
           recipient: canonicalCswAddress,
           originChainId: base.id,
           destinationChainId: base.id,
