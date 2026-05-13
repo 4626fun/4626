@@ -29,6 +29,18 @@ interface Env {
   PROXY_SHARED_SECRET: string
 }
 
+type WorkerExecutionContext = {
+  waitUntil(promise: Promise<unknown>): void
+  passThroughOnException(): void
+}
+
+type CfRequestInit = RequestInit & {
+  cf?: {
+    cacheTtl?: number
+    cacheEverything?: boolean
+  }
+}
+
 const HOP_BY_HOP = new Set([
   'connection',
   'keep-alive',
@@ -72,7 +84,6 @@ function jsonResponse(status: number, body: Record<string, unknown>): Response {
     headers: { 'content-type': 'application/json; charset=utf-8' },
   })
 }
-
 
 function normalizeSharedSecret(value: unknown): string {
   const normalized = String(value ?? '').trim()
@@ -120,7 +131,7 @@ function buildResponseHeaders(upstream: Response, requestId: string): Headers {
 }
 
 export default {
-  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: WorkerExecutionContext): Promise<Response> {
     const url = new URL(req.url)
 
     // Health probe — useful during deploy.
@@ -176,14 +187,15 @@ export default {
 
     let upstream: Response
     try {
-      upstream = await fetch(upstreamRequest, {
+      const init: CfRequestInit = {
         // Skip Cloudflare's edge cache for chat history. Stale data
         // here would directly cause `/gmeow` to be missed.
         cf: {
           cacheTtl: Number(env.EDGE_CACHE_TTL_SECONDS) || 0,
           cacheEverything: false,
         },
-      })
+      }
+      upstream = await fetch(upstreamRequest, init)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return jsonResponse(502, {
