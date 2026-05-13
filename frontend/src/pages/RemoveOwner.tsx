@@ -59,6 +59,13 @@ type RelayQuoteExecutePayload = {
   statusEndpoint: string | null
 }
 
+type RelayStatusCheckResult = {
+  done: boolean
+  success: boolean
+  txHash: `0x${string}` | null
+  raw: unknown
+}
+
 type AADepositDiagnostics = {
   txHash: `0x${string}`
   blockNumber: bigint
@@ -75,6 +82,8 @@ type AADepositDiagnostics = {
     hasEntryPointUserOpForCsw: boolean
     hasRelayDepositForCsw: boolean
     requestIdMatches: boolean
+    traceEntryPointToCsw: boolean | null
+    traceCswToDepository: boolean | null
   }
 }
 
@@ -179,11 +188,69 @@ function toHex32Topic(value: `0x${string}`): `0x${string}` {
   return (`0x${clean.padStart(64, '0')}`) as `0x${string}`
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function pollRelayStatusEndpoint(params: {
+  statusEndpoint: string
+  timeoutMs?: number
+  intervalMs?: number
+  onTick?: (message: string) => void
+}): Promise<RelayStatusCheckResult> {
+  const timeoutMs = params.timeoutMs ?? 90_000
+  const intervalMs = params.intervalMs ?? 2_000
+  const start = Date.now()
+  let attempt = 0
+  while (Date.now() - start < timeoutMs) {
+    attempt += 1
+    let raw: unknown = null
+    try {
+      const response = await fetch(params.statusEndpoint, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+      raw = await response.json().catch(() => null)
+      const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+      const statusText = String(obj?.status ?? obj?.state ?? '').trim().toLowerCase()
+      const txCandidate = obj?.txHash ?? obj?.transactionHash ?? obj?.executionTxHash ?? null
+      const txHash =
+        typeof txCandidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txCandidate)
+          ? (txCandidate as `0x${string}`)
+          : null
+      const success =
+        obj?.success === true ||
+        statusText === 'success' ||
+        statusText === 'completed' ||
+        statusText === 'executed' ||
+        statusText === 'fulfilled'
+      const done =
+        success ||
+        statusText === 'failed' ||
+        statusText === 'error' ||
+        statusText === 'cancelled' ||
+        statusText === 'reverted'
+
+      params.onTick?.(
+        `status_poll.attempt=${attempt} status=${statusText || 'unknown'} tx=${txHash ?? 'n/a'}`,
+      )
+      if (done) {
+        return { done: true, success, txHash, raw }
+      }
+    } catch {
+      params.onTick?.(`status_poll.attempt=${attempt} status=fetch_error`)
+    }
+    await sleep(intervalMs)
+  }
+  return { done: false, success: false, txHash: null, raw: null }
+}
+
 async function verifyAARelayDepositShape(params: {
   publicClient: PublicClient | undefined
   txHash: `0x${string}`
   cswAddress: `0x${string}`
   expectedRequestId: `0x${string}`
+  strictTrace?: boolean
 }): Promise<
   | { ok: true; diagnostics: AADepositDiagnostics }
   | { ok: false; reason: string; diagnostics?: AADepositDiagnostics }
@@ -206,6 +273,8 @@ async function verifyAARelayDepositShape(params: {
   let hasEntryPointUserOpForCsw = false
   let hasRelayDepositForCsw = false
   let hasMatchingRequestId = false
+  let hasTraceEntryPointToCsw: boolean | null = null
+  let hasTraceCswToDepository: boolean | null = null
 
   for (const log of receipt.logs) {
     const addressLower = log.address.toLowerCase()
@@ -279,6 +348,8 @@ async function verifyAARelayDepositShape(params: {
       hasEntryPointUserOpForCsw,
       hasRelayDepositForCsw,
       requestIdMatches: hasMatchingRequestId,
+      traceEntryPointToCsw: hasTraceEntryPointToCsw,
+      traceCswToDepository: hasTraceCswToDepository,
     },
   }
 
@@ -304,6 +375,59 @@ async function verifyAARelayDepositShape(params: {
       reason:
         'Deposit tx RelayNativeDeposit requestId does not match the expected request-bound Relay quote.',
       diagnostics,
+    }
+  }
+
+  if (params.strictTrace) {
+    const expectedEntryPoint = ENTRY_POINT_V06_ADDRESS.toLowerCase()
+    const expectedCswLower = params.cswAddress.toLowerCase()
+    const expectedDepository = RELAY_DEPOSITORY_BASE.toLowerCase()
+    type TraceNode = {
+      from?: string
+      to?: string
+      calls?: TraceNode[]
+    }
+    const hasEdge = (node: TraceNode | null | undefined, fromLower: string, toLower: string): boolean => {
+      if (!node) return false
+      const from = String(node.from ?? '').toLowerCase()
+      const to = String(node.to ?? '').toLowerCase()
+      if (from === fromLower && to === toLower) return true
+      const calls = Array.isArray(node.calls) ? node.calls : []
+      for (const child of calls) {
+        if (hasEdge(child, fromLower, toLower)) return true
+      }
+      return false
+    }
+    try {
+      const traceRaw = await (params.publicClient as any).request({
+        method: 'debug_traceTransaction',
+        params: [params.txHash, { tracer: 'callTracer' }],
+      })
+      const traceNode =
+        traceRaw && typeof traceRaw === 'object' && !Array.isArray(traceRaw)
+          ? (traceRaw as TraceNode)
+          : null
+      const traceEntryPointToCsw = hasEdge(traceNode, expectedEntryPoint, expectedCswLower)
+      const traceCswToDepository = hasEdge(traceNode, expectedCswLower, expectedDepository)
+      hasTraceEntryPointToCsw = traceEntryPointToCsw
+      hasTraceCswToDepository = traceCswToDepository
+      diagnostics.checks.traceEntryPointToCsw = traceEntryPointToCsw
+      diagnostics.checks.traceCswToDepository = traceCswToDepository
+      if (!traceEntryPointToCsw || !traceCswToDepository) {
+        return {
+          ok: false,
+          reason:
+            'Strict trace check failed: missing required call edges (EntryPoint->CSW and/or CSW->RelayDepository).',
+          diagnostics,
+        }
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        reason:
+          `Strict trace check failed: debug_traceTransaction unavailable or errored (${error instanceof Error ? error.message : String(error)}).`,
+        diagnostics,
+      }
     }
   }
   return { ok: true, diagnostics }
@@ -601,6 +725,10 @@ export function RemoveOwnerPage() {
     if (!canonicalCswAddress || !ownerSignerAddress) return false
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, ownerSignerAddress])
+  const strictTraceEnabled = useMemo(() => {
+    if (typeof window === 'undefined') return false
+    return new URLSearchParams(window.location.search).get('strictTrace') === '1'
+  }, [])
 
   const pasteValidation = useMemo(() => {
     if (!pasteFlow || !pasteResponse.trim()) return null
@@ -663,8 +791,15 @@ export function RemoveOwnerPage() {
 
   const patternLockStatus = useMemo(() => {
     const checks = aaDepositDiagnostics?.checks
+    const traceSatisfied =
+      checks?.traceEntryPointToCsw == null && checks?.traceCswToDepository == null
+        ? true
+        : Boolean(checks?.traceEntryPointToCsw && checks?.traceCswToDepository)
     const locked = Boolean(
-      checks?.hasEntryPointUserOpForCsw && checks?.hasRelayDepositForCsw && checks?.requestIdMatches,
+      checks?.hasEntryPointUserOpForCsw &&
+        checks?.hasRelayDepositForCsw &&
+        checks?.requestIdMatches &&
+        traceSatisfied,
     )
     if (locked) {
       return {
@@ -874,6 +1009,7 @@ export function RemoveOwnerPage() {
           txHash: resolution.transactionHash as `0x${string}`,
           cswAddress: canonicalCswAddress as `0x${string}`,
           expectedRequestId: preview.relay.requestId,
+          strictTrace: strictTraceEnabled,
         })
         if (!shape.ok) {
           setAaDepositDiagnostics(shape.diagnostics ?? null)
@@ -907,6 +1043,7 @@ export function RemoveOwnerPage() {
           txHash: depositResult as `0x${string}`,
           cswAddress: canonicalCswAddress as `0x${string}`,
           expectedRequestId: preview.relay.requestId,
+          strictTrace: strictTraceEnabled,
         })
         if (!shape.ok) {
           setAaDepositDiagnostics(shape.diagnostics ?? null)
@@ -1080,6 +1217,7 @@ export function RemoveOwnerPage() {
         txHash: resolution.transactionHash as `0x${string}`,
         cswAddress: canonicalCswAddress as `0x${string}`,
         expectedRequestId: quotePayload.requestId,
+        strictTrace: strictTraceEnabled,
       })
       if (!shape.ok) {
         setAaDepositDiagnostics(shape.diagnostics ?? null)
@@ -1091,9 +1229,45 @@ export function RemoveOwnerPage() {
       setTxHash(null)
       setPageNotice(
         `Submitted request-bound Relay depository deposit via CSW sendCalls (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
-          `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…` +
-          (quotePayload.statusEndpoint ? ` Track status: ${quotePayload.statusEndpoint}` : ''),
+          `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…`,
       )
+      if (quotePayload.statusEndpoint) {
+        appendEvent(`paste_submit.status.poll.start endpoint=${quotePayload.statusEndpoint}`)
+        const statusResult = await pollRelayStatusEndpoint({
+          statusEndpoint: quotePayload.statusEndpoint,
+          timeoutMs: 90_000,
+          intervalMs: 2_000,
+          onTick: (message) => appendEvent(`paste_submit.${message}`),
+        })
+        if (!statusResult.done) {
+          throw new Error(
+            `Request-bound deposit succeeded, but Relay execution did not finalize within 90s. ` +
+              `Check status endpoint: ${quotePayload.statusEndpoint}`,
+          )
+        }
+        if (!statusResult.success) {
+          throw new Error(
+            `Request-bound deposit succeeded, but Relay execution reported failure for request ${quotePayload.requestId}.`,
+          )
+        }
+        appendEvent('paste_submit.status.poll.success')
+        if (statusResult.txHash) {
+          setTxHash(statusResult.txHash)
+          setPageNotice(
+            `Owner removal execution confirmed (tx ${statusResult.txHash.slice(0, 10)}…). ` +
+              `Deposit tx ${resolution.transactionHash.slice(0, 10)}… was request-bound and matched.`,
+          )
+        } else {
+          setPageNotice(
+            `Relay execution reported success for request ${quotePayload.requestId.slice(0, 10)}…, ` +
+              `but no execution tx hash was returned by status endpoint.`,
+          )
+        }
+      } else {
+        throw new Error(
+          `Request-bound deposit succeeded, but no Relay status endpoint was returned for request ${quotePayload.requestId}.`,
+        )
+      }
       setPreview(null)
       setSelectedIndex(null)
       setPasteFlow(null)
@@ -1336,6 +1510,7 @@ export function RemoveOwnerPage() {
               txHash: resolution.transactionHash as `0x${string}`,
               cswAddress: canonicalCswAddress as `0x${string}`,
               expectedRequestId: preview.relay!.requestId,
+              strictTrace: strictTraceEnabled,
             })
             if (!shape.ok) {
               setAaDepositDiagnostics(shape.diagnostics ?? null)
@@ -2099,6 +2274,11 @@ export function RemoveOwnerPage() {
                     <div className="text-[10px] uppercase tracking-[0.18em] opacity-80">AA Pattern</div>
                     <div className="mt-1 font-semibold">{patternLockStatus.label}</div>
                     <div className="mt-1 text-[11px] opacity-90">{patternLockStatus.detail}</div>
+                    {strictTraceEnabled ? (
+                      <div className="mt-1 text-[10px] opacity-80">
+                        strict trace mode enabled (<code className="font-mono">strictTrace=1</code>)
+                      </div>
+                    ) : null}
                   </div>
 
                   {aaDepositDiagnostics ? (
@@ -2192,7 +2372,7 @@ export function RemoveOwnerPage() {
                           <dd className="font-mono break-all">{aaDepositDiagnostics.expectedRequestId}</dd>
                         </div>
                       </dl>
-                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-1 sm:grid-cols-5">
                         <div className="font-mono text-[10px]">
                           entrypoint userOp:{' '}
                           <span className={aaDepositDiagnostics.checks.hasEntryPointUserOpForCsw ? 'text-emerald-300' : 'text-rose-300'}>
@@ -2211,6 +2391,30 @@ export function RemoveOwnerPage() {
                             {aaDepositDiagnostics.checks.requestIdMatches ? 'ok' : 'mismatch'}
                           </span>
                         </div>
+                        {aaDepositDiagnostics.checks.traceEntryPointToCsw != null ? (
+                          <div className="font-mono text-[10px]">
+                            trace entrypoint→csw:{' '}
+                            <span
+                              className={
+                                aaDepositDiagnostics.checks.traceEntryPointToCsw ? 'text-emerald-300' : 'text-rose-300'
+                              }
+                            >
+                              {aaDepositDiagnostics.checks.traceEntryPointToCsw ? 'ok' : 'missing'}
+                            </span>
+                          </div>
+                        ) : null}
+                        {aaDepositDiagnostics.checks.traceCswToDepository != null ? (
+                          <div className="font-mono text-[10px]">
+                            trace csw→depository:{' '}
+                            <span
+                              className={
+                                aaDepositDiagnostics.checks.traceCswToDepository ? 'text-emerald-300' : 'text-rose-300'
+                              }
+                            >
+                              {aaDepositDiagnostics.checks.traceCswToDepository ? 'ok' : 'missing'}
+                            </span>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}

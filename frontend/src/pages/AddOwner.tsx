@@ -113,12 +113,16 @@ export function AddOwnerPage() {
         )
         return
       } catch (error) {
-        setSelfAuthError(
-          error instanceof Error
-            ? error.message
-            : 'Failed to submit add-owner via Base App send-calls.',
-        )
-        return
+        const message =
+          error instanceof Error ? error.message : 'Failed to submit add-owner via Base App send-calls.'
+        if (message.toLowerCase().includes('self calls are not allowed')) {
+          setSelfAuthNotice(
+            'Base App rejected direct self-call owner mutation; retrying via prepared owner-install lane.',
+          )
+        } else {
+          setSelfAuthError(message)
+          return
+        }
       } finally {
         setSelfAuthBusy(false)
       }
