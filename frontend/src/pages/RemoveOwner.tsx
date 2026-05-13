@@ -66,6 +66,10 @@ type RelayStatusCheckResult = {
   raw: unknown
 }
 
+function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`): string {
+  return `https://api.relay.link/intents/status?requestId=${encodeURIComponent(requestId)}`
+}
+
 type AADepositDiagnostics = {
   txHash: `0x${string}`
   blockNumber: bigint
@@ -1231,10 +1235,17 @@ export function RemoveOwnerPage() {
         `Submitted request-bound Relay depository deposit via CSW sendCalls (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
           `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…`,
       )
-      if (quotePayload.statusEndpoint) {
-        appendEvent(`paste_submit.status.poll.start endpoint=${quotePayload.statusEndpoint}`)
+      const statusEndpoint =
+        quotePayload.statusEndpoint && quotePayload.statusEndpoint.trim()
+          ? quotePayload.statusEndpoint.trim()
+          : buildRelayStatusEndpointFromRequestId(quotePayload.requestId)
+      if (!quotePayload.statusEndpoint) {
+        appendEvent(`paste_submit.status.poll.fallback_endpoint=${statusEndpoint}`)
+      }
+      if (statusEndpoint) {
+        appendEvent(`paste_submit.status.poll.start endpoint=${statusEndpoint}`)
         const statusResult = await pollRelayStatusEndpoint({
-          statusEndpoint: quotePayload.statusEndpoint,
+          statusEndpoint,
           timeoutMs: 90_000,
           intervalMs: 2_000,
           onTick: (message) => appendEvent(`paste_submit.${message}`),
@@ -1242,7 +1253,7 @@ export function RemoveOwnerPage() {
         if (!statusResult.done) {
           throw new Error(
             `Request-bound deposit succeeded, but Relay execution did not finalize within 90s. ` +
-              `Check status endpoint: ${quotePayload.statusEndpoint}`,
+              `Check status endpoint: ${statusEndpoint}`,
           )
         }
         if (!statusResult.success) {
@@ -1265,7 +1276,7 @@ export function RemoveOwnerPage() {
         }
       } else {
         throw new Error(
-          `Request-bound deposit succeeded, but no Relay status endpoint was returned for request ${quotePayload.requestId}.`,
+          `Request-bound deposit succeeded, but no Relay status endpoint could be derived for request ${quotePayload.requestId}.`,
         )
       }
       setPreview(null)
