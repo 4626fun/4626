@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ExternalLink, Gift } from 'lucide-react'
+import { ExternalLink, Gift, MessageCircle } from 'lucide-react'
 import type { Address, Hex } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
@@ -168,6 +168,7 @@ export function AmoeEntryCard(props: {
   const [jackpotUsd, setJackpotUsd] = useState<string | null>(null)
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)
+  const [xmtpCheckinBusy, setXmtpCheckinBusy] = useState(false)
   const [entryBusy, setEntryBusy] = useState(false)
   const [txHash, setTxHash] = useState<Hex | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -251,7 +252,7 @@ export function AmoeEntryCard(props: {
       setNextEntryAtCredits(Math.max(Number(json.data.creditsPerEntry ?? 100), Number(json.data.credits ?? 0)))
       setStatusMessage(
         json.data.awarded
-          ? `Daily X check-in complete (+${json.data.awardedCredits} point)`
+          ? `Daily X check-in complete (+${json.data.awardedCredits} points)`
           : 'Daily check-in already claimed today',
       )
       await refreshCredits()
@@ -259,6 +260,43 @@ export function AmoeEntryCard(props: {
       setErrorMessage(toErrorMessage(error, 'X check-in failed'))
     } finally {
       setCheckinBusy(false)
+    }
+  }, [protocolEntryMode, refreshCredits, walletAddress])
+
+  const handleXmtpCheckin = useCallback(async () => {
+    if (!walletAddress && !protocolEntryMode) {
+      setErrorMessage('Connect your wallet first')
+      return
+    }
+    setXmtpCheckinBusy(true)
+    setErrorMessage(null)
+    setStatusMessage(null)
+    try {
+      const res = await apiFetch('/api/v1/lottery/amoe/xmtp-checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+        withCredentials: true,
+      })
+      const json = parseJsonSafe<CheckinResponse>(await res.json().catch(() => null))
+      if (!res.ok || !json?.success || !json.data) {
+        throw new Error(json?.error || 'XMTP check-in failed')
+      }
+
+      setCredits(Number(json.data.credits ?? 0))
+      setCreditsPerEntry(Number(json.data.creditsPerEntry ?? 100))
+      setEntriesAvailable(Number(json.data.entriesAvailable ?? 0))
+      setNextEntryAtCredits(Math.max(Number(json.data.creditsPerEntry ?? 100), Number(json.data.credits ?? 0)))
+      setStatusMessage(
+        json.data.awarded
+          ? `Daily XMTP check-in complete (+${json.data.awardedCredits} points)`
+          : 'Daily XMTP task already claimed today',
+      )
+      await refreshCredits()
+    } catch (error: unknown) {
+      setErrorMessage(toErrorMessage(error, 'XMTP check-in failed'))
+    } finally {
+      setXmtpCheckinBusy(false)
     }
   }, [protocolEntryMode, refreshCredits, walletAddress])
 
@@ -382,7 +420,11 @@ export function AmoeEntryCard(props: {
   }, [sliderMax])
 
   const canEnter = Boolean(
-    (walletAddress || protocolEntryMode) && hasEnoughForFloor && !entryBusy && !checkinBusy,
+    (walletAddress || protocolEntryMode) &&
+      hasEnoughForFloor &&
+      !entryBusy &&
+      !checkinBusy &&
+      !xmtpCheckinBusy,
   )
   const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
@@ -508,14 +550,30 @@ export function AmoeEntryCard(props: {
           <button
             type="button"
             onClick={() => void handleTwitterCheckin()}
-            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
+            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy || xmtpCheckinBusy}
             className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {checkinBusy ? (
               <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
             ) : (
               <span className="inline-flex items-center justify-center gap-1.5">
-                <XIcon className="h-3.5 w-3.5" /> {hasEnoughForFloor ? 'Post on X for a point' : 'Earn more points'}
+                <XIcon className="h-3.5 w-3.5" />{' '}
+                {hasEnoughForFloor ? 'Post on X for 100 points' : 'Earn more points'}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleXmtpCheckin()}
+            disabled={(!walletAddress && !protocolEntryMode) || xmtpCheckinBusy || entryBusy || checkinBusy}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {xmtpCheckinBusy ? (
+              <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
+            ) : (
+              <span className="inline-flex items-center justify-center gap-1.5">
+                <MessageCircle className="h-3.5 w-3.5" />
+                {hasEnoughForFloor ? 'Message Akita on XMTP for 100 points' : 'Earn via XMTP task'}
               </span>
             )}
           </button>
@@ -523,7 +581,13 @@ export function AmoeEntryCard(props: {
             <button
               type="button"
               onClick={() => void refreshCredits()}
-              disabled={(!walletAddress && !protocolEntryMode) || loadingCredits || checkinBusy || entryBusy}
+              disabled={
+                (!walletAddress && !protocolEntryMode) ||
+                loadingCredits ||
+                checkinBusy ||
+                xmtpCheckinBusy ||
+                entryBusy
+              }
               className="h-9 rounded-xl bg-white/[0.03] px-3 text-xs font-medium text-zinc-400 transition hover:bg-white/[0.06] hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingCredits ? 'Refreshing…' : 'Refresh'}

@@ -34,6 +34,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'lottery/amoe/retry-cron': () => import('./v1/lottery/_amoeRetryCron.js'),
   'lottery/amoe/publish-cron': () => import('./v1/lottery/_amoePublishCron.js'),
   'lottery/amoe/burn-refund-cron': () => import('./v1/lottery/_amoeBurnRefundCron.js'),
+  'lottery/amoe/xmtp-checkin': () => import('./v1/lottery/_amoeXmtpCheckin.js'),
   'zora-csw/scan-cron': () => import('./v1/zora-csw/_scanCron.js'),
   'zora-csw/enrich-cron': () => import('./v1/zora-csw/_enrichCron.js'),
   'lottery/amoe/twitter-checkin': () => import('./v1/lottery/_amoeTwitterCheckin.js'),

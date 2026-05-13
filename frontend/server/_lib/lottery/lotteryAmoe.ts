@@ -34,6 +34,8 @@ const AMOE_MESSAGE_TITLE = '4626 Lottery AMOE Entry' as const
 export const AMOE_CREDITS_PER_ENTRY = 100
 // Temporary promo boost: increase the daily X check-in award.
 export const AMOE_DAILY_TWITTER_CREDIT = 100
+// Temporary promo boost: XMTP outreach check-in award.
+export const AMOE_DAILY_XMTP_CREDIT = 100
 
 // PR 2 — AMOE Linear Parity (variable points amount).
 //
@@ -306,6 +308,14 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
       PRIMARY KEY (wallet_address, checkin_date)
     );
   `
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS lottery_amoe_daily_xmtp_checkins (
+      wallet_address TEXT NOT NULL,
+      checkin_date DATE NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (wallet_address, checkin_date)
+    );
+  `
 
   // AMOE-eligibility view. Mirrors
   // `supabase/migrations/20260427180000_amoe_eligible_points_view.sql`.
@@ -328,6 +338,7 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
               WHEN source = 'amoe_entry_spend'    THEN amount
               WHEN source = 'amoe_entry_refund'   THEN amount
               WHEN source = 'amoe_twitter_daily'  THEN amount * 1.00
+              WHEN source = 'amoe_xmtp_daily'     THEN amount * 1.00
               WHEN source = 'amoe_checkin'        THEN amount * 1.00
               WHEN source = 'waitlist_signup'     THEN amount * 1.00
               WHEN source = 'csw_link'            THEN amount * 1.00
@@ -477,6 +488,7 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
           CASE
             WHEN source = 'amoe_entry_spend' THEN amount
             WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+            WHEN source = 'amoe_xmtp_daily' THEN amount * 1.00
             -- amoe_checkin must mirror the AMOE eligibility view's 1.00x
             -- weight; otherwise unified points (leaderboard/tier) would
             -- under-count and AMOE-eligible credits could exceed unified
@@ -638,6 +650,72 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
     wallet,
     awarded,
     awardedCredits: awarded ? AMOE_DAILY_TWITTER_CREDIT : 0,
+    credits: snapshot.credits,
+    creditsPerEntry: snapshot.creditsPerEntry,
+    entriesAvailable: snapshot.entriesAvailable,
+  }
+}
+
+export async function claimDailyXmtpCheckin(params: { wallet: `0x${string}` }): Promise<{
+  wallet: `0x${string}`
+  awarded: boolean
+  awardedCredits: number
+  credits: number
+  creditsPerEntry: number
+  entriesAvailable: number
+}> {
+  const wallet = normalizeWallet(params.wallet)
+  const now = Date.now()
+  const dayKey = dayKeyUtc(now)
+
+  const db = await getDb()
+  if (!db) {
+    const memKey = `${wallet}:xmtp:${dayKey}`
+    const alreadyClaimed = memDailyTwitterCheckins.has(memKey)
+    if (!alreadyClaimed) {
+      memDailyTwitterCheckins.add(memKey)
+      memCredits.set(wallet, (memCredits.get(wallet) ?? 0) + AMOE_DAILY_XMTP_CREDIT)
+    }
+    const snapshot = toCreditSnapshot(wallet, memCredits.get(wallet) ?? 0)
+    return {
+      wallet,
+      awarded: !alreadyClaimed,
+      awardedCredits: alreadyClaimed ? 0 : AMOE_DAILY_XMTP_CREDIT,
+      credits: snapshot.credits,
+      creditsPerEntry: snapshot.creditsPerEntry,
+      entriesAvailable: snapshot.entriesAvailable,
+    }
+  }
+
+  await ensureAmoeSchema(db)
+  const inserted = await db.sql`
+    INSERT INTO lottery_amoe_daily_xmtp_checkins (wallet_address, checkin_date)
+    VALUES (${wallet}, ${dayKey})
+    ON CONFLICT (wallet_address, checkin_date) DO NOTHING
+    RETURNING wallet_address;
+  `
+  const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
+  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+
+  if (awarded) {
+    await db.sql`
+      INSERT INTO points (signup_id, source, source_id, amount, created_at)
+      VALUES (${signupId}, ${'amoe_xmtp_daily'}, ${dayKey}, ${AMOE_DAILY_XMTP_CREDIT}, NOW())
+      ON CONFLICT DO NOTHING;
+    `
+    try {
+      await awardAmoeCheckinPoints({ db, wallet, dayKey: `xmtp:${dayKey}` })
+    } catch {
+      // swallow — points are additive
+    }
+  }
+
+  const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
+  const snapshot = toCreditSnapshot(wallet, credits)
+  return {
+    wallet,
+    awarded,
+    awardedCredits: awarded ? AMOE_DAILY_XMTP_CREDIT : 0,
     credits: snapshot.credits,
     creditsPerEntry: snapshot.creditsPerEntry,
     entriesAvailable: snapshot.entriesAvailable,
