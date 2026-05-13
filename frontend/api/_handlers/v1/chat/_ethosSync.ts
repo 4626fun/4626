@@ -1,9 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
+import { getDb, isDbConfigured } from '../../../../server/_lib/db/postgres.js'
 import {
-  getDb,
-  isDbConfigured,
   materializeCanonicalEthosScores,
   seedEthosIdentityKeys,
   syncEthosScoreUpdates,

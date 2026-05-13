@@ -324,7 +324,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const walletClient = createWalletClient({ account, chain: base, transport: http(rpcUrl, { timeout: 30_000 }) })
     const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl, { timeout: 30_000 }) })
     const txHash = await walletClient.writeContract({
       address: row.innerAjnaVault,
