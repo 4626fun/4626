@@ -739,6 +739,11 @@ contract DeploymentBatcherPhase2Module {
 contract DeploymentBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
+    modifier onlyProtocolTreasury() {
+        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+        _;
+    }
+
     /// @notice Charm Finance Alpha Vault Factory on Base.
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
@@ -1429,38 +1434,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         nonReentrant
         returns (Phase2Result memory out)
     {
-        _requireOwner(params.owner);
-        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
-        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
-            revert ZeroAddress();
-        }
-        _enforceRolePolicy(params.owner, params.owner, params.owner, params.owner, vaultRolePolicyId);
-        _requirePhase2CodeIds(codeIds);
-        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
-            revert Phase1Missing();
-        }
-
-        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
-        {
-            Phase1SplitState storage p1state = phase1SplitStates[baseSalt];
-            if (!p1state.finalized) revert Phase1Missing();
-            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
-                revert Phase1StateMismatch();
-            }
-        }
-        if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
-            revert InvalidCreatorTreasury(params.creatorTreasury);
-        }
-        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
-
-        string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
-        bytes memory outData = _delegatePhase2(
-            abi.encodeWithSelector(
-                DeploymentBatcherPhase2Module.deployPhase2Core.selector, params, codeIds, baseSalt, shareSymbolLower
-            )
-        );
-        out = abi.decode(outData, (Phase2Result));
-
+        out = _deployPhase2CoreInternal(params, codeIds, vaultRolePolicyId);
         emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
 
@@ -1474,6 +1448,15 @@ contract DeploymentBatcher is ReentrancyGuard {
         CodeIds calldata codeIds,
         uint256 rolePolicyId
     ) external nonReentrant returns (Phase2Result memory out) {
+        out = _deployPhase2CoreInternal(params, codeIds, rolePolicyId);
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
+    }
+
+    function _deployPhase2CoreInternal(
+        Phase2CoreParams calldata params,
+        CodeIds calldata codeIds,
+        uint256 rolePolicyId
+    ) internal returns (Phase2Result memory out) {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
@@ -1505,8 +1488,6 @@ contract DeploymentBatcher is ReentrancyGuard {
             )
         );
         out = abi.decode(outData, (Phase2Result));
-
-        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
 
     function finalizePhase2(Phase2FinalizeParams calldata params)
@@ -1515,7 +1496,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         returns (Phase2Result memory out)
     {
         _requireOwner(params.owner);
-        _pullCreatorTokens(params.creatorToken, params.owner, params.depositAmount);
+        _pullCreatorTokens(params.creatorToken, params.depositAmount);
         out = _finalizePhase2Internal(params);
     }
 
@@ -1525,7 +1506,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         bytes calldata signature
     ) external nonReentrant returns (Phase2Result memory out) {
         _requireOwner(params.owner);
-        _permit2Pull(params.creatorToken, params.owner, params.depositAmount, permit, signature);
+        _permit2Pull(params.creatorToken, params.depositAmount, permit, signature);
         out = _finalizePhase2Internal(params);
     }
 
@@ -1808,9 +1789,7 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @notice Set Solana bridge adapter + destination configuration.
      * @dev finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
      */
-    function setSolanaConfig(address _adapter, bytes32 _destination) external {
-        // FIX: F-15 — use dedicated error for protocol treasury auth (not generic NotOwner)
-        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+    function setSolanaConfig(address _adapter, bytes32 _destination) external onlyProtocolTreasury {
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
     }
@@ -1819,9 +1798,7 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @notice Configure OVault runtime composer + Solana EID.
      * @dev Enabled configs require a non-zero composer and EID.
      */
-    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external {
-        // FIX: F-15 — use dedicated error for protocol treasury auth (not generic NotOwner)
-        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+    function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external onlyProtocolTreasury {
         if (_enabled) {
             if (_hubComposer == address(0)) revert ZeroAddress();
             if (_solanaEid == 0) revert InvalidSolanaEid();
@@ -1837,8 +1814,7 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @notice Configure optional role-policy validation for phase-2 deployment.
      * @dev Set `manager = address(0)` to disable policy checks entirely.
      */
-    function setVaultRolePolicyConfig(address manager, uint256 policyId) external {
-        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+    function setVaultRolePolicyConfig(address manager, uint256 policyId) external onlyProtocolTreasury {
         if (manager != address(0) && manager.code.length == 0) revert InvalidRolePolicyManager();
         vaultRolePolicyManager = manager;
         vaultRolePolicyId = policyId;
@@ -1849,8 +1825,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     // tuples are not permanently blocked by stale/abandoned deployments.
     // The reset must be tuple-scoped so callers cannot accidentally clear an
     // unrelated deployment state.
-    function resetPhase1State(address creatorToken, address owner, string calldata version) external {
-        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+    function resetPhase1State(address creatorToken, address owner, string calldata version) external onlyProtocolTreasury {
         if (creatorToken == address(0) || owner == address(0)) revert ZeroAddress();
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(creatorToken, owner, block.chainid, version);
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
@@ -1870,25 +1845,22 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (msg.sender != owner) revert NotOwner();
     }
 
-    function _pullCreatorTokens(address creatorToken, address owner, uint256 amount) internal {
-        if (owner != msg.sender) revert NotOwner();
+    function _pullCreatorTokens(address creatorToken, uint256 amount) internal {
         IERC20(creatorToken).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     function _permit2Pull(
         address creatorToken,
-        address owner,
         uint256 amount,
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
     ) internal {
-        if (owner != msg.sender) revert NotOwner();
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < amount) revert PermitAmountTooLow();
 
         ISignatureTransfer.SignatureTransferDetails memory details =
             ISignatureTransfer.SignatureTransferDetails({to: address(this), requestedAmount: amount});
-        ISignatureTransfer(permit2).permitTransferFrom(permit, details, owner, signature);
+        ISignatureTransfer(permit2).permitTransferFrom(permit, details, msg.sender, signature);
     }
 
     function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure {
