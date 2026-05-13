@@ -170,13 +170,13 @@ function decodeOwnerAddress(ownerBytes: `0x${string}`): `0x${string}` | null {
  *   - CSW ETH balance on Base (for any direct funding lane the user might
  *     try elsewhere)
  *   - RelayDepository ETH balance attributed to this CSW (for visibility;
- *     Relay's solver may require a pre-deposit before executing handleOps)
+ *     Relay Router execution may require a pre-deposit before multicall(handleOps))
  *
  * Reference txs that defined this lane:
  *   - https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
  *     (CSW UserOp executeBatch → RelayDepository.depositNative; pre-fund step)
  *   - https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
- *     (Relay solver → RelayRouter.multicall → EntryPoint.handleOps → CSW
+ *     (Relay Router multicall → EntryPoint.handleOps → CSW
  *      addOwnerAddress; the owner-mutation half of the flow)
  *
  * If the deposit step is needed and you don't have a depository balance,
@@ -231,7 +231,7 @@ export function RemoveOwnerPage() {
   // session keys that are no longer installed as owners on the CSW — the
   // SignatureWrapper claims an ownerIndex but the ECDSA actually recovers to
   // an address that doesn't match the bytes stored at that slot, so EntryPoint
-  // reverts with AA24 inside Relay's solver simulation. Passkey signing
+  // reverts with AA24 inside Relay simulation. Passkey signing
   // signs via WebAuthn, which the CSW validates with stored credentialId bytes
   // — no session-key drift possible. The user can opt back into session-key
   // mode if they explicitly want to (e.g. when no passkey is available).
@@ -793,15 +793,16 @@ export function RemoveOwnerPage() {
       // The actual on-chain pattern (re-derived 2026-05-11 from the May 5
       // owner[3] reference flow) is two transactions in the same Base block:
       //   Part 1 — CSW → RelayRouterV3 (deposit, multicalls into depository)
-      //   Part 2 — Relay solver bundler → EntryPoint → CSW destination mutation
+      //   Part 2 — RelayRouterV3.multicall(...) containing EntryPoint.handleOps
+      //            for the destination mutation
       //
-      // The user only signs Part 1. Relay's solver pre-signs and dispatches
-      // Part 2 from its own infrastructure when it sees the deposit event.
+      // The user only signs Part 1. Relay infrastructure then dispatches
+      // Part 2 as a router multicall when it sees the deposit event.
       // So `calls[]` here is exactly ONE entry: the Relay-router deposit tx.
       //
       // When the Relay quote failed (preview.relay is null), `calls[]` falls
       // back to the raw mutation calldata — but Base App's self-auth lane
-      // cannot actually dispatch that without Relay's solver, so the page
+      // cannot actually dispatch that without Relay routing, so the page
       // surfaces relayQuoteError before letting the user submit.
       if (isSelfAuthSession) {
         // ─────────────────────────────────────────────────────────────────────
@@ -944,8 +945,8 @@ export function RemoveOwnerPage() {
             const rid = preview.relay!.requestId.slice(0, 10)
             setPageNotice(
               `Part 1 (deposit) submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
-                `Relay's solver will now dispatch Part 2 (the actual removeOwner mutation) from its bundler, ` +
-                `usually within the same block. Watch the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
+                `Relay will now dispatch Part 2 as RelayRouterV3.multicall containing EntryPoint.handleOps, ` +
+                `usually within the same block. Watch the router tx and the CSW's AA tx list on Basescan for the AddOwner/RemoveOwner event; ` +
                 `request id ${rid}… can also be tracked via Relay /intents/status.`,
             )
           }
@@ -1094,7 +1095,7 @@ export function RemoveOwnerPage() {
       setPageNotice(
         `Broadcast removal tx for owner[${preview.preflight.targetOwnerIndex}] via Relay. ` +
           (submitResult.statusCheckEndpoint
-            ? 'Relay solver will pick up the request and execute the owner mutation on Base shortly.'
+            ? 'Relay Router will pick up the request and execute the owner mutation on Base shortly.'
             : ''),
       )
       setPreview(null)
