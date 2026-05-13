@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { formatEther, type Hex, type PublicClient } from 'viem'
+import { decodeAbiParameters, formatEther, type Hex, type PublicClient } from 'viem'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
@@ -30,6 +30,10 @@ import {
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 const RELAY_EXECUTION_QUOTE_AMOUNT_WEI = '20000000000000'
+const ENTRY_POINT_USER_OPERATION_EVENT_TOPIC =
+  '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f' as const
+const RELAY_NATIVE_DEPOSIT_EVENT_TOPIC =
+  '0x8032066556caf3967d8fec4ad22a2d9e1e9576556b2903a0fcd5b1fd201e3477' as const
 /** One EIP-5792 call. Shape matches what the backend preview returns. */
 type Eip5792Call = {
   to: `0x${string}`
@@ -143,6 +147,91 @@ function extractExecuteQuotePayload(raw: unknown): RelayQuoteExecutePayload | nu
 
   if (!requestId || !txValueWei) return null
   return { requestId, txValueWei, statusEndpoint }
+}
+
+function topicAddress(topic: string | undefined): `0x${string}` | null {
+  if (!topic || typeof topic !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(topic)) return null
+  return (`0x${topic.slice(26)}` as `0x${string}`).toLowerCase() as `0x${string}`
+}
+
+function toHex32Topic(value: `0x${string}`): `0x${string}` {
+  const clean = value.slice(2).toLowerCase()
+  return (`0x${clean.padStart(64, '0')}`) as `0x${string}`
+}
+
+async function verifyAARelayDepositShape(params: {
+  publicClient: PublicClient | undefined
+  txHash: `0x${string}`
+  cswAddress: `0x${string}`
+  expectedRequestId: `0x${string}`
+}): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!params.publicClient) {
+    return { ok: false, reason: 'Public client unavailable; cannot verify AA relay deposit shape.' }
+  }
+  const receipt = await params.publicClient.getTransactionReceipt({ hash: params.txHash })
+  const expectedCsw = params.cswAddress.toLowerCase()
+  const expectedRequestIdTopic = toHex32Topic(params.expectedRequestId)
+
+  let hasEntryPointUserOpForCsw = false
+  let hasRelayDepositForCsw = false
+  let hasMatchingRequestId = false
+
+  for (const log of receipt.logs) {
+    const addressLower = log.address.toLowerCase()
+    const topic0 = log.topics?.[0]?.toLowerCase() ?? ''
+    if (
+      addressLower === ENTRY_POINT_V06_ADDRESS.toLowerCase() &&
+      topic0 === ENTRY_POINT_USER_OPERATION_EVENT_TOPIC
+    ) {
+      const senderTopicAddress = topicAddress(log.topics?.[2])
+      if (senderTopicAddress && senderTopicAddress.toLowerCase() === expectedCsw) {
+        hasEntryPointUserOpForCsw = true
+      }
+      continue
+    }
+    if (
+      addressLower === RELAY_DEPOSITORY_BASE.toLowerCase() &&
+      topic0 === RELAY_NATIVE_DEPOSIT_EVENT_TOPIC
+    ) {
+      try {
+        const [from, _amount, requestId] = decodeAbiParameters(
+          [{ type: 'address' }, { type: 'uint256' }, { type: 'bytes32' }],
+          log.data,
+        )
+        if (String(from).toLowerCase() === expectedCsw) {
+          hasRelayDepositForCsw = true
+        }
+        if ((requestId as string).toLowerCase() === expectedRequestIdTopic.toLowerCase()) {
+          hasMatchingRequestId = true
+        }
+      } catch {
+        return { ok: false, reason: 'Could not decode RelayNativeDeposit log data.' }
+      }
+    }
+  }
+
+  if (!hasEntryPointUserOpForCsw) {
+    return {
+      ok: false,
+      reason:
+        'Deposit tx missing EntryPoint UserOperationEvent for canonical CSW (no CSW -> EntryPoint leg).',
+    }
+  }
+  if (!hasRelayDepositForCsw) {
+    return {
+      ok: false,
+      reason:
+        'Deposit tx missing RelayNativeDeposit for canonical CSW (no CSW -> RelayDepository leg).',
+    }
+  }
+  if (!hasMatchingRequestId) {
+    return {
+      ok: false,
+      reason:
+        'Deposit tx RelayNativeDeposit requestId does not match the expected request-bound Relay quote.',
+    }
+  }
+  return { ok: true }
 }
 
 type OnchainOwnerRow = {
@@ -676,6 +765,16 @@ export function RemoveOwnerPage() {
             `wallet_sendCalls deposit did not surface an on-chain tx hash yet (bundle: ${sendCallsResult.callBundleId}).`,
           )
         }
+        const shape = await verifyAARelayDepositShape({
+          publicClient,
+          txHash: resolution.transactionHash as `0x${string}`,
+          cswAddress: canonicalCswAddress as `0x${string}`,
+          expectedRequestId: preview.relay.requestId,
+        })
+        if (!shape.ok) {
+          throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
+        }
+        appendEvent('paste_submit.deposit.shape_check=ok')
         setDepositTxHash(resolution.transactionHash)
         appendEvent(`paste_submit.deposit.tx=${resolution.transactionHash}`)
         setPageNotice(
@@ -697,6 +796,16 @@ export function RemoveOwnerPage() {
         if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
           throw new Error('Wallet did not return a valid Relay depository tx hash.')
         }
+        const shape = await verifyAARelayDepositShape({
+          publicClient,
+          txHash: depositResult as `0x${string}`,
+          cswAddress: canonicalCswAddress as `0x${string}`,
+          expectedRequestId: preview.relay.requestId,
+        })
+        if (!shape.ok) {
+          throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
+        }
+        appendEvent('paste_submit.deposit.shape_check=ok')
         setDepositTxHash(depositResult)
         appendEvent(`paste_submit.deposit.tx=${depositResult}`)
         if (publicClient) {
@@ -857,6 +966,16 @@ export function RemoveOwnerPage() {
           `wallet_sendCalls did not return on-chain tx hash for request ${quotePayload.requestId}.`,
         )
       }
+      const shape = await verifyAARelayDepositShape({
+        publicClient,
+        txHash: resolution.transactionHash as `0x${string}`,
+        cswAddress: canonicalCswAddress as `0x${string}`,
+        expectedRequestId: quotePayload.requestId,
+      })
+      if (!shape.ok) {
+        throw new Error(`Request-bound deposit transaction shape check failed: ${shape.reason}`)
+      }
+      appendEvent('paste_submit.execute.shape_check=ok')
       setDepositTxHash(resolution.transactionHash)
       setTxHash(null)
       setPageNotice(
