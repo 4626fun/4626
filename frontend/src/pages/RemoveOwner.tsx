@@ -29,6 +29,7 @@ import {
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
+const RELAY_EXECUTION_QUOTE_AMOUNT_WEI = '20000000000000'
 /** One EIP-5792 call. Shape matches what the backend preview returns. */
 type Eip5792Call = {
   to: `0x${string}`
@@ -45,6 +46,12 @@ type PreviewRelayFlow = {
   requestId: `0x${string}`
   userCall: Eip5792Call
   feeUsd: string | null
+}
+
+type RelayQuoteExecutePayload = {
+  requestId: `0x${string}`
+  txValueWei: string
+  statusEndpoint: string | null
 }
 
 type RemoveOwnerPreview = {
@@ -80,6 +87,62 @@ type RemoveOwnerPreview = {
     }
     relayQuoteError: string | null
   }
+}
+
+function extractExecuteQuotePayload(raw: unknown): RelayQuoteExecutePayload | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+
+  let requestId: `0x${string}` | null = null
+  let txValueWei: string | null = null
+  let statusEndpoint: string | null = null
+
+  const steps = Array.isArray(obj.steps) ? obj.steps : []
+  for (const step of steps) {
+    if (!step || typeof step !== 'object') continue
+    const stepObj = step as Record<string, unknown>
+    if (!requestId && typeof stepObj.requestId === 'string' && /^0x[0-9a-fA-F]{64}$/.test(stepObj.requestId)) {
+      requestId = stepObj.requestId as `0x${string}`
+    }
+    if (!statusEndpoint && stepObj.check && typeof stepObj.check === 'object') {
+      const endpoint = (stepObj.check as Record<string, unknown>).endpoint
+      if (typeof endpoint === 'string' && endpoint.trim()) {
+        statusEndpoint = endpoint
+      }
+    }
+    if (txValueWei) continue
+    const items = Array.isArray(stepObj.items) ? stepObj.items : []
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue
+      const data = (item as Record<string, unknown>).data
+      if (!data || typeof data !== 'object') continue
+      const value = (data as Record<string, unknown>).value
+      if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
+        txValueWei = value
+        break
+      }
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        txValueWei = Math.trunc(value).toString(10)
+        break
+      }
+    }
+  }
+
+  if (!requestId) {
+    const protocol = obj.protocol
+    if (protocol && typeof protocol === 'object') {
+      const v2 = (protocol as Record<string, unknown>).v2
+      if (v2 && typeof v2 === 'object') {
+        const orderId = (v2 as Record<string, unknown>).orderId
+        if (typeof orderId === 'string' && /^0x[0-9a-fA-F]{64}$/.test(orderId)) {
+          requestId = orderId as `0x${string}`
+        }
+      }
+    }
+  }
+
+  if (!requestId || !txValueWei) return null
+  return { requestId, txValueWei, statusEndpoint }
 }
 
 type OnchainOwnerRow = {
@@ -666,16 +729,23 @@ export function RemoveOwnerPage() {
       setPageError('Prepare the keys.coinbase.com signing snippet first.')
       return
     }
-    if (!depositTxHash) {
-      setPageError('Complete step 4 and send the Relay depository funding transaction first.')
-      return
-    }
     if (!pasteValidation?.ok) {
       setPageError('Pasted payload is invalid. Fix step 3 before submitting owner removal.')
       return
     }
     if (!signerOwnerIndexValidation.ok) {
       setPageError(signerOwnerIndexValidation.message)
+      return
+    }
+    if (!walletClient) {
+      setPageError('Connect your wallet first.')
+      return
+    }
+    const request = (walletClient as any).request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
       return
     }
     setBusy(true)
@@ -698,46 +768,101 @@ export function RemoveOwnerPage() {
       appendEvent(`paste_submit.signer_owner_index=${pasteFlow.signerOwnerIndex}`)
       appendEvent(`paste_submit.handle_ops_len=${(handleOpsCalldata.length - 2) / 2}`)
 
-      appendEvent(`paste_submit.deposit.reuse=${depositTxHash}`)
-
       const relayBody = buildRelayExecuteRequestBody({
         chainId: base.id,
         csw: canonicalCswAddress as `0x${string}`,
         handleOpsCalldata,
         entryPoint: ENTRY_POINT_V06_ADDRESS,
       })
-      const res = await apiFetch('/api/relay/execute', {
+      appendEvent('paste_submit.quote.start')
+      const quoteRes = await apiFetch('/api/relay/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(relayBody),
+        body: JSON.stringify({
+          ...relayBody,
+          amount: RELAY_EXECUTION_QUOTE_AMOUNT_WEI,
+          recipient: canonicalCswAddress,
+          originChainId: base.id,
+          destinationChainId: base.id,
+        }),
       })
-      const json = (await res.json().catch(() => null)) as
+      const quoteJson = (await quoteRes.json().catch(() => null)) as
         | {
             success?: boolean
             error?: string
-            status?: number
-            data?: {
-              txHash?: string
-              transactionHash?: string
-              hash?: string
-            } | null
-            txHash?: string
-            transactionHash?: string
+            data?: unknown
           }
         | null
-      if (!res.ok || !json?.success) {
-        throw new Error(json?.error ?? `Relay execute failed (${res.status})`)
+      if (!quoteRes.ok || !quoteJson?.success) {
+        throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteRes.status})`)
       }
-      const maybeHash =
-        json?.data?.txHash ??
-        json?.data?.transactionHash ??
-        json?.data?.hash ??
-        json?.txHash ??
-        json?.transactionHash ??
-        null
-      if (maybeHash) setTxHash(maybeHash)
+      const quotePayload = extractExecuteQuotePayload(quoteJson.data)
+      if (!quotePayload) {
+        throw new Error('Relay quote did not return requestId + deposit value for router execution.')
+      }
+      appendEvent(`paste_submit.quote.request_id=${quotePayload.requestId}`)
+      appendEvent(`paste_submit.quote.tx_value_wei=${quotePayload.txValueWei}`)
+
+      const depositValueHex = `0x${BigInt(quotePayload.txValueWei).toString(16)}` as `0x${string}`
+      const depositCallData = preview.relay?.userCall?.data
+      const quotedDepositCallData =
+        typeof depositCallData === 'string' &&
+        /^0x[0-9a-fA-F]+$/.test(depositCallData) &&
+        depositCallData.startsWith('0x49290c1c')
+          ? (`0x49290c1c000000000000000000000000${canonicalCswAddress.slice(2).toLowerCase()}${quotePayload.requestId.slice(2)}` as `0x${string}`)
+          : preview.relay?.userCall?.data
+      if (!quotedDepositCallData) {
+        throw new Error('Missing Relay depository calldata for request-bound execution.')
+      }
+
+      appendEvent('paste_submit.deposit.execute_from_quote.start')
+      const sendCallsResult = await _submitOwnerViaSendCalls({
+        walletRequest: async (args) => await request(args),
+        csw: canonicalCswAddress as `0x${string}`,
+        calls: [
+          {
+            to: RELAY_DEPOSITORY_BASE,
+            data: quotedDepositCallData as Hex,
+            value: depositValueHex,
+          },
+        ],
+        chainId: base.id,
+        onTelemetry: (event) => {
+          try {
+            const detail =
+              typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+            appendEvent(`paste_submit.execute.${event.step}: ${detail.slice(0, 280)}`)
+          } catch {
+            appendEvent(`paste_submit.execute.${event.step}: <unloggable>`)
+          }
+        },
+      })
+      const resolution = await waitForCallsTxHash({
+        walletRequest: async (args) => await request(args),
+        callBundleId: sendCallsResult.callBundleId,
+        timeoutMs: 60_000,
+        intervalMs: 1_500,
+        onTelemetry: (event) => {
+          try {
+            const detail =
+              typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+            appendEvent(`paste_submit.execute.${event.step}: ${detail.slice(0, 280)}`)
+          } catch {
+            appendEvent(`paste_submit.execute.${event.step}: <unloggable>`)
+          }
+        },
+      })
+      if (!resolution.transactionHash) {
+        throw new Error(
+          `wallet_sendCalls did not return on-chain tx hash for request ${quotePayload.requestId}.`,
+        )
+      }
+      setDepositTxHash(resolution.transactionHash)
+      setTxHash(null)
       setPageNotice(
-        'Submitted relay funding + signed owner-remove UserOp. Watch the canonical CSW owner list for removal confirmation.',
+        `Submitted request-bound Relay depository deposit via CSW sendCalls (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+          `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…` +
+          (quotePayload.statusEndpoint ? ` Track status: ${quotePayload.statusEndpoint}` : ''),
       )
       setPreview(null)
       setSelectedIndex(null)
@@ -1570,14 +1695,13 @@ export function RemoveOwnerPage() {
                           </button>
                         </div>
                         <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
-                          <span>Step 5. Submit owner removal</span>
+                          <span>Step 5. Quote + execute request-bound deposit</span>
                           <button
                             type="button"
                             disabled={
                               busy ||
                               !pasteFlow ||
                               !pasteValidation?.ok ||
-                              !depositTxHash ||
                               !signerOwnerIndexValidation.ok
                             }
                             onClick={() => void handleSubmitKeysCoinbasePaste()}
