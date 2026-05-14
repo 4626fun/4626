@@ -60,6 +60,14 @@ type RelayQuoteExecutePayload = {
 
 const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
 const RELAY_DEPOSIT_NATIVE_SELECTOR = '0x49290c1c'
+const BASE_USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
+const ETHEREUM_USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
+const ARBITRUM_USDC = '0xaf88d065e77c8cc2239327c5edb3a432268e5831'
+const FORBIDDEN_RELAY_CURRENCY_ADDRESSES = new Set<string>([
+  BASE_USDC,
+  ETHEREUM_USDC,
+  ARBITRUM_USDC,
+])
 
 type RelayStatusCheckResult = {
   done: boolean
@@ -110,11 +118,28 @@ const RELAY_QUOTE_MULTIPLIER = 6n
 const RELAY_QUOTE_MIN_WEI = 1_000_000_000_000n
 const RELAY_QUOTE_MAX_WEI = 200_000_000_000_000n
 
-async function deriveRelayQuoteSeedAmountWei(publicClient: PublicClient | undefined): Promise<string> {
+async function deriveRelayQuoteSeedAmountWei(params: {
+  publicClient: PublicClient | undefined
+  cswAddress: `0x${string}`
+  handleOpsCalldata: `0x${string}`
+}): Promise<string> {
+  const { publicClient, cswAddress, handleOpsCalldata } = params
   if (!publicClient) return RELAY_QUOTE_MIN_WEI.toString(10)
   try {
     const gasPrice = await publicClient.getGasPrice()
-    const seeded = gasPrice * RELAY_QUOTE_DEFAULT_GAS_LIMIT * RELAY_QUOTE_MULTIPLIER
+    let estimatedGas = RELAY_QUOTE_DEFAULT_GAS_LIMIT
+    try {
+      const estimate = await publicClient.estimateGas({
+        account: cswAddress,
+        to: ENTRY_POINT_V06_ADDRESS,
+        data: handleOpsCalldata,
+        value: 0n,
+      })
+      if (estimate > 0n) {
+        estimatedGas = estimate
+      }
+    } catch {}
+    const seeded = gasPrice * estimatedGas * RELAY_QUOTE_MULTIPLIER
     const clamped =
       seeded < RELAY_QUOTE_MIN_WEI
         ? RELAY_QUOTE_MIN_WEI
@@ -290,6 +315,33 @@ function validateRelayQuoteIsNativeOnly(raw: unknown): string | null {
     return `Relay paymentDetails currency is non-native (${paymentDetailsCurrency}). This flow only allows native ETH.`
   }
 
+  return null
+}
+
+function findForbiddenRelayCurrency(raw: unknown): string | null {
+  const seen = new Set<unknown>()
+  const stack: unknown[] = [raw]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (current == null || seen.has(current)) continue
+    seen.add(current)
+    if (typeof current === 'string') {
+      const lower = current.toLowerCase()
+      if (FORBIDDEN_RELAY_CURRENCY_ADDRESSES.has(lower)) {
+        return lower
+      }
+      continue
+    }
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+      continue
+    }
+    if (typeof current === 'object') {
+      for (const value of Object.values(current as Record<string, unknown>)) {
+        stack.push(value)
+      }
+    }
+  }
   return null
 }
 
@@ -1283,7 +1335,11 @@ export function RemoveOwnerPage() {
         entryPoint: ENTRY_POINT_V06_ADDRESS,
       })
       appendEvent('paste_submit.quote.start')
-      const relayQuoteAmountWei = await deriveRelayQuoteSeedAmountWei(publicClient)
+      const relayQuoteAmountWei = await deriveRelayQuoteSeedAmountWei({
+        publicClient,
+        cswAddress: canonicalCswAddress as `0x${string}`,
+        handleOpsCalldata,
+      })
       appendEvent(`paste_submit.quote.seed_amount_wei=${relayQuoteAmountWei}`)
       const quoteRes = await apiFetch('/api/relay/quote', {
         method: 'POST',
@@ -1309,6 +1365,12 @@ export function RemoveOwnerPage() {
       const nativeOnlyError = validateRelayQuoteIsNativeOnly(quoteJson.data)
       if (nativeOnlyError) {
         throw new Error(nativeOnlyError)
+      }
+      const forbiddenCurrency = findForbiddenRelayCurrency(quoteJson.data)
+      if (forbiddenCurrency) {
+        throw new Error(
+          `Relay quote references forbidden non-native currency (${forbiddenCurrency}). This flow is ETH-native only.`,
+        )
       }
       const quotePayload = extractExecuteQuotePayload(quoteJson.data)
       if (!quotePayload) {
