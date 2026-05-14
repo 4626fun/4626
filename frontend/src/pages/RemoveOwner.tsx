@@ -58,6 +58,8 @@ type RelayQuoteExecutePayload = {
   statusEndpoint: string | null
 }
 
+const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
+
 type RelayStatusCheckResult = {
   done: boolean
   success: boolean
@@ -236,6 +238,60 @@ function extractExecuteQuotePayload(raw: unknown): RelayQuoteExecutePayload | nu
   return { requestId, txValueWei, statusEndpoint }
 }
 
+function validateRelayQuoteIsNativeOnly(raw: unknown): string | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const details = obj.details && typeof obj.details === 'object'
+    ? (obj.details as Record<string, unknown>)
+    : null
+
+  const currencyInAddress =
+    details?.currencyIn &&
+    typeof details.currencyIn === 'object' &&
+    (details.currencyIn as Record<string, unknown>).currency &&
+    typeof (details.currencyIn as Record<string, unknown>).currency === 'object'
+      ? ((details.currencyIn as Record<string, unknown>).currency as Record<string, unknown>).address
+      : null
+  if (
+    typeof currencyInAddress === 'string' &&
+    currencyInAddress.toLowerCase() !== NATIVE_CURRENCY_ADDRESS
+  ) {
+    return `Relay quote currencyIn is non-native (${currencyInAddress}). This flow only allows native ETH.`
+  }
+
+  const currencyOutAddress =
+    details?.currencyOut &&
+    typeof details.currencyOut === 'object' &&
+    (details.currencyOut as Record<string, unknown>).currency &&
+    typeof (details.currencyOut as Record<string, unknown>).currency === 'object'
+      ? ((details.currencyOut as Record<string, unknown>).currency as Record<string, unknown>).address
+      : null
+  if (
+    typeof currencyOutAddress === 'string' &&
+    currencyOutAddress.toLowerCase() !== NATIVE_CURRENCY_ADDRESS
+  ) {
+    return `Relay quote currencyOut is non-native (${currencyOutAddress}). This flow only allows native ETH.`
+  }
+
+  const paymentDetailsCurrency =
+    obj.protocol &&
+    typeof obj.protocol === 'object' &&
+    (obj.protocol as Record<string, unknown>).v2 &&
+    typeof (obj.protocol as Record<string, unknown>).v2 === 'object' &&
+    ((obj.protocol as Record<string, unknown>).v2 as Record<string, unknown>).paymentDetails &&
+    typeof ((obj.protocol as Record<string, unknown>).v2 as Record<string, unknown>).paymentDetails === 'object'
+      ? (((obj.protocol as Record<string, unknown>).v2 as Record<string, unknown>).paymentDetails as Record<string, unknown>).currency
+      : null
+  if (
+    typeof paymentDetailsCurrency === 'string' &&
+    paymentDetailsCurrency.toLowerCase() !== NATIVE_CURRENCY_ADDRESS
+  ) {
+    return `Relay paymentDetails currency is non-native (${paymentDetailsCurrency}). This flow only allows native ETH.`
+  }
+
+  return null
+}
+
 function topicAddress(topic: string | undefined): `0x${string}` | null {
   if (!topic || typeof topic !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(topic)) return null
   return (`0x${topic.slice(26)}` as `0x${string}`).toLowerCase() as `0x${string}`
@@ -260,6 +316,8 @@ async function pollRelayStatusEndpoint(params: {
   const intervalMs = params.intervalMs ?? 2_000
   const start = Date.now()
   let attempt = 0
+  let lastRaw: unknown = null
+  let lastTxHash: `0x${string}` | null = null
   while (Date.now() - start < timeoutMs) {
     attempt += 1
     let raw: unknown = null
@@ -289,6 +347,9 @@ async function pollRelayStatusEndpoint(params: {
         statusText === 'cancelled' ||
         statusText === 'reverted'
 
+      lastRaw = raw
+      lastTxHash = txHash
+
       params.onTick?.(
         `status_poll.attempt=${attempt} status=${statusText || 'unknown'} tx=${txHash ?? 'n/a'}`,
       )
@@ -300,7 +361,7 @@ async function pollRelayStatusEndpoint(params: {
     }
     await sleep(intervalMs)
   }
-  return { done: false, success: false, txHash: null, raw: null }
+  return { done: false, success: false, txHash: lastTxHash, raw: lastRaw }
 }
 
 async function verifyAARelayDepositShape(params: {
@@ -1213,6 +1274,10 @@ export function RemoveOwnerPage() {
       if (!quoteRes.ok || !quoteJson?.success) {
         throw new Error(quoteJson?.error ?? `Relay quote failed (${quoteRes.status})`)
       }
+      const nativeOnlyError = validateRelayQuoteIsNativeOnly(quoteJson.data)
+      if (nativeOnlyError) {
+        throw new Error(nativeOnlyError)
+      }
       const quotePayload = extractExecuteQuotePayload(quoteJson.data)
       if (!quotePayload) {
         throw new Error('Relay quote did not return requestId + deposit value for router execution.')
@@ -1352,14 +1417,16 @@ export function RemoveOwnerPage() {
             requestId: quotePayload.requestId,
             statusEndpoint,
             depositTxHash: resolution.transactionHash as `0x${string}`,
-            executionTxHash: null,
-            status: 'status_timeout',
+            executionTxHash: statusResult.txHash,
+            status: 'execution_pending',
             statusText,
           })
-          throw new Error(
-            `Request-bound deposit succeeded, but Relay execution did not finalize within 90s. ` +
-              `Check status endpoint: ${statusEndpoint}`,
+          setPageNotice(
+            `Request-bound deposit is confirmed and Relay execution is still pending (${statusText ?? 'unknown'}) for request ${quotePayload.requestId.slice(0, 10)}…. ` +
+              `Continue monitoring ${statusEndpoint}`,
           )
+          appendEvent(`paste_submit.status.poll.pending_after_timeout=${statusText ?? 'unknown'}`)
+          return
         }
         if (!statusResult.success) {
           setRelayTwoLegDiagnostics({
