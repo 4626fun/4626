@@ -1154,59 +1154,31 @@ export function RemoveOwnerPage() {
     try {
       appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
       if (isSelfAuthSession && canonicalCswAddress) {
-        appendEvent('paste_submit.deposit.mode=wallet_sendCalls')
-        const sendCallsResult = await _submitOwnerViaSendCalls({
-          walletRequest: async (args) => await request(args),
-          csw: canonicalCswAddress as `0x${string}`,
-          calls: [
+        appendEvent('paste_submit.deposit.mode=eth_sendTransaction_direct')
+        const depositResult = (await request({
+          method: 'eth_sendTransaction',
+          params: [
             {
+              from: canonicalCswAddress,
               to: preview.relay.userCall.to,
-              data: preview.relay.userCall.data as Hex,
+              data: preview.relay.userCall.data,
               value: preview.relay.userCall.value,
             },
           ],
-          chainId: base.id,
-          onTelemetry: (event) => {
-            try {
-              const detail =
-                typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-              appendEvent(`paste_submit.deposit.${event.step}: ${detail.slice(0, 280)}`)
-            } catch {
-              appendEvent(`paste_submit.deposit.${event.step}: <unloggable>`)
-            }
-          },
-        })
-        appendEvent(`paste_submit.deposit.bundle_id=${sendCallsResult.callBundleId}`)
-        const resolution = await waitForCallsTxHash({
-          walletRequest: async (args) => await request(args),
-          callBundleId: sendCallsResult.callBundleId,
-          timeoutMs: 60_000,
-          intervalMs: 1_500,
-          onTelemetry: (event) => {
-            try {
-              const detail =
-                typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-              appendEvent(`paste_submit.deposit.${event.step}: ${detail.slice(0, 280)}`)
-            } catch {
-              appendEvent(`paste_submit.deposit.${event.step}: <unloggable>`)
-            }
-          },
-        })
-        if (!resolution.transactionHash) {
-          throw new Error(
-            `wallet_sendCalls deposit did not surface an on-chain tx hash yet (bundle: ${sendCallsResult.callBundleId}).`,
-          )
+        })) as string
+        if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
+          throw new Error('Direct deposit send did not return a valid on-chain tx hash.')
         }
         if (publicClient) {
           await publicClient.waitForTransactionReceipt({
-            hash: resolution.transactionHash as `0x${string}`,
+            hash: depositResult as `0x${string}`,
             confirmations: 1,
             timeout: 60_000,
           })
         }
         const shape = await verifyAARelayDepositShape({
           publicClient,
-          txHash: resolution.transactionHash as `0x${string}`,
+          txHash: depositResult as `0x${string}`,
           cswAddress: canonicalCswAddress as `0x${string}`,
           expectedRequestId: preview.relay.requestId,
           strictTrace: strictTraceEnabled,
@@ -1217,10 +1189,10 @@ export function RemoveOwnerPage() {
         }
         setAaDepositDiagnostics(shape.diagnostics)
         appendEvent('paste_submit.deposit.shape_check=ok')
-        setDepositTxHash(resolution.transactionHash)
-        appendEvent(`paste_submit.deposit.tx=${resolution.transactionHash}`)
+        setDepositTxHash(depositResult)
+        appendEvent(`paste_submit.deposit.tx=${depositResult}`)
         setPageNotice(
-          'Relay depository funding submitted via CSW wallet_sendCalls (EntryPoint path). Continue to step 5.',
+          'Relay depository funding submitted via direct tx. Continue to step 5.',
         )
       } else {
         appendEvent('paste_submit.deposit.mode=eth_sendTransaction_fallback')
@@ -1399,57 +1371,31 @@ export function RemoveOwnerPage() {
       const quotedDepositCallData = (`0x49290c1c000000000000000000000000${canonicalCswAddress.slice(2).toLowerCase()}${quotePayload.requestId.slice(2)}` as `0x${string}`)
 
       appendEvent('paste_submit.deposit.execute_from_quote.start')
-      const sendCallsResult = await _submitOwnerViaSendCalls({
-        walletRequest: async (args) => await request(args),
-        csw: canonicalCswAddress as `0x${string}`,
-        calls: [
+      appendEvent('paste_submit.execute.mode=eth_sendTransaction_direct')
+      const depositResult = (await request({
+        method: 'eth_sendTransaction',
+        params: [
           {
+            from: canonicalCswAddress,
             to: RELAY_DEPOSITORY_BASE,
-            data: quotedDepositCallData as Hex,
+            data: quotedDepositCallData,
             value: depositValueHex,
           },
         ],
-        chainId: base.id,
-        onTelemetry: (event) => {
-          try {
-            const detail =
-              typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-            appendEvent(`paste_submit.execute.${event.step}: ${detail.slice(0, 280)}`)
-          } catch {
-            appendEvent(`paste_submit.execute.${event.step}: <unloggable>`)
-          }
-        },
-      })
-      const resolution = await waitForCallsTxHash({
-        walletRequest: async (args) => await request(args),
-        callBundleId: sendCallsResult.callBundleId,
-        timeoutMs: 60_000,
-        intervalMs: 1_500,
-        onTelemetry: (event) => {
-          try {
-            const detail =
-              typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-            appendEvent(`paste_submit.execute.${event.step}: ${detail.slice(0, 280)}`)
-          } catch {
-            appendEvent(`paste_submit.execute.${event.step}: <unloggable>`)
-          }
-        },
-      })
-      if (!resolution.transactionHash) {
-        throw new Error(
-          `wallet_sendCalls did not return on-chain tx hash for request ${quotePayload.requestId}.`,
-        )
+      })) as string
+      if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
+        throw new Error(`Direct deposit send did not return a valid tx hash for request ${quotePayload.requestId}.`)
       }
       if (publicClient) {
         await publicClient.waitForTransactionReceipt({
-          hash: resolution.transactionHash as `0x${string}`,
+          hash: depositResult as `0x${string}`,
           confirmations: 1,
           timeout: 60_000,
         })
       }
       const shape = await verifyAARelayDepositShape({
         publicClient,
-        txHash: resolution.transactionHash as `0x${string}`,
+        txHash: depositResult as `0x${string}`,
         cswAddress: canonicalCswAddress as `0x${string}`,
         expectedRequestId: quotePayload.requestId,
         strictTrace: strictTraceEnabled,
@@ -1460,12 +1406,12 @@ export function RemoveOwnerPage() {
       }
       setAaDepositDiagnostics(shape.diagnostics)
       appendEvent('paste_submit.execute.shape_check=ok')
-      setDepositTxHash(resolution.transactionHash)
+      setDepositTxHash(depositResult)
       setTxHash(null)
       setRelayTwoLegDiagnostics({
         requestId: quotePayload.requestId,
         statusEndpoint,
-        depositTxHash: resolution.transactionHash as `0x${string}`,
+        depositTxHash: depositResult as `0x${string}`,
         executionTxHash: null,
         status: 'deposit_submitted',
         statusText: null,
@@ -1475,7 +1421,7 @@ export function RemoveOwnerPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            txHash: resolution.transactionHash,
+            txHash: depositResult,
             chainId: base.id,
           }),
         })
@@ -1494,7 +1440,7 @@ export function RemoveOwnerPage() {
         appendEvent('paste_submit.indexing.failed=fetch_error')
       }
       setPageNotice(
-        `Submitted request-bound Relay depository deposit via CSW sendCalls (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
+        `Submitted request-bound Relay depository deposit via direct tx (tx ${depositResult.slice(0, 10)}…). ` +
           `Relay Router will execute the paired multicall containing EntryPoint.handleOps for request ${quotePayload.requestId.slice(0, 10)}…`,
       )
       if (!quotePayload.statusEndpoint || quotePayload.statusEndpoint.trim().startsWith('/')) {
@@ -1505,7 +1451,7 @@ export function RemoveOwnerPage() {
         setRelayTwoLegDiagnostics({
           requestId: quotePayload.requestId,
           statusEndpoint,
-          depositTxHash: resolution.transactionHash as `0x${string}`,
+          depositTxHash: depositResult as `0x${string}`,
           executionTxHash: null,
           status: 'execution_pending',
           statusText: null,
@@ -1521,7 +1467,7 @@ export function RemoveOwnerPage() {
           setRelayTwoLegDiagnostics({
             requestId: quotePayload.requestId,
             statusEndpoint,
-            depositTxHash: resolution.transactionHash as `0x${string}`,
+            depositTxHash: depositResult as `0x${string}`,
             executionTxHash: statusResult.txHash,
             status: 'execution_pending',
             statusText,
@@ -1537,7 +1483,7 @@ export function RemoveOwnerPage() {
           setRelayTwoLegDiagnostics({
             requestId: quotePayload.requestId,
             statusEndpoint,
-            depositTxHash: resolution.transactionHash as `0x${string}`,
+            depositTxHash: depositResult as `0x${string}`,
             executionTxHash: statusResult.txHash,
             status: 'execution_failed',
             statusText,
@@ -1550,7 +1496,7 @@ export function RemoveOwnerPage() {
         setRelayTwoLegDiagnostics({
           requestId: quotePayload.requestId,
           statusEndpoint,
-          depositTxHash: resolution.transactionHash as `0x${string}`,
+          depositTxHash: depositResult as `0x${string}`,
           executionTxHash: statusResult.txHash,
           status: 'execution_succeeded',
           statusText,
@@ -1559,7 +1505,7 @@ export function RemoveOwnerPage() {
           setTxHash(statusResult.txHash)
           setPageNotice(
             `Owner removal execution confirmed (tx ${statusResult.txHash.slice(0, 10)}…). ` +
-              `Deposit tx ${resolution.transactionHash.slice(0, 10)}… was request-bound and matched.`,
+              `Deposit tx ${depositResult.slice(0, 10)}… was request-bound and matched.`,
           )
         } else {
           setPageNotice(

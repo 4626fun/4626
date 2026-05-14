@@ -74,6 +74,14 @@ type SubmitResponse = {
   entriesAvailable: number
 }
 
+type BurnCreditsResponse = {
+  spendRefId: string
+  consumed: number
+  creditsRemaining: number
+  creditsPerEntry: number
+  entriesAvailable: number
+}
+
 type CheckinResponse = {
   awarded: boolean
   awardedCredits: number
@@ -84,6 +92,11 @@ type CheckinResponse = {
 
 export type AmoeSigningWalletClient = {
   signMessage: (args: { message: string }) => Promise<Hex | string>
+}
+
+function deriveAmoeTwitterHandleFallback(wallet: Address): string {
+  const compact = wallet.toLowerCase().replace(/^0x/, '')
+  return `wallet_${compact.slice(0, 12)}`
 }
 
 function toErrorMessage(error: unknown, fallback: string): string {
@@ -352,12 +365,13 @@ export function AmoeEntryCard(props: {
         message: nonceData.message,
       })) as Hex
 
-      // PR 2 — server-relay only. The previous client-relay fallback was
-      // dropped: PR 1's `processAmoeEntry` is gated to a single relayer
-      // key on-chain, so client-signed transactions cannot succeed. The
-      // signed message above remains the off-chain auth + anti-replay
-      // artifact (verified server-side).
-      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit', {
+      const twitterHandle = deriveAmoeTwitterHandleFallback(nonceData.wallet)
+      const spendRefId = `amoe-ui:${nonceData.creatorCoin}:${nonceData.nonce}`
+
+      // ZK flow phase A: burn points and register burn intent.
+      // If the endpoint is disabled in an environment, we still attempt
+      // submit-zk below so legacy single-call mode can continue to work.
+      const burnRes = await apiFetch('/api/v1/lottery/amoe/burn-credits', {
         method: 'POST',
         withCredentials: true,
         headers: { 'Content-Type': 'application/json' },
@@ -366,17 +380,43 @@ export function AmoeEntryCard(props: {
           message: nonceData.message,
           signature,
           pointsBurned: requestedPoints,
+          nonce: nonceData.nonce,
+          twitterHandle,
+          spendRefId,
+        }),
+      })
+      const burnJson = parseJsonSafe<BurnCreditsResponse>(await burnRes.json().catch(() => null))
+      if (!burnRes.ok) {
+        const burnError = burnJson?.error || 'Burn credits failed'
+        if (burnError !== 'burn_credits_disabled') {
+          throw new Error(burnError)
+        }
+      }
+
+      // ZK flow phase B: submit proof-backed entry.
+      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit-zk', {
+        method: 'POST',
+        withCredentials: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorCoin: nonceData.creatorCoin,
+          message: nonceData.message,
+          signature,
+          pointsBurned: requestedPoints,
+          nonce: nonceData.nonce,
+          twitterHandle,
+          spendRefId,
         }),
       })
       const submitJson = parseJsonSafe<SubmitResponse>(await submitRes.json().catch(() => null))
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
-        throw new Error(submitJson?.error || 'Failed to submit AMOE entry')
+        throw new Error(submitJson?.error || 'Failed to submit AMOE ZK entry')
       }
 
       const tx = submitJson.data
       const hash = tx.txHash
       setTxHash(hash)
-      setStatusMessage('AMOE entry relayed by protocol. Waiting for confirmation…')
+      setStatusMessage('AMOE ZK entry relayed by protocol. Waiting for confirmation…')
 
       // Receipt confirmation is best-effort — if no public client is
       // configured we still surface the txHash so the user can follow up.
