@@ -310,6 +310,20 @@ export function RemoveOwnerPage() {
     setEventLog((prev) => [...prev, row].slice(-40))
   }
 
+  const resolveActiveWalletAccount = async (
+    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>,
+  ): Promise<`0x${string}`> => {
+    const accounts = (await request({ method: 'eth_accounts' })) as unknown
+    const first =
+      Array.isArray(accounts) && typeof accounts[0] === 'string' && /^0x[0-9a-fA-F]{40}$/.test(accounts[0])
+        ? (accounts[0].toLowerCase() as `0x${string}`)
+        : null
+    if (!first) {
+      throw new Error('No active wallet account found. Reconnect your external EOA and try again.')
+    }
+    return first
+  }
+
   const fetchPreview = async (index: number) => {
     if (!canonicalCswAddress || !ownerSignerAddress) {
       setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
@@ -458,12 +472,19 @@ export function RemoveOwnerPage() {
     setAaDepositDiagnostics(null)
     try {
       appendEvent(`paste_submit.deposit.start request=${preview.relay.requestId}`)
+      const activeFrom = await resolveActiveWalletAccount(request)
+      if (activeFrom !== ownerSignerAddress.toLowerCase()) {
+        throw new Error(
+          `Active wallet account ${activeFrom} does not match connected signer ${ownerSignerAddress.toLowerCase()}. ` +
+            'Switch wallet account to the connected EOA and retry.',
+        )
+      }
       appendEvent('paste_submit.deposit.mode=eth_sendTransaction_external_eoa')
       const depositResult = (await request({
         method: 'eth_sendTransaction',
         params: [
           {
-            from: ownerSignerAddress,
+            from: activeFrom,
             to: preview.relay.userCall.to,
             data: preview.relay.userCall.data,
             value: preview.relay.userCall.value,
@@ -543,6 +564,17 @@ export function RemoveOwnerPage() {
       | undefined
     if (!request) {
       setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+      return
+    }
+    if (!ownerSignerAddress || !canonicalCswAddress) {
+      setPageError('Connect a distinct external EOA signer first.')
+      return
+    }
+    if (ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()) {
+      setPageError(
+        'Non-paymaster relay funding requires an external EOA signer. ' +
+          'Your current signer matches the CSW (self-auth), which is paymaster-backed.',
+      )
       return
     }
     setBusy(true)
@@ -648,6 +680,13 @@ export function RemoveOwnerPage() {
             'Connect a distinct external EOA (funder) and use the external-signer lane so the deposit is broadcast as a plain EOA tx.',
         )
       }
+      const activeFrom = await resolveActiveWalletAccount(request)
+      if (activeFrom !== ownerSignerAddress.toLowerCase()) {
+        throw new Error(
+          `Active wallet account ${activeFrom} does not match connected signer ${ownerSignerAddress.toLowerCase()}. ` +
+            'Switch wallet account to the connected EOA and retry.',
+        )
+      }
 
       const depositValueHex = `0x${BigInt(quotePayload.txValueWei).toString(16)}` as `0x${string}`
       const quotedDepositCallData = (`0x49290c1c000000000000000000000000${canonicalCswAddress.slice(2).toLowerCase()}${quotePayload.requestId.slice(2)}` as `0x${string}`)
@@ -658,7 +697,7 @@ export function RemoveOwnerPage() {
         method: 'eth_sendTransaction',
         params: [
           {
-            from: canonicalCswAddress,
+            from: activeFrom,
             to: RELAY_DEPOSITORY_BASE,
             data: quotedDepositCallData,
             value: depositValueHex,
