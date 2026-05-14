@@ -59,6 +59,7 @@ type RelayQuoteExecutePayload = {
 }
 
 const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
+const RELAY_DEPOSIT_NATIVE_SELECTOR = '0x49290c1c'
 
 type RelayStatusCheckResult = {
   done: boolean
@@ -289,6 +290,21 @@ function validateRelayQuoteIsNativeOnly(raw: unknown): string | null {
     return `Relay paymentDetails currency is non-native (${paymentDetailsCurrency}). This flow only allows native ETH.`
   }
 
+  return null
+}
+
+function validatePreviewRelayUserCallIsNativeDepository(preview: RemoveOwnerPreview | null): string | null {
+  const userCall = preview?.relay?.userCall
+  if (!userCall) return 'missing relay user call in preview'
+  if (userCall.to.toLowerCase() !== RELAY_DEPOSITORY_BASE.toLowerCase()) {
+    return `target must be RelayDepository (got ${userCall.to})`
+  }
+  if (!userCall.data.toLowerCase().startsWith(RELAY_DEPOSIT_NATIVE_SELECTOR)) {
+    return `calldata must be depositNative (got selector ${userCall.data.slice(0, 10)})`
+  }
+  if (userCall.value === '0x0' || userCall.value === '0x') {
+    return 'value must be non-zero native ETH'
+  }
   return null
 }
 
@@ -1066,6 +1082,11 @@ export function RemoveOwnerPage() {
       setPageError('Paste and validate the signed payload before funding the relay depository.')
       return
     }
+    const previewRelayGuard = validatePreviewRelayUserCallIsNativeDepository(preview)
+    if (previewRelayGuard) {
+      setPageError(`Relay funding lane blocked: ${previewRelayGuard}.`)
+      return
+    }
     const request = (walletClient as any).request as
       | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
       | undefined
@@ -1124,6 +1145,13 @@ export function RemoveOwnerPage() {
             `wallet_sendCalls deposit did not surface an on-chain tx hash yet (bundle: ${sendCallsResult.callBundleId}).`,
           )
         }
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({
+            hash: resolution.transactionHash as `0x${string}`,
+            confirmations: 1,
+            timeout: 60_000,
+          })
+        }
         const shape = await verifyAARelayDepositShape({
           publicClient,
           txHash: resolution.transactionHash as `0x${string}`,
@@ -1158,6 +1186,13 @@ export function RemoveOwnerPage() {
         if (!depositResult || !/^0x([a-fA-F0-9]{64})$/.test(depositResult)) {
           throw new Error('Wallet did not return a valid Relay depository tx hash.')
         }
+        if (publicClient) {
+          await publicClient.waitForTransactionReceipt({
+            hash: depositResult as `0x${string}`,
+            confirmations: 1,
+            timeout: 60_000,
+          })
+        }
         const shape = await verifyAARelayDepositShape({
           publicClient,
           txHash: depositResult as `0x${string}`,
@@ -1173,10 +1208,7 @@ export function RemoveOwnerPage() {
         appendEvent('paste_submit.deposit.shape_check=ok')
         setDepositTxHash(depositResult)
         appendEvent(`paste_submit.deposit.tx=${depositResult}`)
-        if (publicClient) {
-          await publicClient.waitForTransactionReceipt({ hash: depositResult as `0x${string}` })
-          appendEvent('paste_submit.deposit.confirmed')
-        }
+        appendEvent('paste_submit.deposit.confirmed')
         setPageNotice(
           'Relay depository funding transaction sent via direct wallet tx fallback. Continue to step 5.',
         )
@@ -1284,6 +1316,10 @@ export function RemoveOwnerPage() {
       }
       appendEvent(`paste_submit.quote.request_id=${quotePayload.requestId}`)
       appendEvent(`paste_submit.quote.tx_value_wei=${quotePayload.txValueWei}`)
+      const previewRelayGuard = validatePreviewRelayUserCallIsNativeDepository(preview)
+      if (previewRelayGuard) {
+        throw new Error(`Preview relay call failed native-depository guard: ${previewRelayGuard}.`)
+      }
       const statusEndpoint = normalizeRelayStatusEndpoint(
         quotePayload.statusEndpoint,
         quotePayload.requestId,
@@ -1341,6 +1377,13 @@ export function RemoveOwnerPage() {
         throw new Error(
           `wallet_sendCalls did not return on-chain tx hash for request ${quotePayload.requestId}.`,
         )
+      }
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({
+          hash: resolution.transactionHash as `0x${string}`,
+          confirmations: 1,
+          timeout: 60_000,
+        })
       }
       const shape = await verifyAARelayDepositShape({
         publicClient,
