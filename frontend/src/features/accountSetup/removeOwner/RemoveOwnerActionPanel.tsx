@@ -13,7 +13,6 @@ type RemoveOwnerActionPanelProps = {
   previewLoading: boolean
   preview: RemoveOwnerPreview | null
   busy: boolean
-  isSelfAuthSession: boolean
   handleRemove: () => Promise<void>
   txHash: string | null
   pageNotice: string | null
@@ -27,7 +26,6 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
     previewLoading,
     preview,
     busy,
-    isSelfAuthSession,
     handleRemove,
     txHash,
     pageNotice,
@@ -210,15 +208,12 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
           <div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Recommended lane</div>
             <div className="text-xs font-medium text-emerald-100">
-              {isSelfAuthSession
-                ? 'Self-auth compatibility remove route'
-                : 'Relay hook-native remove route'}
+              Relay hook-native remove route
             </div>
           </div>
           <p className="text-[10px] text-emerald-100/80">
-            {isSelfAuthSession
-              ? 'Submit exact request-bound deposit (orderId/requestId + paymentDetails.amount), then require Relay success + owner-slot change before completion.'
-              : 'Fetch Relay quote via hook, execute via `executeQuote`, then require Relay success + owner-slot change before reporting completion.'}
+            Fetch Relay quote via hook, execute via `executeQuote`, then require
+            Relay success + owner-slot change before reporting completion.
           </p>
           <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-2.5">
             <div className="flex items-center justify-between text-xs">
@@ -226,11 +221,7 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>{preview ? 'done' : 'pending'}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span>
-                {isSelfAuthSession
-                  ? 'Step 2. Submit exact request-bound deposit'
-                  : 'Step 2. Execute Relay quote'}
-              </span>
+              <span>Step 2. Execute Relay quote</span>
               <span
                 className={
                   preview && !submitBlockedByMissingRequiredDeposit
@@ -258,12 +249,8 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               {submitBlockedByMissingRequiredDeposit
                 ? 'Blocked: missing required Relay deposit amount'
                 : busy
-                ? isSelfAuthSession
-                  ? 'Submitting exact request-bound deposit…'
-                  : 'Executing Relay quote…'
-                : isSelfAuthSession
-                  ? `Execute relay remove for owner index ${preview?.preflight.targetOwnerIndex ?? '?'} (self-auth mode)`
-                  : !preview
+                ? 'Executing Relay quote…'
+                : !preview
                     ? 'Select an owner above first'
                     : `Execute relay remove for owner index ${preview.preflight.targetOwnerIndex}`}
             </button>
