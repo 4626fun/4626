@@ -1238,14 +1238,19 @@ export async function executeHermitCommand(
     const attachment = inferPublicMediaAttachment(meme.url)
     const localReply = `${meme.caption}\n${meme.url}`
     const explicitSignalSource = classifyExplicitSignal(args)
-    const draft = await runPinataDraft(
-      buildPinataPromptForGmeow({
-        userPrompt: args,
-        memeCaption: meme.caption,
-        memeTags: meme.tags,
-        userPreferences,
-      }),
-    )
+    let draft: PinataChatResult | null = null
+    try {
+      draft = await runPinataDraft(
+        buildPinataPromptForGmeow({
+          userPrompt: args,
+          memeCaption: meme.caption,
+          memeTags: meme.tags,
+          userPreferences,
+        }),
+      )
+    } catch {
+      draft = null
+    }
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
     }

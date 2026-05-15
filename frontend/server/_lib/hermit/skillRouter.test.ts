@@ -162,6 +162,24 @@ describe('executeHermitCommand', () => {
     expect(result.reply.toLowerCase()).not.toContain('oauth token refresh failed')
   })
 
+  it('/gmeow falls back to local caption when pinata throws', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockRejectedValueOnce(new Error('socket hang up'))
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('cat laugh')
+    expect(result.reply).toContain('https://')
+  })
+
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
