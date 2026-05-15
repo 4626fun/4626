@@ -86,11 +86,11 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
             <div className="text-xs font-medium text-emerald-100">Relay two-leg remove route</div>
           </div>
           <p className="text-[10px] text-emerald-100/80">
-            Submit the Relay depository leg first, then wait for Relay execution + owner-slot change.
+            Submit Relay&apos;s quoted user transaction first, then wait for Relay execution + owner-slot change.
           </p>
           {!isSelfAuthSession ? (
             <div className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-100">
-              You are not in CSW self-auth mode. This flow sends the depository leg from your external EOA.
+              You are not in CSW self-auth mode. This flow sends Relay&apos;s quoted user transaction from your external EOA.
             </div>
           ) : null}
           <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-2.5">
@@ -99,7 +99,7 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>{preview ? 'done' : 'pending'}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span>Step 2. Submit Relay depository leg</span>
+              <span>Step 2. Submit Relay quoted user transaction</span>
               <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>
                 {preview ? 'ready' : 'blocked'}
               </span>
@@ -115,11 +115,12 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
             {isSelfAuthSession ? (
               <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
-                  EIP-5792 wallet_sendCalls lane
+                  Relay routed mode
                 </div>
                 <p className="leading-relaxed">
-                  Base App submits the Relay depository leg via wallet_sendCalls. Owner removal completes only after
-                  Relay executes the second leg and this page confirms the on-chain slot changed.
+                  This session is CSW self-auth. Relay routed submission currently requires an
+                  external owner signer because self-auth wallet_sendCalls estimation can revert
+                  before Relay receives Part 1.
                 </p>
               </div>
             ) : null}
@@ -130,15 +131,16 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
                 busy ||
                 !preview ||
                 previewLoading ||
-                !preview.preflight.simulation.ok
+                !preview.preflight.simulation.ok ||
+                isSelfAuthSession
               }
               onClick={() => void handleRemove()}
               className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy
-                ? 'Submitting relay depository leg…'
+                ? 'Submitting Relay quoted user transaction…'
                 : isSelfAuthSession
-                  ? `Submit relay remove for owner index ${preview?.preflight.targetOwnerIndex ?? '?'}`
+                  ? 'Switch to external owner signer to submit routed relay transaction'
                   : !preview
                     ? 'Select an owner above first'
                     : `Submit relay remove for owner index ${preview.preflight.targetOwnerIndex}`}

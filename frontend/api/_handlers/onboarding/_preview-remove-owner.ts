@@ -26,29 +26,9 @@ import { getRelayQuote } from '../../../server/_lib/relay/getQuote.js'
 
 const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 
-// RelayDepository on Base mainnet. Smart-wallet flows MUST call this directly
-// (not via RelayRouterV3) because the router's user-transaction shape that
-// /quote/v2 returns is the EOA path — it requires the caller to be an EOA and
-// fails Base App's UserOp simulation. The May 5 owner[3] flow confirmed this:
-// the working Part 1 was a CSW UserOp whose executeBatch called
-// RelayDepository.depositNative(CSW, requestId) directly with value attached.
-const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const RELAY_QUOTE_MIN_WEI = 1_000_000_000_000n
-
-const RELAY_DEPOSITORY_ABI = [
-  {
-    type: 'function',
-    name: 'depositNative',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'depositor', type: 'address' },
-      { name: 'id', type: 'bytes32' },
-    ],
-    outputs: [],
-  },
-] as const
+const DEFAULT_RELAY_QUOTE_OUTPUT_WEI = '10000000000000' // 0.00001 ETH
 
 const CSW_OWNER_ABI = [
   {
@@ -170,6 +150,22 @@ type RemoveOwnerPreviewResponse = {
   }
 }
 
+function encodeExecuteWithoutChainIdValidation(innerCallData: `0x${string}`): `0x${string}` {
+  return encodeFunctionData({
+    abi: [
+      {
+        type: 'function',
+        name: 'executeWithoutChainIdValidation',
+        inputs: [{ name: 'calls', type: 'bytes[]' }],
+        outputs: [],
+        stateMutability: 'payable',
+      },
+    ] as const,
+    functionName: 'executeWithoutChainIdValidation',
+    args: [[innerCallData]],
+  })
+}
+
 function resolveBaseRpcUrl(): string {
   const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
   return envUrl || 'https://mainnet.base.org'
@@ -232,6 +228,52 @@ async function deriveRelayQuoteTxsGasLimit(params: {
   } catch {
     return Number(DEFAULT_RELAY_QUOTE_GAS_LIMIT)
   }
+}
+
+function resolveRelayQuoteInputWei(): string {
+  const configured = (process.env.RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI ?? '').trim()
+  if (/^[1-9][0-9]*$/.test(configured)) return configured
+  return DEFAULT_RELAY_QUOTE_OUTPUT_WEI
+}
+
+function parseRelayQuotedInputAmountWei(raw: unknown): bigint | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const details = obj.details
+  if (!details || typeof details !== 'object') return null
+  const currencyIn = (details as Record<string, unknown>).currencyIn
+  if (!currencyIn || typeof currencyIn !== 'object') return null
+  const amount = (currencyIn as Record<string, unknown>).amount
+  if (typeof amount !== 'string' || !/^[1-9][0-9]*$/.test(amount)) return null
+  try {
+    const wei = BigInt(amount)
+    return wei > 0n ? wei : null
+  } catch {
+    return null
+  }
+}
+
+function parseRelayQuotedFeeAmountWei(raw: unknown): bigint | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const fees = obj.fees
+  if (!fees || typeof fees !== 'object') return null
+  const feeObj = fees as Record<string, unknown>
+  const parts = [feeObj.gas, feeObj.fixed, feeObj.price]
+  let total = 0n
+  let seen = false
+  for (const part of parts) {
+    if (typeof part === 'string' && /^[0-9]+$/.test(part)) {
+      total += BigInt(part)
+      seen = true
+      continue
+    }
+    if (typeof part === 'number' && Number.isFinite(part) && part >= 0) {
+      total += BigInt(Math.trunc(part))
+      seen = true
+    }
+  }
+  return seen && total > 0n ? total : null
 }
 
 async function simulateRemoveCall(params: {
@@ -358,9 +400,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<never>)
     }
 
-    const selectedByHeuristic: 'removeOwnerAtIndex' | 'removeLastOwner' =
-      ownerIndex === highestPopulatedOwnerIndex ? 'removeLastOwner' : 'removeOwnerAtIndex'
-
     const removeOwnerAtIndexData = encodeFunctionData({
       abi: CSW_OWNER_ABI,
       functionName: 'removeOwnerAtIndex',
@@ -385,25 +424,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }),
     ])
 
-    let selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner' = selectedByHeuristic
-    let selectedBy: 'heuristic' | 'simulation' = 'heuristic'
-    if (!removeOwnerAtIndexSimulation.ok && removeLastOwnerSimulation.ok) {
-      selectedFunction = 'removeLastOwner'
-      selectedBy = 'simulation'
-    } else if (removeOwnerAtIndexSimulation.ok && !removeLastOwnerSimulation.ok) {
-      selectedFunction = 'removeOwnerAtIndex'
-      selectedBy = 'simulation'
-    }
-    const data = selectedFunction === 'removeLastOwner' ? removeLastOwnerData : removeOwnerAtIndexData
-    const selectedSimulation =
-      selectedFunction === 'removeLastOwner' ? removeLastOwnerSimulation : removeOwnerAtIndexSimulation
+    // Force canonical remove-owner flow to removeOwnerAtIndex. We still compute
+    // removeLastOwner simulation for diagnostics, but never route execution to it.
+    const selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner' = 'removeOwnerAtIndex'
+    const selectedBy: 'heuristic' | 'simulation' = 'heuristic'
+    const data = removeOwnerAtIndexData
+    const selectedSimulation = removeOwnerAtIndexSimulation
+    const relayDestinationData = encodeExecuteWithoutChainIdValidation(data)
 
     // ─────────────────────────────────────────────────────────────────────
     // RELAY QUOTE — single user transaction, two-part on-chain flow
     //
     // We ask Relay's /quote/v2 to orchestrate executing our mutation calldata
-    // on Base. Relay returns ONE transaction the user must submit (a deposit
-    // into RelayRouterV3, which multicalls RelayDepository.depositNative).
+    // on Base. Relay returns ONE transaction the user must submit (typically a
+    // router transaction that performs the request-bound deposit).
     // After that single tx lands, Relay's solver picks up the deposit event,
     // pre-signs and submits Part 2 (our destination mutation) from its own
     // bundler infrastructure, in the same block.
@@ -422,14 +456,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     try {
-      // Relay should own the final fee math. We first request an exact quote
-      // for zero destination output (owner mutation sends no value), then only
-      // fall back to a seeded amount when Relay returns a zero-value user tx.
+      // Use Relay's own quote as the source of truth for required funding.
+      // Deposit-specified transaction flows require EXACT_OUTPUT. For owner
+      // mutations we request a deterministic same-chain output amount
+      // (historically 0.00001 ETH) and then fund exactly the returned
+      // userTransaction.value for that requestId.
       const relayQuoteTxsGasLimit = await deriveRelayQuoteTxsGasLimit({
         publicClient,
         cswAddress,
         data,
       })
+      const relayQuoteOutputWei = resolveRelayQuoteInputWei()
       const quoteParams = {
         user: cswAddress,
         recipient: cswAddress,
@@ -439,59 +476,45 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         txs: [
           {
             to: cswAddress,
-            data,
+            data: relayDestinationData,
             value: '0',
           },
         ],
         txsGasLimit: relayQuoteTxsGasLimit,
       }
-      let quote = await getRelayQuote({
+      const quote = await getRelayQuote({
         ...quoteParams,
-        amount: '0',
+        amount: relayQuoteOutputWei,
       })
       if (quote.ok) {
-        const userValue = quote.extract.userTransaction?.value
-        if (!userValue || !/^[1-9][0-9]*$/.test(userValue)) {
-          // Keep fallback tiny and deterministic for test loops; we only need a
-          // non-zero destination amount so Relay returns a non-zero user tx.
-          const fallbackAmountWei = RELAY_QUOTE_MIN_WEI.toString(10)
-          quote = await getRelayQuote({
-            ...quoteParams,
-            amount: fallbackAmountWei,
-          })
-        }
-      }
-      if (quote.ok) {
         const e = quote.extract
-        if (e.requestId && e.userTransaction) {
-          // Relay's /quote returns a router-targeted user transaction designed
-          // for EOA submission. That path fails Base App's UserOp simulation
-          // (the wallet shows "error generating transaction"). For CSW flows
-          // we MUST call RelayDepository.depositNative directly instead, the
-          // way the May 5 reference flow did it.
-          //
-          // We take the requestId from Relay's quote (so their solver can
-          // still match the deposit event), use the value Relay quoted (so
-          // their fee math is satisfied), and construct our own depositNative
-          // calldata against the canonical depository address.
-          const depositValueBig = BigInt(e.userTransaction.value)
-          const depositNativeData = encodeFunctionData({
-            abi: RELAY_DEPOSITORY_ABI,
-            functionName: 'depositNative',
-            args: [cswAddress, e.requestId],
-          })
+        if (
+          e.requestId &&
+          e.userTransaction &&
+          typeof e.userTransaction.value === 'string' &&
+          /^[1-9][0-9]*$/.test(e.userTransaction.value)
+        ) {
+          // Primary path: use Relay's quoted user transaction as-is.
+          const quotedValueBig = BigInt(e.userTransaction.value)
+          const quotedInputAmountWei = parseRelayQuotedInputAmountWei(e.raw)
+          const quotedFeeAmountWei = parseRelayQuotedFeeAmountWei(e.raw)
+          const fundedValueWei =
+            [quotedValueBig, quotedInputAmountWei ?? 0n, quotedFeeAmountWei ?? 0n].reduce(
+              (max, curr) => (curr > max ? curr : max),
+              0n,
+            )
           relay = {
             requestId: e.requestId,
             userCall: {
-              to: RELAY_DEPOSITORY_BASE,
-              data: depositNativeData,
-              value: `0x${depositValueBig.toString(16)}` as `0x${string}`,
+              to: e.userTransaction.to,
+              data: e.userTransaction.data,
+              value: `0x${fundedValueWei.toString(16)}` as `0x${string}`,
             },
             feeUsd: e.feeUsd,
           }
         } else {
           relayQuoteError =
-            'Relay quote returned no requestId or user transaction; cannot orchestrate the flow.'
+            'Relay quote missing a valid non-zero user transaction; refusing to construct a synthetic fallback.'
         }
       } else {
         relayQuoteError = quote.error

@@ -364,15 +364,25 @@ export function findForbiddenRelayCurrency(raw: unknown): string | null {
 export function validatePreviewRelayUserCallIsNativeDepository(preview: RemoveOwnerPreview | null): string | null {
   const userCall = preview?.relay?.userCall
   if (!userCall) return 'missing relay user call in preview'
-  if (userCall.to.toLowerCase() !== RELAY_DEPOSITORY_BASE.toLowerCase()) {
-    return `target must be RelayDepository (got ${userCall.to})`
+  if (!/^0x[0-9a-fA-F]{40}$/.test(userCall.to)) {
+    return `relay user call target is not a valid address (${userCall.to})`
   }
-  if (!userCall.data.toLowerCase().startsWith(RELAY_DEPOSIT_NATIVE_SELECTOR)) {
-    return `calldata must be depositNative (got selector ${userCall.data.slice(0, 10)})`
+  if (!/^0x[0-9a-fA-F]+$/.test(userCall.data) || userCall.data.length < 10) {
+    return 'relay user call calldata must include a function selector'
   }
-  if (userCall.value === '0x0' || userCall.value === '0x') {
+  let valueWei: bigint
+  try {
+    valueWei = BigInt(userCall.value)
+  } catch {
+    return `relay user call value is not valid hex wei (${userCall.value})`
+  }
+  if (valueWei <= 0n) {
     return 'value must be non-zero native ETH'
   }
+  // Accept either Relay's quoted router user-tx OR our depository fallback lane.
+  // Depository fallback shape is identified by:
+  //   to == RelayDepository && selector == depositNative (0x49290c1c)
+  // Router quote shape has a different target/selector and is also valid.
   return null
 }
 

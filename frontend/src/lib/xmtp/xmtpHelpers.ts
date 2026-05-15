@@ -170,7 +170,12 @@ export function isScwSignatureValidationError(message: string): boolean {
 
 export function isOpfsAccessHandleError(message: string): boolean {
   const m = String(message || '').toLowerCase()
-  return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
+  return (
+    m.includes('createsyncaccesshandle') ||
+    m.includes('nomodificationallowederror') ||
+    m.includes('failed to initialize opfs') ||
+    m.includes('active xmtp clients or opfs instances')
+  )
 }
 
 // ---------------------------------------------------------------------------

@@ -313,6 +313,8 @@ const XMTP_ENV: 'production' | 'dev' | 'local' =
     : 'production'
 const XMTP_APP_VERSION = '4626.fun-web'
 const XMTP_CONNECT_FAILURE_COOLDOWN_MS = 5_000
+const XMTP_TAB_LOCK_STALE_MS = 20_000
+const XMTP_TAB_LOCK_HEARTBEAT_MS = 5_000
 const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
 const inMemoryEncKeys = new Map<string, string>()
 
@@ -326,6 +328,41 @@ function autoConnectStorageKey(address: string): string {
 
 function signerTypeStorageKey(address: string): string {
   return `cv:xmtp:signerType:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function tabLockStorageKey(): string {
+  return `cv:xmtp:tabLock:${XMTP_ENV}`
+}
+
+type XmtpTabLockRecord = {
+  owner: string
+  ts: number
+  address: string
+}
+
+function readTabLockRecord(): XmtpTabLockRecord | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(tabLockStorageKey())
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<XmtpTabLockRecord> | null
+    if (!parsed || typeof parsed !== 'object') return null
+    if (typeof parsed.owner !== 'string' || typeof parsed.ts !== 'number' || typeof parsed.address !== 'string') {
+      return null
+    }
+    return {
+      owner: parsed.owner,
+      ts: parsed.ts,
+      address: parsed.address,
+    }
+  } catch {
+    return null
+  }
+}
+
+function isTabLockStale(lock: XmtpTabLockRecord | null): boolean {
+  if (!lock) return true
+  return Date.now() - lock.ts > XMTP_TAB_LOCK_STALE_MS
 }
 
 function installationProvisionedStorageKey(address: string): string {
@@ -727,12 +764,104 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
+  const resetLocalStateInFlightRef = useRef(false)
   const connectCooldownUntilRef = useRef(0)
+  const tabLockOwnerRef = useRef<string>(
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `tab-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  )
+  const tabLockAddressRef = useRef<string | null>(null)
+  const tabLockHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const resolvedIdentityByWalletRef = useRef<
     Map<string, { identityAddress: string; isCanonicalSmartWallet: boolean }>
   >(new Map())
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
   const identityAddressRef = useRef<string | null>(null)
+
+  const stopTabLockHeartbeat = useCallback((): void => {
+    if (tabLockHeartbeatRef.current) {
+      clearInterval(tabLockHeartbeatRef.current)
+      tabLockHeartbeatRef.current = null
+    }
+  }, [])
+
+  const writeTabLock = useCallback((address: string): void => {
+    if (typeof window === 'undefined') return
+    const payload: XmtpTabLockRecord = {
+      owner: tabLockOwnerRef.current,
+      ts: Date.now(),
+      address,
+    }
+    try {
+      window.localStorage.setItem(tabLockStorageKey(), JSON.stringify(payload))
+      tabLockAddressRef.current = address
+    } catch {
+      // ignore storage errors
+    }
+  }, [])
+
+  const releaseTabLock = useCallback((): void => {
+    if (typeof window === 'undefined') return
+    const existing = readTabLockRecord()
+    if (!existing) return
+    if (existing.owner !== tabLockOwnerRef.current) return
+    try {
+      window.localStorage.removeItem(tabLockStorageKey())
+    } catch {
+      // ignore storage errors
+    }
+    tabLockAddressRef.current = null
+  }, [])
+
+  const acquireTabLock = useCallback((address: string): { ok: true } | { ok: false; holder: XmtpTabLockRecord | null } => {
+    if (typeof window === 'undefined') return { ok: true }
+    const existing = readTabLockRecord()
+    const selfOwner = tabLockOwnerRef.current
+    const canTake =
+      !existing ||
+      isTabLockStale(existing) ||
+      existing.owner === selfOwner
+    if (!canTake) {
+      return { ok: false, holder: existing }
+    }
+    writeTabLock(address)
+    const confirmed = readTabLockRecord()
+    if (confirmed && confirmed.owner === selfOwner) {
+      return { ok: true }
+    }
+    return { ok: false, holder: confirmed }
+  }, [writeTabLock])
+
+  const startTabLockHeartbeat = useCallback((address: string): void => {
+    stopTabLockHeartbeat()
+    writeTabLock(address)
+    tabLockHeartbeatRef.current = setInterval(() => {
+      const existing = readTabLockRecord()
+      if (!existing || existing.owner !== tabLockOwnerRef.current) {
+        stopTabLockHeartbeat()
+        return
+      }
+      writeTabLock(address)
+    }, XMTP_TAB_LOCK_HEARTBEAT_MS)
+  }, [stopTabLockHeartbeat, writeTabLock])
+
+  // ------- cleanup -------
+  const cleanup = useCallback(async () => {
+    try { convoStreamRef.current?.end() } catch {}
+    try { msgStreamRef.current?.end() } catch {}
+    for (const s of perConvoStreamsRef.current.values()) {
+      try { s.end() } catch {}
+    }
+    perConvoStreamsRef.current.clear()
+    perConvoCbRef.current.clear()
+    try { clientRef.current?.close() } catch {}
+    clientRef.current = null
+    conversationsRef.current = []
+    identityAddressRef.current = null
+    stopTabLockHeartbeat()
+    releaseTabLock()
+  }, [releaseTabLock, stopTabLockHeartbeat])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -741,7 +870,21 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       mountedRef.current = false
       void cleanup()
     }
-  }, [])
+  }, [cleanup])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onUnload = () => {
+      stopTabLockHeartbeat()
+      releaseTabLock()
+    }
+    window.addEventListener('beforeunload', onUnload)
+    window.addEventListener('pagehide', onUnload)
+    return () => {
+      window.removeEventListener('beforeunload', onUnload)
+      window.removeEventListener('pagehide', onUnload)
+    }
+  }, [releaseTabLock, stopTabLockHeartbeat])
 
   // Reset when wallet changes
   useEffect(() => {
@@ -757,22 +900,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       setLocalStateResetRequired(false)
     }
-  }, [isConnected, address])
-
-  // ------- cleanup -------
-  async function cleanup() {
-    try { convoStreamRef.current?.end() } catch {}
-    try { msgStreamRef.current?.end() } catch {}
-    for (const s of perConvoStreamsRef.current.values()) {
-      try { s.end() } catch {}
-    }
-    perConvoStreamsRef.current.clear()
-    perConvoCbRef.current.clear()
-      try { clientRef.current?.close() } catch {}
-      clientRef.current = null
-      conversationsRef.current = []
-      identityAddressRef.current = null
-  }
+  }, [isConnected, address, cleanup])
 
   const markLocalStateInvalid = useCallback((errorMessage: string): void => {
     try { convoStreamRef.current?.end() } catch {}
@@ -793,8 +921,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     setConversations([])
     conversationsRef.current = []
     identityAddressRef.current = null
+    stopTabLockHeartbeat()
+    releaseTabLock()
     console.warn('[xmtp] local state reset required:', errorMessage)
-  }, [])
+  }, [releaseTabLock, stopTabLockHeartbeat])
 
   // ------- resolve address → display name (Basename / truncated) -------
   const nameCache = useRef<Map<string, string>>(new Map())
@@ -1075,6 +1205,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
 
     connectInFlightRef.current = true
+    let tabLockAcquired = false
     let xmtpIdentityAddress = String(address).toLowerCase()
     try {
       setError(null)
@@ -1083,6 +1214,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
       const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
+      const lockResult = acquireTabLock(normalizedIdentity)
+      if (!lockResult.ok) {
+        setStatus('error')
+        setError(
+          'Messaging is active in another tab/window for this browser profile. ' +
+            'Close the other chat tab or wait for its lock to expire, then retry.',
+        )
+        return
+      }
+      tabLockAcquired = true
       identityAddressRef.current = normalizedIdentity
       if (mountedRef.current) setIdentityAddress(normalizedIdentity)
       xmtpDebug('[xmtp] Using identity for connect:', xmtpIdentityAddress)
@@ -1279,6 +1420,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setInstallationLimitInboxId(null)
           setLocalStateResetRequired(false)
         }
+        startTabLockHeartbeat(xmtpIdentityAddress)
         writeInstallationProvisioned(xmtpIdentityAddress)
 
         // Auto-create a DM conversation with the Keepr agent so it appears
@@ -1655,6 +1797,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       console.error('[xmtp] connect error:', e)
       if (mountedRef.current) {
         const msg = e instanceof Error ? e.message : 'Failed to connect to XMTP'
+        if (isOpfsAccessHandleError(msg)) {
+          setStatus('error')
+          setError(
+            'XMTP local storage is locked by another active tab/window. ' +
+              'Close other 4626 tabs/windows using chat, then retry.',
+          )
+          return
+        }
         if (isLocalXmtpStateInvalidError(msg)) {
           markLocalStateInvalid(msg)
           return
@@ -1672,8 +1822,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     } finally {
       connectInFlightRef.current = false
+      if (!clientRef.current && tabLockAcquired) {
+        stopTabLockHeartbeat()
+        releaseTabLock()
+      }
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat])
 
   const resetInstallations = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
@@ -1858,24 +2012,32 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   const resetLocalState = useCallback(async () => {
     if (!address || !walletClient) throw new Error('Connect wallet first.')
-    const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
-
-    setStatus('connecting')
-    setError(null)
-    setInstallationLimitInboxId(null)
-    setLocalStateResetRequired(false)
-    connectCooldownUntilRef.current = 0
-    connectInFlightRef.current = false
-
-    clearAutoConnect(targetIdentity)
-    clearStoredSignerType(targetIdentity)
-    clearStoredEncKeyHex(targetIdentity)
-    clearInstallationProvisioned(targetIdentity)
-    await cleanup()
-
+    if (resetLocalStateInFlightRef.current) {
+      throw new Error('Local XMTP reset already in progress. Please wait.')
+    }
+    resetLocalStateInFlightRef.current = true
     try {
+      const targetIdentity = identityAddressRef.current ?? identityAddress ?? address
+
+      setStatus('connecting')
+      setError(null)
+      setInstallationLimitInboxId(null)
+      setLocalStateResetRequired(false)
+      connectCooldownUntilRef.current = 0
+      connectInFlightRef.current = false
+
+      await cleanup()
+
       const deleted = await deleteXmtpOpfsDatabaseFilesWithRetry()
       xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
+      // Only clear local installation/signer state after OPFS cleanup succeeds.
+      // This preserves restoration markers if cleanup is blocked by lock errors.
+      clearAutoConnect(targetIdentity)
+      clearStoredSignerType(targetIdentity)
+      clearStoredEncKeyHex(targetIdentity)
+      clearInstallationProvisioned(targetIdentity)
+
+      await connect('user')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
       const isOpfsLock = isOpfsAccessHandleError(msg)
@@ -1888,10 +2050,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       )
       setLocalStateResetRequired(true)
       throw err
+    } finally {
+      resetLocalStateInFlightRef.current = false
     }
-
-    await connect('user')
-  }, [address, walletClient, identityAddress, connect])
+  }, [address, walletClient, identityAddress, connect, cleanup])
 
   // ------- disconnect -------
   const disconnect = useCallback(() => {
@@ -1904,7 +2066,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     conversationsRef.current = []
     identityAddressRef.current = null
     setInboxId(null)
-  }, [])
+  }, [cleanup])
 
   // ------- decode message helper -------
   function decodedToChat(msg: DecodedMessage, selfInboxId: string): ChatMessage {
