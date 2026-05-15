@@ -61,7 +61,7 @@ function readKnowledgeDocs(): KnowledgeDoc[] {
     docs.push({
       title: '4626 Basics',
       body:
-        '4626 uses ERC-4626 vaults on Base. Keepr supports /keepr status, /cre commands, wallet intelligence, and reputation tools.',
+        '4626 uses ERC-4626 vaults on Base. Keepr supports /keepr status, /keepr operational commands, wallet intelligence, and reputation tools.',
     })
   }
 

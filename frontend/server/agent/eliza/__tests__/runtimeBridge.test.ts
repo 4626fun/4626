@@ -52,8 +52,8 @@ describe('runtime bridge', () => {
   it('composes session-aware state and ranks matching actions', async () => {
     const { createRuntimeBridge } = await import('../runtimeBridge.ts')
 
-    const creAction = {
-      name: 'CRE_TRIGGER',
+    const keeprAction = {
+      name: 'KEEPR_TRIGGER',
       validate: vi.fn(async () => true),
       handler: vi.fn(),
     }
@@ -62,7 +62,7 @@ describe('runtime bridge', () => {
       validate: vi.fn(async () => true),
       handler: vi.fn(),
     }
-    const plugins = [{ name: 'test-plugin', actions: [genericAction, creAction] }] as any
+    const plugins = [{ name: 'test-plugin', actions: [genericAction, keeprAction] }] as any
 
     const bridge = createRuntimeBridge({
       agentKey: 'creator-1',
@@ -86,7 +86,7 @@ describe('runtime bridge', () => {
       isAdmin: true,
       source: 'xmtp',
     })
-    expect(ranked.map((r) => r.action.name)).toEqual(['CRE_TRIGGER', 'GENERIC_ACTION'])
+    expect(ranked.map((r) => r.action.name)).toEqual(['KEEPR_TRIGGER', 'GENERIC_ACTION'])
     expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0)
   })
 
@@ -110,7 +110,7 @@ describe('runtime bridge', () => {
       plugins,
       swarm: {
         role: 'trader',
-        capabilities: ['uniswap', 'cre'],
+        capabilities: ['uniswap', 'keeper'],
       },
     })
 

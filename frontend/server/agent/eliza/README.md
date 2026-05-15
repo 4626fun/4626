@@ -25,7 +25,7 @@ Important boundary:
 In this repo, ElizaOS provides the agent-shaped abstraction layer:
 
 - `Plugin`: command families and context providers
-- `Action`: executable behaviors like `/keepr`, `/cre`, `/coin`, `/intel`
+- `Action`: executable behaviors like `/keepr`, `/coin`, `/intel`
 - `Provider`: context injection for vault state, docs, channel metadata
 - `Memory` and `State`: message history, summaries, semantic recall, continuity
 - action ranking and selection before LLM fallback
