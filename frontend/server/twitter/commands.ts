@@ -134,6 +134,12 @@ type TwitterOauthConfig = {
   accessSecret: string
 }
 
+type TweetMediaInput = {
+  url: string
+  filename?: string | null
+  contentType?: string | null
+}
+
 type TwitterVerifiedAccount = {
   screenName: string | null
   userId: string | null
@@ -320,10 +326,122 @@ async function verifyTwitterConfig(config: TwitterOauthConfig): Promise<TwitterC
   }
 }
 
+async function downloadTweetMedia(input: TweetMediaInput): Promise<
+  | { ok: true; bytes: Uint8Array; filename: string; contentType: string }
+  | { ok: false; response: string }
+> {
+  const url = String(input.url ?? '').trim()
+  if (!/^https:\/\//i.test(url)) {
+    return { ok: false, response: 'Twitter media URL must be a public HTTPS URL.' }
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { accept: 'image/png,image/jpeg,image/webp,image/gif,*/*' },
+    })
+    if (!response.ok) {
+      return { ok: false, response: `Failed to download Twitter media (${response.status}).` }
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    const bytes = new Uint8Array(arrayBuffer)
+    if (bytes.byteLength === 0) {
+      return { ok: false, response: 'Downloaded Twitter media was empty.' }
+    }
+    const contentType = String(input.contentType ?? response.headers.get('content-type') ?? 'image/png')
+      .split(';', 1)[0]
+      .trim()
+      .toLowerCase()
+    if (!['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'].includes(contentType)) {
+      return { ok: false, response: `Unsupported Twitter media content-type: ${contentType || 'unknown'}` }
+    }
+    const pathName = (() => {
+      try {
+        return new URL(url).pathname.split('/').pop() ?? ''
+      } catch {
+        return ''
+      }
+    })()
+    const ext =
+      contentType === 'image/png'
+        ? 'png'
+        : contentType === 'image/webp'
+          ? 'webp'
+          : contentType === 'image/gif'
+            ? 'gif'
+            : 'jpg'
+    const filename =
+      String(input.filename ?? '').trim() ||
+      (pathName && /\.[A-Za-z0-9]+$/.test(pathName) ? pathName : `twitter-media.${ext}`)
+    return { ok: true, bytes, filename, contentType: contentType === 'image/jpg' ? 'image/jpeg' : contentType }
+  } catch (error) {
+    logger.error('[x/media] download error', error)
+    return { ok: false, response: 'Failed to download Twitter media due to a network/runtime error.' }
+  }
+}
+
+async function uploadTweetMedia(params: {
+  config: TwitterOauthConfig
+  media: TweetMediaInput
+}): Promise<{ ok: true; mediaId: string } | TwitterCommandFailure> {
+  const downloaded = await downloadTweetMedia(params.media)
+  if (!downloaded.ok) return downloaded
+
+  const url = 'https://upload.twitter.com/1.1/media/upload.json'
+  try {
+    const authHeader = oauth1AuthorizationHeader({
+      method: 'POST',
+      url,
+      config: params.config,
+    })
+    const form = new FormData()
+    const blob = new Blob([downloaded.bytes], { type: downloaded.contentType })
+    form.append('media', blob, downloaded.filename)
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: authHeader,
+      },
+      body: form,
+    })
+
+    if (!response.ok) {
+      const errorBody = await response.text()
+      const detail = parseTwitterApiError(errorBody)
+      logger.error('[x/media] upload failed', { status: response.status, detail })
+      return {
+        ok: false,
+        response: detail
+          ? `Twitter media upload failed (${response.status}): ${detail}`
+          : `Twitter media upload failed (${response.status}).`,
+      }
+    }
+
+    const body = (await response.json()) as any
+    const mediaId =
+      typeof body?.media_id_string === 'string'
+        ? body.media_id_string
+        : typeof body?.media_id === 'number'
+          ? String(body.media_id)
+          : null
+    if (!mediaId) {
+      logger.warn('[x/media] upload response missing media id', { body })
+      return { ok: false, response: 'Twitter media upload succeeded, but no media id was returned.' }
+    }
+
+    return { ok: true, mediaId }
+  } catch (error) {
+    logger.error('[x/media] upload error', error)
+    return { ok: false, response: 'Failed to upload Twitter media due to a network/runtime error.' }
+  }
+}
+
 async function postTweet(params: {
   text: string
   groupId: string
   senderWallet: Address
+  media?: TweetMediaInput | null
 }): Promise<TwitterCommandResult> {
   const cfg = readTwitterOauthConfig()
   if (!cfg.ok) return cfg
@@ -360,13 +478,26 @@ async function postTweet(params: {
       config: cfg.config,
     })
 
+    let mediaIds: string[] | undefined
+    if (params.media) {
+      const uploaded = await uploadTweetMedia({
+        config: cfg.config,
+        media: params.media,
+      })
+      if (!uploaded.ok) return uploaded
+      mediaIds = [uploaded.mediaId]
+    }
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         Authorization: authHeader,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text: tweetText }),
+      body: JSON.stringify({
+        text: tweetText,
+        ...(mediaIds ? { media: { media_ids: mediaIds } } : {}),
+      }),
     })
 
     if (!response.ok) {
@@ -406,6 +537,7 @@ async function postTweet(params: {
         tweetUrl,
         text: tweetText,
         actor: params.senderWallet,
+        mediaUrl: params.media?.url ?? null,
       },
     }
   } catch (error) {
@@ -418,6 +550,7 @@ export async function postTweetFromSystem(params: {
   text: string
   groupId: string
   senderWallet: Address
+  media?: TweetMediaInput | null
 }): Promise<TwitterCommandResult> {
   return postTweet(params)
 }
