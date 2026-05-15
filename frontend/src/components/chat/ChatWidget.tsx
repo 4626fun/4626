@@ -114,7 +114,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
 
   const maybeConnectMessaging = useCallback(() => {
     if (shouldAutoConnectMessaging(status)) {
-      void connect()
+      void connect('auto')
     }
   }, [connect, status])
 
@@ -237,7 +237,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
 
       if (detail.kind === 'dm' && status !== 'connected') {
         setPendingOpenRequest(detail)
-        void connect()
+        void connect('user')
         return
       }
 
@@ -257,7 +257,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
 
   useEffect(() => {
     if (!pendingOpenRequest || status !== 'idle' || !isConnected) return
-    void connect()
+    void connect('user')
   }, [connect, isConnected, pendingOpenRequest, status])
 
   useEffect(() => {

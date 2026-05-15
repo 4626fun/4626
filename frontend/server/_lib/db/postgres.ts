@@ -220,6 +220,8 @@ function resetCachedPool(): void {
 }
 
 const QUERY_RETRY_BASE_MS = 250
+let lastPoolAcquireTimeoutWarnAtMs = Number.NEGATIVE_INFINITY
+const POOL_ACQUIRE_TIMEOUT_WARN_THROTTLE_MS = 5 * 60_000
 
 function getQueryRetryCount(): number {
   return parsePositiveInt(process.env.POSTGRES_QUERY_RETRY_COUNT) ?? 2
@@ -247,9 +249,19 @@ async function withSessionRetry<T>(
         const jitter = 0.5 + Math.random() * 0.5
         const delayMs = QUERY_RETRY_BASE_MS * Math.pow(2, attempt) * jitter
         const reason = sessionModeMaxClients ? 'MaxClientsInSessionMode' : 'pool acquire timeout'
-        console.warn(
-          `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
-        )
+        if (sessionModeMaxClients) {
+          console.warn(
+            `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+          )
+        } else {
+          const now = Date.now()
+          if (now - lastPoolAcquireTimeoutWarnAtMs >= POOL_ACQUIRE_TIMEOUT_WARN_THROTTLE_MS) {
+            lastPoolAcquireTimeoutWarnAtMs = now
+            console.warn(
+              `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+            )
+          }
+        }
         await sleep(delayMs)
       }
     }
@@ -390,16 +402,18 @@ export async function getDb(): Promise<DbPool | null> {
           // unhandled error and crashes the process — which is exactly what
           // takes down the hermit Railway service. Attach a handler that logs
           // the failure and lets the pool reconnect on the next query.
-          pool.on('error', (err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err)
-            const code = String((err as any)?.code ?? '').trim() || undefined
-            console.warn('[postgres] pool client error (background)', { code, message })
-            // If the pool has been emitting failures for an idle client,
-            // drop the cached pool so the next getDb() call rebuilds it.
-            if (cachedRawPool === pool) {
-              resetCachedPool()
-            }
-          })
+          if (typeof (pool as { on?: unknown }).on === 'function') {
+            pool.on('error', (err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err)
+              const code = String((err as any)?.code ?? '').trim() || undefined
+              console.warn('[postgres] pool client error (background)', { code, message })
+              // If the pool has been emitting failures for an idle client,
+              // drop the cached pool so the next getDb() call rebuilds it.
+              if (cachedRawPool === pool) {
+                resetCachedPool()
+              }
+            })
+          }
           cachedRawPool = pool
           const queryRetries = getQueryRetryCount()
           const db: DbPool = {

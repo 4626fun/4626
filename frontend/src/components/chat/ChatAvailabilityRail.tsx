@@ -565,7 +565,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
     const handleToggleRequest = () => {
       setExpanded((current) => {
         const next = !current
-        if (next && status === 'idle') void connect()
+        if (next && status === 'idle') void connect('user')
         return next
       })
     }
@@ -665,7 +665,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
           type="button"
           onClick={() => {
             setExpanded(true)
-            if (status === 'idle') void connect()
+            if (status === 'idle') void connect('user')
           }}
           className="group relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-black/65 text-zinc-300 shadow-[0_18px_46px_-24px_rgba(0,0,0,0.9)] backdrop-blur-xl transition-[border-color,background,transform] duration-200 hover:-translate-y-px hover:border-brand-primary/35 hover:bg-black/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary/60"
           aria-label="Open XMTP chat"

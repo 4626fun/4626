@@ -302,7 +302,7 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {!localStateResetRequired ? (
                 <button
                   type="button"
-                  onClick={connect}
+                  onClick={() => void connect('user')}
                   className="px-4 py-2 rounded-lg bg-brand-primary/20 text-brand-primary text-sm font-medium hover:bg-brand-primary/30 transition-colors"
                 >
                   {hasWalletIdentity ? `Connect Messaging (${xmtpModeLabel})` : 'Connect Messaging'}

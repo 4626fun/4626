@@ -67,6 +67,7 @@ import { encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
 // ---------------------------------------------------------------------------
 
 export type XmtpStatus = 'idle' | 'signing' | 'connecting' | 'connected' | 'error'
+type ConnectIntent = 'auto' | 'user'
 
 export type ChatMessageStatus = 'sending' | 'sent' | 'failed'
 export type ChatMessageContentType = 'text' | 'json' | 'code'
@@ -134,7 +135,7 @@ type XmtpContextValue = {
   installationLimitInboxId: string | null
   /** True when the local XMTP OPFS installation is no longer accepted by the network. */
   localStateResetRequired: boolean
-  connect: () => Promise<void>
+  connect: (intent?: ConnectIntent) => Promise<void>
   /** Emergency recovery: revoke installations to free a slot, then reconnect. */
   resetInstallations: () => Promise<void>
   /** Clears only this browser's local XMTP database and reconnects with a fresh installation. */
@@ -325,6 +326,37 @@ function autoConnectStorageKey(address: string): string {
 
 function signerTypeStorageKey(address: string): string {
   return `cv:xmtp:signerType:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function installationProvisionedStorageKey(address: string): string {
+  return `cv:xmtp:installationProvisioned:${XMTP_ENV}:${address.toLowerCase()}`
+}
+
+function readInstallationProvisioned(address: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return window.localStorage.getItem(installationProvisionedStorageKey(address)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeInstallationProvisioned(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(installationProvisionedStorageKey(address), '1')
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearInstallationProvisioned(address: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(installationProvisionedStorageKey(address))
+  } catch {
+    // ignore storage errors
+  }
 }
 
 function readStoredSignerType(address: string): 'SCW' | 'EOA' | null {
@@ -519,62 +551,6 @@ const XMTP_DEFAULT_LOG_LEVEL = ((LogLevel as any).Error ?? LogLevel.Warn) as Log
 function xmtpDebug(...args: unknown[]): void {
   if (!XMTP_VERBOSE_LOGS) return
   console.log(...args)
-}
-
-/**
- * Auto-revoke the single oldest XMTP installation to free exactly 1 slot.
- *
- * IMPORTANT: each revocation consumes 1 of the inbox's 256 lifetime updates.
- * We revoke only the minimum needed (1) to stay as frugal as possible.
- * Uses the static `Client.revokeInstallations` — no live client required.
- */
-async function autoRevokeOldestInstallation(
-  signer: Signer,
-  inboxId: string,
-): Promise<void> {
-  xmtpDebug('[xmtp] Fetching installations for inbox', inboxId)
-  const states = await (Client as any).fetchInboxStates(
-    [inboxId],
-    XMTP_ENV as any,
-  ) as any[]
-  const state = Array.isArray(states) ? states[0] : null
-  const installsRaw = Array.isArray(state?.installations)
-    ? state.installations
-    : []
-  const installs = installsRaw
-    .map((i: any) => {
-      const bytes = i?.bytes ?? i
-      const createdAt =
-        typeof i?.createdAt === 'string' && i.createdAt
-          ? Date.parse(i.createdAt)
-          : Number.NaN
-      return {
-        bytes,
-        createdAt: Number.isFinite(createdAt) ? createdAt : null,
-      }
-    })
-    .filter((i: any) => Boolean(i.bytes))
-
-  if (installs.length === 0) return
-
-  // Pick just the single oldest installation to revoke — 1 update spent.
-  const sorted = [...installs].sort((a, b) => {
-    const aa = a.createdAt ?? 0
-    const bb = b.createdAt ?? 0
-    return aa - bb // oldest first
-  })
-  const toRevoke = [sorted[0].bytes]
-
-  xmtpDebug(
-    `[xmtp] Revoking 1 oldest of ${installs.length} installation(s) (256-update budget)…`,
-  )
-  await (Client as any).revokeInstallations(
-    signer,
-    inboxId,
-    toRevoke,
-    XMTP_ENV as any,
-  )
-  xmtpDebug('[xmtp] Auto-revocation complete — freed 1 slot')
 }
 
 // ---------------------------------------------------------------------------
@@ -1042,7 +1018,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     return resolved
   }, [accountContext.activeAccount, accountContext.activeAccountType, accountContext.cswAddress, publicClient])
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (intent: ConnectIntent = 'auto') => {
     if (!address || !walletClient) return
     if (clientRef.current) return // already connected
     if (connectInFlightRef.current) return
@@ -1091,6 +1067,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identifier: xmtpIdentityAddress as `0x${string}`,
         identifierKind: IdentifierKind.Ethereum,
       }
+      const installationAlreadyProvisioned = readInstallationProvisioned(xmtpIdentityAddress)
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
@@ -1278,6 +1255,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setInstallationLimitInboxId(null)
           setLocalStateResetRequired(false)
         }
+        writeInstallationProvisioned(xmtpIdentityAddress)
 
         // Auto-create a DM conversation with the Keepr agent so it appears
         // in the user's chat list.  We do NOT send any message on behalf of
@@ -1436,6 +1414,22 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         }
       } else {
         xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
+        if (installationAlreadyProvisioned) {
+          setStatus('error')
+          setError(
+            'XMTP installation was previously provisioned for this wallet, but no local XMTP database was found. ' +
+            'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+            'If you intentionally want a fresh installation on this browser, use "Reset local messaging state".',
+          )
+          return
+        }
+        if (intent !== 'user') {
+          setStatus('idle')
+          setError(
+            'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',
+          )
+          return
+        }
       }
 
       // ── Phase 1b: Client.build succeeded — set up conversations ──
@@ -1504,26 +1498,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               clientRef.current = null
 
               if (regMsg.toLowerCase().includes('uninitialized')) {
-                console.warn(
-                  '[xmtp] Restored installation cannot be registered (stale OPFS state). ' +
-                  'Clearing OPFS database and falling through to Client.create for a fresh installation.',
+                setStatus('error')
+                setError(
+                  'XMTP restored local state but identity registration failed. ' +
+                  'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
+                  'Use "Reset local messaging state" only if you intentionally want a fresh installation.',
                 )
-                try {
-                  const opfs = await Opfs.create()
-                  try {
-                    const files = await opfs.listFiles()
-                    for (const f of files) {
-                      if (f.endsWith('.db3')) {
-                        const ok = await opfs.deleteFile(f)
-                        xmtpDebug(`[xmtp] Deleted stale OPFS file: ${f} (${ok})`)
-                      }
-                    }
-                  } finally { opfs.close() }
-                } catch (opfsErr) {
-                  console.warn('[xmtp] OPFS cleanup failed:', opfsErr)
-                }
-                // Fall through — execution will exit the catch/if blocks and
-                // reach the Client.create path below with a clean OPFS.
+                return
               } else {
                 setStatus('error')
                 setError(
@@ -1559,22 +1540,35 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       xmtpDebug('[xmtp] No reusable local installation found — falling through to Client.create (will require wallet signature)')
 
-      // Helper: attempt Client.create, auto-revoking stale installations on 10/10.
+      if (installationAlreadyProvisioned) {
+        setStatus('error')
+        setError(
+          'XMTP could not restore a previously provisioned local installation. ' +
+          'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+          'Use "Reset local messaging state" if you intentionally want to recreate this browser installation.',
+        )
+        return
+      }
+      if (intent !== 'user') {
+        setStatus('idle')
+        setError(
+          'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',
+        )
+        return
+      }
+
+      // Helper: attempt Client.create without auto-revoking installations.
+      // Revoke operations consume finite inbox update budget (max 256 lifetime),
+      // so we only allow revocation through explicit user-triggered resetInstallations().
       const tryCreate = async (activeSigner: Signer, dbKey: Uint8Array): Promise<Client> => {
         try {
           return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
         } catch (createErr) {
           const errMsg = createErr instanceof Error ? createErr.message : String(createErr)
           if (!isInstallationLimitError(errMsg)) throw createErr
-
-          // 10/10 hit — auto-revoke stale installations and retry once.
-          const limitInboxId = extractInstallationLimitInboxId(errMsg)
-          if (!limitInboxId) throw createErr
-
-          xmtpDebug('[xmtp] 10/10 installation limit hit — revoking oldest installation to free 1 slot…')
-          setStatus('connecting')
-          await autoRevokeOldestInstallation(activeSigner, limitInboxId)
-          return await Client.create(activeSigner, { ...baseOptions, dbEncryptionKey: dbKey })
+          throw new Error(
+            `${errMsg} Automatic XMTP installation revocation is disabled to protect the inbox update budget. Use "Reset XMTP installations" to revoke manually if needed.`,
+          )
         }
       }
 
@@ -1625,11 +1619,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         throw setupErr
       }
 
-      // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here.
-      // Each revocation consumes 1 of the inbox's 256 lifetime updates.
-      // Proactive bulk revocation would burn updates far too fast. Instead we
-      // revoke only on-demand: when the 10/10 limit is actually hit (inside
-      // tryCreate above) or via the manual resetInstallations() escape hatch.
+      // NOTE: we intentionally do NOT call revokeAllOtherInstallations() here,
+      // and we do not auto-revoke on 10/10 during connect.
+      // Each revocation consumes 1 of the inbox's 256 lifetime updates, so
+      // revocation is only allowed via manual resetInstallations().
     } catch (e) {
       connectCooldownUntilRef.current = Date.now() + XMTP_CONNECT_FAILURE_COOLDOWN_MS
       console.error('[xmtp] connect error:', e)
@@ -1827,7 +1820,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       setInstallationLimitInboxId(null)
       setError(null)
-      await connect()
+      await connect('user')
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to reset XMTP installations'
       setStatus('error')
@@ -1850,6 +1843,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     clearAutoConnect(targetIdentity)
     clearStoredSignerType(targetIdentity)
     clearStoredEncKeyHex(targetIdentity)
+    clearInstallationProvisioned(targetIdentity)
     await cleanup()
 
     try {
@@ -1863,7 +1857,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       throw err
     }
 
-    await connect()
+    await connect('user')
   }, [address, walletClient, identityAddress, connect])
 
   // ------- disconnect -------

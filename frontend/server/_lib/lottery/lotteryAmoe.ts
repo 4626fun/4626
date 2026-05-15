@@ -316,6 +316,21 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
       PRIMARY KEY (wallet_address, checkin_date)
     );
   `
+  await db.sql`
+    ALTER TABLE lottery_amoe_daily_xmtp_checkins ENABLE ROW LEVEL SECURITY;
+  `
+  await db.sql`
+    DROP POLICY IF EXISTS "deny_public_rest" ON lottery_amoe_daily_xmtp_checkins;
+  `
+  await db.sql`
+    CREATE POLICY "deny_public_rest"
+    ON lottery_amoe_daily_xmtp_checkins
+    AS RESTRICTIVE
+    FOR ALL
+    TO public
+    USING (false)
+    WITH CHECK (false);
+  `
 
   // AMOE-eligibility view. Mirrors
   // `supabase/migrations/20260427180000_amoe_eligible_points_view.sql`.
@@ -328,7 +343,7 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
   // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION. If you
   // change one, update the other.
   await db.sql`
-    CREATE OR REPLACE VIEW points_amoe_eligible_balance AS
+    CREATE OR REPLACE VIEW points_amoe_eligible_balance WITH (security_invoker = true) AS
     SELECT
       signup_id,
       COALESCE(

@@ -1798,7 +1798,9 @@ function flushWsErrorRollup(): void {
   const repeats = bridgeAuthState.wsErrorRepeats
   bridgeAuthState.wsErrorFlushTimer = null
   if (repeats > 1) {
-    logger.warn('[alfaclub-chat] ws_error:rollup', {
+    const benign = isBenignWsErrorMessage(bridgeAuthState.wsErrorLastMessage)
+    const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+    emit('[alfaclub-chat] ws_error:rollup', {
       roomId: bridgeAuthState.wsErrorRoomId,
       repeats,
       windowStartedAt: bridgeAuthState.wsErrorFirstAt
@@ -1817,6 +1819,7 @@ function flushWsErrorRollup(): void {
 function warnWsError(params: { roomId: string; message: string; now?: number }): void {
   const now = params.now ?? Date.now()
   const truncated = params.message.slice(0, 180)
+  const benign = isBenignWsErrorMessage(truncated)
 
   if (
     bridgeAuthState.wsErrorRepeats > 0 &&
@@ -1832,7 +1835,8 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   bridgeAuthState.wsErrorRoomId = params.roomId
   bridgeAuthState.wsErrorLastMessage = truncated
 
-  logger.warn('[alfaclub-chat] ws_error', {
+  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+  emit('[alfaclub-chat] ws_error', {
     roomId: params.roomId,
     repeats: 1,
     windowStartedAt: new Date(now).toISOString(),
@@ -1848,6 +1852,38 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
     ;(timer as { unref: () => void }).unref()
   }
   bridgeAuthState.wsErrorFlushTimer = timer
+}
+
+function isBenignWsErrorMessage(message: string | null | undefined): boolean {
+  const normalized = String(message ?? '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return false
+  return (
+    normalized.includes('received network error or non-101 status code') ||
+    normalized.includes('non-101')
+  )
+}
+
+function isBenignWsCloseEvent(params: {
+  code: number | null
+  reason: string | null | undefined
+  now?: number
+}): boolean {
+  const code = params.code
+  const reason = String(params.reason ?? '')
+    .trim()
+    .toLowerCase()
+  const now = params.now ?? Date.now()
+
+  const likelyHandshakeClose =
+    (code === null || code === 1005 || code === 1006) &&
+    (!reason || reason.includes('non-101') || reason.includes('network error'))
+
+  if (!likelyHandshakeClose) return false
+  if (!isBenignWsErrorMessage(bridgeAuthState.wsErrorLastMessage)) return false
+  if (bridgeAuthState.wsErrorFirstAt <= 0) return false
+  return now - bridgeAuthState.wsErrorFirstAt <= LOG_ROLLUP_WINDOW_MS
 }
 
 function noteWsCloseEvent(params: {
@@ -1866,7 +1902,13 @@ function noteWsCloseEvent(params: {
   if (now - bridgeAuthState.wsCloseChurnLastLoggedAt <= LOG_ROLLUP_WINDOW_MS) return
 
   bridgeAuthState.wsCloseChurnLastLoggedAt = now
-  logger.warn('[alfaclub-chat] ws_close_churn', {
+  const benign = isBenignWsCloseEvent({
+    code: params.code,
+    reason: params.reason,
+    now,
+  })
+  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+  emit('[alfaclub-chat] ws_close_churn', {
     roomId: params.roomId,
     closesInWindow,
     windowMs: WS_CLOSE_CHURN_WINDOW_MS,
@@ -2202,7 +2244,12 @@ function ensureLiveCommandSocket(params: {
     applySocketBackoff()
     const closeCode = typeof event?.code === 'number' ? event.code : null
     const closeReason = typeof event?.reason === 'string' ? event.reason.slice(0, 120) : ''
-    logger.warn('[alfaclub-chat] ws_close', {
+    const benign = isBenignWsCloseEvent({
+      code: closeCode,
+      reason: closeReason,
+    })
+    const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+    emit('[alfaclub-chat] ws_close', {
       roomId: params.roomId,
       code: closeCode,
       reason: closeReason,

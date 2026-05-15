@@ -571,6 +571,9 @@ export default defineConfig(({ command }) => {
     modulePreload: buildTelegramLinkStandalone ? false : undefined,
     minify: buildTelegramLinkStandalone ? false : 'esbuild',
     sourcemap: enableSourcemap,
+    // The app intentionally ships a few large route chunks (wallet/auth/deploy).
+    // Keep the warning threshold aligned with the current split strategy so CI logs stay actionable.
+    chunkSizeWarningLimit: 4000,
     rollupOptions: {
       input: buildInputs,
       output: {

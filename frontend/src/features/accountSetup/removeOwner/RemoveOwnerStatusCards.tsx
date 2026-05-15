@@ -1,6 +1,6 @@
 import { formatEther } from 'viem'
 
-import type { AADepositDiagnostics, RelayTwoLegDiagnostics } from '@/lib/removeOwner/removeOwnerHelpers'
+import type { AADepositDiagnostics } from '@/lib/removeOwner/removeOwnerHelpers'
 
 type PatternLockStatus = {
   state: 'locked' | 'unlocked' | 'pending'
@@ -15,22 +15,13 @@ type LastErrorDetail = {
   rawBody: string | null
 }
 
-type SignerMismatch = {
-  recoveredRaw: string | null
-  recoveredEip191: string | null
-  claimedOwnerIndex: number | null
-}
-
 type RemoveOwnerStatusCardsProps = {
   txHash: string | null
-  depositTxHash: string | null
-  relayTwoLegDiagnostics: RelayTwoLegDiagnostics | null
   patternLockStatus: PatternLockStatus
   strictTraceEnabled: boolean
   aaDepositDiagnostics: AADepositDiagnostics | null
   pageNotice: string | null
   pageError: string | null
-  signerMismatch: SignerMismatch | null
   lastErrorDetail: LastErrorDetail | null
   eventLog: string[]
 }
@@ -38,14 +29,11 @@ type RemoveOwnerStatusCardsProps = {
 export function RemoveOwnerStatusCards(props: RemoveOwnerStatusCardsProps) {
   const {
     txHash,
-    depositTxHash,
-    relayTwoLegDiagnostics,
     patternLockStatus,
     strictTraceEnabled,
     aaDepositDiagnostics,
     pageNotice,
     pageError,
-    signerMismatch,
     lastErrorDetail,
     eventLog,
   } = props
@@ -58,80 +46,6 @@ export function RemoveOwnerStatusCards(props: RemoveOwnerStatusCardsProps) {
           <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noreferrer" className="font-mono underline">
             {txHash}
           </a>
-        </div>
-      ) : null}
-
-      {depositTxHash ? (
-        <div className="rounded-xl border border-emerald-400/20 bg-emerald-500/5 p-3 text-xs text-emerald-100 break-all">
-          Relay depository funding tx:{' '}
-          <a
-            href={`https://basescan.org/tx/${depositTxHash}`}
-            target="_blank"
-            rel="noreferrer"
-            className="font-mono underline"
-          >
-            {depositTxHash}
-          </a>
-        </div>
-      ) : null}
-
-      {relayTwoLegDiagnostics ? (
-        <div className="rounded-xl border border-violet-400/25 bg-violet-500/5 p-3 text-[11px] text-violet-100 space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-violet-200/80">Relay Two-Leg Status</div>
-          <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <div>
-              <dt className="text-[10px] text-violet-200/70">requestId</dt>
-              <dd className="font-mono break-all">{relayTwoLegDiagnostics.requestId}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-violet-200/70">status</dt>
-              <dd className="font-mono">{relayTwoLegDiagnostics.status}</dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-violet-200/70">deposit tx (leg 1)</dt>
-              <dd className="font-mono break-all">
-                {relayTwoLegDiagnostics.depositTxHash ? (
-                  <a
-                    href={`https://basescan.org/tx/${relayTwoLegDiagnostics.depositTxHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                  >
-                    {relayTwoLegDiagnostics.depositTxHash}
-                  </a>
-                ) : (
-                  'pending'
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] text-violet-200/70">execution tx (leg 2)</dt>
-              <dd className="font-mono break-all">
-                {relayTwoLegDiagnostics.executionTxHash ? (
-                  <a
-                    href={`https://basescan.org/tx/${relayTwoLegDiagnostics.executionTxHash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="underline"
-                  >
-                    {relayTwoLegDiagnostics.executionTxHash}
-                  </a>
-                ) : (
-                  'pending'
-                )}
-              </dd>
-            </div>
-            <div className="sm:col-span-2">
-              <dt className="text-[10px] text-violet-200/70">status endpoint</dt>
-              <dd className="font-mono break-all">{relayTwoLegDiagnostics.statusEndpoint}</dd>
-            </div>
-            {relayTwoLegDiagnostics.statusText ? (
-              <div className="sm:col-span-2">
-                <dt className="text-[10px] text-violet-200/70">relay status text</dt>
-                <dd className="font-mono">{relayTwoLegDiagnostics.statusText}</dd>
-              </div>
-            ) : null}
-          </dl>
         </div>
       ) : null}
 
@@ -287,41 +201,6 @@ export function RemoveOwnerStatusCards(props: RemoveOwnerStatusCardsProps) {
       {pageError ? (
         <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">
           {pageError}
-        </div>
-      ) : null}
-
-      {signerMismatch ? (
-        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-3 text-[11px] text-amber-100 space-y-2">
-          <div className="text-[10px] uppercase tracking-[0.18em] text-amber-200/80">Signer not installed on CSW</div>
-          <p className="leading-relaxed">
-            The signature your wallet returned recovers to an address that&apos;s not stored at any owner slot on this
-            CSW. Coinbase Wallet&apos;s self-auth session key has likely rotated and the new key isn&apos;t installed.
-            The EntryPoint will reject this UserOp with <code className="font-mono">AA24 signature error</code>.
-          </p>
-          <div className="space-y-1 font-mono break-all">
-            {signerMismatch.recoveredRaw ? (
-              <div>
-                <span className="text-[10px] text-amber-200/60">recovered (raw): </span>
-                {signerMismatch.recoveredRaw}
-              </div>
-            ) : null}
-            {signerMismatch.recoveredEip191 ? (
-              <div>
-                <span className="text-[10px] text-amber-200/60">recovered (eip-191): </span>
-                {signerMismatch.recoveredEip191}
-              </div>
-            ) : null}
-            {signerMismatch.claimedOwnerIndex != null ? (
-              <div>
-                <span className="text-[10px] text-amber-200/60">wrapper claimed ownerIndex: </span>
-                {signerMismatch.claimedOwnerIndex}
-              </div>
-            ) : null}
-          </div>
-          <p className="text-[10px] text-amber-200/80 leading-relaxed">
-            Recommended fix: enable the “Sign with passkey” toggle above and retry. Owner[0] is a passkey, which uses
-            WebAuthn (not personal_sign) and is unaffected by session-key rotation.
-          </p>
         </div>
       ) : null}
 

@@ -247,6 +247,33 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(FakeWebSocket.instances.length).toBeGreaterThan(before)
   })
 
+  it('logs benign non-101 websocket closes at info level', () => {
+    const flags = makeFlags()
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+
+    const socket = latestFakeSocket()
+    expect(socket).toBeDefined()
+
+    socket?.emit('error', { message: 'Received network error or non-101 status code.' })
+    socket?.emit('close', { code: 1006, reason: '' })
+
+    const wsCloseWarns = loggerMock.warn.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_close',
+    )
+    const wsCloseInfos = loggerMock.info.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_close',
+    )
+
+    expect(wsCloseWarns).toHaveLength(0)
+    expect(wsCloseInfos).toHaveLength(1)
+  })
+
   it('rolls up duplicate room-history auth fallback warnings within 60 seconds', async () => {
     mockHistoryStatus(401)
 

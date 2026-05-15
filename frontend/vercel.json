@@ -1,5 +1,5 @@
 {
-  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build:highmem",
+  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build",
   "devCommand": "pnpm run dev",
   "installCommand": "pnpm install --frozen-lockfile",
   "ignoreCommand": "bash scripts/vercel-ignore.sh",

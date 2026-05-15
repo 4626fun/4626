@@ -82,6 +82,8 @@ const bridgeAuthHealth: AlfaClubBridgeAuthHealthSnapshot = {
 }
 
 let bridgeStorageWarnLogged = false
+let lastHealthWriteWarnByKey: Partial<Record<HealthRowKey, number>> = {}
+const HEALTH_WRITE_WARN_THROTTLE_MS = 10 * 60_000
 
 /**
  * Writer names that the auth path is allowed to produce. Anything else is
@@ -388,10 +390,15 @@ async function writeHealthRow(
     // even if the health row write is rejected (e.g. RLS quirk on the
     // runtime role). Log code only, not the value.
     const code = (err as { code?: string } | null)?.code
-    logger.warn('[alfaclub-auth-health] health row write failed; continuing', {
-      key,
-      code: typeof code === 'string' ? code : null,
-    })
+    const now = Date.now()
+    const lastWarnAt = lastHealthWriteWarnByKey[key] ?? Number.NEGATIVE_INFINITY
+    if (now - lastWarnAt >= HEALTH_WRITE_WARN_THROTTLE_MS) {
+      lastHealthWriteWarnByKey[key] = now
+      logger.warn('[alfaclub-auth-health] health row write failed; continuing', {
+        key,
+        code: typeof code === 'string' ? code : null,
+      })
+    }
     return false
   }
 }
@@ -663,6 +670,7 @@ export function _resetBridgeAuthHealthForTests(): void {
   bridgeAuthHealth.suppressedSocketAttempts = 0
   bridgeAuthHealth.socketBackoffMs = 0
   bridgeStorageWarnLogged = false
+  lastHealthWriteWarnByKey = {}
 }
 
 /** For tests only — health row keys. */
