@@ -822,10 +822,12 @@ const creHelpAction: Action = {
 // Plugin export
 // ---------------------------------------------------------------------------
 
-export const crePlugin: Plugin = {
+export const keeprOpsPlugin: Plugin = {
   name: '@4626/plugin-keepr',
   description: 'Keeper operations — observe vault/auction/Solana status and trigger keeper actions on demand.',
   actions: [creHelpAction, creObserveAction, creTriggerAction],
 }
+
+export { keeprOpsPlugin as crePlugin }
 
 export default crePlugin

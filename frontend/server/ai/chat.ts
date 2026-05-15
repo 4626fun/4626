@@ -291,7 +291,7 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       { lensPlugin },
       { walletIntelPlugin },
       { reputationPlugin },
-      { crePlugin },
+      { keeprOpsPlugin },
       { knowledgePlugin },
     ] = await Promise.all([
       import('../agent/eliza/plugins/keepr/index.js'),
@@ -311,7 +311,7 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       lensPlugin,
       walletIntelPlugin,
       reputationPlugin,
-      crePlugin,
+      keeprOpsPlugin,
       knowledgePlugin,
     ]
     const bridge = createRuntimeBridge({
