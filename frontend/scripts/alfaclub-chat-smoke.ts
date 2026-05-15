@@ -32,6 +32,8 @@ type AlfaHistoryResponse = {
   messages?: AlfaHistoryMessage[]
 }
 
+type SmokePreset = 'default' | 'gmeow'
+
 function usage(): void {
   process.stdout.write(`Usage:
   pnpm -C frontend exec tsx --env-file=.env scripts/alfaclub-chat-smoke.ts \\
@@ -48,12 +50,15 @@ Required:
 Optional:
   --origin <url>            App/API origin (default APP_ORIGIN or https://4626.fun)
   --room <id>               AlfaClub room id (default 1043)
+  --preset <name>           Smoke preset: default | gmeow
   --command <text>          Command to send (default "/alfa status")
   --ws-url <url>            WebSocket URL (default wss://ws.alfaclub.app)
   --api-url <url>           AlfaClub API URL (default https://api.alfaclub.app)
   --poll-ms <ms>            Poll interval for reply check (default 3000)
   --timeout-ms <ms>         Total wait for reply (default 30000)
   --expect-text <value>     Require reply text to contain this substring (case-insensitive)
+  --forbid-text <value>     Fail if a detected reply contains this substring (repeatable by re-running with different flag values only via wrapper scripts)
+  --require-url             Require the detected reply text to contain an http/https URL
   --skip-rotate             Skip POST /api/v1/alfaclub/chat-token rotation
 
 Env requirements:
@@ -95,7 +100,18 @@ function toPositiveInt(value: string, fallback: number): number {
 
 function isCommandText(text: string): boolean {
   const t = text.trim().toLowerCase()
-  return t.startsWith('/alfa')
+  return t.startsWith('/alfa') || t.startsWith('/gmeow') || t.startsWith('/hermit') || t.startsWith('/meme')
+}
+
+function parseSmokePreset(raw: string): SmokePreset {
+  const value = raw.trim().toLowerCase()
+  if (!value) return 'default'
+  if (value === 'default' || value === 'gmeow') return value
+  throw new Error(`Invalid --preset: ${raw}`)
+}
+
+function looksLikeUrl(text: string): boolean {
+  return /https?:\/\//i.test(text)
 }
 
 function looksLikePlaceholderToken(value: string): boolean {
@@ -227,12 +243,15 @@ async function main(): Promise<void> {
     getArg('--origin', String(process.env.APP_ORIGIN ?? '').trim() || 'https://4626.fun'),
   )
   const roomId = getArg('--room', '1043')
-  const command = getArg('--command', '/alfa status') || '/alfa status'
+  const preset = parseSmokePreset(getArg('--preset', 'default'))
+  const command = getArg('--command', preset === 'gmeow' ? '/gmeow' : '/alfa status') || (preset === 'gmeow' ? '/gmeow' : '/alfa status')
   const wsUrl = getArg('--ws-url', 'wss://ws.alfaclub.app')
   const apiUrl = getArg('--api-url', 'https://api.alfaclub.app')
   const pollMs = toPositiveInt(getArg('--poll-ms', '3000'), 3000)
-  const timeoutMs = toPositiveInt(getArg('--timeout-ms', '30000'), 30000)
+  const timeoutMs = toPositiveInt(getArg('--timeout-ms', preset === 'gmeow' ? '45000' : '30000'), preset === 'gmeow' ? 45000 : 30000)
   const expectText = getArg('--expect-text', '').trim().toLowerCase()
+  const forbidText = getArg('--forbid-text', preset === 'gmeow' ? 'Hermit access denied' : '').trim().toLowerCase()
+  const requireUrl = hasFlag('--require-url') || preset === 'gmeow'
   const skipRotate = hasFlag('--skip-rotate')
 
   if (!jwt) throw new Error('Missing --jwt')
@@ -245,9 +264,15 @@ async function main(): Promise<void> {
   if (!command.trim().startsWith('/')) {
     throw new Error('Command must start with "/" (e.g. /alfa status)')
   }
-  process.stdout.write(`[alfaclub-smoke] origin=${appOrigin} room=${roomId} command=${JSON.stringify(command)}\n`)
+  process.stdout.write(`[alfaclub-smoke] preset=${preset} origin=${appOrigin} room=${roomId} command=${JSON.stringify(command)}\n`)
   if (expectText) {
     process.stdout.write(`[alfaclub-smoke] expecting reply text containing ${JSON.stringify(expectText)}\n`)
+  }
+  if (forbidText) {
+    process.stdout.write(`[alfaclub-smoke] forbidding reply text containing ${JSON.stringify(forbidText)}\n`)
+  }
+  if (requireUrl) {
+    process.stdout.write('[alfaclub-smoke] requiring reply text to include a URL\n')
   }
 
   if (!skipRotate) {
@@ -325,11 +350,16 @@ async function main(): Promise<void> {
 
     const nonCommandFresh = fresh.filter((m) => !isCommandText(String(m.text ?? '')))
     if (nonCommandFresh.length > 0) {
-      const matching = !expectText
-        ? nonCommandFresh
-        : nonCommandFresh.filter((m) =>
-            String(m.text ?? '').toLowerCase().includes(expectText),
-          )
+      const matching = nonCommandFresh.filter((m) => {
+        const text = String(m.text ?? '')
+        const normalized = text.toLowerCase()
+        if (expectText && !normalized.includes(expectText)) return false
+        if (forbidText && normalized.includes(forbidText)) {
+          throw new Error(`Forbidden reply text detected: ${JSON.stringify(text.slice(0, 220))}`)
+        }
+        if (requireUrl && !looksLikeUrl(text)) return false
+        return true
+      })
       if (matching.length === 0) {
         continue
       }
