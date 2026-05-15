@@ -553,14 +553,15 @@ export function ExploreCreators() {
   }, [baseDisplayCoins])
 
   const profileQueries = useQueries({
-    queries: profileIdentifiers.map(({ coinKey, identifier, immediateUserkey }) => ({
+    queries: profileIdentifiers.map(({ coinKey, identifier }) => ({
       queryKey: ['explore', 'creators', 'ethos-profile-userkey', coinKey, identifier],
       queryFn: async () => {
         if (!identifier) return null
         const profile = await fetchZoraProfile(identifier)
         return buildEthosSocialUserkeyFromZoraProfile(profile)
       },
-      enabled: Boolean(identifier && !immediateUserkey),
+      // Prefer social userkeys when available; wallet-address userkeys are fallback only.
+      enabled: Boolean(identifier),
       staleTime: 6 * 60 * 60 * 1000,
       retry: 1,
     })),
@@ -569,7 +570,7 @@ export function ExploreCreators() {
   const coinEthosUserkeys = useMemo(() => {
     const out = new Map<string, string>()
     profileIdentifiers.forEach((entry, index) => {
-      const userkey = entry.immediateUserkey ?? profileQueries[index]?.data ?? null
+      const userkey = profileQueries[index]?.data ?? entry.immediateUserkey ?? null
       if (userkey) out.set(entry.coinKey, userkey)
     })
     return out
@@ -593,7 +594,7 @@ export function ExploreCreators() {
       if (!hasServerEthosScore) continue
       out.set(key, {
         coinKey: key,
-        userkey: deriveImmediateEthosUserkey(coin),
+        userkey: coinEthosUserkeys.get(key) ?? deriveImmediateEthosUserkey(coin),
         score: {
           score: Number(coin.ethosScore),
           level: typeof coin.ethosLevel === 'string' ? coin.ethosLevel : null,
