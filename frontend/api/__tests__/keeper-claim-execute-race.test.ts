@@ -28,7 +28,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 
 import markSettledHandler from '../_handlers/keeper/_markSettled.ts'
 
-describe('CRE explicit intent: claim/execute race settlement gate', () => {
+describe('keeper explicit intent: claim/execute race settlement gate', () => {
   const VAULT = '0x1111111111111111111111111111111111111111'
   const AUTH = { authorization: 'Bearer test-keepr-key' }
 

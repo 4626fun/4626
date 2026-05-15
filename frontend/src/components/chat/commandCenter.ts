@@ -2,7 +2,7 @@ export type ChatCommandRisk = 'read' | 'write'
 export type ChatCommandMode = 'send' | 'prefill'
 export type ChatCommandCategoryId =
   | 'vault'
-  | 'cre'
+  | 'keeper'
   | 'wallet'
   | 'knowledge'
   | 'advanced'
@@ -26,7 +26,7 @@ export type ChatCommandDefinition = {
 
 export const CHAT_COMMAND_CATEGORIES: readonly ChatCommandCategory[] = [
   { id: 'vault', label: 'Vault' },
-  { id: 'cre', label: 'CRE' },
+  { id: 'keeper', label: 'Keeper' },
   { id: 'wallet', label: 'Wallet' },
   { id: 'knowledge', label: 'Knowledge' },
   { id: 'advanced', label: 'Advanced' },
@@ -41,7 +41,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/help',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['vault-status', 'cre-health'],
+    followUpIds: ['vault-status', 'keeper-health'],
   },
   {
     id: 'ai-assistant',
@@ -51,7 +51,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/ai What should I do next?',
     risk: 'read',
     mode: 'prefill',
-    followUpIds: ['vault-status', 'cre-health'],
+    followUpIds: ['vault-status', 'keeper-health'],
   },
   {
     id: 'vault-status',
@@ -61,7 +61,7 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     command: '/keepr status',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['vault-rules', 'cre-health'],
+    followUpIds: ['vault-rules', 'keeper-health'],
   },
   {
     id: 'vault-rules',
@@ -74,34 +74,34 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     followUpIds: ['vault-status'],
   },
   {
-    id: 'cre-health',
-    label: 'CRE Health',
-    description: 'Run combined CRE health check.',
-    category: 'cre',
-    command: '/cre health',
+    id: 'keeper-health',
+    label: 'Keeper Health',
+    description: 'Run combined keeper health check.',
+    category: 'keeper',
+    command: '/keepr health',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['cre-status', 'cre-solana'],
+    followUpIds: ['keeper-status', 'keeper-solana'],
   },
   {
-    id: 'cre-status',
-    label: 'CRE Status',
+    id: 'keeper-status',
+    label: 'Keeper Status',
     description: 'Show vault keeper status.',
-    category: 'cre',
-    command: '/cre status',
+    category: 'keeper',
+    command: '/keepr status',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['cre-health', 'cre-tend'],
+    followUpIds: ['keeper-health', 'keeper-tend'],
   },
   {
-    id: 'cre-solana',
-    label: 'CRE Solana',
+    id: 'keeper-solana',
+    label: 'Keeper Solana',
     description: 'Show Solana monitor status.',
-    category: 'cre',
-    command: '/cre solana',
+    category: 'keeper',
+    command: '/keepr solana',
     risk: 'read',
     mode: 'send',
-    followUpIds: ['cre-health', 'cre-settle-fees', 'cre-relay-entries'],
+    followUpIds: ['keeper-health', 'keeper-settle-fees', 'keeper-relay-entries'],
   },
   {
     id: 'intel-template',
@@ -144,52 +144,52 @@ const CHAT_COMMANDS: readonly ChatCommandDefinition[] = [
     followUpIds: ['help'],
   },
   {
-    id: 'cre-tend',
-    label: 'CRE Tend',
+    id: 'keeper-tend',
+    label: 'Keeper Tend',
     description: 'Trigger vault tend operation.',
     category: 'advanced',
-    command: '/cre tend',
+    command: '/keepr tend',
     risk: 'write',
     mode: 'send',
-    followUpIds: ['cre-status', 'cre-health'],
+    followUpIds: ['keeper-status', 'keeper-health'],
   },
   {
-    id: 'cre-report',
-    label: 'CRE Report',
+    id: 'keeper-report',
+    label: 'Keeper Report',
     description: 'Trigger vault report operation.',
     category: 'advanced',
-    command: '/cre report',
+    command: '/keepr report',
     risk: 'write',
     mode: 'send',
-    followUpIds: ['cre-status', 'cre-health'],
+    followUpIds: ['keeper-status', 'keeper-health'],
   },
   {
-    id: 'cre-settle-fees',
-    label: 'CRE Settle Fees',
+    id: 'keeper-settle-fees',
+    label: 'Keeper Settle Fees',
     description: 'Settle Solana fees to Base.',
     category: 'advanced',
-    command: '/cre settle-fees',
+    command: '/keepr settle-fees',
     risk: 'write',
     mode: 'send',
-    followUpIds: ['cre-solana', 'cre-health'],
+    followUpIds: ['keeper-solana', 'keeper-health'],
   },
   {
-    id: 'cre-relay-entries',
-    label: 'CRE Relay Entries',
+    id: 'keeper-relay-entries',
+    label: 'Keeper Relay Entries',
     description: 'Relay Solana lottery entries to Base.',
     category: 'advanced',
-    command: '/cre relay-entries',
+    command: '/keepr relay-entries',
     risk: 'write',
     mode: 'send',
-    followUpIds: ['cre-solana', 'cre-health'],
+    followUpIds: ['keeper-solana', 'keeper-health'],
   },
 ]
 
 const QUICK_ACTION_IDS = [
   'help',
   'vault-status',
-  'cre-health',
-  'cre-status',
+  'keeper-health',
+  'keeper-status',
 ] as const
 
 const CHAT_COMMAND_BY_ID = new Map<string, ChatCommandDefinition>(
@@ -267,11 +267,11 @@ export function searchChatCommands(query: string, limit = 8): ChatCommandDefinit
 
 export function inferCommandIdFromAgentText(text: string): string | null {
   const lower = text.toLowerCase()
-  if (lower.includes('cre health')) return 'cre-health'
-  if (lower.includes('cre status')) return 'cre-status'
-  if (lower.includes('settle fees') || lower.includes('fee settlement') || lower.includes('fees settled')) return 'cre-settle-fees'
-  if (lower.includes('relay entries') || lower.includes('entry relay') || lower.includes('entries relayed')) return 'cre-relay-entries'
-  if (lower.includes('solana') && lower.includes('cre')) return 'cre-solana'
+  if (lower.includes('keeper health')) return 'keeper-health'
+  if (lower.includes('keeper status')) return 'keeper-status'
+  if (lower.includes('settle fees') || lower.includes('fee settlement') || lower.includes('fees settled')) return 'keeper-settle-fees'
+  if (lower.includes('relay entries') || lower.includes('entry relay') || lower.includes('entries relayed')) return 'keeper-relay-entries'
+  if (lower.includes('solana') && lower.includes('keeper')) return 'keeper-solana'
   if (lower.includes('keepr status') || lower.includes('vault status')) return 'vault-status'
   if (lower.includes('keepr rules') || lower.includes('gating')) return 'vault-rules'
   if (lower.includes('commands') || lower.includes('/help')) return 'help'

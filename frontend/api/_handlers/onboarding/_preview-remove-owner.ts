@@ -28,7 +28,9 @@ const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const DEFAULT_RELAY_QUOTE_OUTPUT_WEI = '10000000000000' // 0.00001 ETH
+const DEFAULT_RELAY_QUOTE_OUTPUT_WEI = '18000000000000' // 0.000018 ETH
+const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
+const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 
 const CSW_OWNER_ABI = [
   {
@@ -158,6 +160,24 @@ type RemoveOwnerPreviewResponse = {
       removeLastOwner: { ok: boolean; error: string | null }
     }
     relayQuoteError: string | null
+    relayQuoteDiagnostics: {
+      requestId: `0x${string}` | null
+      orderId: `0x${string}` | null
+      paymentDetails: {
+        chainId: number | null
+        depository: `0x${string}` | null
+        currency: `0x${string}` | null
+        amount: string | null
+      } | null
+      userTransaction: {
+        to: `0x${string}`
+        value: string
+        chainId: number
+        dataSelector: string | null
+      } | null
+      feeUsd: string | null
+      rawSnippet: string | null
+    } | null
   }
 }
 
@@ -476,6 +496,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // ─────────────────────────────────────────────────────────────────────
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
+    let relayQuoteDiagnostics: RemoveOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
     try {
       // Use Relay's own quote as the source of truth for required funding.
       // Deposit-specified transaction flows require EXACT_OUTPUT. For owner
@@ -514,6 +535,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       if (quote.ok) {
         const e = quote.extract
+        const requestBoundDepositId = e.orderId ?? e.requestId
+        const quotedUserValue =
+          e.userTransaction && typeof e.userTransaction.value === 'string' && /^[1-9][0-9]*$/.test(e.userTransaction.value)
+            ? e.userTransaction.value
+            : null
         const paymentDetails =
           e.paymentDetails &&
           e.paymentDetails.depository &&
@@ -527,13 +553,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 currency: e.paymentDetails.currency,
                 amount: e.paymentDetails.amount,
               }
+            : requestBoundDepositId && quotedUserValue
+              ? {
+                  chainId: 8453,
+                  depository: RELAY_DEPOSITORY_BASE,
+                  currency: NATIVE_CURRENCY,
+                  amount: quotedUserValue,
+                }
             : null
 
         const paymentAmountWei = parseDecimalWei(paymentDetails?.amount ?? null)
         const depositoryFromPaymentDetails = paymentDetails?.depository ?? null
-        const protocolOrderId = e.orderId
         const builtUserCallFromPaymentDetails =
-          protocolOrderId && paymentDetails && paymentAmountWei && depositoryFromPaymentDetails
+          requestBoundDepositId && paymentDetails && paymentAmountWei && depositoryFromPaymentDetails
             ? {
                 to: depositoryFromPaymentDetails,
                 data: encodeFunctionData({
@@ -550,45 +582,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                     },
                   ] as const,
                   functionName: 'depositNative',
-                  args: [relayQuoteUser, protocolOrderId],
+                  args: [relayQuoteUser, requestBoundDepositId],
                 }),
                 value: `0x${paymentAmountWei.toString(16)}` as `0x${string}`,
               }
             : null
+        relayQuoteDiagnostics = {
+          requestId: e.requestId,
+          orderId: requestBoundDepositId,
+          paymentDetails,
+          userTransaction: e.userTransaction
+            ? {
+                to: e.userTransaction.to,
+                value: e.userTransaction.value,
+                chainId: e.userTransaction.chainId,
+                dataSelector: e.userTransaction.data.slice(0, 10) ?? null,
+              }
+            : null,
+          feeUsd: e.feeUsd,
+          rawSnippet:
+            e.raw == null
+              ? null
+              : JSON.stringify(e.raw).slice(0, 1600),
+        }
         if (
           e.requestId &&
           e.userTransaction &&
           typeof e.userTransaction.value === 'string' &&
-          /^[1-9][0-9]*$/.test(e.userTransaction.value)
+          /^[1-9][0-9]*$/.test(e.userTransaction.value) &&
+          typeof e.userTransaction.data === 'string' &&
+          e.userTransaction.data.startsWith('0xcd6e13f7')
         ) {
-          // Primary path: use Relay's quoted user transaction as-is.
-          const quotedValueBig = BigInt(e.userTransaction.value)
-          const quotedInputAmountWei = parseRelayQuotedInputAmountWei(e.raw)
-          const quotedFeeAmountWei = parseRelayQuotedFeeAmountWei(e.raw)
-          const fundedValueWei =
-            [quotedValueBig, quotedInputAmountWei ?? 0n, quotedFeeAmountWei ?? 0n].reduce(
-              (max, curr) => (curr > max ? curr : max),
-              0n,
-            )
-          const selfAuthProtocolPaymentCall = connectedIsCswSelf ? builtUserCallFromPaymentDetails : null
+          // Primary path: use Relay's full quoted multicall transaction exactly as returned.
           relay = {
             requestId: e.requestId,
-            orderId: e.orderId,
+            orderId: requestBoundDepositId,
             paymentDetails,
             userCall:
-              selfAuthProtocolPaymentCall ??
               ({
                 to: e.userTransaction.to,
                 data: e.userTransaction.data,
-                value: `0x${fundedValueWei.toString(16)}` as `0x${string}`,
+                value: `0x${BigInt(e.userTransaction.value).toString(16)}` as `0x${string}`,
               } satisfies Eip5792Call),
-            userCallSource: selfAuthProtocolPaymentCall ? 'built_from_payment_details' : 'quote_tx',
+            userCallSource: 'quote_tx',
             feeUsd: e.feeUsd,
           }
         } else if (e.requestId && builtUserCallFromPaymentDetails) {
           relay = {
             requestId: e.requestId,
-            orderId: e.orderId,
+            orderId: requestBoundDepositId,
             paymentDetails,
             userCall: builtUserCallFromPaymentDetails,
             userCallSource: 'built_from_payment_details',
@@ -599,6 +641,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'Relay quote missing a valid user transaction and usable protocol.v2 paymentDetails.'
         }
       } else {
+        relayQuoteDiagnostics = {
+          requestId: null,
+          orderId: null,
+          paymentDetails: null,
+          userTransaction: null,
+          feeUsd: null,
+          rawSnippet: quote.raw == null ? null : JSON.stringify(quote.raw).slice(0, 1600),
+        }
         relayQuoteError = quote.error
       }
     } catch (error) {
@@ -644,6 +694,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           removeLastOwner: removeLastOwnerSimulation,
         },
         relayQuoteError,
+        relayQuoteDiagnostics,
       },
     }
 

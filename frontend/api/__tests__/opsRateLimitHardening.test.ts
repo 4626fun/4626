@@ -23,13 +23,13 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 
 import syncCreatorMetricsHandler from '../_handlers/zora/_sync-creator-metrics.ts'
 import creatorAccessRequestHandler from '../_handlers/creator-access/_request.ts'
-import creKeeperAiAssessHandler from '../_handlers/keeper/_aiAssess.ts'
-import creKeeperAlertHandler from '../_handlers/keeper/_alert.ts'
-import creKeeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
-import creKeeperReportHandler from '../_handlers/keeper/_report.ts'
-import creKeeperSolanaReconcileHandler from '../_handlers/keeper/_solanaReconcile.ts'
-import creKeeperSweepHandler from '../_handlers/keeper/_sweep.ts'
-import creKeeperTendHandler from '../_handlers/keeper/_tend.ts'
+import keeperAiAssessHandler from '../_handlers/keeper/_aiAssess.ts'
+import keeperAlertHandler from '../_handlers/keeper/_alert.ts'
+import keeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
+import keeperReportHandler from '../_handlers/keeper/_report.ts'
+import keeperSolanaReconcileHandler from '../_handlers/keeper/_solanaReconcile.ts'
+import keeperSweepHandler from '../_handlers/keeper/_sweep.ts'
+import keeperTendHandler from '../_handlers/keeper/_tend.ts'
 
 describe('ops endpoint rate-limit hardening', () => {
   let restoreEnv: (() => void) | null = null
@@ -80,7 +80,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperAiAssessHandler(req, res)
+    await keeperAiAssessHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -93,7 +93,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperAlertHandler(req, res)
+    await keeperAlertHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -106,7 +106,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperMarkSettledHandler(req, res)
+    await keeperMarkSettledHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -119,7 +119,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperReportHandler(req, res)
+    await keeperReportHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -132,7 +132,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperSolanaReconcileHandler(req, res)
+    await keeperSolanaReconcileHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -145,7 +145,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperSweepHandler(req, res)
+    await keeperSweepHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
@@ -158,7 +158,7 @@ describe('ops endpoint rate-limit hardening', () => {
       body: {},
     })
     const res = createMockRes()
-    await creKeeperTendHandler(req, res)
+    await keeperTendHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')

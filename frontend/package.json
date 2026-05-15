@@ -102,6 +102,7 @@
     "@privy-io/react-auth": "^3.13.1",
     "@privy-io/server-auth": "^1.32.5",
     "@privy-io/wagmi": "^4.0.1",
+    "@relayprotocol/relay-kit-hooks": "^3.0.17",
     "@relayprotocol/relay-sdk": "^5.2.7",
     "@safe-global/api-kit": "^4.0.1",
     "@safe-global/protocol-kit": "^6.1.2",

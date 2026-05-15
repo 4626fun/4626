@@ -1631,8 +1631,8 @@ function actionScoreFromMessage(actionName: string, text: string): { score: numb
   const normalizedName = actionName.toLowerCase()
   const normalizedText = text.toLowerCase()
 
-  if (normalizedText.startsWith('/cre') && normalizedName.includes('cre')) {
-    return { score: 0.95, reason: 'prefix_/cre' }
+  if (normalizedText.startsWith('/keepr') && normalizedName.includes('keepr')) {
+    return { score: 0.95, reason: 'prefix_/keepr' }
   }
   if (normalizedText.startsWith('/lens') && normalizedName.includes('lens')) {
     return { score: 0.92, reason: 'prefix_/lens' }

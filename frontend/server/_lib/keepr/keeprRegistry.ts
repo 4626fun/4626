@@ -43,7 +43,7 @@ export type KeeprConfigV1 = {
     syncMaxMembersPerBatch?: number
     syncCooldownSeconds?: number
   }
-  /** Optional contract addresses for CRE automation workflows */
+  /** Optional contract addresses for keeper automation workflows */
   contracts?: {
     ccaStrategy?: `0x${string}`
     ajnaAdapter?: `0x${string}`

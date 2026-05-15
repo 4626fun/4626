@@ -139,6 +139,7 @@ const memNonces = new Map<string, AmoeNonceRecord>()
 const memCredits = new Map<string, number>()
 const memDailyTwitterCheckins = new Set<string>()
 const memTwitterClaimedTweetIds = new Set<string>()
+const memXmtpClaimedMessageIds = new Set<string>()
 let amoeSchemaEnsured = false
 
 const eip1271Abi = [
@@ -329,9 +330,21 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     CREATE TABLE IF NOT EXISTS lottery_amoe_daily_xmtp_checkins (
       wallet_address TEXT NOT NULL,
       checkin_date DATE NOT NULL,
+      message_id TEXT,
+      recipient_address TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (wallet_address, checkin_date)
     );
+  `
+  await db.sql`
+    ALTER TABLE lottery_amoe_daily_xmtp_checkins
+      ADD COLUMN IF NOT EXISTS message_id TEXT,
+      ADD COLUMN IF NOT EXISTS recipient_address TEXT;
+  `
+  await db.sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS lottery_amoe_daily_xmtp_message_id_unique
+      ON lottery_amoe_daily_xmtp_checkins (message_id)
+      WHERE message_id IS NOT NULL;
   `
   await db.sql`
     ALTER TABLE lottery_amoe_daily_xmtp_checkins ENABLE ROW LEVEL SECURITY;
@@ -726,7 +739,13 @@ export async function claimDailyTwitterCheckin(params: {
   }
 }
 
-export async function claimDailyXmtpCheckin(params: { wallet: `0x${string}` }): Promise<{
+export async function claimDailyXmtpCheckin(params: {
+  wallet: `0x${string}`
+  evidence: {
+    messageId: string
+    recipientAddress: `0x${string}`
+  }
+}): Promise<{
   wallet: `0x${string}`
   awarded: boolean
   awardedCredits: number
@@ -737,13 +756,19 @@ export async function claimDailyXmtpCheckin(params: { wallet: `0x${string}` }): 
   const wallet = normalizeWallet(params.wallet)
   const now = Date.now()
   const dayKey = dayKeyUtc(now)
+  const messageId = String(params.evidence.messageId ?? '').trim()
+  if (!messageId) throw new AmoeBadRequestError('xmtp_message_id_required')
 
   const db = await getDb()
   if (!db) {
+    if (memXmtpClaimedMessageIds.has(messageId)) {
+      throw new Error('xmtp_message_already_claimed')
+    }
     const memKey = `${wallet}:xmtp:${dayKey}`
     const alreadyClaimed = memDailyTwitterCheckins.has(memKey)
     if (!alreadyClaimed) {
       memDailyTwitterCheckins.add(memKey)
+      memXmtpClaimedMessageIds.add(messageId)
       memCredits.set(wallet, (memCredits.get(wallet) ?? 0) + AMOE_DAILY_XMTP_CREDIT)
     }
     const snapshot = toCreditSnapshot(wallet, memCredits.get(wallet) ?? 0)
@@ -758,12 +783,31 @@ export async function claimDailyXmtpCheckin(params: { wallet: `0x${string}` }): 
   }
 
   await ensureAmoeSchema(db)
-  const inserted = await db.sql`
-    INSERT INTO lottery_amoe_daily_xmtp_checkins (wallet_address, checkin_date)
-    VALUES (${wallet}, ${dayKey})
-    ON CONFLICT (wallet_address, checkin_date) DO NOTHING
-    RETURNING wallet_address;
-  `
+  let inserted: { rows: any[] }
+  try {
+    inserted = await db.sql`
+      INSERT INTO lottery_amoe_daily_xmtp_checkins (
+        wallet_address,
+        checkin_date,
+        message_id,
+        recipient_address
+      )
+      VALUES (
+        ${wallet},
+        ${dayKey},
+        ${messageId},
+        ${params.evidence.recipientAddress}
+      )
+      ON CONFLICT (wallet_address, checkin_date) DO NOTHING
+      RETURNING wallet_address;
+    `
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (message.toLowerCase().includes('lottery_amoe_daily_xmtp_message_id_unique')) {
+      throw new Error('xmtp_message_already_claimed')
+    }
+    throw error
+  }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
   const signupId = await resolveOrCreateProfileForWallet(db, wallet)
 

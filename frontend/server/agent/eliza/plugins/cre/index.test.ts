@@ -86,12 +86,12 @@ describe('cre plugin dry-run gate', () => {
     setEnv('KEEPR_API_KEY', undefined)
     setEnv('SOLANA_RPC_URL', undefined)
 
-    const trigger = getAction('CRE_TRIGGER')
-    const text = await runActionText(trigger, '/cre tend 0x1111111111111111111111111111111111111111')
+    const trigger = getAction('KEEPR_TRIGGER')
+    const text = await runActionText(trigger, '/keepr tend 0x1111111111111111111111111111111111111111')
 
     expect(text).toContain('DRY_RUN is enabled')
-    expect(text).toContain('Skipping mutating CRE command')
-    expect(text).toContain('/cre tend')
+    expect(text).toContain('Skipping mutating keeper command')
+    expect(text).toContain('/keepr tend')
     expect(text).not.toContain('Keeper wallet not configured')
   })
 
@@ -100,11 +100,11 @@ describe('cre plugin dry-run gate', () => {
     setEnv('ELIZA_CRE_DRY_RUN', '1')
     setEnv('KEEPR_API_KEY', undefined)
 
-    const trigger = getAction('CRE_TRIGGER')
-    const text = await runActionText(trigger, '/cre queue')
+    const trigger = getAction('KEEPR_TRIGGER')
+    const text = await runActionText(trigger, '/keepr queue')
 
     expect(text).toContain('DRY_RUN is enabled')
-    expect(text).toContain('/cre queue')
+    expect(text).toContain('/keepr queue')
   })
 
   it('keeps existing trigger behavior when dry run is disabled', async () => {
@@ -112,8 +112,8 @@ describe('cre plugin dry-run gate', () => {
     setEnv('ELIZA_CRE_DRY_RUN', '0')
     setEnv('KEEPR_API_KEY', undefined)
 
-    const trigger = getAction('CRE_TRIGGER')
-    const text = await runActionText(trigger, '/cre queue')
+    const trigger = getAction('KEEPR_TRIGGER')
+    const text = await runActionText(trigger, '/keepr queue')
 
     expect(text).toContain('Keepr API not configured')
   })
@@ -122,8 +122,8 @@ describe('cre plugin dry-run gate', () => {
     setEnv('DRY_RUN', 'true')
     setEnv('ELIZA_CRE_DRY_RUN', undefined)
 
-    const help = getAction('CRE_HELP')
-    const text = await runActionText(help, '/cre help')
+    const help = getAction('KEEPR_HELP')
+    const text = await runActionText(help, '/keepr help')
 
     expect(text).toContain('Dry run: yes')
   })
@@ -136,8 +136,8 @@ describe('cre plugin dry-run gate', () => {
       config: { roles: { admins: [] } },
     })
 
-    const trigger = getAction('CRE_TRIGGER')
-    const text = await runActionText(trigger, '/cre queue', {
+    const trigger = getAction('KEEPR_TRIGGER')
+    const text = await runActionText(trigger, '/keepr queue', {
       conversationId: 'group-1',
       senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })
@@ -154,8 +154,8 @@ describe('cre plugin dry-run gate', () => {
       config: { roles: { admins: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'] } },
     })
 
-    const trigger = getAction('CRE_TRIGGER')
-    const text = await runActionText(trigger, '/cre queue', {
+    const trigger = getAction('KEEPR_TRIGGER')
+    const text = await runActionText(trigger, '/keepr queue', {
       conversationId: 'group-1',
       senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })

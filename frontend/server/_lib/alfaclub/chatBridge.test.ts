@@ -275,6 +275,31 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(wsCloseInfos).toHaveLength(1)
   })
 
+  it('logs websocket 403 handshake failures at info level', () => {
+    const flags = makeFlags()
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+
+    const socket = latestFakeSocket()
+    expect(socket).toBeDefined()
+    socket?.emit('error', { message: 'Unexpected server response: 403' })
+
+    const wsErrorWarns = loggerMock.warn.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_error',
+    )
+    const wsErrorInfos = loggerMock.info.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_error',
+    )
+
+    expect(wsErrorWarns).toHaveLength(0)
+    expect(wsErrorInfos).toHaveLength(1)
+  })
+
   it('rolls up duplicate room-history auth fallback warnings within 60 seconds', async () => {
     mockHistoryStatus(401)
 

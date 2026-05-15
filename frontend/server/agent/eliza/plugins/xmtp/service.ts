@@ -220,6 +220,7 @@ export type XmtpConfig = {
 export type XmtpMessage = {
   conversationId: string
   conversationType: 'dm' | 'group'
+  recipientAddress: string | null
   senderInboxId: string
   senderAddress: string | null
   messageId: string
@@ -647,6 +648,7 @@ export class XmtpService {
       const msg: XmtpMessage = {
         conversationId,
         conversationType,
+        recipientAddress: this.agent?.address?.toLowerCase() ?? null,
         senderInboxId,
         senderAddress,
         messageId,

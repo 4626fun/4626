@@ -1902,7 +1902,10 @@ function isBenignWsErrorMessage(message: string | null | undefined): boolean {
   if (!normalized) return false
   return (
     normalized.includes('received network error or non-101 status code') ||
-    normalized.includes('non-101')
+    normalized.includes('non-101') ||
+    normalized.includes('unexpected server response: 403') ||
+    normalized.includes('socket hang up') ||
+    normalized.includes('client network socket disconnected before secure tls connection was established')
   )
 }
 

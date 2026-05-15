@@ -13,7 +13,7 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keepr/keeprRegistry.js'
-import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
+import { isKeeperWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -141,8 +141,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const isCreWrite = isCreWriteCommandText(command)
-  if (!isCreWrite) {
+  const isKeeperWrite = isKeeperWriteCommandText(command)
+  if (!isKeeperWrite) {
     return res.status(200).json(ok({
       allowed: true,
       reason: 'read_or_non_mutating_command',

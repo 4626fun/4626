@@ -309,6 +309,11 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
   return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
 }
 
+function toCreatorSortMetric(value: unknown): number {
+  const parsed = toFiniteNumber(value)
+  return parsed == null ? Number.NEGATIVE_INFINITY : parsed
+}
+
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
@@ -589,6 +594,31 @@ export function ExploreCreators() {
     return out
   }, [coinEthosUserkeys, ethosScoreQueries])
 
+  const ethosSortStats = useMemo(() => {
+    let scored = 0
+    let lookupPendingOrUnknown = 0
+    let noIdentity = 0
+    for (const coin of baseDisplayCoins) {
+      const key = getCoinKey(coin)
+      const record = ethosByCoinKey.get(key)
+      if (!record) {
+        noIdentity += 1
+        continue
+      }
+      if (typeof record.score?.score === 'number' && record.score.score > 0) {
+        scored += 1
+      } else {
+        lookupPendingOrUnknown += 1
+      }
+    }
+    return {
+      total: baseDisplayCoins.length,
+      scored,
+      lookupPendingOrUnknown,
+      noIdentity,
+    }
+  }, [baseDisplayCoins, ethosByCoinKey])
+
   const displayCoins = useMemo(() => {
     const minimumScore = getEthosFilterMinimum(ethosFilter)
     const filtered =
@@ -602,11 +632,32 @@ export function ExploreCreators() {
     if (currentSort !== 'ethosScore') return filtered
 
     return [...filtered].sort((a, b) => {
-      const rawAScore = ethosByCoinKey.get(getCoinKey(a))?.score?.score
-      const rawBScore = ethosByCoinKey.get(getCoinKey(b))?.score?.score
-      const aScore = typeof rawAScore === 'number' && rawAScore > 0 ? rawAScore : Number.NEGATIVE_INFINITY
-      const bScore = typeof rawBScore === 'number' && rawBScore > 0 ? rawBScore : Number.NEGATIVE_INFINITY
-      return bScore - aScore
+      const aRecord = ethosByCoinKey.get(getCoinKey(a))
+      const bRecord = ethosByCoinKey.get(getCoinKey(b))
+
+      const aRawScore = aRecord?.score?.score
+      const bRawScore = bRecord?.score?.score
+      const aHasScore = typeof aRawScore === 'number' && aRawScore > 0
+      const bHasScore = typeof bRawScore === 'number' && bRawScore > 0
+      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
+      if (aHasScore && bHasScore) {
+        const delta = (bRawScore as number) - (aRawScore as number)
+        if (delta !== 0) return delta
+      }
+
+      // Keep rows with a resolved Ethos identity ahead of rows with no identity mapping.
+      const aHasIdentity = Boolean(aRecord?.userkey)
+      const bHasIdentity = Boolean(bRecord?.userkey)
+      if (aHasIdentity !== bHasIdentity) return aHasIdentity ? -1 : 1
+
+      // Tie-breakers keep sort stable and still economically meaningful.
+      const volumeDelta = toCreatorSortMetric(b.volume24h) - toCreatorSortMetric(a.volume24h)
+      if (volumeDelta !== 0) return volumeDelta
+      const mcapDelta = toCreatorSortMetric(b.marketCap) - toCreatorSortMetric(a.marketCap)
+      if (mcapDelta !== 0) return mcapDelta
+      const holdersDelta = toCreatorSortMetric(b.uniqueHolders) - toCreatorSortMetric(a.uniqueHolders)
+      if (holdersDelta !== 0) return holdersDelta
+      return getCoinKey(a).localeCompare(getCoinKey(b))
     })
   }, [baseDisplayCoins, currentSort, ethosByCoinKey, ethosFilter])
 
@@ -659,6 +710,7 @@ export function ExploreCreators() {
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
   const screenshotReady = displayCoins.length > 0 && (!isLoading || hasScreenshotFallbackRows)
+  const showEthosSortCallout = currentSort === 'ethosScore' && !isLoading && displayCoins.length > 0
 
   useScreenshotReady(screenshotReady)
 
@@ -746,6 +798,13 @@ export function ExploreCreators() {
           <div className="mt-3 flex justify-end">
             <ExploreUnfurlDebugCopy path="/explore/creators" />
           </div>
+          {showEthosSortCallout ? (
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
+              Ethos sort ranks scored creators first: {ethosSortStats.scored.toLocaleString()} of{' '}
+              {ethosSortStats.total.toLocaleString()} currently have a scored Ethos identity. Use Ethos filters to focus
+              on 1200+/1600+/1800+ creators.
+            </div>
+          ) : null}
         </>
       }
       subnav={

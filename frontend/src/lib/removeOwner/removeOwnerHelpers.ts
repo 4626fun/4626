@@ -131,6 +131,24 @@ export type RemoveOwnerPreview = {
       removeLastOwner: { ok: boolean; error: string | null }
     }
     relayQuoteError: string | null
+    relayQuoteDiagnostics: {
+      requestId: `0x${string}` | null
+      orderId: `0x${string}` | null
+      paymentDetails: {
+        chainId: number | null
+        depository: `0x${string}` | null
+        currency: `0x${string}` | null
+        amount: string | null
+      } | null
+      userTransaction: {
+        to: `0x${string}`
+        value: string
+        chainId: number
+        dataSelector: string | null
+      } | null
+      feeUsd: string | null
+      rawSnippet: string | null
+    } | null
   }
 }
 

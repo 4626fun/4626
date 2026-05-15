@@ -38,7 +38,7 @@ vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-import creKeeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
+import keeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
 
 describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   let restoreEnv: (() => void) | null = null
@@ -62,7 +62,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   async function postBody(body: Record<string, unknown>) {
     const req = createMockReq({ method: 'POST', headers: AUTH, body })
     const res = createMockRes()
-    await creKeeperMarkSettledHandler(req, res)
+    await keeperMarkSettledHandler(req, res)
     return res
   }
 

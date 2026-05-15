@@ -13,7 +13,7 @@ vi.mock('../../server/agent/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
 }))
 
-describe('CRE explicit intent: AI consensus fallback', () => {
+describe('keeper explicit intent: AI consensus fallback', () => {
   let restoreEnv: () => void
 
   beforeEach(() => {

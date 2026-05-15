@@ -73,12 +73,12 @@ describe('runtime bridge', () => {
       conversationId: 'conv-1',
       conversationType: 'group',
       senderAddress: '0x1111111111111111111111111111111111111111',
-      content: '/cre status',
+      content: '/keepr status',
     })
 
     await bridge.runtime.createMemory(message as any, 'messages' as any)
     const state = await bridge.composeState(message)
-    const ranked = await bridge.rankActions('/cre status', message)
+    const ranked = await bridge.rankActions('/keepr status', message)
 
     expect((state as any).recentMessages).toHaveLength(1)
     expect((state as any).session).toEqual({

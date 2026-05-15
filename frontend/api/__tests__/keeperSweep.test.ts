@@ -58,7 +58,7 @@ function createLifecycle(overrides?: Partial<{
   }
 }
 
-describe('cre keeper sweep handler', () => {
+describe('keeper sweep handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     privateKeyToAccountMock.mockReturnValue({ address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' })

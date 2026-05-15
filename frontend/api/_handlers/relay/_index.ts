@@ -19,6 +19,7 @@ const RELAY_INDEX_URL = 'https://api.relay.link/transactions/index'
 type RelayIndexRequest = {
   txHash?: unknown
   chainId?: unknown
+  requestId?: unknown
 }
 
 function resolveRelayApiKey(): string | null {
@@ -59,10 +60,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(txHash)) {
     return res.status(400).json({ success: false, error: 'txHash must be a 32-byte hex hash' } satisfies ApiEnvelope<never>)
   }
-  const chainId = typeof body.chainId === 'number' ? body.chainId : NaN
-  if (chainId !== 8453) {
+  const chainIdRaw =
+    typeof body.chainId === 'number'
+      ? String(Math.trunc(body.chainId))
+      : typeof body.chainId === 'string'
+        ? body.chainId.trim()
+        : ''
+  if (chainIdRaw !== '8453') {
     return res.status(400).json({ success: false, error: 'chainId must be 8453 (Base mainnet)' } satisfies ApiEnvelope<never>)
   }
+  const requestId =
+    typeof body.requestId === 'string' && /^0x[0-9a-fA-F]{64}$/.test(body.requestId.trim())
+      ? body.requestId.trim()
+      : null
 
   const apiKey = resolveRelayApiKey()
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -73,7 +83,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     upstreamRes = await fetch(RELAY_INDEX_URL, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ txHash, chainId }),
+      body: JSON.stringify({
+        txHash,
+        chainId: chainIdRaw,
+        ...(requestId ? { requestId } : {}),
+      }),
     })
   } catch (error) {
     logger.warn('[relay/index] upstream fetch failed', {

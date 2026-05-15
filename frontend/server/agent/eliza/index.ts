@@ -52,7 +52,7 @@ import { walletIntelPlugin } from './plugins/walletIntel/index.js'
 // previous static import at this position could cascade a Railway
 // healthcheck timeout via silent eliza/index.ts parse failure.
 import { reputationPlugin } from './plugins/reputation/index.js'
-import { crePlugin } from './plugins/cre/index.js'
+import { crePlugin as legacyKeeprPlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'
@@ -81,6 +81,7 @@ import { publishAgentRegistrationToGrove } from '../../_lib/agent/agentRegistrat
 import { formatWelcomeNumberedOptions } from '../../_lib/messaging/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
 import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
+import { claimDailyXmtpCheckin } from '../../_lib/lottery/lotteryAmoe.js'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
   isTargetCanonicalCsw,
@@ -484,7 +485,7 @@ const corePlugins = [
   walletIntelPlugin,
   ...optionalCorePlugins,
   reputationPlugin,
-  crePlugin,
+  legacyKeeprPlugin,
   knowledgePlugin,
 ]
 
@@ -552,7 +553,7 @@ export {
   lensPlugin,
   walletIntelPlugin,
   reputationPlugin,
-  crePlugin,
+  legacyKeeprPlugin,
   knowledgePlugin,
   telegramPlugin,
   discordPlugin,
@@ -1135,6 +1136,47 @@ function summarizeInboundMessageForLog(params: {
   return `${senderLabel}: [len=${contentLength} sha=${contentDigest}]`
 }
 
+const EVM_ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+const AMOE_XMTP_TASK_AGENT_ADDRESS = TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()
+
+function isExpectedAmoeXmtpAwardingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return message === 'xmtp_message_already_claimed' || message === 'xmtp_message_id_required'
+}
+
+async function maybeAwardAmoeXmtpDailyFromInbound(msg: {
+  source: string
+  conversationType: string
+  recipientAddress?: string | null
+  senderAddress?: string | null
+  messageId?: string | null
+}): Promise<void> {
+  if (msg.source !== 'xmtp' || msg.conversationType !== 'dm') return
+  const recipientAddress = String(msg.recipientAddress ?? '').trim().toLowerCase()
+  const senderAddress = String(msg.senderAddress ?? '').trim().toLowerCase()
+  const messageId = String(msg.messageId ?? '').trim()
+  if (!EVM_ADDRESS_RE.test(recipientAddress) || !EVM_ADDRESS_RE.test(senderAddress)) return
+  if (recipientAddress !== AMOE_XMTP_TASK_AGENT_ADDRESS) return
+  if (!messageId) return
+  try {
+    await claimDailyXmtpCheckin({
+      wallet: senderAddress as `0x${string}`,
+      evidence: {
+        messageId,
+        recipientAddress: recipientAddress as `0x${string}`,
+      },
+    })
+  } catch (error) {
+    if (isExpectedAmoeXmtpAwardingError(error)) return
+    logger.warn('[eliza] failed to award XMTP AMOE credit from inbound message', {
+      senderAddress,
+      recipientAddress,
+      messageId,
+      error: toErrorDetails(error),
+    })
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Message router (ElizaOS plugin pipeline)
 // ---------------------------------------------------------------------------
@@ -1143,6 +1185,7 @@ async function handleMessage(
   msg: {
     conversationId: string
     conversationType: string
+    recipientAddress: string | null
     senderAddress: string | null
     senderInboxId: string
     content: string
@@ -1164,6 +1207,7 @@ async function handleMessage(
   const text = msg.content.trim()
   if (!text) return null
   const startedAtMs = Date.now()
+  void maybeAwardAmoeXmtpDailyFromInbound(msg)
 
   if (text.length > MAX_INBOUND_MESSAGE_CHARS) {
     return `Message too long (${text.length} chars). Max supported length is ${MAX_INBOUND_MESSAGE_CHARS}.`
@@ -1529,6 +1573,7 @@ async function startAgent(row: AgentRow, rowFingerprint = computeRowFingerprint(
       {
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
+        recipientAddress: msg.recipientAddress,
         senderAddress: msg.senderAddress,
         senderInboxId: msg.senderInboxId,
         content: msg.content,
@@ -1743,6 +1788,7 @@ async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAg
       {
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
+        recipientAddress: msg.recipientAddress,
         senderAddress: msg.senderAddress,
         senderInboxId: msg.senderInboxId,
         content: msg.content,
@@ -1834,6 +1880,7 @@ async function startSingleAgentCsw(params: {
       {
         conversationId: msg.conversationId,
         conversationType: msg.conversationType,
+        recipientAddress: msg.recipientAddress,
         senderAddress: msg.senderAddress,
         senderInboxId: msg.senderInboxId,
         content: msg.content,
@@ -1888,6 +1935,7 @@ async function startSingleAgentCsw(params: {
           {
             conversationId: m.conversationId,
             conversationType: m.conversationType,
+            recipientAddress: m.recipientAddress,
             senderAddress: m.senderAddress,
             senderInboxId: m.senderInboxId,
             content: m.content,

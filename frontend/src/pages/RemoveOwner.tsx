@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { encodeFunctionData, type PublicClient } from 'viem'
+import { formatEther, type PublicClient } from 'viem'
+import { useQuote } from '@relayprotocol/relay-kit-hooks'
+import {
+  createClient,
+  MAINNET_RELAY_API,
+  type paths,
+  type ProgressData,
+} from '@relayprotocol/relay-sdk'
+import { base as baseChain } from 'viem/chains'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { RemoveOwnerActionPanel } from '@/features/accountSetup/removeOwner/RemoveOwnerActionPanel'
@@ -10,8 +18,7 @@ import { useAccountSetupController } from '@/features/accountSetup/useAccountSet
 import { RemoveOwnerOwnerSlotsCard } from '@/features/accountSetup/removeOwner/RemoveOwnerOwnerSlotsCard'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { apiFetch } from '@/lib/api/apiBase'
-import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
-import { _submitOwnerViaPreparedCalls } from '@/lib/wallet/onboardingWalletPrepared'
+import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
 import * as RemoveOwnerHelpers from '@/lib/removeOwner/removeOwnerHelpers'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
@@ -26,6 +33,7 @@ const normalizeRelayStatusEndpoint = RemoveOwnerHelpers.normalizeRelayStatusEndp
 const validatePreviewRelayUserCallIsNativeDepository =
   RemoveOwnerHelpers.validatePreviewRelayUserCallIsNativeDepository
 const pollRelayStatusEndpoint = RemoveOwnerHelpers.pollRelayStatusEndpoint
+const extractExecuteQuotePayload = RemoveOwnerHelpers.extractExecuteQuotePayload
 const INITIAL_DIAGNOSTICS = RemoveOwnerHelpers.INITIAL_DIAGNOSTICS
 const CSW_OWNER_ABI = RemoveOwnerHelpers.CSW_OWNER_ABI
 const classifyOwnerBytes = RemoveOwnerHelpers.classifyOwnerBytes
@@ -33,18 +41,113 @@ const decodeOwnerAddress = RemoveOwnerHelpers.decodeOwnerAddress
 const REMOVE_OWNER_AT_INDEX_SELECTOR = '0x89625b57'
 const RELAY_MULTICALL_SELECTOR = '0xcd6e13f7'
 const EXECUTE_WITHOUT_CHAIN_ID_SELECTOR = '0x2c2abd1e'
-const RELAY_DEPOSITORY_ABI = [
-  {
-    type: 'function',
-    name: 'depositNative',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'depositor', type: 'address' },
-      { name: 'id', type: 'bytes32' },
-    ],
-    outputs: [],
+const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
+type RelayQuoteBody = paths['/quote/v2']['post']['requestBody']['content']['application/json']
+type RelayChainConfig = {
+  id: number
+  name: string
+  displayName: string
+  httpRpcUrl: string
+  wsRpcUrl: string
+  icon: { dark: string; light: string; squaredDark: string; squaredLight: string }
+  currency: { address: string; name: string; symbol: string; decimals: number }
+  explorerUrl: string
+  vmType: 'evm'
+  depositEnabled: boolean
+  viemChain: typeof baseChain
+}
+
+const RELAY_BASE_CHAIN: RelayChainConfig = {
+  id: baseChain.id,
+  name: 'base',
+  displayName: 'Base',
+  httpRpcUrl: baseChain.rpcUrls.default.http[0] ?? 'https://mainnet.base.org',
+  wsRpcUrl:
+    ((((baseChain as unknown as { rpcUrls?: { default?: { webSocket?: string[] } } }).rpcUrls?.default
+      ?.webSocket?.[0] as string | undefined) ??
+      '')),
+  icon: {
+    dark: `https://assets.relay.link/icons/${baseChain.id}/dark.png`,
+    light: `https://assets.relay.link/icons/${baseChain.id}/light.png`,
+    squaredDark: `https://assets.relay.link/icons/square/${baseChain.id}/dark.png`,
+    squaredLight: `https://assets.relay.link/icons/square/${baseChain.id}/light.png`,
   },
-] as const
+  currency: {
+    address: NATIVE_CURRENCY_ADDRESS,
+    name: baseChain.nativeCurrency.name,
+    symbol: baseChain.nativeCurrency.symbol,
+    decimals: baseChain.nativeCurrency.decimals,
+  },
+  explorerUrl: baseChain.blockExplorers?.default.url ?? 'https://basescan.org',
+  vmType: 'evm',
+  depositEnabled: true,
+  viemChain: baseChain,
+}
+
+function toRelayAmountDecimal(value: string | null | undefined): string | null {
+  if (!value) return null
+  if (/^[1-9][0-9]*$/.test(value)) return value
+  if (/^0x[0-9a-fA-F]+$/.test(value)) {
+    const wei = BigInt(value)
+    return wei > 0n ? wei.toString(10) : null
+  }
+  return null
+}
+
+function extractRelayExecutionTxHash(raw: unknown): `0x${string}` | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+  const txHashes = Array.isArray(obj.txHashes) ? obj.txHashes : []
+  for (const tx of txHashes) {
+    if (!tx || typeof tx !== 'object') continue
+    const txHash = (tx as Record<string, unknown>).txHash
+    if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+      return txHash as `0x${string}`
+    }
+  }
+  const steps = Array.isArray(obj.steps) ? obj.steps : []
+  for (const step of steps) {
+    if (!step || typeof step !== 'object') continue
+    const items = Array.isArray((step as Record<string, unknown>).items)
+      ? ((step as Record<string, unknown>).items as unknown[])
+      : []
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue
+      const itemObj = item as Record<string, unknown>
+      const receipt = itemObj.receipt
+      if (receipt && typeof receipt === 'object') {
+        const txHash = (receipt as Record<string, unknown>).transactionHash
+        if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+          return txHash as `0x${string}`
+        }
+      }
+      const itemTxHashes = Array.isArray(itemObj.txHashes) ? (itemObj.txHashes as unknown[]) : []
+      for (const tx of itemTxHashes) {
+        if (!tx || typeof tx !== 'object') continue
+        const txHash = (tx as Record<string, unknown>).txHash
+        if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
+          return txHash as `0x${string}`
+        }
+      }
+    }
+  }
+  return null
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && typeof error.message === 'string' && error.message.trim()) {
+    return error.message
+  }
+  if (typeof error === 'string' && error.trim()) return error
+  if (error && typeof error === 'object') {
+    const maybeMessage = (error as Record<string, unknown>).message
+    if (typeof maybeMessage === 'string' && maybeMessage.trim()) return maybeMessage
+    try {
+      return JSON.stringify(error)
+    } catch {}
+  }
+  return 'unknown error'
+}
 
 export function RemoveOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/remove-owner' })
@@ -79,6 +182,57 @@ export function RemoveOwnerPage() {
 
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
   const publicClient = wagmiPublicClient as PublicClient | undefined
+  const relayClient = useMemo(
+    () =>
+      createClient({
+        baseApiUrl: MAINNET_RELAY_API,
+        source: '4626-remove-owner',
+        chains: [RELAY_BASE_CHAIN],
+      }),
+    [],
+  )
+  const relayQuoteOptions = useMemo<RelayQuoteBody | undefined>(() => {
+    if (!preview || !canonicalCswAddress || !ownerSignerAddress) return undefined
+    if (!preview.relay) return undefined
+    const amountDecimal =
+      toRelayAmountDecimal(preview.relay.paymentDetails?.amount) ??
+      toRelayAmountDecimal(preview.relay.userCall?.value)
+    if (!amountDecimal) return undefined
+    return {
+      user: ownerSignerAddress,
+      recipient: canonicalCswAddress,
+      originChainId: base.id,
+      destinationChainId: base.id,
+      originCurrency: NATIVE_CURRENCY_ADDRESS,
+      destinationCurrency: NATIVE_CURRENCY_ADDRESS,
+      tradeType: 'EXACT_OUTPUT',
+      amount: amountDecimal,
+      txs: [
+        {
+          to: canonicalCswAddress,
+          data: encodeExecuteWithoutChainIdValidation(preview.txRequest.data),
+          value: '0',
+        },
+      ],
+    } satisfies RelayQuoteBody
+  }, [canonicalCswAddress, ownerSignerAddress, preview])
+  const {
+    data: relayHookQuote,
+    error: relayHookQuoteError,
+    refetch: refetchRelayHookQuote,
+    executeQuote,
+  } = useQuote(
+    relayClient,
+    walletClient,
+    relayQuoteOptions,
+    undefined,
+    undefined,
+    {
+      enabled: Boolean(relayQuoteOptions),
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -176,6 +330,56 @@ export function RemoveOwnerPage() {
     setEventLog((prev) => [...prev, row].slice(-40))
   }
 
+  const formatEthAmount = (value: bigint): string => {
+    const raw = formatEther(value)
+    const [whole = '0', fraction = ''] = raw.split('.')
+    const trimmedFraction = fraction.replace(/0+$/, '').slice(0, 6)
+    return trimmedFraction ? `${whole}.${trimmedFraction}` : whole
+  }
+
+  const mapRemoveOwnerSubmissionError = (params: {
+    error: unknown
+    requiredDepositWei: bigint | null
+    latestCswBalanceWei: bigint | null
+  }): string | null => {
+    const message =
+      params.error instanceof Error
+        ? params.error.message
+        : typeof params.error === 'string'
+          ? params.error
+          : ''
+    const normalized = message.toLowerCase()
+
+    if (normalized.includes('networkid must be provided and not empty')) {
+      return (
+        'Relay quote metadata is missing a network identifier. Refresh the preview, keep your wallet on Base, and retry. ' +
+        'If this keeps happening, regenerate the preview from the owner list before submitting.'
+      )
+    }
+
+    if (
+      normalized.includes('failed to estimate gas for user operation') &&
+      normalized.includes('useroperation reverted')
+    ) {
+      const depositHint =
+        params.requiredDepositWei && params.requiredDepositWei > 0n
+          ? ` Required relay deposit: ${formatEthAmount(params.requiredDepositWei)} ETH.`
+          : ''
+      const balanceHint =
+        params.latestCswBalanceWei !== null
+          ? ` Current CSW balance: ${formatEthAmount(params.latestCswBalanceWei)} ETH.`
+          : ''
+      return (
+        'Coinbase Wallet could not simulate this remove-owner UserOp. ' +
+        'This usually means the targeted owner slot changed, the signer context is stale, or the CSW does not have enough ETH for Relay deposit.' +
+        depositHint +
+        balanceHint +
+        ' Re-open the owner list to rebuild preview state, confirm the same owner is still at that index, and fund the CSW if needed.'
+      )
+    }
+    return null
+  }
+
   const fetchPreview = async (index: number) => {
     if (!canonicalCswAddress || !ownerSignerAddress) {
       setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
@@ -232,79 +436,6 @@ export function RemoveOwnerPage() {
     })
   }
 
-  const resolveActiveWalletAccount = async (
-    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>,
-  ): Promise<`0x${string}`> => {
-    const accounts = (await request({ method: 'eth_accounts' })) as unknown
-    const first =
-      Array.isArray(accounts) && typeof accounts[0] === 'string' && /^0x[0-9a-fA-F]{40}$/.test(accounts[0])
-        ? (accounts[0].toLowerCase() as `0x${string}`)
-        : null
-    if (!first) {
-      throw new Error('No active wallet account found. Reconnect your external EOA and try again.')
-    }
-    return first
-  }
-
-  const submitSelfAuthViaSendCalls = async (params: {
-    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
-    calls: Array<{ to: `0x${string}`; data: `0x${string}`; value: `0x${string}` }>
-    telemetryPrefix: string
-  }): Promise<`0x${string}`> => {
-    const sendCallsResult = await _submitOwnerViaSendCalls({
-      walletRequest: async (args) => await params.request(args),
-      csw: canonicalCswAddress as `0x${string}`,
-      calls: params.calls,
-      chainId: base.id,
-      onTelemetry: (event) => {
-        try {
-          const detail =
-            typeof event.detail === 'string'
-              ? event.detail
-              : JSON.stringify(event.detail)
-          const cap = event.step.includes('error') ? 4000 : 240
-          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
-          if (
-            event.step === 'broadcast_error' &&
-            event.detail &&
-            typeof event.detail === 'object'
-          ) {
-            const d = event.detail as Record<string, unknown>
-            setErrorDetail({
-              revertReason: (d.error as string | null) ?? null,
-              revertData: (d.revertData as string | null) ?? null,
-            })
-          }
-        } catch {
-          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
-        }
-      },
-    })
-    appendEvent(`${params.telemetryPrefix}:bundle_id=${sendCallsResult.callBundleId}`)
-    const resolution = await waitForCallsTxHash({
-      walletRequest: async (args) => await params.request(args),
-      callBundleId: sendCallsResult.callBundleId,
-      timeoutMs: 60_000,
-      intervalMs: 1_500,
-      onTelemetry: (event) => {
-        try {
-          const detail =
-            typeof event.detail === 'string'
-              ? event.detail
-              : JSON.stringify(event.detail)
-          const cap = event.step.includes('error') ? 4000 : 320
-          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
-        } catch {
-          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
-        }
-      },
-    })
-    if (!resolution.transactionHash) {
-      throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
-    }
-    return resolution.transactionHash
-  }
-
   const handleRemove = async () => {
     if (!preview || !canonicalCswAddress || !walletClient) {
       setPageError('Connect your wallet and select an owner index first.')
@@ -316,25 +447,20 @@ export function RemoveOwnerPage() {
       )
       return
     }
-    const request = (walletClient as any).request as
-      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
-      | undefined
-    if (!request) {
-      setPageError('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
-      return
-    }
     setBusy(true)
     setPageError(null)
     setLastErrorDetail(null)
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent(`lane:${isSelfAuthSession ? 'csw_wallet_sendcalls' : 'external_eoa_deposit'}`)
+    appendEvent('lane:relay_hook_execute_quote')
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`target:selector=${preview.txRequest.data.slice(0, 10)}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
+    let requiredDepositWei: bigint | null = null
+    let latestCswBalanceWei: bigint | null = null
     try {
       if (preview.txRequest.data.slice(0, 10).toLowerCase() !== REMOVE_OWNER_AT_INDEX_SELECTOR) {
         throw new Error(
@@ -351,8 +477,63 @@ export function RemoveOwnerPage() {
       if (relayGuard) {
         throw new Error(`Relay preview guard failed: ${relayGuard}.`)
       }
+      requiredDepositWei = BigInt(preview.relay.userCall.value)
+      appendEvent(`precheck:required_deposit_wei=${requiredDepositWei.toString(10)}`)
+
+      if (publicClient) {
+        appendEvent('precheck:owner_slot_refresh=start')
+        const latestTargetOwnerBytes = (await publicClient.readContract({
+          address: canonicalCswAddress as `0x${string}`,
+          abi: CSW_OWNER_ABI,
+          functionName: 'ownerAtIndex',
+          args: [BigInt(preview.preflight.targetOwnerIndex)],
+        })) as `0x${string}`
+        appendEvent(`precheck:owner_slot_refresh.bytes=${latestTargetOwnerBytes}`)
+        if (latestTargetOwnerBytes.toLowerCase() !== preview.preflight.targetOwnerBytes.toLowerCase()) {
+          const latestOwnerAddress = decodeOwnerAddress(latestTargetOwnerBytes)
+          throw new Error(
+            `Owner slot ${preview.preflight.targetOwnerIndex} changed since preview generation (was ${preview.preflight.targetOwnerAddress ?? preview.preflight.targetOwnerBytes}, now ${latestOwnerAddress ?? latestTargetOwnerBytes}). Re-select the owner and retry.`,
+          )
+        }
+      }
+
+      if (isSelfAuthSession && publicClient) {
+        latestCswBalanceWei = await publicClient.getBalance({
+          address: canonicalCswAddress as `0x${string}`,
+        })
+        appendEvent(`precheck:csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
+        if (requiredDepositWei > 0n && latestCswBalanceWei < requiredDepositWei) {
+          throw new Error(
+            `Canonical CSW balance (${formatEthAmount(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatEthAmount(requiredDepositWei)} ETH). Fund the CSW and retry.`,
+          )
+        }
+      }
+
+      if (publicClient) {
+        appendEvent('precheck:remove_owner_call_simulation=start')
+        try {
+          await publicClient.call({
+            account: canonicalCswAddress as `0x${string}`,
+            to: canonicalCswAddress as `0x${string}`,
+            data: preview.txRequest.data,
+          })
+          appendEvent('precheck:remove_owner_call_simulation=ok')
+        } catch (simulationError: unknown) {
+          const message =
+            simulationError instanceof Error
+              ? simulationError.message
+              : typeof simulationError === 'string'
+                ? simulationError
+                : 'unknown simulation error'
+          appendEvent(`precheck:remove_owner_call_simulation=failed:${message.slice(0, 220)}`)
+          throw new Error(
+            `On-chain precheck failed for remove-owner mutation: ${message}. Refresh the owner list and rebuild preview before retrying.`,
+          )
+        }
+      }
+
       const statusEndpoint = normalizeRelayStatusEndpoint(null, preview.relay.requestId)
-      appendEvent(`relay:request_id=${preview.relay.requestId}`)
+      appendEvent(`relay:preview_request_id=${preview.relay.requestId}`)
       appendEvent(`relay:user_call_to=${preview.relay.userCall.to}`)
       appendEvent(`relay:user_call_value=${preview.relay.userCall.value}`)
       appendEvent(`relay:user_call_selector=${preview.relay.userCall.data.slice(0, 10)}`)
@@ -363,197 +544,82 @@ export function RemoveOwnerPage() {
         appendEvent(`relay:payment_currency=${preview.relay.paymentDetails.currency}`)
         appendEvent(`relay:payment_amount=${preview.relay.paymentDetails.amount}`)
       }
-      appendEvent(`relay:status_endpoint=${statusEndpoint}`)
-
-      let depositTxHash: `0x${string}` | null = null
-      if (isSelfAuthSession) {
-        if (preview.relay.userCallSource === 'quote_tx') {
-          appendEvent('lane:self_auth_quote_tx_prepared_calls')
-          try {
-            const preparedPromise = _submitOwnerViaPreparedCalls({
-              walletRequest: async (args) => await request(args),
-              chainId: base.id,
-              sender: canonicalCswAddress as `0x${string}`,
-              to: preview.relay.userCall.to,
-              data: preview.relay.userCall.data,
-              value: preview.relay.userCall.value,
-              paymasterUrl: null,
-              approvalRunId: `remove-owner-${Date.now()}`,
-              executionMode: 'canonicalSmartWallet',
-              signerAddress: ownerSignerAddress ?? null,
-              canonicalCswAddress: canonicalCswAddress,
-              sessionKind: 'self_auth',
-              onStageEvent: (event) => {
-                const message = event.message ? ` ${event.message}` : ''
-                appendEvent(`prepared_calls.${event.stage}.${event.status}${message}`)
-              },
-            })
-            const preparedTimeout = new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error('ERR_PREPARED_CALLS_TIMEOUT')), 45_000)
-            })
-            depositTxHash = await Promise.race([preparedPromise, preparedTimeout])
-          } catch (error: any) {
-            const message = typeof error?.message === 'string' ? error.message : String(error ?? '')
-            appendEvent(`prepared_calls.fallback_reason=${message.slice(0, 220)}`)
-            appendEvent('fallback:quote_tx_via_eth_sendTransaction')
-            try {
-              const activeFrom = await resolveActiveWalletAccount(request)
-              if (activeFrom !== canonicalCswAddress.toLowerCase()) {
-                throw new Error(
-                  `quote_tx eth_sendTransaction requires active CSW sender ${canonicalCswAddress.toLowerCase()}, got ${activeFrom}.`,
-                )
-              }
-              const directQuoteTxHash = (await request({
-                method: 'eth_sendTransaction',
-                params: [
-                  {
-                    from: activeFrom,
-                    to: preview.relay.userCall.to,
-                    data: preview.relay.userCall.data,
-                    value: preview.relay.userCall.value,
-                  },
-                ],
-              })) as string
-              if (!directQuoteTxHash || !/^0x([a-fA-F0-9]{64})$/.test(directQuoteTxHash)) {
-                throw new Error('quote_tx eth_sendTransaction did not return a valid transaction hash.')
-              }
-              appendEvent(`fallback.quote_tx_eth_sendTransaction=${directQuoteTxHash}`)
-              depositTxHash = directQuoteTxHash as `0x${string}`
-            } catch (directQuoteError: any) {
-              const directMessage =
-                typeof directQuoteError?.message === 'string'
-                  ? directQuoteError.message
-                  : String(directQuoteError ?? '')
-              appendEvent(`fallback.quote_tx_eth_sendTransaction_failed=${directMessage.slice(0, 220)}`)
-            }
-            if (!depositTxHash) {
-              appendEvent('fallback:relay_execute_gasless_api')
-              try {
-                const executeRes = await apiFetch('/api/relay/execute-gasless', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    requestId: preview.relay.requestId,
-                    user: canonicalCswAddress,
-                    chainId: base.id,
-                    to: preview.relay.userCall.to,
-                    data: preview.relay.userCall.data,
-                    value: preview.relay.userCall.value,
-                  }),
-                })
-                const executeJson = (await executeRes.json().catch(() => null)) as {
-                  success?: boolean
-                  error?: string
-                  data?: unknown
-                } | null
-                if (!executeRes.ok || !executeJson?.success) {
-                  throw new Error(
-                    executeJson?.error ?? `relay_execute_gasless_failed_${executeRes.status}`,
-                  )
-                }
-                appendEvent('fallback.relay_execute_gasless_queued=ok')
-              } catch (executeGaslessError: any) {
-                const executeMessage =
-                  typeof executeGaslessError?.message === 'string'
-                    ? executeGaslessError.message
-                    : String(executeGaslessError ?? '')
-                appendEvent(`fallback.relay_execute_gasless_failed=${executeMessage.slice(0, 220)}`)
-              }
-            }
-            if (!depositTxHash) {
-              appendEvent('fallback:request_bound_deposit_via_orderId_paymentDetails')
-              const fallbackDepositId = preview.relay.orderId ?? preview.relay.requestId
-              const fallbackDepositAmountHex =
-                preview.relay.paymentDetails?.amount &&
-                /^[1-9][0-9]*$/.test(preview.relay.paymentDetails.amount)
-                  ? (`0x${BigInt(preview.relay.paymentDetails.amount).toString(16)}` as `0x${string}`)
-                  : preview.relay.userCall.value
-              if (!preview.relay.orderId || !preview.relay.paymentDetails) {
-                appendEvent(
-                  'fallback:protocol_fields_missing_using_requestId_userCallValue_permissive_mode',
-                )
-              }
-              const fallbackDepositCall = {
-                to: RELAY_DEPOSITORY_BASE,
-                data: encodeFunctionData({
-                  abi: RELAY_DEPOSITORY_ABI,
-                  functionName: 'depositNative',
-                  args: [canonicalCswAddress as `0x${string}`, fallbackDepositId],
-                }),
-                value: fallbackDepositAmountHex,
-              }
-              appendEvent(`fallback:deposit_id=${fallbackDepositId}`)
-              appendEvent(`fallback:deposit_to=${fallbackDepositCall.to}`)
-              appendEvent(`fallback:deposit_value=${fallbackDepositCall.value}`)
-              depositTxHash = await submitSelfAuthViaSendCalls({
-                request: async (args) => await request(args),
-                calls: [fallbackDepositCall],
-                telemetryPrefix: 'csw_wallet_sendcalls',
-              })
-            }
-          }
-        } else {
-          appendEvent('lane:self_auth_request_bound_deposit')
-          if (!preview.relay.orderId || !preview.relay.paymentDetails) {
-            throw new Error('ERR_REQUEST_BOUND_DEPOSIT_MISSING_PROTOCOL_FIELDS')
-          }
-          depositTxHash = await submitSelfAuthViaSendCalls({
-            request: async (args) => await request(args),
-            calls: [preview.relay.userCall],
-            telemetryPrefix: 'csw_wallet_sendcalls',
-          })
-        }
-      } else {
-        appendEvent('lane:external_signer_submit_quote_user_call')
-        appendEvent('external_eoa_deposit:start')
-        const activeFrom = await resolveActiveWalletAccount(request)
-        if (!ownerSignerAddress || activeFrom !== ownerSignerAddress.toLowerCase()) {
-          throw new Error(
-            `Active wallet account ${activeFrom} does not match connected signer ${ownerSignerAddress?.toLowerCase() ?? 'unknown'}.`,
-          )
-        }
-        const externalTx = (await request({
-          method: 'eth_sendTransaction',
-          params: [
-            {
-              from: activeFrom,
-              to: preview.relay.userCall.to,
-              data: preview.relay.userCall.data,
-              value: preview.relay.userCall.value,
-            },
-          ],
-        })) as string
-        if (!externalTx || !/^0x([a-fA-F0-9]{64})$/.test(externalTx)) {
-          throw new Error('Wallet did not return a valid Relay transaction hash.')
-        }
-        depositTxHash = externalTx as `0x${string}`
-        appendEvent(`external_eoa_deposit:tx=${externalTx}`)
+      if (!relayQuoteOptions) {
+        throw new Error(
+          'Relay quote options are not ready (missing amount/user/recipient/tx payload). Rebuild preview and retry.',
+        )
       }
-
-      if (!depositTxHash) {
-        throw new Error('Deposit tx hash unavailable; cannot confirm execution.')
+      appendEvent(`relay:status_endpoint_fallback=${statusEndpoint}`)
+      let activeQuote = relayHookQuote
+      if (!activeQuote) {
+        appendEvent('relay_quote:refetch=start')
+        const refetchResult = await refetchRelayHookQuote()
+        activeQuote = refetchResult.data
+        appendEvent(`relay_quote:refetch=status=${refetchResult.status}`)
       }
-      setTxHash(depositTxHash)
-      if (publicClient) {
-        await publicClient.waitForTransactionReceipt({
-          hash: depositTxHash,
-          confirmations: 1,
-          timeout: 60_000,
-        })
+      if (!activeQuote) {
+        const quoteErrorMessage =
+          relayHookQuoteError instanceof Error
+            ? relayHookQuoteError.message
+            : relayHookQuoteError
+              ? String(relayHookQuoteError)
+              : 'unknown quote error'
+        throw new Error(`Relay hook quote unavailable: ${quoteErrorMessage}`)
       }
-      try {
-        await apiFetch('/api/relay/index', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            txHash: depositTxHash,
-            chainId: base.id,
-          }),
-        })
-      } catch {}
-
+      const quotedPayload = extractExecuteQuotePayload(activeQuote)
+      const quotedRequestId = quotedPayload?.requestId ?? preview.relay.requestId
+      appendEvent(`relay_quote:request_id=${quotedRequestId ?? 'n/a'}`)
+      appendEvent(`relay_quote:tx_value_wei=${quotedPayload?.txValueWei ?? 'n/a'}`)
+      const executeProgressHashes = new Set<string>()
+      let executeTxHash: `0x${string}` | null = null
+      appendEvent('relay_execute:start')
+      const executed = await executeQuote((progress: ProgressData) => {
+        const stepId = progress.currentStep?.id ?? 'unknown'
+        const stepKind = progress.currentStep?.kind ?? 'unknown'
+        const itemStatus = progress.currentStepItem?.status ?? 'unknown'
+        const checkStatus = progress.currentStepItem?.checkStatus ?? 'n/a'
+        appendEvent(
+          `relay_execute:step=${stepId} kind=${stepKind} status=${itemStatus} check=${checkStatus}`,
+        )
+        const progressTxHashes = Array.isArray(progress.txHashes) ? progress.txHashes : []
+        for (const txEntry of progressTxHashes) {
+          const txHash = txEntry?.txHash
+          if (typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) continue
+          if (executeProgressHashes.has(txHash)) continue
+          executeProgressHashes.add(txHash)
+          executeTxHash = txHash as `0x${string}`
+          setTxHash(txHash)
+          appendEvent(`relay_execute:tx_hash=${txHash} chain=${txEntry.chainId}`)
+        }
+        if (progress.error) {
+          appendEvent(`relay_execute:error=${String(progress.error).slice(0, 220)}`)
+        }
+      })
+      if (!executed?.data) {
+        appendEvent('relay_execute:no_data')
+        throw new Error(
+          'Relay hook executeQuote returned no data. This usually means the wallet execution was cancelled before Relay accepted it.',
+        )
+      }
+      const executedPayload = extractExecuteQuotePayload(executed.data)
+      const requestId = executedPayload?.requestId ?? quotedRequestId
+      if (!requestId) {
+        throw new Error('Relay execute result missing requestId; cannot poll final execution status.')
+      }
+      appendEvent(`relay_execute:request_id=${requestId}`)
+      const statusEndpointFromExecute = normalizeRelayStatusEndpoint(
+        executedPayload?.statusEndpoint ?? quotedPayload?.statusEndpoint ?? null,
+        requestId,
+      )
+      appendEvent(`relay_execute:status_endpoint=${statusEndpointFromExecute}`)
+      const executeResultTxHash = extractRelayExecutionTxHash(executed.data)
+      if (executeResultTxHash && !executeTxHash) {
+        executeTxHash = executeResultTxHash
+        setTxHash(executeResultTxHash)
+        appendEvent(`relay_execute:result_tx_hash=${executeResultTxHash}`)
+      }
       const status = await pollRelayStatusEndpoint({
-        statusEndpoint,
+        statusEndpoint: statusEndpointFromExecute,
         timeoutMs: 120_000,
         intervalMs: 2_000,
         onTick: (message) => appendEvent(`relay_status.${message}`),
@@ -564,15 +630,16 @@ export function RemoveOwnerPage() {
           `ERR_RELAY_STATUS_INCOMPLETE:${String((status.raw as any)?.status ?? 'unknown')}`,
         )
       }
-      if (status.txHash) {
-        setTxHash(status.txHash)
+      const verifiedRelayTxHash = status.txHash ?? executeTxHash
+      if (!verifiedRelayTxHash) {
+        throw new Error(
+          'Relay reported success but no execution tx hash was surfaced by status or executeQuote progress.',
+        )
       }
-      if (!status.txHash) {
-        throw new Error('Relay reported success but did not return an execution tx hash for verification.')
-      }
+      setTxHash(verifiedRelayTxHash)
       if (publicClient) {
         const relayExecutionTx = await publicClient.getTransaction({
-          hash: status.txHash as `0x${string}`,
+          hash: verifiedRelayTxHash,
         })
         const relayInput = String(relayExecutionTx.input ?? '').toLowerCase()
         appendEvent(`relay_execution.tx_selector=${relayInput.slice(0, 10) || 'n/a'}`)
@@ -610,11 +677,12 @@ export function RemoveOwnerPage() {
       }
       appendEvent('relay_execution.owner_slot_changed=ok')
       setPageNotice(
-        `Owner removal confirmed on-chain (execution tx ${(status.txHash ?? depositTxHash).slice(0, 10)}…).`,
+        `Owner removal confirmed on-chain (execution tx ${verifiedRelayTxHash.slice(0, 10)}…).`,
       )
       setPreview(null)
       setSelectedIndex(null)
     } catch (err: any) {
+      appendEvent(`error:${getErrorMessage(err).slice(0, 260)}`)
       if (err && typeof err === 'object') {
         const revertDataCandidate =
           typeof err.data === 'string' ? err.data : typeof err.revertData === 'string' ? err.revertData : null
@@ -630,7 +698,12 @@ export function RemoveOwnerPage() {
           })
         }
       }
-      setPageError(typeof err?.message === 'string' ? err.message : 'Failed to remove owner.')
+      const mapped = mapRemoveOwnerSubmissionError({
+        error: err,
+        requiredDepositWei,
+        latestCswBalanceWei,
+      })
+      setPageError(mapped ?? getErrorMessage(err))
     } finally {
       setBusy(false)
     }
@@ -707,10 +780,9 @@ export function RemoveOwnerPage() {
 
         {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
-            In-app browser detected with a CSW self-auth session. This page
-            will use a request-bound depository submission for compatibility in this mode.
-            If you need Relay routed/cross-chain explorer visibility, switch to an external
-            owner signer and resubmit.
+            In-app browser detected with a CSW self-auth session. This page uses
+            Relay hook-native quote execution from the active signer context. If the
+            wallet prompt stalls, open the page in an external browser and retry.
           </div>
         ) : null}
 

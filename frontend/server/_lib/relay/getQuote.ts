@@ -155,6 +155,66 @@ function asHexString(value: unknown): `0x${string}` | null {
     : null
 }
 
+function collectCandidateObjects(root: unknown): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = []
+  const seen = new Set<unknown>()
+  const stack: unknown[] = [root]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || typeof current !== 'object' || seen.has(current)) continue
+    seen.add(current)
+    const obj = current as Record<string, unknown>
+    out.push(obj)
+    for (const value of Object.values(obj)) {
+      if (value && typeof value === 'object') stack.push(value)
+    }
+  }
+  return out
+}
+
+function normalizePaymentDetailsCandidate(
+  candidate: Record<string, unknown> | null | undefined,
+): RelayPaymentDetails | null {
+  if (!candidate) return null
+  const depository = asAddress(
+    candidate.depository ??
+      candidate.depositoryAddress ??
+      candidate.depositAddress ??
+      candidate.to ??
+      null,
+  )
+  const currency = asAddress(candidate.currency ?? candidate.token ?? null)
+  const amount = asDecimalString(candidate.amount)
+  const chainCandidate = candidate.chainId ?? candidate.chain ?? candidate.destinationChainId
+  const chainId =
+    typeof chainCandidate === 'number' && Number.isFinite(chainCandidate)
+      ? chainCandidate
+      : typeof chainCandidate === 'string' && chainCandidate.trim()
+        ? Number(chainCandidate)
+        : null
+  if (!depository && !amount) return null
+  return {
+    chainId: Number.isFinite(chainId as number) ? (chainId as number) : null,
+    depository,
+    currency,
+    amount,
+  }
+}
+
+function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
+  if (!raw || typeof raw !== 'object') return null
+  const objects = collectCandidateObjects(raw)
+  for (const obj of objects) {
+    const keyHit = Object.keys(obj).some((k) =>
+      ['paymentdetails', 'depository', 'depositaddress'].includes(k.toLowerCase()),
+    )
+    if (!keyHit) continue
+    const normalized = normalizePaymentDetailsCandidate(obj)
+    if (normalized?.amount && normalized.depository) return normalized
+  }
+  return null
+}
+
 /**
  * Extracts the fields we care about from a Relay /quote/v2 response:
  *   - requestId (for status polling and matching)
@@ -221,33 +281,40 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
         extract.orderId = v2OrderId
       }
 
-      const paymentRaw =
-        v2.paymentDetails && typeof v2.paymentDetails === 'object'
-          ? (v2.paymentDetails as Record<string, unknown>)
-          : null
-      if (paymentRaw) {
-        const depository = asAddress(
-          paymentRaw.depository ??
-            paymentRaw.depositoryAddress ??
-            paymentRaw.depositAddress ??
-            paymentRaw.to ??
-            null,
-        )
-        const currency = asAddress(paymentRaw.currency ?? paymentRaw.token ?? null)
-        const amount = asDecimalString(paymentRaw.amount)
-        const chainCandidate = paymentRaw.chainId ?? paymentRaw.chain ?? paymentRaw.destinationChainId
-        const chainId =
-          typeof chainCandidate === 'number' && Number.isFinite(chainCandidate)
-            ? chainCandidate
-            : typeof chainCandidate === 'string' && chainCandidate.trim()
-              ? Number(chainCandidate)
-              : null
-        extract.paymentDetails = {
-          chainId: Number.isFinite(chainId as number) ? (chainId as number) : null,
-          depository,
-          currency,
-          amount,
-        }
+      const paymentRaw = v2.paymentDetails as Record<string, unknown> | undefined
+      const normalized = normalizePaymentDetailsCandidate(paymentRaw)
+      if (normalized) {
+        extract.paymentDetails = normalized
+      }
+    }
+  }
+
+  if (!extract.paymentDetails) {
+    const fromRaw = findPaymentDetailsInRaw(raw)
+    if (fromRaw) {
+      extract.paymentDetails = fromRaw
+    }
+  }
+
+  // Some quote shapes expose only details.currencyIn.amount (no explicit
+  // paymentDetails block). Use that amount as a conservative fallback so
+  // request-bound submissions can still surface required funding in UI.
+  if (!extract.paymentDetails?.amount) {
+    const details = obj.details as Record<string, unknown> | undefined
+    const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+    const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+    const currencyInAddress = asAddress(currencyInObj?.address ?? null)
+    const amountFromCurrencyIn = asDecimalString(currencyIn?.amount)
+    if (
+      amountFromCurrencyIn &&
+      currencyInAddress &&
+      currencyInAddress.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
+    ) {
+      extract.paymentDetails = {
+        chainId: extract.paymentDetails?.chainId ?? null,
+        depository: extract.paymentDetails?.depository ?? null,
+        currency: extract.paymentDetails?.currency ?? currencyInAddress,
+        amount: amountFromCurrencyIn,
       }
     }
   }

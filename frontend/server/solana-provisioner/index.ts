@@ -767,7 +767,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     }
 
     // ── Post-provision: DLMM pool + Alpha Vault (opt-in) ──────────────
-    // When SOLANA_AUTO_POOL=1 and CRE scripts are available, automatically
+    // When SOLANA_AUTO_POOL=1 and keeper scripts are available, automatically
     // create a Meteora DLMM pool and Alpha Vault for the newly created mint.
     // This eliminates the chicken-and-egg problem where Phase 2 Finalize
     // needs a Meteora vault but the mint doesn't exist until wrap-token runs.

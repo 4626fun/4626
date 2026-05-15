@@ -883,7 +883,7 @@ describe('telegram webhook handler', () => {
     expect(Boolean(connectButton)).toBe(true)
     expect(String(connectButton?.callback_data ?? '')).toBe('menu:connect')
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:explore')).toBe(true)
-    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(false)
+    expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:keeper')).toBe(false)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:solana')).toBe(false)
     expect(callbackButtons.some((button: any) => typeof button?.switch_inline_query === 'string')).toBe(false)
     expect(callbackButtons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
@@ -1174,11 +1174,11 @@ describe('telegram webhook handler', () => {
     expect(text).not.toContain('- `/keepr status — vault status and config`')
   })
 
-  it('renders /cre status with premium chrome and collapsed details', async () => {
+  it('renders /keepr status with premium chrome and collapsed details', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     executeDeterministicCommandMock.mockResolvedValueOnce({
       ok: true,
-      response: ['CRE Status', '', '- vaults: 2', '- idleFunds: 0.42 ETH', '- reportsPending: 1'].join('\n'),
+      response: ['Keeper Status', '', '- vaults: 2', '- idleFunds: 0.42 ETH', '- reportsPending: 1'].join('\n'),
     })
 
     const req = createMockReq({
@@ -1186,7 +1186,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 3_0_1,
-        message: { message_id: 90_1, text: '/cre status', chat: { id: -100123 }, from: { id: 42 } },
+        message: { message_id: 90_1, text: '/keepr status', chat: { id: -100123 }, from: { id: 42 } },
       },
     })
     const res = createMockRes()
@@ -1196,14 +1196,14 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     const text = String(payload.text ?? '')
-    expect(text).toContain('AKITA | CRE STATUS')
-    expect(text).toContain('<code>/cre status</code>')
+    expect(text).toContain('AKITA | KEEPER STATUS')
+    expect(text).toContain('<code>/keepr status</code>')
     expect(text).toContain('<blockquote expandable>')
     const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(buttons.some((button: any) => String(button?.callback_data ?? '').startsWith('message:delete:42'))).toBe(true)
   })
 
-  it('blocks /cre status for non-admin users and falls back to the regular start surface', async () => {
+  it('blocks /keepr status for non-admin users and falls back to the regular start surface', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -1211,7 +1211,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 3_0_1_1,
-        message: { message_id: 90_2, text: '/cre status', chat: { id: -100123 }, from: { id: 99 } },
+        message: { message_id: 90_2, text: '/keepr status', chat: { id: -100123 }, from: { id: 99 } },
       },
     })
     const res = createMockRes()
@@ -1481,7 +1481,7 @@ describe('telegram webhook handler', () => {
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:trade')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:explore')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:topics')).toBe(true)
-    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:cre')).toBe(false)
+    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:keeper')).toBe(false)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:solana')).toBe(false)
     expect(flat.some((b: any) => String(b?.text ?? '').trim() === 'Start')).toBe(false)
   })
@@ -2516,7 +2516,7 @@ describe('telegram webhook handler', () => {
 
   it('handles callback query for help topic and responds with topic help', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
-    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr — ops\n- /cre status\n- /cre health' })
+    executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Keepr — ops\n- /keepr status\n- /keepr health' })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -2576,8 +2576,8 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('/cre status')
-    expect(String(payload.text ?? '')).toContain('/cre health')
+    expect(String(payload.text ?? '')).toContain('/keepr status')
+    expect(String(payload.text ?? '')).toContain('/keepr health')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
   })
@@ -2753,7 +2753,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.text ?? '').includes('⇢'))).toBe(false)
   })
 
-  it('handles callback query for CRE menu and returns one-tap operator actions', async () => {
+  it('handles callback query for keeper menu and returns one-tap operator actions', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     ;(fetch as any).mockReset()
@@ -2776,7 +2776,7 @@ describe('telegram webhook handler', () => {
         update_id: 11_3,
         callback_query: {
           id: 'cbq-cre',
-          data: 'menu:cre',
+          data: 'menu:keeper',
           from: { id: 42 },
           message: { message_id: 17, chat: { id: -100123 } },
         },
@@ -2791,17 +2791,17 @@ describe('telegram webhook handler', () => {
     expect(String((fetch as any).mock.calls[0][0])).toContain('/answerCallbackQuery')
     expect(String((fetch as any).mock.calls[1][0])).toContain('/editMessageText')
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
-    expect(String(payload.text ?? '')).toContain('CRE Ops')
+    expect(String(payload.text ?? '')).toContain('Keeper Ops')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:status')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:auction')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:tend')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:report')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:status')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:auction')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:tend')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:report')).toBe(true)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:solana')).toBe(true)
     expect(allButtons.some((button: any) => typeof button?.switch_inline_query_current_chat === 'string')).toBe(true)
   })
 
-  it('blocks stale CRE operator callbacks for non-admin users', async () => {
+  it('blocks stale keeper operator callbacks for non-admin users', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     ;(fetch as any).mockReset()
@@ -2818,7 +2818,7 @@ describe('telegram webhook handler', () => {
         update_id: 11_3_1,
         callback_query: {
           id: 'cbq-cre-blocked',
-          data: 'menu:cre',
+          data: 'menu:keeper',
           from: { id: 99 },
           message: { message_id: 17, chat: { id: -100123 } },
         },
@@ -2877,15 +2877,15 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Solana')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:solana')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:settle-fees')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:relay-entries')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:solana')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:settle-fees')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:relay-entries')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'menu:keeper')).toBe(true)
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:start')).toBe(true)
     expect(allButtons.some((button: any) => typeof button?.switch_inline_query_current_chat === 'string')).toBe(true)
   })
 
-  it('routes Solana action callbacks to the existing CRE command backend and keeps the Solana menu attached', async () => {
+  it('routes Solana action callbacks to the existing keeper command backend and keeps the Solana menu attached', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     executeDeterministicCommandMock.mockResolvedValueOnce({ ok: true, response: 'Fee settlement submitted.' })
 
@@ -2909,7 +2909,7 @@ describe('telegram webhook handler', () => {
         update_id: 11_5,
         callback_query: {
           id: 'cbq-settle',
-          data: 'cre:settle-fees',
+          data: 'keeper:settle-fees',
           from: { id: 42 },
           message: { message_id: 19, chat: { id: -100123 } },
         },
@@ -2924,15 +2924,15 @@ describe('telegram webhook handler', () => {
     expect(executeDeterministicCommandMock).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'xmtp-group-1',
       senderWallet: '0x00000000000000000000000000000000000000aa',
-      text: '/cre settle-fees',
+      text: '/keepr settle-fees',
     }))
     expect((fetch as any).mock.calls.length).toBe(2)
     const payload = JSON.parse(String((fetch as any).mock.calls[1][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Fee settlement submitted.')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:settle-fees')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'cre:relay-entries')).toBe(true)
-    expect(allButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:settle-fees')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'keeper:relay-entries')).toBe(true)
+    expect(allButtons.some((button: any) => button?.callback_data === 'menu:keeper')).toBe(true)
   })
 
   it('handles /status as a telegram-native command without delegating to keepr', async () => {

@@ -49,7 +49,7 @@ function isPrivilegedKeeprCommand(text: string): boolean {
   const t = text.trim().toLowerCase()
   if (matchesCommandFamily(text, 'send')) return true
   if (matchesCommandFamily(text, 'coin')) return true
-  if (t.startsWith('/cre') || t.startsWith('cre ')) {
+  if (t.startsWith('/keepr') || t.startsWith('keepr ')) {
     return (
       t.includes(' tend') ||
       t.includes(' report') ||

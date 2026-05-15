@@ -1,5 +1,6 @@
 import { RemoveOwnerStatusCards } from '@/features/accountSetup/removeOwner/RemoveOwnerStatusCards'
 import type { RemoveOwnerPreview } from '@/lib/removeOwner/removeOwnerHelpers'
+import { formatEther } from 'viem'
 
 type LastErrorDetail = {
   revertReason: string | null
@@ -34,6 +35,40 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
     lastErrorDetail,
     eventLog,
   } = props
+
+  const requiredDepositWei = (() => {
+    if (!preview?.relay) return null
+    const amount = preview.relay.paymentDetails?.amount
+    if (typeof amount === 'string' && /^[1-9][0-9]*$/.test(amount)) {
+      return BigInt(amount)
+    }
+    const quotedUserValue = preview.relay.userCall?.value
+    if (typeof quotedUserValue === 'string' && /^0x[0-9a-fA-F]+$/.test(quotedUserValue)) {
+      const wei = BigInt(quotedUserValue)
+      return wei > 0n ? wei : null
+    }
+    if (typeof quotedUserValue === 'string' && /^[1-9][0-9]*$/.test(quotedUserValue)) {
+      return BigInt(quotedUserValue)
+    }
+    return null
+  })()
+  const requiredDepositEth =
+    requiredDepositWei !== null
+      ? (() => {
+          const raw = formatEther(requiredDepositWei)
+          const [whole, fraction = ''] = raw.split('.')
+          const trimmed = fraction.replace(/0+$/, '').slice(0, 8)
+          return trimmed ? `${whole}.${trimmed}` : whole
+        })()
+      : null
+  const submitBlockedByMissingRequiredDeposit = Boolean(preview) && requiredDepositWei === null
+  const isQuoteTxMode = preview?.relay?.userCallSource === 'quote_tx'
+  const submitBlocked =
+    busy ||
+    !preview ||
+    previewLoading ||
+    !preview.preflight.simulation.ok ||
+    submitBlockedByMissingRequiredDeposit
 
   return (
     <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
@@ -98,6 +133,61 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               <span className="font-mono text-zinc-300">{preview.relay.paymentDetails.currency}</span>)
             </div>
           ) : null}
+          <div
+            className={
+              requiredDepositWei !== null
+                ? 'rounded-md border border-emerald-400/25 bg-emerald-500/10 p-2 text-[11px] text-emerald-100'
+                : 'rounded-md border border-amber-400/25 bg-amber-500/10 p-2 text-[11px] text-amber-100'
+            }
+          >
+            <div className="text-[10px] uppercase tracking-[0.16em] opacity-80">Required request-bound deposit</div>
+            {requiredDepositWei !== null ? (
+              <div className="mt-1">
+                <span className="font-mono">{requiredDepositEth} ETH</span>{' '}
+                <span className="opacity-85">(wei: {requiredDepositWei.toString(10)})</span>
+              </div>
+            ) : (
+              <div className="mt-1">
+                {isQuoteTxMode
+                  ? 'Missing explicit request-bound payment details and quote tx value. Submit is blocked to avoid underfunded deposits that stay in waiting.'
+                  : 'Missing `paymentDetails.amount` from Relay quote. Submit is blocked to avoid underfunded deposits that stay in waiting.'}
+              </div>
+            )}
+          </div>
+          {preview.preflight.relayQuoteDiagnostics ? (
+            <details className="rounded-md border border-white/10 bg-black/20 p-2 text-[10px] text-zinc-300">
+              <summary className="cursor-pointer uppercase tracking-[0.16em] text-zinc-500">
+                Relay quote diagnostics
+              </summary>
+              <div className="mt-2 space-y-1 break-all font-mono">
+                <div>requestId: {preview.preflight.relayQuoteDiagnostics.requestId ?? 'n/a'}</div>
+                <div>orderId: {preview.preflight.relayQuoteDiagnostics.orderId ?? 'n/a'}</div>
+                <div>
+                  paymentDetails.amount:{' '}
+                  {preview.preflight.relayQuoteDiagnostics.paymentDetails?.amount ?? 'n/a'}
+                </div>
+                <div>
+                  paymentDetails.depository:{' '}
+                  {preview.preflight.relayQuoteDiagnostics.paymentDetails?.depository ?? 'n/a'}
+                </div>
+                <div>
+                  userTx.value: {preview.preflight.relayQuoteDiagnostics.userTransaction?.value ?? 'n/a'}
+                </div>
+                <div>
+                  userTx.selector:{' '}
+                  {preview.preflight.relayQuoteDiagnostics.userTransaction?.dataSelector ?? 'n/a'}
+                </div>
+                {preview.preflight.relayQuoteDiagnostics.rawSnippet ? (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-zinc-500">raw snippet</summary>
+                    <pre className="mt-1 whitespace-pre-wrap break-all text-[10px]">
+                      {preview.preflight.relayQuoteDiagnostics.rawSnippet}
+                    </pre>
+                  </details>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
         </div>
       ) : null}
 
@@ -106,34 +196,28 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
           <div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Recommended lane</div>
             <div className="text-xs font-medium text-emerald-100">
-              {isSelfAuthSession
-                ? 'Self-auth compatibility remove route'
-                : 'Relay routed remove route'}
+              Relay hook-native remove route
             </div>
           </div>
           <p className="text-[10px] text-emerald-100/80">
-            {isSelfAuthSession
-              ? "Submit a request-bound depository call, then wait for Relay execution + owner-slot change."
-              : "Submit Relay's quoted user transaction, then wait for Relay execution + owner-slot change."}
+            Fetch Relay quote via hook, execute via `executeQuote`, then require Relay success +
+            owner-slot change before reporting completion.
           </p>
-          {!isSelfAuthSession ? (
-            <div className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-100">
-              You are not in CSW self-auth mode. This flow sends Relay&apos;s quoted user transaction from your external EOA.
-            </div>
-          ) : null}
           <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-2.5">
             <div className="flex items-center justify-between text-xs">
               <span>Step 1. Select owner slot</span>
               <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>{preview ? 'done' : 'pending'}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span>
-                {isSelfAuthSession
-                  ? 'Step 2. Submit request-bound depository call'
-                  : 'Step 2. Submit Relay quoted user transaction'}
-              </span>
-              <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>
-                {preview ? 'ready' : 'blocked'}
+              <span>Step 2. Execute Relay quote</span>
+              <span
+                className={
+                  preview && !submitBlockedByMissingRequiredDeposit
+                    ? 'text-emerald-300'
+                    : 'text-zinc-500'
+                }
+              >
+                {preview && !submitBlockedByMissingRequiredDeposit ? 'ready' : 'blocked'}
               </span>
             </div>
           </div>
@@ -144,40 +228,29 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
             Submission
           </summary>
           <div className="mt-3 space-y-3">
-            {isSelfAuthSession ? (
-              <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/5 p-3 text-[11px] text-emerald-100/85 space-y-1">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/70">
-                  Relay routed mode
-                </div>
-                <p className="leading-relaxed">
-                  This session is CSW self-auth. Submission uses a request-bound depository call
-                  for compatibility. Switch to an external owner signer if you need router-routed
-                  Relay explorer visibility for Part 1.
-                </p>
-              </div>
-            ) : null}
-
             <button
               type="button"
-              disabled={
-                busy ||
-                !preview ||
-                previewLoading ||
-                !preview.preflight.simulation.ok
-              }
+              disabled={submitBlocked}
               onClick={() => void handleRemove()}
               className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {busy
-                ? isSelfAuthSession
-                  ? 'Submitting request-bound depository call…'
-                  : 'Submitting Relay quoted user transaction…'
+              {submitBlockedByMissingRequiredDeposit
+                ? 'Blocked: missing required Relay deposit amount'
+                : busy
+                ? 'Executing Relay quote…'
                 : isSelfAuthSession
-                  ? `Submit relay remove for owner index ${preview?.preflight.targetOwnerIndex ?? '?'} (self-auth mode)`
+                  ? `Execute relay remove for owner index ${preview?.preflight.targetOwnerIndex ?? '?'} (self-auth mode)`
                   : !preview
                     ? 'Select an owner above first'
-                    : `Submit relay remove for owner index ${preview.preflight.targetOwnerIndex}`}
+                    : `Execute relay remove for owner index ${preview.preflight.targetOwnerIndex}`}
             </button>
+            {submitBlockedByMissingRequiredDeposit ? (
+              <div className="text-[11px] text-amber-200/90">
+                {isQuoteTxMode
+                  ? 'Rebuild preview until Relay returns a positive quote tx value; cannot safely submit without a required deposit amount.'
+                  : 'Rebuild preview until Relay returns `paymentDetails.amount`; request-bound deposit cannot be safely submitted without it.'}
+              </div>
+            ) : null}
           </div>
         </details>
       </div>

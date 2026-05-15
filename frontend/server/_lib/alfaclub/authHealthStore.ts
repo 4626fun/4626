@@ -394,7 +394,8 @@ async function writeHealthRow(
     const lastWarnAt = lastHealthWriteWarnByKey[key] ?? Number.NEGATIVE_INFINITY
     if (now - lastWarnAt >= HEALTH_WRITE_WARN_THROTTLE_MS) {
       lastHealthWriteWarnByKey[key] = now
-      logger.warn('[alfaclub-auth-health] health row write failed; continuing', {
+      const emit = key === HEALTH_KEY_BRIDGE ? logger.info.bind(logger) : logger.warn.bind(logger)
+      emit('[alfaclub-auth-health] health row write failed; continuing', {
         key,
         code: typeof code === 'string' ? code : null,
       })

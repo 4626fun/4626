@@ -1,24 +1,24 @@
 /**
- * ElizaOS CRE Plugin — Observe & Trigger keeper operations
+ * ElizaOS Keeper Plugin — Observe & Trigger keeper operations
  *
- * Imports CRE action modules directly (same repo, resolved by tsx).
+ * Imports keeper action modules directly (same repo, resolved by tsx).
  * Provides two command groups:
  *
  *   Observe (read-only, open to all):
- *     /cre status     — Vault states (idle funds, last report, deployment threshold)
- *     /cre auction    — CCA auction states (active, graduated, pending settlement)
- *     /cre solana     — Solana status (price deviation, pending entries, fee balances)
- *     /cre health     — Combined health check across all systems
+ *     /keepr status     — Vault states (idle funds, last report, deployment threshold)
+ *     /keepr auction    — CCA auction states (active, graduated, pending settlement)
+ *     /keepr solana     — Solana status (price deviation, pending entries, fee balances)
+ *     /keepr health     — Combined health check across all systems
  *
  *   Trigger (admin-only, requires OWNER/ADMIN role):
- *     /cre tend [vault]       — Force-tend a vault (deploy idle funds)
- *     /cre report [vault]     — Force-report a vault (harvest yields)
- *     /cre settle [strategy]  — Force CCA finalization
- *     /cre settle-fees        — Force Solana fee settlement to Base
- *     /cre relay-entries      — Force relay of Solana lottery entries to Base
- *     /cre relay-winners      — Force relay winners to Solana
- *     /cre graduate           — Force graduation check
- *     /cre queue              — Force process pending Keepr action queue items
+ *     /keepr tend [vault]       — Force-tend a vault (deploy idle funds)
+ *     /keepr report [vault]     — Force-report a vault (harvest yields)
+ *     /keepr settle [strategy]  — Force CCA finalization
+ *     /keepr settle-fees        — Force Solana fee settlement to Base
+ *     /keepr relay-entries      — Force relay of Solana lottery entries to Base
+ *     /keepr relay-winners      — Force relay winners to Solana
+ *     /keepr graduate           — Force graduation check
+ *     /keepr queue              — Force process pending Keepr action queue items
  *
  * Graceful degradation: if required env vars are missing, commands return
  * a helpful "not configured" message instead of crashing.
@@ -37,11 +37,11 @@ import { getKeeprVaultByGroupId } from '../../../../_lib/keepr/keeprRegistry.js'
 import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 
 // ---------------------------------------------------------------------------
-// CRE action imports (relative path from frontend/server/agent/eliza/plugins/cre/)
-// These resolve at runtime via tsx — CRE modules are ESM in the same repo.
+// Keeper action imports (relative path from frontend/server/agent/eliza/plugins/cre/)
+// These resolve at runtime via tsx — keeper modules are ESM in the same repo.
 // ---------------------------------------------------------------------------
 
-// We use dynamic imports so the plugin loads even if CRE deps are missing.
+// We use dynamic imports so the plugin loads even if keeper deps are missing.
 // Each handler catches import errors and returns a "not configured" message.
 
 type VaultState = {
@@ -143,7 +143,7 @@ type KeeprActionQueueResult = {
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
-export const CRE_WRITE_SUBCOMMAND_PREFIXES = [
+export const KEEPR_WRITE_SUBCOMMAND_PREFIXES = [
   'tend',
   'report',
   'settle',
@@ -154,12 +154,14 @@ export const CRE_WRITE_SUBCOMMAND_PREFIXES = [
   'queue',
 ] as const
 
-export function isCreWriteCommandText(text: string): boolean {
+export function isKeeperWriteCommandText(text: string): boolean {
   const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ')
-  if (!normalized.startsWith('/cre ') && !normalized.startsWith('cre ')) return false
-  const withoutPrefix = normalized.startsWith('/cre ') ? normalized.slice(5).trim() : normalized.slice(4).trim()
+  if (!normalized.startsWith('/keepr ') && !normalized.startsWith('keepr ')) return false
+  const withoutPrefix = normalized.startsWith('/keepr ')
+    ? normalized.slice('/keepr '.length).trim()
+    : normalized.slice('keepr '.length).trim()
   if (!withoutPrefix) return false
-  return CRE_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
+  return KEEPR_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
 }
 
 // ---------------------------------------------------------------------------
@@ -190,49 +192,53 @@ function envFlagEnabled(raw: string | undefined): boolean {
 }
 
 function isDryRunEnabled(): boolean {
-  return envFlagEnabled(process.env.ELIZA_CRE_DRY_RUN) || envFlagEnabled(process.env.DRY_RUN)
+  return (
+    envFlagEnabled(process.env.ELIZA_KEEPR_DRY_RUN)
+    || envFlagEnabled(process.env.ELIZA_CRE_DRY_RUN)
+    || envFlagEnabled(process.env.DRY_RUN)
+  )
 }
 
 // ---------------------------------------------------------------------------
-// Dynamic CRE imports (lazy, cached)
+// Dynamic keeper imports (lazy, cached)
 // ---------------------------------------------------------------------------
 
-const CRE_BASE = '../../../../../../cre'
+const KEEPR_BASE = '../../../../../../cre'
 
 async function importVaultKeeper() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/vault-keeper.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/vault-keeper.action.js`)
 }
 
 async function importCcaFinalization() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/cca-finalization.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/cca-finalization.action.js`)
 }
 
 async function importKeeprActionQueue() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-action-queue.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-action-queue.action.js`)
 }
 
 async function importRelayEntries() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-relay-entries.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-relay-entries.action.js`)
 }
 
 async function importFeeSettlement() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-settle-fees.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-settle-fees.action.js`)
 }
 
 async function importWinnerRelay() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-winner-relay.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-winner-relay.action.js`)
 }
 
 async function importGraduation() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-graduation.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-graduation.action.js`)
 }
 
 async function importPriceMonitor() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-solana-price-monitor.action.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-price-monitor.action.js`)
 }
 
 async function importRegistry() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/utils/registry.js`)
+  return import(/* @vite-ignore */ `${KEEPR_BASE}/utils/registry.js`)
 }
 
 // ---------------------------------------------------------------------------
@@ -292,13 +298,13 @@ function formatPriceMonitor(r: PriceMonitorResult): string {
 // ---------------------------------------------------------------------------
 
 const creObserveAction: Action = {
-  name: 'CRE_OBSERVE',
-  similes: ['cre status', 'cre health', 'cre auction', 'cre solana', 'keeper status'],
-  description: 'Show CRE keeper status — vault states, auction states, Solana health, or combined health check.',
+  name: 'KEEPR_OBSERVE',
+  similes: ['keepr status', 'keepr health', 'keepr auction', 'keepr solana', 'keeper status'],
+  description: 'Show keeper status — vault states, auction states, Solana health, or combined health check.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    if (!text.startsWith('/cre ')) return false
+    if (!text.startsWith('/keepr ')) return false
     const sub = text.slice(5).trim()
     return ['status', 'health', 'auction', 'solana'].some((cmd) => sub.startsWith(cmd))
   },
@@ -322,24 +328,24 @@ const creObserveAction: Action = {
         await handleObserveSolana(callback)
       }
     } catch (err: any) {
-      await callback?.({ text: `CRE observe error: ${err.message}` } as Content)
+      await callback?.({ text: `keeper observe error: ${err.message}` } as Content)
     }
   },
 
   examples: [
     [
-      { name: 'user', content: { text: '/cre status' } },
-      { name: 'agent', content: { text: 'CRE Vault Status\n...' } },
+      { name: 'user', content: { text: '/keepr status' } },
+      { name: 'agent', content: { text: 'Keeper Vault Status\n...' } },
     ],
     [
-      { name: 'user', content: { text: '/cre health' } },
-      { name: 'agent', content: { text: 'CRE Health Check\n...' } },
+      { name: 'user', content: { text: '/keepr health' } },
+      { name: 'agent', content: { text: 'Keeper Health Check\n...' } },
     ],
   ],
 }
 
 async function handleObserveStatus(callback: HandlerCallback | undefined, includeAll: boolean): Promise<void> {
-  const parts: string[] = ['**CRE Keeper Status**\n']
+  const parts: string[] = ['**Keeper Status**\n']
 
   // Vault states
   try {
@@ -362,7 +368,7 @@ async function handleObserveStatus(callback: HandlerCallback | undefined, includ
     }
   } catch (err: any) {
     if (err.message?.includes('Cannot find module') || err.message?.includes('KEEPR_API')) {
-      parts.push('Vault status: not configured (missing KEEPR_API_KEY or CRE modules)')
+      parts.push('Vault status: not configured (missing KEEPR_API_KEY or keeper modules)')
     } else {
       parts.push(`Vault status error: ${err.message}`)
     }
@@ -464,18 +470,18 @@ async function handleObserveSolana(callback: HandlerCallback | undefined): Promi
 // ---------------------------------------------------------------------------
 
 const creTriggerAction: Action = {
-  name: 'CRE_TRIGGER',
+  name: 'KEEPR_TRIGGER',
   similes: [
-    'cre tend', 'cre report', 'cre settle',
-    'cre settle fees', 'cre settle-fees',
-    'cre relay entries', 'cre relay-entries',
-    'cre graduate', 'cre queue',
+    'keepr tend', 'keepr report', 'keepr settle',
+    'keepr settle fees', 'keepr settle-fees',
+    'keepr relay entries', 'keepr relay-entries',
+    'keepr graduate', 'keepr queue',
   ],
-  description: 'Trigger CRE keeper operations on demand — tend, report, settle, settle-fees, relay-entries, relay-winners, graduate, queue.',
+  description: 'Trigger keeper operations on demand — tend, report, settle, settle-fees, relay-entries, relay-winners, graduate, queue.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    return isCreWriteCommandText(text)
+    return isKeeperWriteCommandText(text)
   },
 
   handler: async (
@@ -492,7 +498,7 @@ const creTriggerAction: Action = {
     const conversationId = String(meta?.conversationId ?? '').trim()
     const senderAddress = String(meta?.senderAddress ?? '').trim().toLowerCase()
 
-    // Parse optional address argument: /cre tend 0x1234...
+    // Parse optional address argument: /keepr tend 0x1234...
     const addressMatch = text.match(/(0x[a-fA-F0-9]{40})/i)
     const address = addressMatch ? addressMatch[1] as `0x${string}` : undefined
 
@@ -501,8 +507,8 @@ const creTriggerAction: Action = {
       const target = address ? ` target=${address}` : ''
       await callback?.({
         text:
-          `DRY_RUN is enabled. Skipping mutating CRE command \`/cre ${command}\`${target}.\n` +
-          'Set DRY_RUN=0 and ELIZA_CRE_DRY_RUN=0 to execute live operations.',
+          `DRY_RUN is enabled. Skipping mutating keeper command \`/keepr ${command}\`${target}.\n` +
+          'Set DRY_RUN=0 and ELIZA_KEEPR_DRY_RUN=0 to execute live operations.',
       } as Content)
       return
     }
@@ -519,7 +525,7 @@ const creTriggerAction: Action = {
     const vault = await getKeeprVaultByGroupId(conversationId)
     if (!vault) {
       await callback?.({
-        text: 'Vault not configured. /cre trigger commands require a connected vault.',
+        text: 'Vault not configured. /keepr trigger commands require a connected vault.',
       } as Content)
       return
     }
@@ -547,20 +553,20 @@ const creTriggerAction: Action = {
       } else if (sub.startsWith('queue')) {
         await handleTriggerQueue(callback)
       } else {
-        await callback?.({ text: `Unknown CRE trigger: \`${sub}\`. Use \`/cre help\` for available commands.` } as Content)
+        await callback?.({ text: `Unknown keeper trigger: \`${sub}\`. Use \`/keepr help\` for available commands.` } as Content)
       }
     } catch (err: any) {
-      await callback?.({ text: `CRE trigger error: ${err.message}` } as Content)
+      await callback?.({ text: `keeper trigger error: ${err.message}` } as Content)
     }
   },
 
   examples: [
     [
-      { name: 'user', content: { text: '/cre tend' } },
+      { name: 'user', content: { text: '/keepr tend' } },
       { name: 'agent', content: { text: 'Running vault tend...\nTended 2/3 vaults, reported 1.' } },
     ],
     [
-      { name: 'user', content: { text: '/cre settle-fees' } },
+      { name: 'user', content: { text: '/keepr settle-fees' } },
       { name: 'agent', content: { text: 'Running Solana fee settlement...\nFees settled: 1,234 tokens, bridged to Base.' } },
     ],
   ],
@@ -761,13 +767,13 @@ async function handleTriggerQueue(callback: HandlerCallback | undefined): Promis
 // ---------------------------------------------------------------------------
 
 const creHelpAction: Action = {
-  name: 'CRE_HELP',
-  similes: ['cre help', 'cre commands'],
-  description: 'Show available CRE keeper commands.',
+  name: 'KEEPR_HELP',
+  similes: ['keepr help', 'keepr commands'],
+  description: 'Show available keeper commands.',
 
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    return text === '/cre' || text === '/cre help' || text === '/cre commands'
+    return text === '/keepr' || text === '/keepr help' || text === '/keepr commands'
   },
 
   handler: async (
@@ -783,21 +789,21 @@ const creHelpAction: Action = {
     const dryRun = isDryRunEnabled() ? 'yes' : 'no'
 
     const helpText = [
-      '**CRE Keeper Commands**\n',
+      '**Keeper Commands**\n',
       '**Observe (read-only):**',
-      '  `/cre status` — Vault states (idle funds, last report)',
-      '  `/cre auction` — CCA auction states',
-      '  `/cre solana` — Solana price deviation & health',
-      '  `/cre health` — Combined health check\n',
+      '  `/keepr status` — Vault states (idle funds, last report)',
+      '  `/keepr auction` — CCA auction states',
+      '  `/keepr solana` — Solana price deviation & health',
+      '  `/keepr health` — Combined health check\n',
       '**Trigger (execute operations):**',
-      '  `/cre tend [vault]` — Deploy idle funds',
-      '  `/cre report [vault]` — Harvest yields',
-      '  `/cre settle [strategy]` — Run CCA finalization',
-      '  `/cre settle-fees` — Settle Solana fees to Base',
-      '  `/cre relay-entries` — Relay lottery entries from Solana',
-      '  `/cre relay-winners` — Relay winners to Solana',
-      '  `/cre graduate` — Check graduation status',
-      '  `/cre queue` — Process pending queue actions\n',
+      '  `/keepr tend [vault]` — Deploy idle funds',
+      '  `/keepr report [vault]` — Harvest yields',
+      '  `/keepr settle [strategy]` — Run CCA finalization',
+      '  `/keepr settle-fees` — Settle Solana fees to Base',
+      '  `/keepr relay-entries` — Relay lottery entries from Solana',
+      '  `/keepr relay-winners` — Relay winners to Solana',
+      '  `/keepr graduate` — Check graduation status',
+      '  `/keepr queue` — Process pending queue actions\n',
       `**Config:** Base keeper: ${baseConfigured} | Solana: ${solanaConfigured} | API: ${apiConfigured} | Dry run: ${dryRun}`,
     ]
 
@@ -806,8 +812,8 @@ const creHelpAction: Action = {
 
   examples: [
     [
-      { name: 'user', content: { text: '/cre help' } },
-      { name: 'agent', content: { text: 'CRE Keeper Commands\n...' } },
+      { name: 'user', content: { text: '/keepr help' } },
+      { name: 'agent', content: { text: 'Keeper Commands\n...' } },
     ],
   ],
 }
@@ -817,8 +823,8 @@ const creHelpAction: Action = {
 // ---------------------------------------------------------------------------
 
 export const crePlugin: Plugin = {
-  name: '@4626/plugin-cre',
-  description: 'CRE keeper operations — observe vault/auction/Solana status and trigger keeper actions on demand.',
+  name: '@4626/plugin-keepr',
+  description: 'Keeper operations — observe vault/auction/Solana status and trigger keeper actions on demand.',
   actions: [creHelpAction, creObserveAction, creTriggerAction],
 }
 

@@ -185,7 +185,7 @@ const TELEGRAM_MENU_LABELS = {
   wallet: '■ Wallet',
   trade: 'Trade',
   explore: 'Explore',
-  cre: 'CRE Ops',
+  keeper: 'Keeper Ops',
   solana: 'Solana',
   help: 'Help',
   vaults: 'Vaults',
@@ -1653,11 +1653,11 @@ function shouldShowOperatorMenus(params: { isAdmin: boolean }): boolean {
 
 function isOperatorCallbackToken(rawData: string): boolean {
   const token = asTrimmed(rawData).toLowerCase()
-  return token === 'menu:cre' || token === 'menu:solana' || token.startsWith('cre:')
+  return token === 'menu:keeper' || token === 'menu:solana' || token.startsWith('keeper:')
 }
 
 function isOperatorCommand(rawText: string): boolean {
-  return asTrimmed(rawText).toLowerCase().startsWith('/cre')
+  return asTrimmed(rawText).toLowerCase().startsWith('/keepr')
 }
 
 function buildOperatorAccessDeniedResponse(params: {
@@ -1678,18 +1678,18 @@ function buildCreReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: 'Status', callback_data: 'cre:status' },
-        { text: 'Auctions', callback_data: 'cre:auction' },
+        { text: 'Status', callback_data: 'keeper:status' },
+        { text: 'Auctions', callback_data: 'keeper:auction' },
       ],
       [
-        { text: 'Health', callback_data: 'cre:health' },
+        { text: 'Health', callback_data: 'keeper:health' },
         { text: menuLabel('solana'), callback_data: 'menu:solana' },
       ],
       [
-        { text: 'Tend All', callback_data: 'cre:tend' },
-        { text: 'Report All', callback_data: 'cre:report' },
+        { text: 'Tend All', callback_data: 'keeper:tend' },
+        { text: 'Report All', callback_data: 'keeper:report' },
       ],
-      [{ text: 'Ask AI About CRE', switch_inline_query_current_chat: 'ai summarize current CRE status, auctions, health, and next operator actions' }],
+      [{ text: 'Ask AI About Keeper', switch_inline_query_current_chat: 'ai summarize current keeper status, auctions, health, and next operator actions' }],
       [{ text: menuLabel('back'), callback_data: 'menu:start' }],
     ],
   }
@@ -1699,16 +1699,16 @@ function buildSolanaReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
-        { text: 'Status', callback_data: 'cre:solana' },
-        { text: 'Health', callback_data: 'cre:health' },
+        { text: 'Status', callback_data: 'keeper:solana' },
+        { text: 'Health', callback_data: 'keeper:health' },
       ],
       [
-        { text: 'Settle Fees', callback_data: 'cre:settle-fees' },
-        { text: 'Relay Entries', callback_data: 'cre:relay-entries' },
+        { text: 'Settle Fees', callback_data: 'keeper:settle-fees' },
+        { text: 'Relay Entries', callback_data: 'keeper:relay-entries' },
       ],
       [{ text: 'Ask AI About Solana', switch_inline_query_current_chat: 'ai summarize current Solana health, pending entries, and fee settlement status' }],
       [
-        { text: menuLabel('cre'), callback_data: 'menu:cre' },
+        { text: menuLabel('keeper'), callback_data: 'menu:keeper' },
         { text: menuLabel('back'), callback_data: 'menu:start' },
       ],
     ],
@@ -1717,11 +1717,11 @@ function buildSolanaReplyMarkup(): Record<string, unknown> {
 
 function resolveOperatorReplyMarkup(commandText: string): Record<string, unknown> | undefined {
   const normalized = asTrimmed(commandText).toLowerCase()
-  if (!normalized.startsWith('/cre')) return undefined
+  if (!normalized.startsWith('/keepr')) return undefined
   if (
-    normalized === '/cre solana' ||
-    normalized === '/cre settle-fees' ||
-    normalized === '/cre relay-entries'
+    normalized === '/keepr solana' ||
+    normalized === '/keepr settle-fees' ||
+    normalized === '/keepr relay-entries'
   ) {
     return buildSolanaReplyMarkup()
   }
@@ -1779,7 +1779,7 @@ function resolveStaticMenuCallbackResponse(params: {
       replyMarkup: buildTradeMenuReplyMarkup(),
     }
   }
-  if (token === 'menu:cre') {
+  if (token === 'menu:keeper') {
     if (!shouldShowOperatorMenus({ isAdmin: params.isAdmin })) {
       return buildOperatorAccessDeniedResponse({
         chatId: params.chatId,
@@ -5720,10 +5720,10 @@ async function handleTelegramDeployCallback(params: {
 function buildPremiumObservedCommandText(commandText: string, responseText: string): string | null {
   const normalized = asTrimmed(commandText).toLowerCase()
   const detailLines = responseText.split('\n').map((line) => line.trimEnd())
-  if (normalized === '/cre status') {
+  if (normalized === '/keepr status') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE STATUS',
-      command: '/cre status',
+      title: 'AKITA | KEEPER STATUS',
+      command: '/keepr status',
       summaryLines: [
         'Vault keeper snapshot.',
         'Idle funds, tend cadence, and latest report state.',
@@ -5732,10 +5732,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre auction') {
+  if (normalized === '/keepr auction') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE AUCTIONS',
-      command: '/cre auction',
+      title: 'AKITA | KEEPER AUCTIONS',
+      command: '/keepr auction',
       summaryLines: [
         'CCA auction snapshot.',
         'Settlement and graduation state across scoped vaults.',
@@ -5744,10 +5744,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre solana') {
+  if (normalized === '/keepr solana') {
     return buildTelegramCommandChrome({
       title: 'AKITA | SOLANA',
-      command: '/cre solana',
+      command: '/keepr solana',
       summaryLines: [
         'Solana bridge and relay snapshot.',
         'Price deviation, entries, and fee path health.',
@@ -5756,10 +5756,10 @@ function buildPremiumObservedCommandText(commandText: string, responseText: stri
       expandableDetails: true,
     })
   }
-  if (normalized === '/cre health') {
+  if (normalized === '/keepr health') {
     return buildTelegramCommandChrome({
-      title: 'AKITA | CRE HEALTH',
-      command: '/cre health',
+      title: 'AKITA | KEEPER HEALTH',
+      command: '/keepr health',
       summaryLines: [
         'Combined keeper health check.',
         'Cross-chain readiness and operator attention points.',
@@ -7464,7 +7464,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await answerTelegramCallbackQuery({
         botToken,
         callbackQueryId,
-        text: 'Only configured bot operators can use CRE Ops and Solana actions.',
+        text: 'Only configured bot operators can use Keeper Ops and Solana actions.',
         showAlert: true,
       }).catch(() => {})
       return res.status(200).json({

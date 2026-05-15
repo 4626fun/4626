@@ -16,15 +16,15 @@ const MENU_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
   help: '/help',
 }
 
-const CRE_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
-  status: '/cre status',
-  auction: '/cre auction',
-  solana: '/cre solana',
-  health: '/cre health',
-  tend: '/cre tend',
-  report: '/cre report',
-  'settle-fees': '/cre settle-fees',
-  'relay-entries': '/cre relay-entries',
+const KEEPER_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
+  status: '/keepr status',
+  auction: '/keepr auction',
+  solana: '/keepr solana',
+  health: '/keepr health',
+  tend: '/keepr tend',
+  report: '/keepr report',
+  'settle-fees': '/keepr settle-fees',
+  'relay-entries': '/keepr relay-entries',
 }
 
 const HELP_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
@@ -43,7 +43,7 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'menu:start': 'Start menu',
   'menu:trade': 'Trade menu',
   'menu:explore': 'Explore menu',
-  'menu:cre': 'CRE ops',
+  'menu:keeper': 'Keeper ops',
   'menu:solana': 'Solana ops',
   'menu:topics': 'Help topics',
   'menu:wallet': 'Wallet ready',
@@ -60,14 +60,14 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'menu:connect': 'Connect flow',
   'menu:status': 'Link status',
   'menu:rooms': 'Rooms list',
-  'cre:status': 'CRE status',
-  'cre:auction': 'Auction status',
-  'cre:solana': 'Solana status',
-  'cre:health': 'CRE health',
-  'cre:tend': 'Tending vaults',
-  'cre:report': 'Reporting vaults',
-  'cre:settle-fees': 'Settling fees',
-  'cre:relay-entries': 'Relaying entries',
+  'keeper:status': 'Keeper status',
+  'keeper:auction': 'Auction status',
+  'keeper:solana': 'Solana status',
+  'keeper:health': 'Keeper health',
+  'keeper:tend': 'Tending vaults',
+  'keeper:report': 'Reporting vaults',
+  'keeper:settle-fees': 'Settling fees',
+  'keeper:relay-entries': 'Relaying entries',
 }
 
 function resolveNamespacedCallbackCommand(
@@ -84,8 +84,8 @@ export function resolveHelpCallbackCommand(rawData: string): string | null {
   const menuCommand = resolveNamespacedCallbackCommand(token, 'menu:', MENU_CALLBACK_COMMANDS)
   if (menuCommand) return menuCommand
 
-  const creCommand = resolveNamespacedCallbackCommand(token, 'cre:', CRE_CALLBACK_COMMANDS)
-  if (creCommand) return creCommand
+  const keeperCommand = resolveNamespacedCallbackCommand(token, 'keeper:', KEEPER_CALLBACK_COMMANDS)
+  if (keeperCommand) return keeperCommand
 
   if (!token.startsWith('help:')) return null
   const action = token.slice(5)

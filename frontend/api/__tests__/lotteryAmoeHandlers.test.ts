@@ -96,10 +96,12 @@ describe('AMOE lottery routes', () => {
     const creditsHandler = await getV1ApiHandler('lottery/amoe/credits')
     const submitHandler = await getV1ApiHandler('lottery/amoe/submit')
     const checkinHandler = await getV1ApiHandler('lottery/amoe/twitter-checkin')
+    const xmtpCheckinHandler = await getV1ApiHandler('lottery/amoe/xmtp-checkin')
     expect(typeof nonceHandler).toBe('function')
     expect(typeof creditsHandler).toBe('function')
     expect(typeof submitHandler).toBe('function')
     expect(typeof checkinHandler).toBe('function')
+    expect(typeof xmtpCheckinHandler).toBe('function')
   })
 })
 
@@ -800,5 +802,20 @@ describe('AMOE daily Twitter checkin handler', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(403)
     expect(res.body?.error).toBe('twitter_not_linked')
+  })
+})
+
+describe('AMOE daily XMTP checkin handler', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('returns gone for deprecated manual claim path', async () => {
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeXmtpCheckin')
+    const req = createMockReq({ method: 'POST', body: { messageId: 'msg-1' } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(410)
+    expect(res.body?.error).toBe('xmtp_checkin_auto_only')
   })
 })
