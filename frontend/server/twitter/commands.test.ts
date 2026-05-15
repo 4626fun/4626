@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv } from '../../api/__tests__/helpers'
 
+const { buildAlfaRoomChartMock } = vi.hoisted(() => ({
+  buildAlfaRoomChartMock: vi.fn(),
+}))
+
+vi.mock('../_lib/alfaclub/roomCharts.js', () => ({
+  buildAlfaRoomChart: (...args: any[]) => buildAlfaRoomChartMock(...args),
+}))
+
 import { handleTwitterCommand, postTweetFromSystem } from './commands.js'
 
 describe('twitter commands', () => {
