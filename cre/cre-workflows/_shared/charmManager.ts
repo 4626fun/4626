@@ -346,7 +346,7 @@ export function evaluateAndEnqueueCharmActions(
   runtime: Runtime<CharmManagerConfig>,
   manual: CharmManualPayload = {},
 ): CharmWorkflowResult {
-  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  const apiKey = runtime.getSecret({ id: "KPR_API_KEY" }).result().value
   // FIX: CRT-03 — Use separate FORCE_ENQUEUE_AUTH_TOKEN secret for manual override auth.
   // 4626-audit-2026-04-25 review: after the H-01 HMAC migration, `authToken` is the
   // HMAC signature, NOT the force-enqueue secret. Force-enqueue authorization is now

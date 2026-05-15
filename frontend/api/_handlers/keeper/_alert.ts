@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log(logMsg, details ?? '')
   }
 
-  const webhookUrl = process.env.KEEPR_ALERT_WEBHOOK_URL
+  const webhookUrl = process.env.KPR_ALERT_WEBHOOK_URL
   if (webhookUrl) {
     try {
       await fetch(webhookUrl, {

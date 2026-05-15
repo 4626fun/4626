@@ -147,8 +147,8 @@ function asAddress(value: unknown): `0x${string}` | null {
 
 function buildConfig(): ListenerConfig {
   const wsRpcUrl = requireEnv('BASE_WS_RPC_URL');
-  const apiBaseUrl = requireEnv('KEEPR_API_BASE_URL').replace(/\/$/, '');
-  const apiKey = requireEnv('KEEPR_API_KEY');
+  const apiBaseUrl = requireEnv('KPR_API_BASE_URL').replace(/\/$/, '');
+  const apiKey = requireEnv('KPR_API_KEY');
 
   return {
     wsRpcUrl,

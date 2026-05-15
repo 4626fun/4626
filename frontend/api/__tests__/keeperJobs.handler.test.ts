@@ -64,7 +64,7 @@ function jobRow(overrides: Record<string, unknown> = {}) {
 describe('keeper job coordination handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    applyEnv({ KEEPR_API_KEY: API_KEY })
+    applyEnv({ KPR_API_KEY: API_KEY })
   })
 
   it('routes keeper job endpoints through the API route map', async () => {
@@ -673,7 +673,7 @@ describe('keeper job coordination handlers', () => {
 
   it('runs one cron-gated noop worker tick', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       CRON_SECRET: 'cron-secret-for-keeper-runner',
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
       KEEPER_WORKER_ID: 'test-cron-worker',
@@ -716,7 +716,7 @@ describe('keeper job coordination handlers', () => {
 
   it('enqueues mark-settled follow-up after a completed sweep job', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       CRON_SECRET: 'cron-secret-for-keeper-runner',
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
       KEEPER_WORKER_ID: 'test-cron-worker',
@@ -808,7 +808,7 @@ describe('keeper job coordination handlers', () => {
   it('keeps keepr action processing disabled by default', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-action-process',
-      KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED: undefined,
+      KEEPER_PROCESS_KPR_ACTIONS_ENABLED: undefined,
     })
     try {
       const req = createMockReq({
@@ -835,10 +835,10 @@ describe('keeper job coordination handlers', () => {
   it('processes one pending keepr action when enabled', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-action-process',
-      KEEPR_API_KEY: API_KEY,
+      KPR_API_KEY: API_KEY,
       KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
-      KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED: '1',
-      KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT: '1',
+      KEEPER_PROCESS_KPR_ACTIONS_ENABLED: '1',
+      KEEPER_PROCESS_KPR_ACTIONS_LIMIT: '1',
     })
     const calls: Array<{ url: string; init: RequestInit | undefined }> = []
     try {

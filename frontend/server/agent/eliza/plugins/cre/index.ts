@@ -143,7 +143,7 @@ type KeeprActionQueueResult = {
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
-export const KEEPR_WRITE_SUBCOMMAND_PREFIXES = [
+export const KPR_WRITE_SUBCOMMAND_PREFIXES = [
   'tend',
   'report',
   'settle',
@@ -161,7 +161,7 @@ export function isKeeperWriteCommandText(text: string): boolean {
     ? normalized.slice('/keepr '.length).trim()
     : normalized.slice('keepr '.length).trim()
   if (!withoutPrefix) return false
-  return KEEPR_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
+  return KPR_WRITE_SUBCOMMAND_PREFIXES.some((cmd) => withoutPrefix.startsWith(cmd))
 }
 
 // ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ export function isKeeperWriteCommandText(text: string): boolean {
 declare const process: { env: Record<string, string | undefined> }
 
 function hasBaseKeeper(): boolean {
-  return !!(process.env.KEEPR_PRIVATE_KEY ?? '').trim()
+  return !!(process.env.KPR_PRIVATE_KEY ?? '').trim()
 }
 
 function hasBaseRpc(): boolean {
@@ -183,7 +183,7 @@ function hasSolana(): boolean {
 }
 
 function hasKeeprApi(): boolean {
-  return !!(process.env.KEEPR_API_KEY ?? '').trim()
+  return !!(process.env.KPR_API_KEY ?? '').trim()
 }
 
 function envFlagEnabled(raw: string | undefined): boolean {
@@ -193,7 +193,7 @@ function envFlagEnabled(raw: string | undefined): boolean {
 
 function isDryRunEnabled(): boolean {
   return (
-    envFlagEnabled(process.env.ELIZA_KEEPR_DRY_RUN)
+    envFlagEnabled(process.env.ELIZA_KPR_DRY_RUN)
     || envFlagEnabled(process.env.ELIZA_CRE_DRY_RUN)
     || envFlagEnabled(process.env.DRY_RUN)
   )
@@ -203,42 +203,42 @@ function isDryRunEnabled(): boolean {
 // Dynamic keeper imports (lazy, cached)
 // ---------------------------------------------------------------------------
 
-const KEEPR_BASE = '../../../../../../cre'
+const KPR_BASE = '../../../../../../cre'
 
 async function importVaultKeeper() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/vault-keeper.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/vault-keeper.action.js`)
 }
 
 async function importCcaFinalization() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/cca-finalization.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/cca-finalization.action.js`)
 }
 
 async function importKeeprActionQueue() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-action-queue.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-action-queue.action.js`)
 }
 
 async function importRelayEntries() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-relay-entries.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-relay-entries.action.js`)
 }
 
 async function importFeeSettlement() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-settle-fees.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-settle-fees.action.js`)
 }
 
 async function importWinnerRelay() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-winner-relay.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-winner-relay.action.js`)
 }
 
 async function importGraduation() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-graduation.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-graduation.action.js`)
 }
 
 async function importPriceMonitor() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/actions/keepr-solana-price-monitor.action.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/actions/keepr-solana-price-monitor.action.js`)
 }
 
 async function importRegistry() {
-  return import(/* @vite-ignore */ `${KEEPR_BASE}/utils/registry.js`)
+  return import(/* @vite-ignore */ `${KPR_BASE}/utils/registry.js`)
 }
 
 // ---------------------------------------------------------------------------
@@ -298,7 +298,7 @@ function formatPriceMonitor(r: PriceMonitorResult): string {
 // ---------------------------------------------------------------------------
 
 const keeprObserveAction: Action = {
-  name: 'KEEPR_OBSERVE',
+  name: 'KPR_OBSERVE',
   similes: ['keepr status', 'keepr health', 'keepr auction', 'keepr solana', 'keeper status'],
   description: 'Show keeper status — vault states, auction states, Solana health, or combined health check.',
 
@@ -367,8 +367,8 @@ async function handleObserveStatus(callback: HandlerCallback | undefined, includ
       if (vaults.length > 10) parts.push(`  ... and ${vaults.length - 10} more`)
     }
   } catch (err: any) {
-    if (err.message?.includes('Cannot find module') || err.message?.includes('KEEPR_API')) {
-      parts.push('Vault status: not configured (missing KEEPR_API_KEY or keeper modules)')
+    if (err.message?.includes('Cannot find module') || err.message?.includes('KPR_API')) {
+      parts.push('Vault status: not configured (missing KPR_API_KEY or keeper modules)')
     } else {
       parts.push(`Vault status error: ${err.message}`)
     }
@@ -470,7 +470,7 @@ async function handleObserveSolana(callback: HandlerCallback | undefined): Promi
 // ---------------------------------------------------------------------------
 
 const keeprTriggerAction: Action = {
-  name: 'KEEPR_TRIGGER',
+  name: 'KPR_TRIGGER',
   similes: [
     'keepr tend', 'keepr report', 'keepr settle',
     'keepr settle fees', 'keepr settle-fees',
@@ -508,7 +508,7 @@ const keeprTriggerAction: Action = {
       await callback?.({
         text:
           `DRY_RUN is enabled. Skipping mutating keeper command \`/keepr ${command}\`${target}.\n` +
-          'Set DRY_RUN=0 and ELIZA_KEEPR_DRY_RUN=0 to execute live operations.',
+          'Set DRY_RUN=0 and ELIZA_KPR_DRY_RUN=0 to execute live operations.',
       } as Content)
       return
     }
@@ -576,7 +576,7 @@ const keeprTriggerAction: Action = {
 
 async function handleTriggerTend(callback: HandlerCallback | undefined, vault?: `0x${string}`): Promise<void> {
   if (!hasBaseKeeper()) {
-    await callback?.({ text: 'Keeper wallet not configured. Set `KEEPR_PRIVATE_KEY` to enable.' } as Content)
+    await callback?.({ text: 'Keeper wallet not configured. Set `KPR_PRIVATE_KEY` to enable.' } as Content)
     return
   }
 
@@ -605,7 +605,7 @@ async function handleTriggerTend(callback: HandlerCallback | undefined, vault?: 
 
 async function handleTriggerReport(callback: HandlerCallback | undefined, vault?: `0x${string}`): Promise<void> {
   if (!hasBaseKeeper()) {
-    await callback?.({ text: 'Keeper wallet not configured. Set `KEEPR_PRIVATE_KEY` to enable.' } as Content)
+    await callback?.({ text: 'Keeper wallet not configured. Set `KPR_PRIVATE_KEY` to enable.' } as Content)
     return
   }
 
@@ -629,7 +629,7 @@ async function handleTriggerReport(callback: HandlerCallback | undefined, vault?
 
 async function handleTriggerSettle(callback: HandlerCallback | undefined, strategy?: `0x${string}`): Promise<void> {
   if (!hasBaseKeeper()) {
-    await callback?.({ text: 'Keeper wallet not configured. Set `KEEPR_PRIVATE_KEY` to enable.' } as Content)
+    await callback?.({ text: 'Keeper wallet not configured. Set `KPR_PRIVATE_KEY` to enable.' } as Content)
     return
   }
 
@@ -734,7 +734,7 @@ async function handleTriggerGraduation(callback: HandlerCallback | undefined): P
 
 async function handleTriggerQueue(callback: HandlerCallback | undefined): Promise<void> {
   if (!hasKeeprApi()) {
-    await callback?.({ text: 'Keepr API not configured. Set `KEEPR_API_KEY` to enable.' } as Content)
+    await callback?.({ text: 'Keepr API not configured. Set `KPR_API_KEY` to enable.' } as Content)
     return
   }
 
@@ -767,7 +767,7 @@ async function handleTriggerQueue(callback: HandlerCallback | undefined): Promis
 // ---------------------------------------------------------------------------
 
 const keeprHelpAction: Action = {
-  name: 'KEEPR_HELP',
+  name: 'KPR_HELP',
   similes: ['keepr help', 'keepr commands'],
   description: 'Show available keeper commands.',
 

@@ -61,6 +61,12 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
           return trimmed ? `${whole}.${trimmed}` : whole
         })()
       : null
+  const quoteLooksEchoedExactOutput =
+    Boolean(preview?.relay) &&
+    preview?.relay?.userCallSource === 'quote_tx' &&
+    requiredDepositWei !== null &&
+    preview?.preflight?.relayQuoteDiagnostics?.paymentDetails?.amount ===
+      preview?.preflight?.relayQuoteDiagnostics?.userTransaction?.value
   const submitBlockedByMissingRequiredDeposit = Boolean(preview) && requiredDepositWei === null
   const isQuoteTxMode = preview?.relay?.userCallSource === 'quote_tx'
   const submitBlocked =
@@ -140,7 +146,9 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
                 : 'rounded-md border border-amber-400/25 bg-amber-500/10 p-2 text-[11px] text-amber-100'
             }
           >
-            <div className="text-[10px] uppercase tracking-[0.16em] opacity-80">Required request-bound deposit</div>
+            <div className="text-[10px] uppercase tracking-[0.16em] opacity-80">
+              Quote-requested exact deposit
+            </div>
             {requiredDepositWei !== null ? (
               <div className="mt-1">
                 <span className="font-mono">{requiredDepositEth} ETH</span>{' '}
@@ -153,6 +161,12 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
                   : 'Missing `paymentDetails.amount` from Relay quote. Submit is blocked to avoid underfunded deposits that stay in waiting.'}
               </div>
             )}
+            {quoteLooksEchoedExactOutput ? (
+              <div className="mt-1 text-[10px] opacity-85">
+                Same-chain EXACT_OUTPUT quote: Relay echoes the requested amount as
+                `paymentDetails.amount` / `userTx.value`.
+              </div>
+            ) : null}
           </div>
           {preview.preflight.relayQuoteDiagnostics ? (
             <details className="rounded-md border border-white/10 bg-black/20 p-2 text-[10px] text-zinc-300">

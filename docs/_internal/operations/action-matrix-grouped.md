@@ -169,10 +169,10 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action          | Endpoint / Method                      | Permission           | Mode          | Notes                          | Source                                             |
 | --------------- | -------------------------------------- | -------------------- | ------------- | ------------------------------ | -------------------------------------------------- |
-| `enqueue`       | `POST /api/keepr/actions/enqueue`      | Bearer KEEPR_API_KEY | manual/hybrid | Adds action to queue           | `frontend/api/_handlers/keepr/actions/_enqueue.ts` |
-| `pending`       | `GET /api/keepr/actions/pending`       | Bearer KEEPR_API_KEY | automated     | Reads pending/retry actions    | `frontend/api/_handlers/_routes.keepr.ts`          |
-| `execute`       | `POST /api/keepr/actions/execute`      | Bearer KEEPR_API_KEY | automated     | Executes single action         | `frontend/api/_handlers/keepr/actions/_execute.ts` |
-| `update_status` | `POST /api/keepr/actions/updateStatus` | Bearer KEEPR_API_KEY | automated     | Updates action lifecycle state | `frontend/api/_handlers/_routes.keepr.ts`          |
+| `enqueue`       | `POST /api/keepr/actions/enqueue`      | Bearer KPR_API_KEY | manual/hybrid | Adds action to queue           | `frontend/api/_handlers/keepr/actions/_enqueue.ts` |
+| `pending`       | `GET /api/keepr/actions/pending`       | Bearer KPR_API_KEY | automated     | Reads pending/retry actions    | `frontend/api/_handlers/_routes.keepr.ts`          |
+| `execute`       | `POST /api/keepr/actions/execute`      | Bearer KPR_API_KEY | automated     | Executes single action         | `frontend/api/_handlers/keepr/actions/_execute.ts` |
+| `update_status` | `POST /api/keepr/actions/updateStatus` | Bearer KPR_API_KEY | automated     | Updates action lifecycle state | `frontend/api/_handlers/_routes.keepr.ts`          |
 
 
 ## queue_action
@@ -193,14 +193,14 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action                    | Endpoint / Method                       | Permission           | Mode      | Notes                         | Source                                         |
 | ------------------------- | --------------------------------------- | -------------------- | --------- | ----------------------------- | ---------------------------------------------- |
-| `list_active_vaults`      | `GET /api/vaults/active`                | Bearer KEEPR_API_KEY | automated | Vault registry view           | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_tend`             | `POST /api/keeper/tend`                 | Bearer KEEPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/keeper/_tend.ts`       |
-| `keeper_report`           | `POST /api/keeper/report`               | Bearer KEEPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/keeper/_report.ts`     |
-| `keeper_sweep`            | `POST /api/keeper/sweep`                | Bearer KEEPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/keeper/_sweep.ts`      |
-| `keeper_mark_settled`     | `POST /api/keeper/mark-settled`         | Bearer KEEPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_alert`            | `POST /api/keeper/alert`                | Bearer KEEPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_ai_assess`        | `POST /api/keeper/aiAssess`             | Bearer KEEPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.ts`            |
-| `keeper_solana_reconcile` | `POST /api/keeper/solana/reconcile`     | Bearer KEEPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.ts`            |
+| `list_active_vaults`      | `GET /api/vaults/active`                | Bearer KPR_API_KEY | automated | Vault registry view           | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_tend`             | `POST /api/keeper/tend`                 | Bearer KPR_API_KEY | automated | Tend write bridge             | `frontend/api/_handlers/keeper/_tend.ts`       |
+| `keeper_report`           | `POST /api/keeper/report`               | Bearer KPR_API_KEY | automated | Report write bridge           | `frontend/api/_handlers/keeper/_report.ts`     |
+| `keeper_sweep`            | `POST /api/keeper/sweep`                | Bearer KPR_API_KEY | automated | Settlement write bridge       | `frontend/api/_handlers/keeper/_sweep.ts`      |
+| `keeper_mark_settled`     | `POST /api/keeper/mark-settled`         | Bearer KPR_API_KEY | automated | Marks settlement stage        | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_alert`            | `POST /api/keeper/alert`                | Bearer KPR_API_KEY | automated | Alert forwarding              | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_ai_assess`        | `POST /api/keeper/aiAssess`             | Bearer KPR_API_KEY | automated | Assessment hook               | `frontend/api/_handlers/_routes.ts`            |
+| `keeper_solana_reconcile` | `POST /api/keeper/solana/reconcile`     | Bearer KPR_API_KEY | automated | Solana reconcile hook         | `frontend/api/_handlers/_routes.ts`            |
 
 
 ## workflow

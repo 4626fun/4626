@@ -142,7 +142,7 @@ function normalizeActionList(config: Config, manual?: ManualPayload): string[] {
 }
 
 function runReconciliation(runtime: Runtime<Config>, manual?: ManualPayload): SolanaOrchestratorResult {
-  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  const apiKey = runtime.getSecret({ id: "KPR_API_KEY" }).result().value
   const httpClient = new HTTPClient()
   const workflowName = manual?.workflowName?.trim() || runtime.config.workflowName
   const actions = normalizeActionList(runtime.config, manual)
@@ -243,7 +243,7 @@ const onCronTrigger = (runtime: Runtime<Config>): SolanaOrchestratorResult => ru
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): SolanaOrchestratorResult => {
   const manual = parseManualPayload(payload)
   // H-01 (audit 2026-04-25): manual triggers now require an HMAC envelope.
-  // The signing key is the workflow-specific HMAC secret, not KEEPR_API_KEY.
+  // The signing key is the workflow-specific HMAC secret, not KPR_API_KEY.
   // See cre/cre-workflows/_shared/manualTriggerAuth.ts for the wire format.
   const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
   assertManualTriggerHmac(manual, hmacSecret)

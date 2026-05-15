@@ -33,9 +33,9 @@ cp frontend/.env.example frontend/.env.local
 Minimum required for local simulation:
 
 - `CRE_ETH_PRIVATE_KEY`
-- `KEEPR_API_KEY_VALUE`
-- `KEEPR_API_BASE_URL_VALUE`
-- `KEEPR_PRIVATE_KEY_VALUE`
+- `KPR_API_KEY_VALUE`
+- `KPR_API_BASE_URL_VALUE`
+- `KPR_PRIVATE_KEY_VALUE`
 
 ## Simulate
 
@@ -112,9 +112,9 @@ cre workflow delete <workflow-id>
 ## Secrets
 
 ```bash
-cre secrets set KEEPR_API_KEY
-cre secrets set KEEPR_API_BASE_URL
-cre secrets set KEEPR_PRIVATE_KEY
+cre secrets set KPR_API_KEY
+cre secrets set KPR_API_BASE_URL
+cre secrets set KPR_PRIVATE_KEY
 ```
 
 Workflow mapping file: `cre/cre-workflows/secrets.yaml`
@@ -154,6 +154,6 @@ Workflow mapping file: `cre/cre-workflows/secrets.yaml`
   - In canonical mode, Charm actions should be produced by `strategy-signal-listener` and executed by `keepr-action-queue`
   - Use `CHARM_REBALANCE_CANONICAL_MODE=direct` only for explicit emergency/manual override
 - **Solana reconcile path not executing**
-  - Check `/api/keeper/solana/reconcile` auth header (`Bearer KEEPR_API_KEY`)
+  - Check `/api/keeper/solana/reconcile` auth header (`Bearer KPR_API_KEY`)
   - Verify `SOLANA_ORCHESTRATOR_URL` is configured
   - Inspect checkpoint table `keepr_workflow_checkpoints` for status (`completed`, `already_processed`, `failed`)

@@ -47,6 +47,19 @@ type PendingUserkeyScore = {
 }
 
 const USERKEY_BATCH_DELAY_MS = 12
+function readClientDurationMs(raw: string | undefined, fallbackMs: number, minMs = 30_000, maxMs = 24 * 60 * 60 * 1000): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return fallbackMs
+  return Math.max(minMs, Math.min(maxMs, Math.floor(parsed)))
+}
+const ETHOS_SCORE_QUERY_STALE_MS = readClientDurationMs(
+  import.meta.env.VITE_ETHOS_SCORE_QUERY_STALE_MS,
+  2 * 60 * 1000,
+)
+const ETHOS_PROFILE_QUERY_STALE_MS = readClientDurationMs(
+  import.meta.env.VITE_ETHOS_PROFILE_QUERY_STALE_MS,
+  30 * 60 * 1000,
+)
 const pendingUserkeyScores = new Map<string, PendingUserkeyScore[]>()
 let userkeyBatchTimer: ReturnType<typeof setTimeout> | null = null
 const ETHOS_MARK_SRC = '/assets/ethos-reserve-logo.png'
@@ -345,7 +358,7 @@ function useEthosScoreQuery(query: string | null | undefined, queryKeyKind: 'add
         : fetchSingleEthosScore(normalized)
     },
     enabled: Boolean(normalized),
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: ETHOS_SCORE_QUERY_STALE_MS,
   })
 }
 
@@ -368,7 +381,7 @@ function useEthosProfileSummary(
       return json.data?.users?.[0]?.ethosProfile ?? null
     },
     enabled: Boolean(enabled && normalized),
-    staleTime: 6 * 60 * 60 * 1000,
+    staleTime: ETHOS_PROFILE_QUERY_STALE_MS,
   })
 }
 

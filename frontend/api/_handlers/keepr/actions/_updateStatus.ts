@@ -19,7 +19,7 @@ import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 
 import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
 import {
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
@@ -103,7 +103,7 @@ async function syncJoinRequestStatus(params: {
  * POST /api/keepr/actions/updateStatus
  *
  * Updates the status of a keepr_actions row.
- * Protected by a shared secret (KEEPR_API_KEY).
+ * Protected by a shared secret (KPR_API_KEY).
  *
  * Body:
  *   - id: action ID
@@ -166,7 +166,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (
       !requireOptionalHeaderEnvAuth(req, res, {
         envKey: getKeeprTrustZoneEnvKey(trustZone),
-        headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+        headerName: KPR_TRUST_ZONE_KEY_HEADER,
         unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
       })
     ) {

@@ -3,7 +3,7 @@
  *
  * Schedule: Every 10 minutes (adapter -> bridge -> optional Meteora
  * Alpha Vault deposit). Non-blocking; logs plan and does not write
- * onchain until `KEEPR_SOLANA_REBALANCE_EXECUTE=1` is set.
+ * onchain until `KPR_SOLANA_REBALANCE_EXECUTE=1` is set.
  *
  * This workflow picks up CREATOR tokens that `SolanaStrategy.rebalanceToSolana`
  * has moved from the strategy contract into the adapter on Base, and

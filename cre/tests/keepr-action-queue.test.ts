@@ -27,25 +27,25 @@ function pendingAction(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe('keepr action queue', () => {
   const originalFetch = globalThis.fetch;
-  const originalApiBase = process.env.KEEPR_API_BASE_URL;
-  const originalApiKey = process.env.KEEPR_API_KEY;
-  const originalZoneFinancial = process.env.KEEPR_ZONE_KEY_FINANCIAL_EXECUTION;
-  const originalZoneQueue = process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING;
+  const originalApiBase = process.env.KPR_API_BASE_URL;
+  const originalApiKey = process.env.KPR_API_KEY;
+  const originalZoneFinancial = process.env.KPR_ZONE_KEY_FINANCIAL_EXECUTION;
+  const originalZoneQueue = process.env.KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.KEEPR_API_BASE_URL = 'https://api.test';
-    process.env.KEEPR_API_KEY = 'secret';
-    delete process.env.KEEPR_ZONE_KEY_FINANCIAL_EXECUTION;
-    process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = 'zone-queue-secret';
+    process.env.KPR_API_BASE_URL = 'https://api.test';
+    process.env.KPR_API_KEY = 'secret';
+    delete process.env.KPR_ZONE_KEY_FINANCIAL_EXECUTION;
+    process.env.KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = 'zone-queue-secret';
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
-    process.env.KEEPR_API_BASE_URL = originalApiBase;
-    process.env.KEEPR_API_KEY = originalApiKey;
-    process.env.KEEPR_ZONE_KEY_FINANCIAL_EXECUTION = originalZoneFinancial;
-    process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = originalZoneQueue;
+    process.env.KPR_API_BASE_URL = originalApiBase;
+    process.env.KPR_API_KEY = originalApiKey;
+    process.env.KPR_ZONE_KEY_FINANCIAL_EXECUTION = originalZoneFinancial;
+    process.env.KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = originalZoneQueue;
   });
 
   it('marks action executed when execute endpoint succeeds', async () => {
@@ -181,7 +181,7 @@ describe('keepr action queue', () => {
   });
 
   it('uses the effective action payload to choose trust-zone headers', async () => {
-    process.env.KEEPR_ZONE_KEY_FINANCIAL_EXECUTION = 'zone-financial-secret';
+    process.env.KPR_ZONE_KEY_FINANCIAL_EXECUTION = 'zone-financial-secret';
 
     const calls: Array<{ url: string; body: any; headers: Record<string, string> }> = [];
     globalThis.fetch = vi.fn(async (input: unknown, init?: RequestInit) => {

@@ -22,7 +22,7 @@ describe('keeper/aiAssess', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    restoreEnv = applyEnv({ KEEPR_API_KEY: 'test-keepr-key' });
+    restoreEnv = applyEnv({ KPR_API_KEY: 'test-keepr-key' });
     getElizaLlmServiceMock.mockReturnValue({
       getAvailableProviders: getAvailableProvidersMock,
       generateResponse: generateResponseMock,

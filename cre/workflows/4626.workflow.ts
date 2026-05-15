@@ -13,7 +13,7 @@
  *   7. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
- * Falls back to single-vault env vars if KEEPR_API_KEY is not set.
+ * Falls back to single-vault env vars if KPR_API_KEY is not set.
  */
 
 import { executeKeeper, type BatchKeeperResult } from '../actions/vault-keeper.action.js';

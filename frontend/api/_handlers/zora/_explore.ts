@@ -94,26 +94,44 @@ async function buildEthosSortedCreatorList(params: {
   const limitPlusOne = params.count + 1
 
   const rows = await db.sql`
+    WITH ranked_creator_coins AS (
+      SELECT
+        cc.coin_address,
+        lower(cc.creator_address) AS creator_address,
+        cc.created_at,
+        cc.market_cap_usd,
+        cc.volume_24h_usd,
+        ROW_NUMBER() OVER (
+          PARTITION BY lower(cc.creator_address)
+          ORDER BY
+            cc.volume_24h_usd DESC NULLS LAST,
+            cc.market_cap_usd DESC NULLS LAST,
+            cc.created_at DESC NULLS LAST,
+            cc.coin_address ASC
+        ) AS creator_coin_rank
+      FROM creator_coins cc
+      WHERE cc.chain_id = 8453
+    )
     SELECT
-      cc.coin_address,
-      cc.creator_address,
-      cc.created_at,
-      cc.market_cap_usd,
-      cc.volume_24h_usd,
+      rcc.coin_address,
+      rcc.creator_address,
+      rcc.created_at,
+      rcc.market_cap_usd,
+      rcc.volume_24h_usd,
       es.score AS ethos_score,
       es.level AS ethos_level
-    FROM creator_coins cc
+    FROM ranked_creator_coins rcc
     LEFT JOIN ethos_userkey_scores es
-      ON es.ethos_userkey = ('address:' || lower(cc.creator_address))
+      ON es.ethos_userkey = ('address:' || rcc.creator_address)
       AND es.status = 'matched'
-    WHERE cc.chain_id = 8453
+    WHERE rcc.creator_coin_rank = 1
       AND (${params.ethosMin}::numeric IS NULL OR es.score >= ${params.ethosMin})
     ORDER BY
       CASE WHEN es.score IS NULL THEN 1 ELSE 0 END ASC,
       es.score DESC NULLS LAST,
-      cc.volume_24h_usd DESC NULLS LAST,
-      cc.market_cap_usd DESC NULLS LAST,
-      cc.coin_address ASC
+      rcc.volume_24h_usd DESC NULLS LAST,
+      rcc.market_cap_usd DESC NULLS LAST,
+      rcc.creator_address ASC
     OFFSET ${offset}
     LIMIT ${limitPlusOne};
   `

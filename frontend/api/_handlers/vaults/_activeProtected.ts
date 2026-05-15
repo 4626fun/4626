@@ -2,7 +2,7 @@
  * GET /api/vaults/active
  *
  * Returns all registered vaults with their contract addresses for keeper workflows.
- * Protected by KEEPR_API_KEY Bearer token.
+ * Protected by KPR_API_KEY Bearer token.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'

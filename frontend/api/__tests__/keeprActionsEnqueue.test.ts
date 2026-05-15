@@ -53,8 +53,8 @@ describe('keepr/actions/enqueue', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_API_KEY: 'test-keepr-key',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
     })
     getKeeprVaultAutomationByVaultAddressMock.mockResolvedValue(buildAutomationRow())
     getDbMock.mockResolvedValue({ sql: vi.fn() })
@@ -296,7 +296,7 @@ describe('keepr/actions/enqueue', () => {
 
   it('enforces optional zone keys when configured', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
+      KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
     })
     enqueueKeeprActionMock.mockResolvedValue({ id: 77 })
 
@@ -341,7 +341,7 @@ describe('keepr/actions/enqueue', () => {
 
   it('derives trust zone from the effective action payload, not only the raw actionType field', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
     })
     enqueueKeeprActionMock.mockResolvedValue({ id: 88 })
 
@@ -382,7 +382,7 @@ describe('keepr/actions/enqueue', () => {
 
   it('blocks writes when the resolved trust zone is kill-switched', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
+      KPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
     })
 
     try {

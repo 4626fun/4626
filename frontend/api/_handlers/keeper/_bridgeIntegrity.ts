@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const baseUrl = getBaseUrl(req)
-  const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim()
+  const apiKey = String(process.env.KPR_API_KEY ?? '').trim()
   if (!baseUrl || !apiKey) {
     return res.status(500).json({ success: false, error: 'bridge_integrity_not_configured' } satisfies ApiEnvelope<never>)
   }

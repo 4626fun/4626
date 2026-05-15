@@ -195,7 +195,7 @@ function sendBridgeRequest(
 // ---------------------------------------------------------------------------
 
 const onCronTrigger = (runtime: Runtime<Config>): KeeperResult => {
-  const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
+  const apiKeySecret = runtime.getSecret({ id: "KPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
 

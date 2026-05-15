@@ -14,7 +14,7 @@
  *   - SOLANA_RPC_URL set in CRE secrets
  *   - SOLANA_KEEPER_KEYPAIR set in CRE secrets
  *   - LOTTERY_MANAGER set in CRE secrets
- *   - KEEPR_PRIVATE_KEY set in CRE secrets
+ *   - KPR_PRIVATE_KEY set in CRE secrets
  *
  * UX impact: MEDIUM
  *   - Without this, Solana winners won't see "You won!" notification

@@ -30,7 +30,6 @@ function readAmoeRelaySmartWallet(): `0x${string}` | null {
   const candidates = [
     process.env.LOTTERY_AMOE_RELAY_SMART_WALLET,
     process.env.KPR_ERC4337_SMART_WALLET,
-    process.env.KEEPR_ERC4337_SMART_WALLET,
     process.env.CRE_ERC4337_SMART_WALLET,
   ]
   for (const candidate of candidates) {
@@ -47,7 +46,6 @@ function readAmoeRelayBundlerUrl(): string | null {
     process.env.CDP_PAYMASTER_AND_BUNDLER_URL,
     process.env.CDP_PAYMASTER_AND_BUNDLER_ENDPOINT,
     process.env.KPR_ERC4337_BUNDLER_URL,
-    process.env.KEEPR_ERC4337_BUNDLER_URL,
     process.env.CRE_ERC4337_BUNDLER_URL,
     process.env.PAYMASTER_URL,
     process.env.BUNDLER_URL,
@@ -63,7 +61,6 @@ function readAmoeRelayPrivyWalletId(): string | null {
   const candidates = [
     process.env.LOTTERY_AMOE_RELAY_PRIVY_WALLET_ID,
     process.env.KPR_ERC4337_PRIVY_WALLET_ID,
-    process.env.KEEPR_ERC4337_PRIVY_WALLET_ID,
     process.env.CRE_ERC4337_PRIVY_WALLET_ID,
   ]
   for (const candidate of candidates) {
@@ -77,7 +74,6 @@ function readAmoeRelayOwnerAddress(): `0x${string}` | null {
   const candidates = [
     process.env.LOTTERY_AMOE_RELAY_OWNER,
     process.env.KPR_ERC4337_OWNER,
-    process.env.KEEPR_ERC4337_OWNER,
     process.env.CRE_ERC4337_OWNER,
   ]
   for (const candidate of candidates) {

@@ -186,11 +186,11 @@ export function getPublicClient() {
 
 /**
  * Get a singleton wallet client for onchain writes.
- * The private key is loaded from the CRE secret `KEEPR_PRIVATE_KEY`.
+ * The private key is loaded from the CRE secret `KPR_PRIVATE_KEY`.
  */
 export function getWalletClient() {
   if (!_walletClient) {
-    const pk = requireEnv('KEEPR_PRIVATE_KEY');
+    const pk = requireEnv('KPR_PRIVATE_KEY');
     const account = privateKeyToAccount(pk as `0x${string}`);
     // FIX: LOW-04 — Require BASE_RPC_URL; warn loudly before falling back to public RPC
     const rpcUrl = process.env.BASE_RPC_URL;
@@ -217,7 +217,7 @@ function isErc4337Enabled(): boolean {
  * Return the keeper EOA account derived from the private key.
  */
 function getKeeperEoaAccount() {
-  const pk = requireEnv('KEEPR_PRIVATE_KEY');
+  const pk = requireEnv('KPR_PRIVATE_KEY');
   return privateKeyToAccount(pk as `0x${string}`);
 }
 
@@ -233,10 +233,10 @@ export function getKeeperEoaAddress(): Address {
  */
 function getErc4337OwnerAccountFromPrivateKey() {
   const pk =
-    (process.env.CRE_ERC4337_OWNER_PRIVATE_KEY ?? process.env.KEEPR_PRIVATE_KEY ?? '').trim();
+    (process.env.CRE_ERC4337_OWNER_PRIVATE_KEY ?? process.env.KPR_PRIVATE_KEY ?? '').trim();
   if (!pk) {
     throw new Error(
-      'Missing ERC-4337 signer. Set CRE_ERC4337_OWNER_PRIVATE_KEY (or KEEPR_PRIVATE_KEY fallback).',
+      'Missing ERC-4337 signer. Set CRE_ERC4337_OWNER_PRIVATE_KEY (or KPR_PRIVATE_KEY fallback).',
     );
   }
   return privateKeyToAccount(pk as `0x${string}`);

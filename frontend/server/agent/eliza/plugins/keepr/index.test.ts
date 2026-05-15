@@ -17,7 +17,7 @@ function getAction(name: string): AnyAction {
 
 describe('keepr plugin command routing', () => {
   it('does not claim conversational ai prefixes', async () => {
-    const action = getAction('KEEPR_COMMAND')
+    const action = getAction('KPR_COMMAND')
 
     await expect(action.validate?.({}, { content: { text: '/ai hello' } })).resolves.toBe(false)
     await expect(action.validate?.({}, { content: { text: '@keepr hello' } })).resolves.toBe(false)
@@ -25,7 +25,7 @@ describe('keepr plugin command routing', () => {
   })
 
   it('still claims deterministic keepr commands', async () => {
-    const action = getAction('KEEPR_COMMAND')
+    const action = getAction('KPR_COMMAND')
 
     await expect(action.validate?.({}, { content: { text: '/keepr status' } })).resolves.toBe(true)
     await expect(action.validate?.({}, { content: { text: '/send 1 USDC to 0x1111111111111111111111111111111111111111' } })).resolves.toBe(true)

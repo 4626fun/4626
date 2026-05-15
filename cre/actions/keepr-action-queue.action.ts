@@ -18,12 +18,12 @@ type KeeprTrustZone =
   | 'market_maintenance'
   | 'queue_messaging_monitoring';
 
-const KEEPR_TRUST_ZONE_HEADER = 'x-keepr-trust-zone';
-const KEEPR_TRUST_ZONE_KEY_HEADER = 'x-keepr-zone-key';
+const KPR_TRUST_ZONE_HEADER = 'x-keepr-trust-zone';
+const KPR_TRUST_ZONE_KEY_HEADER = 'x-keepr-zone-key';
 const TRUST_ZONE_ENV_KEY_MAP: Record<KeeprTrustZone, string> = {
-  financial_execution: 'KEEPR_ZONE_KEY_FINANCIAL_EXECUTION',
-  market_maintenance: 'KEEPR_ZONE_KEY_MARKET_MAINTENANCE',
-  queue_messaging_monitoring: 'KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
+  financial_execution: 'KPR_ZONE_KEY_FINANCIAL_EXECUTION',
+  market_maintenance: 'KPR_ZONE_KEY_MARKET_MAINTENANCE',
+  queue_messaging_monitoring: 'KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
 };
 
 const ACTION_TYPE_ALIASES: Record<string, string> = {
@@ -89,11 +89,11 @@ export interface KeeprActionQueueResult {
 // ---------------------------------------------------------------------------
 
 function getApiBaseUrl(): string {
-  return requireEnv('KEEPR_API_BASE_URL').replace(/\/$/, '');
+  return requireEnv('KPR_API_BASE_URL').replace(/\/$/, '');
 }
 
 function getApiSecret(): string {
-  return requireEnv('KEEPR_API_KEY');
+  return requireEnv('KPR_API_KEY');
 }
 
 function normalizeActionType(actionType: string | null | undefined): string {
@@ -166,8 +166,8 @@ function buildZoneHeaders(
   const zone = resolveKeeprTrustZone(resolveEffectiveActionType(actionType, actionPayload));
   const key = getTrustZoneKey(zone);
   return {
-    [KEEPR_TRUST_ZONE_HEADER]: zone,
-    ...(key ? { [KEEPR_TRUST_ZONE_KEY_HEADER]: key } : {}),
+    [KPR_TRUST_ZONE_HEADER]: zone,
+    ...(key ? { [KPR_TRUST_ZONE_KEY_HEADER]: key } : {}),
   };
 }
 

@@ -165,7 +165,7 @@ describe('generateLlmResponse memory integration', () => {
       await cb({ text: 'vault status: healthy' })
     })
     rankActionsMock.mockResolvedValueOnce([
-      { action: { name: 'KEEPR_COMMAND', handler: handlerMock, validate: vi.fn() }, score: 0.95, reason: 'keepr_prefix' },
+      { action: { name: 'KPR_COMMAND', handler: handlerMock, validate: vi.fn() }, score: 0.95, reason: 'keepr_prefix' },
     ])
 
     const { generateLlmResponse } = await import('../chat.ts')

@@ -11,8 +11,8 @@
  *   4. Max 5 attempts per action before permanent failure
  *
  * Prerequisites:
- *   - KEEPR_API_BASE_URL set in CRE secrets
- *   - KEEPR_API_KEY set in CRE secrets (shared with Vercel API)
+ *   - KPR_API_BASE_URL set in CRE secrets
+ *   - KPR_API_KEY set in CRE secrets (shared with Vercel API)
  *   - XMTP keys configured (for actual group operations)
  *
  * Infrastructure impact: HIGH

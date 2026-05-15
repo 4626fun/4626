@@ -37,7 +37,7 @@ describe('ops endpoint rate-limit hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
+      KPR_API_KEY: 'test-keepr-key',
       CRON_SECRET: 'test-cron-secret',
       AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
     })

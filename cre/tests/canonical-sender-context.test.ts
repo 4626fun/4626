@@ -185,7 +185,7 @@ const ENV_KEYS = [
   'CRE_ERC4337_BUNDLER_URL',
   'CRE_ERC4337_PAYMASTER_URL',
   'CRE_ERC4337_VERSION',
-  'KEEPR_PRIVATE_KEY',
+  'KPR_PRIVATE_KEY',
   'BASE_RPC_URL',
 ] as const
 
@@ -199,7 +199,7 @@ describe('canonical sender context plumbing', () => {
     vi.clearAllMocks()
     vi.resetModules()
     installOnchainClientMocks()
-    process.env.KEEPR_PRIVATE_KEY =
+    process.env.KPR_PRIVATE_KEY =
       '0x0000000000000000000000000000000000000000000000000000000000000001'
     process.env.BASE_RPC_URL = 'https://mainnet.base.org'
     delete process.env.DRY_RUN

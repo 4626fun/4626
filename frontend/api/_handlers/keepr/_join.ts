@@ -36,7 +36,7 @@ type JoinResponse = {
   evidence?: any
 }
 
-const KEEPR_JOIN_BODY_MAX_BYTES = 16_384
+const KPR_JOIN_BODY_MAX_BYTES = 16_384
 
 function asObjectBody(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
@@ -111,7 +111,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_JOIN_BODY_MAX_BYTES })) as JoinBody
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_JOIN_BODY_MAX_BYTES })) as JoinBody
   const vaultRaw = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
   const vaultAddress = isAddressLike(vaultRaw) ? (vaultRaw.toLowerCase() as `0x${string}`) : null
   if (!vaultAddress) {

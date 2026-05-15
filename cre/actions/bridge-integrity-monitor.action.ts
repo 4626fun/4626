@@ -395,8 +395,8 @@ async function parseSignerOverlapFindings(): Promise<{
 async function fetchSolanaInfraStatusWithFallback(params: {
   fallbackBridgeToken: `0x${string}` | null;
 }): Promise<{ infra: SolanaInfraStatusData; mode: InfraFetchMode }> {
-  const apiBaseUrl = String(process.env.KEEPR_API_BASE_URL ?? '').trim().replace(/\/$/, '');
-  const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim();
+  const apiBaseUrl = String(process.env.KPR_API_BASE_URL ?? '').trim().replace(/\/$/, '');
+  const apiKey = String(process.env.KPR_API_KEY ?? '').trim();
   const internalSecret = String(
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
       process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
@@ -649,8 +649,8 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
   let monitoredRoutes = 0;
 
   try {
-    const apiBaseUrl = String(process.env.KEEPR_API_BASE_URL ?? '').trim();
-    const apiKey = String(process.env.KEEPR_API_KEY ?? '').trim();
+    const apiBaseUrl = String(process.env.KPR_API_BASE_URL ?? '').trim();
+    const apiKey = String(process.env.KPR_API_KEY ?? '').trim();
     const internalSecret = String(
       process.env.DEPLOY_SOLANA_REGISTRATION_SECRET ??
         process.env.SOLANA_REGISTRATION_INTERNAL_SECRET ??
@@ -658,7 +658,7 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
     ).trim();
     if (!apiBaseUrl || (!apiKey && !internalSecret)) {
       warningFindings.push(
-        'Bridge integrity monitor skipped: KEEPR_API_BASE_URL and at least one auth secret are required.',
+        'Bridge integrity monitor skipped: KPR_API_BASE_URL and at least one auth secret are required.',
       );
       await alertWarning(WORKFLOW_NAME, 'Bridge integrity monitor skipped', {
         warningFindings,

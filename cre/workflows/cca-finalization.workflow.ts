@@ -11,7 +11,7 @@
  *   4. Then call sweepUnsoldTokens()
  *
  * Prerequisites:
- *   - KEEPR_PRIVATE_KEY set in CRE secrets (for gas only — no keeper role needed)
+ *   - KPR_PRIVATE_KEY set in CRE secrets (for gas only — no keeper role needed)
  *   - CCA_STRATEGY_ADDRESS set in CRE secrets
  *
  * Feature impact: COMPLETING

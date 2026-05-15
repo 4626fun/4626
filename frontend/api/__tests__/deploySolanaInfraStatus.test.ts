@@ -51,7 +51,7 @@ describe('deploy solana infra status handler', () => {
 
   it('returns 401 when session is missing', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: undefined,
+      KPR_API_KEY: undefined,
       DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
       SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
     })
@@ -69,9 +69,9 @@ describe('deploy solana infra status handler', () => {
     }
   })
 
-  it('allows machine auth via KEEPR_API_KEY when session is missing', async () => {
+  it('allows machine auth via KPR_API_KEY when session is missing', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
+      KPR_API_KEY: 'test-keepr-key',
       DEPLOY_SOLANA_REGISTRATION_SECRET: undefined,
       SOLANA_REGISTRATION_INTERNAL_SECRET: undefined,
       SOLANA_DYNAMIC_ROUTE_ENABLED: '0',
@@ -135,7 +135,7 @@ describe('deploy solana infra status handler', () => {
       SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: undefined,
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY: 'not-a-hex-private-key',
       SOLANA_DEFAULT_MINT_BYTES32: undefined,
-      KEEPR_PRIVATE_KEY: undefined,
+      KPR_PRIVATE_KEY: undefined,
       PRIVATE_KEY: undefined,
     })
     try {

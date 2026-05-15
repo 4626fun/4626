@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto'
 
 const NON_IDEMPOTENT_ACTIONS = new Set([
-  'KEEPR_COMMAND',
+  'KPR_COMMAND',
   'ZORA_COIN',
-  'KEEPR_TRIGGER',
+  'KPR_TRIGGER',
   'UNISWAP_SKILL',
 ])
 

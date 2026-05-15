@@ -70,10 +70,10 @@ function isPrivilegedKeeprCommand(text: string): boolean {
 
 /**
  * Single catch-all action that delegates to the production command executor.
- * This replaces the previous VAULT_STATUS, SEND_TOKENS, and KEEPR_HELP stubs.
+ * This replaces the previous VAULT_STATUS, SEND_TOKENS, and KPR_HELP stubs.
  */
 const keeprCommandAction: Action = {
-  name: 'KEEPR_COMMAND',
+  name: 'KPR_COMMAND',
   similes: [
     'keepr status', 'vault status', 'send', 'transfer',
     'keepr help', 'help', 'commands',

@@ -22,7 +22,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
     creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
   },
   requireKeeprApiKey: (req: any, res: any, opts?: { missingSecretError?: string }) => {
-    const expected = String(process.env.KEEPR_API_KEY ?? '').trim()
+    const expected = String(process.env.KPR_API_KEY ?? '').trim()
     if (!expected) {
       res.status(500).json({ success: false, error: opts?.missingSecretError ?? 'Server misconfigured' })
       return false
@@ -63,9 +63,9 @@ describe('keepr/actions/updateStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
-      KEEPR_ZONE_KEY_MARKET_MAINTENANCE: 'zone-market-secret',
+      KPR_API_KEY: 'test-keepr-key',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_ZONE_KEY_MARKET_MAINTENANCE: 'zone-market-secret',
     })
   })
 

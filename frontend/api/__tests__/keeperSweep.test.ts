@@ -66,8 +66,8 @@ describe('keeper sweep handler', () => {
 
   it('returns completion_invariant_failed when completion wiring mismatches expected router mode', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-key',
-      KEEPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       KEEPER_ENABLE_HOOK_CONFIG: 'false',
       KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
       BASE_RPC_URL: 'https://mainnet.base.org',
@@ -154,8 +154,8 @@ describe('keeper sweep handler', () => {
 
   it('skips invariant evaluation entirely when invariant enforcement is disabled', async () => {
     const restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-key',
-      KEEPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      KPR_API_KEY: 'test-key',
+      KPR_PRIVATE_KEY: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       KEEPER_ENABLE_HOOK_CONFIG: 'false',
       KEEPER_ENFORCE_COMPLETION_INVARIANTS: 'true',
       BASE_RPC_URL: 'https://mainnet.base.org',

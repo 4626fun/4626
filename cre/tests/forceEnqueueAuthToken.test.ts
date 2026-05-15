@@ -135,7 +135,7 @@ vi.mock('../cre-workflows/_shared/strategyQueue.ts', () => ({
 describe('Charm forceEnqueue token separation [4626-audit-2026-04-25]', () => {
   it('treats authToken as HMAC-only: matching authToken alone does NOT authorize forceEnqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
@@ -159,7 +159,7 @@ describe('Charm forceEnqueue token separation [4626-audit-2026-04-25]', () => {
 
   it('reaches the force-enqueue branch when forceEnqueueAuthToken matches the secret', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
@@ -178,7 +178,7 @@ describe('Charm forceEnqueue token separation [4626-audit-2026-04-25]', () => {
 
   it('rejects forceEnqueue when forceEnqueueAuthToken is wrong', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
@@ -199,7 +199,7 @@ describe('Charm forceEnqueue token separation [4626-audit-2026-04-25]', () => {
 describe('Ajna forceEnqueue token separation [4626-audit-2026-04-25]', () => {
   it('treats authToken as HMAC-only: matching authToken alone does NOT authorize forceEnqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
@@ -217,7 +217,7 @@ describe('Ajna forceEnqueue token separation [4626-audit-2026-04-25]', () => {
 
   it('reaches the force-enqueue branch when forceEnqueueAuthToken matches the secret', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
@@ -236,7 +236,7 @@ describe('Ajna forceEnqueue token separation [4626-audit-2026-04-25]', () => {
 
   it('rejects forceEnqueue when forceEnqueueAuthToken is wrong', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
@@ -328,7 +328,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Charm: a valid HMAC envelope with forceEnqueue=true but NO forceEnqueueAuthToken does not force enqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
@@ -357,7 +357,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Charm: a valid HMAC envelope with WRONG forceEnqueueAuthToken does not force enqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
@@ -384,7 +384,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Ajna: a valid HMAC envelope with forceEnqueue=true but NO forceEnqueueAuthToken does not force enqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
@@ -410,7 +410,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Ajna: a valid HMAC envelope with WRONG forceEnqueueAuthToken does not force enqueue', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
@@ -437,7 +437,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Charm: HMAC-valid envelope + correct forceEnqueueAuthToken means BOTH gates are independently satisfied', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
@@ -467,7 +467,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
 
   it('Ajna: HMAC-valid envelope + correct forceEnqueueAuthToken means BOTH gates are independently satisfied', async () => {
     const runtime = buildRuntimeWithSecrets({
-      KEEPR_API_KEY: 'keepr-key',
+      KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
       CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })

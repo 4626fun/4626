@@ -31,8 +31,8 @@ This runbook covers rollout and rollback for the P0 Ajna Vault Manager lane intr
 ## Required environment
 
 - Keeper execution:
-  - `KEEPR_API_KEY`
-  - `KEEPR_PRIVATE_KEY`
+  - `KPR_API_KEY`
+  - `KPR_PRIVATE_KEY`
   - `BASE_RPC_URL` (recommended non-public RPC)
 - Enqueue scheduler:
   - `CRON_SECRET`

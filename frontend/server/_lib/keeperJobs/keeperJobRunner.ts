@@ -6,8 +6,8 @@ import {
   type KeeperJob,
 } from './keeperJobs.js'
 import {
-  KEEPR_TRUST_ZONE_HEADER,
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
@@ -85,8 +85,8 @@ function zoneHeaders(actionType: string | null, action: Record<string, unknown> 
   const zone = resolveKeeprTrustZone(effectiveActionType ?? actionType)
   const key = String(process.env[getKeeprTrustZoneEnvKey(zone)] ?? '').trim()
   return {
-    [KEEPR_TRUST_ZONE_HEADER]: zone,
-    ...(key ? { [KEEPR_TRUST_ZONE_KEY_HEADER]: key } : null),
+    [KPR_TRUST_ZONE_HEADER]: zone,
+    ...(key ? { [KPR_TRUST_ZONE_KEY_HEADER]: key } : null),
   }
 }
 

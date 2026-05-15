@@ -310,7 +310,7 @@ function fetchPendingActions(
 
 const onCronTrigger = (runtime: Runtime<Config>): KeeprActionQueueResult => {
   // Retrieve the API key from CRE secrets
-  const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
+  const apiKeySecret = runtime.getSecret({ id: "KPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
 
   runtime.log("Keepr action queue starting")

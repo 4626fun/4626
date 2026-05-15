@@ -28,7 +28,7 @@ The migration creates `public.keeper_jobs` with deny-all RLS. Server code reache
 Set these on the API runtime and worker runtime:
 
 ```bash
-KEEPR_API_KEY=<shared-machine-secret>
+KPR_API_KEY=<shared-machine-secret>
 KEEPER_COORDINATION_BASE_URL=https://app.4626.fun
 ```
 
@@ -43,13 +43,13 @@ KEEPER_WORKER_RETRY_DELAY_SECONDS=60
 
 ## API
 
-All endpoints require `Authorization: Bearer <KEEPR_API_KEY>`.
+All endpoints require `Authorization: Bearer <KPR_API_KEY>`.
 
 ### Enqueue
 
 ```bash
 curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/enqueue" \
-  -H "Authorization: Bearer $KEEPR_API_KEY" \
+  -H "Authorization: Bearer $KPR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "kind": "internal_api",
@@ -65,7 +65,7 @@ curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/enqueue" \
 
 ```bash
 curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/claim" \
-  -H "Authorization: Bearer $KEEPR_API_KEY" \
+  -H "Authorization: Bearer $KPR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "workerId": "keeper-worker-1", "limit": 1, "kinds": ["internal_api"] }'
 ```
@@ -74,7 +74,7 @@ curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/claim" \
 
 ```bash
 curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/complete" \
-  -H "Authorization: Bearer $KEEPR_API_KEY" \
+  -H "Authorization: Bearer $KPR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "id": 1, "workerId": "keeper-worker-1", "status": "succeeded", "result": { "ok": true } }'
 ```
@@ -83,7 +83,7 @@ curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/complete" \
 
 ```bash
 curl "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/status?status=retry&limit=25" \
-  -H "Authorization: Bearer $KEEPR_API_KEY"
+  -H "Authorization: Bearer $KPR_API_KEY"
 ```
 
 ## Worker
@@ -105,7 +105,7 @@ Smoke-test the full queue and worker loop without triggering keeper mutations:
 
 ```bash
 curl -X POST "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/enqueue" \
-  -H "Authorization: Bearer $KEEPR_API_KEY" \
+  -H "Authorization: Bearer $KPR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "kind": "noop", "dedupeKey": "smoke:keeper-worker", "payload": { "reason": "smoke" } }'
 
@@ -219,12 +219,12 @@ Discovery reads `keepr_vaults` directly and embeds addresses in the queued paylo
 Vercel also calls `/api/keeper/jobs/process-keepr-actions` every 5 minutes. This replaces the `keepr-action-queue` loop when enabled:
 
 ```bash
-KEEPER_PROCESS_KEEPR_ACTIONS_ENABLED=1
-KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT=1
-KEEPER_PROCESS_KEEPR_ACTIONS_RETRY_DELAY_SECONDS=60
+KEEPER_PROCESS_KPR_ACTIONS_ENABLED=1
+KEEPER_PROCESS_KPR_ACTIONS_LIMIT=1
+KEEPER_PROCESS_KPR_ACTIONS_RETRY_DELAY_SECONDS=60
 ```
 
-It fetches `/api/keepr/actions/pending`, claims one action with `updateStatus: executing`, executes `/api/keepr/actions/execute`, and finalizes with `executed`, `retry`, or `failed`. Trust-zone headers are derived from the action type and the existing `KEEPR_ZONE_KEY_*` env vars.
+It fetches `/api/keepr/actions/pending`, claims one action with `updateStatus: executing`, executes `/api/keepr/actions/execute`, and finalizes with `executed`, `retry`, or `failed`. Trust-zone headers are derived from the action type and the existing `KPR_ZONE_KEY_*` env vars.
 
 ## Bridge Integrity Monitor
 
@@ -261,7 +261,7 @@ Charm:
 KEEPER_STRATEGY_CANARY_CHARM_VAULT_ADDRESS=0x...
 ```
 
-These canaries rely on `/api/keeper/jobs/process-keepr-actions` to execute the action queue. Keep `KEEPER_PROCESS_KEEPR_ACTIONS_LIMIT=1` until each strategy action has run cleanly.
+These canaries rely on `/api/keeper/jobs/process-keepr-actions` to execute the action queue. Keep `KEEPER_PROCESS_KPR_ACTIONS_LIMIT=1` until each strategy action has run cleanly.
 
 ## Strategy Signal Polling Fallback
 
@@ -336,7 +336,7 @@ Monitor stuck jobs:
 
 ```bash
 curl "$KEEPER_COORDINATION_BASE_URL/api/keeper/jobs/health" \
-  -H "Authorization: Bearer $KEEPR_API_KEY"
+  -H "Authorization: Bearer $KPR_API_KEY"
 ```
 
 Non-zero `retry`, `failed`, or `expiredClaims` should page the operator once the fallback lane is carrying production work.

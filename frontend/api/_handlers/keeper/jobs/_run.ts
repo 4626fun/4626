@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const result = await runKeeperJobTick({
       baseUrl: getBaseUrl(req),
-      apiKey: String(process.env.KEEPR_API_KEY ?? ''),
+      apiKey: String(process.env.KPR_API_KEY ?? ''),
       workerId: String(process.env.KEEPER_WORKER_ID ?? 'vercel-cron-keeper-worker'),
       limit: Number(process.env.KEEPER_WORKER_LIMIT ?? 1),
       leaseSeconds: Number(process.env.KEEPER_WORKER_LEASE_SECONDS ?? 300),

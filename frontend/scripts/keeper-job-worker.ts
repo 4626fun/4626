@@ -14,7 +14,7 @@ function optionalPositiveInt(name: string, fallback: number, min: number, max: n
 
 async function main() {
   const baseUrl = requiredEnv('KEEPER_COORDINATION_BASE_URL')
-  const apiKey = requiredEnv('KEEPR_API_KEY')
+  const apiKey = requiredEnv('KPR_API_KEY')
   const workerId = String(process.env.KEEPER_WORKER_ID ?? `keeper-worker-${process.pid}`).trim()
   const limit = optionalPositiveInt('KEEPER_WORKER_LIMIT', 1, 1, 10)
   const leaseSeconds = optionalPositiveInt('KEEPER_WORKER_LEASE_SECONDS', 300, 30, 3600)

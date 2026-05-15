@@ -53,7 +53,7 @@ describe('runtime bridge', () => {
     const { createRuntimeBridge } = await import('../runtimeBridge.ts')
 
     const keeprAction = {
-      name: 'KEEPR_TRIGGER',
+      name: 'KPR_TRIGGER',
       validate: vi.fn(async () => true),
       handler: vi.fn(),
     }
@@ -86,7 +86,7 @@ describe('runtime bridge', () => {
       isAdmin: true,
       source: 'xmtp',
     })
-    expect(ranked.map((r) => r.action.name)).toEqual(['KEEPR_TRIGGER', 'GENERIC_ACTION'])
+    expect(ranked.map((r) => r.action.name)).toEqual(['KPR_TRIGGER', 'GENERIC_ACTION'])
     expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0)
   })
 

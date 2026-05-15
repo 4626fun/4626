@@ -316,10 +316,10 @@ cp secrets.example.env .env
 ```
 
 Required:
-- `KEEPR_PRIVATE_KEY` — EOA private key for the keeper wallet
+- `KPR_PRIVATE_KEY` — EOA private key for the keeper wallet
 - `BASE_RPC_URL` — Base mainnet RPC
-- `KEEPR_API_BASE_URL` — Your deployment (e.g. `https://4626.fun/api`)
-- `KEEPR_API_KEY` — API key for CRE-to-Vercel auth
+- `KPR_API_BASE_URL` — Your deployment (e.g. `https://4626.fun/api`)
+- `KPR_API_KEY` — API key for CRE-to-Vercel auth
 
 Optional (ERC-4337 smart wallet mode for shared/global keeper workflows):
 - `CRE_ERC4337_ENABLED=true`
@@ -333,7 +333,7 @@ Optional (ERC-4337 smart wallet mode for shared/global keeper workflows):
 - `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY` — required for Privy signer
 
 Optional (alerting):
-- `KEEPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
+- `KPR_ALERT_WEBHOOK_URL` — webhook URL for payout-integrity and settlement alerts
 
 Optional (Ajna bucket manager):
 - `AJNA_BUCKET_VAULT_ADDRESS` / `AJNA_BUCKET_ORACLE_ADDRESS` — explicit single-vault targeting for Ajna bucket workflow
@@ -388,7 +388,7 @@ cast send $VAULT --rpc-url $RPC "setKeeper(address)" $KEEPER_ADDRESS
 
 If ERC-4337 is enabled, `KEEPER_ADDRESS` must be the smart wallet
 (`CRE_ERC4337_SMART_WALLET`). Otherwise, use the EOA derived from
-`KEEPR_PRIVATE_KEY`.
+`KPR_PRIVATE_KEY`.
 
 Auction settlement is permissionless — no auth needed.
 
@@ -550,7 +550,7 @@ WantedBy=multi-user.target
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
 | `/api/keepr/actions/updateStatus` | POST | Updates action status |
 
-All require `Authorization: Bearer $KEEPR_API_KEY`.
+All require `Authorization: Bearer $KPR_API_KEY`.
 
 ## CRE SDK Workflows
 
@@ -583,9 +583,9 @@ cre workflow deploy payout-integrity --target production-settings
 Set secrets before deploying:
 
 ```bash
-cre secrets set KEEPR_API_KEY
-cre secrets set KEEPR_API_BASE_URL
-cre secrets set KEEPR_PRIVATE_KEY
+cre secrets set KPR_API_KEY
+cre secrets set KPR_API_BASE_URL
+cre secrets set KPR_PRIVATE_KEY
 ```
 
 For local simulation, add these to `cre/cre-workflows/.env`.
@@ -618,8 +618,8 @@ Vercel API endpoints:
 CRE Workflow → HTTPClient.sendRequest(POST /keeper/tend) → Vercel API → viem writeContract → Base
 ```
 
-The bridge endpoints authenticate with `KEEPR_API_KEY` and use the shared
-keeper wallet (`KEEPR_PRIVATE_KEY`) to submit transactions.
+The bridge endpoints authenticate with `KPR_API_KEY` and use the shared
+keeper wallet (`KPR_PRIVATE_KEY`) to submit transactions.
 
 Canonical Ajna automation is the current exception: Ajna bucket management can
 execute directly from CRE using the vault's stored canonical sender context, or

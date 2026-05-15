@@ -14,7 +14,7 @@
  *   - SOLANA_RPC_URL set in CRE secrets
  *   - DLMM_POOL_ADDRESS set in CRE secrets (Solana)
  *   - CCA_STRATEGY set in CRE secrets (Base, for floor price)
- *   - KEEPR_PRIVATE_KEY set in CRE secrets
+ *   - KPR_PRIVATE_KEY set in CRE secrets
  *
  * Market integrity impact: HIGH (during launch window)
  *   - Prevents excessive price divergence between Base and Solana

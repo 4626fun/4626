@@ -148,7 +148,7 @@ describe('/api/(cre/)?vaults/active automation exposure', () => {
     vi.clearAllMocks()
     validateCreatorRegistryBindingMock.mockImplementation(async () => ({ ok: true }))
     isDbConfiguredMock.mockReturnValue(true)
-    restoreEnv = applyEnv({ KEEPR_API_KEY: 'test-keepr-key' })
+    restoreEnv = applyEnv({ KPR_API_KEY: 'test-keepr-key' })
   })
 
   afterEach(() => {

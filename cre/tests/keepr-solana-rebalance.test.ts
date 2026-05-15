@@ -55,10 +55,10 @@ import { executeSolanaRebalance } from '../actions/keepr-solana-rebalance.action
 
 const ENV_KEYS = [
   'SOLANA_BRIDGE_ADAPTER',
-  'KEEPR_SOLANA_REBALANCE_EXECUTE',
-  'KEEPR_SOLANA_REBALANCE_CREATORS_JSON',
-  'KEEPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON',
-  'KEEPR_SOLANA_REBALANCE_FEE_WEI',
+  'KPR_SOLANA_REBALANCE_EXECUTE',
+  'KPR_SOLANA_REBALANCE_CREATORS_JSON',
+  'KPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON',
+  'KPR_SOLANA_REBALANCE_FEE_WEI',
 ] as const
 
 const savedEnv: Record<string, string | undefined> = {}
@@ -92,7 +92,7 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('skips creators whose adapter balance is below threshold', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST },
     ])
     // Below threshold (default 1e18)
@@ -106,7 +106,7 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('plans a plain bridge dispatch (dry run, no writeContract)', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST },
     ])
     // 2 tokens worth
@@ -122,9 +122,9 @@ describe('executeSolanaRebalance', () => {
     expect(writeContractMock).not.toHaveBeenCalled()
   })
 
-  it('broadcasts plain bridge when KEEPR_SOLANA_REBALANCE_EXECUTE=1', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_EXECUTE = '1'
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+  it('broadcasts plain bridge when KPR_SOLANA_REBALANCE_EXECUTE=1', async () => {
+    process.env.KPR_SOLANA_REBALANCE_EXECUTE = '1'
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST },
     ])
     readContractMock.mockResolvedValueOnce(2_000_000_000_000_000_000n)
@@ -140,8 +140,8 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('reports failure cleanly when writeContract returns success=false', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_EXECUTE = '1'
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_EXECUTE = '1'
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST },
     ])
     readContractMock.mockResolvedValueOnce(2_000_000_000_000_000_000n)
@@ -153,7 +153,7 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('refuses to bridge when destinationPubkey is missing', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR }, // no destinationPubkey
     ])
     readContractMock.mockResolvedValueOnce(2_000_000_000_000_000_000n)
@@ -165,8 +165,8 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('does not broadcast Meteora-ixs path yet (marks plan without tx)', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_EXECUTE = '1'
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_EXECUTE = '1'
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST, meteoraAlphaVault: METEORA_AV },
     ])
     readContractMock.mockResolvedValueOnce(2_000_000_000_000_000_000n)
@@ -177,7 +177,7 @@ describe('executeSolanaRebalance', () => {
   })
 
   it('marks a creator as skipped when balanceOf RPC fails', async () => {
-    process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
+    process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON = JSON.stringify([
       { creatorToken: CREATOR, destinationPubkey: SOLANA_DEST },
     ])
     readContractMock.mockRejectedValueOnce(new Error('rpc timeout'))

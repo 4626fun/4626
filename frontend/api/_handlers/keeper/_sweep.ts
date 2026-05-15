@@ -230,9 +230,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       invariants?.payoutRecipientMode === 'payout_router' ? 'payout_router' : 'gauge',
   }
 
-  const keeperPk = process.env.KEEPR_PRIVATE_KEY
+  const keeperPk = process.env.KPR_PRIVATE_KEY
   if (!keeperPk) {
-    return res.status(500).json({ success: false, error: 'KEEPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
+    return res.status(500).json({ success: false, error: 'KPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
   }
 
   try {

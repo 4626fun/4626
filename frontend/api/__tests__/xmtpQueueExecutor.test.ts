@@ -148,7 +148,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       BASE_RPC_URL: 'https://base-rpc.example',
-      KEEPR_PRIVATE_KEY: undefined,
+      KPR_PRIVATE_KEY: undefined,
       CDP_PAYMASTER_URL: 'https://paymaster.example',
       XMTP_AGENT_CSW_OWNER_INDEX: undefined,
     })
@@ -676,7 +676,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
   })
 
   it('keeps Charm fallback retryable when an earlier CSW candidate failed retryably and a later one failed permanently', async () => {
-    process.env.KEEPR_PRIVATE_KEY =
+    process.env.KPR_PRIVATE_KEY =
       '0x1111111111111111111111111111111111111111111111111111111111111111'
     mocks.privateKeyToAccount.mockReturnValue({
       address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

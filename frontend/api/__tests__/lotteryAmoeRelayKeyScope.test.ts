@@ -4,8 +4,8 @@
 // `docs/security/amoe-relay-key-scope.md`):
 //
 //   A4 (relay key isolation): assert `_amoeSubmit.ts` never falls back to
-//        the generic `PRIVATE_KEY` / `KEEPR_PRIVATE_KEY` /
-//        `KPR_ERC4337_OWNER_PRIVATE_KEY`/`KEEPR_ERC4337_OWNER_PRIVATE_KEY`/`CRE_ERC4337_OWNER_PRIVATE_KEY` env vars when no AMOE-scoped key
+//        the generic `PRIVATE_KEY` / `KPR_PRIVATE_KEY` /
+//        `KPR_ERC4337_OWNER_PRIVATE_KEY`/`CRE_ERC4337_OWNER_PRIVATE_KEY` env vars when no AMOE-scoped key
 //        is configured. The relayed submit must surface
 //        `amoe_relay_unavailable` instead of silently signing with another
 //        service's key.
@@ -195,7 +195,7 @@ describe('AMOE submit relay key scope (A4)', () => {
     }
   })
 
-  it('refuses to relay when only KEEPR_PRIVATE_KEY / PRIVATE_KEY are set (no AMOE-scoped key)', async () => {
+  it('refuses to relay when only KPR_PRIVATE_KEY / PRIVATE_KEY are set (no AMOE-scoped key)', async () => {
     // Plant the legacy keys we explicitly want to NOT inherit. If the relay
     // ever falls back to either of these we'd silently sign with whatever
     // service owns that key (Keepr automation, generic deploy key, etc.).
@@ -205,10 +205,9 @@ describe('AMOE submit relay key scope (A4)', () => {
       LOTTERY_AMOE_RELAY_SMART_WALLET: undefined,
       LOTTERY_AMOE_RELAY_BUNDLER_URL: undefined,
       // Pre-A4 fallbacks — must NOT be used for AMOE relaying.
-      KEEPR_PRIVATE_KEY: '0x' + '11'.repeat(32),
+      KPR_PRIVATE_KEY: '0x' + '11'.repeat(32),
       PRIVATE_KEY: '0x' + '22'.repeat(32),
-      KPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '33'.repeat(32),
-      KEEPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '44'.repeat(32),
+      KPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '44'.repeat(32),
       CRE_ERC4337_OWNER_PRIVATE_KEY: '0x' + '55'.repeat(32),
     })
 
@@ -256,7 +255,7 @@ describe('AMOE submit relay key scope (A4)', () => {
       LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY: undefined,
       LOTTERY_AMOE_RELAY_SMART_WALLET: undefined,
       LOTTERY_AMOE_RELAY_BUNDLER_URL: undefined,
-      KEEPR_PRIVATE_KEY: undefined,
+      KPR_PRIVATE_KEY: undefined,
       PRIVATE_KEY: undefined,
     })
 
@@ -276,7 +275,7 @@ describe('AMOE submit relay key scope (A4)', () => {
     // Either the dynamic viem mock takes effect (200 + txHash) or the
     // dynamic-import shape diverges in test env and we get 500. Both are
     // acceptable for THIS test — what we're guarding against is the
-    // pre-A4 behaviour of accepting `KEEPR_PRIVATE_KEY` / `PRIVATE_KEY`.
+    // pre-A4 behaviour of accepting `KPR_PRIVATE_KEY` / `PRIVATE_KEY`.
     // The previous test already locked that down; this one just confirms
     // the AMOE-scoped key is the only one that unblocks relay.
     expect([200, 500]).toContain(res.statusCode)

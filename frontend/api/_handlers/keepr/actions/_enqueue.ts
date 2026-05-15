@@ -20,7 +20,7 @@ import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/k
 
 import { enqueueKeeprAction } from '../../../../server/_lib/keepr/keeprRegistry.js'
 import {
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
   formatTrustZoneDisabledError,
   resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
@@ -43,7 +43,7 @@ type EnqueueResponse = {
   trustZone: string
 }
 
-const KEEPR_ENQUEUE_BODY_MAX_BYTES = 65_536
+const KPR_ENQUEUE_BODY_MAX_BYTES = 65_536
 
 const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
 const AJNA_ACTION_TYPES = new Set([
@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_ENQUEUE_BODY_MAX_BYTES })) as EnqueueBody
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_ENQUEUE_BODY_MAX_BYTES })) as EnqueueBody
   const vaultAddressRaw = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''
   const groupId = typeof body.groupId === 'string' ? body.groupId.trim() : ''
   const actionType = typeof body.actionType === 'string' ? body.actionType.trim() : null
@@ -134,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (
     !requireOptionalHeaderEnvAuth(req, res, {
       envKey: trustZoneEnvKey,
-      headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+      headerName: KPR_TRUST_ZONE_KEY_HEADER,
       unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
     })
   ) {

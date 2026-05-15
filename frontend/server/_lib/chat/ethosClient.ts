@@ -29,7 +29,20 @@ export type EthosProfileSummary = EthosScore & {
 }
 
 const ETHOS_API_BASE = 'https://api.ethos.network/api/v2'
-const SCORE_CACHE_TTL_MS = 6 * 60 * 60 * 1000
+function readDurationMs(raw: string | undefined, fallbackMs: number, minMs = 30_000, maxMs = 24 * 60 * 60 * 1000): number {
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed)) return fallbackMs
+  return Math.max(minMs, Math.min(maxMs, Math.floor(parsed)))
+}
+
+const SCORE_CACHE_TTL_MS = readDurationMs(
+  process.env.ETHOS_SCORE_CACHE_TTL_MS,
+  15 * 60 * 1000,
+)
+const PROFILE_CACHE_TTL_MS = readDurationMs(
+  process.env.ETHOS_PROFILE_CACHE_TTL_MS,
+  60 * 60 * 1000,
+)
 const USERKEY_SCORE_CACHE = new Map<string, { value: EthosScore | null; expiresAt: number }>()
 const USERKEY_PROFILE_CACHE = new Map<string, { value: EthosProfileSummary | null; expiresAt: number }>()
 const SUPPORTED_USERKEY_PREFIXES = [
@@ -367,7 +380,7 @@ export async function getCachedEthosProfileByUserkey(rawUserkey: string): Promis
   const profile = await fetchEthosProfileByUserkey(userkey)
   USERKEY_PROFILE_CACHE.set(userkey, {
     value: profile,
-    expiresAt: Date.now() + SCORE_CACHE_TTL_MS,
+    expiresAt: Date.now() + PROFILE_CACHE_TTL_MS,
   })
   return profile
 }

@@ -33,7 +33,7 @@ type AutomationBody = {
 type PersistedIdentity = NonNullable<Awaited<ReturnType<typeof resolvePersistedWalletIdentity>>>
 
 const DEFAULT_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
-const KEEPR_AUTOMATION_BODY_MAX_BYTES = 16_384
+const KPR_AUTOMATION_BODY_MAX_BYTES = 16_384
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -128,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respondOk(res, row)
     }
 
-    const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_AUTOMATION_BODY_MAX_BYTES })) as AutomationBody
+    const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_AUTOMATION_BODY_MAX_BYTES })) as AutomationBody
 
     if (req.method === 'DELETE') {
       const vaultAddress =

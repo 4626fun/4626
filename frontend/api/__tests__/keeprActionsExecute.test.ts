@@ -16,7 +16,7 @@ describe('keepr/actions/execute', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    restoreEnv = applyEnv({ KEEPR_API_KEY: 'test-keepr-key' })
+    restoreEnv = applyEnv({ KPR_API_KEY: 'test-keepr-key' })
   })
 
   afterEach(() => {
@@ -217,7 +217,7 @@ describe('keepr/actions/execute', () => {
 
   it('enforces optional trust-zone key when configured', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
+      KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
     })
     executeKeeprActionMock.mockResolvedValue({
       success: true,
@@ -269,7 +269,7 @@ describe('keepr/actions/execute', () => {
 
   it('derives trust zone from the effective action payload, not only the raw actionType field', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+      KPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
     })
     executeKeeprActionMock.mockResolvedValue({
       success: true,
@@ -307,7 +307,7 @@ describe('keepr/actions/execute', () => {
 
   it('blocks execution when the resolved trust zone is kill-switched', async () => {
     const restoreZoneEnv = applyEnv({
-      KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
+      KPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
     })
     executeKeeprActionMock.mockResolvedValue({
       success: true,

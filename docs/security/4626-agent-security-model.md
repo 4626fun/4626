@@ -165,19 +165,19 @@ For keepr enqueue, execute, and queue execution, the effective action type is de
 
 ### Auth layering
 
-- `KEEPR_API_KEY`
+- `KPR_API_KEY`
   - Coarse machine auth for backward compatibility.
-- `KEEPR_ZONE_KEY_FINANCIAL_EXECUTION`
-- `KEEPR_ZONE_KEY_MARKET_MAINTENANCE`
-- `KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
+- `KPR_ZONE_KEY_FINANCIAL_EXECUTION`
+- `KPR_ZONE_KEY_MARKET_MAINTENANCE`
+- `KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING`
 
 When a zone-specific key is configured, the corresponding request must also supply `x-keepr-zone-key`.
 
 ### Kill switches
 
-- `KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION`
-- `KEEPR_ZONE_DISABLE_MARKET_MAINTENANCE`
-- `KEEPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING`
+- `KPR_ZONE_DISABLE_FINANCIAL_EXECUTION`
+- `KPR_ZONE_DISABLE_MARKET_MAINTENANCE`
+- `KPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING`
 
 Kill switches are enforced at:
 
@@ -243,24 +243,24 @@ These are known follow-ups, not accidental omissions.
 ### Safe rollout order
 
 1. Deploy code with the shared helpers and correlation ID support.
-2. Leave `KEEPR_API_KEY` in place during the transition.
+2. Leave `KPR_API_KEY` in place during the transition.
 3. Configure zone-specific keys per automation boundary.
 4. Turn on zone kill switches only when operators understand the execution impact for that zone.
 
 ### Backward compatibility
 
-- Existing coarse `KEEPR_API_KEY` auth still works unless operators configure a stricter zone key.
+- Existing coarse `KPR_API_KEY` auth still works unless operators configure a stricter zone key.
 - Existing Telegram callback tokens and audit tables are preserved.
 - Existing remote-AI call sites keep their provider behavior while now sharing a consistent egress gate.
 
 ## Rollback and Kill-Switch Guidance
 
 - To stop financial writes immediately:
-  - Set `KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION=true`
+  - Set `KPR_ZONE_DISABLE_FINANCIAL_EXECUTION=true`
 - To stop messaging and queue-side writes:
-  - Set `KEEPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING=true`
+  - Set `KPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING=true`
 - To remove extra per-zone auth during a staged rollback:
-  - Unset the corresponding `KEEPR_ZONE_KEY_*` variable
+  - Unset the corresponding `KPR_ZONE_KEY_*` variable
 - If remote-AI egress causes unexpected behavior:
   - disable the specific provider API key at the environment layer
   - keep the shared egress wrapper in place rather than bypassing redaction ad hoc

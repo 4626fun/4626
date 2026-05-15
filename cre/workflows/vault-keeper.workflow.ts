@@ -12,7 +12,7 @@
  *
  * Prerequisites:
  *   - Keeper wallet must be authorized via setKeeper(keeperAddress) on the vault
- *   - KEEPR_PRIVATE_KEY set in CRE secrets
+ *   - KPR_PRIVATE_KEY set in CRE secrets
  *   - VAULT_ADDRESS set in CRE secrets
  *
  * Revenue impact: HIGH

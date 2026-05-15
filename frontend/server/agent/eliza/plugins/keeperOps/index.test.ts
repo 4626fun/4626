@@ -24,10 +24,10 @@ type AnyAction = {
 
 const ENV_KEYS = [
   'DRY_RUN',
-  'ELIZA_KEEPR_DRY_RUN',
-  'KEEPR_PRIVATE_KEY',
+  'ELIZA_KPR_DRY_RUN',
+  'KPR_PRIVATE_KEY',
   'SOLANA_RPC_URL',
-  'KEEPR_API_KEY',
+  'KPR_API_KEY',
 ] as const
 
 const originalEnv = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]])) as Record<string, string | undefined>
@@ -81,12 +81,12 @@ describe('keeperOps plugin dry-run gate', () => {
 
   it('blocks mutating trigger commands when DRY_RUN is enabled', async () => {
     setEnv('DRY_RUN', 'true')
-    setEnv('ELIZA_KEEPR_DRY_RUN', undefined)
-    setEnv('KEEPR_PRIVATE_KEY', undefined)
-    setEnv('KEEPR_API_KEY', undefined)
+    setEnv('ELIZA_KPR_DRY_RUN', undefined)
+    setEnv('KPR_PRIVATE_KEY', undefined)
+    setEnv('KPR_API_KEY', undefined)
     setEnv('SOLANA_RPC_URL', undefined)
 
-    const trigger = getAction('KEEPR_TRIGGER')
+    const trigger = getAction('KPR_TRIGGER')
     const text = await runActionText(trigger, '/keepr tend 0x1111111111111111111111111111111111111111')
 
     expect(text).toContain('DRY_RUN is enabled')
@@ -95,12 +95,12 @@ describe('keeperOps plugin dry-run gate', () => {
     expect(text).not.toContain('Keeper wallet not configured')
   })
 
-  it('supports ELIZA_KEEPR_DRY_RUN override gate', async () => {
+  it('supports ELIZA_KPR_DRY_RUN override gate', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_KEEPR_DRY_RUN', '1')
-    setEnv('KEEPR_API_KEY', undefined)
+    setEnv('ELIZA_KPR_DRY_RUN', '1')
+    setEnv('KPR_API_KEY', undefined)
 
-    const trigger = getAction('KEEPR_TRIGGER')
+    const trigger = getAction('KPR_TRIGGER')
     const text = await runActionText(trigger, '/keepr queue')
 
     expect(text).toContain('DRY_RUN is enabled')
@@ -109,10 +109,10 @@ describe('keeperOps plugin dry-run gate', () => {
 
   it('keeps existing trigger behavior when dry run is disabled', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
-    setEnv('KEEPR_API_KEY', undefined)
+    setEnv('ELIZA_KPR_DRY_RUN', '0')
+    setEnv('KPR_API_KEY', undefined)
 
-    const trigger = getAction('KEEPR_TRIGGER')
+    const trigger = getAction('KPR_TRIGGER')
     const text = await runActionText(trigger, '/keepr queue')
 
     expect(text).toContain('Keepr API not configured')
@@ -120,9 +120,9 @@ describe('keeperOps plugin dry-run gate', () => {
 
   it('shows dry-run status in help output', async () => {
     setEnv('DRY_RUN', 'true')
-    setEnv('ELIZA_KEEPR_DRY_RUN', undefined)
+    setEnv('ELIZA_KPR_DRY_RUN', undefined)
 
-    const help = getAction('KEEPR_HELP')
+    const help = getAction('KPR_HELP')
     const text = await runActionText(help, '/keepr help')
 
     expect(text).toContain('Dry run: yes')
@@ -130,13 +130,13 @@ describe('keeperOps plugin dry-run gate', () => {
 
   it('denies trigger commands for MEMBER role', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
+    setEnv('ELIZA_KPR_DRY_RUN', '0')
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       config: { roles: { admins: [] } },
     })
 
-    const trigger = getAction('KEEPR_TRIGGER')
+    const trigger = getAction('KPR_TRIGGER')
     const text = await runActionText(trigger, '/keepr queue', {
       conversationId: 'group-1',
       senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
@@ -147,14 +147,14 @@ describe('keeperOps plugin dry-run gate', () => {
 
   it('allows trigger commands for ADMIN role', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
-    setEnv('KEEPR_API_KEY', undefined)
+    setEnv('ELIZA_KPR_DRY_RUN', '0')
+    setEnv('KPR_API_KEY', undefined)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       config: { roles: { admins: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'] } },
     })
 
-    const trigger = getAction('KEEPR_TRIGGER')
+    const trigger = getAction('KPR_TRIGGER')
     const text = await runActionText(trigger, '/keepr queue', {
       conversationId: 'group-1',
       senderAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',

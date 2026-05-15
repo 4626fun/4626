@@ -5,8 +5,8 @@ export type KeeprTrustZone =
   | 'market_maintenance'
   | 'queue_messaging_monitoring'
 
-export const KEEPR_TRUST_ZONE_HEADER = 'x-keepr-trust-zone'
-export const KEEPR_TRUST_ZONE_KEY_HEADER = 'x-keepr-zone-key'
+export const KPR_TRUST_ZONE_HEADER = 'x-keepr-trust-zone'
+export const KPR_TRUST_ZONE_KEY_HEADER = 'x-keepr-zone-key'
 
 const TRUST_ZONE_VALUES: KeeprTrustZone[] = [
   'financial_execution',
@@ -15,15 +15,15 @@ const TRUST_ZONE_VALUES: KeeprTrustZone[] = [
 ]
 
 const ZONE_ENV_KEY_MAP: Record<KeeprTrustZone, string> = {
-  financial_execution: 'KEEPR_ZONE_KEY_FINANCIAL_EXECUTION',
-  market_maintenance: 'KEEPR_ZONE_KEY_MARKET_MAINTENANCE',
-  queue_messaging_monitoring: 'KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
+  financial_execution: 'KPR_ZONE_KEY_FINANCIAL_EXECUTION',
+  market_maintenance: 'KPR_ZONE_KEY_MARKET_MAINTENANCE',
+  queue_messaging_monitoring: 'KPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
 }
 
 const ZONE_KILL_SWITCH_ENV_KEY_MAP: Record<KeeprTrustZone, string> = {
-  financial_execution: 'KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION',
-  market_maintenance: 'KEEPR_ZONE_DISABLE_MARKET_MAINTENANCE',
-  queue_messaging_monitoring: 'KEEPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING',
+  financial_execution: 'KPR_ZONE_DISABLE_FINANCIAL_EXECUTION',
+  market_maintenance: 'KPR_ZONE_DISABLE_MARKET_MAINTENANCE',
+  queue_messaging_monitoring: 'KPR_ZONE_DISABLE_QUEUE_MESSAGING_MONITORING',
 }
 
 const ACTION_TYPE_ALIASES: Record<string, string> = {

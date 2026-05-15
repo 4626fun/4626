@@ -94,6 +94,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/v1/chat/ethos-sync-hot",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/keeper/jobs/run",
       "schedule": "*/5 * * * *"
     },

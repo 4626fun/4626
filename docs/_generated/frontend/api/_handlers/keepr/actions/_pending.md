@@ -17,7 +17,7 @@ Defined in: [api/\_handlers/keepr/actions/\_pending.ts:53](https://github.com/we
 GET /api/keepr/actions/pending
 
 Returns pending/retry actions from the keepr_actions queue.
-Protected by a shared secret (KEEPR_API_KEY).
+Protected by a shared secret (KPR_API_KEY).
 
 Query params:
   - limit: max actions to return (default 10, max 50)

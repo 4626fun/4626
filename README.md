@@ -455,8 +455,8 @@ The swap surface has a few deliberate runtime constraints to keep the route stab
 
 | Variable             | Purpose                                     |
 | -------------------- | ------------------------------------------- |
-| `KEEPR_PRIVATE_KEY`  | Keeper signer for API-triggered writes      |
-| `KEEPR_API_KEY`      | Auth between keeper clients and API         |
+| `KPR_PRIVATE_KEY`  | Keeper signer for API-triggered writes      |
+| `KPR_API_KEY`      | Auth between keeper clients and API         |
 
 For complete env references, see `frontend/README.md`.
 

@@ -269,7 +269,7 @@ function readSolanaDecimalsFromEnv(): number {
 function readRegistrationSignerPk(): Hex | null {
   const candidates = [
     process.env.SOLANA_ADAPTER_OWNER_PRIVATE_KEY,
-    process.env.KEEPR_PRIVATE_KEY,
+    process.env.KPR_PRIVATE_KEY,
     process.env.PRIVATE_KEY,
   ]
   for (const c of candidates) {
@@ -1419,7 +1419,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({
         success: false,
         error:
-          'Auto-registration signer key is not configured. Set SOLANA_ADAPTER_OWNER_PRIVATE_KEY (or KEEPR_PRIVATE_KEY).',
+          'Auto-registration signer key is not configured. Set SOLANA_ADAPTER_OWNER_PRIVATE_KEY (or KPR_PRIVATE_KEY).',
       } satisfies ApiEnvelope<never>)
     }
     const account = privateKeyToAccount(signerPk)

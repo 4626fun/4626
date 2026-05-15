@@ -26,7 +26,7 @@
  * yet; tracked as follow-up in `docs/operations/solana-bridge-naming-invariant.md`).
  *
  * Actual on-chain dispatch is gated behind the
- * `KEEPR_SOLANA_REBALANCE_EXECUTE=1` env so dry-running the keeper
+ * `KPR_SOLANA_REBALANCE_EXECUTE=1` env so dry-running the keeper
  * produces only a plan, never an onchain write. Set that env to `1` AND
  * configure the destination map before enabling in production.
  */
@@ -42,7 +42,7 @@ const WORKFLOW_NAME = 'keepr-solana-rebalance'
 
 /** Minimum adapter-held balance (in CREATOR token base units) before we
  *  consider it worth paying bridge gas for a rebalance. Per-creator
- *  override via `KEEPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON`. */
+ *  override via `KPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON`. */
 const DEFAULT_MIN_REBALANCE_AMOUNT = 1_000_000_000_000_000_000n // 1 token @ 18 decimals
 
 /**
@@ -129,7 +129,7 @@ function readCreatorRegistrations(): CreatorRegistration[] {
   // Stub reads from env. Production will query Supabase for every creator
   // in `allowlist` whose vault exists in `CreatorRegistry.getVaultForToken`,
   // then join on `creator_meteora_alpha_vaults` for the Meteora destination.
-  const raw = String(process.env.KEEPR_SOLANA_REBALANCE_CREATORS_JSON ?? '').trim()
+  const raw = String(process.env.KPR_SOLANA_REBALANCE_CREATORS_JSON ?? '').trim()
   if (!raw) return []
   try {
     const parsed = JSON.parse(raw) as Array<Partial<CreatorRegistration>>
@@ -148,7 +148,7 @@ function readCreatorRegistrations(): CreatorRegistration[] {
 }
 
 function readMinAmount(creatorToken: Address): bigint {
-  const mapRaw = String(process.env.KEEPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON ?? '').trim()
+  const mapRaw = String(process.env.KPR_SOLANA_REBALANCE_MIN_AMOUNT_MAP_JSON ?? '').trim()
   if (mapRaw) {
     try {
       const map = JSON.parse(mapRaw) as Record<string, string>
@@ -172,7 +172,7 @@ function readMinAmount(creatorToken: Address): bigint {
  * set this env (e.g. "100000000000000" for 0.0001 ETH).
  */
 function readBridgeFeeValueWei(): bigint {
-  const raw = String(process.env.KEEPR_SOLANA_REBALANCE_FEE_WEI ?? '0').trim()
+  const raw = String(process.env.KPR_SOLANA_REBALANCE_FEE_WEI ?? '0').trim()
   try {
     const parsed = BigInt(raw)
     return parsed >= 0n ? parsed : 0n
@@ -182,7 +182,7 @@ function readBridgeFeeValueWei(): bigint {
 }
 
 export async function executeSolanaRebalance(): Promise<RebalanceResult> {
-  const executeWrites = String(process.env.KEEPR_SOLANA_REBALANCE_EXECUTE ?? '').trim() === '1'
+  const executeWrites = String(process.env.KPR_SOLANA_REBALANCE_EXECUTE ?? '').trim() === '1'
   const adapterAddressRaw = requireEnv('SOLANA_BRIDGE_ADAPTER')
   if (!isAddress(adapterAddressRaw)) {
     throw new Error(`invalid SOLANA_BRIDGE_ADAPTER: ${adapterAddressRaw}`)
@@ -270,7 +270,7 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
         destination: null,
         meteoraAlphaVault: null,
         notes:
-          'destinationPubkey missing in registration; set KEEPR_SOLANA_REBALANCE_CREATORS_JSON entry.destinationPubkey',
+          'destinationPubkey missing in registration; set KPR_SOLANA_REBALANCE_CREATORS_JSON entry.destinationPubkey',
       })
       continue
     }

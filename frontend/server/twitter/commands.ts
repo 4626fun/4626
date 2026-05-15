@@ -455,7 +455,12 @@ async function uploadTweetMedia(params: {
       config: params.config,
     })
     const form = new FormData()
-    const blob = new Blob([downloaded.bytes], { type: downloaded.contentType })
+    // Copy into a plain ArrayBuffer so BlobPart typing stays compatible
+    // across Node/DOM lib combinations (ArrayBufferLike can include SAB).
+    const mediaBytes = new Uint8Array(downloaded.bytes.byteLength)
+    mediaBytes.set(downloaded.bytes)
+    const mediaBuffer = mediaBytes.buffer
+    const blob = new Blob([mediaBuffer], { type: downloaded.contentType })
     form.append('media', blob, downloaded.filename)
 
     const response = await fetch(url, {

@@ -21,8 +21,8 @@ vi.mock('../utils/alerts.js', () => ({
 import { executeBridgeIntegrityMonitor } from '../actions/bridge-integrity-monitor.action.js';
 
 const ENV_KEYS = [
-  'KEEPR_API_BASE_URL',
-  'KEEPR_API_KEY',
+  'KPR_API_BASE_URL',
+  'KPR_API_KEY',
   'SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST',
   'SOLANA_BRIDGE_MONITOR_ROUTES_JSON',
   'SOLANA_BRIDGE_BASE_ORACLE_SIGNERS',
@@ -86,8 +86,8 @@ describe('bridge integrity monitor', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', fetchMock);
-    setEnv('KEEPR_API_BASE_URL', 'https://api.test');
-    setEnv('KEEPR_API_KEY', 'test-key');
+    setEnv('KPR_API_BASE_URL', 'https://api.test');
+    setEnv('KPR_API_KEY', 'test-key');
     setEnv('SOLANA_CANONICAL_BRIDGE_TOKEN_ALLOWLIST', SAMPLE_BRIDGE_TOKEN);
     setEnv('SOLANA_BRIDGE_MONITOR_ROUTES_JSON', '');
     setEnv('SOLANA_BRIDGE_BASE_ORACLE_SIGNERS', '');
@@ -189,8 +189,8 @@ describe('bridge integrity monitor', () => {
     expect(alertCriticalMock).not.toHaveBeenCalled();
   });
 
-  it('uses the internal registration secret header when no KEEPR_API_KEY is configured', async () => {
-    setEnv('KEEPR_API_KEY', undefined);
+  it('uses the internal registration secret header when no KPR_API_KEY is configured', async () => {
+    setEnv('KPR_API_KEY', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
     mockInfraStatusResponse();
 
@@ -220,7 +220,7 @@ describe('bridge integrity monitor', () => {
       'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
       '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
     );
-    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('KPR_API_KEY', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
     setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
     setEnv(
@@ -259,9 +259,8 @@ describe('bridge integrity monitor', () => {
     const result = await executeBridgeIntegrityMonitor();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(result.status).toBe('warning');
-    expect(result.criticalFindings).toHaveLength(0);
-    expect(result.warningFindings.join(' ')).toContain('build-only fallback');
+    expect(result.status).toBe('critical');
+    expect(result.criticalFindings.join(' ')).toContain('build-only fallback');
     expect(result.routeChecks).toHaveLength(1);
   });
 
@@ -274,7 +273,7 @@ describe('bridge integrity monitor', () => {
       'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
       '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
     );
-    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('KPR_API_KEY', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
     setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
     setEnv('SOLANA_BRIDGE_LIVENESS_ENFORCED', 'true');
@@ -327,10 +326,9 @@ describe('bridge integrity monitor', () => {
     const result = await executeBridgeIntegrityMonitor();
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(result.status).toBe('warning');
-    expect(result.criticalFindings).toHaveLength(0);
-    expect(result.warningFindings.join(' ')).toContain('build-only fallback');
-    expect(result.warningFindings.join(' ')).not.toContain('liveness freshness checks are skipped');
+    expect(result.status).toBe('critical');
+    expect(result.criticalFindings.join(' ')).toContain('build-only fallback');
+    expect(result.criticalFindings.join(' ')).not.toContain('liveness freshness checks are skipped');
   });
 
   it('raises critical in fallback mode when direct liveness probe is unhealthy', async () => {
@@ -342,7 +340,7 @@ describe('bridge integrity monitor', () => {
       'SOLANA_BRIDGE_PARTNER_ORACLE_SIGNERS',
       '0xcccccccccccccccccccccccccccccccccccccccc,0xdddddddddddddddddddddddddddddddddddddddd',
     );
-    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('KPR_API_KEY', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', 'internal-secret');
     setEnv('SOLANA_DEFAULT_BRIDGE_TOKEN', SAMPLE_BRIDGE_TOKEN);
     setEnv('SOLANA_BRIDGE_LIVENESS_ENFORCED', 'true');
@@ -388,7 +386,7 @@ describe('bridge integrity monitor', () => {
   });
 
   it('skips monitoring when API credentials are missing', async () => {
-    setEnv('KEEPR_API_KEY', undefined);
+    setEnv('KPR_API_KEY', undefined);
     setEnv('DEPLOY_SOLANA_REGISTRATION_SECRET', undefined);
     setEnv('SOLANA_REGISTRATION_INTERNAL_SECRET', undefined);
 

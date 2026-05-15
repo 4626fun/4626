@@ -34,7 +34,7 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    applyEnv({ KEEPR_API_KEY: 'test-keepr-key' })
+    applyEnv({ KPR_API_KEY: 'test-keepr-key' })
   })
 
   async function post(body: Record<string, unknown>) {

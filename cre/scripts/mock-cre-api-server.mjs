@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 
 const HOST = process.env.CRE_MOCK_API_HOST ?? '127.0.0.1';
 const PORT = Number(process.env.CRE_MOCK_API_PORT ?? '8789');
-const API_KEY = process.env.CRE_MOCK_API_KEY ?? process.env.KEEPR_API_KEY_VALUE ?? 'local-test-key';
+const API_KEY = process.env.CRE_MOCK_API_KEY ?? process.env.KPR_API_KEY_VALUE ?? 'local-test-key';
 
 const MOCK_VAULT = {
   vaultAddress: '0x82C06EaAE27B1Ca31fA29F22341A162A670A4471',

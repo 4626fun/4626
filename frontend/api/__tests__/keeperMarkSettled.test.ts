@@ -46,7 +46,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      KEEPR_API_KEY: 'test-keepr-key',
+      KPR_API_KEY: 'test-keepr-key',
     })
   })
 

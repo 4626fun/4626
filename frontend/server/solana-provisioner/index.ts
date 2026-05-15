@@ -775,7 +775,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     let vaultResult: { vault?: string; signature?: string; error?: string } | null = null
 
     if (envBool('SOLANA_AUTO_POOL', false)) {
-      const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
+      const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
       const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
       const strictSolPair = readStrictSolPairEnabled()
       const configuredQuoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim()
@@ -1022,7 +1022,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
   const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
   if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
@@ -1118,7 +1118,7 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
   const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
   if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {

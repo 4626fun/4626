@@ -162,7 +162,7 @@ function getDbEncryptionKey(): `0x${string}` | undefined {
  * agent identity, not a vault address, otherwise one inbox fans out into
  * multiple DBs and multiple XMTP installations.
  */
-const KEEPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
+const KPR_XMTP_DB_DIR = resolveXmtpDbDirectory()
 const XMTP_DB_FORCE_ENCRYPTED_MIGRATION_REQUESTED = (() => {
   const raw = (process.env.XMTP_DB_FORCE_ENCRYPTED_MIGRATION ?? '0').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes'
@@ -238,10 +238,10 @@ function resolveKeeprDbIdentityKey(row: QueueAgentRow): string {
 }
 
 function makeKeeprDbPath(identityKey: string): string {
-  fs.mkdirSync(KEEPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  fs.mkdirSync(KPR_XMTP_DB_DIR, { recursive: true, mode: 0o700 })
   const env = parseXmtpEnv()
   const safe = identityKey.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const p = path.join(KEEPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
+  const p = path.join(KPR_XMTP_DB_DIR, `keepr-${env}-${safe}.db3`)
   rotateLegacyPlaintextDbIfNeeded(p)
   logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
   return p
@@ -294,7 +294,7 @@ function getBaseRpcUrl(): string {
 }
 
 function getKeeperAccount() {
-  const pk = (process.env.KEEPR_PRIVATE_KEY ?? '').trim()
+  const pk = (process.env.KPR_PRIVATE_KEY ?? '').trim()
   if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
     throw new KeeprQueueError('keeper_private_key_missing', false)
   }

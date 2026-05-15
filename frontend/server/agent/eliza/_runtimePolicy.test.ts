@@ -8,11 +8,11 @@ import {
 
 describe('runtime policy', () => {
   it('disables retries for known mutating actions', () => {
-    expect(getActionRetryBudget('KEEPR_COMMAND', 2)).toBe(0)
+    expect(getActionRetryBudget('KPR_COMMAND', 2)).toBe(0)
     expect(getActionRetryBudget('ZORA_COIN', 3)).toBe(0)
-    expect(getActionRetryBudget('KEEPR_TRIGGER', 3)).toBe(0)
+    expect(getActionRetryBudget('KPR_TRIGGER', 3)).toBe(0)
     expect(getActionRetryBudget('UNISWAP_SKILL', 2)).toBe(0)
-    expect(getActionRetryBudget('KEEPR_OBSERVE', 3)).toBe(3)
+    expect(getActionRetryBudget('KPR_OBSERVE', 3)).toBe(3)
   })
 
   it('changes fingerprint when relevant agent config changes', () => {

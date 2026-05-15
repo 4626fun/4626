@@ -10,7 +10,7 @@
  *                      has rolled past the cooldown window.
  *   FEEDBACK_ENABLED → submit ERC-8004 giveFeedback() onchain per top-N creator.
  *                      Uses an EOA signer (ALFACLUB_VIGILANTE_SIGNER_PRIVATE_KEY
- *                      with fallback to KEEPR_PRIVATE_KEY). If no key is
+ *                      with fallback to KPR_PRIVATE_KEY). If no key is
  *                      configured, the calldata is merely queued in the ledger
  *                      with kind='erc8004-queued' for later manual submission.
  *
@@ -288,7 +288,7 @@ type Erc8004Signer = {
 function resolveSignerPrivateKey(): `0x${string}` | null {
   const a = (process.env.ALFACLUB_VIGILANTE_SIGNER_PRIVATE_KEY ?? '').trim()
   if (/^0x[0-9a-fA-F]{64}$/.test(a)) return a as `0x${string}`
-  const b = (process.env.KEEPR_PRIVATE_KEY ?? '').trim()
+  const b = (process.env.KPR_PRIVATE_KEY ?? '').trim()
   if (/^0x[0-9a-fA-F]{64}$/.test(b)) return b as `0x${string}`
   return null
 }

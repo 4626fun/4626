@@ -15,7 +15,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
 import {
-  KEEPR_TRUST_ZONE_KEY_HEADER,
+  KPR_TRUST_ZONE_KEY_HEADER,
   formatTrustZoneDisabledError,
   resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
@@ -42,7 +42,7 @@ type ExecuteResponse = {
   details?: Record<string, unknown>
 }
 
-const KEEPR_EXECUTE_BODY_MAX_BYTES = 65_536
+const KPR_EXECUTE_BODY_MAX_BYTES = 65_536
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -69,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_EXECUTE_BODY_MAX_BYTES })) as ExecuteBody
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KPR_EXECUTE_BODY_MAX_BYTES })) as ExecuteBody
 
   const id = Number(body.id)
   const vaultAddress = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''
@@ -100,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (
       !requireOptionalHeaderEnvAuth(req, res, {
         envKey: trustZoneEnvKey,
-        headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+        headerName: KPR_TRUST_ZONE_KEY_HEADER,
         unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
       })
     ) {

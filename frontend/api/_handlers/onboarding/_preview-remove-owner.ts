@@ -28,7 +28,7 @@ const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const DEFAULT_RELAY_QUOTE_OUTPUT_WEI = '18000000000000' // 0.000018 ETH
+const RELAY_QUOTE_OUTPUT_MULTIPLIER = 6n
 const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 
@@ -261,10 +261,19 @@ async function deriveRelayQuoteTxsGasLimit(params: {
   }
 }
 
-function resolveRelayQuoteInputWei(): string {
+async function resolveRelayQuoteInputWei(params: {
+  publicClient: any
+  relayQuoteTxsGasLimit: number
+}): Promise<string> {
   const configured = (process.env.RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI ?? '').trim()
   if (/^[1-9][0-9]*$/.test(configured)) return configured
-  return DEFAULT_RELAY_QUOTE_OUTPUT_WEI
+  const gasPrice = await params.publicClient.getGasPrice()
+  const gasLimit = BigInt(params.relayQuoteTxsGasLimit)
+  const derived = gasPrice * gasLimit * RELAY_QUOTE_OUTPUT_MULTIPLIER
+  if (derived <= 0n) {
+    throw new Error('Could not derive relay quote input wei; derived amount is zero.')
+  }
+  return derived.toString(10)
 }
 
 function parseRelayQuotedInputAmountWei(raw: unknown): bigint | null {
@@ -508,7 +517,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         cswAddress,
         data,
       })
-      const relayQuoteOutputWei = resolveRelayQuoteInputWei()
+      const relayQuoteOutputWei = await resolveRelayQuoteInputWei({
+        publicClient,
+        relayQuoteTxsGasLimit,
+      })
       const relayQuoteUser = connectedAddress
       const relayQuoteRecipient = cswAddress
       const quoteParams = {

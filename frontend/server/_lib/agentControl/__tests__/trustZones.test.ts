@@ -15,7 +15,7 @@ describe('agent control trust zone helpers', () => {
 
   it('maps trust zones to kill-switch env keys', () => {
     expect(getKeeprTrustZoneKillSwitchEnvKey('financial_execution')).toBe(
-      'KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION',
+      'KPR_ZONE_DISABLE_FINANCIAL_EXECUTION',
     )
   })
 
@@ -31,7 +31,7 @@ describe('agent control trust zone helpers', () => {
     expect(isKeeprTrustZoneWriteEnabled('financial_execution', {})).toBe(true)
     expect(
       isKeeprTrustZoneWriteEnabled('financial_execution', {
-        KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
+        KPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
       }),
     ).toBe(false)
   })

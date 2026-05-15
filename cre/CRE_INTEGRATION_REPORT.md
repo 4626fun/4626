@@ -146,9 +146,9 @@ cre workflow delete <workflow-id>
 2. Configure secrets via CRE CLI:
 
 ```bash
-cre secrets set KEEPR_API_KEY
-cre secrets set KEEPR_API_BASE_URL
-cre secrets set KEEPR_PRIVATE_KEY
+cre secrets set KPR_API_KEY
+cre secrets set KPR_API_BASE_URL
+cre secrets set KPR_PRIVATE_KEY
 ```
 
 3. Local simulation values should only live in local `.env` files (never committed with real secrets).
