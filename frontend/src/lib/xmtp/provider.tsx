@@ -629,6 +629,29 @@ async function deleteXmtpOpfsDatabaseFiles(): Promise<number> {
   }
 }
 
+async function deleteXmtpOpfsDatabaseFilesWithRetry(): Promise<number> {
+  const retryDelaysMs = [0, 200, 500, 1000]
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
+    const delayMs = retryDelaysMs[attempt] ?? 0
+    if (delayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
+    }
+    try {
+      return await deleteXmtpOpfsDatabaseFiles()
+    } catch (err) {
+      lastError = err
+      const msg = err instanceof Error ? err.message : String(err)
+      if (!isOpfsAccessHandleError(msg)) throw err
+      if (attempt === retryDelaysMs.length - 1) throw err
+      xmtpDebug(`[xmtp] OPFS cleanup attempt ${attempt + 1} failed due active lock; retrying...`)
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? 'Failed to clear local OPFS files'))
+}
+
 function isLocalXmtpStateInvalidError(message: string): boolean {
   return (
     /InboxValidationFailed/i.test(message) ||
@@ -1056,6 +1079,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     try {
       setError(null)
       setInstallationLimitInboxId(null)
+      setLocalStateResetRequired(false)
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
       xmtpIdentityAddress = resolved.identityAddress
       const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
@@ -1416,6 +1440,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
         if (installationAlreadyProvisioned) {
           setStatus('error')
+          setLocalStateResetRequired(true)
           setError(
             'XMTP installation was previously provisioned for this wallet, but no local XMTP database was found. ' +
             'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
@@ -1499,6 +1524,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
               if (regMsg.toLowerCase().includes('uninitialized')) {
                 setStatus('error')
+                setLocalStateResetRequired(true)
                 setError(
                   'XMTP restored local state but identity registration failed. ' +
                   'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
@@ -1542,6 +1568,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       if (installationAlreadyProvisioned) {
         setStatus('error')
+        setLocalStateResetRequired(true)
         setError(
           'XMTP could not restore a previously provisioned local installation. ' +
           'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
@@ -1847,12 +1874,18 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     await cleanup()
 
     try {
-      const deleted = await deleteXmtpOpfsDatabaseFiles()
+      const deleted = await deleteXmtpOpfsDatabaseFilesWithRetry()
       xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
+      const isOpfsLock = isOpfsAccessHandleError(msg)
       setStatus('error')
-      setError(`Could not clear local XMTP state: ${msg}`)
+      setError(
+        isOpfsLock
+          ? 'Could not clear local XMTP state because OPFS is locked by another active XMTP client. ' +
+            'Close other 4626 tabs/windows (and other XMTP sessions in this browser), then retry reset.'
+          : `Could not clear local XMTP state: ${msg}`,
+      )
       setLocalStateResetRequired(true)
       throw err
     }

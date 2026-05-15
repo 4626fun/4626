@@ -17,7 +17,6 @@ import * as RemoveOwnerHelpers from '@/lib/removeOwner/removeOwnerHelpers'
 // https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
 // (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
 const RELAY_DEPOSITORY_BASE = RemoveOwnerHelpers.RELAY_DEPOSITORY_BASE
-type AADepositDiagnostics = RemoveOwnerHelpers.AADepositDiagnostics
 type RemoveOwnerPreview = RemoveOwnerHelpers.RemoveOwnerPreview
 type OnchainOwnerRow = RemoveOwnerHelpers.OnchainOwnerRow
 type LiveDiagnostics = RemoveOwnerHelpers.LiveDiagnostics
@@ -25,7 +24,7 @@ type LiveDiagnostics = RemoveOwnerHelpers.LiveDiagnostics
 const normalizeRelayStatusEndpoint = RemoveOwnerHelpers.normalizeRelayStatusEndpoint
 const validatePreviewRelayUserCallIsNativeDepository =
   RemoveOwnerHelpers.validatePreviewRelayUserCallIsNativeDepository
-const verifyAARelayDepositShape = RemoveOwnerHelpers.verifyAARelayDepositShape
+const pollRelayStatusEndpoint = RemoveOwnerHelpers.pollRelayStatusEndpoint
 const INITIAL_DIAGNOSTICS = RemoveOwnerHelpers.INITIAL_DIAGNOSTICS
 const CSW_OWNER_ABI = RemoveOwnerHelpers.CSW_OWNER_ABI
 const classifyOwnerBytes = RemoveOwnerHelpers.classifyOwnerBytes
@@ -54,7 +53,6 @@ export function RemoveOwnerPage() {
   const [pageError, setPageError] = useState<string | null>(null)
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
-  const [aaDepositDiagnostics, setAaDepositDiagnostics] = useState<AADepositDiagnostics | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<{
     revertReason: string | null
@@ -157,43 +155,6 @@ export function RemoveOwnerPage() {
     if (!canonicalCswAddress || !ownerSignerAddress) return false
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, ownerSignerAddress])
-  const strictTraceEnabled = useMemo(() => {
-    if (typeof window === 'undefined') return false
-    return new URLSearchParams(window.location.search).get('strictTrace') === '1'
-  }, [])
-
-  const patternLockStatus = useMemo(() => {
-    const checks = aaDepositDiagnostics?.checks
-    const traceSatisfied =
-      checks?.traceEntryPointToCsw == null && checks?.traceCswToDepository == null
-        ? true
-        : Boolean(checks?.traceEntryPointToCsw && checks?.traceCswToDepository)
-    const locked = Boolean(
-      checks?.hasEntryPointUserOpForCsw &&
-        checks?.hasRelayDepositForCsw &&
-        checks?.requestIdMatches &&
-        traceSatisfied,
-    )
-    if (locked) {
-      return {
-        state: 'locked' as const,
-        label: 'Pattern lock: locked',
-        detail: 'EntryPoint UserOp + Relay deposit + requestId match verified.',
-      }
-    }
-    if (aaDepositDiagnostics) {
-      return {
-        state: 'unlocked' as const,
-        label: 'Pattern lock: unlocked',
-        detail: 'Deposit transaction does not satisfy the required AA pattern.',
-      }
-    }
-    return {
-      state: 'pending' as const,
-      label: 'Pattern lock: awaiting verification',
-      detail: 'Submit/fund once to verify the EntryPoint + Relay deposit shape.',
-    }
-  }, [aaDepositDiagnostics])
 
   const appendEvent = (row: string) => {
     setEventLog((prev) => [...prev, row].slice(-40))
@@ -211,7 +172,6 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setPreview(null)
     setTxHash(null)
-    setAaDepositDiagnostics(null)
     try {
       const res = await apiFetch('/api/onboarding/preview-remove-owner', {
         method: 'POST',
@@ -247,13 +207,27 @@ export function RemoveOwnerPage() {
     void fetchPreview(index)
   }
 
-  const setRelayErrorDetail = (input: { revertReason?: string | null; revertData?: string | null }) => {
+  const setErrorDetail = (input: { revertReason?: string | null; revertData?: string | null }) => {
     setLastErrorDetail({
       revertReason: input.revertReason ?? null,
       revertData: input.revertData ?? null,
       relayTx: null,
       rawBody: null,
     })
+  }
+
+  const resolveActiveWalletAccount = async (
+    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>,
+  ): Promise<`0x${string}`> => {
+    const accounts = (await request({ method: 'eth_accounts' })) as unknown
+    const first =
+      Array.isArray(accounts) && typeof accounts[0] === 'string' && /^0x[0-9a-fA-F]{40}$/.test(accounts[0])
+        ? (accounts[0].toLowerCase() as `0x${string}`)
+        : null
+    if (!first) {
+      throw new Error('No active wallet account found. Reconnect your external EOA and try again.')
+    }
+    return first
   }
 
   const handleRemove = async () => {
@@ -280,115 +254,165 @@ export function RemoveOwnerPage() {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:csw_wallet_sendcalls')
+    appendEvent(`lane:${isSelfAuthSession ? 'csw_wallet_sendcalls' : 'external_eoa_deposit'}`)
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
     try {
-      if (!isSelfAuthSession) {
-        throw new Error('Remove owner is currently limited to CSW self-auth sessions.')
-      }
       if (!preview.relay) {
         throw new Error(
           preview.preflight.relayQuoteError ??
-            'Relay quote unavailable; self-auth submission requires Relay orchestration.',
+            'Relay quote unavailable; this route requires Relay orchestration.',
         )
       }
       const relayGuard = validatePreviewRelayUserCallIsNativeDepository(preview)
       if (relayGuard) {
         throw new Error(`Relay preview guard failed: ${relayGuard}.`)
       }
-      appendEvent('csw_wallet_sendcalls:start')
-      appendEvent('csw_wallet_sendcalls:mode=relay_orchestrated')
+      const statusEndpoint = normalizeRelayStatusEndpoint(null, preview.relay.requestId)
       appendEvent(`relay:request_id=${preview.relay.requestId}`)
       appendEvent(`relay:user_call_to=${preview.relay.userCall.to}`)
       appendEvent(`relay:user_call_value=${preview.relay.userCall.value}`)
       appendEvent(`relay:user_call_selector=${preview.relay.userCall.data.slice(0, 10)}`)
-      if (preview.relay.feeUsd) {
-        appendEvent(`relay:fee_usd=${preview.relay.feeUsd}`)
-      }
+      appendEvent(`relay:status_endpoint=${statusEndpoint}`)
 
-      const sendCallsResult = await _submitOwnerViaSendCalls({
-        walletRequest: async (args) => await request(args),
-        csw: canonicalCswAddress as `0x${string}`,
-        calls: preview.calls.map((call) => ({
-          to: call.to,
-          data: call.data,
-          value: call.value,
-        })),
-        chainId: base.id,
-        onTelemetry: (event) => {
-          try {
-            const detail =
-              typeof event.detail === 'string'
-                ? event.detail
-                : JSON.stringify(event.detail)
-            const cap = event.step.includes('error') ? 4000 : 240
-            appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-            if (
-              event.step === 'broadcast_error' &&
-              event.detail &&
-              typeof event.detail === 'object'
-            ) {
-              const d = event.detail as Record<string, unknown>
-              setRelayErrorDetail({
-                revertReason: (d.error as string | null) ?? null,
-                revertData: (d.revertData as string | null) ?? null,
-              })
+      let depositTxHash: `0x${string}` | null = null
+      if (isSelfAuthSession) {
+        appendEvent('csw_wallet_sendcalls:start')
+        const sendCallsResult = await _submitOwnerViaSendCalls({
+          walletRequest: async (args) => await request(args),
+          csw: canonicalCswAddress as `0x${string}`,
+          calls: preview.calls.map((call) => ({
+            to: call.to,
+            data: call.data,
+            value: call.value,
+          })),
+          chainId: base.id,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string'
+                  ? event.detail
+                  : JSON.stringify(event.detail)
+              const cap = event.step.includes('error') ? 4000 : 240
+              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+              if (
+                event.step === 'broadcast_error' &&
+                event.detail &&
+                typeof event.detail === 'object'
+              ) {
+                const d = event.detail as Record<string, unknown>
+                setErrorDetail({
+                  revertReason: (d.error as string | null) ?? null,
+                  revertData: (d.revertData as string | null) ?? null,
+                })
+              }
+            } catch {
+              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
             }
-          } catch {
-            appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-          }
-        },
-      })
-      appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
-      const resolution = await waitForCallsTxHash({
-        walletRequest: async (args) => await request(args),
-        callBundleId: sendCallsResult.callBundleId,
-        timeoutMs: 60_000,
-        intervalMs: 1_500,
-        onTelemetry: (event) => {
-          try {
-            const detail =
-              typeof event.detail === 'string'
-                ? event.detail
-                : JSON.stringify(event.detail)
-            const cap = event.step.includes('error') ? 4000 : 320
-            appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-          } catch {
-            appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-          }
-        },
-      })
-      if (!resolution.transactionHash) {
-        setTxHash(null)
-        setPageNotice(
-          `wallet_sendCalls submitted (bundle id ${sendCallsResult.callBundleId}). ` +
-            `Wallet did not surface an on-chain tx hash within 60s. ` +
-            `Relay request id ${preview.relay.requestId.slice(0, 10)}… can be polled at ` +
-            `${normalizeRelayStatusEndpoint(null, preview.relay.requestId)}.`,
-        )
-        return
+          },
+        })
+        appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
+        const resolution = await waitForCallsTxHash({
+          walletRequest: async (args) => await request(args),
+          callBundleId: sendCallsResult.callBundleId,
+          timeoutMs: 60_000,
+          intervalMs: 1_500,
+          onTelemetry: (event) => {
+            try {
+              const detail =
+                typeof event.detail === 'string'
+                  ? event.detail
+                  : JSON.stringify(event.detail)
+              const cap = event.step.includes('error') ? 4000 : 320
+              appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
+            } catch {
+              appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+            }
+          },
+        })
+        depositTxHash = resolution.transactionHash
+      } else {
+        appendEvent('external_eoa_deposit:start')
+        const activeFrom = await resolveActiveWalletAccount(request)
+        if (!ownerSignerAddress || activeFrom !== ownerSignerAddress.toLowerCase()) {
+          throw new Error(
+            `Active wallet account ${activeFrom} does not match connected signer ${ownerSignerAddress?.toLowerCase() ?? 'unknown'}.`,
+          )
+        }
+        const externalTx = (await request({
+          method: 'eth_sendTransaction',
+          params: [
+            {
+              from: activeFrom,
+              to: preview.relay.userCall.to,
+              data: preview.relay.userCall.data,
+              value: preview.relay.userCall.value,
+            },
+          ],
+        })) as string
+        if (!externalTx || !/^0x([a-fA-F0-9]{64})$/.test(externalTx)) {
+          throw new Error('Wallet did not return a valid depository transaction hash.')
+        }
+        depositTxHash = externalTx as `0x${string}`
+        appendEvent(`external_eoa_deposit:tx=${externalTx}`)
       }
 
-      setTxHash(resolution.transactionHash)
-      const shape = await verifyAARelayDepositShape({
-        publicClient,
-        txHash: resolution.transactionHash as `0x${string}`,
-        cswAddress: canonicalCswAddress as `0x${string}`,
-        expectedRequestId: preview.relay.requestId,
-        strictTrace: strictTraceEnabled,
-      })
-      if (!shape.ok) {
-        setAaDepositDiagnostics(shape.diagnostics ?? null)
-        throw new Error(`Deposit transaction shape check failed: ${shape.reason}`)
+      if (!depositTxHash) {
+        throw new Error('Deposit tx hash unavailable; cannot confirm execution.')
       }
-      setAaDepositDiagnostics(shape.diagnostics)
-      appendEvent('csw_wallet_sendcalls.shape_check=ok')
+      setTxHash(depositTxHash)
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({
+          hash: depositTxHash,
+          confirmations: 1,
+          timeout: 60_000,
+        })
+      }
+      try {
+        await apiFetch('/api/relay/index', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            txHash: depositTxHash,
+            chainId: base.id,
+          }),
+        })
+      } catch {}
+
+      const status = await pollRelayStatusEndpoint({
+        statusEndpoint,
+        timeoutMs: 120_000,
+        intervalMs: 2_000,
+        onTick: (message) => appendEvent(`relay_status.${message}`),
+      })
+      if (!status.done || !status.success) {
+        throw new Error(
+          `Relay execution did not complete after deposit (status: ${String((status.raw as any)?.status ?? 'unknown')}).`,
+        )
+      }
+      if (status.txHash) {
+        setTxHash(status.txHash)
+      }
+
+      const slotAfter = (await publicClient?.readContract({
+        address: canonicalCswAddress as `0x${string}`,
+        abi: CSW_OWNER_ABI,
+        functionName: 'ownerAtIndex',
+        args: [BigInt(preview.preflight.targetOwnerIndex)],
+      })) as `0x${string}` | undefined
+      const ownerRemoved =
+        typeof slotAfter === 'string' &&
+        slotAfter.toLowerCase() !== preview.preflight.targetOwnerBytes.toLowerCase()
+      if (!ownerRemoved) {
+        throw new Error(
+          `Relay reported success, but owner slot ${preview.preflight.targetOwnerIndex} is unchanged.`,
+        )
+      }
+      appendEvent('relay_execution.owner_slot_changed=ok')
       setPageNotice(
-        `Relay deposit submitted on-chain (tx ${resolution.transactionHash.slice(0, 10)}…). ` +
-          `Relay will execute owner removal for request ${preview.relay.requestId.slice(0, 10)}….`,
+        `Owner removal confirmed on-chain (execution tx ${(status.txHash ?? depositTxHash).slice(0, 10)}…).`,
       )
       setPreview(null)
       setSelectedIndex(null)
@@ -397,7 +421,7 @@ export function RemoveOwnerPage() {
         const revertDataCandidate =
           typeof err.data === 'string' ? err.data : typeof err.revertData === 'string' ? err.revertData : null
         if (revertDataCandidate || typeof err.shortMessage === 'string') {
-          setRelayErrorDetail({
+          setErrorDetail({
             revertReason:
               typeof err.shortMessage === 'string'
                 ? err.shortMessage
@@ -418,7 +442,7 @@ export function RemoveOwnerPage() {
     <div className="min-h-screen bg-black text-white">
       <PageMeta
         title="Remove owner"
-        description="Remove an owner from your canonical Coinbase Smart Wallet via the Relay-sponsored UserOp lane, with live on-chain diagnostics."
+        description="Remove an owner from your canonical Coinbase Smart Wallet via Relay two-leg execution with strict completion checks."
         canonicalPath="/remove-owner"
       />
       <div className="mx-auto w-full max-w-2xl px-6 py-16 space-y-6">
@@ -428,14 +452,9 @@ export function RemoveOwnerPage() {
           </div>
           <h1 className="text-3xl font-semibold tracking-tight">Remove owner</h1>
           <p className="text-sm text-zinc-400">
-            Remove an owner from your canonical Coinbase Smart Wallet via the
-            Relay-sponsored UserOp lane (
-            <code className="font-mono text-zinc-300">wallet_sendCalls</code> →
-            <code className="font-mono text-zinc-300"> EntryPoint.handleOps</code> →
-            <code className="font-mono text-zinc-300"> RelayDepository.depositNative</code>).
-            Live on-chain diagnostics below show which owner slots are populated and
-            whether Relay&apos;s depository has a balance for your CSW so you can
-            anticipate whether validation will pass before signing.
+            Remove an owner from your canonical Coinbase Smart Wallet through the
+            Relay two-leg route. This page only reports success when Relay execution
+            succeeds and the owner slot is changed on-chain.
           </p>
         </div>
 
@@ -473,10 +492,9 @@ export function RemoveOwnerPage() {
               </div>
             </div>
             <p className="text-xs leading-relaxed text-amber-100/85">
-              You&apos;re connected as an external signer (not the CSW itself).
-              Removing an owner needs the same passkey or EOA signature owner
-              installs use, and in-app browsers can block or replace that signing
-              context. Open in a regular browser for the best chance of success.
+              You&apos;re connected as an external signer (not the CSW itself). In-app
+              browsers can block prompts or return stale signer context. Open in a
+              regular browser for the best chance of success.
             </p>
             <a
               href={externalUrl}
@@ -492,13 +510,9 @@ export function RemoveOwnerPage() {
         {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
             In-app browser detected with a CSW self-auth session. This page
-            will submit via EIP-5792{' '}
-            <code className="font-mono">wallet_sendCalls</code>: Base App
-            builds the UserOp internally, signs it locally with the on-device
-            passkey, and submits via its built-in bundler. The CSW pays its
-            own gas from its EntryPoint deposit — no popup, no external
-            funder. If you need a strict non-paymaster Relay deposit, switch to
-            an external EOA signer/funder lane.
+            uses EIP-5792 <code className="font-mono">wallet_sendCalls</code> only
+            for the Relay depository leg. The owner mutation is performed by Relay's
+            execution leg and must complete on-chain before this page shows success.
           </div>
         ) : null}
 
@@ -532,12 +546,8 @@ export function RemoveOwnerPage() {
                   preview={preview}
                   busy={busy}
                   isSelfAuthSession={isSelfAuthSession}
-                  inAppEnv={inAppEnv ? { isAnyWalletInApp: Boolean(inAppEnv.isAnyWalletInApp) } : null}
                   handleRemove={handleRemove}
                   txHash={txHash}
-                  patternLockStatus={patternLockStatus}
-                  strictTraceEnabled={strictTraceEnabled}
-                  aaDepositDiagnostics={aaDepositDiagnostics}
                   pageNotice={pageNotice}
                   pageError={pageError}
                   lastErrorDetail={lastErrorDetail}

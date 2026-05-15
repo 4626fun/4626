@@ -1,15 +1,5 @@
 import { RemoveOwnerStatusCards } from '@/features/accountSetup/removeOwner/RemoveOwnerStatusCards'
-import type { AADepositDiagnostics, RemoveOwnerPreview } from '@/lib/removeOwner/removeOwnerHelpers'
-
-type InAppEnvironment = {
-  isAnyWalletInApp: boolean
-}
-
-type PatternLockStatus = {
-  state: 'locked' | 'unlocked' | 'pending'
-  label: string
-  detail: string
-}
+import type { RemoveOwnerPreview } from '@/lib/removeOwner/removeOwnerHelpers'
 
 type LastErrorDetail = {
   revertReason: string | null
@@ -23,12 +13,8 @@ type RemoveOwnerActionPanelProps = {
   preview: RemoveOwnerPreview | null
   busy: boolean
   isSelfAuthSession: boolean
-  inAppEnv: InAppEnvironment | null
   handleRemove: () => Promise<void>
   txHash: string | null
-  patternLockStatus: PatternLockStatus
-  strictTraceEnabled: boolean
-  aaDepositDiagnostics: AADepositDiagnostics | null
   pageNotice: string | null
   pageError: string | null
   lastErrorDetail: LastErrorDetail | null
@@ -41,12 +27,8 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
     preview,
     busy,
     isSelfAuthSession,
-    inAppEnv,
     handleRemove,
     txHash,
-    patternLockStatus,
-    strictTraceEnabled,
-    aaDepositDiagnostics,
     pageNotice,
     pageError,
     lastErrorDetail,
@@ -101,17 +83,14 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
         <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 p-3 text-[11px] text-emerald-100 space-y-2">
           <div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-emerald-200/80">Recommended lane</div>
-            <div className="text-xs font-medium text-emerald-100">CSW self-auth wallet_sendCalls</div>
+            <div className="text-xs font-medium text-emerald-100">Relay two-leg remove route</div>
           </div>
           <p className="text-[10px] text-emerald-100/80">
-            This page now uses one stable submission lane for owner removal.
+            Submit the Relay depository leg first, then wait for Relay execution + owner-slot change.
           </p>
-          <div className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-100">
-            Keys passkey paste flow is temporarily disabled while self-auth lane stabilization is in progress.
-          </div>
           {!isSelfAuthSession ? (
             <div className="rounded-lg border border-amber-300/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-100">
-              Submission requires CSW self-auth mode. Switch to the canonical CSW session, then retry.
+              You are not in CSW self-auth mode. This flow sends the depository leg from your external EOA.
             </div>
           ) : null}
           <div className="space-y-2 rounded-xl border border-white/15 bg-black/30 p-2.5">
@@ -120,9 +99,9 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>{preview ? 'done' : 'pending'}</span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span>Step 2. Submit via wallet_sendCalls</span>
-              <span className={isSelfAuthSession ? 'text-emerald-300' : 'text-zinc-500'}>
-                {isSelfAuthSession ? 'ready' : 'blocked'}
+              <span>Step 2. Submit Relay depository leg</span>
+              <span className={preview ? 'text-emerald-300' : 'text-zinc-500'}>
+                {preview ? 'ready' : 'blocked'}
               </span>
             </div>
           </div>
@@ -139,8 +118,8 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
                   EIP-5792 wallet_sendCalls lane
                 </div>
                 <p className="leading-relaxed">
-                  Base App builds the UserOp from this call, signs it locally with the on-device passkey, and submits
-                  via its built-in bundler. The CSW pays its own gas from its EntryPoint deposit.
+                  Base App submits the Relay depository leg via wallet_sendCalls. Owner removal completes only after
+                  Relay executes the second leg and this page confirms the on-chain slot changed.
                 </p>
               </div>
             ) : null}
@@ -151,24 +130,18 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
                 busy ||
                 !preview ||
                 previewLoading ||
-                !isSelfAuthSession ||
-                !preview.preflight.simulation.ok ||
-                !preview.relay
+                !preview.preflight.simulation.ok
               }
               onClick={() => void handleRemove()}
               className="inline-flex rounded-xl border border-white/25 bg-black/40 px-4 py-2 text-sm text-zinc-200 hover:border-white/40 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy
-                ? 'Submitting via wallet_sendCalls…'
+                ? 'Submitting relay depository leg…'
                 : isSelfAuthSession
-                  ? !preview?.relay
-                    ? 'Relay quote unavailable for current selection'
-                    : `Remove owner at index ${preview?.preflight.targetOwnerIndex ?? '?'} via wallet_sendCalls`
-                  : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
-                    ? 'Open in browser to remove'
-                    : !preview
-                      ? 'Select an owner above first'
-                      : 'Switch to CSW self-auth mode to submit'}
+                  ? `Submit relay remove for owner index ${preview?.preflight.targetOwnerIndex ?? '?'}`
+                  : !preview
+                    ? 'Select an owner above first'
+                    : `Submit relay remove for owner index ${preview.preflight.targetOwnerIndex}`}
             </button>
           </div>
         </details>
@@ -176,9 +149,6 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
 
       <RemoveOwnerStatusCards
         txHash={txHash}
-        patternLockStatus={patternLockStatus}
-        strictTraceEnabled={strictTraceEnabled}
-        aaDepositDiagnostics={aaDepositDiagnostics}
         pageNotice={pageNotice}
         pageError={pageError}
         lastErrorDetail={lastErrorDetail}

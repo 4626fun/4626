@@ -34,9 +34,8 @@ const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 // RelayDepository.depositNative(CSW, requestId) directly with value attached.
 const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
-const RELAY_QUOTE_GAS_MULTIPLIER = 6n
+const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
 const RELAY_QUOTE_MIN_WEI = 1_000_000_000_000n
-const RELAY_QUOTE_MAX_WEI = 200_000_000_000_000n
 
 const RELAY_DEPOSITORY_ABI = [
   {
@@ -210,22 +209,28 @@ function errorMessage(error: unknown): string {
   return String(error ?? 'unknown error')
 }
 
-async function deriveRelayQuoteAmountWei(params: {
+async function deriveRelayQuoteTxsGasLimit(params: {
   publicClient: any
-  txsGasLimit?: bigint
-}): Promise<string> {
-  const gasLimit = params.txsGasLimit ?? DEFAULT_RELAY_QUOTE_GAS_LIMIT
+  cswAddress: Address
+  data: Hex
+}): Promise<number> {
   try {
-    const gasPrice = await params.publicClient.getGasPrice()
-    const seeded = gasPrice * gasLimit * RELAY_QUOTE_GAS_MULTIPLIER
-    const clamped = seeded < RELAY_QUOTE_MIN_WEI
-      ? RELAY_QUOTE_MIN_WEI
-      : seeded > RELAY_QUOTE_MAX_WEI
-        ? RELAY_QUOTE_MAX_WEI
-        : seeded
-    return clamped.toString(10)
+    const estimated = await params.publicClient.estimateGas({
+      account: params.cswAddress,
+      to: params.cswAddress,
+      data: params.data,
+      value: 0n,
+    })
+    const withBuffer = estimated + estimated / 2n
+    const bounded =
+      withBuffer < RELAY_QUOTE_MIN_GAS_LIMIT
+        ? RELAY_QUOTE_MIN_GAS_LIMIT
+        : withBuffer > DEFAULT_RELAY_QUOTE_GAS_LIMIT
+          ? DEFAULT_RELAY_QUOTE_GAS_LIMIT
+          : withBuffer
+    return Number(bounded)
   } catch {
-    return RELAY_QUOTE_MIN_WEI.toString(10)
+    return Number(DEFAULT_RELAY_QUOTE_GAS_LIMIT)
   }
 }
 
@@ -417,21 +422,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     try {
-      // We pass a non-zero EXACT_OUTPUT amount to size the deposit. With
-      // amount=0, Relay returns a zero-value user tx and Base App can reject
-      // it as a no-op. Seed this quote with a gas-price-derived amount so it
-      // adapts with Base network conditions instead of using a flat constant.
-      const relayQuoteAmountWei = await deriveRelayQuoteAmountWei({
+      // Relay should own the final fee math. We first request an exact quote
+      // for zero destination output (owner mutation sends no value), then only
+      // fall back to a seeded amount when Relay returns a zero-value user tx.
+      const relayQuoteTxsGasLimit = await deriveRelayQuoteTxsGasLimit({
         publicClient,
-        txsGasLimit: DEFAULT_RELAY_QUOTE_GAS_LIMIT,
+        cswAddress,
+        data,
       })
-      const quote = await getRelayQuote({
+      const quoteParams = {
         user: cswAddress,
         recipient: cswAddress,
         originChainId: 8453,
         destinationChainId: 8453,
-        amount: relayQuoteAmountWei,
-        tradeType: 'EXACT_OUTPUT',
+        tradeType: 'EXACT_OUTPUT' as const,
         txs: [
           {
             to: cswAddress,
@@ -439,8 +443,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             value: '0',
           },
         ],
-        txsGasLimit: Number(DEFAULT_RELAY_QUOTE_GAS_LIMIT),
+        txsGasLimit: relayQuoteTxsGasLimit,
+      }
+      let quote = await getRelayQuote({
+        ...quoteParams,
+        amount: '0',
       })
+      if (quote.ok) {
+        const userValue = quote.extract.userTransaction?.value
+        if (!userValue || !/^[1-9][0-9]*$/.test(userValue)) {
+          // Keep fallback tiny and deterministic for test loops; we only need a
+          // non-zero destination amount so Relay returns a non-zero user tx.
+          const fallbackAmountWei = RELAY_QUOTE_MIN_WEI.toString(10)
+          quote = await getRelayQuote({
+            ...quoteParams,
+            amount: fallbackAmountWei,
+          })
+        }
+      }
       if (quote.ok) {
         const e = quote.extract
         if (e.requestId && e.userTransaction) {

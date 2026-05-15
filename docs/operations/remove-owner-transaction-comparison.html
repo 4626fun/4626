@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Remove Owner Transaction Comparison</title>
+    <style>
+      :root {
+        --bg: #0b0f19;
+        --panel: #12192b;
+        --panel-2: #17213a;
+        --text: #e8eefc;
+        --muted: #95a3c7;
+        --ok: #3ddc97;
+        --warn: #ffcc66;
+        --bad: #ff7a90;
+        --link: #78a9ff;
+        --border: #2a3556;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: linear-gradient(180deg, #0a1020 0%, #0a0d16 100%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 { margin: 0 0 8px; font-size: 28px; }
+      .sub { color: var(--muted); margin-bottom: 20px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(280px, 1fr));
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px;
+      }
+      .card h3 { margin: 0 0 10px; font-size: 14px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; }
+      .metric { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+      .note { color: var(--muted); font-size: 13px; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+        border: 1px solid var(--border);
+        background: var(--panel);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th, td {
+        border-bottom: 1px solid var(--border);
+        padding: 10px 12px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 14px;
+      }
+      th { background: var(--panel-2); color: #c6d4fa; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .delta {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .delta.good { background: rgba(61,220,151,0.12); color: var(--ok); border: 1px solid rgba(61,220,151,0.35);}
+      .delta.warn { background: rgba(255,204,102,0.12); color: var(--warn); border: 1px solid rgba(255,204,102,0.35);}
+      .delta.bad { background: rgba(255,122,144,0.12); color: var(--bad); border: 1px solid rgba(255,122,144,0.35);}
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+      .section-title {
+        margin: 24px 0 8px;
+        font-size: 18px;
+      }
+      .impact {
+        margin-top: 16px;
+        background: rgba(255,122,144,0.08);
+        border: 1px solid rgba(255,122,144,0.35);
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .impact h4 { margin: 0 0 8px; color: #ffb3c0; }
+      ul { margin: 0; padding-left: 18px; }
+      li { margin: 6px 0; color: #d8e3ff; }
+      a { color: var(--link); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      @media (max-width: 860px) {
+        .grid { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Remove Owner Flow: Transaction Comparison</h1>
+      <p class="sub">
+        Side-by-side comparison of the recent request (<span class="mono">0x1ce070...dda19</span>) vs the older successful reference
+        (<span class="mono">0x8cc58a...3797a</span>).
+      </p>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Recent Attempt</h3>
+          <div class="metric mono">0x1bee80e4...26ecfd4</div>
+          <div class="note">AA status: Success (deposit leg)</div>
+          <div class="note">Relay status endpoint: <span class="mono">waiting</span></div>
+        </div>
+        <div class="card">
+          <h3>Reference Attempt</h3>
+          <div class="metric mono">0x34edd28d...10d2aadf</div>
+          <div class="note">AA status: Success</div>
+          <div class="note">Historical flow known to complete</div>
+        </div>
+      </div>
+
+      <h2 class="section-title">Key Differences</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Signal</th>
+            <th>Recent Attempt</th>
+            <th>Reference Attempt</th>
+            <th>Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Paymaster</td>
+            <td class="mono">0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c</td>
+            <td>None (N/A)</td>
+            <td><span class="delta bad">Changed</span></td>
+          </tr>
+          <tr>
+            <td>Token side effects</td>
+            <td>USDC transfer observed (<span class="mono">0.001585</span>)</td>
+            <td>No token transfer shown</td>
+            <td><span class="delta bad">Changed</span></td>
+          </tr>
+          <tr>
+            <td>Deposit value</td>
+            <td class="mono">0.0002 ETH</td>
+            <td class="mono">0.000018871666861048 ETH</td>
+            <td><span class="delta warn">~10.6x higher</span></td>
+          </tr>
+          <tr>
+            <td>Bundler</td>
+            <td class="mono">0x048ef1062cbb39B338Ac2685dA72adf104b4cEF5</td>
+            <td class="mono">0x54E2ACaB04C89A3Fe02852BF8dd69Ee8F526bC75</td>
+            <td><span class="delta warn">Different infra path</span></td>
+          </tr>
+          <tr>
+            <td>EntryPoint</td>
+            <td class="mono">0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</td>
+            <td class="mono">0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789</td>
+            <td><span class="delta good">Same</span></td>
+          </tr>
+          <tr>
+            <td>Target call selector</td>
+            <td class="mono">0x49290c1c (depositNative)</td>
+            <td class="mono">0x49290c1c (depositNative)</td>
+            <td><span class="delta good">Same</span></td>
+          </tr>
+          <tr>
+            <td>Relay request state</td>
+            <td class="mono">waiting</td>
+            <td>unknown (historical endpoint response now unavailable)</td>
+            <td><span class="delta bad">Current flow stalled</span></td>
+          </tr>
+          <tr>
+            <td>Onchain owner mutation outcome</td>
+            <td>Owner slot unchanged</td>
+            <td>Historical reference was treated as complete path</td>
+            <td><span class="delta bad">Leg 2 not confirmed</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="impact">
+        <h4>Likely Operational Impact</h4>
+        <ul>
+          <li>Recent tx proves deposit leg is healthy but does <strong>not</strong> prove owner mutation execution.</li>
+          <li>Paymaster + token side-effect differences suggest a materially different solver/quote route than the historical run.</li>
+          <li>Relay intent staying <span class="mono">waiting</span> indicates execution leg was not dispatched or not recognized as executable.</li>
+        </ul>
+      </div>
+
+      <h2 class="section-title">Reference IDs</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Recent AA hash</td><td class="mono">0xa0bd63c9e2cbd32e423f3004b06ac3183f70590e4b3ee38a88b3d6d3a23ad455</td></tr>
+          <tr><td>Recent bundle tx</td><td class="mono">0x1bee80e42e2a543d25c08eb7042a28325220da910d65040609bf3efd026ecfd4</td></tr>
+          <tr><td>Recent requestId</td><td class="mono">0x1ce070a28ec05c72a645237929df2b0ca8f7e20e9552fca90ca025528afdda19</td></tr>
+          <tr><td>Reference AA hash</td><td class="mono">0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3</td></tr>
+          <tr><td>Reference bundle tx</td><td class="mono">0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf</td></tr>
+          <tr><td>Reference requestId</td><td class="mono">0x8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </body>
+</html>
