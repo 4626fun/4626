@@ -75,6 +75,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/leaderboard': () => import('./v1/alfaclub/_leaderboard.js'),
   'alfaclub/run': () => import('./v1/alfaclub/_run.js'),
   'alfaclub/radar': () => import('./v1/alfaclub/_radar.js'),
+  'alfaclub/daily-brief': () => import('./v1/alfaclub/_daily-brief.js'),
   'alfaclub/compare': () => import('./v1/alfaclub/_compare.js'),
   'alfaclub/relay-now': () => import('./v1/alfaclub/_relay-now.js'),
   'alfaclub/chat-token': () => import('./v1/alfaclub/_chat-token.js'),

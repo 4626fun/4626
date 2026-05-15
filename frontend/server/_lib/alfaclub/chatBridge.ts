@@ -3106,6 +3106,54 @@ export async function _sendRoomMessageViaWebSocketForTests(params: {
   return sendRoomMessageViaWebSocket(params)
 }
 
+export async function sendAlfaClubRoomText(params: {
+  text: string
+  roomId?: string | null
+  replyToMessageId?: string
+  flags?: AlfaClubChatBridgeFlags
+  jwt?: string | null
+  attachments?: unknown
+}): Promise<{ lane: string }> {
+  const flags = params.flags ?? readAlfaClubChatBridgeFlags()
+  const roomId = (params.roomId ?? flags.roomId ?? '').trim()
+  if (!roomId) throw new Error('alfaclub_room_id_missing')
+  const text = String(params.text ?? '').trim()
+  if (!text) throw new Error('alfaclub_message_empty')
+
+  if (flags.botToken) {
+    await sendRoomMessageViaBotTokenWithProxyFallback({
+      apiBaseUrl: resolveAlfaClubApiCallBaseUrl(flags),
+      directApiBaseUrl: flags.apiBaseUrl,
+      botToken: flags.botToken,
+      roomId,
+      text,
+      replyToMessageId: params.replyToMessageId,
+      proxySecret: resolveAlfaClubProxySecret(flags),
+      idempotencyKey: buildBotMessageIdempotencyKey({
+        roomId,
+        messageId: params.replyToMessageId ?? `daily-brief-${Date.now()}`,
+      }),
+      timeoutMs: flags.sendTimeoutMs,
+    })
+    return { lane: params.replyToMessageId ? 'bot_token_with_reply_id' : 'bot_token_without_reply_id' }
+  }
+
+  const jwt = (params.jwt ?? flags.jwt ?? '').trim()
+  if (!jwt) throw new Error('alfaclub_jwt_missing')
+  const wsLane = await sendRoomMessageViaWebSocket({
+    websocketUrl: flags.websocketUrl,
+    wsProxyHttpSendUrl: null,
+    wsProxySecret: null,
+    jwt,
+    roomId,
+    text,
+    attachments: params.attachments,
+    replyToMessageId: params.replyToMessageId,
+    timeoutMs: flags.sendTimeoutMs,
+  })
+  return { lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary' }
+}
+
 export function _resetAlfaClubChatBridgeStateForTests(): void {
   if (activeHandle !== null) clearInterval(activeHandle)
   activeHandle = null

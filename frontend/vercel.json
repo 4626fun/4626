@@ -62,6 +62,10 @@
       "schedule": "5 12 * * *"
     },
     {
+      "path": "/api/v1/alfaclub/daily-brief",
+      "schedule": "10 12 * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/chat-token-refresh",
       "schedule": "13,43 * * * *"
     },
