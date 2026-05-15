@@ -1374,13 +1374,54 @@ async function sendRoomMessageViaBotTokenWithProxyFallback(params: {
 
 async function sendRoomMessageViaWebSocket(params: {
   websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
   jwt: string
   roomId: string
   text: string
   attachments?: unknown
   replyToMessageId?: string
   timeoutMs: number
-}): Promise<void> {
+}): Promise<'ws_proxy_http' | 'websocket'> {
+  if (params.wsProxyHttpSendUrl) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+    try {
+      const response = await fetch(params.wsProxyHttpSendUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...((params.wsProxySecret ?? '').trim()
+            ? { 'x-proxy-secret': String(params.wsProxySecret).trim() }
+            : {}),
+        },
+        body: JSON.stringify({
+          websocketUrl: params.websocketUrl,
+          jwt: params.jwt,
+          frame: buildAlfaClubOutboundFrame({
+            roomId: params.roomId,
+            text: params.text,
+            attachments: params.attachments,
+            replyToMessageId: params.replyToMessageId,
+          }),
+        }),
+        signal: controller.signal,
+      })
+      const bodyText = await response.text().catch(() => '')
+      if (!response.ok) {
+        const detail = redactForDiagnostics(bodyText.replace(/\s+/g, ' ').slice(0, 160))
+        throw new Error(`ws_proxy_send_failed:${response.status}${detail ? `:${detail}` : ''}`)
+      }
+      return 'ws_proxy_http'
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error('ws_proxy_send_timeout')
+      }
+      throw error instanceof Error ? error : new Error(String(error))
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
   const WebSocketCtor = getBridgeWebSocketCtor()
   if (!WebSocketCtor) {
     throw new Error('ws_unavailable')
@@ -1398,7 +1439,7 @@ async function sendRoomMessageViaWebSocket(params: {
     }),
   )
 
-  await new Promise<void>((resolve, reject) => {
+  return await new Promise<'websocket'>((resolve, reject) => {
     let settled = false
     let opened = false
     const socket = new WebSocketCtor(wsUrl.toString())
@@ -1445,7 +1486,7 @@ async function sendRoomMessageViaWebSocket(params: {
         reject(new Error('ws_closed_before_open'))
         return
       }
-      resolve()
+      resolve('websocket')
     }
 
     const onError = (): void => {
@@ -2408,7 +2449,7 @@ async function executeCommandBatch(params: {
         }
 
         if (!sent) {
-          await sendRoomMessageViaWebSocket({
+          const wsLane = await sendRoomMessageViaWebSocket({
             websocketUrl: params.flags.websocketUrl,
             jwt: params.jwt,
             roomId: params.roomId,
@@ -2421,11 +2462,11 @@ async function executeCommandBatch(params: {
             roomId: params.roomId,
             messageId: command.id,
             sender: command.sender,
-            lane: 'websocket_fallback',
+            lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_fallback' : 'websocket_fallback',
           })
         }
       } else {
-        await sendRoomMessageViaWebSocket({
+        const wsLane = await sendRoomMessageViaWebSocket({
           websocketUrl: params.flags.websocketUrl,
           jwt: params.jwt,
           roomId: params.roomId,
@@ -2438,7 +2479,7 @@ async function executeCommandBatch(params: {
           roomId: params.roomId,
           messageId: command.id,
           sender: command.sender,
-          lane: 'websocket_primary',
+          lane: wsLane === 'ws_proxy_http' ? 'ws_proxy_http_primary' : 'websocket_primary',
         })
       }
       replied += 1
@@ -3049,6 +3090,20 @@ export async function _sendRoomMessageViaBotTokenWithProxyFallbackForTests(param
   timeoutMs: number
 }): Promise<BotSendResultSummary> {
   return sendRoomMessageViaBotTokenWithProxyFallback(params)
+}
+
+export async function _sendRoomMessageViaWebSocketForTests(params: {
+  websocketUrl: string
+  wsProxyHttpSendUrl?: string | null
+  wsProxySecret?: string | null
+  jwt: string
+  roomId: string
+  text: string
+  attachments?: unknown
+  replyToMessageId?: string
+  timeoutMs: number
+}): Promise<'ws_proxy_http' | 'websocket'> {
+  return sendRoomMessageViaWebSocket(params)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {

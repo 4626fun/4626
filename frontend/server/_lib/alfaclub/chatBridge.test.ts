@@ -40,6 +40,7 @@ import {
   _getBridgeAuthStateForTests,
   _resetAlfaClubChatBridgeStateForTests,
   _runAlfaClubChatBridgeTickForTests,
+  _sendRoomMessageViaWebSocketForTests,
   readAlfaClubChatBridgeFlags,
   type AlfaClubChatBridgeFlags,
 } from './chatBridge.js'
@@ -447,5 +448,48 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     const result = await _runAlfaClubChatBridgeTickForTests(makeFlags())
     expect(result.seeded).toBe(true)
     expect(result.processed).toBe(1)
+  })
+
+  it('reports ws_proxy_http when websocket send goes through the HTTP proxy lane', async () => {
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    ) as unknown as typeof fetch
+
+    const lane = await _sendRoomMessageViaWebSocketForTests({
+      websocketUrl: 'wss://ws.alfaclub.app',
+      wsProxyHttpSendUrl: 'https://proxy.example/send',
+      wsProxySecret: 'secret-123',
+      jwt: 'jwt-current',
+      roomId: '1043',
+      text: 'gm',
+      timeoutMs: 5_000,
+    })
+
+    expect(lane).toBe('ws_proxy_http')
+    expect(FakeWebSocket.instances).toHaveLength(0)
+  })
+
+  it('reports websocket when websocket send uses the raw ws lane', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('fetch should not be used for raw websocket lane')
+    }) as unknown as typeof fetch
+
+    const lanePromise = _sendRoomMessageViaWebSocketForTests({
+      websocketUrl: 'wss://ws.alfaclub.app',
+      jwt: 'jwt-current',
+      roomId: '1043',
+      text: 'gm',
+      timeoutMs: 5_000,
+    })
+
+    const socket = latestFakeSocket()
+    expect(socket).toBeDefined()
+    socket?.emit('open')
+    socket?.emit('close', { code: 1000, reason: 'ok' })
+
+    await expect(lanePromise).resolves.toBe('websocket')
   })
 })
