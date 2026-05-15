@@ -92,17 +92,30 @@ export function resolvePayoutRouterZoraToken(fallback?: Address | null): Address
 export function resolvePayoutRouterKeeperAddress(): Address | null {
   const explicit =
     normalizeAddress(process.env.PAYOUT_ROUTER_KEEPER) ??
+    normalizeAddress(process.env.KPR_ADDRESS) ??
+    normalizeAddress(process.env.KEEPR_ADDRESS) ??
     normalizeAddress(process.env.CRE_KEEPER_ADDRESS) ??
-    normalizeAddress(process.env.KEEPR_ADDRESS)
+    null
   if (explicit) return explicit
 
-  const erc4337Enabled = String(process.env.CRE_ERC4337_ENABLED ?? '').trim().toLowerCase() === 'true'
+  const erc4337EnabledRaw =
+    process.env.KPR_ERC4337_ENABLED ??
+    process.env.KEEPR_ERC4337_ENABLED ??
+    process.env.CRE_ERC4337_ENABLED
+  const erc4337Enabled = String(erc4337EnabledRaw ?? '').trim().toLowerCase() === 'true'
   if (erc4337Enabled) {
-    const smartWallet = normalizeAddress(process.env.CRE_ERC4337_SMART_WALLET)
+    const smartWallet = normalizeAddress(
+      process.env.KPR_ERC4337_SMART_WALLET ??
+      process.env.KEEPR_ERC4337_SMART_WALLET ??
+      process.env.CRE_ERC4337_SMART_WALLET,
+    )
     if (smartWallet) return smartWallet
   }
 
-  return addressFromPrivateKey(process.env.KEEPR_PRIVATE_KEY)
+  return addressFromPrivateKey(
+    process.env.KPR_PRIVATE_KEY ??
+    process.env.KEEPR_PRIVATE_KEY,
+  )
 }
 
 export function resolvePayoutRouterExternalSwapApprovals(): PayoutRouterExternalSwapApprovals {

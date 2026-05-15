@@ -66,7 +66,7 @@ That means ElizaOS here is the **decision and memory layer**, not the low-level 
 ## Plugin map
 
 - `plugins/keepr`: delegates to the shared deterministic executor in `server/agent/core/executeDeterministicCommand.ts`
-- `plugins/cre`: keeper observation and trigger commands
+- `plugins/keeperOps`: keeper observation and trigger commands
 - `plugins/zora`: coin flows
 - `plugins/uniswap`: swap skill routing
 - `plugins/walletIntel`: `/intel`, `/funder`, `/portfolio`, `/labels`

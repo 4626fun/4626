@@ -1657,7 +1657,11 @@ function isOperatorCallbackToken(rawData: string): boolean {
 }
 
 function isOperatorCommand(rawText: string): boolean {
-  return asTrimmed(rawText).toLowerCase().startsWith('/keepr')
+  const normalized = asTrimmed(rawText).toLowerCase()
+  if (normalized === '/keepr' || normalized === '/keepr help' || normalized === '/keepr commands') {
+    return false
+  }
+  return normalized.startsWith('/keepr')
 }
 
 function buildOperatorAccessDeniedResponse(params: {
@@ -1666,7 +1670,7 @@ function buildOperatorAccessDeniedResponse(params: {
 }): TelegramCommandResponse {
   return {
     text: [
-      `${menuLabel('cre')} and ${menuLabel('solana')} are only available to configured bot operators.`,
+      `${menuLabel('keeper')} and ${menuLabel('solana')} are only available to configured bot operators.`,
       '',
       'Use /start for regular wallet, trade, and discovery actions.',
     ].join('\n'),
@@ -1674,7 +1678,7 @@ function buildOperatorAccessDeniedResponse(params: {
   }
 }
 
-function buildCreReplyMarkup(): Record<string, unknown> {
+function buildKeeperReplyMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [
       [
@@ -1725,7 +1729,7 @@ function resolveOperatorReplyMarkup(commandText: string): Record<string, unknown
   ) {
     return buildSolanaReplyMarkup()
   }
-  return buildCreReplyMarkup()
+  return buildKeeperReplyMarkup()
 }
 
 function resolveHelpCallbackCommand(rawData: string): string | null {
@@ -1787,8 +1791,8 @@ function resolveStaticMenuCallbackResponse(params: {
       })
     }
     return {
-      text: [menuLabel('cre'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
-      replyMarkup: buildCreReplyMarkup(),
+      text: [menuLabel('keeper'), '', 'Tap an operator action to inspect or run keeper flows.'].join('\n'),
+      replyMarkup: buildKeeperReplyMarkup(),
     }
   }
   if (token === 'menu:solana') {

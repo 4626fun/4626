@@ -580,7 +580,7 @@
 - [server/agent/eliza/identity](server/agent/eliza/identity.md)
 - [server/agent/eliza/llm](server/agent/eliza/llm.md)
 - [server/agent/eliza/plugins/alfaclub](server/agent/eliza/plugins/alfaclub.md)
-- [server/agent/eliza/plugins/cre](server/agent/eliza/plugins/cre.md)
+- [server/agent/eliza/plugins/keeperOps](server/agent/eliza/plugins/keeperOps.md)
 - [server/agent/eliza/plugins/discord](server/agent/eliza/plugins/discord.md)
 - [server/agent/eliza/plugins/keepr](server/agent/eliza/plugins/keepr.md)
 - [server/agent/eliza/plugins/knowledge](server/agent/eliza/plugins/knowledge.md)

@@ -13,7 +13,7 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keepr/keeprRegistry.js'
-import { isKeeperWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
+import { isKeeperWriteCommandText } from '../../../../server/agent/eliza/plugins/keeperOps/index.js'
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 

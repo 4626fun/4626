@@ -52,7 +52,7 @@ import { walletIntelPlugin } from './plugins/walletIntel/index.js'
 // previous static import at this position could cascade a Railway
 // healthcheck timeout via silent eliza/index.ts parse failure.
 import { reputationPlugin } from './plugins/reputation/index.js'
-import { keeprOpsPlugin } from './plugins/cre/index.js'
+import { keeprOpsPlugin } from './plugins/keeperOps/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
 import { uniswapPlugin } from './plugins/uniswap/index.js'
 import { knowledgePlugin } from './plugins/knowledge/index.js'

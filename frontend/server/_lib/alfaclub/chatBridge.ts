@@ -1546,6 +1546,8 @@ const bridgeAuthState = {
   wsErrorFlushTimer: null as RollupTimer,
   wsErrorRoomId: null as string | null,
   wsErrorLastMessage: null as string | null,
+  wsErrorLastCode: null as string | null,
+  wsErrorLastErrno: null as string | null,
   wsCloseAtMs: [] as number[],
   wsCloseChurnLastLoggedAt: Number.NEGATIVE_INFINITY,
   cfChallengeRepeats: 0,
@@ -1839,7 +1841,11 @@ function flushWsErrorRollup(): void {
   const repeats = bridgeAuthState.wsErrorRepeats
   bridgeAuthState.wsErrorFlushTimer = null
   if (repeats > 1) {
-    const benign = isBenignWsErrorMessage(bridgeAuthState.wsErrorLastMessage)
+    const benign = isBenignWsError({
+      message: bridgeAuthState.wsErrorLastMessage,
+      code: bridgeAuthState.wsErrorLastCode,
+      errno: bridgeAuthState.wsErrorLastErrno,
+    })
     const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
     emit('[alfaclub-chat] ws_error:rollup', {
       roomId: bridgeAuthState.wsErrorRoomId,
@@ -1848,6 +1854,8 @@ function flushWsErrorRollup(): void {
         ? new Date(bridgeAuthState.wsErrorFirstAt).toISOString()
         : null,
       lastMessage: bridgeAuthState.wsErrorLastMessage,
+      code: bridgeAuthState.wsErrorLastCode,
+      errno: bridgeAuthState.wsErrorLastErrno,
     })
   }
   bridgeAuthState.wsErrorRepeats = 0
@@ -1855,12 +1863,29 @@ function flushWsErrorRollup(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  bridgeAuthState.wsErrorLastCode = null
+  bridgeAuthState.wsErrorLastErrno = null
 }
 
-function warnWsError(params: { roomId: string; message: string; now?: number }): void {
+function warnWsError(params: {
+  roomId: string
+  message: string
+  code?: string | null
+  errno?: string | null
+  syscall?: string | null
+  address?: string | null
+  port?: number | null
+  now?: number
+}): void {
   const now = params.now ?? Date.now()
   const truncated = params.message.slice(0, 180)
-  const benign = isBenignWsErrorMessage(truncated)
+  const normalizedCode = typeof params.code === 'string' ? params.code.trim() : ''
+  const normalizedErrno = typeof params.errno === 'string' ? params.errno.trim() : ''
+  const benign = isBenignWsError({
+    message: truncated,
+    code: normalizedCode || null,
+    errno: normalizedErrno || null,
+  })
 
   if (
     bridgeAuthState.wsErrorRepeats > 0 &&
@@ -1868,6 +1893,8 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   ) {
     bridgeAuthState.wsErrorRepeats += 1
     bridgeAuthState.wsErrorLastMessage = truncated
+    bridgeAuthState.wsErrorLastCode = normalizedCode || null
+    bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
     return
   }
 
@@ -1875,6 +1902,8 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
   bridgeAuthState.wsErrorRepeats = 1
   bridgeAuthState.wsErrorRoomId = params.roomId
   bridgeAuthState.wsErrorLastMessage = truncated
+  bridgeAuthState.wsErrorLastCode = normalizedCode || null
+  bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
 
   const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
   emit('[alfaclub-chat] ws_error', {
@@ -1882,6 +1911,11 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
     repeats: 1,
     windowStartedAt: new Date(now).toISOString(),
     message: truncated,
+    code: normalizedCode || null,
+    errno: normalizedErrno || null,
+    syscall: params.syscall ?? null,
+    address: params.address ?? null,
+    port: params.port ?? null,
   })
   bridgeAuthState.wsErrorLastLoggedAt = now
 
@@ -1896,17 +1930,83 @@ function warnWsError(params: { roomId: string; message: string; now?: number }):
 }
 
 function isBenignWsErrorMessage(message: string | null | undefined): boolean {
-  const normalized = String(message ?? '')
+  return isBenignWsError({ message })
+}
+
+function isBenignWsError(params: {
+  message?: string | null
+  code?: string | null
+  errno?: string | null
+}): boolean {
+  const normalized = String(params.message ?? '')
     .trim()
     .toLowerCase()
+  const code = String(params.code ?? '').trim().toUpperCase()
+  const errno = String(params.errno ?? '').trim().toUpperCase()
+  if (code === 'ECONNRESET' || code === 'EAI_AGAIN' || code === 'ETIMEDOUT') return true
+  if (errno === 'ECONNRESET' || errno === 'EAI_AGAIN' || errno === 'ETIMEDOUT') return true
   if (!normalized) return false
   return (
     normalized.includes('received network error or non-101 status code') ||
     normalized.includes('non-101') ||
     normalized.includes('unexpected server response: 403') ||
     normalized.includes('socket hang up') ||
+    normalized.includes('before secure tls connection was established') ||
+    normalized.includes('client network socket disconnected before secure tls') ||
     normalized.includes('client network socket disconnected before secure tls connection was established')
   )
+}
+
+function extractWsErrorContext(event: unknown): {
+  message: string
+  code: string | null
+  errno: string | null
+  syscall: string | null
+  address: string | null
+  port: number | null
+} {
+  const root = event && typeof event === 'object' ? (event as Record<string, unknown>) : null
+  const nestedError =
+    root?.error && typeof root.error === 'object'
+      ? (root.error as Record<string, unknown>)
+      : null
+  const messageCandidate =
+    root?.message ??
+    nestedError?.message ??
+    (event instanceof Error ? event.message : null) ??
+    event
+  const message = String(messageCandidate ?? 'unknown')
+  const code =
+    typeof nestedError?.code === 'string'
+      ? nestedError.code
+      : typeof root?.code === 'string'
+        ? root.code
+        : null
+  const errno =
+    typeof nestedError?.errno === 'string'
+      ? nestedError.errno
+      : typeof root?.errno === 'string'
+        ? root.errno
+        : null
+  const syscall =
+    typeof nestedError?.syscall === 'string'
+      ? nestedError.syscall
+      : typeof root?.syscall === 'string'
+        ? root.syscall
+        : null
+  const address =
+    typeof nestedError?.address === 'string'
+      ? nestedError.address
+      : typeof root?.address === 'string'
+        ? root.address
+        : null
+  const port =
+    typeof nestedError?.port === 'number'
+      ? nestedError.port
+      : typeof root?.port === 'number'
+        ? root.port
+        : null
+  return { message, code, errno, syscall, address, port }
 }
 
 function isBenignWsCloseEvent(params: {
@@ -2315,9 +2415,15 @@ function ensureLiveCommandSocket(params: {
 
   const onError = (event?: any): void => {
     applySocketBackoff()
+    const wsErrorContext = extractWsErrorContext(event)
     warnWsError({
       roomId: params.roomId,
-      message: String(event?.message ?? event?.error?.message ?? event ?? 'unknown').slice(0, 180),
+      message: wsErrorContext.message,
+      code: wsErrorContext.code,
+      errno: wsErrorContext.errno,
+      syscall: wsErrorContext.syscall,
+      address: wsErrorContext.address,
+      port: wsErrorContext.port,
     })
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
@@ -3196,6 +3302,8 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.wsErrorLastLoggedAt = Number.NEGATIVE_INFINITY
   bridgeAuthState.wsErrorRoomId = null
   bridgeAuthState.wsErrorLastMessage = null
+  bridgeAuthState.wsErrorLastCode = null
+  bridgeAuthState.wsErrorLastErrno = null
   bridgeAuthState.wsCloseAtMs = []
   bridgeAuthState.wsCloseChurnLastLoggedAt = Number.NEGATIVE_INFINITY
   if (bridgeAuthState.cfChallengeFlushTimer) {

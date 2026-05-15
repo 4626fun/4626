@@ -23,7 +23,7 @@ vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
 }))
 
-vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
+vi.mock('../../server/agent/eliza/plugins/keeperOps/index.js', () => ({
   isKeeperWriteCommandText: isKeeperWriteCommandTextMock,
 }))
 

@@ -775,8 +775,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
     let vaultResult: { vault?: string; signature?: string; error?: string } | null = null
 
     if (envBool('SOLANA_AUTO_POOL', false)) {
-      const repoRoot = String(process.env.CRE_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
-      const creDir = repoRoot ? `${repoRoot}/cre` : ''
+      const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
+      const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
       const strictSolPair = readStrictSolPairEnabled()
       const configuredQuoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim()
       const quoteMint = strictSolPair ? SOLANA_NATIVE_MINT : configuredQuoteMint
@@ -788,7 +788,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
         )
       }
 
-      if (creDir && existsSync(creDir)) {
+      if (keeperScriptsDir && existsSync(keeperScriptsDir)) {
         // Step 1: Create DLMM pool
         try {
           process.stderr.write(`[solana-provisioner] Creating DLMM pool for ${mintPubkey}...\n`)
@@ -802,8 +802,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
           }
           const { stdout: poolOut, stderr: poolErr } = await execFileAsync(
             'node',
-            [`${creDir}/_create-pool.cjs`],
-            { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: poolEnv },
+            [`${keeperScriptsDir}/_create-pool.cjs`],
+            { cwd: keeperScriptsDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: poolEnv },
           )
           if (poolErr) process.stderr.write(poolErr)
           const sigMatch = (poolOut ?? '').match(/Signature:\s*(\S+)/)
@@ -826,8 +826,8 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
             }
             const { stdout: vaultOut, stderr: vaultErr } = await execFileAsync(
               'node',
-              [`${creDir}/_create-vault.cjs`],
-              { cwd: creDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: vaultEnv },
+              [`${keeperScriptsDir}/_create-vault.cjs`],
+              { cwd: keeperScriptsDir, timeout: 3 * 60_000, maxBuffer: 4 * 1024 * 1024, env: vaultEnv },
             )
             if (vaultErr) process.stderr.write(vaultErr)
             const vaultMatch = (vaultOut ?? '').match(/Vault:\s*(\S+)/)
@@ -841,7 +841,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
           }
         }
       } else {
-        process.stderr.write(`[solana-provisioner] SOLANA_AUTO_POOL=1 but CRE_REPO_ROOT not configured; skipping pool/vault\n`)
+        process.stderr.write('[solana-provisioner] SOLANA_AUTO_POOL=1 but KPR_REPO_ROOT not configured; skipping pool/vault\n')
       }
     }
 
@@ -1022,13 +1022,13 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const creDir = repoRoot ? `${repoRoot}/cre` : ''
-  if (!creDir || !existsSync(creDir)) {
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
     })
   }
 
@@ -1073,7 +1073,7 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
 
   try {
     const { stdout, stderr } = await execFileAsync('tsx', args, {
-      cwd: creDir,
+      cwd: keeperScriptsDir,
       timeout: 5 * 60_000,
       maxBuffer: 4 * 1024 * 1024,
       env: { ...process.env },
@@ -1118,13 +1118,13 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
     return json(res, 401, { success: false, error: 'Unauthorized' })
   }
 
-  const repoRoot = String(process.env.CRE_REPO_ROOT ?? '').trim()
+  const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.KEEPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const creDir = repoRoot ? `${repoRoot}/cre` : ''
-  if (!creDir || !existsSync(creDir)) {
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
+  if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'CRE_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
     })
   }
 
@@ -1165,7 +1165,7 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
     const { stdout, stderr } = await execFileAsync(
       'tsx',
       ['scripts/solana/launch/create-dlmm-pool.ts'],
-      { cwd: creDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
+      { cwd: keeperScriptsDir, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024, env },
     )
     if (stderr) process.stderr.write(stderr)
     const output = `${stdout ?? ''}\n${stderr ?? ''}`

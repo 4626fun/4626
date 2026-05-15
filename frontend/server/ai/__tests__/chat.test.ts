@@ -117,7 +117,7 @@ vi.mock('../../agent/eliza/plugins/walletIntel/index.js', () => ({
 vi.mock('../../agent/eliza/plugins/reputation/index.js', () => ({
   reputationPlugin: { name: 'reputation', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/cre/index.js', () => ({
+vi.mock('../../agent/eliza/plugins/keeperOps/index.js', () => ({
   keeprOpsPlugin: { name: 'keeper-ops', actions: [], providers: [] },
 }))
 vi.mock('../../agent/eliza/plugins/knowledge/index.js', () => ({

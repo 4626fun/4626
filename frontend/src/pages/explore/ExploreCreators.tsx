@@ -203,7 +203,8 @@ function getCoinKey(coin: ZoraCoin, fallbackIndex?: number): string {
 }
 
 function deriveImmediateEthosUserkey(coin: ZoraCoin): string | null {
-  void coin
+  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(creator)) return `address:${creator}`
   return null
 }
 
@@ -372,12 +373,15 @@ export function ExploreCreators() {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ['explore', 'creators', listType],
+    queryKey: ['explore', 'creators', listType, currentSort, ethosFilter],
     queryFn: async ({ pageParam }) => {
+      const ethosMinimum = getEthosFilterMinimum(ethosFilter)
       const result = await fetchZoraExplore({
         list: listType,
         count: PAGE_SIZE,
         after: pageParam,
+        ...(currentSort === 'ethosScore' ? { sort: 'ETHOS_SCORE' as const } : {}),
+        ...(currentSort === 'ethosScore' && ethosMinimum != null ? { ethosMin: ethosMinimum } : {}),
       })
       return result
     },
@@ -583,8 +587,22 @@ export function ExploreCreators() {
 
   const ethosByCoinKey = useMemo(() => {
     const out = new Map<string, CreatorEthosRecord>()
+    for (const coin of baseDisplayCoins) {
+      const key = getCoinKey(coin)
+      const hasServerEthosScore = typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)
+      if (!hasServerEthosScore) continue
+      out.set(key, {
+        coinKey: key,
+        userkey: deriveImmediateEthosUserkey(coin),
+        score: {
+          score: Number(coin.ethosScore),
+          level: typeof coin.ethosLevel === 'string' ? coin.ethosLevel : null,
+        },
+      })
+    }
     const entries = Array.from(coinEthosUserkeys.entries())
     entries.forEach(([coinKey, userkey], index) => {
+      if (out.has(coinKey)) return
       out.set(coinKey, {
         coinKey,
         userkey,
@@ -592,7 +610,7 @@ export function ExploreCreators() {
       })
     })
     return out
-  }, [coinEthosUserkeys, ethosScoreQueries])
+  }, [baseDisplayCoins, coinEthosUserkeys, ethosScoreQueries])
 
   const ethosSortStats = useMemo(() => {
     let scored = 0

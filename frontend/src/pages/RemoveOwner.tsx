@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { formatEther, type PublicClient } from 'viem'
+import { encodeFunctionData, formatEther, type PublicClient } from 'viem'
 import { useQuote } from '@relayprotocol/relay-kit-hooks'
 import {
   createClient,
@@ -19,6 +19,7 @@ import { RemoveOwnerOwnerSlotsCard } from '@/features/accountSetup/removeOwner/R
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { apiFetch } from '@/lib/api/apiBase'
 import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
+import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 import * as RemoveOwnerHelpers from '@/lib/removeOwner/removeOwnerHelpers'
 
 // Relay Protocol's depository on Base. Reference tx where this CSW deposited:
@@ -42,6 +43,18 @@ const REMOVE_OWNER_AT_INDEX_SELECTOR = '0x89625b57'
 const RELAY_MULTICALL_SELECTOR = '0xcd6e13f7'
 const EXECUTE_WITHOUT_CHAIN_ID_SELECTOR = '0x2c2abd1e'
 const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
+const RELAY_DEPOSITORY_ABI = [
+  {
+    type: 'function',
+    name: 'depositNative',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'depositor', type: 'address' },
+      { name: 'id', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
 type RelayQuoteBody = paths['/quote/v2']['post']['requestBody']['content']['application/json']
 type RelayChainConfig = {
   id: number
@@ -436,6 +449,53 @@ export function RemoveOwnerPage() {
     })
   }
 
+  const submitSelfAuthViaSendCalls = async (params: {
+    calls: Array<{ to: `0x${string}`; data: `0x${string}`; value: `0x${string}` }>
+    telemetryPrefix: string
+  }): Promise<`0x${string}`> => {
+    const request = (walletClient as any)?.request as
+      | ((args: { method: string; params?: unknown[] }) => Promise<unknown>)
+      | undefined
+    if (!request) {
+      throw new Error('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+    }
+    const sendCallsResult = await _submitOwnerViaSendCalls({
+      walletRequest: async (args) => await request(args),
+      csw: canonicalCswAddress as `0x${string}`,
+      calls: params.calls,
+      chainId: base.id,
+      onTelemetry: (event) => {
+        try {
+          const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+          const cap = event.step.includes('error') ? 4000 : 240
+          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
+        } catch {
+          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
+        }
+      },
+    })
+    appendEvent(`${params.telemetryPrefix}:bundle_id=${sendCallsResult.callBundleId}`)
+    const resolution = await waitForCallsTxHash({
+      walletRequest: async (args) => await request(args),
+      callBundleId: sendCallsResult.callBundleId,
+      timeoutMs: 60_000,
+      intervalMs: 1_500,
+      onTelemetry: (event) => {
+        try {
+          const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+          const cap = event.step.includes('error') ? 4000 : 320
+          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
+        } catch {
+          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
+        }
+      },
+    })
+    if (!resolution.transactionHash) {
+      throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
+    }
+    return resolution.transactionHash
+  }
+
   const handleRemove = async () => {
     if (!preview || !canonicalCswAddress || !walletClient) {
       setPageError('Connect your wallet and select an owner index first.')
@@ -550,73 +610,115 @@ export function RemoveOwnerPage() {
         )
       }
       appendEvent(`relay:status_endpoint_fallback=${statusEndpoint}`)
-      let activeQuote = relayHookQuote
-      if (!activeQuote) {
-        appendEvent('relay_quote:refetch=start')
-        const refetchResult = await refetchRelayHookQuote()
-        activeQuote = refetchResult.data
-        appendEvent(`relay_quote:refetch=status=${refetchResult.status}`)
-      }
-      if (!activeQuote) {
-        const quoteErrorMessage =
-          relayHookQuoteError instanceof Error
-            ? relayHookQuoteError.message
-            : relayHookQuoteError
-              ? String(relayHookQuoteError)
-              : 'unknown quote error'
-        throw new Error(`Relay hook quote unavailable: ${quoteErrorMessage}`)
-      }
-      const quotedPayload = extractExecuteQuotePayload(activeQuote)
-      const quotedRequestId = quotedPayload?.requestId ?? preview.relay.requestId
-      appendEvent(`relay_quote:request_id=${quotedRequestId ?? 'n/a'}`)
-      appendEvent(`relay_quote:tx_value_wei=${quotedPayload?.txValueWei ?? 'n/a'}`)
-      const executeProgressHashes = new Set<string>()
       let executeTxHash: `0x${string}` | null = null
-      appendEvent('relay_execute:start')
-      const executed = await executeQuote((progress: ProgressData) => {
-        const stepId = progress.currentStep?.id ?? 'unknown'
-        const stepKind = progress.currentStep?.kind ?? 'unknown'
-        const itemStatus = progress.currentStepItem?.status ?? 'unknown'
-        const checkStatus = progress.currentStepItem?.checkStatus ?? 'n/a'
-        appendEvent(
-          `relay_execute:step=${stepId} kind=${stepKind} status=${itemStatus} check=${checkStatus}`,
-        )
-        const progressTxHashes = Array.isArray(progress.txHashes) ? progress.txHashes : []
-        for (const txEntry of progressTxHashes) {
-          const txHash = txEntry?.txHash
-          if (typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) continue
-          if (executeProgressHashes.has(txHash)) continue
-          executeProgressHashes.add(txHash)
-          executeTxHash = txHash as `0x${string}`
-          setTxHash(txHash)
-          appendEvent(`relay_execute:tx_hash=${txHash} chain=${txEntry.chainId}`)
+      let requestId: `0x${string}` = preview.relay.requestId
+      let statusEndpointFromExecute = statusEndpoint
+
+      if (isSelfAuthSession) {
+        appendEvent('relay_execute:self_auth_compat_route=request_bound_deposit')
+        const requestBoundDepositId = (preview.relay.orderId ?? preview.relay.requestId) as
+          | `0x${string}`
+          | null
+        const requestBoundPaymentDetails = preview.relay.paymentDetails
+        const requestBoundDepository =
+          requestBoundPaymentDetails &&
+          /^0x[0-9a-fA-F]{40}$/.test(requestBoundPaymentDetails.depository)
+            ? (requestBoundPaymentDetails.depository as `0x${string}`)
+            : null
+        const requestBoundValueHex =
+          requestBoundPaymentDetails &&
+          typeof requestBoundPaymentDetails.amount === 'string' &&
+          /^[1-9][0-9]*$/.test(requestBoundPaymentDetails.amount)
+            ? (`0x${BigInt(requestBoundPaymentDetails.amount).toString(16)}` as `0x${string}`)
+            : null
+        if (!requestBoundDepositId || !requestBoundDepository || !requestBoundValueHex) {
+          throw new Error(
+            'Relay quote missing request-bound payment fields (id/depository/amount). Cannot submit self-auth compatibility lane safely.',
+          )
         }
-        if (progress.error) {
-          appendEvent(`relay_execute:error=${String(progress.error).slice(0, 220)}`)
+        const requestBoundDepositCall = {
+          to: requestBoundDepository,
+          data: encodeFunctionData({
+            abi: RELAY_DEPOSITORY_ABI,
+            functionName: 'depositNative',
+            args: [canonicalCswAddress as `0x${string}`, requestBoundDepositId],
+          }),
+          value: requestBoundValueHex,
         }
-      })
-      if (!executed?.data) {
-        appendEvent('relay_execute:no_data')
-        throw new Error(
-          'Relay hook executeQuote returned no data. This usually means the wallet execution was cancelled before Relay accepted it.',
+        appendEvent(`request_bound:deposit_id=${requestBoundDepositId}`)
+        appendEvent(`request_bound:deposit_to=${requestBoundDepositCall.to}`)
+        appendEvent(`request_bound:deposit_value=${requestBoundDepositCall.value}`)
+        executeTxHash = await submitSelfAuthViaSendCalls({
+          calls: [requestBoundDepositCall],
+          telemetryPrefix: 'csw_wallet_sendcalls',
+        })
+        requestId = preview.relay.requestId
+        statusEndpointFromExecute = normalizeRelayStatusEndpoint(null, requestId)
+      } else {
+        let activeQuote = relayHookQuote
+        if (!activeQuote) {
+          appendEvent('relay_quote:refetch=start')
+          const refetchResult = await refetchRelayHookQuote()
+          activeQuote = refetchResult.data
+          appendEvent(`relay_quote:refetch=status=${refetchResult.status}`)
+        }
+        if (!activeQuote) {
+          const quoteErrorMessage =
+            relayHookQuoteError instanceof Error
+              ? relayHookQuoteError.message
+              : relayHookQuoteError
+                ? String(relayHookQuoteError)
+                : 'unknown quote error'
+          throw new Error(`Relay hook quote unavailable: ${quoteErrorMessage}`)
+        }
+        const quotedPayload = extractExecuteQuotePayload(activeQuote)
+        const quotedRequestId = quotedPayload?.requestId ?? preview.relay.requestId
+        appendEvent(`relay_quote:request_id=${quotedRequestId ?? 'n/a'}`)
+        appendEvent(`relay_quote:tx_value_wei=${quotedPayload?.txValueWei ?? 'n/a'}`)
+        const executeProgressHashes = new Set<string>()
+        appendEvent('relay_execute:start')
+        const executed = await executeQuote((progress: ProgressData) => {
+          const stepId = progress.currentStep?.id ?? 'unknown'
+          const stepKind = progress.currentStep?.kind ?? 'unknown'
+          const itemStatus = progress.currentStepItem?.status ?? 'unknown'
+          const checkStatus = progress.currentStepItem?.checkStatus ?? 'n/a'
+          appendEvent(
+            `relay_execute:step=${stepId} kind=${stepKind} status=${itemStatus} check=${checkStatus}`,
+          )
+          const progressTxHashes = Array.isArray(progress.txHashes) ? progress.txHashes : []
+          for (const txEntry of progressTxHashes) {
+            const txHash = txEntry?.txHash
+            if (typeof txHash !== 'string' || !/^0x[0-9a-fA-F]{64}$/.test(txHash)) continue
+            if (executeProgressHashes.has(txHash)) continue
+            executeProgressHashes.add(txHash)
+            executeTxHash = txHash as `0x${string}`
+            setTxHash(txHash)
+            appendEvent(`relay_execute:tx_hash=${txHash} chain=${txEntry.chainId}`)
+          }
+          if (progress.error) {
+            appendEvent(`relay_execute:error=${String(progress.error).slice(0, 220)}`)
+          }
+        })
+        if (!executed?.data) {
+          appendEvent('relay_execute:no_data')
+          throw new Error(
+            'Relay hook executeQuote returned no data. This usually means the wallet execution was cancelled before Relay accepted it.',
+          )
+        }
+        const executedPayload = extractExecuteQuotePayload(executed.data)
+        requestId = executedPayload?.requestId ?? quotedRequestId ?? preview.relay.requestId
+        appendEvent(`relay_execute:request_id=${requestId}`)
+        statusEndpointFromExecute = normalizeRelayStatusEndpoint(
+          executedPayload?.statusEndpoint ?? quotedPayload?.statusEndpoint ?? null,
+          requestId,
         )
-      }
-      const executedPayload = extractExecuteQuotePayload(executed.data)
-      const requestId = executedPayload?.requestId ?? quotedRequestId
-      if (!requestId) {
-        throw new Error('Relay execute result missing requestId; cannot poll final execution status.')
-      }
-      appendEvent(`relay_execute:request_id=${requestId}`)
-      const statusEndpointFromExecute = normalizeRelayStatusEndpoint(
-        executedPayload?.statusEndpoint ?? quotedPayload?.statusEndpoint ?? null,
-        requestId,
-      )
-      appendEvent(`relay_execute:status_endpoint=${statusEndpointFromExecute}`)
-      const executeResultTxHash = extractRelayExecutionTxHash(executed.data)
-      if (executeResultTxHash && !executeTxHash) {
-        executeTxHash = executeResultTxHash
-        setTxHash(executeResultTxHash)
-        appendEvent(`relay_execute:result_tx_hash=${executeResultTxHash}`)
+        appendEvent(`relay_execute:status_endpoint=${statusEndpointFromExecute}`)
+        const executeResultTxHash = extractRelayExecutionTxHash(executed.data)
+        if (executeResultTxHash && !executeTxHash) {
+          executeTxHash = executeResultTxHash
+          setTxHash(executeResultTxHash)
+          appendEvent(`relay_execute:result_tx_hash=${executeResultTxHash}`)
+        }
       }
       const status = await pollRelayStatusEndpoint({
         statusEndpoint: statusEndpointFromExecute,

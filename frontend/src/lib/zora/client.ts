@@ -333,9 +333,11 @@ export async function fetchZoraExplore(params: {
   list: ZoraExploreListType
   count?: number
   after?: string
+  sort?: 'ETHOS_SCORE'
+  ethosMin?: number
 }): Promise<ZoraExploreList | null> {
-  const { list, count, after } = params
-  const key = `${list}:${count ?? ''}:${after ?? ''}`
+  const { list, count, after, sort, ethosMin } = params
+  const key = `${list}:${count ?? ''}:${after ?? ''}:${sort ?? ''}:${ethosMin ?? ''}`
 
   return dedupeAndCache('explore', key, zoraExploreInFlight, zoraExploreCache, async () => {
     try {
@@ -343,6 +345,8 @@ export async function fetchZoraExplore(params: {
         list,
         ...(count ? { count: String(count) } : {}),
         ...(after ? { after } : {}),
+        ...(sort ? { sort } : {}),
+        ...(typeof ethosMin === 'number' && Number.isFinite(ethosMin) ? { ethosMin: String(ethosMin) } : {}),
       })
 
       const envelope = await withUpstreamAttempt('explore', () =>

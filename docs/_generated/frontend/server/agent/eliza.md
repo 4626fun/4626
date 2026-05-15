@@ -8,9 +8,9 @@
 
 ## References
 
-### crePlugin
+### keeprOpsPlugin
 
-Re-exports [crePlugin](eliza/plugins/cre.md#creplugin)
+Re-exports [keeprOpsPlugin](eliza/plugins/keeperOps.md#keepropsplugin)
 
 ***
 

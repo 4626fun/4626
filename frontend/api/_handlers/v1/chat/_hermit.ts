@@ -12,7 +12,7 @@ import {
   checkRateLimit,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { isKeeperWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
+import { isKeeperWriteCommandText } from '../../../../server/agent/eliza/plugins/keeperOps/index.js'
 import { isHermitUserAllowed } from '../../../../server/_lib/hermit/policy.js'
 import { executeHermitCommand } from '../../../../server/_lib/hermit/skillRouter.js'
 

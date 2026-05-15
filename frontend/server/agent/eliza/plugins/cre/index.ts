@@ -37,7 +37,7 @@ import { getKeeprVaultByGroupId } from '../../../../_lib/keepr/keeprRegistry.js'
 import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 
 // ---------------------------------------------------------------------------
-// Keeper action imports (relative path from frontend/server/agent/eliza/plugins/cre/)
+// Keeper action imports (relative path from frontend/server/agent/eliza/plugins/keeperOps/)
 // These resolve at runtime via tsx — keeper modules are ESM in the same repo.
 // ---------------------------------------------------------------------------
 
@@ -297,7 +297,7 @@ function formatPriceMonitor(r: PriceMonitorResult): string {
 // Observe action
 // ---------------------------------------------------------------------------
 
-const creObserveAction: Action = {
+const keeprObserveAction: Action = {
   name: 'KEEPR_OBSERVE',
   similes: ['keepr status', 'keepr health', 'keepr auction', 'keepr solana', 'keeper status'],
   description: 'Show keeper status — vault states, auction states, Solana health, or combined health check.',
@@ -305,7 +305,7 @@ const creObserveAction: Action = {
   validate: async (_runtime: IAgentRuntime, message: Memory) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
     if (!text.startsWith('/keepr ')) return false
-    const sub = text.slice(5).trim()
+    const sub = text.slice('/keepr '.length).trim()
     return ['status', 'health', 'auction', 'solana'].some((cmd) => sub.startsWith(cmd))
   },
 
@@ -317,7 +317,7 @@ const creObserveAction: Action = {
     callback?: HandlerCallback,
   ) => {
     const text = (message.content?.text ?? '').trim().toLowerCase()
-    const sub = text.slice(5).trim()
+    const sub = text.slice('/keepr '.length).trim()
 
     try {
       if (sub.startsWith('status') || sub.startsWith('health')) {
@@ -469,7 +469,7 @@ async function handleObserveSolana(callback: HandlerCallback | undefined): Promi
 // Trigger action
 // ---------------------------------------------------------------------------
 
-const creTriggerAction: Action = {
+const keeprTriggerAction: Action = {
   name: 'KEEPR_TRIGGER',
   similes: [
     'keepr tend', 'keepr report', 'keepr settle',
@@ -492,7 +492,7 @@ const creTriggerAction: Action = {
     callback?: HandlerCallback,
   ) => {
     const text = (message.content?.text ?? '').trim()
-    const sub = text.slice(5).trim().toLowerCase()
+    const sub = text.slice('/keepr '.length).trim().toLowerCase()
     const dryRunEnabled = isDryRunEnabled()
     const meta = (message.content as any)?.metadata
     const conversationId = String(meta?.conversationId ?? '').trim()
@@ -766,7 +766,7 @@ async function handleTriggerQueue(callback: HandlerCallback | undefined): Promis
 // Help action
 // ---------------------------------------------------------------------------
 
-const creHelpAction: Action = {
+const keeprHelpAction: Action = {
   name: 'KEEPR_HELP',
   similes: ['keepr help', 'keepr commands'],
   description: 'Show available keeper commands.',
@@ -825,9 +825,7 @@ const creHelpAction: Action = {
 export const keeprOpsPlugin: Plugin = {
   name: '@4626/plugin-keepr',
   description: 'Keeper operations — observe vault/auction/Solana status and trigger keeper actions on demand.',
-  actions: [creHelpAction, creObserveAction, creTriggerAction],
+  actions: [keeprHelpAction, keeprObserveAction, keeprTriggerAction],
 }
 
-export { keeprOpsPlugin as crePlugin }
-
-export default crePlugin
+export default keeprOpsPlugin

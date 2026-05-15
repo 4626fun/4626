@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
+import { getDb } from '../../../packages/server-core/src/index.js'
 
 type ExploreList =
   | 'TOP_GAINERS'
@@ -27,6 +28,8 @@ type ExploreList =
   | 'TOP_VOLUME_ALL_24H'
   | 'NEW_ALL'
   | 'MOST_VALUABLE_ALL'
+
+type ExploreSort = 'DEFAULT' | 'ETHOS_SCORE'
 
 function parseList(value: string | null): ExploreList {
   switch (value) {
@@ -56,9 +59,138 @@ function parseList(value: string | null): ExploreList {
   }
 }
 
+function parseSort(value: string | null): ExploreSort {
+  return value === 'ETHOS_SCORE' ? 'ETHOS_SCORE' : 'DEFAULT'
+}
+
 function normalizeExploreResponse(response: any) {
   if (response?.data?.edges || response?.data?.pageInfo) return response.data
   return response?.data?.exploreList ?? response?.data?.creatorCoins ?? response?.data?.coins ?? null
+}
+
+function shortSymbol(address: string): string {
+  return `${address.slice(2, 6).toUpperCase()}`
+}
+
+function toNumericString(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const n = Number(value)
+    return Number.isFinite(n) ? String(n) : undefined
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return undefined
+}
+
+async function buildEthosSortedCreatorList(params: {
+  count: number
+  after: string | null
+  ethosMin: number | null
+  key: string | null
+}) {
+  const db = await getDb()
+  if (!db) throw new Error('db_unavailable')
+
+  const offset = Math.max(0, Number.parseInt(params.after ?? '0', 10) || 0)
+  const limitPlusOne = params.count + 1
+
+  const rows = await db.sql`
+    SELECT
+      cc.coin_address,
+      cc.creator_address,
+      cc.created_at,
+      cc.market_cap_usd,
+      cc.volume_24h_usd,
+      es.score AS ethos_score,
+      es.level AS ethos_level
+    FROM creator_coins cc
+    LEFT JOIN ethos_userkey_scores es
+      ON es.ethos_userkey = ('address:' || lower(cc.creator_address))
+      AND es.status = 'matched'
+    WHERE cc.chain_id = 8453
+      AND (${params.ethosMin}::numeric IS NULL OR es.score >= ${params.ethosMin})
+    ORDER BY
+      CASE WHEN es.score IS NULL THEN 1 ELSE 0 END ASC,
+      es.score DESC NULLS LAST,
+      cc.volume_24h_usd DESC NULLS LAST,
+      cc.market_cap_usd DESC NULLS LAST,
+      cc.coin_address ASC
+    OFFSET ${offset}
+    LIMIT ${limitPlusOne};
+  `
+
+  const selected = (rows.rows ?? []) as Array<{
+    coin_address: string
+    creator_address: string
+    created_at: string | null
+    market_cap_usd: string | number | null
+    volume_24h_usd: string | number | null
+    ethos_score: number | null
+    ethos_level: string | null
+  }>
+  const hasNextPage = selected.length > params.count
+  const pageRows = hasNextPage ? selected.slice(0, params.count) : selected
+
+  let coinDetails = new Map<string, any>()
+  if (params.key) {
+    try {
+      const sdk: any = await import('@zoralabs/coins-sdk')
+      sdk.setApiKey(params.key)
+      const responses = await Promise.allSettled(
+        pageRows.map((row) => sdk.getCoin({ address: row.coin_address, chain: 8453 })),
+      )
+      responses.forEach((result, index) => {
+        if (result.status !== 'fulfilled') return
+        const row = pageRows[index]
+        if (!row) return
+        const token = result.value?.data?.zora20Token
+        if (token) coinDetails.set(row.coin_address.toLowerCase(), token)
+      })
+    } catch {
+      coinDetails = new Map()
+    }
+  }
+
+  const edges = pageRows.map((row, idx) => {
+    const detail = coinDetails.get(String(row.coin_address).toLowerCase()) ?? null
+    const address = String(row.coin_address).toLowerCase()
+    const creatorAddress = String(row.creator_address).toLowerCase()
+    const displayName = typeof detail?.name === 'string' && detail.name.trim() ? detail.name.trim() : shortSymbol(address)
+    const displaySymbol = typeof detail?.symbol === 'string' && detail.symbol.trim() ? detail.symbol.trim() : shortSymbol(address)
+    const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
+    const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
+    const creatorProfile = detail?.creatorProfile
+    return {
+      cursor: String(offset + idx + 1),
+      node: {
+        id: typeof detail?.id === 'string' ? detail.id : undefined,
+        address,
+        creatorAddress,
+        payoutRecipientAddress: creatorAddress,
+        name: displayName,
+        symbol: displaySymbol,
+        coinType: 'CREATOR',
+        chainId: 8453,
+        createdAt: (typeof detail?.createdAt === 'string' && detail.createdAt) || row.created_at || undefined,
+        marketCap,
+        volume24h,
+        totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
+        uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
+        mediaContent: detail?.mediaContent,
+        creatorProfile,
+        ethosScore: typeof row.ethos_score === 'number' ? row.ethos_score : null,
+        ethosLevel: row.ethos_level ?? null,
+      },
+    }
+  })
+
+  return {
+    edges,
+    pageInfo: {
+      hasNextPage,
+      endCursor: hasNextPage ? String(offset + params.count) : null,
+    },
+    count: edges.length,
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -75,8 +207,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const list = parseList(getStringQuery(req, 'list'))
+  const sort = parseSort(getStringQuery(req, 'sort'))
   const count = Math.min(Math.max(getNumberQuery(req, 'count') ?? 20, 1), 50)
   const after = getStringQuery(req, 'after') ?? undefined
+  const ethosMin = (() => {
+    const raw = getNumberQuery(req, 'ethosMin')
+    return Number.isFinite(raw ?? NaN) ? Number(raw) : null
+  })()
+
+  if (
+    sort === 'ETHOS_SCORE' &&
+    (list === 'NEW_CREATORS' || list === 'MOST_VALUABLE_CREATORS' || list === 'TOP_VOLUME_CREATORS_24H')
+  ) {
+    try {
+      const data = await buildEthosSortedCreatorList({
+        count,
+        after: after ?? null,
+        ethosMin,
+        key,
+      })
+      setCache(res, 120)
+      return res.status(200).json({
+        success: true,
+        data,
+      })
+    } catch (e: any) {
+      const status = typeof e?.status === 'number' ? e.status : 500
+      return res.status(status).json({
+        success: false,
+        error: e?.message || 'Failed to fetch Ethos-sorted creators',
+      })
+    }
+  }
 
   try {
     const sdk: any = await import('@zoralabs/coins-sdk')

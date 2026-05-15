@@ -64,6 +64,8 @@ export type ZoraCoin = {
   platformReferrerAddress?: string
   payoutRecipientAddress?: string
   mediaContent?: ZoraMediaContent
+  ethosScore?: number | null
+  ethosLevel?: string | null
 }
 
 export type ZoraEdge<T> = { node?: T; cursor?: string }

@@ -8,7 +8,7 @@ vi.mock('../../../../_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
 }))
 
-import { crePlugin } from './index.ts'
+import { keeprOpsPlugin } from './index.ts'
 
 type AnyAction = {
   name?: string
@@ -24,7 +24,7 @@ type AnyAction = {
 
 const ENV_KEYS = [
   'DRY_RUN',
-  'ELIZA_CRE_DRY_RUN',
+  'ELIZA_KEEPR_DRY_RUN',
   'KEEPR_PRIVATE_KEY',
   'SOLANA_RPC_URL',
   'KEEPR_API_KEY',
@@ -38,7 +38,7 @@ function setEnv(key: string, value: string | undefined): void {
 }
 
 function getAction(name: string): AnyAction {
-  const action = (crePlugin.actions ?? []).find((entry) => entry?.name === name) as AnyAction | undefined
+  const action = (keeprOpsPlugin.actions ?? []).find((entry) => entry?.name === name) as AnyAction | undefined
   if (!action?.validate || !action?.handler) {
     throw new Error(`Missing action: ${name}`)
   }
@@ -64,7 +64,7 @@ async function runActionText(
   return outputs.join('\n---\n')
 }
 
-describe('cre plugin dry-run gate', () => {
+describe('keeperOps plugin dry-run gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getKeeprVaultByGroupIdMock.mockResolvedValue({
@@ -81,7 +81,7 @@ describe('cre plugin dry-run gate', () => {
 
   it('blocks mutating trigger commands when DRY_RUN is enabled', async () => {
     setEnv('DRY_RUN', 'true')
-    setEnv('ELIZA_CRE_DRY_RUN', undefined)
+    setEnv('ELIZA_KEEPR_DRY_RUN', undefined)
     setEnv('KEEPR_PRIVATE_KEY', undefined)
     setEnv('KEEPR_API_KEY', undefined)
     setEnv('SOLANA_RPC_URL', undefined)
@@ -95,9 +95,9 @@ describe('cre plugin dry-run gate', () => {
     expect(text).not.toContain('Keeper wallet not configured')
   })
 
-  it('supports ELIZA_CRE_DRY_RUN override gate', async () => {
+  it('supports ELIZA_KEEPR_DRY_RUN override gate', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_CRE_DRY_RUN', '1')
+    setEnv('ELIZA_KEEPR_DRY_RUN', '1')
     setEnv('KEEPR_API_KEY', undefined)
 
     const trigger = getAction('KEEPR_TRIGGER')
@@ -109,7 +109,7 @@ describe('cre plugin dry-run gate', () => {
 
   it('keeps existing trigger behavior when dry run is disabled', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_CRE_DRY_RUN', '0')
+    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
     setEnv('KEEPR_API_KEY', undefined)
 
     const trigger = getAction('KEEPR_TRIGGER')
@@ -120,7 +120,7 @@ describe('cre plugin dry-run gate', () => {
 
   it('shows dry-run status in help output', async () => {
     setEnv('DRY_RUN', 'true')
-    setEnv('ELIZA_CRE_DRY_RUN', undefined)
+    setEnv('ELIZA_KEEPR_DRY_RUN', undefined)
 
     const help = getAction('KEEPR_HELP')
     const text = await runActionText(help, '/keepr help')
@@ -130,7 +130,7 @@ describe('cre plugin dry-run gate', () => {
 
   it('denies trigger commands for MEMBER role', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_CRE_DRY_RUN', '0')
+    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       config: { roles: { admins: [] } },
@@ -147,7 +147,7 @@ describe('cre plugin dry-run gate', () => {
 
   it('allows trigger commands for ADMIN role', async () => {
     setEnv('DRY_RUN', '0')
-    setEnv('ELIZA_CRE_DRY_RUN', '0')
+    setEnv('ELIZA_KEEPR_DRY_RUN', '0')
     setEnv('KEEPR_API_KEY', undefined)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',

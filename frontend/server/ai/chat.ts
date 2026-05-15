@@ -300,7 +300,7 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       import('../agent/eliza/plugins/lens/index.js'),
       import('../agent/eliza/plugins/walletIntel/index.js'),
       import('../agent/eliza/plugins/reputation/index.js'),
-      import('../agent/eliza/plugins/cre/index.js'),
+      import('../agent/eliza/plugins/keeperOps/index.js'),
       import('../agent/eliza/plugins/knowledge/index.js'),
     ])
     const characterRuntimeConfig = resolveCharacterRuntimeConfig()

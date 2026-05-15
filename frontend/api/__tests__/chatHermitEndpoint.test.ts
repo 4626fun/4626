@@ -31,7 +31,7 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
-vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
+vi.mock('../../server/agent/eliza/plugins/keeperOps/index.js', () => ({
   isKeeperWriteCommandText: isKeeperWriteCommandTextMock,
 }))
 
