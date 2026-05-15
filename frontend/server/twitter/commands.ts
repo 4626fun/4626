@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 import type { Address } from 'viem'
 
+import { buildAlfaRoomChart } from '../_lib/alfaclub/roomCharts.js'
 import { logger } from '../_lib/infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -18,6 +19,17 @@ const TWITTER_POST_COOLDOWN_MS = 60_000
 const TWITTER_POST_PREVIEW_TTL_SECONDS = 90
 const tweetRateLimits = new Map<string, number>()
 const DASH_PREFIX_RE = /^[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212\uFE58\uFE63\uFF0D]+/
+const CHART_KIND_ALIASES = new Set([
+  'top',
+  'top-volume',
+  'volume',
+  'tier',
+  'tier-mix',
+  'mix',
+  'pnl',
+  'pnl-distribution',
+  'distribution',
+])
 
 function canPostTweet(groupId: string): boolean {
   const lastPost = tweetRateLimits.get(groupId)
@@ -108,7 +120,11 @@ function formatHelp(): string {
     '- /x help - Show this help',
     '- /x status - Verify posting account config',
     '- /x post <message> --confirm - Post a tweet (ADMIN/OWNER)',
+    '- /x chart [kind] [limit] <message> --confirm - Post a live AlfaClub chart image tweet',
     '- /tweet <message> --confirm - Alias for /x post',
+    '',
+    'Chart kinds:',
+    '- top-volume · tier-mix · pnl-distribution',
     '',
     'Notes:',
     '- Posts are rate-limited to 1 per minute per group.',
@@ -125,6 +141,50 @@ function formatTwitterPostPreview(tweetText: string): string {
     `Tap Post below in Telegram, or rerun with \`/x post ${tweetText} --confirm\`.`,
     `Preview expires in ${TWITTER_POST_PREVIEW_TTL_SECONDS}s.`,
   ].join('\n')
+}
+
+function formatTwitterChartPreview(params: {
+  kindRaw: string | null
+  limit: number | null
+  tweetText: string
+}): string {
+  const kind = params.kindRaw?.trim() || 'top-volume'
+  const limit = params.limit ? ` ${params.limit}` : ''
+  return [
+    'Twitter/X chart post preview',
+    '',
+    `chart: ${kind}${limit}`,
+    '',
+    params.tweetText,
+    '',
+    `Rerun with \`/x chart ${kind}${limit} ${params.tweetText} --confirm\`.`,
+    `Preview expires in ${TWITTER_POST_PREVIEW_TTL_SECONDS}s.`,
+  ].join('\n')
+}
+
+function parseTwitterChartArgs(args: string[]): {
+  hasConfirm: boolean
+  kindRaw: string | null
+  limit: number | null
+  tweetText: string
+} {
+  const hasConfirm = args.some((arg) => isConfirmFlag(arg))
+  const filtered = args.filter((arg) => !isConfirmFlag(arg))
+  let idx = 0
+  let kindRaw: string | null = null
+  let limit: number | null = null
+  const first = String(filtered[0] ?? '').trim().toLowerCase()
+  if (CHART_KIND_ALIASES.has(first)) {
+    kindRaw = filtered[0] ?? null
+    idx = 1
+  }
+  const maybeLimit = String(filtered[idx] ?? '').trim()
+  if (/^\d+$/.test(maybeLimit)) {
+    limit = Number.parseInt(maybeLimit, 10)
+    idx += 1
+  }
+  const tweetText = filtered.slice(idx).join(' ').trim()
+  return { hasConfirm, kindRaw, limit, tweetText }
 }
 
 type TwitterOauthConfig = {
@@ -630,6 +690,60 @@ export async function handleTwitterCommand(params: {
         groupId: params.groupId,
         senderWallet: params.senderWallet,
       })
+    }
+
+    case 'chart': {
+      if (params.role === 'MEMBER') {
+        return { ok: false, response: 'Denied: ADMIN or OWNER only.' }
+      }
+
+      const parsed = parseTwitterChartArgs(args)
+      if (!parsed.tweetText) {
+        return { ok: false, response: 'Usage: /x chart [kind] [limit] <message> --confirm' }
+      }
+      if (!parsed.hasConfirm) {
+        return {
+          ok: false,
+          response: formatTwitterChartPreview(parsed),
+          action: {
+            action: 'twitter.preview_post',
+            tweetText: parsed.tweetText,
+            ttlSeconds: TWITTER_POST_PREVIEW_TTL_SECONDS,
+            chartKind: parsed.kindRaw ?? 'top-volume',
+            chartLimit: parsed.limit,
+          },
+        }
+      }
+
+      const chartResult = await buildAlfaRoomChart({
+        kindRaw: parsed.kindRaw,
+        limit: parsed.limit,
+      })
+      if (!chartResult.ok) {
+        return { ok: false, response: chartResult.error }
+      }
+
+      const posted = await postTweet({
+        text: parsed.tweetText,
+        groupId: params.groupId,
+        senderWallet: params.senderWallet,
+        media: {
+          url: chartResult.chart.attachment.url,
+          filename: chartResult.chart.attachment.filename,
+          contentType: chartResult.chart.attachment.mime_type,
+        },
+      })
+      if (!posted.ok) return posted
+      return {
+        ...posted,
+        response: `${posted.response}\n- chart: ${chartResult.chart.title}`,
+        action: {
+          ...(posted.action ?? {}),
+          chartKind: chartResult.chart.kind,
+          chartTitle: chartResult.chart.title,
+          chartUrl: chartResult.chart.attachment.url,
+        },
+      }
     }
 
     default:

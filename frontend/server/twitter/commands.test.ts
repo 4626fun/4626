@@ -8,6 +8,22 @@ describe('twitter commands', () => {
 
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
+    buildAlfaRoomChartMock.mockReset()
+    buildAlfaRoomChartMock.mockResolvedValue({
+      ok: true,
+      chart: {
+        kind: 'top-volume',
+        title: 'Top Volume Rooms',
+        summary: 'Top room summary',
+        attachment: {
+          url: 'https://4626.fun/ipfs/bafy-chart?filename=alfaclub-top-volume.png',
+          type: 'photo',
+          filename: 'alfaclub-top-volume.png',
+          mime_type: 'image/png',
+        },
+        delivery: 'ipfs',
+      },
+    })
   })
 
   afterEach(() => {
@@ -361,6 +377,93 @@ describe('twitter commands', () => {
     expect(result.ok).toBe(false)
     expect(result.response).toContain('Twitter media upload failed (403): media rejected')
     expect((fetch as any).mock.calls.length).toBe(3)
+  })
+
+  it('posts a live AlfaClub chart tweet with attached image media', async () => {
+    restoreEnv = applyEnv({
+      TWITTER_API_KEY: 'key',
+      TWITTER_API_SECRET: 'secret',
+      TWITTER_ACCESS_TOKEN: 'token',
+      TWITTER_ACCESS_SECRET: 'token-secret',
+    })
+
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'x-access-level' ? 'read-write' : null),
+        },
+        json: async () => ({
+          screen_name: 'agenthermit4626',
+          id_str: '1739288918867214336',
+        }),
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'image/png' : null),
+        },
+        arrayBuffer: async () => Uint8Array.from([1, 2, 3, 4]).buffer,
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ media_id_string: '99112233' }),
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({
+          data: {
+            id: '1900000000000000002',
+            text: 'daily top volume',
+          },
+        }),
+        text: async () => '',
+      })
+
+    const result = await handleTwitterCommand({
+      groupId: 'group-chart-success',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x chart top-volume 8 daily top volume --confirm',
+      role: 'OWNER',
+    })
+
+    expect(result.ok).toBe(true)
+    expect(buildAlfaRoomChartMock).toHaveBeenCalledWith({ kindRaw: 'top-volume', limit: 8 })
+    expect((fetch as any).mock.calls.length).toBe(4)
+    const tweetBody = JSON.parse(String((fetch as any).mock.calls[3][1]?.body ?? '{}'))
+    expect(tweetBody.media.media_ids).toEqual(['99112233'])
+    expect(result.response).toContain('Tweet posted')
+    expect(result.response).toContain('chart: Top Volume Rooms')
+    expect(result.action?.chartKind).toBe('top-volume')
+  })
+
+  it('shows a preview for /x chart without confirm', async () => {
+    restoreEnv = applyEnv({
+      TWITTER_API_KEY: 'key',
+      TWITTER_API_SECRET: 'secret',
+      TWITTER_ACCESS_TOKEN: 'token',
+      TWITTER_ACCESS_SECRET: 'token-secret',
+    })
+
+    const result = await handleTwitterCommand({
+      groupId: 'group-chart-preview',
+      senderWallet: '0x00000000000000000000000000000000000000aa',
+      text: '/x chart tier-mix 5 room rotation is broadening',
+      role: 'OWNER',
+    })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('Twitter/X chart post preview')
+    expect(result.response).toContain('chart: tier-mix 5')
+    expect(buildAlfaRoomChartMock).not.toHaveBeenCalled()
+    expect((fetch as any).mock.calls.length).toBe(0)
   })
 
   it('uses HERMIT_TWITTER_* oauth1 env vars when present', async () => {

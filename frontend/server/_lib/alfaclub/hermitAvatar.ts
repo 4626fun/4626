@@ -13,7 +13,7 @@ const HERMIT_CUTOUT_PATH = resolve(__dirname, 'assets/hermit-cutout.png')
 const DEFAULT_SIZE = 512
 const MIN_SIZE = 64
 const MAX_SIZE = 1024
-const DEFAULT_SIGNATURE = 'hermit4626'
+const DEFAULT_SIGNATURE = 'Agent Hermit 4626'
 const MAX_SIGNATURE_LENGTH = 24
 
 // renderBackgroundCard uses cardRadius = round(size * 0.16); we mirror it so
