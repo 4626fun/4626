@@ -378,6 +378,7 @@ export async function _submitOwnerViaPreparedCalls(params: {
   canonicalCswAddress: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
   sessionKind?: 'self_auth' | 'external_signer'
+  requireWebAuthnOwnerIndexZero?: boolean
   signaturePayloadMode?: PreparedCallsSignaturePayloadMode
   signHashMode?: PreparedCallsSignHashMode
   signRequestMode?: PreparedCallsSignRequestMode
@@ -462,6 +463,13 @@ export async function _submitOwnerViaPreparedCalls(params: {
   const signatureBytes = hexByteLength(signature)
   const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
   const webAuthnClassification = classifyWebAuthnOwnerSignature(signature)
+  if (params.requireWebAuthnOwnerIndexZero) {
+    if (!webAuthnClassification.ok || webAuthnClassification.ownerIndex !== 0) {
+      throw new Error(
+        'Expected a Coinbase/Base App WebAuthn owner[0] signature. Re-open in Base App and approve with the canonical passkey.',
+      )
+    }
+  }
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
   let guardSummary: Record<string, unknown> | null = null

@@ -512,12 +512,9 @@ export async function sendPreparedOwnerTx(params: {
           } else if (preferSponsoredFirst) {
             await trySponsoredPreferredFallback()
           } else {
-            const signerMatchesCanonical =
-              Boolean(canonicalSmartWalletAddress) &&
-              Boolean(signerAddress) &&
-              signerAddress?.toLowerCase() === canonicalSmartWalletAddress?.toLowerCase()
-            const preferDirectSelfAuthSendFirst =
-              effectiveOwnerInstallIntent === 'embeddedOwner' && signerMatchesCanonical
+            // In Coinbase/Base App self-auth sessions, keep embedded-owner
+            // installs on prepared-calls owner[0] WebAuthn signing.
+            const preferDirectSelfAuthSendFirst = false
             if (preferDirectSelfAuthSendFirst) {
               try {
                 txHash = await submitDirectSelfAuthTx()
@@ -597,6 +594,8 @@ export async function sendPreparedOwnerTx(params: {
                   canonicalCswAddress: canonicalSmartWalletAddress,
                   onStageEvent,
                   sessionKind: 'self_auth',
+                  requireWebAuthnOwnerIndexZero:
+                    effectiveOwnerInstallIntent === 'embeddedOwner' && selfAuthenticatedCanonicalSession,
                 })
               } else if (preferWalletSendCallsFirst) {
                 txHash = await _submitOwnerViaWalletSendCalls({
@@ -675,6 +674,22 @@ export async function sendPreparedOwnerTx(params: {
               })
             } catch (replayableDirectError) {
               if (isUserRejectedWalletAction(replayableDirectError)) throw replayableDirectError
+              if (preferReplayablePreparedCallsFirst) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'prepare_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(replayableDirectError).code,
+                  message:
+                    replayableDirectError instanceof Error
+                      ? replayableDirectError.message
+                      : String(replayableDirectError ?? ''),
+                })
+                throw replayableDirectError
+              }
               if (preferWalletSendCallsFirst) {
                 const walletSendCallsErrorMessage =
                   replayableDirectError instanceof Error

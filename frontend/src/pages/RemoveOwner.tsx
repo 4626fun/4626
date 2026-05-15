@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { type PublicClient } from 'viem'
+import { encodeFunctionData, type PublicClient } from 'viem'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { RemoveOwnerActionPanel } from '@/features/accountSetup/removeOwner/RemoveOwnerActionPanel'
@@ -33,6 +33,18 @@ const decodeOwnerAddress = RemoveOwnerHelpers.decodeOwnerAddress
 const REMOVE_OWNER_AT_INDEX_SELECTOR = '0x89625b57'
 const RELAY_MULTICALL_SELECTOR = '0xcd6e13f7'
 const EXECUTE_WITHOUT_CHAIN_ID_SELECTOR = '0x2c2abd1e'
+const RELAY_DEPOSITORY_ABI = [
+  {
+    type: 'function',
+    name: 'depositNative',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'depositor', type: 'address' },
+      { name: 'id', type: 'bytes32' },
+    ],
+    outputs: [],
+  },
+] as const
 
 export function RemoveOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/remove-owner' })
@@ -234,6 +246,65 @@ export function RemoveOwnerPage() {
     return first
   }
 
+  const submitSelfAuthViaSendCalls = async (params: {
+    request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+    calls: Array<{ to: `0x${string}`; data: `0x${string}`; value: `0x${string}` }>
+    telemetryPrefix: string
+  }): Promise<`0x${string}`> => {
+    const sendCallsResult = await _submitOwnerViaSendCalls({
+      walletRequest: async (args) => await params.request(args),
+      csw: canonicalCswAddress as `0x${string}`,
+      calls: params.calls,
+      chainId: base.id,
+      onTelemetry: (event) => {
+        try {
+          const detail =
+            typeof event.detail === 'string'
+              ? event.detail
+              : JSON.stringify(event.detail)
+          const cap = event.step.includes('error') ? 4000 : 240
+          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
+          if (
+            event.step === 'broadcast_error' &&
+            event.detail &&
+            typeof event.detail === 'object'
+          ) {
+            const d = event.detail as Record<string, unknown>
+            setErrorDetail({
+              revertReason: (d.error as string | null) ?? null,
+              revertData: (d.revertData as string | null) ?? null,
+            })
+          }
+        } catch {
+          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
+        }
+      },
+    })
+    appendEvent(`${params.telemetryPrefix}:bundle_id=${sendCallsResult.callBundleId}`)
+    const resolution = await waitForCallsTxHash({
+      walletRequest: async (args) => await params.request(args),
+      callBundleId: sendCallsResult.callBundleId,
+      timeoutMs: 60_000,
+      intervalMs: 1_500,
+      onTelemetry: (event) => {
+        try {
+          const detail =
+            typeof event.detail === 'string'
+              ? event.detail
+              : JSON.stringify(event.detail)
+          const cap = event.step.includes('error') ? 4000 : 320
+          appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
+        } catch {
+          appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
+        }
+      },
+    })
+    if (!resolution.transactionHash) {
+      throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
+    }
+    return resolution.transactionHash
+  }
+
   const handleRemove = async () => {
     if (!preview || !canonicalCswAddress || !walletClient) {
       setPageError('Connect your wallet and select an owner index first.')
@@ -295,10 +366,9 @@ export function RemoveOwnerPage() {
       appendEvent(`relay:status_endpoint=${statusEndpoint}`)
 
       let depositTxHash: `0x${string}` | null = null
-      let usedRelayFlow = true
       if (isSelfAuthSession) {
         if (preview.relay.userCallSource === 'quote_tx') {
-          appendEvent('relay:self_auth_call_mode=prepared_quote_tx')
+          appendEvent('lane:self_auth_quote_tx_prepared_calls')
           try {
             const preparedPromise = _submitOwnerViaPreparedCalls({
               walletRequest: async (args) => await request(args),
@@ -319,123 +389,122 @@ export function RemoveOwnerPage() {
               },
             })
             const preparedTimeout = new Promise<never>((_, reject) => {
-              setTimeout(() => reject(new Error('wallet_prepareCalls timeout in self-auth quote-tx lane')), 45_000)
+              setTimeout(() => reject(new Error('ERR_PREPARED_CALLS_TIMEOUT')), 45_000)
             })
             depositTxHash = await Promise.race([preparedPromise, preparedTimeout])
           } catch (error: any) {
             const message = typeof error?.message === 'string' ? error.message : String(error ?? '')
             appendEvent(`prepared_calls.fallback_reason=${message.slice(0, 220)}`)
-            appendEvent('fallback:self_auth_direct_remove_owner')
-            usedRelayFlow = false
-            const sendCallsResult = await _submitOwnerViaSendCalls({
-              walletRequest: async (args) => await request(args),
-              csw: canonicalCswAddress as `0x${string}`,
-              calls: [
-                {
-                  to: preview.txRequest.to,
-                  data: preview.txRequest.data,
-                  value: preview.txRequest.value,
-                },
-              ],
-              chainId: base.id,
-              onTelemetry: (event) => {
-                try {
-                  const detail =
-                    typeof event.detail === 'string'
-                      ? event.detail
-                      : JSON.stringify(event.detail)
-                  const cap = event.step.includes('error') ? 4000 : 240
-                  appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-                  if (
-                    event.step === 'broadcast_error' &&
-                    event.detail &&
-                    typeof event.detail === 'object'
-                  ) {
-                    const d = event.detail as Record<string, unknown>
-                    setErrorDetail({
-                      revertReason: (d.error as string | null) ?? null,
-                      revertData: (d.revertData as string | null) ?? null,
-                    })
-                  }
-                } catch {
-                  appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
+            appendEvent('fallback:quote_tx_via_eth_sendTransaction')
+            try {
+              const activeFrom = await resolveActiveWalletAccount(request)
+              if (activeFrom !== canonicalCswAddress.toLowerCase()) {
+                throw new Error(
+                  `quote_tx eth_sendTransaction requires active CSW sender ${canonicalCswAddress.toLowerCase()}, got ${activeFrom}.`,
+                )
+              }
+              const directQuoteTxHash = (await request({
+                method: 'eth_sendTransaction',
+                params: [
+                  {
+                    from: activeFrom,
+                    to: preview.relay.userCall.to,
+                    data: preview.relay.userCall.data,
+                    value: preview.relay.userCall.value,
+                  },
+                ],
+              })) as string
+              if (!directQuoteTxHash || !/^0x([a-fA-F0-9]{64})$/.test(directQuoteTxHash)) {
+                throw new Error('quote_tx eth_sendTransaction did not return a valid transaction hash.')
+              }
+              appendEvent(`fallback.quote_tx_eth_sendTransaction=${directQuoteTxHash}`)
+              depositTxHash = directQuoteTxHash as `0x${string}`
+            } catch (directQuoteError: any) {
+              const directMessage =
+                typeof directQuoteError?.message === 'string'
+                  ? directQuoteError.message
+                  : String(directQuoteError ?? '')
+              appendEvent(`fallback.quote_tx_eth_sendTransaction_failed=${directMessage.slice(0, 220)}`)
+            }
+            if (!depositTxHash) {
+              appendEvent('fallback:relay_execute_gasless_api')
+              try {
+                const executeRes = await apiFetch('/api/relay/execute-gasless', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    requestId: preview.relay.requestId,
+                    user: canonicalCswAddress,
+                    chainId: base.id,
+                    to: preview.relay.userCall.to,
+                    data: preview.relay.userCall.data,
+                    value: preview.relay.userCall.value,
+                  }),
+                })
+                const executeJson = (await executeRes.json().catch(() => null)) as {
+                  success?: boolean
+                  error?: string
+                  data?: unknown
+                } | null
+                if (!executeRes.ok || !executeJson?.success) {
+                  throw new Error(
+                    executeJson?.error ?? `relay_execute_gasless_failed_${executeRes.status}`,
+                  )
                 }
-              },
-            })
-            appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
-            const resolution = await waitForCallsTxHash({
-              walletRequest: async (args) => await request(args),
-              callBundleId: sendCallsResult.callBundleId,
-              timeoutMs: 60_000,
-              intervalMs: 1_500,
-              onTelemetry: (event) => {
-                try {
-                  const detail =
-                    typeof event.detail === 'string'
-                      ? event.detail
-                      : JSON.stringify(event.detail)
-                  const cap = event.step.includes('error') ? 4000 : 320
-                  appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-                } catch {
-                  appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-                }
-              },
-            })
-            depositTxHash = resolution.transactionHash
+                appendEvent('fallback.relay_execute_gasless_queued=ok')
+              } catch (executeGaslessError: any) {
+                const executeMessage =
+                  typeof executeGaslessError?.message === 'string'
+                    ? executeGaslessError.message
+                    : String(executeGaslessError ?? '')
+                appendEvent(`fallback.relay_execute_gasless_failed=${executeMessage.slice(0, 220)}`)
+              }
+            }
+            if (!depositTxHash) {
+              appendEvent('fallback:request_bound_deposit_via_orderId_paymentDetails')
+              const fallbackDepositId = preview.relay.orderId ?? preview.relay.requestId
+              const fallbackDepositAmountHex =
+                preview.relay.paymentDetails?.amount &&
+                /^[1-9][0-9]*$/.test(preview.relay.paymentDetails.amount)
+                  ? (`0x${BigInt(preview.relay.paymentDetails.amount).toString(16)}` as `0x${string}`)
+                  : preview.relay.userCall.value
+              if (!preview.relay.orderId || !preview.relay.paymentDetails) {
+                appendEvent(
+                  'fallback:protocol_fields_missing_using_requestId_userCallValue_permissive_mode',
+                )
+              }
+              const fallbackDepositCall = {
+                to: RELAY_DEPOSITORY_BASE,
+                data: encodeFunctionData({
+                  abi: RELAY_DEPOSITORY_ABI,
+                  functionName: 'depositNative',
+                  args: [canonicalCswAddress as `0x${string}`, fallbackDepositId],
+                }),
+                value: fallbackDepositAmountHex,
+              }
+              appendEvent(`fallback:deposit_id=${fallbackDepositId}`)
+              appendEvent(`fallback:deposit_to=${fallbackDepositCall.to}`)
+              appendEvent(`fallback:deposit_value=${fallbackDepositCall.value}`)
+              depositTxHash = await submitSelfAuthViaSendCalls({
+                request: async (args) => await request(args),
+                calls: [fallbackDepositCall],
+                telemetryPrefix: 'csw_wallet_sendcalls',
+              })
+            }
           }
         } else {
-          appendEvent('relay:self_auth_call_mode=preview_user_call')
-          const sendCallsResult = await _submitOwnerViaSendCalls({
-            walletRequest: async (args) => await request(args),
-            csw: canonicalCswAddress as `0x${string}`,
+          appendEvent('lane:self_auth_request_bound_deposit')
+          if (!preview.relay.orderId || !preview.relay.paymentDetails) {
+            throw new Error('ERR_REQUEST_BOUND_DEPOSIT_MISSING_PROTOCOL_FIELDS')
+          }
+          depositTxHash = await submitSelfAuthViaSendCalls({
+            request: async (args) => await request(args),
             calls: [preview.relay.userCall],
-            chainId: base.id,
-            onTelemetry: (event) => {
-              try {
-                const detail =
-                  typeof event.detail === 'string'
-                    ? event.detail
-                    : JSON.stringify(event.detail)
-                const cap = event.step.includes('error') ? 4000 : 240
-                appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-                if (
-                  event.step === 'broadcast_error' &&
-                  event.detail &&
-                  typeof event.detail === 'object'
-                ) {
-                  const d = event.detail as Record<string, unknown>
-                  setErrorDetail({
-                    revertReason: (d.error as string | null) ?? null,
-                    revertData: (d.revertData as string | null) ?? null,
-                  })
-                }
-              } catch {
-                appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-              }
-            },
+            telemetryPrefix: 'csw_wallet_sendcalls',
           })
-          appendEvent(`csw_wallet_sendcalls:bundle_id=${sendCallsResult.callBundleId}`)
-          const resolution = await waitForCallsTxHash({
-            walletRequest: async (args) => await request(args),
-            callBundleId: sendCallsResult.callBundleId,
-            timeoutMs: 60_000,
-            intervalMs: 1_500,
-            onTelemetry: (event) => {
-              try {
-                const detail =
-                  typeof event.detail === 'string'
-                    ? event.detail
-                    : JSON.stringify(event.detail)
-                const cap = event.step.includes('error') ? 4000 : 320
-                appendEvent(`csw_wallet_sendcalls.${event.step}: ${detail.slice(0, cap)}`)
-              } catch {
-                appendEvent(`csw_wallet_sendcalls.${event.step}: <unloggable>`)
-              }
-            },
-          })
-          depositTxHash = resolution.transactionHash
         }
       } else {
+        appendEvent('lane:external_signer_submit_quote_user_call')
         appendEvent('external_eoa_deposit:start')
         const activeFrom = await resolveActiveWalletAccount(request)
         if (!ownerSignerAddress || activeFrom !== ownerSignerAddress.toLowerCase()) {
@@ -483,28 +552,6 @@ export function RemoveOwnerPage() {
         })
       } catch {}
 
-      if (!usedRelayFlow) {
-        const slotAfter = (await publicClient?.readContract({
-          address: canonicalCswAddress as `0x${string}`,
-          abi: CSW_OWNER_ABI,
-          functionName: 'ownerAtIndex',
-          args: [BigInt(preview.preflight.targetOwnerIndex)],
-        })) as `0x${string}` | undefined
-        const ownerRemoved =
-          typeof slotAfter === 'string' &&
-          slotAfter.toLowerCase() !== preview.preflight.targetOwnerBytes.toLowerCase()
-        if (!ownerRemoved) {
-          throw new Error(
-            `Direct self-auth fallback sent tx ${depositTxHash.slice(0, 10)}…, but owner slot ${preview.preflight.targetOwnerIndex} is unchanged.`,
-          )
-        }
-        appendEvent('direct_fallback.owner_slot_changed=ok')
-        setPageNotice(`Owner removal confirmed on-chain (direct fallback tx ${depositTxHash.slice(0, 10)}…).`)
-        setPreview(null)
-        setSelectedIndex(null)
-        return
-      }
-
       const status = await pollRelayStatusEndpoint({
         statusEndpoint,
         timeoutMs: 120_000,
@@ -512,8 +559,9 @@ export function RemoveOwnerPage() {
         onTick: (message) => appendEvent(`relay_status.${message}`),
       })
       if (!status.done || !status.success) {
+        appendEvent('relay_status.result=failed_or_timeout')
         throw new Error(
-          `Relay execution did not complete after deposit (status: ${String((status.raw as any)?.status ?? 'unknown')}).`,
+          `ERR_RELAY_STATUS_INCOMPLETE:${String((status.raw as any)?.status ?? 'unknown')}`,
         )
       }
       if (status.txHash) {
