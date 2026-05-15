@@ -82,6 +82,7 @@ const BASE_FLAGS = {
   feedbackEnabled: false,
   topN: 5,
   cooldownHours: 24,
+  maxCreatorsPerRun: null,
 }
 
 const CREATORS = [

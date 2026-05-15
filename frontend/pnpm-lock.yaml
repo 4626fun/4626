@@ -140,6 +140,9 @@ importers:
       '@privy-io/wagmi':
         specifier: ^4.0.1
         version: 4.0.1(@privy-io/react-auth@3.13.1(eed267efbc3677454d3e3148b97a981e))(react@19.2.4)(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))(wagmi@2.19.5(@tanstack/query-core@5.90.20)(@tanstack/react-query@5.90.20(react@19.2.4))(@types/react@19.2.13)(@vercel/blob@2.1.0)(@vercel/functions@3.4.3)(bufferutil@4.1.0)(encoding@0.1.13)(fastestsmallesttextencoderdecoder@1.0.22)(immer@11.1.3)(react@19.2.4)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))(zod@4.3.6))
+      '@relayprotocol/relay-sdk':
+        specifier: ^5.2.7
+        version: 5.2.7(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
       '@safe-global/api-kit':
         specifier: ^4.0.1
         version: 4.0.1(bufferutil@4.1.0)(encoding@0.1.13)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
@@ -2081,6 +2084,11 @@ packages:
   '@redocly/openapi-core@1.34.7':
     resolution: {integrity: sha512-gn2P0OER6qxF/+f4GqNv9XsnU5+6oszD/0SunulOvPYJDhrNkNVrVZV5waX25uqw5UDn2+roViWlRDHKFfHH0g==}
     engines: {node: '>=18.17.0', npm: '>=9.5.0'}
+
+  '@relayprotocol/relay-sdk@5.2.7':
+    resolution: {integrity: sha512-nTrk3ABSdmfPa1ZjFHhoZRCdCrYkxUp5t2j1Lj0wrUe8QBEdgCX2uIU2PSvJqsIYk3vGVSAlIrULoH5YKOyJvQ==}
+    peerDependencies:
+      viem: '>=2.26.0'
 
   '@reown/appkit-common@1.7.8':
     resolution: {integrity: sha512-ridIhc/x6JOp7KbDdwGKY4zwf8/iK8EYBl+HtWrruutSLwZyVi5P8WaZa+8iajL6LcDcDF7LoyLwMTym7SRuwQ==}
@@ -9082,6 +9090,13 @@ snapshots:
       yaml-ast-parser: 0.0.43
     transitivePeerDependencies:
       - supports-color
+
+  '@relayprotocol/relay-sdk@5.2.7(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
+    dependencies:
+      axios: 1.15.2
+      viem: 2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+    transitivePeerDependencies:
+      - debug
 
   '@reown/appkit-common@1.7.8(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.22.4)':
     dependencies:

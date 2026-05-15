@@ -33,7 +33,7 @@ contract SeedCreatorRegistry is Script {
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    address internal constant DEFAULT_REGISTRY = 0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4;
+    address internal constant DEFAULT_REGISTRY = 0x3f64087dc361Ad52300409E5873b26941D6418B6;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS

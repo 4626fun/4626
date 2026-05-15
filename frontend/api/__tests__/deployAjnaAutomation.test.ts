@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes, withAuthHeader } from './helpers'
+import type { AjnaVaultRegistryRow } from '../../server/_lib/ajnaVaultManager/registry'
 
 const { resolveCoinPartiesAndOwnerMock, isServerAdminAddressMock, getAjnaVaultRegistryEntryMock, updateAjnaVaultAutomationConfigMock } =
   vi.hoisted(() => ({
@@ -13,8 +14,12 @@ const { resolveCoinPartiesAndOwnerMock, isServerAdminAddressMock, getAjnaVaultRe
       isVerified: false,
     })),
     isServerAdminAddressMock: vi.fn(() => false),
-    getAjnaVaultRegistryEntryMock: vi.fn(async () => null),
-    updateAjnaVaultAutomationConfigMock: vi.fn(async () => null),
+    getAjnaVaultRegistryEntryMock: vi.fn(
+      async (): Promise<AjnaVaultRegistryRow | null> => null,
+    ),
+    updateAjnaVaultAutomationConfigMock: vi.fn(
+      async (): Promise<AjnaVaultRegistryRow | null> => null,
+    ),
   }))
 
 vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
@@ -78,7 +83,7 @@ describe('deploy ajna automation endpoints', () => {
       metadata: {},
       createdAt: '2026-05-12T06:00:00.000Z',
       updatedAt: '2026-05-12T06:00:00.000Z',
-    })
+    } as AjnaVaultRegistryRow)
     const req = createMockReq({
       method: 'GET',
       headers: withAuthHeader({}, '0x1111111111111111111111111111111111111111'),
@@ -116,7 +121,7 @@ describe('deploy ajna automation endpoints', () => {
       metadata: {},
       createdAt: '2026-05-12T06:00:00.000Z',
       updatedAt: '2026-05-12T07:00:00.000Z',
-    })
+    } as AjnaVaultRegistryRow)
     const req = createMockReq({
       method: 'POST',
       headers: withAuthHeader({}, '0x1111111111111111111111111111111111111111'),

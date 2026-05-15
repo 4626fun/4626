@@ -138,6 +138,7 @@ type AmoeNonceRecord = {
 const memNonces = new Map<string, AmoeNonceRecord>()
 const memCredits = new Map<string, number>()
 const memDailyTwitterCheckins = new Set<string>()
+const memTwitterClaimedTweetIds = new Set<string>()
 let amoeSchemaEnsured = false
 
 const eip1271Abi = [
@@ -304,9 +305,25 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
     CREATE TABLE IF NOT EXISTS lottery_amoe_daily_twitter_checkins (
       wallet_address TEXT NOT NULL,
       checkin_date DATE NOT NULL,
+      tweet_id TEXT,
+      tweet_url TEXT,
+      tweet_author_username TEXT,
+      tweet_author_id TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       PRIMARY KEY (wallet_address, checkin_date)
     );
+  `
+  await db.sql`
+    ALTER TABLE lottery_amoe_daily_twitter_checkins
+      ADD COLUMN IF NOT EXISTS tweet_id TEXT,
+      ADD COLUMN IF NOT EXISTS tweet_url TEXT,
+      ADD COLUMN IF NOT EXISTS tweet_author_username TEXT,
+      ADD COLUMN IF NOT EXISTS tweet_author_id TEXT;
+  `
+  await db.sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS lottery_amoe_daily_twitter_tweet_id_unique
+      ON lottery_amoe_daily_twitter_checkins (tweet_id)
+      WHERE tweet_id IS NOT NULL;
   `
   await db.sql`
     CREATE TABLE IF NOT EXISTS lottery_amoe_daily_xmtp_checkins (
@@ -600,7 +617,15 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
   return toCreditSnapshot(wallet, credits)
 }
 
-export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }): Promise<{
+export async function claimDailyTwitterCheckin(params: {
+  wallet: `0x${string}`
+  verifiedTweet: {
+    tweetId: string
+    tweetUrl: string
+    authorUsername: string | null
+    authorId: string | null
+  }
+}): Promise<{
   wallet: `0x${string}`
   awarded: boolean
   awardedCredits: number
@@ -611,13 +636,20 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
   const wallet = normalizeWallet(params.wallet)
   const now = Date.now()
   const dayKey = dayKeyUtc(now)
+  const tweetId = String(params.verifiedTweet.tweetId ?? '').trim()
+  const tweetUrl = String(params.verifiedTweet.tweetUrl ?? '').trim()
+  if (!tweetId) throw new AmoeBadRequestError('invalid_tweet_reference')
 
   const db = await getDb()
   if (!db) {
+    if (memTwitterClaimedTweetIds.has(tweetId)) {
+      throw new Error('tweet_already_claimed')
+    }
     const memKey = `${wallet}:${dayKey}`
     const alreadyClaimed = memDailyTwitterCheckins.has(memKey)
     if (!alreadyClaimed) {
       memDailyTwitterCheckins.add(memKey)
+      memTwitterClaimedTweetIds.add(tweetId)
       memCredits.set(wallet, (memCredits.get(wallet) ?? 0) + AMOE_DAILY_TWITTER_CREDIT)
     }
     const snapshot = toCreditSnapshot(wallet, memCredits.get(wallet) ?? 0)
@@ -632,12 +664,35 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
   }
 
   await ensureAmoeSchema(db)
-  const inserted = await db.sql`
-    INSERT INTO lottery_amoe_daily_twitter_checkins (wallet_address, checkin_date)
-    VALUES (${wallet}, ${dayKey})
-    ON CONFLICT (wallet_address, checkin_date) DO NOTHING
-    RETURNING wallet_address;
-  `
+  let inserted: { rows: any[] }
+  try {
+    inserted = await db.sql`
+      INSERT INTO lottery_amoe_daily_twitter_checkins (
+        wallet_address,
+        checkin_date,
+        tweet_id,
+        tweet_url,
+        tweet_author_username,
+        tweet_author_id
+      )
+      VALUES (
+        ${wallet},
+        ${dayKey},
+        ${tweetId},
+        ${tweetUrl || null},
+        ${params.verifiedTweet.authorUsername},
+        ${params.verifiedTweet.authorId}
+      )
+      ON CONFLICT (wallet_address, checkin_date) DO NOTHING
+      RETURNING wallet_address;
+    `
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    if (message.toLowerCase().includes('lottery_amoe_daily_twitter_tweet_id_unique')) {
+      throw new Error('tweet_already_claimed')
+    }
+    throw error
+  }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
   const signupId = await resolveOrCreateProfileForWallet(db, wallet)
 

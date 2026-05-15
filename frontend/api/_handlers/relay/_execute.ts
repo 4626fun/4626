@@ -12,6 +12,14 @@ import {
   RATE_LIMITS,
   logger,
 } from '../../../packages/server-core/src/index.js'
+import {
+  MAINNET_RELAY_API,
+  axios as relaySdkAxios,
+  createClient as createRelaySdkClient,
+  getApiKeyHeader as getRelayApiKeyHeader,
+  getClient as getRelaySdkClient,
+  type paths as RelaySdkPaths,
+} from '@relayprotocol/relay-sdk'
 
 const RELAY_EXECUTE_BODY_MAX_BYTES = 262_144
 
@@ -74,12 +82,20 @@ type RelayExecuteError = {
   data?: unknown
 }
 
-const RELAY_EXECUTE_URL = 'https://api.relay.link/execute/call'
 const HANDLE_OPS_SELECTOR = '0x1fad948c' // EntryPoint.handleOps((userOp[]),beneficiary)
 const ENTRY_POINT_V06 = '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789'
 const ENTRY_POINT_V07 = '0x0000000071727de22e5e9d8baf0edac6f37da032'
 const ALLOWED_TO = new Set([ENTRY_POINT_V06, ENTRY_POINT_V07])
 const ALLOWED_CHAIN_IDS = new Set([8453]) // Base mainnet only
+const RELAY_SDK_SOURCE = '4626.fun'
+
+type RelayExecuteCallRequestBody = NonNullable<
+  RelaySdkPaths['/execute/call']['post']['requestBody']['content']['application/json']
+>
+
+type RelayExecuteCallSuccessBody = NonNullable<
+  RelaySdkPaths['/execute/call']['post']['responses']['200']['content']['application/json']
+>
 
 function isHexString(value: unknown, minBytes: number): value is string {
   if (typeof value !== 'string') return false
@@ -106,6 +122,32 @@ function resolveRelayApiKey(): string | null {
     }
   }
   return null
+}
+
+function readRelaySdkError(error: unknown): {
+  message: string
+  status: number | null
+  raw: unknown
+} {
+  if (!error || typeof error !== 'object') {
+    return {
+      message: error instanceof Error ? error.message : String(error ?? 'Unknown Relay SDK error'),
+      status: null,
+      raw: null,
+    }
+  }
+
+  const errorObj = error as Record<string, unknown>
+  const statusRaw = errorObj.statusCode
+  const status =
+    typeof statusRaw === 'number' && Number.isFinite(statusRaw) ? statusRaw : null
+  const raw = errorObj.rawError ?? null
+  const message =
+    typeof errorObj.message === 'string' && errorObj.message.trim()
+      ? errorObj.message.trim()
+      : 'Relay SDK request failed'
+
+  return { message, status, raw }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -197,13 +239,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     logger.info('[relay/execute] forwarding without x-api-key (public rate-limit tier)')
   }
 
-  // Schema for `/execute/call` (confirmed via direct probe 2026-05-04):
-  //   { user, originChainId, destinationChainId, txs: [{ to, data, value }] }
-  // The endpoint runs txs[] through Relay's bundler and the multicall router
-  // is built server-side. Returns 400 with `{ message, tx }` on EVM revert,
-  // 400 with `{ message: "body must have required property '<name>'" }` on
-  // schema errors, 200 with the receipt on success.
-  const upstreamPayload = {
+  // Build a typed /execute/call payload from the SDK OpenAPI schema so we
+  // stay aligned with Relay's canonical request shape.
+  const upstreamPayload: RelayExecuteCallRequestBody = {
     user: body.user,
     originChainId: chainId,
     destinationChainId: chainId,
@@ -216,87 +254,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ],
   }
 
-  let upstreamRes: Response
+  // Route through Relay SDK's configured client and axios plumbing so auth
+  // header handling and base URL behavior stay SDK-owned.
+  const relayClient = createRelaySdkClient({
+    baseApiUrl: MAINNET_RELAY_API,
+    source: RELAY_SDK_SOURCE,
+    ...(apiKey ? { apiKey } : {}),
+  })
+  const sdkClient = getRelaySdkClient() ?? relayClient
+  const upstreamUrl = `${sdkClient.baseApiUrl}/execute/call`
+
+  let upstreamBody: RelayExecuteCallSuccessBody
   try {
-    const upstreamHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    if (apiKey) {
-      upstreamHeaders['x-api-key'] = apiKey
-    }
-    upstreamRes = await fetch(RELAY_EXECUTE_URL, {
+    const response = await relaySdkAxios.request<RelayExecuteCallSuccessBody>({
+      url: upstreamUrl,
       method: 'POST',
-      headers: upstreamHeaders,
-      body: JSON.stringify(upstreamPayload),
+      data: upstreamPayload,
+      headers: {
+        ...getRelayApiKeyHeader(sdkClient, upstreamUrl),
+        'relay-sdk-version': sdkClient.version ?? 'unknown',
+      },
     })
+    upstreamBody = response.data
   } catch (error) {
-    logger.warn('[relay/execute] upstream fetch failed', {
-      error: error instanceof Error ? error.message : String(error ?? ''),
+    const sdkError = readRelaySdkError(error)
+    logger.warn('[relay/execute] upstream rejected', {
+      status: sdkError.status,
+      message: sdkError.message,
+      raw: sdkError.raw,
     })
-    return res.status(502).json({
-      success: false,
-      error: 'Failed to reach Relay /execute',
-    } satisfies ApiEnvelope<never>)
-  }
-
-  let upstreamBody: unknown = null
-  let upstreamText = ''
-  try {
-    upstreamText = await upstreamRes.text()
-  } catch {
-    upstreamText = ''
-  }
-  if (upstreamText) {
-    try {
-      upstreamBody = JSON.parse(upstreamText)
-    } catch {
-      upstreamBody = upstreamText
-    }
-  }
-
-  if (!upstreamRes.ok) {
-    // Extract a useful error message from Relay's upstream body. Relay typically
-    // returns either a string or an object with shape { message, name, code, ... }
-    // or { error: { message, code }, ... }. Probe several common shapes so that
-    // 400s with real error content surface to the frontend instead of a generic
-    // "Relay /execute failed with status 400".
-    let upstreamMessage: string | null = null
-    if (typeof upstreamBody === 'string' && upstreamBody.trim()) {
-      upstreamMessage = upstreamBody.trim()
-    } else if (upstreamBody && typeof upstreamBody === 'object') {
-      const obj = upstreamBody as Record<string, unknown>
-      const messageCandidates: unknown[] = [
-        obj.message,
-        obj.error,
-        (obj.error as Record<string, unknown> | undefined)?.message,
-        obj.detail,
-        obj.reason,
-      ]
-      for (const cand of messageCandidates) {
-        if (typeof cand === 'string' && cand.trim()) {
-          upstreamMessage = cand.trim()
-          break
-        }
-      }
-    }
+    const status =
+      sdkError.status && sdkError.status >= 400 && sdkError.status < 600 ? sdkError.status : 502
     const errorPayload: RelayExecuteError = {
       success: false,
-      error: upstreamMessage
-        ? `Relay /execute (${upstreamRes.status}): ${upstreamMessage}`
-        : `Relay /execute failed with status ${upstreamRes.status}`,
-      status: upstreamRes.status,
+      error: sdkError.status
+        ? `Relay /execute (${sdkError.status}): ${sdkError.message}`
+        : `Relay /execute failed: ${sdkError.message}`,
+      status: sdkError.status ?? undefined,
     }
-    if (upstreamBody && typeof upstreamBody === 'object') {
-      errorPayload.data = upstreamBody
+    if (sdkError.raw && typeof sdkError.raw === 'object') {
+      errorPayload.data = sdkError.raw
     }
-    logger.warn('[relay/execute] upstream rejected', {
-      status: upstreamRes.status,
-      upstreamMessage,
-      upstreamBody: typeof upstreamBody === 'object' ? upstreamBody : String(upstreamBody ?? ''),
-    })
-    return res
-      .status(upstreamRes.status >= 400 && upstreamRes.status < 600 ? upstreamRes.status : 502)
-      .json(errorPayload)
+    return res.status(status).json(errorPayload)
   }
 
   return res

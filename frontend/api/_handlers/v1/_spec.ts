@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/lottery/amoe/nonce': { get: { summary: 'Issue AMOE nonce + signable challenge', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/credits': { get: { summary: 'Read AMOE credit balance for a wallet', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/submit': { post: { summary: 'Verify AMOE challenge signature and return attested onchain payload', responses: { '200': { description: 'OK' } } } },
-      '/v1/lottery/amoe/twitter-checkin': { post: { summary: 'Claim daily Twitter AMOE credit (100 credits/day, temporary)', responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/amoe/twitter-checkin': { post: { summary: 'Claim daily Twitter AMOE credit after server-verified tweet proof (100 credits/day)', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/xmtp-checkin': { post: { summary: 'Claim daily XMTP check-in AMOE credit (100 credits/day, temporary)', responses: { '200': { description: 'OK' } } } },
       '/v1/gauge/epoch': { get: { summary: 'Gauge epoch info', responses: { '200': { description: 'OK' } } } },
       '/v1/gauge/vaults': { get: { summary: 'Gauge whitelisted vaults + weights', responses: { '200': { description: 'OK' } } } },

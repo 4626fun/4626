@@ -6,6 +6,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv } from '../../api/__tests__/helpers'
+import type { HermitExecutionResult } from '../_lib/hermit/types'
+import type { TwitterCommandResult } from '../twitter/commands'
 
 type HermitCallShape = {
   commandText: string
@@ -28,11 +30,13 @@ type HermitCallShape = {
 }
 
 const isHermitUserAllowedMock = vi.fn(() => true)
-const executeHermitCommandMock = vi.fn(async (_params: HermitCallShape) => ({
-  kind: 'hermit' as const,
-  provider: 'pinata' as const,
-  reply: 'ok',
-}))
+const executeHermitCommandMock = vi.fn(
+  async (_params: HermitCallShape): Promise<HermitExecutionResult> => ({
+    kind: 'hermit',
+    provider: 'pinata',
+    reply: 'ok',
+  }),
+)
 const readUserPreferenceMock = vi.fn()
 const upsertUserPreferenceMock = vi.fn(async () => true)
 const listUserPreferencesMock = vi.fn(async () => [] as Array<{
@@ -44,17 +48,19 @@ const listUserPreferencesMock = vi.fn(async () => [] as Array<{
   updatedAt: string
 }>)
 const clearUserPreferencesMock = vi.fn(async () => true)
-const postTweetFromSystemMock = vi.fn(async () => ({
-  ok: true as const,
-  response: 'Tweet posted.\n- id: 1\n- url: https://x.com/i/web/status/1',
-  action: {
-    action: 'twitter.posted',
-    tweetId: '1',
-    tweetUrl: 'https://x.com/i/web/status/1',
-    text: 'cat laugh',
-    actor: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  },
-}))
+const postTweetFromSystemMock = vi.fn(
+  async (): Promise<TwitterCommandResult> => ({
+    ok: true,
+    response: 'Tweet posted.\n- id: 1\n- url: https://x.com/i/web/status/1',
+    action: {
+      action: 'twitter.posted',
+      tweetId: '1',
+      tweetUrl: 'https://x.com/i/web/status/1',
+      text: 'cat laugh',
+      actor: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    },
+  }),
+)
 let restoreEnv: (() => void) | null = null
 
 vi.mock('../_lib/hermit/policy.js', () => ({

@@ -182,6 +182,7 @@ export function AmoeEntryCard(props: {
   const [loadingCredits, setLoadingCredits] = useState(false)
   const [checkinBusy, setCheckinBusy] = useState(false)
   const [xmtpCheckinBusy, setXmtpCheckinBusy] = useState(false)
+  const [tweetProofUrl, setTweetProofUrl] = useState('')
   const [entryBusy, setEntryBusy] = useState(false)
   const [txHash, setTxHash] = useState<Hex | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -243,7 +244,11 @@ export function AmoeEntryCard(props: {
       setErrorMessage('Connect your wallet first')
       return
     }
-    openXPost()
+    const trimmedTweetUrl = tweetProofUrl.trim()
+    if (!trimmedTweetUrl) {
+      setErrorMessage('Paste your posted X link first')
+      return
+    }
     setCheckinBusy(true)
     setErrorMessage(null)
     setStatusMessage(null)
@@ -251,7 +256,7 @@ export function AmoeEntryCard(props: {
       const res = await apiFetch('/api/v1/lottery/amoe/twitter-checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ tweetUrl: trimmedTweetUrl }),
         withCredentials: true,
       })
       const json = parseJsonSafe<CheckinResponse>(await res.json().catch(() => null))
@@ -268,13 +273,14 @@ export function AmoeEntryCard(props: {
           ? `Daily X check-in complete (+${json.data.awardedCredits} points)`
           : 'Daily check-in already claimed today',
       )
+      setTweetProofUrl('')
       await refreshCredits()
     } catch (error: unknown) {
       setErrorMessage(toErrorMessage(error, 'X check-in failed'))
     } finally {
       setCheckinBusy(false)
     }
-  }, [protocolEntryMode, refreshCredits, walletAddress])
+  }, [protocolEntryMode, refreshCredits, tweetProofUrl, walletAddress])
 
   const handleXmtpCheckin = useCallback(async () => {
     if (!walletAddress && !protocolEntryMode) {
@@ -589,7 +595,7 @@ export function AmoeEntryCard(props: {
           ) : null}
           <button
             type="button"
-            onClick={() => void handleTwitterCheckin()}
+            onClick={() => openXPost()}
             disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy || xmtpCheckinBusy}
             className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
@@ -598,9 +604,32 @@ export function AmoeEntryCard(props: {
             ) : (
               <span className="inline-flex items-center justify-center gap-1.5">
                 <XIcon className="h-3.5 w-3.5" />{' '}
-                {hasEnoughForFloor ? 'Post on X for 100 points' : 'Earn more points'}
+                {hasEnoughForFloor ? 'Open X composer' : 'Open X'}
               </span>
             )}
+          </button>
+          <input
+            type="url"
+            value={tweetProofUrl}
+            onChange={(event) => setTweetProofUrl(event.target.value)}
+            placeholder="Paste posted tweet URL"
+            disabled={checkinBusy || entryBusy || xmtpCheckinBusy}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs text-zinc-100 placeholder:text-zinc-500 disabled:cursor-not-allowed disabled:opacity-50`}
+            aria-label="Tweet URL proof"
+          />
+          <button
+            type="button"
+            onClick={() => void handleTwitterCheckin()}
+            disabled={
+              (!walletAddress && !protocolEntryMode) ||
+              checkinBusy ||
+              entryBusy ||
+              xmtpCheckinBusy ||
+              tweetProofUrl.trim().length === 0
+            }
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            {checkinBusy ? 'Verifying tweet…' : 'Verify posted tweet for 100 points'}
           </button>
           <button
             type="button"
@@ -633,6 +662,9 @@ export function AmoeEntryCard(props: {
               {loadingCredits ? 'Refreshing…' : 'Refresh'}
             </button>
           ) : null}
+        </div>
+        <div className="text-[11px] text-zinc-500">
+          X reward now requires posting first, then verifying your tweet link.
         </div>
 
       {statusMessage ? <div className="text-xs text-emerald-300">{statusMessage}</div> : null}
