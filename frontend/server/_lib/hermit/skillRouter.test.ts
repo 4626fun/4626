@@ -180,6 +180,33 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('https://')
   })
 
+  it('/gmeow still replies when explicit dialect persistence fails', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'jajaja alpha cat.' }) }),
+    } as Response)
+
+    const persistPreference = vi.fn(async () => {
+      throw new Error('db unavailable')
+    })
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow 🇲🇽',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      roomId: '1043',
+      persistPreference,
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.reply).toContain('https://')
+    expect(result.reply).toContain('jajaja alpha cat.')
+    expect(persistPreference).toHaveBeenCalledTimes(1)
+  })
+
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',

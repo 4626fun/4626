@@ -26,6 +26,7 @@ import type {
   HermitUserPreferences,
 } from './types.js'
 import WebSocket from 'ws'
+import { logger } from '../infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -1239,6 +1240,7 @@ export async function executeHermitCommand(
     const localReply = `${meme.caption}\n${meme.url}`
     const explicitSignalSource = classifyExplicitSignal(args)
     let draft: PinataChatResult | null = null
+    let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
     try {
       draft = await runPinataDraft(
         buildPinataPromptForGmeow({
@@ -1248,7 +1250,11 @@ export async function executeHermitCommand(
           userPreferences,
         }),
       )
-    } catch {
+    } catch (error) {
+      fallbackReason = 'pinata_throw'
+      logger.warn('[hermit] /gmeow draft failed; using local fallback', {
+        error: error instanceof Error ? error.message : String(error),
+      })
       draft = null
     }
     if (explicitSignalSource) {
@@ -1257,11 +1263,25 @@ export async function executeHermitCommand(
     const parsed = draft?.text ? parseLooseJsonObject(draft.text) : null
     const draftedLineRaw =
       asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
-    const draftedLine = isLikelyPinataProviderErrorText(draftedLineRaw) ? '' : draftedLineRaw
+    const draftedLineLooksLikeProviderError = isLikelyPinataProviderErrorText(draftedLineRaw)
+    if (!fallbackReason && draftedLineLooksLikeProviderError) {
+      fallbackReason = 'pinata_provider_error_text'
+      logger.warn('[hermit] /gmeow provider returned fallback-worthy text; using local fallback', {
+        replyHead: draftedLineRaw.slice(0, 120),
+      })
+    }
+    const draftedLine = draftedLineLooksLikeProviderError ? '' : draftedLineRaw
     const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
+    const provider = draftedLine ? 'pinata' : 'local'
+    logger.info('[hermit] /gmeow resolved', {
+      provider,
+      fallbackReason,
+      hasAttachment: Boolean(attachment),
+      explicitSignalSource,
+    })
     const result: HermitExecutionResult = {
       kind: 'gmeow',
-      provider: draftedLine ? 'pinata' : 'local',
+      provider,
       meme,
       reply,
       ...(attachment ? { mediaAttachments: [attachment] } : {}),
