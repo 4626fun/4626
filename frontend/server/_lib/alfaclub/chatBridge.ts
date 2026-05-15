@@ -1876,6 +1876,10 @@ function isBenignWsCloseEvent(params: {
     .toLowerCase()
   const now = params.now ?? Date.now()
 
+  // Most noisy production closes come through as 1006 with an empty reason.
+  // Treat this as benign by default so warning channels stay actionable.
+  if (code === 1006 && !reason) return true
+
   const likelyHandshakeClose =
     (code === null || code === 1005 || code === 1006) &&
     (!reason || reason.includes('non-101') || reason.includes('network error'))

@@ -21,13 +21,15 @@ export const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f2
 export const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
 export const PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
 export const PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('004684670d284EF607E1B2424fcf8ccBda8ef828')
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
+export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
 
 const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
   MODULE_MISMATCH_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -52,17 +54,17 @@ export function normalizeCreatorVaultBatcherAddress(
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // v1.11.0 protocol cutover addresses.
-  registry: addr('a6216Ea21f4a4d190EdD453A51e4e015A44e60C4'),
-  lotteryManager: addr('04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8'),
-  vrfConsumer: addr('d62D561A48dCe00D9913206Bfce060F8960B57b5'),
+  // v1.11.1 protocol cutover addresses.
+  registry: addr('3f64087dc361Ad52300409E5873b26941D6418B6'),
+  lotteryManager: addr('5c0115589d7F4930A0dc93417aE409f44186f4E7'),
+  vrfConsumer: addr('E4AcDD5316EcF4D98301509968F0728EEDaaB68E'),
   // No live global PayoutRouterFactory is part of the current deploy flow.
   // PayoutRouter is deployed per creator through DeploymentBatcher; keep this
   // zero so stale no-code factory addresses fail closed if a legacy caller uses it.
   payoutRouterFactory: addr('0000000000000000000000000000000000000000'),
 
-  // Base↔Solana bridge integration for current v1.11.0 stack.
-  solanaBridgeAdapter: addr('3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5'),
+  // Base↔Solana bridge integration for current v1.11.1 stack.
+  solanaBridgeAdapter: addr('700b4BBAf965c013123bAd02a6562FBa487aC0f1'),
 
   // CREATE2 infra (canonical, chain-agnostic)
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
@@ -72,12 +74,12 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('Bd21c58f3D59c6E90a6bCCe462c68670F124a792'),
-  universalCreate2DeployerFromStore: addr('24c80676E03f4c160bfa769589280fE9f9509eCb'),
+  universalBytecodeStore: addr('9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69'),
+  universalCreate2DeployerFromStore: addr('F6538d7D18AfFe5057C6f109DBEd33c851A70c7E'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
-  vaultActivationBatcher: addr('681DC69607f6E8848a56819ce8C6d591E764187a'),
+  vaultActivationBatcher: addr('5036FB536f53b15307825eB2006B21E22f0F3193'),
   // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
   // sessions. It exposes both core/finalize split selectors, Base↔Solana
   // bridge routing, compatible CreatorOVault modules, and enabled OVault

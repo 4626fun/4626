@@ -257,7 +257,7 @@ async function withSessionRetry<T>(
           const now = Date.now()
           if (now - lastPoolAcquireTimeoutWarnAtMs >= POOL_ACQUIRE_TIMEOUT_WARN_THROTTLE_MS) {
             lastPoolAcquireTimeoutWarnAtMs = now
-            console.warn(
+            console.info(
               `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
             )
           }

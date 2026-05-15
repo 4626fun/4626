@@ -87,6 +87,13 @@ export type RelayUserTransaction = {
   chainId: number
 }
 
+export type RelayPaymentDetails = {
+  chainId: number | null
+  depository: `0x${string}` | null
+  currency: `0x${string}` | null
+  amount: string | null
+}
+
 export type RelayQuoteExtract = {
   /**
    * The Relay request id. Used by Relay's solver to match the deposit event
@@ -94,6 +101,10 @@ export type RelayQuoteExtract = {
    * polling (Relay's /intents/status?requestId=... endpoint).
    */
   requestId: `0x${string}` | null
+  /** Protocol v2 order id (same semantic id as requestId when present). */
+  orderId: `0x${string}` | null
+  /** Protocol v2 payment details used for request-bound deposits. */
+  paymentDetails: RelayPaymentDetails | null
   /**
    * The single on-chain transaction the user must submit (Part 1). Sending
    * this via wallet_sendCalls executes the deposit; Relay's solver handles
@@ -157,6 +168,8 @@ function asHexString(value: unknown): `0x${string}` | null {
 export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
   const extract: RelayQuoteExtract = {
     requestId: null,
+    orderId: null,
+    paymentDetails: null,
     userTransaction: null,
     feeUsd: null,
     raw,
@@ -198,12 +211,44 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
 
   // Fallback: protocol.v2.orderId. Older quote shapes used this instead of
   // steps[].requestId; carry it through as the requestId for diagnostics.
-  if (!extract.requestId) {
+  if (!extract.requestId || !extract.orderId || !extract.paymentDetails) {
     const protocol = obj.protocol as Record<string, unknown> | undefined
     const v2 = protocol?.v2 as Record<string, unknown> | undefined
     if (v2) {
       const v2OrderId = asHex32(v2.orderId)
-      if (v2OrderId) extract.requestId = v2OrderId
+      if (v2OrderId) {
+        if (!extract.requestId) extract.requestId = v2OrderId
+        extract.orderId = v2OrderId
+      }
+
+      const paymentRaw =
+        v2.paymentDetails && typeof v2.paymentDetails === 'object'
+          ? (v2.paymentDetails as Record<string, unknown>)
+          : null
+      if (paymentRaw) {
+        const depository = asAddress(
+          paymentRaw.depository ??
+            paymentRaw.depositoryAddress ??
+            paymentRaw.depositAddress ??
+            paymentRaw.to ??
+            null,
+        )
+        const currency = asAddress(paymentRaw.currency ?? paymentRaw.token ?? null)
+        const amount = asDecimalString(paymentRaw.amount)
+        const chainCandidate = paymentRaw.chainId ?? paymentRaw.chain ?? paymentRaw.destinationChainId
+        const chainId =
+          typeof chainCandidate === 'number' && Number.isFinite(chainCandidate)
+            ? chainCandidate
+            : typeof chainCandidate === 'string' && chainCandidate.trim()
+              ? Number(chainCandidate)
+              : null
+        extract.paymentDetails = {
+          chainId: Number.isFinite(chainId as number) ? (chainId as number) : null,
+          depository,
+          currency,
+          amount,
+        }
+      }
     }
   }
 

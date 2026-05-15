@@ -14,30 +14,30 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.11.0` protocol contract release target)
+### Current Live Infrastructure (`v1.11.1` protocol contract release target)
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0xa6216Ea21f4a4d190EdD453A51e4e015A44e60C4` |
-| CreatorOVaultFactory | `0x183b8825Bbe7d92be8F54F811EfF9C0dFe854F6E` |
-| VaultActivationBatcher | `0x681DC69607f6E8848a56819ce8C6d591E764187a` |
-| CreatorLotteryManager | `0x04CADE6FDf564A5005FF80930d8e8784cb1A7Cf8` |
-| CreatorVRFConsumerV2_5 | `0xd62D561A48dCe00D9913206Bfce060F8960B57b5` |
-| SolanaBridgeAdapter | `0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5` |
-| UniversalBytecodeStoreV2 | `0xBd21c58f3D59c6E90a6bCCe462c68670F124a792` |
-| UniversalCreate2DeployerFromStore | `0x24c80676E03f4c160bfa769589280fE9f9509eCb` |
-| CreatorOVaultCoreModule | `0x7818AA425a22D9892b33773ccF60CA22D07446E0` |
-| CreatorOVaultStrategiesModule | `0x8370c2190e8FB9f9A82D213e1f00240374F1Fd9D` |
-| CreatorOVaultAdminModule | `0x493FdDC8dd670EDaCC9b8C94842AfFedbf6E31F7` |
-| DeploymentBatcher | `0x271Ab2C53D79d52ddB14506a44133Fe3FA395332` |
-| DeploymentBatcherPhase2Module | `0x81D70248eB4276a6Db7E7DaB9c3B202e52c87593` |
-| DeploymentBatcherPhase3Helper | `0xC2270DA64Cb6ab39e9361926529AA8462c7d3770` |
-| DeploymentBatcherUniV4Helper | `0xbE953c5Da2Cf31C22087F528615bB8e2079b33A4` |
-| DeploymentBatcherUtilsHelper | `0x9D811694842D3d67Af243bc140961fb9a9ad4040` |
+| CreatorRegistry | `0x3f64087dc361Ad52300409E5873b26941D6418B6` |
+| CreatorOVaultFactory | `0x09a2fd817F30D2599fb13520d06751259b6AdcFE` |
+| VaultActivationBatcher | `0x5036FB536f53b15307825eB2006B21E22f0F3193` |
+| CreatorLotteryManager | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
+| CreatorVRFConsumerV2_5 | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
+| SolanaBridgeAdapter | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
+| UniversalBytecodeStoreV2 | `0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69` |
+| UniversalCreate2DeployerFromStore | `0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E` |
+| CreatorOVaultCoreModule | `0x5f6b5E9044179BF3C4d2f38AB5EC5c60b4B6657b` |
+| CreatorOVaultStrategiesModule | `0x6048eC7103Ce9090Ad3B650931A6113a5369A164` |
+| CreatorOVaultAdminModule | `0xDBC68d78D2961e4d2ca156D9F0e489B149cb7d73` |
+| DeploymentBatcher | `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` |
+| DeploymentBatcherPhase2Module | `0x1A806550070d42d18ad5C5325A8b90BeD647E7BB` |
+| DeploymentBatcherPhase3Helper | `0x809a20c6655D75C1d408dEd02a6EAB705b7b5153` |
+| DeploymentBatcherUniV4Helper | `0xD7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b` |
+| DeploymentBatcherUtilsHelper | `0x158C9925BbC53295675a1b0BB489c7Cfba2cfa73` |
 
 Notes:
-- Shared/global and split Phase-1 infra were redeployed in the v1.11.0 protocol cutover.
-- The repo's canonical release target is `v1.11.0` for the active protocol contract stack used by user vault deployments.
+- Shared/global and split Phase-1 infra were redeployed in the v1.11.1 protocol cutover.
+- The repo's canonical release target is `v1.11.1` for the active protocol contract stack used by user vault deployments.
 - `DeploymentBatcherPhase2Module`, `DeploymentBatcherPhase3Helper`, `DeploymentBatcherUniV4Helper`, and `DeploymentBatcherUtilsHelper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

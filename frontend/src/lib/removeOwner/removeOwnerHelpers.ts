@@ -8,7 +8,6 @@ const ENTRY_POINT_USER_OPERATION_EVENT_TOPIC =
 const RELAY_NATIVE_DEPOSIT_EVENT_TOPIC =
   '0x8032066556caf3967d8fec4ad22a2d9e1e9576556b2903a0fcd5b1fd201e3477' as const
 const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
-const RELAY_DEPOSIT_NATIVE_SELECTOR = '0x49290c1c'
 const BASE_USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913'
 const ETHEREUM_USDC = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
 const ARBITRUM_USDC = '0xaf88d065e77c8cc2239327c5edb3a432268e5831'
@@ -36,7 +35,15 @@ export type Eip5792Call = {
  */
 export type PreviewRelayFlow = {
   requestId: `0x${string}`
+  orderId: `0x${string}` | null
+  paymentDetails: {
+    chainId: number | null
+    depository: `0x${string}`
+    currency: `0x${string}`
+    amount: string
+  } | null
   userCall: Eip5792Call
+  userCallSource: 'quote_tx' | 'built_from_payment_details'
   feeUsd: string | null
 }
 

@@ -87,7 +87,7 @@ export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 export VITE_DEV_SERVER_HOST="localhost"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
-export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.11.0-dryrun}"
+export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.11.1-dryrun}"
 
 ANVIL_PID=""
 DEV_REDIRECT_PID=""
