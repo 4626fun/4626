@@ -309,7 +309,7 @@ The reconcile endpoint is idempotent by `workflow + checkpointKey`. If `KEEPER_S
 Run the owned Solana orchestrator sidecar:
 
 ```bash
-pnpm -C cre start:solana-orchestrator
+pnpm -C kpr start:solana-orchestrator
 ```
 
 Required sidecar env:

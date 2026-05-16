@@ -430,7 +430,7 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
     });
     content = content.replace(/\]\(cre\/README\.md\)/g, () => {
       fileRewrites++;
-      return '](/operations/cre/)';
+      return '](/operations/kpr/)';
     });
 
     // Pattern 1e: AGENTS.md is not part of docs-site content; link to GitHub.

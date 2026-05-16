@@ -1216,7 +1216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             error:
               `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
               'Add an active creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON, then retry. ' +
-              'If you are bootstrapping Solana side, run `pnpm -C cre run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
+              'If you are bootstrapping Solana side, run `pnpm -C kpr run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
               `ALPHA_VAULT_PROGRAM_ID, and DEPOSIT_ACCOUNTS_JSON set.${supersededHint}`,
           } satisfies ApiEnvelope<never>)
         }

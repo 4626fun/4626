@@ -15,44 +15,44 @@ updates:
     open-pull-requests-limit: 8
 
   - package-ecosystem: "npm"
-    directory: "/cre"
+    directory: "/kpr"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
 
-  # CRE Chainlink workflows: Bun lockfiles (text `bun.lock`); dirs without a lockfile rely on CI install only.
+  # KPR Chainlink workflows: Bun lockfiles (text `bun.lock`); dirs without a lockfile rely on CI install only.
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows"
+    directory: "/kpr/kpr-workflows"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
 
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows/ajna-bucket-manager"
+    directory: "/kpr/kpr-workflows/ajna-bucket-manager"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
 
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows/cca-finalization"
+    directory: "/kpr/kpr-workflows/cca-finalization"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
 
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows/keepr-action-queue"
+    directory: "/kpr/kpr-workflows/keepr-action-queue"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
 
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows/payout-integrity"
+    directory: "/kpr/kpr-workflows/payout-integrity"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2
 
   - package-ecosystem: "bun"
-    directory: "/cre/cre-workflows/vault-keeper"
+    directory: "/kpr/kpr-workflows/vault-keeper"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 2

@@ -248,8 +248,8 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
 
   return (
     <>
-      <div className="hidden divide-y divide-zinc-800/70 sm:block">
-        <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 px-4 py-2.5 app-meta-value text-zinc-600">
+      <div className="hidden space-y-2 px-3 pb-3 sm:block">
+        <div className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] gap-3 px-2 py-1.5 app-meta-value text-zinc-600">
           <div>Token</div>
           <div className="text-right">Price</div>
           <div className="text-right">Balance</div>
@@ -261,16 +261,19 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
           const price = typeof token.price === 'number' ? token.price : null
           const tokenLogoSrc = buildPortfolioImageProxyUrl(token.logoUrl)
           return (
-            <div key={`${holding.coinType}:${token.id}`} className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] items-center gap-3 px-4 py-3">
+            <div
+              key={`${holding.coinType}:${token.id}`}
+              className="grid grid-cols-[minmax(0,1fr)_92px_92px_104px] items-center gap-3 rounded-lg border border-white/8 bg-black/20 px-3 py-2.5 transition-colors hover:bg-white/[0.03]"
+            >
               <div className="flex min-w-0 items-center gap-3">
                 {tokenLogoSrc ? (
-                  <img src={tokenLogoSrc} alt="" className="h-7 w-7 shrink-0 rounded-full border border-white/10" />
+                  <img src={tokenLogoSrc} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
                 ) : (
-                  <div className="h-7 w-7 shrink-0 rounded-full border border-white/10 bg-white/5" />
+                  <div className="h-8 w-8 shrink-0 rounded-full border border-white/10 bg-white/5" />
                 )}
                 <div className="min-w-0">
                   <div className="flex min-w-0 items-center gap-2">
-                    <div className="truncate text-[12px] text-white">{name}</div>
+                    <div className="truncate text-[12px] font-medium text-white">{name}</div>
                     <span
                       className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${
                         holding.coinType === 'CREATOR'
@@ -284,22 +287,25 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
                   <div className="app-meta-value truncate text-zinc-600">{shortAddr(String(token.id || ''))}</div>
                 </div>
               </div>
-              <div className="text-right text-[12px] tabular-nums text-zinc-200">{price != null ? formatUsd(price) : '--'}</div>
-              <div className="text-right text-[12px] tabular-nums text-zinc-200">{formatAmount(token.amount)}</div>
-              <div className="text-right text-[12px] tabular-nums text-zinc-200">{formatUsd(token.usdValue)}</div>
+              <div className="text-right text-[12px] tabular-nums text-zinc-300">{price != null ? formatUsd(price) : '--'}</div>
+              <div className="text-right text-[12px] tabular-nums text-zinc-300">{formatAmount(token.amount)}</div>
+              <div className="text-right text-[12px] font-medium tabular-nums text-zinc-100">{formatUsd(token.usdValue)}</div>
             </div>
           )
         })}
       </div>
 
-      <div className="divide-y divide-zinc-800/70 sm:hidden">
+      <div className="space-y-2 px-3 pb-3 sm:hidden">
         {items.map((holding) => {
           const token = holding.token
           const name = token.symbol || token.name || holding.coin.symbol || holding.coin.name || token.id
           const price = typeof token.price === 'number' ? token.price : null
           const tokenLogoSrc = buildPortfolioImageProxyUrl(token.logoUrl)
           return (
-            <div key={`mobile:${holding.coinType}:${token.id}`} className="flex items-center gap-3 px-4 py-3">
+            <div
+              key={`mobile:${holding.coinType}:${token.id}`}
+              className="flex items-center gap-3 rounded-lg border border-white/8 bg-black/20 px-3 py-2.5 transition-colors hover:bg-white/[0.03]"
+            >
               {tokenLogoSrc ? (
                 <img src={tokenLogoSrc} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
               ) : (
@@ -316,7 +322,7 @@ function HoldingsTable(props: { items: Holding[]; loading: boolean; emptyLabel: 
                   {price != null ? formatUsd(price) : '--'} · {formatAmount(token.amount)}
                 </div>
               </div>
-              <div className="shrink-0 text-right text-[13px] tabular-nums text-zinc-200">{formatUsd(token.usdValue)}</div>
+              <div className="shrink-0 text-right text-[13px] font-medium tabular-nums text-zinc-100">{formatUsd(token.usdValue)}</div>
             </div>
           )
         })}

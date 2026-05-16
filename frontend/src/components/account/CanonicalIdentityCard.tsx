@@ -26,11 +26,15 @@ export function CanonicalIdentityCard({
   onToggle,
   menuOpen,
   variant = 'nav',
+  activeNetworkLabel: _activeNetworkLabel = 'Base',
+  activeNetworkUsd = null,
 }: {
   identity: CanonicalIdentity
   onToggle: () => void
   menuOpen: boolean
   variant?: 'nav' | 'compact'
+  activeNetworkLabel?: string | null
+  activeNetworkUsd?: number | null
 }) {
   const cswBasename = useBasenameForAddress(identity.cswAddress)
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
@@ -46,6 +50,31 @@ export function CanonicalIdentityCard({
 
   const avatarAddress = identity.cswAddress ?? identity.externalEoaAddress ?? identity.privyEmbeddedAddress
   const avatarSize = variant === 'compact' ? 20 : 24
+
+  if (variant === 'nav') {
+    return (
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="group flex min-h-[50px] items-center gap-2.5 rounded-2xl bg-white/[0.02] px-2.5 py-1.5 text-left transition-colors hover:bg-white/[0.045]"
+      >
+        <span
+          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-black/35"
+          aria-hidden="true"
+        >
+          <span className="h-3.5 w-3.5 rounded-[3px] bg-[#1C3CFF]" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[12px] font-semibold tabular-nums text-white">
+            {formatUsdCompact(activeNetworkUsd)}
+          </span>
+        </span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-500 transition-colors group-hover:text-zinc-300" />
+      </button>
+    )
+  }
 
   return (
     <button
@@ -264,7 +293,7 @@ export function CanonicalIdentityDropdown({
                 variant="muted"
                 className="text-xs text-zinc-300"
               />
-              <div className="text-[10px] text-zinc-600 truncate">Fallback / recovery wallet</div>
+              <div className="text-[10px] text-zinc-600 truncate">Primary owner wallet for CSW owner actions</div>
             </div>
           </div>
         </div>
@@ -277,9 +306,12 @@ export function CanonicalIdentityDropdown({
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             External signer
           </div>
-          <div className="mt-1 text-xs text-zinc-300">Connect an external wallet</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5 truncate" title="Optional — use Rabby / MetaMask / Coinbase Wallet as a fallback wallet">
-            Optional fallback wallet (Rabby / MetaMask / Coinbase Wallet)
+          <div className="mt-1 text-xs text-zinc-300">Connect your owner wallet extension</div>
+          <div
+            className="text-[10px] text-zinc-600 mt-0.5 truncate"
+            title="You are already signed in to 4626. Next, connect your external owner wallet so you can add the 4626 embedded signer to your Zora CSW."
+          >
+            Required for most users: connect your external owner wallet (Rabby / MetaMask / Coinbase Wallet) to add the 4626 signer to your Zora CSW.
           </div>
         </button>
       ) : null}
@@ -392,4 +424,13 @@ function formatShort(value: string | null | undefined): string {
   if (!value) return ''
   if (value.length <= 10) return value
   return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
+function formatUsdCompact(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '--'
+  const amount = Number(value)
+  if (amount >= 1_000_000_000) return `$${(amount / 1_000_000_000).toFixed(2)}B`
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(2)}M`
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(2)}K`
+  return `$${amount.toFixed(2)}`
 }

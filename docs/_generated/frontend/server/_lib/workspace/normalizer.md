@@ -52,7 +52,7 @@ Defined in: [server/\_lib/workspace/normalizer.ts:124](https://github.com/wenaki
 
 ###### decision
 
-[`RuntimeDecision`](../cre/runtimeBridge.md#runtimedecision)
+[`RuntimeDecision`](../kpr/runtimeBridge.md#runtimedecision)
 
 ###### enqueueAction?
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/workspace/normalizer.ts:48](https://github.com/wenakit
 
 ###### record
 
-[`RuntimeRecord`](../cre/runtimeBridge.md#runtimerecord)
+[`RuntimeRecord`](../kpr/runtimeBridge.md#runtimerecord)
 
 #### Returns
 

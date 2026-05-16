@@ -46,11 +46,11 @@ This rollout does not introduce a separate secure-agent service. The control pla
 ### Automation, scheduling, and execution
 
 - Local runner:
-  - [`cre/runner.ts`](../../cre/runner.ts)
+  - [`kpr/runner.ts`](../../kpr/runner.ts)
 - Main workflow:
-  - [`cre/workflows/4626.workflow.ts`](../../cre/workflows/4626.workflow.ts)
+  - [`kpr/workflows/4626.workflow.ts`](../../kpr/workflows/4626.workflow.ts)
 - Additional workflow packages:
-  - [`cre/cre-workflows`](../../cre/cre-workflows)
+  - [`kpr/kpr-workflows`](../../kpr/kpr-workflows)
 - Keepr queue APIs:
   - [`frontend/api/_handlers/keepr/actions/_enqueue.ts`](../../frontend/api/_handlers/keepr/actions/_enqueue.ts)
   - [`frontend/api/_handlers/keepr/actions/_pending.ts`](../../frontend/api/_handlers/keepr/actions/_pending.ts)
@@ -81,7 +81,7 @@ Signing and execution split across two distinct tracks — see [4626 Connection 
   - [`frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts`](../../frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts)
   - [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts)
 - Payout processor:
-  - [`cre/actions/payout-router-harvest.action.ts`](../../cre/actions/payout-router-harvest.action.ts)
+  - [`kpr/actions/payout-router-harvest.action.ts`](../../kpr/actions/payout-router-harvest.action.ts)
 
 ### Outbound remote-AI call sites
 

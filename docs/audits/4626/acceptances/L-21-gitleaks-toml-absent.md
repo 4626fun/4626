@@ -36,7 +36,7 @@ paths = [
   # ...
   '''^frontend/api/__tests__/''',
   '''^frontend/src/.+\.test\.tsx?$''',
-  '''^cre/tests/''',
+  '''^kpr/tests/''',
   # ...
 ]
 ```
@@ -74,7 +74,7 @@ paths = [
   '''^frontend/src/.+\.test\.tsx?$''',
   '''^frontend/server/.+\.test\.ts$''',
   '''^frontend/server/.+/__tests__/''',
-  '''^cre/tests/''',
+  '''^kpr/tests/''',
 ]
 ```
 
@@ -114,7 +114,7 @@ Two workflows invoke gitleaks on every PR and push to `main`:
    gitleaks 8.x downloaded from the official GitHub release tarball.
    SHA-256 verification was added in Sprint 7 L-23. Invoked with
    `--config gitleaks.toml`.
-2. `.github/workflows/cre-workflows.yml` lines 99–114 — invoked
+2. `.github/workflows/kpr-workflows.yml` lines 99–114 — invoked
    without `--config`, which applies only the built-in default rules
    (no allowlist). Retained as a belt-and-braces second gate.
 
@@ -128,7 +128,7 @@ same scoped allowlist applies on local commits.
 - Any future PR that broadens the global `[allowlist].paths` to cover
   a test directory — reinstating the flaw L-21 flagged — is visible
   as a diff to `gitleaks.toml`.
-- The `cre-workflows.yml` default-config invocation remains as a
+- The `kpr-workflows.yml` default-config invocation remains as a
   second independent check with no project allowlist.
 - The pinned gitleaks version (Sprint 7 L-23) prevents a registry
   substitution from silently altering which paths the config
@@ -139,6 +139,6 @@ same scoped allowlist applies on local commits.
 - Phase 6 SEV-607
 - Codex PR comment: https://github.com/wenakita/4626/pull/329#discussion_r3129607573
 - `.github/workflows/security-scanning.yml` (gitleaks job with `--config gitleaks.toml`)
-- `.github/workflows/cre-workflows.yml` lines 99–114 (default-config run)
+- `.github/workflows/kpr-workflows.yml` lines 99–114 (default-config run)
 - Sprint 7 commit `20df147` — L-23 gitleaks SHA-256 verification
 - Sprint 8 commit `395ae9b` + `scripts/lint-staged-gitleaks.sh` — pre-commit hook

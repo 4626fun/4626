@@ -6,7 +6,7 @@
 --   - L-11 (4626-359): duplicate tracker for M-31 (see acceptance doc)
 --
 -- Previously these tables were created by
---   - `frontend/server/_lib/cre/runtimeSchema.ts`
+--   - `frontend/server/_lib/kpr/runtimeSchema.ts`
 --   - `frontend/server/_lib/infra/durableRateLimit.ts`
 -- at application boot via `CREATE TABLE IF NOT EXISTS ...`. Application-
 -- time DDL is invisible to migration tooling, can drift across

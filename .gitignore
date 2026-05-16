@@ -1,6 +1,6 @@
 # Dependencies
 **/node_modules/
-/cre/package-lock.json
+/kpr/package-lock.json
 
 # Docs - ignore drafts but keep source and generated
 docs/_drafts/
@@ -30,7 +30,7 @@ broadcast/
 
 # CRE build artifacts
 *.wasm
-.cre/
+.kpr/
 .cre_build_tmp*
 
 # Rust build artifacts
@@ -181,7 +181,7 @@ apps/docs-site/.docusaurus/
 apps/docs-site/.cache/
 
 bun.lock
-!cre/cre-workflows/**/bun.lock
+!kpr/kpr-workflows/**/bun.lock
 # Local audit outputs (generated ad hoc)
 docs/audits/codex/security-findings.md
 docs/audits/codex/security-second-pass.csv
@@ -206,7 +206,7 @@ docs/perplexity/perplexity-skills/4626-agent-runtime-guardrails/SKILL.md
 docs/perplexity/perplexity-skills/4626-integrations/SKILL.md
 docs/perplexity/perplexity-skills/4626-onchain-vaults/SKILL.md
 docs/perplexity/perplexity-skills/4626-product-frontend/SKILL.md
-docs/perplexity/perplexity-skills/4626-solana-cre/SKILL.md
+docs/perplexity/perplexity-skills/4626-solana-kpr/SKILL.md
 docs/perplexity/perplexity-skills/4626-uniswap-ai/SKILL.md
 docs/audits/eip170_handoff_prompt.md
 ZORB3D-pbr.glb

@@ -776,7 +776,7 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
 
     if (envBool('SOLANA_AUTO_POOL', false)) {
       const repoRoot = String(process.env.KPR_REPO_ROOT ?? process.env.REPO_ROOT ?? '').trim()
-      const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
+      const keeperScriptsDir = repoRoot ? `${repoRoot}/kpr` : ''
       const strictSolPair = readStrictSolPairEnabled()
       const configuredQuoteMint = String(process.env.SOLANA_POOL_QUOTE_MINT ?? SOLANA_NATIVE_MINT).trim()
       const quoteMint = strictSolPair ? SOLANA_NATIVE_MINT : configuredQuoteMint
@@ -1024,11 +1024,11 @@ async function handleSetupCreator(req: IncomingMessage, res: ServerResponse): Pr
 
   const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/kpr` : ''
   if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or kpr/ directory not found.',
     })
   }
 
@@ -1120,11 +1120,11 @@ async function handleCreatePool(req: IncomingMessage, res: ServerResponse): Prom
 
   const repoRoot = String(process.env.KPR_REPO_ROOT ?? '').trim()
     || String(process.env.REPO_ROOT ?? '').trim()
-  const keeperScriptsDir = repoRoot ? `${repoRoot}/cre` : ''
+  const keeperScriptsDir = repoRoot ? `${repoRoot}/kpr` : ''
   if (!keeperScriptsDir || !existsSync(keeperScriptsDir)) {
     return json(res, 503, {
       success: false,
-      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or cre/ directory not found.',
+      error: 'KPR_REPO_ROOT (or REPO_ROOT) is not configured or kpr/ directory not found.',
     })
   }
 

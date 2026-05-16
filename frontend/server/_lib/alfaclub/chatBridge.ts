@@ -67,6 +67,8 @@ const SOCKET_BACKOFF_INITIAL_MS = 1_000
 const SOCKET_BACKOFF_CAP_MS = 60_000
 const LOG_ROLLUP_WINDOW_MS = 60_000
 const WS_CLOSE_CHURN_WINDOW_MS = 60_000
+const WS_BENIGN_ESCALATION_WINDOW_MS = 10 * 60_000
+const WS_BENIGN_ESCALATION_ROLLUP_WINDOWS = 5
 const WS_CLOSE_CHURN_THRESHOLD = 5
 const FIRST_TICK_RECENT_COMMAND_WINDOW_MS = 60_000
 
@@ -1548,6 +1550,10 @@ const bridgeAuthState = {
   wsErrorLastMessage: null as string | null,
   wsErrorLastCode: null as string | null,
   wsErrorLastErrno: null as string | null,
+  wsErrorLastHandshakeStatus: null as number | null,
+  wsErrorLastPhase: null as 'handshake' | 'connected' | 'unknown' | null,
+  wsErrorLastUpstream: null as string | null,
+  wsBenignWindowByRoom: new Map<string, number[]>(),
   wsCloseAtMs: [] as number[],
   wsCloseChurnLastLoggedAt: Number.NEGATIVE_INFINITY,
   cfChallengeRepeats: 0,
@@ -1558,6 +1564,14 @@ const bridgeAuthState = {
   cfChallengeLastCfRay: null as string | null,
   cfChallengeLastHtmlErrorCode: null as string | null,
   cfChallengeSustainedFlagged: false,
+}
+
+function recordBenignWsErrorWindow(params: { roomId: string; now: number }): { windowsInLast10m: number } {
+  const previous = bridgeAuthState.wsBenignWindowByRoom.get(params.roomId) ?? []
+  const recent = previous.filter((value) => params.now - value <= WS_BENIGN_ESCALATION_WINDOW_MS)
+  recent.push(params.now)
+  bridgeAuthState.wsBenignWindowByRoom.set(params.roomId, recent)
+  return { windowsInLast10m: recent.length }
 }
 
 function isFutureIsoTimestamp(value: string | null | undefined): boolean {
@@ -1856,6 +1870,9 @@ function flushWsErrorRollup(): void {
       lastMessage: bridgeAuthState.wsErrorLastMessage,
       code: bridgeAuthState.wsErrorLastCode,
       errno: bridgeAuthState.wsErrorLastErrno,
+      handshakeStatus: bridgeAuthState.wsErrorLastHandshakeStatus,
+      phase: bridgeAuthState.wsErrorLastPhase,
+      upstream: bridgeAuthState.wsErrorLastUpstream,
     })
   }
   bridgeAuthState.wsErrorRepeats = 0
@@ -1865,6 +1882,9 @@ function flushWsErrorRollup(): void {
   bridgeAuthState.wsErrorLastMessage = null
   bridgeAuthState.wsErrorLastCode = null
   bridgeAuthState.wsErrorLastErrno = null
+  bridgeAuthState.wsErrorLastHandshakeStatus = null
+  bridgeAuthState.wsErrorLastPhase = null
+  bridgeAuthState.wsErrorLastUpstream = null
 }
 
 function warnWsError(params: {
@@ -1875,6 +1895,9 @@ function warnWsError(params: {
   syscall?: string | null
   address?: string | null
   port?: number | null
+  handshakeStatus?: number | null
+  phase?: 'handshake' | 'connected' | 'unknown'
+  upstream?: string | null
   now?: number
 }): void {
   const now = params.now ?? Date.now()
@@ -1895,6 +1918,9 @@ function warnWsError(params: {
     bridgeAuthState.wsErrorLastMessage = truncated
     bridgeAuthState.wsErrorLastCode = normalizedCode || null
     bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
+    bridgeAuthState.wsErrorLastHandshakeStatus = params.handshakeStatus ?? null
+    bridgeAuthState.wsErrorLastPhase = params.phase ?? 'unknown'
+    bridgeAuthState.wsErrorLastUpstream = params.upstream ?? null
     return
   }
 
@@ -1904,8 +1930,19 @@ function warnWsError(params: {
   bridgeAuthState.wsErrorLastMessage = truncated
   bridgeAuthState.wsErrorLastCode = normalizedCode || null
   bridgeAuthState.wsErrorLastErrno = normalizedErrno || null
+  bridgeAuthState.wsErrorLastHandshakeStatus = params.handshakeStatus ?? null
+  bridgeAuthState.wsErrorLastPhase = params.phase ?? 'unknown'
+  bridgeAuthState.wsErrorLastUpstream = params.upstream ?? null
 
-  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
+  const benignWindowStats = benign
+    ? recordBenignWsErrorWindow({ roomId: params.roomId, now })
+    : { windowsInLast10m: 0 }
+  const benignShouldEscalate = benign && benignWindowStats.windowsInLast10m >= WS_BENIGN_ESCALATION_ROLLUP_WINDOWS
+  const emit = benignShouldEscalate
+    ? logger.warn.bind(logger)
+    : benign
+      ? logger.info.bind(logger)
+      : logger.warn.bind(logger)
   emit('[alfaclub-chat] ws_error', {
     roomId: params.roomId,
     repeats: 1,
@@ -1916,6 +1953,11 @@ function warnWsError(params: {
     syscall: params.syscall ?? null,
     address: params.address ?? null,
     port: params.port ?? null,
+    handshakeStatus: params.handshakeStatus ?? null,
+    phase: params.phase ?? 'unknown',
+    upstream: params.upstream ?? null,
+    benignEscalated: benignShouldEscalate,
+    benignWindowsInLast10m: benignWindowStats.windowsInLast10m,
   })
   bridgeAuthState.wsErrorLastLoggedAt = now
 
@@ -1957,6 +1999,14 @@ function isBenignWsError(params: {
   )
 }
 
+function parseHandshakeStatusFromMessage(message: string): number | null {
+  const direct = /\bunexpected server response:\s*(\d{3})\b/i.exec(message)
+  if (direct) return Number(direct[1])
+  const htmlError = /\bhtml-error-code=(\d{3})\b/i.exec(message)
+  if (htmlError) return Number(htmlError[1])
+  return null
+}
+
 function extractWsErrorContext(event: unknown): {
   message: string
   code: string | null
@@ -1964,6 +2014,7 @@ function extractWsErrorContext(event: unknown): {
   syscall: string | null
   address: string | null
   port: number | null
+  handshakeStatus: number | null
 } {
   const root = event && typeof event === 'object' ? (event as Record<string, unknown>) : null
   const nestedError =
@@ -2006,7 +2057,12 @@ function extractWsErrorContext(event: unknown): {
       : typeof root?.port === 'number'
         ? root.port
         : null
-  return { message, code, errno, syscall, address, port }
+  const handshakeStatus = typeof root?.status === 'number'
+    ? root.status
+    : typeof nestedError?.status === 'number'
+      ? nestedError.status
+      : parseHandshakeStatusFromMessage(message)
+  return { message, code, errno, syscall, address, port, handshakeStatus }
 }
 
 function isBenignWsCloseEvent(params: {
@@ -2330,13 +2386,16 @@ function ensureLiveCommandSocket(params: {
   const wsUrl = new URL(params.websocketUrl)
   wsUrl.searchParams.set('TOKEN', params.jwt)
   wsUrl.searchParams.set('_k', '0')
+  const upstream = wsUrl.host || null
 
   const socket = new WebSocketCtor(wsUrl.toString())
   bridgeState.liveSocket = socket
   bridgeState.liveSocketJwt = params.jwt
   bridgeState.liveSocketRoomId = params.roomId
+  let socketOpened = false
 
   const onOpen = (): void => {
+    socketOpened = true
     resetSocketBackoff()
     logger.info('[alfaclub-chat] ws_open', {
       roomId: params.roomId,
@@ -2424,6 +2483,9 @@ function ensureLiveCommandSocket(params: {
       syscall: wsErrorContext.syscall,
       address: wsErrorContext.address,
       port: wsErrorContext.port,
+      handshakeStatus: wsErrorContext.handshakeStatus,
+      phase: socketOpened ? 'connected' : 'handshake',
+      upstream,
     })
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
@@ -3304,6 +3366,10 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.wsErrorLastMessage = null
   bridgeAuthState.wsErrorLastCode = null
   bridgeAuthState.wsErrorLastErrno = null
+  bridgeAuthState.wsErrorLastHandshakeStatus = null
+  bridgeAuthState.wsErrorLastPhase = null
+  bridgeAuthState.wsErrorLastUpstream = null
+  bridgeAuthState.wsBenignWindowByRoom.clear()
   bridgeAuthState.wsCloseAtMs = []
   bridgeAuthState.wsCloseChurnLastLoggedAt = Number.NEGATIVE_INFINITY
   if (bridgeAuthState.cfChallengeFlushTimer) {

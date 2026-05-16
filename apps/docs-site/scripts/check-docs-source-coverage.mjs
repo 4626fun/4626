@@ -102,9 +102,9 @@ function isCoveredByManualSource(filePath) {
 }
 
 function isCoveredByCreSource(filePath) {
-  if (!filePath.startsWith('cre/')) return false;
+  if (!filePath.startsWith('kpr/')) return false;
   if (filePath.includes('/node_modules/')) return false;
-  if (filePath.includes('/cre-workflows/') && filePath.includes('/node_modules/')) return false;
+  if (filePath.includes('/kpr-workflows/') && filePath.includes('/node_modules/')) return false;
   if (filePath.includes('/patches/')) return false;
   if (filePath.includes('/dist/')) return false;
   return true;

@@ -7,8 +7,8 @@ echo "== forge test (summary) =="
 forge test --summary
 
 echo "== CRE workflow layout + typecheck =="
-bash cre/cre-workflows/scripts/validate-workflow-layout.sh
-bash cre/cre-workflows/scripts/typecheck-workflows.sh
+bash kpr/kpr-workflows/scripts/validate-workflow-layout.sh
+bash kpr/kpr-workflows/scripts/typecheck-workflows.sh
 
 echo "== no TODO/FIXME markers (first-party paths) =="
 bash frontend/scripts/check-no-todo-markers.sh
@@ -43,7 +43,7 @@ fi
 echo "== pnpm audit (report only; does not fail script) =="
 pnpm audit || true
 ( cd frontend && pnpm audit ) || true
-( cd cre && pnpm audit ) || true
+( cd kpr && pnpm audit ) || true
 ( cd apps/docs-site && pnpm audit ) || true
 
 echo ""

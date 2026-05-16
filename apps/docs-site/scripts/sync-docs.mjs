@@ -4,7 +4,7 @@
  * Merges documentation from multiple first-party sources:
  * 1. docs/              - Manual documentation (source of truth)
  * 2. docs/_generated/   - Auto-generated API docs (forge doc, typedoc)
- * 3. cre/               - automation workflows (README + docs)
+ * 3. kpr/               - automation workflows (README + docs)
  * 4. frontend/docs/     - Frontend design docs & guides
  * 5. frontend/README.md - Frontend overview
  * 6. repo root docs      - Root README/security/deployment docs
@@ -58,9 +58,9 @@ const SOURCES = {
     dir: path.join(REPO_ROOT, 'cre'),
     destPrefix: 'operations/cre',
     exclude: [
-      'node_modules/**', 'cre-workflows/**/node_modules/**',
+      'node_modules/**', 'kpr-workflows/**/node_modules/**',
       '**/*.ts', '**/*.js', '**/*.mjs', '**/*.json', '**/*.yaml', '**/*.yml',
-      '**/*.env*', '**/patches/**', '**/dist/**', '**/.cre/**', '**/*.wasm',
+      '**/*.env*', '**/patches/**', '**/dist/**', '**/.kpr/**', '**/*.wasm',
     ],
     label: 'Automation workflows',
   },
@@ -407,7 +407,7 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   if (sourceType === 'manual') {
     ensureManualMetadata(parsed.data, relativePath, sourceMetadata);
   } else if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
-    if (sourceType === 'cre') parsed.data.synced_from = 'cre/';
+    if (sourceType === 'cre') parsed.data.synced_from = 'kpr/';
     if (sourceType === 'frontendDocs') parsed.data.synced_from = 'frontend/';
     if (sourceType === 'rootMeta') parsed.data.synced_from = 'repo-root';
     if (sourceType === 'runtimeSkills') parsed.data.synced_from = 'script/agent-runtime/skills/';

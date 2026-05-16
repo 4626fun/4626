@@ -25,7 +25,7 @@ Please report vulnerabilities that could affect user funds, protocol accounting,
 - `deployments/`
 - `script/`
 - `frontend/` (including `frontend/api/` and `frontend/server/`)
-- `cre/` automation workflows and keeper logic
+- `kpr/` automation workflows and keeper logic
 - `supabase/` and `frontend/db/migrations/`
 - wallet, paymaster, bundler, or account-abstraction integration logic
 - oracle, randomness, automation, or provisioner integrations

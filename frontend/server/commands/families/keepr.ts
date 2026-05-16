@@ -606,7 +606,6 @@ function resolveKeeprHelpTopic(rawTopic: string | null | undefined): { topic: Ke
     case 'twitter':
       return { topic: 'social', unknownTopic: null }
     case 'ops':
-    case 'cre':
     case 'keeper':
     case 'keepr':
       return { topic: 'ops', unknownTopic: null }

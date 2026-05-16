@@ -13,8 +13,8 @@ L-29 flagged that Solana program IDs in `docs/integrations/solana-spoke-article.
 Only one program ID appears in the article: `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` (line 104, `creator_share_hook`). Cross-checked against every other location in the tree:
 
 - `Anchor.toml` (localnet / devnet / mainnet entries) — **matches**.
-- `cre/config.ts` line 26 — **matches**.
-- `cre/tests/keepr-solana-winner-relay.test.ts` line 89 — **matches**.
+- `kpr/config.ts` line 26 — **matches**.
+- `kpr/tests/keepr-solana-winner-relay.test.ts` line 89 — **matches**.
 - `AGENTS.md` operations runbook — **matches**.
 - `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` — **matches**.
 
@@ -28,10 +28,10 @@ A prior revision of this acceptance doc asserted `git ls-files | grep -i naming-
 
 The article now includes a note immediately after the program ID:
 
-> **Canonical program-ID source:** [`Anchor.toml`](https://github.com/wenakita/4626/blob/main/Anchor.toml) is authoritative for the `creator_share_hook` program ID on every cluster. The value above is verified to match `Anchor.toml` and `cre/config.ts` as of 2026-04-22. If the two ever diverge, `Anchor.toml` wins.
+> **Canonical program-ID source:** [`Anchor.toml`](https://github.com/wenakita/4626/blob/main/Anchor.toml) is authoritative for the `creator_share_hook` program ID on every cluster. The value above is verified to match `Anchor.toml` and `kpr/config.ts` as of 2026-04-22. If the two ever diverge, `Anchor.toml` wins.
 
 This satisfies the remediation ask ("Last verified" timestamp + link to authoritative registry) and establishes the drift-detection contract for future updates.
 
 ## Follow-ups
 
-- When the Solana program is redeployed to a new program ID (unlikely — design is upgrade-in-place), update `Anchor.toml` first, then `cre/config.ts`, then propagate to docs.
+- When the Solana program is redeployed to a new program ID (unlikely — design is upgrade-in-place), update `Anchor.toml` first, then `kpr/config.ts`, then propagate to docs.

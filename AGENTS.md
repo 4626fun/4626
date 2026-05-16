@@ -11,7 +11,7 @@
 | **Frontend SPA + Vercel API** | `frontend/`         | Vite 7 + React 19 + TypeScript | `pnpm -C frontend dev`       |
 | **Solidity contracts**        | `contracts/` (root) | Foundry (forge)                | `forge build` / `forge test` |
 
-Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE automation (`cre/`), Docs site (`apps/docs-site/`), Solana program (`programs/creator-share-hook/`).
+Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE automation (`kpr/`), Docs site (`apps/docs-site/`), Solana program (`programs/creator-share-hook/`).
 
 ### Default working style
 
@@ -151,7 +151,7 @@ All docs, UI copy, commit messages, and code comments that reference 4626's valu
 - **Never** conflate jackpot custody and payout authority into a single "lottery wallet".
 - "Buy+sell fee" claims are **conditional on active hook configuration**. Do not present ShareOFT native transfer fees as guaranteeing a sell fee; the sell-side fee plane requires the hook to be enabled and aligned.
 
-**Canonical completion truth:** vault settlement completion lives in `/api/keeper/sweep` (`frontend/api/_handlers/keeper/_sweep.ts`, delegating to the legacy CRE handler during sunset). `cre/actions/cca-finalization.action.ts` is non-canonical and must not write DB `settledAt`. The five mandatory invariants in the audit §5.1 gate `settledAt`:
+**Canonical completion truth:** vault settlement completion lives in `/api/keeper/sweep` (`frontend/api/_handlers/keeper/_sweep.ts`, delegating to the legacy CRE handler during sunset). `kpr/actions/cca-finalization.action.ts` is non-canonical and must not write DB `settledAt`. The five mandatory invariants in the audit §5.1 gate `settledAt`:
 
 1. `CCALaunchStrategy.feeRecipient == expected tradeFeeCollector` and `CreatorShareOFT.gaugeController == expected tradeFeeCollector`.
 2. CreatorCoin `payoutRecipient` equals expected mode target; in router mode `PayoutRouter.burnStream` matches expected burn stream.
@@ -313,9 +313,9 @@ The Solana route provisioner (`frontend/server/solana-provisioner/`) handles the
 - Priority 1: DB table `creator_meteora_alpha_vaults` (auto-created on first query)
 - Priority 2: `METEORA_CREATOR_ALPHA_VAULT_MAP_JSON` env var (JSON map keyed by creator token address)
 
-### CRE keeper bots
+### KPR keeper bots
 
-Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && npm ci`.
+Keeper bots in `kpr/` relay data between Solana and Base. Install: `cd kpr && npm ci`.
 
 **Solana-specific workflows:**
 
@@ -324,9 +324,9 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - `keepr-solana-winner-relay` — relays Base lottery wins → records on Solana
 - `keepr-solana-price-monitor` — monitors Solana vs Base price deviation
 
-**Start:** `cd cre && tsx runner.ts` (runs all workflows). Dry-run: `DRY_RUN=true tsx runner.ts`.
+**Start:** `cd kpr && tsx runner.ts` (runs all workflows). Dry-run: `DRY_RUN=true tsx runner.ts`.
 
-**Required secrets** (see `cre/secrets.example.env`):
+**Required secrets** (see `kpr/secrets.example.env`):
 
 - `KPR_PRIVATE_KEY` — Base signer (EOA or ERC-4337 owner)
 - `SOLANA_KEEPER_KEYPAIR` — Solana payer/authority (base58)
@@ -337,7 +337,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - `SOLANA_CREATOR_COIN_TO_MINT_MAPPING` — JSON: Base creator coin → Solana mint
 - `SOLANA_TWIN_TO_PUBKEY_MAPPING` — JSON: Base Twin contract → Solana pubkey
 
-**CRE TypeScript baseline is currently clean** (`pnpm -C cre typecheck` passes). Keep this as a no-regression launch gate.
+**KPR TypeScript baseline is currently clean** (`pnpm -C kpr typecheck` passes). Keep this as a no-regression launch gate.
 
 ## Learned User Preferences
 
@@ -449,9 +449,9 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - **UniversalCreate2DeployerFromStore is ACL-gated, and creator CSWs should not be individually authorized.** Direct deploy calls are allowed only from its owner or `authorizedDeployers`; creator-facing Base App/canonical-CSW deploy flows must route stored-bytecode CREATE2 through an authorized `DeploymentBatcher`, while direct deployer authorization stays limited to protocol/operator deploy surfaces. If deploy preflight reports creator-CSW CREATE2 authorization blockers, rotate to or configure a deploy-capable batcher rather than repeatedly authorizing each creator wallet.
 - **Deploy preflight bytecode/config reads may fall back to Base public RPC, but execution must not.** `DeployVault.tsx` uses a read-only `https://mainnet.base.org` fallback when the browser wallet RPC returns empty bytecode for live Base contracts; actual deploy transactions still route through the normal wallet/UserOp path.
 - **AlfaClub Creator Coin/FriendKey LP is a secondary-market ERC20/ERC1155 AMM, not an AlfaClub primary-curve writer.** `contracts/alfaclub/AlfaCreatorKeyLPFactory.sol` and `AlfaCreatorKeyPool.sol` pair Creator Coins with AlfaClub FriendKey tokenIds using xy=k LP shares; they should transfer existing keys/coins only and must not call `FriendKey.buyShares`, `sellShares`, stake/unstake, or `FriendPool` write methods. The exploratory curve/LP convergence chart lives at `docs/alfaclub-lp-vs-bonding-curve-chart.html`. **Pool fee bps are room-type-scoped:** Social rooms = 3 bps, Trading rooms = 690 bps (6.9%); apply the correct fee constant when computing LP cost quotes or pool invariant checks.
-- **Bridge ↔ Meteora integration is two decoupled hops.** `SolanaStrategy.rebalanceToSolana` only moves CREATOR tokens from the strategy contract to the `SolanaBridgeAdapter` on Base — it does NOT cross the bridge. The actual bridge + Solana-side destination routing is the `keepr-solana-rebalance` keeper workflow (`cre/actions/keepr-solana-rebalance.action.ts` + `cre/workflows/keepr-solana-rebalance.workflow.ts`, currently a stub gated behind `KPR_SOLANA_REBALANCE_EXECUTE=1`). Routing policy: if a creator has an `enabled=true` row in `creator_meteora_alpha_vaults`, dispatch `adapter.bridgeToSolanaWithIxs(creator, amount, alphaVault, ixs[])` for atomic bridge + Alpha Vault deposit; otherwise dispatch plain `adapter.bridgeToSolana(creator, amount, destination)` to a custody wallet. Per-creator Meteora infra (DLMM pool + Alpha Vault) costs ~3.5 SOL and is optional — creators without Meteora still bridge successfully; their SolanaStrategy accounting uses keeper NAV reports rather than on-chain DLMM valuation. Runbook in the canonical doc.
+- **Bridge ↔ Meteora integration is two decoupled hops.** `SolanaStrategy.rebalanceToSolana` only moves CREATOR tokens from the strategy contract to the `SolanaBridgeAdapter` on Base — it does NOT cross the bridge. The actual bridge + Solana-side destination routing is the `keepr-solana-rebalance` keeper workflow (`kpr/actions/keepr-solana-rebalance.action.ts` + `kpr/workflows/keepr-solana-rebalance.workflow.ts`, currently a stub gated behind `KPR_SOLANA_REBALANCE_EXECUTE=1`). Routing policy: if a creator has an `enabled=true` row in `creator_meteora_alpha_vaults`, dispatch `adapter.bridgeToSolanaWithIxs(creator, amount, alphaVault, ixs[])` for atomic bridge + Alpha Vault deposit; otherwise dispatch plain `adapter.bridgeToSolana(creator, amount, destination)` to a custody wallet. Per-creator Meteora infra (DLMM pool + Alpha Vault) costs ~3.5 SOL and is optional — creators without Meteora still bridge successfully; their SolanaStrategy accounting uses keeper NAV reports rather than on-chain DLMM valuation. Runbook in the canonical doc.
 - **Keeper job coordination is the CRE-independent fallback lane, but not yet a full CRE replacement.** `public.keeper_jobs` is created by `supabase/migrations/20260506221000_keeper_job_coordination_queue.sql` with deny-all RLS; `/api/keeper/jobs/*` handles enqueue/claim/complete/status/health/run behind machine auth or cron auth; `pnpm -C frontend keeper:jobs:worker` claims `internal_api`/`noop` jobs using `KEEPER_COORDINATION_BASE_URL` and `KPR_API_KEY`. Current confirmed coverage is sweep/tend/report multi-vault fan-out plus sweep -> mark-settled follow-up; payout-router harvest, direct `keepr_actions` drain, bridge-integrity, Ajna/Charm, strategy-signal listener, and Solana workflows still need explicit replacement lanes. Keep privileged signing behind existing machine-auth endpoints, keep worker paths allowlisted to `/api/keeper/` and `/api/keepr/actions/`, and monitor non-zero retry/failed/expired-claim counts once carrying production work.
-- During CRE sunset, `frontend/api/_handlers/vaults/_active.ts` and `frontend/api/_handlers/cre/vaults/_active.ts` are not behavior-equivalent; keep the live route pinned to the CRE handler until parity migration is explicitly completed.
+- During CRE sunset, `frontend/api/_handlers/vaults/_active.ts` and `frontend/api/_handlers/kpr/vaults/_active.ts` are not behavior-equivalent; keep the live route pinned to the CRE handler until parity migration is explicitly completed.
 - **`resolveCommandIssuerContext*` in `frontend/server/_lib/wallet/commandIssuerContext.ts` is tombstone-aware.** Both `ByAddress` and `ByProfileId` chase `merged_into_profile_id` and filter tombstones. Future arch-b sub-account rollout (`docs/arch-b-sub-account-design-addendum.md`) will add `sub_account_address` / `parent_csw_address` / `spend_permission_*` columns to this table — the resolver's tombstone filter must be preserved through that migration. The addendum is design-only today; when implementing, gate behind `ARCH_B_SUB_ACCOUNTS_ENABLED` and keep the `smart_wallet_address = sub_account_address, parent_csw_address = funding CSW` invariant so legacy rows (sub_account_address IS NULL) continue to work unchanged.
 - **Production host split is two SPA shells, not one.** `https://4626.fun/*` serves `index.html` (marketing-mode shell that waitlist-routes unauthenticated users) and `https://app.4626.fun/*` serves `app.html` (app-mode shell where Deploy, Portfolio, and other authenticated routes actually mount). Deploy/app deep links must use `https://app.4626.fun/...` — pointing users to the bare `4626.fun` host for `/deploy/vault` or similar authenticated routes is a recurring regression that silently lands them on the marketing shell. Auth uses the HttpOnly `cv_auth_session` cookie with `Domain=.4626.fun` on production hosts so sessions survive marketing-shell ↔ app-shell navigation; localhost/dev remains host-only, and session reads tolerate duplicate legacy host-only cookies during rollout. The canonical origin pair is documented in `frontend/.env.example` via `VITE_PRIVY_ALLOWED_ORIGINS` and `DEPLOY_SOLANA_REGISTRATION_ORIGINS`.
 - **Waitlist UI must never synthesize a "full" state from missing stats.** `/api/waitlist/stats` returning null/500 or a zero capacity is an unknown state, not a "0 / 0 — Current round full" state. `frontend/src/features/waitlist/WaitlistFlow.tsx` must hide progress/urgency copy when stats are unavailable rather than fabricating a full-round banner — the "Current round full. Next approvals unlock the next batch." regression came from defaulting to 0/0 when the stats endpoint was 500ing.

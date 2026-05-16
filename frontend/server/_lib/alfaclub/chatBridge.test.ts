@@ -298,6 +298,47 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
 
     expect(wsErrorWarns).toHaveLength(0)
     expect(wsErrorInfos).toHaveLength(1)
+    expect(wsErrorInfos[0]?.[1]).toMatchObject({
+      handshakeStatus: 403,
+      phase: 'handshake',
+      upstream: 'ws.alfaclub.app',
+      benignEscalated: false,
+    })
+  })
+
+  it('escalates persistent benign ws_error windows for the same room', () => {
+    const flags = makeFlags()
+
+    _ensureLiveCommandSocketForTests({
+      websocketUrl: flags.websocketUrl,
+      roomId: '1043',
+      jwt: 'jwt-a',
+      flags,
+    })
+
+    const socket = latestFakeSocket()
+    expect(socket).toBeDefined()
+
+    for (let i = 0; i < 5; i += 1) {
+      socket?.emit('error', { message: 'Received network error or non-101 status code.' })
+      vi.advanceTimersByTime(61_000)
+    }
+
+    const wsErrorWarns = loggerMock.warn.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_error',
+    )
+    const wsErrorInfos = loggerMock.info.mock.calls.filter(
+      ([message]) => message === '[alfaclub-chat] ws_error',
+    )
+
+    expect(wsErrorInfos.length).toBeGreaterThanOrEqual(4)
+    expect(wsErrorWarns).toHaveLength(1)
+    expect(wsErrorWarns[0]?.[1]).toMatchObject({
+      roomId: '1043',
+      benignEscalated: true,
+      benignWindowsInLast10m: 5,
+      phase: 'handshake',
+    })
   })
 
   it('rolls up duplicate room-history auth fallback warnings within 60 seconds', async () => {

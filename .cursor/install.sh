@@ -21,7 +21,7 @@ pnpm install --frozen-lockfile
 pnpm -C frontend install --frozen-lockfile
 
 # ── CRE automation dependencies (keeper bots) ────────────────────────────────
-cd cre && npm ci && cd ..
+cd kpr && npm ci && cd ..
 
 # ── Env files (copy examples if missing — never overwrite existing) ───────────
 [ -f .env ]          || cp .env.example .env

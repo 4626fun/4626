@@ -28,17 +28,73 @@ type EthosProjectionHealth = {
   totalRows: number
   rowsWithScore: number
   rowsMissingScore: number
+  rowsMissingNoIdentityKey: number
+  rowsMissingNoMatchedCache: number
+  rowsMissingProjectionGap: number
   rowsStaleOver24h: number
   newestProjectedScoreAt: string | null
   matchedCacheRows: number
   matchedCacheStaleOver24h: number
   newestCacheScoreAt: string | null
   staleSignal: {
-    stale: boolean
-    thresholdHours: number
-    newestCacheAgeHours: number | null
+    cache: {
+      stale: boolean
+      thresholdHours: number
+      newestCacheAgeHours: number | null
+    }
+    projection: {
+      stale: boolean
+      thresholdHours: number
+      newestProjectedAgeHours: number | null
+      staleRowsOver24h: number
+    }
+    pipelineSplit: {
+      stale: boolean
+    }
   }
 } | null
+
+type ProjectionLagMeta = {
+  staleRatio: number | null
+  staleByRatio: boolean
+  pipelineSplit: boolean
+  projectionStale: boolean
+}
+
+function computeProjectionLagMeta(health: EthosProjectionHealth): ProjectionLagMeta {
+  if (!health) {
+    return {
+      staleRatio: null,
+      staleByRatio: false,
+      pipelineSplit: false,
+      projectionStale: false,
+    }
+  }
+  const staleRatio = health.rowsWithScore > 0 ? health.rowsStaleOver24h / health.rowsWithScore : null
+  return {
+    staleRatio,
+    staleByRatio: staleRatio !== null && staleRatio > 0.25,
+    pipelineSplit: health.staleSignal.pipelineSplit.stale,
+    projectionStale: health.staleSignal.projection.stale,
+  }
+}
+
+function emitProjectionLagIfNeeded(params: { health: EthosProjectionHealth }): ProjectionLagMeta {
+  const meta = computeProjectionLagMeta(params.health)
+  if (!meta.pipelineSplit && !meta.projectionStale && !meta.staleByRatio) {
+    return meta
+  }
+  console.warn('[ethos-canonical-sync] projection_lag', {
+    reasons: {
+      pipelineSplit: meta.pipelineSplit,
+      projectionStale: meta.projectionStale,
+      staleByRatio: meta.staleByRatio,
+    },
+    staleRatio: meta.staleRatio === null ? null : Number(meta.staleRatio.toFixed(4)),
+    health: params.health,
+  })
+  return meta
+}
 
 async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Promise<EthosProjectionHealth> {
   if (!db) return null
@@ -49,6 +105,9 @@ async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Prom
         total_rows,
         rows_with_score,
         rows_missing_score,
+        rows_missing_no_identity_key,
+        rows_missing_no_matched_cache,
+        rows_missing_projection_gap,
         rows_stale_over_24h,
         newest_projected_score_at,
         matched_cache_rows,
@@ -59,25 +118,47 @@ async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Prom
     `
     const row = result.rows?.[0]
     if (!row) return null
-    const thresholdHours = readInt(process.env.ETHOS_SCORE_STALE_ALERT_HOURS, 6, 1, 168)
+    const cacheThresholdHours = readInt(process.env.ETHOS_SCORE_STALE_ALERT_HOURS, 6, 1, 168)
+    const projectionThresholdHours = readInt(process.env.ETHOS_SCORE_PROJECTION_STALE_ALERT_HOURS, 2, 1, 168)
     const newestCacheIso = row.newest_cache_score_at ? new Date(row.newest_cache_score_at).toISOString() : null
+    const newestProjectedIso = row.newest_projected_score_at ? new Date(row.newest_projected_score_at).toISOString() : null
     const newestCacheAgeHours = newestCacheIso
       ? Math.max(0, (Date.now() - Date.parse(newestCacheIso)) / (1000 * 60 * 60))
       : null
+    const newestProjectedAgeHours = newestProjectedIso
+      ? Math.max(0, (Date.now() - Date.parse(newestProjectedIso)) / (1000 * 60 * 60))
+      : null
+    const projectionStale = newestProjectedAgeHours === null || newestProjectedAgeHours > projectionThresholdHours
+    const cacheStale = newestCacheAgeHours === null || newestCacheAgeHours > cacheThresholdHours
     return {
       observedAt: row.observed_at ? new Date(row.observed_at).toISOString() : null,
       totalRows: Number(row.total_rows ?? 0),
       rowsWithScore: Number(row.rows_with_score ?? 0),
       rowsMissingScore: Number(row.rows_missing_score ?? 0),
+      rowsMissingNoIdentityKey: Number(row.rows_missing_no_identity_key ?? 0),
+      rowsMissingNoMatchedCache: Number(row.rows_missing_no_matched_cache ?? 0),
+      rowsMissingProjectionGap: Number(row.rows_missing_projection_gap ?? 0),
       rowsStaleOver24h: Number(row.rows_stale_over_24h ?? 0),
-      newestProjectedScoreAt: row.newest_projected_score_at ? new Date(row.newest_projected_score_at).toISOString() : null,
+      newestProjectedScoreAt: newestProjectedIso,
       matchedCacheRows: Number(row.matched_cache_rows ?? 0),
       matchedCacheStaleOver24h: Number(row.matched_cache_stale_over_24h ?? 0),
       newestCacheScoreAt: newestCacheIso,
       staleSignal: {
-        stale: newestCacheAgeHours === null || newestCacheAgeHours > thresholdHours,
-        thresholdHours,
-        newestCacheAgeHours: newestCacheAgeHours === null ? null : Number(newestCacheAgeHours.toFixed(2)),
+        cache: {
+          stale: cacheStale,
+          thresholdHours: cacheThresholdHours,
+          newestCacheAgeHours: newestCacheAgeHours === null ? null : Number(newestCacheAgeHours.toFixed(2)),
+        },
+        projection: {
+          stale: projectionStale,
+          thresholdHours: projectionThresholdHours,
+          newestProjectedAgeHours:
+            newestProjectedAgeHours === null ? null : Number(newestProjectedAgeHours.toFixed(2)),
+          staleRowsOver24h: Number(row.rows_stale_over_24h ?? 0),
+        },
+        pipelineSplit: {
+          stale: !cacheStale && projectionStale,
+        },
       },
     }
   } catch {
@@ -143,6 +224,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       limit: sweepLimit,
     })
     const health = await readProjectionHealth(db)
+    emitProjectionLagIfNeeded({ health })
 
     console.info('[ethos-canonical-sync] tick', {
       updates,

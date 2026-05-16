@@ -71,7 +71,7 @@ target
 !/apps/docs-site
 !/apps/docs-site/**
 /contracts
-/cre
+/kpr
 /design
 /deployments
 /docs

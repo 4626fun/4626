@@ -8,7 +8,7 @@ triggers:
 scope:
   - frontend/server/solana-provisioner/
   - programs/creator-share-hook/
-  - cre/
+  - kpr/
 verification:
   - pnpm -C frontend typecheck
   - pnpm -C frontend test

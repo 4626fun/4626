@@ -355,6 +355,20 @@ export function AccountSetupWorkspaceView(props: {
                       </div>
                     ) : null}
                   </div>
+
+                  {s === 'done' ? (
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void onSwitchAccount()
+                      }}
+                      disabled={busyProvider === 'email'}
+                      className="shrink-0 text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
+                    >
+                      {busyProvider === 'email' ? 'Resetting…' : 'Reset'}
+                    </button>
+                  ) : null}
                 </div>
 
                 {/* Expanded body */}

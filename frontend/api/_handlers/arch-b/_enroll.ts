@@ -4,13 +4,13 @@
  * POST /api/arch-b/enroll
  *
  * Bridges a "linked" profile to "execution-ready" after the user has delegated
- * their owner EOA to the cre-privy-signer quorum via the client-side
+ * their owner EOA to the kpr-privy-signer quorum via the client-side
  * Privy delegateWallet() call. This endpoint:
  *
  *   1. Resolves the authenticated SIWE session to a profile.
  *   2. Loads privy_user_id + primary_embedded_eoa from the profiles row.
  *   3. Fetches the Privy user and resolves the owner wallet id.
- *   4. Verifies the cre-privy-signer quorum appears in additional_signers.
+ *   4. Verifies the kpr-privy-signer quorum appears in additional_signers.
  *   5. Smoke-tests signing with the resolved wallet.
  *   6. Calls provisionCommandIssuerContext to persist the execution context.
  *

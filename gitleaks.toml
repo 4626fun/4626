@@ -28,7 +28,7 @@ paths = [
   '''^bAlanciaga-master/''',
 ]
 
-# NOTE on `cre/secrets.example.env`:
+# NOTE on `kpr/secrets.example.env`:
 # This is a distribution template with placeholder values. The historical
 # `generic-api-key` findings against it (26 in the full-history walk) are
 # silenced by the rule-scoped allowlist below — see the
@@ -76,11 +76,11 @@ paths = [
   '''^frontend/src/.+\.test\.tsx?$''',
   '''^frontend/server/.+\.test\.ts$''',
   '''^frontend/server/.+/__tests__/''',
-  '''^cre/tests/''',
+  '''^kpr/tests/''',
   # env.example files are distribution templates, not secret stores.
   # Provider-specific detectors still scan them.
   '''(^|/)\.env\.example$''',
-  # Same posture for the alt naming convention used by `cre/`:
+  # Same posture for the alt naming convention used by `kpr/`:
   # `<name>.example.env` (placeholder values; comment-documented).
   '''(^|/)secrets\.example\.env$''',
   '''(^|/)[A-Za-z0-9_-]+\.example\.env$''',

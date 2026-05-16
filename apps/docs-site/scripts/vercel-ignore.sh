@@ -53,7 +53,7 @@ while IFS= read -r path; do
     docs/*|docs/*/*|docs/*/*/*|docs/*/*/*/*|docs/*/*/*/*/*)
       exit 1
       ;;
-    cre/*|cre/*/*|cre/*/*/*|cre/*/*/*/*|cre/*/*/*/*/*)
+    kpr/*|kpr/*/*|kpr/*/*/*|kpr/*/*/*/*|kpr/*/*/*/*/*)
       exit 1
       ;;
     frontend/docs/*|frontend/docs/*/*|frontend/docs/*/*/*|frontend/docs/*/*/*/*)
