@@ -769,7 +769,7 @@ export function AlfaClubLiquidity() {
                   type="button"
                   disabled={Boolean(disabledReason) || isSubmitting || switchingChain}
                   onClick={submit}
-                  className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-medium text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
+                  className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-primary px-4 text-sm font-medium text-white transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-zinc-600"
                 >
                   <Droplets className="h-4 w-4" />
                   {switchingChain ? 'Switching Chain' : isSubmitting ? 'Submitting' : disabledReason ?? modeTabs.find((x) => x.id === mode)?.label}

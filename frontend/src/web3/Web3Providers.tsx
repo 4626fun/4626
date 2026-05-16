@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { WagmiProvider } from 'wagmi'
+import { WagmiProvider, useAccount } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
+import { applyChainBrandTheme, resolveChainBrandTheme } from '@/theme/chainBrandTheme'
 
 function isRateLimitedError(error: unknown): boolean {
   const asAny = error as { status?: unknown; details?: unknown; shortMessage?: unknown; message?: unknown }
@@ -41,9 +42,21 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
 export function WalletProviders({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig} reconnectOnMount>
+      <ChainBrandThemeSync />
       {children}
     </WagmiProvider>
   )
+}
+
+function ChainBrandThemeSync() {
+  const { chainId, isConnected } = useAccount()
+
+  useEffect(() => {
+    const theme = resolveChainBrandTheme(isConnected ? chainId : null)
+    applyChainBrandTheme(theme)
+  }, [chainId, isConnected])
+
+  return null
 }
 
 /**

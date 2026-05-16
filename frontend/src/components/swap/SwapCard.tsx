@@ -161,7 +161,7 @@ export function SwapCard(props: SwapCardProps) {
       <Button
         variant="primary"
         size="lg"
-        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgb(var(--brand-primary)/0.9)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={primaryAction}
         loading={props.busy === 'pending'}
         disabled={primaryDisabled}

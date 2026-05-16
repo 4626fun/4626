@@ -63,7 +63,7 @@ export function TokenInput({
   const shellBackground =
     label === 'Sell'
       ? 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgb(var(--vault-card) / 0.5))'
-      : 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgba(0, 82, 255, 0.13))'
+      : 'linear-gradient(165deg, rgb(var(--vault-card-raised) / 0.66), rgb(var(--brand-primary) / 0.13))'
   const metaValueTextClass = 'app-meta-value'
 
   return (

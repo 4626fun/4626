@@ -3,9 +3,10 @@ import { defaultTheme } from '@coinbase/cds-web/themes/defaultTheme'
 /**
  * Custom 4626 dark theme extending the CDS default theme.
  *
- * The project uses an ultra-dark aesthetic with #0052FF accent,
- * which maps to CDS blue60 ("0,82,255"). The default CDS dark
- * spectrum already includes this as blue60, so we only need to
+ * The project uses an ultra-dark aesthetic with a custom 4626 blue accent
+ * (#1C5CF2), so we override CDS primary tones directly while
+ * preserving the default dark-spectrum ergonomics.
+ * We still
  * push backgrounds deeper (true black instead of CDS's gray0 = "10,11,13")
  * and adjust elevation surfaces to match the vault aesthetic.
  *
@@ -28,10 +29,10 @@ export const theme4626 = {
     bgElevation1: 'rgb(12,12,16)' as const,
     bgElevation2: 'rgb(18,18,24)' as const,
     bgOverlay: 'rgba(0,0,0,0.7)' as const,
-    // Keep CDS primary blue but punch up foreground primary for contrast on dark bg
-    fgPrimary: 'rgb(55,115,245)' as const,
-    bgPrimary: 'rgb(0,82,255)' as const,
-    bgPrimaryWash: 'rgb(0,12,40)' as const,
+    // Custom 4626 blue with strong contrast on dark backgrounds
+    fgPrimary: 'rgb(91,147,255)' as const,
+    bgPrimary: 'rgb(28,92,242)' as const,
+    bgPrimaryWash: 'rgb(8,22,54)' as const,
   },
   darkSpectrum: {
     ...defaultTheme.darkSpectrum,

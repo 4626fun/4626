@@ -15,25 +15,25 @@ export default {
         // Uses <alpha-value> so classes like `bg-uniswap/10` work.
         uniswap: 'rgb(255 0 122 / <alpha-value>)',
         // Creator Vaults Brand Kit (v2)
-        // - Primary: controlled Base Blue (#0000FF)
+        // - Primary: custom 4626 Blue
         // - Surfaces: True black + deep charcoal
         brand: {
           // Named tokens (preferred)
-          primary: '#0000FF',
-          hover: '#1E59FF',
-          accent: '#1E59FF',
-          glow: 'rgba(0, 0, 255, 0.15)',
+          primary: 'rgb(var(--brand-primary) / <alpha-value>)',
+          hover: 'rgb(var(--brand-hover) / <alpha-value>)',
+          accent: 'rgb(var(--brand-accent-rgb) / <alpha-value>)',
+          glow: 'rgb(var(--brand-primary) / 0.15)',
           // Numeric scale (legacy; kept for existing UI)
           50: '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
-          400: '#1E59FF',
-          500: '#0000FF',
-          600: '#0000CC',
-          700: '#0033CC',
-          800: '#0029A3',
-          900: '#001F7A',
+          400: '#5B93FF',
+          500: '#1C5CF2',
+          600: '#174ACE',
+          700: '#123BA4',
+          800: '#0E2E82',
+          900: '#0B2464',
           950: '#172554',
         },
         // Theme-aware tokens (set via CSS variables in index.css)
@@ -128,8 +128,8 @@ export default {
           '100%': { opacity: '1', transform: 'scale(1)' },
         },
         pulseGlow: {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(0, 82, 255, 0.3)' },
-          '50%': { boxShadow: '0 0 40px rgba(0, 82, 255, 0.6)' },
+          '0%, 100%': { boxShadow: '0 0 20px rgba(28, 92, 242, 0.3)' },
+          '50%': { boxShadow: '0 0 40px rgba(28, 92, 242, 0.6)' },
         },
         shimmer: {
           '0%': { transform: 'translateX(-100%) skewX(12deg)' },
@@ -165,8 +165,8 @@ export default {
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
         'gradient-brand': 'linear-gradient(135deg, var(--tw-gradient-stops))',
-        'blue-gradient': 'linear-gradient(135deg, #0052FF 0%, #0033CC 100%)',
-        'subtle-glow': 'radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.05) 0%, transparent 70%)',
+        'blue-gradient': 'linear-gradient(135deg, #1C5CF2 0%, #123BA4 100%)',
+        'subtle-glow': 'radial-gradient(circle at 50% 0%, rgba(28, 92, 242, 0.05) 0%, transparent 70%)',
         'grain': 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'filter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.65\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23filter)\'/%3E%3C/svg%3E")',
         'wire-grid': 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
       },

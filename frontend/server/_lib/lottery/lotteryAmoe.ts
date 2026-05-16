@@ -518,6 +518,43 @@ async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): P
 }
 
 /**
+ * Resolve a profile for AMOE daily awards only when it is tied to a Privy
+ * account with a verified, non-synthetic email.
+ *
+ * This is the strict eligibility gate for earning AMOE points:
+ * - must map from wallet -> profile via `profile_wallets`
+ * - profile must be Privy-backed (`profiles.privy_user_id IS NOT NULL`)
+ * - account email must be verified (`accounts.email_verified = true`)
+ * - synthetic placeholder emails are excluded
+ */
+async function resolveVerifiedPrivyProfileForAmoeAward(
+  db: Db,
+  wallet: `0x${string}`,
+): Promise<number | null> {
+  const normalizedWallet = wallet.toLowerCase()
+  const result = await db.sql`
+    SELECT pw.profile_id
+    FROM profile_wallets pw
+    JOIN profiles p ON p.id = pw.profile_id
+    JOIN accounts a ON a.privy_user_id = p.privy_user_id
+    WHERE LOWER(pw.address) = ${normalizedWallet}
+      AND p.privy_user_id IS NOT NULL
+      AND a.email_verified = TRUE
+      AND LOWER(COALESCE(a.email, '')) NOT LIKE '%@wallet.4626.fun'
+      AND LOWER(COALESCE(a.email, '')) NOT LIKE '%@noemail.4626.fun'
+    ORDER BY
+      pw.is_canonical_smart_wallet DESC NULLS LAST,
+      pw.is_primary DESC NULLS LAST,
+      pw.profile_id ASC
+    LIMIT 1;
+  `
+  const row = result.rows?.[0] ?? null
+  const raw = row?.profile_id
+  const id = typeof raw === 'number' ? raw : Number(raw)
+  return Number.isFinite(id) && id > 0 ? Math.floor(id) : null
+}
+
+/**
  * Total weighted points for a signup — used for leaderboard, tier
  * progression, and "Your points" UI surfaces.
  *
@@ -625,7 +662,10 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
   }
 
   await ensureAmoeSchema(db)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveVerifiedPrivyProfileForAmoeAward(db, wallet)
+  if (signupId === null) {
+    throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
+  }
   const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
   return toCreditSnapshot(wallet, credits)
 }
@@ -707,7 +747,10 @@ export async function claimDailyTwitterCheckin(params: {
     throw error
   }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveVerifiedPrivyProfileForAmoeAward(db, wallet)
+  if (signupId === null) {
+    throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
+  }
 
   if (awarded) {
     await db.sql`

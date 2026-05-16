@@ -457,7 +457,7 @@ describe('TelegramLink UI flow', () => {
 
     await screen.findByLabelText('Email Address')
     const sendCodeButton = screen.getByRole('button', { name: 'Send Code' })
-    expect(sendCodeButton.className).toContain('bg-[#0052FF]')
+    expect(sendCodeButton.className).toContain('bg-[rgb(var(--brand-primary))]')
     expect(sendCodeButton.className).toContain('rounded-[16px]')
     expect(sendCodeButton.className).toContain('h-11')
 
@@ -465,7 +465,7 @@ describe('TelegramLink UI flow', () => {
     await user.click(sendCodeButton)
 
     const verifyCodeButton = await screen.findByRole('button', { name: 'Verify Code' })
-    expect(verifyCodeButton.className).toContain('bg-[#0052FF]')
+    expect(verifyCodeButton.className).toContain('bg-[rgb(var(--brand-primary))]')
     expect(verifyCodeButton.className).toContain('rounded-[16px]')
     expect(verifyCodeButton.className).toContain('h-11')
   })

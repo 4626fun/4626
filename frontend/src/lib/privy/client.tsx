@@ -99,21 +99,29 @@ export function PrivyClientProvider(props: {
     }),
     [],
   )
-  const externalWallets = useMemo(
-    () => ({
-      // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
-      // provider discovery can trigger extension-side assignment crashes. Keep waitlist
-      // auth email-first, but do not disable connectors entirely because Step 3 owner
-      // install requires external wallet connection on this page.
+  const externalWallets = useMemo(() => {
+    // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
+    // provider discovery can trigger extension-side assignment crashes.
+    const sharedWalletConnectors = {
       walletConnect: { enabled: true },
       coinbaseWallet: { connectionOptions: 'all' as const },
+      solana: { connectors: solanaConnectors },
+    }
+
+    // Waitlist auth is intentionally email-only. Keep wallet connectors available
+    // for account-setup surfaces, but skip cross-app smart-wallet init here to
+    // avoid popup opener requirements (`window.opener`) in constrained browsers.
+    if (mode === 'waitlist-email-only') {
+      return sharedWalletConnectors
+    }
+
+    return {
+      ...sharedWalletConnectors,
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
-      solana: { connectors: solanaConnectors },
-    }),
-    [solanaConnectors],
-  )
+    }
+  }, [mode, solanaConnectors])
 
   if (!hasRuntimeConfig || !appId) {
     return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>

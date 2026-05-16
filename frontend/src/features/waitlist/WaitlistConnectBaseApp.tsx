@@ -219,7 +219,7 @@ export function WaitlistConnectBaseApp(props: Props) {
   return (
     <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-connect-base-app">
       <div className="space-y-2">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3C8AFF]/80">Optional · Base App</p>
+        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">Optional · Base App</p>
         <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">{headline}</h2>
         <p className="text-sm leading-relaxed text-zinc-400">{explanation}</p>
       </div>

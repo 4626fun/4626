@@ -207,6 +207,37 @@ type TrayTokenHolding = {
   walletCount: number
 }
 
+type TrayWalletTokenRow = {
+  token: DebankToken
+  wallet: TrayWalletSource
+}
+
+type TrayAssetHolding = {
+  tokenAddress: string
+  symbol: string
+  name: string
+  logoUrl: string | null
+  amount: number
+  usdValue: number
+}
+
+type WaitlistPositionSnapshot = {
+  points: {
+    total: number
+    invite: number
+    signup: number
+    tasks: number
+    csw: number
+    social: number
+    bonus: number
+  }
+  rank: {
+    invite: number | null
+    total: number | null
+  }
+  totalCount: number
+}
+
 async function fetchZoraCoinViaApi(address: string): Promise<unknown | null> {
   const qs = new URLSearchParams({
     address,
@@ -219,6 +250,18 @@ async function fetchZoraCoinViaApi(address: string): Promise<unknown | null> {
   if (!response.ok) return null
   const json = (await response.json().catch(() => null)) as { data?: unknown } | null
   return json?.data ?? null
+}
+
+async function fetchWaitlistPositionByWallet(wallet: string): Promise<WaitlistPositionSnapshot | null> {
+  const qs = new URLSearchParams({ wallet })
+  const response = await apiFetch(`/api/waitlist/position?${qs.toString()}`, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  if (!response.ok) return null
+  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: WaitlistPositionSnapshot | null } | null
+  if (!json?.success) return null
+  return json.data ?? null
 }
 
 function buildTrayHoldings(params: {
@@ -336,7 +379,7 @@ function IdentityButton({
             className="h-7 w-7 rounded-full object-cover ring-1 ring-white/12"
           />
         ) : (
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgba(0,82,255,0.95),rgba(90,138,255,0.7))] text-[11px] font-semibold text-white ring-1 ring-white/12">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-primary)/0.95),rgb(var(--brand-hover)/0.7))] text-[11px] font-semibold text-white ring-1 ring-white/12">
             {presentation.avatarFallback}
           </div>
         )}
@@ -385,6 +428,7 @@ export function ConnectButton({
   const auth = useSiweAuth()
   const canonicalIdentity = useCanonicalIdentity()
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
+  const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
@@ -449,16 +493,7 @@ export function ConnectButton({
     () => trayWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [trayWalletSources],
   )
-  const zoraTokenWalletSources = useMemo<TrayWalletSource[]>(() => {
-    if (canonicalIdentity.cswAddress) {
-      return [{
-        kind: 'canonical',
-        address: canonicalIdentity.cswAddress,
-        label: '4626 CSW',
-      }]
-    }
-    return trayWalletSources
-  }, [canonicalIdentity.cswAddress, trayWalletSources])
+  const zoraTokenWalletSources = useMemo<TrayWalletSource[]>(() => trayWalletSources, [trayWalletSources])
   const zoraTokenWalletKey = useMemo(
     () => zoraTokenWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [zoraTokenWalletSources],
@@ -504,6 +539,32 @@ export function ConnectButton({
       )
     },
   })
+  const trayBaseTokens = useMemo<TrayAssetHolding[]>(() => {
+    const rows = (trayTokenRowsQuery.data ?? []) as TrayWalletTokenRow[]
+    const grouped = new Map<string, TrayAssetHolding>()
+    for (const row of rows) {
+      const token = row.token
+      const tokenAddress = String(token.id || '').toLowerCase()
+      if (!isEvmAddress(tokenAddress)) continue
+      const amount = Number(token.amount ?? 0)
+      const usdValue = Number(token.usdValue ?? 0)
+      const existing = grouped.get(tokenAddress)
+      if (existing) {
+        existing.amount += Number.isFinite(amount) ? amount : 0
+        existing.usdValue += Number.isFinite(usdValue) ? usdValue : 0
+        continue
+      }
+      grouped.set(tokenAddress, {
+        tokenAddress,
+        symbol: String(token.symbol || '').trim() || formatAddress(tokenAddress),
+        name: String(token.name || '').trim() || String(token.symbol || '').trim() || tokenAddress,
+        logoUrl: token.logoUrl ? String(token.logoUrl) : null,
+        amount: Number.isFinite(amount) ? amount : 0,
+        usdValue: Number.isFinite(usdValue) ? usdValue : 0,
+      })
+    }
+    return Array.from(grouped.values()).sort((a, b) => b.usdValue - a.usdValue)
+  }, [trayTokenRowsQuery.data])
   const trayTokenAddressesKey = useMemo(() => {
     const addresses = (trayTokenRowsQuery.data ?? [])
       .map((row) => String(row.token.id || '').toLowerCase())
@@ -565,6 +626,29 @@ export function ConnectButton({
   }, [trayTokenRowsQuery.data, trayZoraTokensQuery.data])
   const trayZoraTokensLoading = trayTokenRowsQuery.isLoading || trayZoraTokensQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
+  const trayPointsLookupWallet = useMemo(() => {
+    const candidate =
+      canonicalIdentity.cswAddress ??
+      canonicalIdentity.externalEoaAddress ??
+      canonicalIdentity.privyEmbeddedAddress ??
+      sessionAddress ??
+      address ??
+      null
+    return typeof candidate === 'string' && isEvmAddress(candidate) ? candidate : null
+  }, [
+    address,
+    canonicalIdentity.cswAddress,
+    canonicalIdentity.externalEoaAddress,
+    canonicalIdentity.privyEmbeddedAddress,
+    sessionAddress,
+  ])
+  const trayPointsQuery = useQuery({
+    queryKey: ['account-tray', 'waitlist-position', trayPointsLookupWallet],
+    enabled: auth.hasSession && Boolean(trayPointsLookupWallet),
+    staleTime: 15_000,
+    retry: 0,
+    queryFn: async () => fetchWaitlistPositionByWallet(trayPointsLookupWallet as string),
+  })
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
     isConnected,
@@ -588,6 +672,7 @@ export function ConnectButton({
     setShowOptions(false)
     setShowMenu((current) => !current)
     setTrayTab('tokens')
+    setTraySection('account')
   }
   const toggleOptions = () => {
     setShowMenu(false)
@@ -673,7 +758,10 @@ export function ConnectButton({
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >
-              {showCanonicalCard ? (
+              {auth.hasSession ? (
+                <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
+              ) : null}
+              {showCanonicalCard && (!auth.hasSession || traySection === 'account') ? (
                 <>
                   <CanonicalIdentityDropdown
                     identity={canonicalIdentity}
@@ -681,11 +769,20 @@ export function ConnectButton({
                       setShowMenu(false)
                       setShowOptions(true)
                     }}
+                    onRequestSignOut={() => {
+                      void auth.signOut()
+                      setShowMenu(false)
+                    }}
+                    signingOut={auth.busy}
+                    onRequestDisconnectMainWallet={() => {
+                      disconnect()
+                      setShowMenu(false)
+                    }}
                   />
                   <div className="h-px bg-white/8 my-2" />
                 </>
               ) : null}
-              {auth.hasSession ? (
+              {auth.hasSession && traySection === 'portfolio' ? (
                 <RelayTrayPortfolioModule
                   tab={trayTab}
                   onTabChange={setTrayTab}
@@ -693,8 +790,16 @@ export function ConnectButton({
                   activeNetworkLabel={trayHoldings.activeNetworkLabel}
                   rows={trayHoldings.rows}
                   loading={trayBalancesQuery.isLoading}
+                  baseTokens={trayBaseTokens}
+                  baseTokensLoading={trayTokenRowsQuery.isLoading}
                   zoraTokens={trayZoraTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
+                />
+              ) : null}
+              {auth.hasSession && traySection === 'points' ? (
+                <RelayTrayPointsModule
+                  points={trayPointsQuery.data ?? null}
+                  loading={trayPointsQuery.isLoading}
                 />
               ) : null}
               {!auth.hasSession ? (
@@ -710,7 +815,7 @@ export function ConnectButton({
                   <span className="label block">{auth.busy ? 'Signing in…' : 'Sign in'}</span>
                   <span className="app-meta-value text-zinc-600 block mt-1">No transaction.</span>
                 </button>
-              ) : (
+              ) : traySection === 'account' ? (
                 <div className="px-4 py-3">
                   <div className="label text-emerald-200">Signed in</div>
                   <div className="app-meta-value text-zinc-600 mt-1">
@@ -722,40 +827,34 @@ export function ConnectButton({
                     })}
                   </div>
                 </div>
-              )}
-              {auth.hasSession ? (
-                <Link
-                  to="/accounts"
-                  onClick={() => setShowMenu(false)}
-                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-                >
-                  <span className="label block text-zinc-300">Account settings</span>
-                </Link>
               ) : null}
+              {auth.hasSession ? <div className="mt-auto" /> : null}
               {auth.hasSession ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    void auth.signOut()
-                    setShowMenu(false)
-                  }}
-                  disabled={auth.busy}
-                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
-                >
-                  <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
-                </button>
+                <div className="border-t border-white/8 bg-black/20">
+                  <button
+                    type="button"
+                    onClick={() => setShowMenu(false)}
+                    className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
+                  >
+                    <span className="label block text-zinc-300">Help</span>
+                  </button>
+                  <Link
+                    to="/portfolio"
+                    onClick={() => setShowMenu(false)}
+                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
+                  >
+                    <span className="label block text-zinc-300">Profile</span>
+                  </Link>
+                  <Link
+                    to="/accounts"
+                    onClick={() => setShowMenu(false)}
+                    className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
+                  >
+                    <span className="label block text-zinc-300">Settings</span>
+                  </Link>
+                </div>
               ) : null}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-              <div className="h-px bg-white/8 my-2" />
-              <button
-                onClick={() => {
-                  disconnect()
-                  setShowMenu(false)
-                }}
-                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
-              >
-                <span className="label block text-zinc-600">Disconnect</span>
-              </button>
           </Tray>
         )}
       </div>
@@ -805,60 +904,87 @@ export function ConnectButton({
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >
-              {showCanonicalCard ? (
+              <RelayTrayPrimaryTabs section={traySection} onChange={setTraySection} />
+              {traySection === 'account' ? (
                 <>
-                  <CanonicalIdentityDropdown
-                    identity={canonicalIdentity}
-                    onRequestConnectWallet={() => {
-                      setShowMenu(false)
-                      setShowOptions(true)
-                    }}
-                  />
-                  <div className="h-px bg-white/8 my-2" />
-                </>
-              ) : (
-                <div className="px-4 py-3">
-                  <div className="label text-emerald-200">Signed in</div>
-                  <div className="app-meta-value text-zinc-600 mt-1">
-                    Session signer: {formatAddress(sessionAddress)}.
+                  <div className="px-4 py-3">
+                    <div className="app-meta-value text-zinc-500">
+                      Signed in. Connect your main wallet to finish setup.
+                    </div>
                   </div>
-                </div>
+                  {showCanonicalCard ? (
+                    <>
+                      <CanonicalIdentityDropdown
+                        identity={canonicalIdentity}
+                        onRequestConnectWallet={() => {
+                          setShowMenu(false)
+                          setShowOptions(true)
+                        }}
+                        onRequestSignOut={() => {
+                          void auth.signOut()
+                          setShowMenu(false)
+                        }}
+                        signingOut={auth.busy}
+                        onRequestDisconnectMainWallet={() => {
+                          disconnect()
+                          setShowMenu(false)
+                        }}
+                      />
+                      <div className="h-px bg-white/8 my-2" />
+                    </>
+                  ) : (
+                    <div className="px-4 py-3">
+                      <div className="label text-emerald-200">Signed in</div>
+                      <div className="app-meta-value text-zinc-600 mt-1">
+                        Session signer: {formatAddress(sessionAddress)}.
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : traySection === 'portfolio' ? (
+                <RelayTrayPortfolioModule
+                  tab={trayTab}
+                  onTabChange={setTrayTab}
+                  aggregateUsd={trayHoldings.aggregateUsd}
+                  activeNetworkLabel={trayHoldings.activeNetworkLabel}
+                  rows={trayHoldings.rows}
+                  loading={trayBalancesQuery.isLoading}
+                  baseTokens={trayBaseTokens}
+                  baseTokensLoading={trayTokenRowsQuery.isLoading}
+                  zoraTokens={trayZoraTokens}
+                  zoraTokensLoading={trayZoraTokensLoading}
+                />
+              ) : (
+                <RelayTrayPointsModule
+                  points={trayPointsQuery.data ?? null}
+                  loading={trayPointsQuery.isLoading}
+                />
               )}
-              <RelayTrayPortfolioModule
-                tab={trayTab}
-                onTabChange={setTrayTab}
-                aggregateUsd={trayHoldings.aggregateUsd}
-                activeNetworkLabel={trayHoldings.activeNetworkLabel}
-                rows={trayHoldings.rows}
-                loading={trayBalancesQuery.isLoading}
-                zoraTokens={trayZoraTokens}
-                zoraTokensLoading={trayZoraTokensLoading}
-              />
-              <Link
-                to="/accounts"
-                onClick={() => setShowMenu(false)}
-                className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
-              >
-                <span className="label block text-zinc-300">Account settings</span>
-              </Link>
-              <div className="px-4 py-3">
-                <div className="app-meta-value text-zinc-500">
-                  4626 sign-in is active. For most users, the next step is connecting an
-                  <span className="text-zinc-400"> External signer</span> (owner wallet) to authorize the 4626 signer on your Zora CSW.
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  void auth.signOut()
-                  setShowMenu(false)
-                }}
-                disabled={auth.busy}
-                className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors disabled:opacity-60"
-              >
-                <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
-              </button>
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
+              <div className="mt-auto" />
+              <div className="border-t border-white/8 bg-black/20">
+                <button
+                  type="button"
+                  onClick={() => setShowMenu(false)}
+                  className="w-full text-left py-3 px-4 hover:bg-white/4 transition-colors"
+                >
+                  <span className="label block text-zinc-300">Help</span>
+                </button>
+                <Link
+                  to="/portfolio"
+                  onClick={() => setShowMenu(false)}
+                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
+                >
+                  <span className="label block text-zinc-300">Profile</span>
+                </Link>
+                <Link
+                  to="/accounts"
+                  onClick={() => setShowMenu(false)}
+                  className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
+                >
+                  <span className="label block text-zinc-300">Settings</span>
+                </Link>
+              </div>
           </Tray>
         )}
 
@@ -941,6 +1067,32 @@ export function ConnectButton({
   )
 }
 
+function RelayTrayPrimaryTabs(props: {
+  section: 'account' | 'portfolio' | 'points'
+  onChange: (section: 'account' | 'portfolio' | 'points') => void
+}) {
+  return (
+    <div className="px-4 pt-1 pb-2">
+      <div className="inline-flex items-center gap-1 rounded-lg border border-white/8 bg-black/20 p-1">
+        {(['account', 'portfolio', 'points'] as const).map((value) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => props.onChange(value)}
+            className={`rounded-md px-2 py-1 text-[12px] font-medium transition-colors ${
+              props.section === value
+                ? 'bg-white/[0.08] text-white'
+                : 'text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200'
+            }`}
+          >
+            {value === 'account' ? 'Account' : value === 'portfolio' ? 'Portfolio' : 'Points'}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function RelayTrayPortfolioModule(props: {
   tab: 'tokens' | 'activity'
   onTabChange: (tab: 'tokens' | 'activity') => void
@@ -948,12 +1100,15 @@ function RelayTrayPortfolioModule(props: {
   activeNetworkLabel: string
   rows: TrayNetworkHolding[]
   loading: boolean
+  baseTokens: TrayAssetHolding[]
+  baseTokensLoading: boolean
   zoraTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
 }) {
   const [expandedNetworkId, setExpandedNetworkId] = useState<string | null>(null)
   const topRows = props.rows.slice(0, 6)
   const activityRows = props.rows.slice(0, 4)
+  const topBaseTokens = props.baseTokens.slice(0, 6)
 
   return (
     <div className="px-4 pt-2 pb-3">
@@ -1004,7 +1159,7 @@ function RelayTrayPortfolioModule(props: {
                         <img src={row.networkLogoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
                       ) : (
                         <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                          <span className="h-2.5 w-2.5 rounded-sm bg-[#1C3CFF]" />
+                          <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
@@ -1029,6 +1184,39 @@ function RelayTrayPortfolioModule(props: {
                               <span className="text-[11px] tabular-nums text-zinc-300">{formatUsdValue(wallet.usdValue)}</span>
                             </div>
                           ))}
+                        {row.networkId === 'base' ? (
+                          <div className="mt-2 border-t border-white/8 pt-2">
+                            <div className="px-0.5 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                              Asset breakdown
+                            </div>
+                            {props.baseTokensLoading ? (
+                              <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
+                                Loading assets…
+                              </div>
+                            ) : topBaseTokens.length === 0 ? (
+                              <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
+                                No Base token assets found.
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                {topBaseTokens.map((token) => (
+                                  <div
+                                    key={`base-asset:${token.tokenAddress}`}
+                                    className="flex items-center justify-between gap-2 rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5"
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-[10px] text-zinc-200">{token.symbol}</span>
+                                      <span className="block truncate text-[10px] text-zinc-600">
+                                        {formatTokenAmount(token.amount)}
+                                      </span>
+                                    </span>
+                                    <span className="text-[10px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -1043,7 +1231,7 @@ function RelayTrayPortfolioModule(props: {
                 </div>
               ) : props.zoraTokens.length === 0 ? (
                 <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  No Zora token holdings found on Base.
+                  No Zora-tagged token holdings found on Base.
                 </div>
               ) : (
                 <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
@@ -1056,7 +1244,7 @@ function RelayTrayPortfolioModule(props: {
                         <img src={token.logoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
                       ) : (
                         <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                          <span className="h-2.5 w-2.5 rounded-sm bg-[#1C3CFF]" />
+                          <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
                         </span>
                       )}
                       <span className="min-w-0 flex-1">
@@ -1074,22 +1262,112 @@ function RelayTrayPortfolioModule(props: {
           </div>
         ) : (
           <div className="mt-2 space-y-1">
-            {activityRows.length === 0 ? (
+            {activityRows.length === 0 && topBaseTokens.length === 0 ? (
               <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                Activity sync is coming next.
+                No recent portfolio activity yet.
               </div>
             ) : (
-              activityRows.map((row) => (
-                <div key={`activity:${row.networkId}`} className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
-                    <span className="block text-[10px] text-zinc-600">Exposure updated</span>
-                  </span>
-                  <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
-                </div>
-              ))
+              <>
+                {activityRows.map((row) => (
+                  <div key={`activity:${row.networkId}`} className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
+                      <span className="block text-[10px] text-zinc-600">Network exposure</span>
+                    </span>
+                    <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
+                  </div>
+                ))}
+                {topBaseTokens.slice(0, 3).map((token) => (
+                  <div
+                    key={`activity-token:${token.tokenAddress}`}
+                    className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-[12px] text-zinc-200">{token.symbol}</span>
+                      <span className="block text-[10px] text-zinc-600">Top holding snapshot</span>
+                    </span>
+                    <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
+                  </div>
+                ))}
+              </>
             )}
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RelayTrayPointsModule(props: {
+  points: WaitlistPositionSnapshot | null
+  loading: boolean
+}) {
+  const total = props.points?.points.total ?? 0
+  const totalRank = props.points?.rank.total ?? null
+  const inviteRank = props.points?.rank.invite ?? null
+  const totalCount = props.points?.totalCount ?? 0
+  const breakdown = [
+    { label: 'Invites', value: props.points?.points.invite ?? 0 },
+    { label: 'Signup', value: props.points?.points.signup ?? 0 },
+    { label: 'Tasks', value: props.points?.points.tasks ?? 0 },
+    { label: 'CSW', value: props.points?.points.csw ?? 0 },
+    { label: 'Social', value: props.points?.points.social ?? 0 },
+    { label: 'Bonus', value: props.points?.points.bonus ?? 0 },
+  ]
+
+  return (
+    <div className="px-4 pt-2 pb-3">
+      <div className="rounded-xl bg-white/[0.02] p-3">
+        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
+        {props.loading ? (
+          <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+            Loading points…
+          </div>
+        ) : !props.points ? (
+          <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+            No points profile found yet.
+          </div>
+        ) : (
+          <>
+            <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
+              {total.toLocaleString()}
+            </div>
+            <div className="mt-1 text-[10px] text-zinc-500">AMOE eligible points</div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                <div className="text-[10px] text-zinc-500">Total rank</div>
+                <div className="text-[13px] text-zinc-200 tabular-nums">
+                  {totalRank ? `#${totalRank.toLocaleString()}` : '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+                <div className="text-[10px] text-zinc-500">Invite rank</div>
+                <div className="text-[13px] text-zinc-200 tabular-nums">
+                  {inviteRank ? `#${inviteRank.toLocaleString()}` : '—'}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 text-[10px] text-zinc-500">
+              Leaderboard pool: {Math.max(0, totalCount).toLocaleString()} profiles
+            </div>
+
+            <div className="mt-3 border-t border-white/8 pt-2">
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Breakdown</div>
+              <div className="space-y-1">
+                {breakdown.map((item) => (
+                  <div
+                    key={item.label}
+                    className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                  >
+                    <span className="text-[11px] text-zinc-300">{item.label}</span>
+                    <span className="text-[11px] tabular-nums text-zinc-200">{item.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>

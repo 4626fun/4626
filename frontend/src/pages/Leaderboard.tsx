@@ -207,7 +207,7 @@ export function Leaderboard() {
                       key={`${r.rank}-${r.signupId}`}
                       className={[
                         isMe ? 'bg-brand-primary/6' : '',
-                        r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[#0052FF]/30' : '',
+                        r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[rgb(var(--brand-primary)/0.3)]' : '',
                       ]
                         .filter(Boolean)
                         .join(' ')}

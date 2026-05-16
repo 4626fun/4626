@@ -33,7 +33,7 @@ import {
 import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
-import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import { WaitlistSetupTray } from './WaitlistSetupTray'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import { WaitlistConnectBaseApp } from './WaitlistConnectBaseApp'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
@@ -350,22 +350,22 @@ function WaitlistAuthStep(props: {
       ) : (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(60,138,255,0.14),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--brand-primary)/0.14),transparent_60%)]"
         />
       )}
 
-      {/* dual ambient glow — Base Blue core + Cerulean halo */}
+      {/* dual ambient glow — app brand blue core + halo */}
       {motionEnabled ? (
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <motion.div
             animate={{ opacity: [0.18, 0.28, 0.18], scale: [1, 1.04, 1] }}
             transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute h-64 w-64 rounded-full bg-[#0000FF]/20 blur-[80px]"
+            className="absolute h-64 w-64 rounded-full bg-[rgb(var(--brand-primary)/0.2)] blur-[80px]"
           />
           <motion.div
             animate={{ opacity: [0.08, 0.15, 0.08], scale: [1, 1.08, 1] }}
             transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute h-96 w-96 rounded-full bg-[#3C8AFF]/10 blur-[120px]"
+            className="absolute h-96 w-96 rounded-full bg-[rgb(var(--brand-hover)/0.1)] blur-[120px]"
           />
         </div>
       ) : null}
@@ -373,7 +373,7 @@ function WaitlistAuthStep(props: {
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* headline */}
         <motion.div {...stagger(0)} className="space-y-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3C8AFF]/80">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
             Secure onboarding
           </p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">{authUi.title}</h2>
@@ -1026,16 +1026,6 @@ export function WaitlistFlow(props: {
     setStep('done')
   }, [account])
 
-  const onOpenAccounts = useCallback(async () => {
-    if (completionBusy) return
-    setCompletionBusy(true)
-    try {
-      await navigateWithSessionHandoff(accountsUrl)
-    } finally {
-      setCompletionBusy(false)
-    }
-  }, [accountsUrl, completionBusy, navigateWithSessionHandoff])
-
   useEffect(() => {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {
       return
@@ -1150,6 +1140,7 @@ export function WaitlistFlow(props: {
   }, [setBusy, setRecoveryRequired, step])
 
   const authUi = deriveWaitlistAuthUi()
+  const authVisibleError = error === SESSION_FINALIZING_RETRY_MESSAGE ? null : error
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })
@@ -1239,7 +1230,7 @@ export function WaitlistFlow(props: {
             waitlistStats={waitlistStats}
             busy={busy}
             privyClientStatus={privyClientStatus}
-            error={error}
+            error={authVisibleError}
             recoveryRequired={recoveryRequired}
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
@@ -1252,12 +1243,11 @@ export function WaitlistFlow(props: {
           </div>
         ) : step === 'done' && account ? (
           <div key="done-static">
-            <WaitlistSetupWorkspace
-              initialAccount={account}
+            <WaitlistSetupTray
+              account={account}
               canEnterApp={canEnterApp}
               completionBusy={completionBusy}
               onEnterApp={onEnterApp}
-              onOpenAccounts={onOpenAccounts}
             />
           </div>
         ) : null
@@ -1270,7 +1260,7 @@ export function WaitlistFlow(props: {
               waitlistStats={waitlistStats}
               busy={busy}
               privyClientStatus={privyClientStatus}
-              error={error}
+              error={authVisibleError}
               recoveryRequired={recoveryRequired}
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
@@ -1295,12 +1285,11 @@ export function WaitlistFlow(props: {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: WAITLIST_EASE }}
             >
-              <WaitlistSetupWorkspace
-                initialAccount={account}
+              <WaitlistSetupTray
+                account={account}
                 canEnterApp={canEnterApp}
                 completionBusy={completionBusy}
                 onEnterApp={onEnterApp}
-                onOpenAccounts={onOpenAccounts}
               />
             </motion.div>
           ) : null}

@@ -455,7 +455,7 @@ export function AmoeEntryCard(props: {
   const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
   return (
-    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgba(0,82,255,0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
+    <div className="relative overflow-hidden rounded-[28px] bg-[linear-gradient(145deg,rgb(var(--vault-card-raised)/0.88),rgb(var(--vault-card)/0.66))] p-5 shadow-[0_28px_80px_-42px_rgb(var(--brand-primary)/0.8),0_18px_42px_-34px_rgba(0,0,0,0.95)] ring-1 ring-white/[0.07] sm:p-6">
       <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-linear-to-r from-transparent via-blue-300/35 to-transparent" />
       <div className="pointer-events-none absolute -right-16 -top-24 h-48 w-48 rounded-full bg-blue-500/12 blur-3xl" />
       <div className="relative space-y-3.5">
@@ -564,7 +564,7 @@ export function AmoeEntryCard(props: {
               type="button"
               onClick={() => void handleEnterForFree()}
               disabled={!canEnter}
-              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="col-span-2 h-10 rounded-xl bg-brand-primary px-3 text-xs font-semibold text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)] hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {entryBusy ? (
                 <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Submitting…</span>
@@ -577,7 +577,7 @@ export function AmoeEntryCard(props: {
             type="button"
             onClick={() => openXPost()}
             disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy || xmtpCheckinBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {checkinBusy ? (
               <span className="inline-flex items-center justify-center gap-1.5"><Spinner size="sm" /> Claiming…</span>
@@ -614,7 +614,7 @@ export function AmoeEntryCard(props: {
             type="button"
             onClick={() => void handleXmtpCheckin()}
             disabled={(!walletAddress && !protocolEntryMode) || entryBusy || checkinBusy}
-            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgba(0,82,255,0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             <span className="inline-flex items-center justify-center gap-1.5">
               <MessageCircle className="h-3.5 w-3.5" />

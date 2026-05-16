@@ -699,7 +699,7 @@ export function ChatAvailabilityRail(props: { onExpandedChange?: (expanded: bool
 
   return (
     <aside className={cn('fixed bottom-24 left-4 top-24 z-60 hidden overflow-hidden rounded-[28px] border border-white/10 bg-black/72 shadow-[0_30px_90px_-42px_rgba(0,0,0,0.95)] backdrop-blur-2xl md:flex md:flex-col motion-safe:animate-scale-in', RAIL_WIDTH_CLASS)}>
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_42%_at_84%_0%,rgba(0,82,255,0.16),transparent_68%)]" />
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(80%_42%_at_84%_0%,rgb(var(--brand-primary)/0.16),transparent_68%)]" />
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-6 top-0 h-px bg-linear-to-r from-transparent via-white/22 to-transparent" />
 
       <div className="relative border-b border-white/8 p-3">

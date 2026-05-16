@@ -122,6 +122,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/keeper/jobs/enqueue-ethos-sync",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/keeper/jobs/enqueue-strategy-canary",
       "schedule": "*/30 * * * *"
     },
@@ -161,6 +165,7 @@
       "src": "/(.*)",
       "headers": {
         "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; script-src-elem 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://challenges.cloudflare.com https://telegram.org https://ajax.googleapis.com https://auth.privy.io https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https://*.choicecdn.com https://imagedelivery.net https://metadata.ens.domains https://euc.li https://grails.app https://efp.app https://ipfs.decentralized-content.com https://raw.githubusercontent.com https://explorer-api.walletconnect.com https://*.mypinata.cloud https://4626.fun https://pinata.4626.fun; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'; child-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://vercel.live https://dexscreener.com https://www.dexscreener.com; frame-src https://auth.privy.io https://privy.app.4626.fun https://privy.4626.fun https://oauth.telegram.org https://challenges.cloudflare.com https://vercel.live https://dexscreener.com https://www.dexscreener.com https://keys.coinbase.com https://account.base.app; connect-src 'self' https://auth.privy.io https://api.developer.coinbase.com https://chain-proxy.wallet.coinbase.com https://keys.coinbase.com https://*.wallet.coinbase.com https://account.base.app https://api.cdp.coinbase.com https://base-mainnet.g.alchemy.com https://*.g.alchemy.com https://explorer-api.walletconnect.com https://metamask-sdk.api.cx.metamask.io wss://metamask-sdk.api.cx.metamask.io wss://www.walletlink.org https://www.walletlink.org https://*.rpc.privy.systems https://rpc.zora.energy https://mainnet.base.org https://api.production.xmtp.network:5558 https://*.xmtp.network:5558 https://*.xmtp.network:* wss://*.xmtp.network:* https://ipfs.decentralized-content.com https://api.lens.xyz https://ccip.ens.xyz; worker-src 'self' blob:; manifest-src 'self'",
+        "cross-origin-opener-policy": "same-origin-allow-popups",
         "referrer-policy": "strict-origin-when-cross-origin",
         "x-content-type-options": "nosniff"
       },

@@ -65,6 +65,13 @@ export type CanonicalIdentity = {
   /** Privy-provisioned embedded EOA, if Privy is authed. */
   privyEmbeddedAddress: Address | null
   /**
+   * Whether the embedded signer is already an owner on the canonical CSW.
+   * - true  => embedded signer is authorized for canonical owner actions
+   * - false => embedded signer exists but is not yet authorized
+   * - null  => unknown / not yet resolved from account signals
+   */
+  embeddedSignerAuthorizedOnCsw: boolean | null
+  /**
    * Which signer is currently active. Priority:
    *   - 'external' when an external wagmi connection exists
    *   - 'embedded' when only Privy is signing
@@ -209,6 +216,8 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   })()
 
   const executionTrack = (accountMe.me?.accountSignals?.executionTrack ?? null) as CanonicalIdentity['executionTrack']
+  const embeddedSignerAuthorizedOnCsw =
+    accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
   const executionSubAccountAddress: Address | null = (() => {
     const signals = accountMe.me?.accountSignals
     if (!signals) return null
@@ -274,6 +283,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     hasSession,
     externalEoaAddress: externalEoa,
     privyEmbeddedAddress,
+    embeddedSignerAuthorizedOnCsw,
     activeSigner,
     creatorCoinAddress,
     loadingCoin,

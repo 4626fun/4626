@@ -10,6 +10,7 @@ export const waitlistRouteLoaders: ApiRouteLoaders = {
   'position': () => import('./waitlist/_position.js'),
   'referrer': () => import('./waitlist/_referrer.js'),
   'stats': () => import('./waitlist/_stats.js'),
+  'xmtp-join': () => import('./waitlist/_xmtpJoin.js'),
 }
 
 export function getWaitlistApiHandler(subpath: string) {

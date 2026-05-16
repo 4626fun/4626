@@ -315,7 +315,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
               )
               const className = `flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
                 isActive
-                  ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
+                  ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.9)]'
                   : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
               }`
               return hostMode === 'marketing' ? (
@@ -350,7 +350,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                 aria-current={isActive ? 'page' : undefined}
                 className={`flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl border transition-all duration-200 active:scale-[0.97] ${
                   isActive
-                    ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgba(0,82,255,0.9)]'
+                    ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.9)]'
                     : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
                 }`}
                 role="listitem"

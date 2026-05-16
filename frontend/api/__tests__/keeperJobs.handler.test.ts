@@ -24,6 +24,7 @@ import claimHandler from '../_handlers/keeper/jobs/_claim.js'
 import completeHandler from '../_handlers/keeper/jobs/_complete.js'
 import enqueueActiveVaultsHandler from '../_handlers/keeper/jobs/_enqueueActiveVaults.js'
 import enqueueBridgeIntegrityHandler from '../_handlers/keeper/jobs/_enqueueBridgeIntegrity.js'
+import enqueueEthosSyncHandler from '../_handlers/keeper/jobs/_enqueueEthosSync.js'
 import enqueueSolanaReconcileHandler from '../_handlers/keeper/jobs/_enqueueSolanaReconcile.js'
 import enqueueStrategyCanaryHandler from '../_handlers/keeper/jobs/_enqueueStrategyCanary.js'
 import enqueueStrategySignalsHandler from '../_handlers/keeper/jobs/_enqueueStrategySignals.js'
@@ -71,6 +72,7 @@ describe('keeper job coordination handlers', () => {
     await expect(getApiHandler('keeper/jobs/enqueue')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-active-vaults')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-bridge-integrity')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('keeper/jobs/enqueue-ethos-sync')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-solana-reconcile')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-strategy-canary')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('keeper/jobs/enqueue-strategy-signals')).resolves.toBeTypeOf('function')
@@ -372,6 +374,63 @@ describe('keeper job coordination handlers', () => {
       expect(res.statusCode).toBe(200)
       expect(res.body?.data?.enabled).toBe(true)
       expect(res.body?.data?.job?.dedupeKey).toBe('bridge-integrity:default')
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('keeps ethos sync enqueue disabled by default', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-ethos-sync',
+      KEEPER_ETHOS_SYNC_ENQUEUE_ENABLED: undefined,
+    })
+    try {
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-ethos-sync' },
+      })
+      const res = createMockRes()
+
+      await enqueueEthosSyncHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data).toMatchObject({ enabled: false, job: null, reason: 'disabled' })
+      expect(dbSqlMock).not.toHaveBeenCalled()
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('enqueues ethos sync monitor when enabled', async () => {
+    const restoreEnv = applyEnv({
+      CRON_SECRET: 'cron-secret-for-ethos-sync',
+      KEEPER_ETHOS_SYNC_ENQUEUE_ENABLED: '1',
+    })
+    try {
+      dbSqlMock.mockResolvedValueOnce({
+        rows: [
+          jobRow({
+            id: 451,
+            dedupe_key: 'ethos-sync:default',
+            payload: {
+              path: '/api/keeper/ethos-sync',
+              body: {},
+            },
+          }),
+        ],
+        rowCount: 1,
+      })
+      const req = createMockReq({
+        method: 'GET',
+        headers: { authorization: 'Bearer cron-secret-for-ethos-sync' },
+      })
+      const res = createMockRes()
+
+      await enqueueEthosSyncHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.enabled).toBe(true)
+      expect(res.body?.data?.job?.dedupeKey).toBe('ethos-sync:default')
     } finally {
       restoreEnv()
     }

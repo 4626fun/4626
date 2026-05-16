@@ -16,7 +16,7 @@ import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { shareTokenLogo } from '@/lib/uniswap/swapUtils'
 import { cn } from '@/lib/shared/utils'
 
-const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
+const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
 
 /** Static mapping: share token address -> CCA strategy (for vaults not yet in keepr) */
 const SHARE_TO_CCA: Record<string, `0x${string}`> = {
@@ -230,7 +230,7 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
                 Share token: {shareOFT ?? 'Unavailable'}
               </div>
               <div className="app-meta-value mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-400">
-                <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
+                <img alt="Base" className="h-3.5 w-3.5 rounded-[4px] object-contain shrink-0" loading="lazy" src={BASE_CHAIN_LOGO} />
                 <span>Base</span>
               </div>
             </div>

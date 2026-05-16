@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, MessageCircle, Twitter, UserPlus } from 'lucide-react'
+import { Check, Copy, UserPlus } from 'lucide-react'
+import { RiTelegram2Fill } from 'react-icons/ri'
+import { SiFarcaster, SiX } from 'react-icons/si'
 
 import { getMarketingWaitlistReferralUrl } from '@/lib/auth/waitlistEntry'
 import {
@@ -66,7 +68,7 @@ export function ReferralShareBlock({
             <UserPlus className="w-3 h-3" /> Invite friends
           </div>
           <div className="mt-1 text-[11px] text-zinc-500">
-            Each qualified referral earns you +6 points. Pending referrals earn +2.
+            Earn +6 per qualified referral (+2 while pending).
           </div>
         </div>
         <div className="text-[11px] tabular-nums text-zinc-400 flex items-center gap-3">
@@ -83,31 +85,31 @@ export function ReferralShareBlock({
         <code className="flex-1 truncate text-xs text-zinc-300" title={shareUrl}>
           {shareUrl}
         </code>
-        <button
-          type="button"
-          onClick={() => void handleCopy()}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
-          title="Copy referral link"
-        >
-          {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
+          onClick={() => void handleCopy()}
+          className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-hover transition-colors"
+          title="Copy referral link"
+        >
+          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+          {copied ? 'Copied' : 'Copy invite link'}
+        </button>
+        <button
+          type="button"
           onClick={() => openWindow(buildTwitterIntent(shareUrl, SHARE_TEXT))}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
         >
-          <Twitter className="w-3 h-3" /> Share on X
+          <SiX className="w-3 h-3" aria-hidden="true" /> Share on X
         </button>
         <button
           type="button"
           onClick={() => openWindow(buildWarpcastIntent(shareUrl, SHARE_TEXT))}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
         >
-          <span className="inline-flex w-3 h-3 items-center justify-center font-bold">W</span>
+          <SiFarcaster className="w-3 h-3" aria-hidden="true" />
           Cast on Warpcast
         </button>
         <button
@@ -115,7 +117,7 @@ export function ReferralShareBlock({
           onClick={() => openWindow(buildTelegramIntent(shareUrl, SHARE_TEXT))}
           className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-200 hover:border-white/20 hover:text-white transition-colors"
         >
-          <MessageCircle className="w-3 h-3" /> Telegram
+          <RiTelegram2Fill className="w-3 h-3" aria-hidden="true" /> Telegram
         </button>
       </div>
     </div>

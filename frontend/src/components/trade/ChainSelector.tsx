@@ -9,10 +9,12 @@ export interface ChainSelectorProps {
   compact?: boolean
 }
 
+const BASE_CHAIN_LOGO = '/base/base-chain-light.svg'
+
 function ChainLogo({ src, name, size = 20 }: { src: string; name: string; size?: number }) {
   const [error, setError] = useState(false)
   const isBaseLogo = name.trim().toLowerCase() === 'base'
-  const resolvedSrc = isBaseLogo ? '/base/base-square-blue.svg' : src
+  const resolvedSrc = isBaseLogo ? BASE_CHAIN_LOGO : src
   const shapeClass = isBaseLogo ? 'rounded-[4px]' : 'rounded-full'
   const fitClass = isBaseLogo ? 'object-contain' : 'object-cover'
   if (error || !resolvedSrc) {

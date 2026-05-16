@@ -436,7 +436,7 @@ export function TokenSelectorModal({
                   className={cn(
                     'group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition',
                     isSelected
-                      ? 'border-brand-primary/40 bg-brand-primary/10 text-vault-text shadow-[0_8px_24px_-18px_rgba(0,82,255,0.6)]'
+                      ? 'border-brand-primary/40 bg-brand-primary/10 text-vault-text shadow-[0_8px_24px_-18px_rgb(var(--brand-primary)/0.6)]'
                       : 'border-[rgb(var(--vault-border-strong)/0.32)] bg-[rgb(var(--vault-card)/0.25)] text-vault-text hover:bg-[rgb(var(--vault-card-raised)/0.7)] hover:border-[rgb(var(--vault-border-strong)/0.7)]',
                   )}
                 >

@@ -158,6 +158,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (message === 'tweet_already_claimed') {
       return res.status(409).json({ success: false, error: message })
     }
+    if (message === 'amoe_requires_verified_privy_account') {
+      return res.status(403).json({ success: false, error: message })
+    }
     if (message === 'twitter_verification_unavailable') {
       return res.status(503).json({ success: false, error: message })
     }

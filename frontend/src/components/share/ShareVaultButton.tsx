@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Copy, Share2, Twitter, MessageCircle } from 'lucide-react'
+import { Check, Copy, Share2 } from 'lucide-react'
+import { RiTelegram2Fill } from 'react-icons/ri'
+import { SiFarcaster, SiX } from 'react-icons/si'
 
 /**
  * Opens a compact share menu for a vault / creator detail page. The live URL is
@@ -137,7 +139,7 @@ export function ShareVaultButton({
             onClick={() => handleShareNetwork('twitter')}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5 hover:text-white"
           >
-            <Twitter className="w-3.5 h-3.5" /> Share on X
+            <SiX className="w-3.5 h-3.5" aria-hidden="true" /> Share on X
           </button>
           <button
             type="button"
@@ -145,7 +147,7 @@ export function ShareVaultButton({
             onClick={() => handleShareNetwork('warpcast')}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5 hover:text-white"
           >
-            <span className="inline-flex w-3.5 h-3.5 items-center justify-center font-bold">W</span>
+            <SiFarcaster className="w-3.5 h-3.5" aria-hidden="true" />
             Cast on Warpcast
           </button>
           <button
@@ -154,7 +156,7 @@ export function ShareVaultButton({
             onClick={() => handleShareNetwork('telegram')}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-zinc-300 hover:bg-white/5 hover:text-white"
           >
-            <MessageCircle className="w-3.5 h-3.5" /> Share to Telegram
+            <RiTelegram2Fill className="w-3.5 h-3.5" aria-hidden="true" /> Share to Telegram
           </button>
           <div className="h-px bg-white/10" />
           <button

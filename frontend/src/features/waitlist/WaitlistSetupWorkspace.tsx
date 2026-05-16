@@ -1,7 +1,10 @@
+import { useEffect, useRef, useState } from 'react'
+
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { apiFetch } from '@/lib/api/apiBase'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 
@@ -35,6 +38,41 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete
+  const [waitlistChatStatus, setWaitlistChatStatus] = useState<'idle' | 'joining' | 'joined' | 'blocked' | 'error'>('idle')
+  const attemptedIdentityRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    const identity = controller.canonicalCswAddress?.toLowerCase() ?? null
+    if (!setupComplete || !identity) return
+    if (attemptedIdentityRef.current === identity) return
+
+    attemptedIdentityRef.current = identity
+    let cancelled = false
+
+    void (async () => {
+      if (!cancelled) setWaitlistChatStatus('joining')
+      try {
+        const response = await apiFetch('/api/waitlist/xmtp-join', { method: 'POST' })
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null
+          const reason = String(payload?.error ?? '')
+          if (reason === 'embedded_owner_not_installed') {
+            if (!cancelled) setWaitlistChatStatus('blocked')
+            return
+          }
+          if (!cancelled) setWaitlistChatStatus('error')
+          return
+        }
+        if (!cancelled) setWaitlistChatStatus('joined')
+      } catch {
+        if (!cancelled) setWaitlistChatStatus('error')
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [controller.canonicalCswAddress, setupComplete])
 
   return (
     <AccountSetupWorkspaceView
@@ -43,6 +81,22 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       summaryActions={
         <div className="w-full space-y-5">
           <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+          {setupComplete ? (
+            <div className="bv-subpanel px-4 py-3">
+              <p className="bv-kicker text-brand-300">Waitlist chat</p>
+              <p className="mt-1 text-sm text-zinc-300">
+                {waitlistChatStatus === 'joining'
+                  ? 'Joining XMTP waitlist group with your Zora CSW identity...'
+                  : waitlistChatStatus === 'joined'
+                    ? 'Joined. Your Zora CSW is queued as your XMTP identity.'
+                    : waitlistChatStatus === 'blocked'
+                      ? 'Enable 4626 signing to join waitlist chat.'
+                      : waitlistChatStatus === 'error'
+                        ? 'Chat join is temporarily unavailable. It will retry when this page refreshes.'
+                        : 'Waiting to join waitlist chat.'}
+              </p>
+            </div>
+          ) : null}
           {canEnterNow ? (
             <button
               type="button"

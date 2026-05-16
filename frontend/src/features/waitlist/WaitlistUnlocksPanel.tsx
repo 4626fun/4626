@@ -53,18 +53,7 @@ export function WaitlistUnlocksPanel({
 
   return (
     <div className={`space-y-3.5 ${className}`}>
-      {/* Points + tier, single row. Tier label links to the leaderboard
-          so users can compare their position without adding a standalone
-          CTA elsewhere on the page. */}
       <div className="flex items-baseline justify-between gap-3">
-        <div className="flex items-baseline gap-2">
-          <span className="font-display text-xl leading-none text-white tabular-nums">
-            {progress.points.toLocaleString()}
-          </span>
-          <span className="text-[11px] text-zinc-500">
-            {progress.points === 1 ? 'point' : 'points'}
-          </span>
-        </div>
         <Link
           to="/leaderboard"
           className="group inline-flex items-center gap-1 text-[11px] text-zinc-400 transition-colors hover:text-zinc-200"
@@ -74,14 +63,21 @@ export function WaitlistUnlocksPanel({
           </span>
           <ArrowUpRight className="h-3 w-3 text-zinc-600 transition-colors group-hover:text-brand-200" aria-hidden="true" />
         </Link>
+        <div className="flex items-baseline gap-2">
+          <span className="font-display text-xl leading-none text-white tabular-nums">
+            {progress.points.toLocaleString()}
+          </span>
+          <span className="text-[11px] text-zinc-500">
+            {progress.points === 1 ? 'point' : 'points'}
+          </span>
+        </div>
       </div>
 
-      {/* Progress line */}
       {progress.nextTier ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px] text-zinc-500">
-            <span>Next: {progress.nextTier.name}</span>
-            <span className="tabular-nums">{progress.pointsToNext} to go</span>
+            <span>{progress.pointsToNext} points to {progress.nextTier.name}</span>
+            <span className="tabular-nums">{Math.round(progress.progressPercent)}%</span>
           </div>
           <div className="h-1 w-full rounded-full bg-white/[0.06] overflow-hidden">
             <div
@@ -97,7 +93,6 @@ export function WaitlistUnlocksPanel({
         </div>
       )}
 
-      {/* Referral — borderless, separated by a thin rule. */}
       {referral.data?.referralCode ? (
         <div className="border-t border-white/[0.05] pt-3">
           <ReferralShareBlock

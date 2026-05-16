@@ -91,7 +91,7 @@ export function DistributeCcaLaunch() {
             >
               <div
                 className="flex flex-col items-start gap-1 rounded-[20px] border border-brand-primary/14 bg-gradient-to-br from-brand-primary/[0.07] via-brand-primary/[0.03] to-transparent p-6 sm:p-8"
-                style={{ boxShadow: '0 24px 80px -40px rgba(0,82,255,0.3)' }}
+                style={{ boxShadow: '0 24px 80px -40px rgb(var(--brand-primary) / 0.3)' }}
               >
                 <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.28em] text-zinc-600">
                   Allocated

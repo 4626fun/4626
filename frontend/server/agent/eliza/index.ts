@@ -1141,7 +1141,11 @@ const AMOE_XMTP_TASK_AGENT_ADDRESS = TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()
 
 function isExpectedAmoeXmtpAwardingError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
-  return message === 'xmtp_message_already_claimed' || message === 'xmtp_message_id_required'
+  return (
+    message === 'xmtp_message_already_claimed' ||
+    message === 'xmtp_message_id_required' ||
+    message === 'amoe_requires_verified_privy_account'
+  )
 }
 
 async function maybeAwardAmoeXmtpDailyFromInbound(msg: {

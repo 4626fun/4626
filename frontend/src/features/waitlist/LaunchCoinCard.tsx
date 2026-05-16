@@ -445,7 +445,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
                 href={`https://zora.co/coin/base:${createdCoinAddress}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono truncate text-[#0052FF] hover:text-[#3373FF] transition-colors"
+                className="font-mono truncate text-[rgb(var(--brand-primary))] hover:text-[rgb(var(--brand-hover))] transition-colors"
               >
                 {createdCoinAddress.slice(0, 6)}...{createdCoinAddress.slice(-4)}
               </a>
@@ -458,7 +458,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
                 href={`https://basescan.org/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono truncate text-[#0052FF] hover:text-[#3373FF] transition-colors"
+                className="font-mono truncate text-[rgb(var(--brand-primary))] hover:text-[rgb(var(--brand-hover))] transition-colors"
               >
                 {txHash.slice(0, 10)}...
               </a>
@@ -479,8 +479,8 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
     <motion.div {...fadeUp} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2.5">
-        <div className="w-9 h-9 rounded-xl bg-[#0052FF]/10 border border-[#0052FF]/20 flex items-center justify-center">
-          <Coins className="w-4.5 h-4.5 text-[#0052FF]" />
+        <div className="w-9 h-9 rounded-xl bg-[rgb(var(--brand-primary)/0.1)] border border-[rgb(var(--brand-primary)/0.2)] flex items-center justify-center">
+          <Coins className="w-4.5 h-4.5 text-[rgb(var(--brand-primary))]" />
         </div>
         <div>
           <div className="text-[14px] font-semibold text-white">{isOneClick ? 'Create your Creator Coin' : 'Launch Your Creator Coin'}</div>
@@ -512,7 +512,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
               placeholder="e.g. Akita"
               disabled={isBusy}
               maxLength={64}
-              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50"
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50"
             />
           </div>
 
@@ -528,7 +528,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
                 placeholder="e.g. AKITA"
                 disabled={isBusy}
                 maxLength={8}
-                className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 uppercase"
+                className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 uppercase"
               />
             </div>
           </div>
@@ -545,7 +545,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
               disabled={isBusy}
               maxLength={280}
               rows={2}
-              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-600 focus:outline-none focus:border-[#0052FF]/40 transition-colors disabled:opacity-50 resize-none"
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 resize-none"
             />
           </div>
 
@@ -593,7 +593,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
               <button
                 type="button"
                 onClick={handleRetry}
-                className="text-[#0052FF] hover:text-[#3373FF] mt-1 text-[11px] font-medium transition-colors"
+                className="text-[rgb(var(--brand-primary))] hover:text-[rgb(var(--brand-hover))] mt-1 text-[11px] font-medium transition-colors"
               >
                 Try again
               </button>
@@ -605,7 +605,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
       {/* Status */}
       {isBusy && (
         <div className="flex items-center gap-2 text-[12px] text-zinc-400">
-          <Spinner className="shrink-0 text-[#0052FF]" size="sm" />
+          <Spinner className="shrink-0 text-[rgb(var(--brand-primary))]" size="sm" />
           <span>{statusText}</span>
         </div>
       )}
@@ -619,7 +619,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
           className={[
             'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200',
             canSubmit
-              ? 'bg-[#0052FF] text-white hover:bg-[#1a66ff] cursor-pointer shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_6px_24px_-6px_rgba(0,82,255,0.4)]'
+              ? 'bg-[rgb(var(--brand-primary))] text-white hover:bg-[rgb(var(--brand-hover))] cursor-pointer shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_6px_24px_-6px_rgb(var(--brand-primary)/0.4)]'
               : 'bg-white/[0.04] text-zinc-600 cursor-not-allowed',
           ].join(' ')}
         >

@@ -238,7 +238,7 @@
   }
   
   .glow-brand {
-    text-shadow: 0 0 40px rgba(0, 82, 255, 0.35);
+    text-shadow: 0 0 40px rgb(var(--brand-primary) / 0.35);
   }
   
   /* Shared primary CTA — refined, flat with subtle inset bezel */
@@ -247,11 +247,11 @@
     @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-medium text-white transition-[background,box-shadow,transform] duration-150 ease-out;
     min-height: 42px;
     letter-spacing: -0.005em;
-    background: linear-gradient(180deg, #1563ff 0%, #0050f8 100%);
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-primary)) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.16),
       inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-      0 0 0 1px rgba(0, 82, 255, 0.35),
+      0 0 0 1px rgb(var(--brand-primary) / 0.35),
       0 1px 2px rgba(0, 0, 0, 0.28);
   }
 
@@ -271,11 +271,11 @@
 
   .btn-primary:hover,
   .btn-accent:hover {
-    background: linear-gradient(180deg, #2a74ff 0%, #0f59ff 100%);
+    background: linear-gradient(180deg, rgb(var(--brand-hover)) 0%, rgb(var(--brand-hover)) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.22),
       inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-      0 0 0 1px rgba(0, 82, 255, 0.45),
+      0 0 0 1px rgb(var(--brand-primary) / 0.45),
       0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
@@ -284,8 +284,8 @@
     outline: none;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.18),
-      0 0 0 2px rgba(0, 82, 255, 0.5),
-      0 0 0 4px rgba(0, 82, 255, 0.18);
+      0 0 0 2px rgb(var(--brand-primary) / 0.5),
+      0 0 0 4px rgb(var(--brand-primary) / 0.18);
   }
 
   .btn-primary:active,
@@ -294,7 +294,7 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.12),
       inset 0 -1px 0 rgba(0, 0, 0, 0.24),
-      0 0 0 1px rgba(0, 82, 255, 0.4);
+      0 0 0 1px rgb(var(--brand-primary) / 0.4);
   }
 
   .btn-primary:disabled,
@@ -304,7 +304,7 @@
     transform: none;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.1),
-      0 0 0 1px rgba(0, 82, 255, 0.2);
+      0 0 0 1px rgb(var(--brand-primary) / 0.2);
   }
 
   .btn-compact {
@@ -373,7 +373,7 @@
   .fc-authkit-signin-button button:focus-visible,
   .fc-authkit-signin-button > button:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(0, 82, 255, 0.25);
+    box-shadow: 0 0 0 2px rgb(var(--brand-primary) / 0.25);
   }
   
   /* Input - Terminal style */
@@ -409,7 +409,7 @@
     animation-fill-mode: both;
     transform-origin: center;
     will-change: opacity, transform, filter;
-    filter: drop-shadow(0 0 0 rgba(0, 82, 255, 0));
+    filter: drop-shadow(0 0 0 rgb(var(--brand-primary) / 0));
   }
 }
 
@@ -453,7 +453,7 @@
   100% {
     opacity: 0.12;
     transform: scale(calc(var(--dotm-wave-scale, 1) * 0.9));
-    filter: drop-shadow(0 0 0 rgba(0, 82, 255, 0));
+    filter: drop-shadow(0 0 0 rgb(var(--brand-primary) / 0));
   }
   36% {
     opacity: 0.32;
@@ -462,7 +462,7 @@
   54% {
     opacity: 1;
     transform: scale(calc(var(--dotm-wave-scale, 1) * 1.18));
-    filter: drop-shadow(0 0 6px rgba(0, 82, 255, 0.35));
+    filter: drop-shadow(0 0 6px rgb(var(--brand-primary) / 0.35));
   }
   68% {
     opacity: 0.4;
@@ -515,9 +515,10 @@
 
 /* Default: light */
 :root {
-  --brand-primary: 0 82 255;
-  --brand-hover: 26 102 255;
-  --brand-glow: 0 82 255;
+  --brand-primary: 28 92 242;
+  --brand-hover: 63 129 255;
+  --brand-glow: 28 92 242;
+  --brand-accent-rgb: 245 158 11;
   --vault-bg: 248 250 252;      /* slate-50 */
   --vault-card: 255 255 255;    /* white */
   --vault-card-raised: 241 245 249;

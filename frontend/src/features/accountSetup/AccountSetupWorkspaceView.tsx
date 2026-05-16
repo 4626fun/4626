@@ -262,6 +262,86 @@ export function AccountSetupWorkspaceView(props: {
       : null
     const zoraProfileUrl = normalizedZoraHandle ? `${ZORA_PROFILE_BASE}${normalizedZoraHandle}` : null
 
+    if (allDone) {
+      return (
+        <div className="mx-auto w-full max-w-[640px] space-y-5">
+          {error ? (
+            <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
+              <div>{error}</div>
+              {sponsorshipDiagnostic ? (
+                <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                  Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+                </div>
+              ) : null}
+              {ownerApprovalDiagnostic ? (
+                <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                  Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">You&apos;re live</h2>
+            <p className="text-sm text-zinc-500">Your account is activated and ready.</p>
+          </div>
+
+          <div className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.1] px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Zora linked · Signing enabled
+                </div>
+                {(normalizedZoraHandle || canonicalCswAddress) ? (
+                  <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
+                    {normalizedZoraHandle && zoraProfileUrl ? (
+                      <a
+                        href={zoraProfileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0 hover:text-zinc-300 transition-colors"
+                      >
+                        {normalizedZoraHandle}
+                      </a>
+                    ) : null}
+                    {normalizedZoraHandle && canonicalCswAddress ? <span className="text-zinc-700">·</span> : null}
+                    {canonicalCswAddress ? (
+                      <button
+                        type="button"
+                        onClick={() => copyAddress(canonicalCswAddress)}
+                        title={canonicalCswAddress}
+                        className="shrink-0 font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        {shortAddr(canonicalCswAddress)}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                disabled={busyProvider === 'email'}
+                onClick={() => void onSwitchAccount()}
+                className="shrink-0 text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
+              >
+                {busyProvider === 'email' ? 'Resetting…' : 'Reset'}
+              </button>
+            </div>
+          </div>
+
+          {summaryActions ? (
+            <section className="rounded-[13px] border border-brand-primary/20 bg-brand-primary/[0.07] px-4 py-4">
+              <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-brand-200">Earn points faster</div>
+              {summaryActions}
+            </section>
+          ) : null}
+
+          <WaitlistAdvancedSection controller={controller} label="Account settings" />
+        </div>
+      )
+    }
+
     return (
       <div className="mx-auto w-full max-w-[640px] space-y-5">
         {/* Critical errors stay inline; notices are toasted */}
@@ -380,7 +460,7 @@ export function AccountSetupWorkspaceView(props: {
                         type="button"
                         disabled={busyProvider === 'zora_cross_app'}
                         onClick={() => void onLinkZora()}
-                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
                       </button>
@@ -511,7 +591,7 @@ export function AccountSetupWorkspaceView(props: {
                               ? void onEnable4626Signing()
                               : connectOwnerWallet()
                         }
-                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {primarySigningActionLabel}
                       </button>
@@ -1024,8 +1104,10 @@ export function AccountSetupWorkspaceView(props: {
  */
 function WaitlistAdvancedSection({
   controller,
+  label = 'Advanced',
 }: {
   controller: AccountSetupWorkspaceController
+  label?: string
 }) {
   const [open, setOpen] = useState(false)
   const [rabbyOpen, setRabbyOpen] = useState(false)
@@ -1111,7 +1193,7 @@ function WaitlistAdvancedSection({
         className="group flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11.5px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
         aria-expanded={open}
       >
-        <span>Advanced</span>
+        <span>{label}</span>
         <ChevronRight
           className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
           aria-hidden="true"

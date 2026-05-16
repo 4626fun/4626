@@ -2442,7 +2442,7 @@ function LiquidityPanel(props: {
             type="button"
             onClick={props.onCreatePosition}
             disabled={props.anyBusy || !props.identityReady}
-            className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-primary py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-8px_rgba(0,82,255,0.5)] transition hover:bg-brand-hover disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 rounded-xl bg-brand-primary py-2 text-sm font-semibold text-white shadow-[0_4px_20px_-8px_rgb(var(--brand-primary)/0.5)] transition hover:bg-brand-hover disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
             {props.lpBusy === 'lpCreate' ? 'Adding…' : 'Add liquidity'}

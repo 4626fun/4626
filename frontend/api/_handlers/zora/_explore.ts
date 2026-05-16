@@ -82,6 +82,15 @@ function toNumericString(value: unknown): string | undefined {
   return undefined
 }
 
+function toFiniteNumberOrNull(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null
+  if (typeof value === 'string') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
+  }
+  return null
+}
+
 function isCreatorList(list: ExploreList): boolean {
   return (
     list === 'NEW_CREATORS' ||
@@ -131,15 +140,63 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
         ON lower(i.creator_address) = lower(NULLIF(p.signing_eoa, ''))
         OR lower(i.creator_address) = lower(NULLIF(p.primary_wallet, ''))
         OR lower(i.creator_address) = lower(NULLIF(p.payout_recipient, ''))
+        OR lower(i.creator_address) = lower(NULLIF(p.smart_wallet_address, ''))
+        OR lower(i.creator_address) = lower(NULLIF(p.privy_wallet_address, ''))
     ),
     profile_best AS (
       SELECT creator_address, twitter_username
       FROM profile_identity
       WHERE rn = 1
+    ),
+    canonical_wallet AS (
+      SELECT
+        i.creator_address,
+        ces.score,
+        ces.level
+      FROM input i
+      LEFT JOIN user_ethos_identity_keys uiek
+        ON uiek.ethos_userkey = ('address:' || i.creator_address)
+      LEFT JOIN canonical_ethos_scores ces
+        ON ces.canonical_user_id = uiek.canonical_user_id
+    ),
+    canonical_social AS (
+      SELECT
+        i.creator_address,
+        ces.score,
+        ces.level
+      FROM input i
+      LEFT JOIN profile_best pb
+        ON pb.creator_address = i.creator_address
+      LEFT JOIN user_ethos_identity_keys uiek
+        ON pb.twitter_username IS NOT NULL
+        AND uiek.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+      LEFT JOIN canonical_ethos_scores ces
+        ON ces.canonical_user_id = uiek.canonical_user_id
+    ),
+    owner_class_from_csw AS (
+      SELECT DISTINCT ON (i.creator_address)
+        i.creator_address,
+        zoc.ethos_score AS score,
+        zoc.ethos_level AS level
+      FROM input i
+      JOIN zora_csw_owners zco
+        ON lower(zco.csw_address) = i.creator_address
+      CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
+      JOIN zora_csw_owner_class zoc
+        ON lower(zoc.eoa) = lower(owner_eoa)
+      ORDER BY i.creator_address, zoc.ethos_score DESC NULLS LAST, zoc.last_updated_at DESC NULLS LAST
     )
     SELECT
       i.creator_address,
       pb.twitter_username,
+      cs.score AS canonical_social_score,
+      cs.level AS canonical_social_level,
+      cw.score AS canonical_wallet_score,
+      cw.level AS canonical_wallet_level,
+      zoc.ethos_score AS owner_class_score,
+      zoc.ethos_level AS owner_class_level,
+      oc.score AS owner_class_csw_score,
+      oc.level AS owner_class_csw_level,
       es_social.score AS social_score,
       es_social.level AS social_level,
       es_wallet.score AS wallet_score,
@@ -147,6 +204,14 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
     FROM input i
     LEFT JOIN profile_best pb
       ON pb.creator_address = i.creator_address
+    LEFT JOIN canonical_social cs
+      ON cs.creator_address = i.creator_address
+    LEFT JOIN canonical_wallet cw
+      ON cw.creator_address = i.creator_address
+    LEFT JOIN zora_csw_owner_class zoc
+      ON lower(zoc.eoa) = i.creator_address
+    LEFT JOIN owner_class_from_csw oc
+      ON oc.creator_address = i.creator_address
     LEFT JOIN ethos_userkey_scores es_social
       ON pb.twitter_username IS NOT NULL
       AND es_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
@@ -159,9 +224,17 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
   const typed = (rows.rows ?? []) as Array<{
     creator_address: string
     twitter_username: string | null
-    social_score: number | null
+    canonical_social_score: number | string | null
+    canonical_social_level: string | null
+    canonical_wallet_score: number | string | null
+    canonical_wallet_level: string | null
+    owner_class_score: number | string | null
+    owner_class_level: string | null
+    owner_class_csw_score: number | string | null
+    owner_class_csw_level: string | null
+    social_score: number | string | null
     social_level: string | null
-    wallet_score: number | null
+    wallet_score: number | string | null
     wallet_level: string | null
   }>
 
@@ -180,16 +253,24 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
     const creatorAddress = String(row.creator_address).toLowerCase()
     const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : null
     const socialFresh = twitterUsername ? socialFreshMap.get(`service:x.com:username:${twitterUsername}`) ?? null : null
+    const canonicalSocialScore = toFiniteNumberOrNull(row.canonical_social_score)
+    const canonicalWalletScore = toFiniteNumberOrNull(row.canonical_wallet_score)
+    const ownerClassScore = toFiniteNumberOrNull(row.owner_class_score)
+    const ownerClassCswScore = toFiniteNumberOrNull(row.owner_class_csw_score)
+    const dbSocialScore = toFiniteNumberOrNull(row.social_score)
+    const dbWalletScore = toFiniteNumberOrNull(row.wallet_score)
     const score = typeof socialFresh?.score === 'number'
       ? socialFresh.score
-      : typeof row.social_score === 'number'
-        ? row.social_score
-        : typeof row.wallet_score === 'number'
-          ? row.wallet_score
-          : null
+      : canonicalSocialScore ?? canonicalWalletScore ?? ownerClassCswScore ?? ownerClassScore ?? dbSocialScore ?? dbWalletScore
     const level = typeof socialFresh?.level === 'string'
       ? socialFresh.level
-      : row.social_level ?? row.wallet_level ?? null
+      : row.canonical_social_level
+        ?? row.canonical_wallet_level
+        ?? row.owner_class_csw_level
+        ?? row.owner_class_level
+        ?? row.social_level
+        ?? row.wallet_level
+        ?? null
     out.set(creatorAddress, {
       creatorAddress,
       score,
@@ -249,6 +330,10 @@ async function buildEthosSortedCreatorList(params: {
         SELECT NULLIF(p.primary_wallet, '')
         UNION ALL
         SELECT NULLIF(p.payout_recipient, '')
+        UNION ALL
+        SELECT NULLIF(p.smart_wallet_address, '')
+        UNION ALL
+        SELECT NULLIF(p.privy_wallet_address, '')
       ) a
       WHERE a.address IS NOT NULL
     ),
@@ -256,6 +341,47 @@ async function buildEthosSortedCreatorList(params: {
       SELECT creator_address, twitter_username
       FROM profile_identity
       WHERE rn = 1
+    ),
+    canonical_wallet AS (
+      SELECT
+        rcc.creator_address,
+        ces.score,
+        ces.level
+      FROM ranked_creator_coins rcc
+      LEFT JOIN user_ethos_identity_keys uiek
+        ON uiek.ethos_userkey = ('address:' || rcc.creator_address)
+      LEFT JOIN canonical_ethos_scores ces
+        ON ces.canonical_user_id = uiek.canonical_user_id
+      WHERE rcc.creator_coin_rank = 1
+    ),
+    canonical_social AS (
+      SELECT
+        rcc.creator_address,
+        ces.score,
+        ces.level
+      FROM ranked_creator_coins rcc
+      LEFT JOIN profile_best pb
+        ON pb.creator_address = rcc.creator_address
+      LEFT JOIN user_ethos_identity_keys uiek
+        ON pb.twitter_username IS NOT NULL
+        AND uiek.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+      LEFT JOIN canonical_ethos_scores ces
+        ON ces.canonical_user_id = uiek.canonical_user_id
+      WHERE rcc.creator_coin_rank = 1
+    ),
+    owner_class_from_csw AS (
+      SELECT DISTINCT ON (rcc.creator_address)
+        rcc.creator_address,
+        zoc.ethos_score AS score,
+        zoc.ethos_level AS level
+      FROM ranked_creator_coins rcc
+      JOIN zora_csw_owners zco
+        ON lower(zco.csw_address) = rcc.creator_address
+      CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
+      JOIN zora_csw_owner_class zoc
+        ON lower(zoc.eoa) = lower(owner_eoa)
+      WHERE rcc.creator_coin_rank = 1
+      ORDER BY rcc.creator_address, zoc.ethos_score DESC NULLS LAST, zoc.last_updated_at DESC NULLS LAST
     )
     SELECT
       rcc.coin_address,
@@ -264,11 +390,19 @@ async function buildEthosSortedCreatorList(params: {
       rcc.created_at,
       rcc.market_cap_usd,
       rcc.volume_24h_usd,
-      COALESCE(es_social.score, es_wallet.score) AS ethos_score,
-      COALESCE(es_social.level, es_wallet.level) AS ethos_level
+      COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) AS ethos_score,
+      COALESCE(cs.level, cw.level, oc.level, zoc.ethos_level, es_social.level, es_wallet.level) AS ethos_level
     FROM ranked_creator_coins rcc
     LEFT JOIN profile_best pb
       ON pb.creator_address = rcc.creator_address
+    LEFT JOIN canonical_social cs
+      ON cs.creator_address = rcc.creator_address
+    LEFT JOIN canonical_wallet cw
+      ON cw.creator_address = rcc.creator_address
+    LEFT JOIN owner_class_from_csw oc
+      ON oc.creator_address = rcc.creator_address
+    LEFT JOIN zora_csw_owner_class zoc
+      ON lower(zoc.eoa) = rcc.creator_address
     LEFT JOIN ethos_userkey_scores es_social
       ON pb.twitter_username IS NOT NULL
       AND es_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
@@ -277,10 +411,10 @@ async function buildEthosSortedCreatorList(params: {
       ON es_wallet.ethos_userkey = ('address:' || rcc.creator_address)
       AND es_wallet.status = 'matched'
     WHERE rcc.creator_coin_rank = 1
-      AND (${params.ethosMin}::numeric IS NULL OR COALESCE(es_social.score, es_wallet.score) >= ${params.ethosMin})
+      AND (${params.ethosMin}::numeric IS NULL OR COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) >= ${params.ethosMin})
     ORDER BY
-      CASE WHEN COALESCE(es_social.score, es_wallet.score) IS NULL THEN 1 ELSE 0 END ASC,
-      COALESCE(es_social.score, es_wallet.score) DESC NULLS LAST,
+      CASE WHEN COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) IS NULL THEN 1 ELSE 0 END ASC,
+      COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) DESC NULLS LAST,
       rcc.volume_24h_usd DESC NULLS LAST,
       rcc.market_cap_usd DESC NULLS LAST,
       rcc.creator_address ASC
@@ -295,7 +429,7 @@ async function buildEthosSortedCreatorList(params: {
     created_at: string | null
     market_cap_usd: string | number | null
     volume_24h_usd: string | number | null
-    ethos_score: number | null
+    ethos_score: number | string | null
     ethos_level: string | null
   }>
   const hasNextPage = selected.length > params.count
@@ -330,7 +464,7 @@ async function buildEthosSortedCreatorList(params: {
     const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
     const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
     const creatorProfile = detail?.creatorProfile
-    const finalScore = typeof row.ethos_score === 'number' ? row.ethos_score : null
+    const finalScore = toFiniteNumberOrNull(row.ethos_score)
     const finalLevel = row.ethos_level ?? null
     return {
       cursor: String(offset + idx + 1),
