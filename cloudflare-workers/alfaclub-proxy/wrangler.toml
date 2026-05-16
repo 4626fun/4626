@@ -2,6 +2,7 @@ name = "alfaclub-proxy"
 main = "src/index.ts"
 compatibility_date = "2026-04-01"
 compatibility_flags = ["nodejs_compat"]
+upload_source_maps = true
 workers_dev = true
 routes = [
   { pattern = "alfaclub.4626.fun", zone_name = "4626.fun", custom_domain = true, enabled = true, previews_enabled = false }
