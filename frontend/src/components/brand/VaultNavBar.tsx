@@ -1,5 +1,6 @@
 import { Component, type ReactNode, useEffect, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Search } from 'lucide-react'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/account/ConnectButton'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -75,6 +76,7 @@ type VaultNavBarContentProps = {
 
 function VaultNavBarContent(props: VaultNavBarContentProps) {
   const { interactive, location, publicMode, hostMode, isAdmin } = props
+  const [searchParams, setSearchParams] = useSearchParams()
   const [brandHovered, setBrandHovered] = useState(false)
   const canonicalMarketingWaitlistHref =
     hostMode === 'marketing'
@@ -84,6 +86,19 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
   const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
   const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
+  const isExploreRoute = location.pathname.startsWith('/explore')
+  const exploreSearchValue = searchParams.get('q') ?? ''
+  const exploreSearchPlaceholder = location.pathname.startsWith('/explore/creators')
+    ? 'Search creators'
+    : location.pathname.startsWith('/explore/content')
+      ? 'Search content'
+      : location.pathname.startsWith('/explore/vaults')
+        ? 'Search vaults'
+        : location.pathname.startsWith('/explore/trends')
+          ? 'Search trends'
+          : location.pathname.startsWith('/explore/transactions')
+            ? 'Search transactions'
+            : 'Search explore'
   const brandElement = (
     <>
       <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
@@ -183,6 +198,26 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
             {renderNavLinks()}
           </div>
         </nav>
+
+        {isExploreRoute ? (
+          <div className="relative hidden lg:block w-[240px] xl:w-[280px] shrink-0 lg:absolute lg:left-1/2 lg:-translate-x-1/2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={exploreSearchValue}
+              placeholder={exploreSearchPlaceholder}
+              aria-label="Search explore"
+              onChange={(event) => {
+                const nextQuery = event.target.value.trim()
+                const next = new URLSearchParams(searchParams)
+                if (nextQuery) next.set('q', nextQuery)
+                else next.delete('q')
+                setSearchParams(next, { replace: true })
+              }}
+              className="h-9 w-full rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 pl-9 pr-3 text-[13px] text-white placeholder:text-zinc-500 transition-all duration-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
+            />
+          </div>
+        ) : null}
 
         {showConnect ? (
           <div className="flex shrink-0 items-center gap-2">

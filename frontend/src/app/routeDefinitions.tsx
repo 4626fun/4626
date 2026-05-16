@@ -27,6 +27,7 @@ import {
   CreatorEarnings,
   CreatorStrategyFeatures,
   CswSignatureProbe,
+  MetaballOsProbe,
   ToshiProbe,
   Deploy,
   DeployCoin,
@@ -74,6 +75,7 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
+  { path: '/dev/metaball-os', element: <MetaballOsProbe /> },
 ]
 
 /**

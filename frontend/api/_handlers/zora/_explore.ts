@@ -107,6 +107,30 @@ type CreatorEthosResolved = {
   level: string | null
 }
 
+function resolveEthosScoreSource(candidates: {
+  canonicalSocial: number | null
+  canonicalWallet: number | null
+  ownerClassFromCsw: number | null
+  ownerClassEoa: number | null
+  socialCached: number | null
+  walletCached: number | null
+}): string | null {
+  const entries: Array<{ source: string; score: number | null }> = [
+    { source: 'canonical_social', score: candidates.canonicalSocial },
+    { source: 'canonical_wallet', score: candidates.canonicalWallet },
+    { source: 'owner_class_csw', score: candidates.ownerClassFromCsw },
+    { source: 'owner_class_eoa', score: candidates.ownerClassEoa },
+    { source: 'social_cached', score: candidates.socialCached },
+    { source: 'wallet_cached', score: candidates.walletCached },
+  ]
+  const scored = entries.filter((entry): entry is { source: string; score: number } =>
+    typeof entry.score === 'number' && Number.isFinite(entry.score),
+  )
+  if (scored.length === 0) return null
+  const maxScore = Math.max(...scored.map((entry) => entry.score))
+  return scored.find((entry) => entry.score === maxScore)?.source ?? null
+}
+
 async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise<Map<string, CreatorEthosResolved>> {
   const normalizedAddresses = Array.from(
     new Set(
@@ -128,6 +152,7 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
       SELECT
         i.creator_address,
         NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
+        NULLIF(lower(trim(p.handle)), '') AS zora_handle,
         p.last_refreshed_at,
         ROW_NUMBER() OVER (
           PARTITION BY i.creator_address
@@ -144,7 +169,7 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
         OR lower(i.creator_address) = lower(NULLIF(p.privy_wallet_address, ''))
     ),
     profile_best AS (
-      SELECT creator_address, twitter_username
+      SELECT creator_address, twitter_username, zora_handle
       FROM profile_identity
       WHERE rn = 1
     ),
@@ -189,6 +214,7 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
     SELECT
       i.creator_address,
       pb.twitter_username,
+      pb.zora_handle,
       cs.score AS canonical_social_score,
       cs.level AS canonical_social_level,
       cw.score AS canonical_wallet_score,
@@ -224,6 +250,7 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
   const typed = (rows.rows ?? []) as Array<{
     creator_address: string
     twitter_username: string | null
+    zora_handle: string | null
     canonical_social_score: number | string | null
     canonical_social_level: string | null
     canonical_wallet_score: number | string | null
@@ -241,7 +268,12 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
   const socialUserkeys = Array.from(
     new Set(
       typed
-        .map((row) => (typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''))
+        .map((row) => {
+          const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
+          if (twitterUsername) return twitterUsername
+          const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
+          return zoraHandle
+        })
         .filter((username) => username.length > 0)
         .map((username) => `service:x.com:username:${username}`),
     ),
@@ -251,17 +283,26 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
   const out = new Map<string, CreatorEthosResolved>()
   for (const row of typed) {
     const creatorAddress = String(row.creator_address).toLowerCase()
-    const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : null
-    const socialFresh = twitterUsername ? socialFreshMap.get(`service:x.com:username:${twitterUsername}`) ?? null : null
+    const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
+    const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
+    const socialIdentifier = twitterUsername || zoraHandle
+    const socialFresh = socialIdentifier ? socialFreshMap.get(`service:x.com:username:${socialIdentifier}`) ?? null : null
     const canonicalSocialScore = toFiniteNumberOrNull(row.canonical_social_score)
     const canonicalWalletScore = toFiniteNumberOrNull(row.canonical_wallet_score)
     const ownerClassScore = toFiniteNumberOrNull(row.owner_class_score)
     const ownerClassCswScore = toFiniteNumberOrNull(row.owner_class_csw_score)
     const dbSocialScore = toFiniteNumberOrNull(row.social_score)
     const dbWalletScore = toFiniteNumberOrNull(row.wallet_score)
-    const score = typeof socialFresh?.score === 'number'
-      ? socialFresh.score
-      : canonicalSocialScore ?? canonicalWalletScore ?? ownerClassCswScore ?? ownerClassScore ?? dbSocialScore ?? dbWalletScore
+    const scoreCandidates = [
+      canonicalSocialScore,
+      canonicalWalletScore,
+      ownerClassScore,
+      ownerClassCswScore,
+      dbSocialScore,
+      dbWalletScore,
+      typeof socialFresh?.score === 'number' ? socialFresh.score : null,
+    ].filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    const score = scoreCandidates.length > 0 ? Math.max(...scoreCandidates) : null
     const level = typeof socialFresh?.level === 'string'
       ? socialFresh.level
       : row.canonical_social_level
@@ -291,7 +332,8 @@ async function buildEthosSortedCreatorList(params: {
   if (!db) throw new Error('db_unavailable')
 
   const offset = Math.max(0, Number.parseInt(params.after ?? '0', 10) || 0)
-  const limitPlusOne = params.count + 1
+  const windowTarget = Math.max(200, (offset + params.count) * 8)
+  const candidateLimit = Math.min(2000, windowTarget)
 
   const rows = await db.sql`
     WITH ranked_creator_coins AS (
@@ -316,6 +358,7 @@ async function buildEthosSortedCreatorList(params: {
       SELECT
         lower(a.address) AS creator_address,
         NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
+        NULLIF(lower(trim(p.handle)), '') AS zora_handle,
         p.last_refreshed_at,
         ROW_NUMBER() OVER (
           PARTITION BY lower(a.address)
@@ -338,7 +381,7 @@ async function buildEthosSortedCreatorList(params: {
       WHERE a.address IS NOT NULL
     ),
     profile_best AS (
-      SELECT creator_address, twitter_username
+      SELECT creator_address, twitter_username, zora_handle
       FROM profile_identity
       WHERE rn = 1
     ),
@@ -387,10 +430,27 @@ async function buildEthosSortedCreatorList(params: {
       rcc.coin_address,
       rcc.creator_address,
       pb.twitter_username,
+      pb.zora_handle,
       rcc.created_at,
       rcc.market_cap_usd,
       rcc.volume_24h_usd,
-      COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) AS ethos_score,
+      cs.score AS canonical_social_score,
+      cw.score AS canonical_wallet_score,
+      oc.score AS owner_class_csw_score,
+      zoc.ethos_score AS owner_class_eoa_score,
+      es_social.score AS social_cached_score,
+      es_wallet.score AS wallet_cached_score,
+      NULLIF(
+        GREATEST(
+          COALESCE(cs.score, -1),
+          COALESCE(cw.score, -1),
+          COALESCE(oc.score, -1),
+          COALESCE(zoc.ethos_score, -1),
+          COALESCE(es_social.score, -1),
+          COALESCE(es_wallet.score, -1)
+        ),
+        -1
+      ) AS ethos_score,
       COALESCE(cs.level, cw.level, oc.level, zoc.ethos_level, es_social.level, es_wallet.level) AS ethos_level
     FROM ranked_creator_coins rcc
     LEFT JOIN profile_best pb
@@ -411,29 +471,117 @@ async function buildEthosSortedCreatorList(params: {
       ON es_wallet.ethos_userkey = ('address:' || rcc.creator_address)
       AND es_wallet.status = 'matched'
     WHERE rcc.creator_coin_rank = 1
-      AND (${params.ethosMin}::numeric IS NULL OR COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) >= ${params.ethosMin})
+      AND (
+        ${params.ethosMin}::numeric IS NULL
+        OR NULLIF(
+          GREATEST(
+            COALESCE(cs.score, -1),
+            COALESCE(cw.score, -1),
+            COALESCE(oc.score, -1),
+            COALESCE(zoc.ethos_score, -1),
+            COALESCE(es_social.score, -1),
+            COALESCE(es_wallet.score, -1)
+          ),
+          -1
+        ) >= ${params.ethosMin}
+      )
     ORDER BY
-      CASE WHEN COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) IS NULL THEN 1 ELSE 0 END ASC,
-      COALESCE(cs.score, cw.score, oc.score, zoc.ethos_score, es_social.score, es_wallet.score) DESC NULLS LAST,
+      CASE
+        WHEN NULLIF(
+          GREATEST(
+            COALESCE(cs.score, -1),
+            COALESCE(cw.score, -1),
+            COALESCE(oc.score, -1),
+            COALESCE(zoc.ethos_score, -1),
+            COALESCE(es_social.score, -1),
+            COALESCE(es_wallet.score, -1)
+          ),
+          -1
+        ) IS NULL
+        THEN 1
+        ELSE 0
+      END ASC,
+      NULLIF(
+        GREATEST(
+          COALESCE(cs.score, -1),
+          COALESCE(cw.score, -1),
+          COALESCE(oc.score, -1),
+          COALESCE(zoc.ethos_score, -1),
+          COALESCE(es_social.score, -1),
+          COALESCE(es_wallet.score, -1)
+        ),
+        -1
+      ) DESC NULLS LAST,
       rcc.volume_24h_usd DESC NULLS LAST,
       rcc.market_cap_usd DESC NULLS LAST,
       rcc.creator_address ASC
-    OFFSET ${offset}
-    LIMIT ${limitPlusOne};
+    OFFSET 0
+    LIMIT ${candidateLimit};
   `
 
   const selected = (rows.rows ?? []) as Array<{
     coin_address: string
     creator_address: string
     twitter_username: string | null
+    zora_handle: string | null
     created_at: string | null
     market_cap_usd: string | number | null
     volume_24h_usd: string | number | null
     ethos_score: number | string | null
     ethos_level: string | null
+    canonical_social_score: number | string | null
+    canonical_wallet_score: number | string | null
+    owner_class_csw_score: number | string | null
+    owner_class_eoa_score: number | string | null
+    social_cached_score: number | string | null
+    wallet_cached_score: number | string | null
   }>
-  const hasNextPage = selected.length > params.count
-  const pageRows = hasNextPage ? selected.slice(0, params.count) : selected
+  const candidateRows = selected
+
+  const freshUserkeys = Array.from(
+    new Set(
+      candidateRows
+        .map((row) => {
+          const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
+          if (twitterUsername) return twitterUsername
+          const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
+          return zoraHandle
+        })
+        .filter((username) => username.length > 0)
+        .map((username) => `service:x.com:username:${username}`),
+    ),
+  )
+  const freshScoreMap = freshUserkeys.length > 0 ? await fetchFreshEthosScoresByUserkeys(freshUserkeys) : new Map()
+
+  const getFreshScoreForRow = (row: { twitter_username: string | null; zora_handle: string | null }): { score: number | null; level: string | null } => {
+    const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
+    const zoraHandle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
+    const username = twitterUsername || zoraHandle
+    if (!username) return { score: null, level: null }
+    const fresh = freshScoreMap.get(`service:x.com:username:${username}`) ?? null
+    if (typeof fresh?.score !== 'number' || !Number.isFinite(fresh.score)) return { score: null, level: null }
+    return { score: fresh.score, level: typeof fresh.level === 'string' ? fresh.level : null }
+  }
+
+  candidateRows.sort((a, b) => {
+    const aBase = toFiniteNumberOrNull(a.ethos_score)
+    const bBase = toFiniteNumberOrNull(b.ethos_score)
+    const aFresh = getFreshScoreForRow(a).score
+    const bFresh = getFreshScoreForRow(b).score
+    const aScore = Math.max(aBase ?? Number.NEGATIVE_INFINITY, aFresh ?? Number.NEGATIVE_INFINITY)
+    const bScore = Math.max(bBase ?? Number.NEGATIVE_INFINITY, bFresh ?? Number.NEGATIVE_INFINITY)
+    if (aScore !== bScore) return bScore - aScore
+    const aVol = toFiniteNumberOrNull(a.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
+    const bVol = toFiniteNumberOrNull(b.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
+    if (aVol !== bVol) return bVol - aVol
+    const aMcap = toFiniteNumberOrNull(a.market_cap_usd) ?? Number.NEGATIVE_INFINITY
+    const bMcap = toFiniteNumberOrNull(b.market_cap_usd) ?? Number.NEGATIVE_INFINITY
+    if (aMcap !== bMcap) return bMcap - aMcap
+    return String(a.creator_address).localeCompare(String(b.creator_address))
+  })
+
+  const pageRows = candidateRows.slice(offset, offset + params.count)
+  const hasNextPage = candidateRows.length > offset + params.count
 
   let coinDetails = new Map<string, any>()
   if (params.key) {
@@ -464,8 +612,23 @@ async function buildEthosSortedCreatorList(params: {
     const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
     const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
     const creatorProfile = detail?.creatorProfile
-    const finalScore = toFiniteNumberOrNull(row.ethos_score)
-    const finalLevel = row.ethos_level ?? null
+    const baseScore = toFiniteNumberOrNull(row.ethos_score)
+    const fresh = getFreshScoreForRow(row)
+    const finalScore = Math.max(baseScore ?? Number.NEGATIVE_INFINITY, fresh.score ?? Number.NEGATIVE_INFINITY)
+    const normalizedFinalScore = Number.isFinite(finalScore) ? finalScore : null
+    const finalLevel = (fresh.score != null && normalizedFinalScore === fresh.score ? fresh.level : row.ethos_level) ?? null
+    const baseSource = resolveEthosScoreSource({
+      canonicalSocial: toFiniteNumberOrNull(row.canonical_social_score),
+      canonicalWallet: toFiniteNumberOrNull(row.canonical_wallet_score),
+      ownerClassFromCsw: toFiniteNumberOrNull(row.owner_class_csw_score),
+      ownerClassEoa: toFiniteNumberOrNull(row.owner_class_eoa_score),
+      socialCached: toFiniteNumberOrNull(row.social_cached_score),
+      walletCached: toFiniteNumberOrNull(row.wallet_cached_score),
+    })
+    const finalScoreSource =
+      fresh.score != null && normalizedFinalScore === fresh.score
+        ? 'social_fresh'
+        : baseSource
     return {
       cursor: String(offset + idx + 1),
       node: {
@@ -484,8 +647,9 @@ async function buildEthosSortedCreatorList(params: {
         uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
         mediaContent: detail?.mediaContent,
         creatorProfile,
-        ethosScore: finalScore,
+        ethosScore: normalizedFinalScore,
         ethosLevel: finalLevel,
+        ethosScoreSource: finalScoreSource,
       },
     }
   })

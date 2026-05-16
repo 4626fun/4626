@@ -66,6 +66,7 @@ export type ZoraCoin = {
   mediaContent?: ZoraMediaContent
   ethosScore?: number | null
   ethosLevel?: string | null
+  ethosScoreSource?: string | null
 }
 
 export type ZoraEdge<T> = { node?: T; cursor?: string }

@@ -20,13 +20,26 @@ type CanonicalBootstrapResult = {
  * shape exactly so the existing waitlist surface is untouched.
  */
 export function resolveWaitlistStep(params: {
-  account: { emailVerified: boolean; appAccessStatus: string | null }
+  account: {
+    emailVerified: boolean
+    appAccessStatus: string | null
+    accountSignals?: {
+      executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
+    }
+  }
   subAccountFlowEnabled?: boolean
   embeddedEoaAvailable?: boolean
   subAccountStepCompleted?: boolean
 }): WaitlistStep {
   const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted } = params
+  const signingReady =
+    account.accountSignals?.executionTrack === 'legacy-owner-install' ||
+    account.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
   if (!account.emailVerified) return 'auth'
+  // Only reveal the post-auth completion tray once the canonical signer step
+  // is actually complete (embedded EOA owner install on parent CSW).
+  if (!signingReady) return 'auth'
   if (subAccountFlowEnabled && embeddedEoaAvailable && !subAccountStepCompleted) {
     return 'connect-base-app'
   }

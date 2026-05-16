@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import { apiFetch } from '@/lib/api/apiBase'
@@ -22,6 +22,10 @@ type ExploreMetrics = {
     creatorCoinsMarketCapUsd: number | null
     creatorCoinsVolume24hUsd: number | null
     creatorCoinsFees24hUsd: number | null
+    ethosScoredCreators: number | null
+    ethos1200Creators: number | null
+    ethos1600Creators: number | null
+    ethos1800Creators: number | null
   }
   history30d: ExploreMetricHistoryPoint[]
 }
@@ -29,6 +33,8 @@ type ExploreMetrics = {
 type ExploreMetricsDashboardProps = {
   className?: string
 }
+
+let cachedExploreMetrics: ExploreMetrics | null = null
 
 async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
   try {
@@ -57,11 +63,16 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   const metricsQuery = useQuery({
     queryKey: ['explore', 'creators', 'metrics', 'shared-dashboard'],
     queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 10_000,
-    refetchInterval: 20_000,
-    refetchIntervalInBackground: true,
+    initialData: cachedExploreMetrics ?? undefined,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
     retry: 1,
   })
+
+  useEffect(() => {
+    if (metricsQuery.data) cachedExploreMetrics = metricsQuery.data
+  }, [metricsQuery.data])
 
   const totals = metricsQuery.data?.totals
   const updatedAt = metricsQuery.data?.updatedAt ?? null
@@ -69,7 +80,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   const exact = metricsQuery.data?.exact === true
 
   const statusLine = useMemo(() => {
-    if (!updatedAt) return 'Loading canonical market totals...'
+    if (!updatedAt) return 'Canonical totals unavailable'
     const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     if (status === 'error') return `Metrics refresh error — showing last known values (${time})`
     if (status === 'running' || !exact) return `Estimated totals refreshed ${time}`
@@ -85,7 +96,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   return (
     <div className={joinClasses('space-y-2', className)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
@@ -95,7 +106,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(marketCap)}
@@ -105,7 +116,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(volume24h)}
@@ -115,7 +126,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           </div>
         </div>
 
-        <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
           <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
           <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
             {formatCompactUsd(fees24h)}
@@ -127,7 +138,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
       </div>
 
       <div className="app-meta-value text-right text-zinc-500/90">
-        {!updatedAt ? <LoadingText intent="processing" size="sm" labelOverride="Loading canonical market totals..." /> : statusLine}
+        {!updatedAt ? <LoadingText intent="processing" size="sm" labelOverride={statusLine} /> : statusLine}
       </div>
     </div>
   )

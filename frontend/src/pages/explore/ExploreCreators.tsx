@@ -7,7 +7,6 @@ import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
@@ -45,8 +44,10 @@ const LIVE_METRICS_REFETCH_MS = 10_000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
-const CREATORS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const CREATORS_TIME_FILTER_VALUES = ['1d'] as const
+const CREATORS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 const ETHOS_FILTER_VALUES = ['all', '1200', '1600', '1800'] as const
+const ETHOS_FILTER_SLIDER_STOPS = ['all', '1200', '1600', '1800'] as const
 const ETHOS_FILTER_OPTIONS = [
   { label: 'All', value: 'all' },
   { label: '1200+', value: '1200' },
@@ -139,6 +140,10 @@ type ExploreMetrics = {
     creatorCoinsMarketCapUsd: number | null
     creatorCoinsVolume24hUsd: number | null
     creatorCoinsFees24hUsd: number | null
+    ethosScoredCreators: number | null
+    ethos1200Creators: number | null
+    ethos1600Creators: number | null
+    ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
   }
@@ -213,12 +218,6 @@ function getEthosFilterMinimum(value: string): number | null {
   if (value === 'all') return null
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
-}
-
-function getEthosFilterTone(value: (typeof ETHOS_FILTER_VALUES)[number]): string {
-  if (value === 'all') return 'border-white/12 bg-white/7 text-zinc-200'
-  const palette = getEthosScorePalette(Number(value))
-  return `${palette.borderClass} ${palette.bgClass} ${palette.textClass}`
 }
 
 function buildProfileIdentifierCandidates(query: string): string[] {
@@ -353,16 +352,10 @@ export function ExploreCreators() {
   const metricsQuery = useQuery({
     queryKey: ['explore', 'creators', 'metrics'],
     queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 10_000,
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
+    refetchOnWindowFocus: false,
     retry: 1,
-    refetchInterval: (query) => {
-      const data = (query.state.data as ExploreMetrics | null | undefined) ?? null
-      if (!data) return 5_000
-      if (data.exact) return 60_000
-      if (data.syncStatus === 'error') return 20_000
-      return 5_000
-    },
-    refetchIntervalInBackground: true,
   })
 
   // Fast-updating top-creator slice used for visibly-live metric cards.
@@ -373,10 +366,9 @@ export function ExploreCreators() {
         list: 'TOP_VOLUME_CREATORS_24H',
         count: PAGE_SIZE,
       }),
-    staleTime: LIVE_METRICS_REFETCH_MS,
-    refetchInterval: LIVE_METRICS_REFETCH_MS,
-    refetchIntervalInBackground: true,
+    staleTime: 60_000,
     retry: 1,
+    enabled: false,
   })
 
   const {
@@ -539,22 +531,11 @@ export function ExploreCreators() {
       : Number.POSITIVE_INFINITY
   const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
   const useLiveMetricCards = !exactMetrics || metricsTotals?.partial === true || canonicalMetricsStale
-  const preferLiveTotals = useLiveMetricCards && liveMetricCoins.length > 0
-  const creatorsTotalDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorsTotal, metricsTotals?.creatorsTotal)
-    : coalesceMetricValue(metricsTotals?.creatorsTotal, localMetricsFallback.creatorsTotal)
-  const creatorsNew24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorsNew24h, metricsTotals?.creatorsNew24h)
-    : coalesceMetricValue(metricsTotals?.creatorsNew24h, localMetricsFallback.creatorsNew24h)
-  const marketCapDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsMarketCapUsd, metricsTotals?.creatorCoinsMarketCapUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
-  const volume24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsVolume24hUsd, metricsTotals?.creatorCoinsVolume24hUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
-  const fees24hDisplay = preferLiveTotals
-    ? coalesceMetricValue(localMetricsFallback.creatorCoinsFees24hUsd, metricsTotals?.creatorCoinsFees24hUsd)
-    : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
+  const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
+  const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
+  const marketCapDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
+  const volume24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
+  const fees24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
   const creatorsTotalCount = creatorsTotalDisplay ?? 0
   const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
@@ -706,19 +687,16 @@ export function ExploreCreators() {
     ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
   const indexedCreatorProgress =
-    !exactMetrics && creatorsTotalCount > 0
-      ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalCount
-        ? `Indexed ${creatorsTotalCount.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
-        : `Indexed ${creatorsTotalCount.toLocaleString()} creators`
+    !exactMetrics && creatorsTotalDisplay != null
+      ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalDisplay
+        ? `Indexed ${creatorsTotalDisplay.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
+        : `Indexed ${creatorsTotalDisplay.toLocaleString()} creators`
       : null
-  const liveEstimateStatus = `Live estimate updates every ${Math.floor(LIVE_METRICS_REFETCH_MS / 1000)}s`
   const metricsStatusLine =
     syncStatus === 'error'
-      ? `${liveEstimateStatus} while canonical totals retry in background.`
+      ? 'Canonical totals retrying in background.'
       : useLiveMetricCards
-        ? [liveEstimateStatus, indexedCreatorProgress ?? (updatedTimeDisplay ? `Canonical refreshed ${updatedTimeDisplay}` : null)]
-            .filter(Boolean)
-            .join(' | ')
+        ? indexedCreatorProgress ?? (updatedTimeDisplay ? `Estimated totals refreshed ${updatedTimeDisplay}` : null)
         : exactMetrics && updatedTimeDisplay
           ? `Canonical totals refreshed ${updatedTimeDisplay}`
           : indexedCreatorProgress
@@ -744,7 +722,24 @@ export function ExploreCreators() {
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
   const screenshotReady = displayCoins.length > 0 && (!isLoading || hasScreenshotFallbackRows)
-  const showEthosSortCallout = currentSort === 'ethosScore' && !isLoading && displayCoins.length > 0
+  const showEthosSortCallout = currentSort === 'ethosScore' && !isLoading
+  const ethosScoredCreators = metricsTotals?.ethosScoredCreators ?? null
+  const ethos1200Creators = metricsTotals?.ethos1200Creators ?? null
+  const ethos1600Creators = metricsTotals?.ethos1600Creators ?? null
+  const ethos1800Creators = metricsTotals?.ethos1800Creators ?? null
+  const ethosCoverageTotal = metricsTotals?.creatorsTotal ?? null
+  const ethosTopPreview = useMemo(() => {
+    if (currentSort !== 'ethosScore' || displayCoins.length === 0) return null
+    const top = displayCoins.slice(0, 5).map((coin) => {
+      const score = typeof coin.ethosScore === 'number' ? coin.ethosScore : null
+      const symbol = coin.symbol || coin.name || 'unknown'
+      const source = typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : 'unknown'
+      return score != null ? `${symbol}:${score.toFixed(0)} (${source})` : `${symbol}:—`
+    })
+    return top.join(' | ')
+  }, [currentSort, displayCoins])
+  const ethosSliderIndex = Math.max(0, ETHOS_FILTER_SLIDER_STOPS.indexOf(ethosFilter))
+  const ethosSliderLabel = ethosFilter === 'all' ? 'All' : `${ethosFilter}+`
 
   useScreenshotReady(screenshotReady)
 
@@ -786,57 +781,66 @@ export function ExploreCreators() {
       headerContent={
         <>
           {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
-          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div
+              className="px-1 sm:px-2 py-1"
+              title={
+                creatorsNew24hUi != null
+                  ? `+${creatorsNew24hUi.toLocaleString()} today`
+                  : 'Tracking newly created creators'
+              }
+            >
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {creatorsTotalUi?.toLocaleString() ?? '—'}
               </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {creatorsNew24hUi != null
-                  ? `+${creatorsNew24hUi.toLocaleString()} today`
-                  : 'Tracking newly created creators'}
-              </div>
             </div>
 
-            <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="px-1 sm:px-2 py-1" title="Live market-cap snapshot">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(marketCapUi)}
               </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Live market-cap snapshot</div>
             </div>
 
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="px-1 sm:px-2 py-1" title="24H trade volume across creator coins">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(volume24hUi)}
               </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                24H trade volume across creator coins
-              </div>
             </div>
 
-            <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
+            <div className="px-1 sm:px-2 py-1" title="24H fees from creator-coin trading">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(fees24hUi)}
-              </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                24H fees from creator-coin trading
               </div>
             </div>
           </div>
 
           {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/creators" />
-          </div>
           {showEthosSortCallout ? (
             <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
-              Ethos sort ranks scored creators first: {ethosSortStats.scored.toLocaleString()} of{' '}
-              {ethosSortStats.total.toLocaleString()} currently have a scored Ethos identity. Use Ethos filters to focus
-              on 1200+/1600+/1800+ creators.
+              {ethosScoredCreators != null && ethosCoverageTotal != null ? (
+                <>
+                  Ethos sort uses DB-backed creator coverage: {ethosScoredCreators.toLocaleString()} of{' '}
+                  {ethosCoverageTotal.toLocaleString()} creators have a scored Ethos identity
+                  {ethos1200Creators != null && ethos1600Creators != null && ethos1800Creators != null
+                    ? ` (${ethos1200Creators.toLocaleString()} at 1200+, ${ethos1600Creators.toLocaleString()} at 1600+, ${ethos1800Creators.toLocaleString()} at 1800+)`
+                    : ''}
+                  .
+                </>
+              ) : (
+                <>
+                  Ethos sort ranks creators by available Ethos identity signal. Showing scored-first order for currently
+                  loaded rows ({ethosSortStats.scored.toLocaleString()} scored of {ethosSortStats.total.toLocaleString()} loaded).
+                </>
+              )}
+              {ethosTopPreview ? (
+                <span className="block mt-1 text-zinc-500">
+                  Top loaded scores: {ethosTopPreview}
+                </span>
+              ) : null}
             </div>
           ) : null}
         </>
@@ -850,6 +854,9 @@ export function ExploreCreators() {
           onSortChange={handleCreatorSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          timeFilters={CREATORS_TIME_FILTERS}
+          showSearch={false}
+          showMobileSortRow={false}
           sortOptions={[
             { label: 'Volume', value: 'volume' },
             { label: 'Market cap', value: 'marketCap' },
@@ -859,27 +866,27 @@ export function ExploreCreators() {
           ]}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
           extraFilters={
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 px-3 py-1.5">
               <span className="text-[11px] text-zinc-500">Ethos</span>
-              <div className="flex h-8 items-center gap-0.5 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 p-0.5">
-                {ETHOS_FILTER_OPTIONS.map((filter) => {
-                  const active = ethosFilter === filter.value
-                  const tone = getEthosFilterTone(filter.value)
-                  return (
-                    <button
-                      key={filter.value}
-                      type="button"
-                      onClick={() => setEthosFilter(filter.value as (typeof ETHOS_FILTER_VALUES)[number])}
-                      className={`h-6 rounded-full border px-2 text-[10px] font-medium leading-none transition-all duration-200 ${
-                        active
-                          ? tone
-                          : 'border-transparent text-zinc-400 hover:border-white/10 hover:bg-white/7 hover:text-white'
-                      }`}
-                    >
-                      {filter.label}
-                    </button>
+              <input
+                type="range"
+                min={0}
+                max={ETHOS_FILTER_SLIDER_STOPS.length - 1}
+                step={1}
+                value={ethosSliderIndex}
+                onChange={(event) => {
+                  const nextIndex = Math.max(
+                    0,
+                    Math.min(ETHOS_FILTER_SLIDER_STOPS.length - 1, Number(event.target.value)),
                   )
-                })}
+                  setEthosFilter(ETHOS_FILTER_SLIDER_STOPS[nextIndex] as (typeof ETHOS_FILTER_VALUES)[number])
+                }}
+                className="h-1.5 w-28 accent-[rgb(var(--brand-primary))] cursor-pointer"
+                aria-label="Ethos filter threshold"
+              />
+              <div className="text-[11px] text-zinc-200 tabular-nums min-w-[38px] text-right">{ethosSliderLabel}</div>
+              <div className="sr-only">
+                {ETHOS_FILTER_OPTIONS.map((filter) => filter.label).join(', ')}
               </div>
             </div>
           }

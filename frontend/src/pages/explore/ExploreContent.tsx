@@ -7,7 +7,6 @@ import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDash
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
@@ -30,7 +29,8 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 
 const PAGE_SIZE = 20
 const CONTENT_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
-const CONTENT_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const CONTENT_TIME_FILTER_VALUES = ['1d'] as const
+const CONTENT_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 
 export function ExploreContent() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
@@ -110,12 +110,7 @@ export function ExploreContent() {
       title="Top Content on Base"
       subtitle="Content Coins ranked by volume, market cap, and more."
       headerContent={
-        <>
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/content" />
-          </div>
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </>
+        <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
       }
       subnav={
         <ExploreSubnav
@@ -126,6 +121,9 @@ export function ExploreContent() {
           onSortChange={handleSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          timeFilters={CONTENT_TIME_FILTERS}
+          showSearch={false}
+          showMobileSortRow={false}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
         />
       }

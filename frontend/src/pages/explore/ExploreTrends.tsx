@@ -7,7 +7,6 @@ import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDash
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
@@ -31,7 +30,8 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 const PAGE_SIZE = 20
 const LIVE_REFETCH_MS = 12_000
 const TRENDS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new'] as const
-const TRENDS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const TRENDS_TIME_FILTER_VALUES = ['1d'] as const
+const TRENDS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 
 export function ExploreTrends() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
@@ -109,12 +109,7 @@ export function ExploreTrends() {
       title="Top Trends on Base"
       subtitle="Trend Coins ranked by trend velocity, volume, and market cap."
       headerContent={
-        <>
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path={`/explore/trends?sort=${encodeURIComponent(currentSort)}&time=${encodeURIComponent(currentTimeFilter)}`} />
-          </div>
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </>
+        <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
       }
       subnav={
         <ExploreSubnav
@@ -125,6 +120,9 @@ export function ExploreTrends() {
           onSortChange={handleSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
+          timeFilters={TRENDS_TIME_FILTERS}
+          showSearch={false}
+          showMobileSortRow={false}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
         />
       }

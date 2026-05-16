@@ -19,7 +19,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('auth')
   })
 
-  it('routes verified-email accounts directly into done state', () => {
+  it('keeps verified-email accounts on auth until signer install is complete', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -27,10 +27,10 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: null,
         },
       }),
-    ).toBe('done')
+    ).toBe('auth')
   })
 
-  it('keeps verified-but-unapproved accounts in done state', () => {
+  it('keeps verified-but-unapproved accounts on auth when signer install is incomplete', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -38,10 +38,25 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: null,
         },
       }),
+    ).toBe('auth')
+  })
+
+  it('routes approved accounts into done once embedded owner install is complete', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
+        },
+      }),
     ).toBe('done')
   })
 
-  it('routes approved, fully linked accounts into done state', () => {
+  it('keeps approved accounts on auth when signer install is not complete', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -49,24 +64,31 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: 'approved',
         },
       }),
-    ).toBe('done')
-  })
+    ).toBe('auth')
 
-  it('routes approved accounts into done regardless of wallet-readiness details', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
           appAccessStatus: 'approved',
+          accountSignals: {
+            executionTrack: 'none-yet',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
         },
       }),
-    ).toBe('done')
+    ).toBe('auth')
+  })
 
+  it('routes verified accounts into done when owner install is true even without executionTrack', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
-          appAccessStatus: 'approved',
+          appAccessStatus: null,
+          accountSignals: {
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
         },
       }),
     ).toBe('done')
@@ -75,7 +97,14 @@ describe('resolveWaitlistStep', () => {
   it('Track C2 — routes verified accounts to connect-base-app when flag enabled and embedded EOA exists', () => {
     expect(
       resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
+        },
         subAccountFlowEnabled: true,
         embeddedEoaAvailable: true,
         subAccountStepCompleted: false,
@@ -86,7 +115,14 @@ describe('resolveWaitlistStep', () => {
   it('Track C2 — does not route to connect-base-app when flag is off', () => {
     expect(
       resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
+        },
         subAccountFlowEnabled: false,
         embeddedEoaAvailable: true,
         subAccountStepCompleted: false,
@@ -97,7 +133,14 @@ describe('resolveWaitlistStep', () => {
   it('Track C2 — does not route to connect-base-app when embedded EOA is missing', () => {
     expect(
       resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: null },
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
+        },
         subAccountFlowEnabled: true,
         embeddedEoaAvailable: false,
         subAccountStepCompleted: false,
@@ -108,7 +151,14 @@ describe('resolveWaitlistStep', () => {
   it('Track C2 — once the connect-base-app step is completed, falls through to done', () => {
     expect(
       resolveWaitlistStep({
-        account: { emailVerified: true, appAccessStatus: 'approved' },
+        account: {
+          emailVerified: true,
+          appAccessStatus: 'approved',
+          accountSignals: {
+            executionTrack: 'legacy-owner-install',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+          },
+        },
         subAccountFlowEnabled: true,
         embeddedEoaAvailable: true,
         subAccountStepCompleted: true,

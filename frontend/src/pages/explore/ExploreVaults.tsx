@@ -9,7 +9,6 @@ import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableRowMessage } from '@/components/explore/ExploreUiPrimitives'
-import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import {
   formatDateLabel,
@@ -180,9 +179,6 @@ export function ExploreVaults() {
             Discover active, graduated, and settled vaults with live creator coin metrics.
           </p>
 
-          <div className="mt-3 flex justify-end">
-            <ExploreUnfurlDebugCopy path="/explore/vaults" />
-          </div>
           <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
         </motion.div>
 
@@ -200,6 +196,8 @@ export function ExploreVaults() {
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
+            showSearch={false}
+            showMobileSortRow={false}
             volumeColumnNote="24h volume/fees come from creator coin snapshots; market cap reflects latest sampled value."
             sortOptions={VAULT_SORT_OPTIONS}
             timeFilters={VAULT_TIME_FILTERS}

@@ -92,7 +92,8 @@ const TRANSACTIONS_SORT_OPTIONS = [
 ] as const
 
 const TRANSACTIONS_SORT_VALUES = ['new', 'volume', 'marketCap', 'priceChange'] as const
-const TRANSACTIONS_TIME_FILTER_VALUES = ['1d', '1w', '1y'] as const
+const TRANSACTIONS_TIME_FILTER_VALUES = ['1d'] as const
+const TRANSACTIONS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
 const TRANSACTIONS_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
   includePayoutAddress: true,
@@ -371,9 +372,12 @@ export function ExploreTransactions() {
             onSortChange={handleSortChange}
             currentTimeFilter={currentTimeFilter}
             currentSort={currentSort}
+            timeFilters={TRANSACTIONS_TIME_FILTERS}
             volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
             sortOptions={TRANSACTIONS_SORT_OPTIONS}
             disableUniswapTimeGating
+            showSearch={false}
+            showMobileSortRow={false}
           />
         </motion.div>
 
@@ -382,7 +386,7 @@ export function ExploreTransactions() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface overflow-hidden"
+          className="overflow-hidden rounded-2xl bg-vault-card/35"
         >
           {/* Sticky header */}
           <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">

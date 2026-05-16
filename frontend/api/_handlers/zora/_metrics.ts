@@ -27,6 +27,10 @@ type MetricsResponse = {
     creatorCoinsMarketCapUsd: number | null
     creatorCoinsVolume24hUsd: number | null
     creatorCoinsFees24hUsd: number | null
+    ethosScoredCreators: number | null
+    ethos1200Creators: number | null
+    ethos1600Creators: number | null
+    ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
   }
@@ -175,6 +179,10 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         creatorCoinsMarketCapUsd: null,
         creatorCoinsVolume24hUsd: null,
         creatorCoinsFees24hUsd: null,
+        ethosScoredCreators: null,
+        ethos1200Creators: null,
+        ethos1600Creators: null,
+        ethos1800Creators: null,
         partial: true,
         sampledCreators: 0,
       },
@@ -214,6 +222,98 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
       (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
   `
+  let ethosScoredCreators: number | null = null
+  let ethos1200Creators: number | null = null
+  let ethos1600Creators: number | null = null
+  let ethos1800Creators: number | null = null
+  try {
+    const ethosResult = await db.sql`
+    WITH creator_addresses AS (
+      SELECT DISTINCT lower(creator_address) AS creator_address
+      FROM creator_coins
+      WHERE chain_id = 8453
+        AND creator_address IS NOT NULL
+    ),
+    profile_identity AS (
+      SELECT
+        ca.creator_address,
+        NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
+        p.last_refreshed_at,
+        ROW_NUMBER() OVER (
+          PARTITION BY ca.creator_address
+          ORDER BY
+            CASE WHEN NULLIF(lower(trim(p.twitter_username)), '') IS NOT NULL THEN 0 ELSE 1 END,
+            p.last_refreshed_at DESC NULLS LAST
+        ) AS rn
+      FROM creator_addresses ca
+      JOIN zora_profiles p
+        ON ca.creator_address = lower(NULLIF(p.signing_eoa, ''))
+        OR ca.creator_address = lower(NULLIF(p.primary_wallet, ''))
+        OR ca.creator_address = lower(NULLIF(p.payout_recipient, ''))
+        OR ca.creator_address = lower(NULLIF(p.smart_wallet_address, ''))
+        OR ca.creator_address = lower(NULLIF(p.privy_wallet_address, ''))
+    ),
+    profile_best AS (
+      SELECT creator_address, twitter_username
+      FROM profile_identity
+      WHERE rn = 1
+    ),
+    creator_ethos AS (
+      SELECT
+        ca.creator_address,
+        NULLIF(
+          GREATEST(
+            COALESCE(cs.score, -1),
+            COALESCE(cw.score, -1),
+            COALESCE(es_social.score, -1),
+            COALESCE(es_wallet.score, -1)
+          ),
+          -1
+        ) AS ethos_score
+      FROM creator_addresses ca
+      LEFT JOIN profile_best pb
+        ON pb.creator_address = ca.creator_address
+      LEFT JOIN user_ethos_identity_keys uiek_social
+        ON pb.twitter_username IS NOT NULL
+        AND uiek_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+      LEFT JOIN canonical_ethos_scores cs
+        ON cs.canonical_user_id = uiek_social.canonical_user_id
+      LEFT JOIN user_ethos_identity_keys uiek_wallet
+        ON uiek_wallet.ethos_userkey = ('address:' || ca.creator_address)
+      LEFT JOIN canonical_ethos_scores cw
+        ON cw.canonical_user_id = uiek_wallet.canonical_user_id
+      LEFT JOIN ethos_userkey_scores es_social
+        ON pb.twitter_username IS NOT NULL
+        AND es_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+        AND es_social.status = 'matched'
+      LEFT JOIN ethos_userkey_scores es_wallet
+        ON es_wallet.ethos_userkey = ('address:' || ca.creator_address)
+        AND es_wallet.status = 'matched'
+    )
+    SELECT
+      (SELECT COUNT(*)::BIGINT FROM creators) AS creators_total,
+      (
+        SELECT COUNT(DISTINCT creator_address)::BIGINT
+        FROM creator_coins
+        WHERE chain_id = 8453
+          AND created_at >= NOW() - INTERVAL '24 hours'
+      ) AS creators_new_24h,
+      (SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS market_cap_usd,
+      (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
+      (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd,
+      (SELECT COUNT(*)::BIGINT FROM creator_ethos ce WHERE ce.ethos_score IS NOT NULL) AS ethos_scored_creators,
+      (SELECT COUNT(*)::BIGINT FROM creator_ethos ce WHERE ce.ethos_score >= 1200) AS ethos_1200_creators,
+      (SELECT COUNT(*)::BIGINT FROM creator_ethos ce WHERE ce.ethos_score >= 1600) AS ethos_1600_creators,
+      (SELECT COUNT(*)::BIGINT FROM creator_ethos ce WHERE ce.ethos_score >= 1800) AS ethos_1800_creators;
+    `
+    const ethosAgg = ethosResult.rows?.[0] ?? {}
+    ethosScoredCreators = toNumber(ethosAgg.ethos_scored_creators)
+    ethos1200Creators = toNumber(ethosAgg.ethos_1200_creators)
+    ethos1600Creators = toNumber(ethosAgg.ethos_1600_creators)
+    ethos1800Creators = toNumber(ethosAgg.ethos_1800_creators)
+  } catch {
+    // Ethos coverage is optional; keep canonical metrics available even if ethos tables are unavailable.
+  }
 
   const state = stateResult.rows?.[0] ?? {}
   const agg = totalsResult.rows?.[0] ?? {}
@@ -350,6 +450,10 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       creatorCoinsMarketCapUsd,
       creatorCoinsVolume24hUsd,
       creatorCoinsFees24hUsd,
+      ethosScoredCreators,
+      ethos1200Creators,
+      ethos1600Creators,
+      ethos1800Creators,
       partial: !exact,
       sampledCreators,
     },
