@@ -94,7 +94,6 @@ function isCreatorList(list: ExploreList): boolean {
 
 type CreatorEthosResolved = {
   creatorAddress: string
-  twitterUsername: string | null
   score: number | null
   level: string | null
 }
@@ -193,7 +192,6 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
       : row.social_level ?? row.wallet_level ?? null
     out.set(creatorAddress, {
       creatorAddress,
-      twitterUsername,
       score,
       level,
     })
@@ -323,8 +321,6 @@ async function buildEthosSortedCreatorList(params: {
     }
   }
 
-  const creatorEthosMap = await resolveCreatorEthosByAddress(pageRows.map((row) => row.creator_address))
-
   const edges = pageRows.map((row, idx) => {
     const detail = coinDetails.get(String(row.coin_address).toLowerCase()) ?? null
     const address = String(row.coin_address).toLowerCase()
@@ -334,13 +330,8 @@ async function buildEthosSortedCreatorList(params: {
     const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
     const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
     const creatorProfile = detail?.creatorProfile
-    const resolvedEthos = creatorEthosMap.get(creatorAddress) ?? null
-    const finalScore = typeof resolvedEthos?.score === 'number'
-      ? resolvedEthos.score
-      : typeof row.ethos_score === 'number'
-        ? row.ethos_score
-        : null
-    const finalLevel = resolvedEthos?.level ?? row.ethos_level ?? null
+    const finalScore = typeof row.ethos_score === 'number' ? row.ethos_score : null
+    const finalLevel = row.ethos_level ?? null
     return {
       cursor: String(offset + idx + 1),
       node: {
@@ -397,7 +388,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return Number.isFinite(raw ?? NaN) ? Number(raw) : null
   })()
 
-  if (sort === 'ETHOS_SCORE' && (list === 'NEW_CREATORS' || list === 'MOST_VALUABLE_CREATORS' || list === 'TOP_VOLUME_CREATORS_24H')) {
+  if (sort === 'ETHOS_SCORE' && isCreatorList(list)) {
     try {
       const data = await buildEthosSortedCreatorList({
         count,
@@ -474,6 +465,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!resolvedEthos) continue
         edge.node.ethosScore = resolvedEthos.score
         edge.node.ethosLevel = resolvedEthos.level
+      }
+
+      if (typeof ethosMin === 'number' && Number.isFinite(ethosMin)) {
+        data.edges = edges.filter((edge: any) => {
+          const score = edge?.node?.ethosScore
+          return typeof score === 'number' && score >= ethosMin
+        })
       }
     }
 

@@ -33,7 +33,8 @@ import {
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
   marketCap: 'MOST_VALUABLE_CREATORS',
-  priceChange: 'TOP_GAINERS',
+  // Keep creator-page sorts on creator-scoped lists for consistent candidate pools.
+  priceChange: 'TRENDING_CREATORS',
   new: 'NEW_CREATORS',
 }
 
@@ -330,7 +331,21 @@ export function ExploreCreators() {
     debugScope: 'explore-creators',
     })
 
-  const listType = SORT_TO_LIST_TYPE[currentSort] || 'TOP_VOLUME_CREATORS_24H'
+  const [ethosAnchorSort, setEthosAnchorSort] = useState<string>(
+    SORT_TO_LIST_TYPE[currentSort] ? currentSort : 'volume',
+  )
+  const handleCreatorSortChange = useCallback(
+    (nextSort: string) => {
+      if (nextSort !== 'ethosScore' && SORT_TO_LIST_TYPE[nextSort]) {
+        setEthosAnchorSort(nextSort)
+      }
+      handleSortChange(nextSort)
+    },
+    [handleSortChange],
+  )
+
+  const listSortKey = currentSort === 'ethosScore' ? ethosAnchorSort : currentSort
+  const listType = SORT_TO_LIST_TYPE[listSortKey] || 'TOP_VOLUME_CREATORS_24H'
   
   // Fetch migrated coins for accurate fee detection
   const { migratedCoins } = useMigratedCoins()
@@ -381,7 +396,7 @@ export function ExploreCreators() {
         count: PAGE_SIZE,
         after: pageParam,
         ...(currentSort === 'ethosScore' ? { sort: 'ETHOS_SCORE' as const } : {}),
-        ...(currentSort === 'ethosScore' && ethosMinimum != null ? { ethosMin: ethosMinimum } : {}),
+        ...(ethosMinimum != null ? { ethosMin: ethosMinimum } : {}),
       })
       return result
     },
@@ -832,7 +847,7 @@ export function ExploreCreators() {
           searchValue={searchQuery}
           onSearch={handleSearchChange}
           onTimeFilterChange={handleTimeFilterChange}
-          onSortChange={handleSortChange}
+          onSortChange={handleCreatorSortChange}
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
           sortOptions={[
