@@ -52,7 +52,7 @@ from a cold account" to "trust the published Hermez 174-contributor pot17."
   the pragma was bumped to `^0.8.20`, and a header banner records the
   provenance (circom version, SRS, public-input layout). Body bytes are
   otherwise byte-equal to the snarkjs source.
-- `test/zk/AmoePlonkVerifier.t.sol` — three tests pinning a real proof,
+- `amoe/tests/zk/AmoePlonkVerifier.t.sol` — three tests pinning a real proof,
   rejecting a tampered public input, and printing the exact verify gas.
 
 ### Modified
@@ -142,7 +142,7 @@ lock it in.
 ## Reproducing the PLONK setup
 
 ```bash
-cd circuits/amoe && mkdir -p build/plonk_fresh && cd build/plonk_fresh
+cd amoe/circuits && mkdir -p build/plonk_fresh && cd build/plonk_fresh
 
 # 1. Fresh -O1 recompile (PLONK rejects -O2's collapsed linear combos).
 circom ../../amoe_eligibility.circom --r1cs --wasm --sym --O1 -l ../node_modules

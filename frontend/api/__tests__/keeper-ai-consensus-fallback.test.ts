@@ -9,7 +9,7 @@ const { getElizaLlmServiceMock, getAvailableProvidersMock, generateResponseMock 
   generateResponseMock: vi.fn(),
 }))
 
-vi.mock('../../server/agent/eliza/llm.js', () => ({
+vi.mock('../../server/agents/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
 }))
 

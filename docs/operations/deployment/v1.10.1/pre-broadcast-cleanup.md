@@ -9,7 +9,7 @@ This prompt does **not** touch on-chain state. It produces three things:
 
 1. A clean codebase / docs / deployments tree with no stray references
    to addresses that v1.10.1 will orphan.
-2. A reusable CI guard `tools/ci/check_no_orphan_addresses.sh` that
+2. A reusable CI guard `amoe/tools/ci/check_no_orphan_addresses.sh` that
    keeps it that way.
 3. A new doc `docs/operations/deployment/orphan-registry.md` that
    becomes the canonical record of every orphaned mainnet address
@@ -48,10 +48,10 @@ should be silently pointing at one of the six addresses above. The
 - `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md` —
   the original evidence doc
 - `docs/operations/deployment/orphan-registry.md` — created by this prompt
-- `tools/ci/check_manager_amoe_surface.sh` — the AMOE-surface guard
+- `amoe/tools/ci/check_manager_amoe_surface.sh` — the AMOE-surface guard
   references `0xd593…1357` in a comment as the canonical
   baseline-negative-test address (intentional, do not remove)
-- `tools/ci/check_no_orphan_addresses.sh` — the new guard, contains
+- `amoe/tools/ci/check_no_orphan_addresses.sh` — the new guard, contains
   the orphan list itself
 - this prompt and `cursor-deploy-prompt-v1.10.1.md`
 
@@ -168,7 +168,7 @@ For each file in the grep output, classify it into exactly one of:
 
 - **CI_INTENTIONAL** — the address is intentionally referenced as a
   known-bad fixture. The only acceptable file:
-  - `tools/ci/check_manager_amoe_surface.sh` — references
+  - `amoe/tools/ci/check_manager_amoe_surface.sh` — references
     `0xd593…1357` in a comment
 
 - **TEST_TARGET** — guard scripts that pin the v1.8.3 epoch:
@@ -358,14 +358,14 @@ For each hit, follow the same categorization scheme as section 2.
 
 ---
 
-## 6. Create `tools/ci/check_no_orphan_addresses.sh`
+## 6. Create `amoe/tools/ci/check_no_orphan_addresses.sh`
 
 Model on the existing `test/v183-release-target-guard.sh` precedent.
 
 Specification:
 
 - Bash script, `set -euo pipefail`, lives at
-  `tools/ci/check_no_orphan_addresses.sh`, mode 755.
+  `amoe/tools/ci/check_no_orphan_addresses.sh`, mode 755.
 - Hardcodes the 6 orphan addresses as a `readonly` array at the top.
 - Hardcodes a `WHITELIST` array of file paths where the orphan
   addresses are intentionally allowed (release notes, evidence doc,
@@ -453,7 +453,7 @@ it:
   (section 3)
 - `docs/operations/deployment/releases/v1.10.1-supabase-update-plan.md`
   (section 4)
-- `tools/ci/check_no_orphan_addresses.sh` + workflow (section 6)
+- `amoe/tools/ci/check_no_orphan_addresses.sh` + workflow (section 6)
 - `docs/operations/deployment/orphan-registry.md` (section 7)
 
 The main prompt resumes at its step 9 (open the prep PR), which

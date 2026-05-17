@@ -34,18 +34,18 @@ broadcast/
 .cre_build_tmp*
 
 # Rust build artifacts
-target/*
-!target/idl/
-target/idl/*
-!target/idl/creator_share_hook.json
-!target/types/
-target/types/*
-!target/types/creator_share_hook.ts
+programs/creator-share-hook/target/*
+!programs/creator-share-hook/target/idl/
+programs/creator-share-hook/target/idl/*
+!programs/creator-share-hook/target/idl/creator_share_hook.json
+!programs/creator-share-hook/target/types/
+programs/creator-share-hook/target/types/*
+!programs/creator-share-hook/target/types/creator_share_hook.ts
 Cargo.lock
 !programs/creator-share-hook/Cargo.lock
 
 # Solana keypairs (NEVER commit private keys!)
-target/deploy/*-keypair.json
+programs/creator-share-hook/target/deploy/*-keypair.json
 *.keypair.json
 *keypair.json
 
@@ -170,10 +170,10 @@ tools/*
 tools/vanity-salt-grinder/target/
 # AMOE ZK pipeline tooling — explicit allowlist so build artifacts
 # elsewhere under tools/ stay ignored, but the regen + CI scripts ship.
-!tools/zk/
-!tools/zk/**
-!tools/ci/
-!tools/ci/**
+!amoe/tools/zk/
+!amoe/tools/zk/**
+!amoe/tools/ci/
+!amoe/tools/ci/**
 
 # Docusaurus build artifacts
 apps/docs-site/build/

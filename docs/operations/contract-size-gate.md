@@ -112,7 +112,7 @@ happen in Sprint 3 if the size gate fails in CI.
 
 Alongside the EIP-170 hard gate, CI runs a **warn-only** size guard
 specifically for `CreatorLotteryManager.sol`. The script lives at
-`tools/ci/check_manager_size_warn.sh` and is invoked from the
+`amoe/tools/ci/check_manager_size_warn.sh` and is invoked from the
 `build` job in `.github/workflows/test.yml` (with
 `continue-on-error: true`, so it never blocks a merge).
 
@@ -136,7 +136,7 @@ remains the sole enforcer.
 
 ## Manager AMOE selector-surface guard (added v1.10.1 safety-net)
 
-A companion script — `tools/ci/check_manager_amoe_surface.sh` —
+A companion script — `amoe/tools/ci/check_manager_amoe_surface.sh` —
 guards a different failure mode that is **not** about size. Given a
 deployed manager address and an RPC endpoint, it asserts that the
 three AMOE selectors are all present in the deployed runtime

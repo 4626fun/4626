@@ -131,7 +131,7 @@ vi.mock('../../server/_lib/wallet/privyCoinbaseSmartWallet.js', () => ({
   sendPrivyCoinbaseSmartWalletUserOperation: sendPrivyCoinbaseSmartWalletUserOperationMock,
 }))
 
-vi.mock('../../server/agent/core/executeDeterministicCommand.js', () => ({
+vi.mock('../../server/agents/core/executeDeterministicCommand.js', () => ({
   executeDeterministicCommand: async (...args: any[]) => {
     const result = await executeDeterministicCommandMock(...args)
     if (result && typeof result === 'object' && 'responseText' in result) return result
@@ -463,6 +463,32 @@ describe('telegram webhook handler', () => {
       expect(String(res.body?.error ?? '')).toContain('webhook secret')
       expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
       expect((fetch as any).mock.calls.length).toBe(0)
+    } finally {
+      restoreWebhookSecret()
+    }
+  })
+
+  it('accepts webhook requests when TELEGRAM_LINK_API_SECRET is used as webhook secret fallback', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    const restoreWebhookSecret = applyEnv({
+      TELEGRAM_WEBHOOK_SECRET: undefined,
+      TELEGRAM_BOT_CONFIG_SECRET: undefined,
+      TELEGRAM_LINK_API_SECRET: 'fallback-secret',
+    })
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { 'x-telegram-bot-api-secret-token': 'fallback-secret' },
+        body: {
+          update_id: 1,
+          message: { message_id: 7, text: '/help', chat: { id: -100123 }, from: { id: 99 } },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
     } finally {
       restoreWebhookSecret()
     }

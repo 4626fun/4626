@@ -163,7 +163,7 @@ Guardrails:
 
 - Vercel hosts the SPA plus request/response API handlers.
 - The long-lived XMTP / Eliza primary runtime does not run on Vercel in production.
-- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent` and `frontend/server/agent/eliza/index.ts`.
+- Production XMTP consumes from exactly one Railway primary using `frontend/Dockerfile.agent` and `frontend/server/agents/eliza/index.ts`.
 - Do not add or re-enable a Vercel cron for `/api/agent/process`; that path is not part of the production Vercel topology.
 
 ## Pages

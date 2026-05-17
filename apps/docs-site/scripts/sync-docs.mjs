@@ -127,7 +127,7 @@ const GIT_DATE_PATHS = [
   'README.md',
   'SECURITY.md',
   'deployments/README.md',
-  'frontend/server/agent/eliza/README.md',
+  'frontend/server/agents/eliza/README.md',
   'frontend/server/solana-provisioner/README.md',
   'docs/_generated/contracts',
   'docs/_generated/frontend',

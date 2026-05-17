@@ -29,7 +29,7 @@
 // │  after `checkProofData()` so non-canonical encodings     │
 // │  (x + k*q) cannot be used to bypass the router's raw-    │
 // │  bytes replay maps. See the regression tests in          │
-// │  test/zk/AmoePlonkVerifier.t.sol.                        │
+// │  amoe/tests/zk/AmoePlonkVerifier.t.sol.                        │
 // └──────────────────────────────────────────────────────────┘
 //
 

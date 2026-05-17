@@ -53,7 +53,7 @@
     "smoke:deploy-dry-run": "bash scripts/smoke-deploy-dry-run.sh",
     "uniswap:openapi": "openapi-typescript https://trade-api.gateway.uniswap.org/v1/api.json --output src/lib/uniswap/generated/tradeApi.ts",
     "agent:start": "pnpm agent:eliza",
-    "agent:eliza": "tsx --env-file=.env server/agent/eliza/index.ts",
+    "agent:eliza": "tsx --env-file=.env server/agents/eliza/index.ts",
     "agent:eliza:doctor": "tsx --env-file=.env scripts/agent/eliza-doctor.ts",
     "agent:eliza:standby:smoke": "bash -lc 'tmp_xmtp_db_dir=$(mktemp -d); trap \"rm -rf \\\"$tmp_xmtp_db_dir\\\"\" EXIT; timeout 20s env PORT=${PORT:-8081} AGENT_RUNTIME_ROLE=standby AGENT_CONSUME_XMTP=false XMTP_DB_DIRECTORY=\"$tmp_xmtp_db_dir\" pnpm agent:eliza; code=$?; if [ \"$code\" -eq 124 ]; then exit 0; fi; exit \"$code\"'",
     "keeper:jobs:worker": "tsx --env-file=.env scripts/keeper-job-worker.ts",

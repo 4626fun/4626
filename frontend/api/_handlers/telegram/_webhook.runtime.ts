@@ -67,10 +67,10 @@ import {
 import {
   resolveTelegramIdentityContext,
   type TelegramSenderWalletSource as SenderWalletSource,
-} from '../../../server/agent/core/resolveIdentityContext.js'
-import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
+} from '../../../server/agents/core/resolveIdentityContext.js'
+import { executeDeterministicCommand } from '../../../server/agents/core/executeDeterministicCommand.js'
 import { evaluateGroupAdminGate } from '../../../server/commands/telegramGroupAdminGate.js'
-import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
+import { processTelegramAgentInput } from '../../../server/agents/core/processTelegramAgentInput.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'

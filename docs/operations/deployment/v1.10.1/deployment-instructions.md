@@ -13,7 +13,7 @@ situation today is:
   `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3` are both missing all
   three AMOE selectors (`setAuthorizedAmoeRelayer`,
   `authorizedAmoeRelayer`, `processAmoeEntry`). Confirmed locally
-  with `tools/ci/check_manager_amoe_surface.sh` — both fail with all
+  with `amoe/tools/ci/check_manager_amoe_surface.sh` — both fail with all
   3 selectors absent. The evidence doc
   `docs/operations/deployment/amoe-deploy-evidence-2026-05-01.md`
   also notes that `authorizedAmoeRelayer()` reverts on the
@@ -120,17 +120,17 @@ Stop and confirm each of these. Print the result of every check.
 5. `forge --version` on your machine matches the CI pin in
    `.github/workflows/test.yml` line 41 (`version: v1.7.0`).
 6. **Manager size warn-guard passes locally:**
-   `tools/ci/check_manager_size_warn.sh` — must report `[ok]` or
+   `amoe/tools/ci/check_manager_size_warn.sh` — must report `[ok]` or
    `[WARN]` and exit 0. If it exits 1 the manager is over the EIP-170
    cap and v1.10.1 cannot deploy.
 7. **AmoePlonkVerifier patch guard passes locally:**
-   `tools/ci/check_amoe_plonk_patch.sh` — must exit 0.
+   `amoe/tools/ci/check_amoe_plonk_patch.sh` — must exit 0.
 8. **Build clean:** `forge clean && forge build --skip test --sizes`.
    No contract may exceed 24,576 bytes. Save the runtime size for
    `CreatorLotteryManager` — record it in the release packet.
 9. **Full test suite:** `forge test -vvv` runs to completion. The
    single allowlisted failure
-   (`test/zk/LotteryAmoeRouter.t.sol::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary`)
+   (`amoe/tests/zk/LotteryAmoeRouter.t.sol::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary`)
    is acceptable. Anything else failing is a stop.
 
 ### CHECKPOINT 0 — pre-flight signoff
@@ -180,7 +180,7 @@ state, with a check box per item, plus:
   - v1.9.0 abandoned router `0xd588f54Ea9e8c40701B419Cf6b8de7aE8d1fB22F`
     — Privy-CSW-owned, never wired
 - the manager-AMOE-surface guard invocation
-  (`tools/ci/check_manager_amoe_surface.sh <new-manager> https://mainnet.base.org`)
+  (`amoe/tools/ci/check_manager_amoe_surface.sh <new-manager> https://mainnet.base.org`)
   as a mandatory check between **manager deploy** and **router
   `setManager`**.
 - a documented **baseline negative test** entry: the same script
@@ -355,7 +355,7 @@ Agent verifies on chain:
    returns the expected owner (deployer EOA, will be transferred to
    Safe in step 12 — confirm this matches expectation).
 3. **Manager AMOE selector-surface — positive test (new manager):**
-   `tools/ci/check_manager_amoe_surface.sh <new-manager> $BASE_RPC_URL`
+   `amoe/tools/ci/check_manager_amoe_surface.sh <new-manager> $BASE_RPC_URL`
    → exit 0 with all three selectors found. Capture the script
    output verbatim.
 4. **Manager AMOE selector-surface — baseline negative tests (legacy
@@ -364,8 +364,8 @@ Agent verifies on chain:
    reported missing. Capture both outputs verbatim — they go into
    the post-broadcast evidence doc as proof that v1.10.1 is the
    first Base-mainnet manager carrying the AMOE surface.
-   - `tools/ci/check_manager_amoe_surface.sh 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357 $BASE_RPC_URL`
-   - `tools/ci/check_manager_amoe_surface.sh 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3 $BASE_RPC_URL`
+   - `amoe/tools/ci/check_manager_amoe_surface.sh 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357 $BASE_RPC_URL`
+   - `amoe/tools/ci/check_manager_amoe_surface.sh 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3 $BASE_RPC_URL`
 5. The 17 infra contracts each have non-`0x` code.
 
 If any of (1)–(5) fails — *including* an unexpected pass on either
@@ -531,10 +531,10 @@ the upstream pre-condition.
 ## Stop conditions (any one of these → halt and ask)
 
 - Any `forge build` step prints a contract over 24,576 bytes.
-- `tools/ci/check_manager_size_warn.sh` exits non-zero (size hard-cap
+- `amoe/tools/ci/check_manager_size_warn.sh` exits non-zero (size hard-cap
   reached) — note: the warn-only path (`[WARN]` line, exit 0) is
   acceptable but the user should be told.
-- `tools/ci/check_manager_amoe_surface.sh` against the freshly
+- `amoe/tools/ci/check_manager_amoe_surface.sh` against the freshly
   deployed manager exits non-zero — that means PR #395 didn't make
   it into the build, and the router would deadlock.
 - A deployed bytecode hash does not match the pre-broadcast manifest.

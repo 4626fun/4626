@@ -25,7 +25,7 @@ import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import { loadKeeperKeypair } from '../../../utils/solana.js';
 import { CHAINS, requireEnv } from '../../../config.js';
 
-import idl from '../../../../target/idl/creator_share_hook.json' with { type: 'json' };
+import idl from '../../../../programs/creator-share-hook/target/idl/creator_share_hook.json' with { type: 'json' };
 
 const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(rpcUrl, 'confirmed');

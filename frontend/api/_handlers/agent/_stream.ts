@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { creatorVaultCharacter } from '../../../server/agent/eliza/character.js'
-import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
+import { creatorVaultCharacter } from '../../../server/agents/eliza/character.js'
+import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 import {
   createCorrelationId,
   logger,

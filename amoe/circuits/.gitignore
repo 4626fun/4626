@@ -1,0 +1,13 @@
+# Build outputs — regenerate via `amoe/tools/zk/regen_amoe_fixture.sh`
+build/node_modules/
+build/package*.json
+build/*.ptau
+build/*.zkey
+build/*.wtns
+build/proof.json
+build/public.json
+build/input.json
+build/calldata.txt
+build/amoe_eligibility_js/
+# Keep r1cs + sym for diff visibility; both are tiny.
+# Keep verification_key.json — it pins the on-chain VK for reviewers.

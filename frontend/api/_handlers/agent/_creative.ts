@@ -14,7 +14,7 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
-import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
+import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 
 export type CreativeMode = 'referral_og' | 'share_page_copy' | 'quest_reward' | 'metadata_bundle'
 type CreativeVoice = 'premium_dark_crypto'

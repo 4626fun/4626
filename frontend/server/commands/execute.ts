@@ -1,6 +1,6 @@
 import { getKeeprVaultByGroupId } from '../_lib/keepr/keeprRegistry.js'
-import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
-import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
+import { resolveVaultAccessRoleFromVault } from '../agents/core/resolveVaultRole.js'
+import { toAgentError, toUserFacingAgentErrorMessage } from '../agents/eliza/_errors.js'
 import { getCommandFamily } from './registry.js'
 import { evaluateGroupAdminGate } from './telegramGroupAdminGate.js'
 import type { ExecuteCommandParams, KeeprCommandResult, KeeprRole } from './types.js'

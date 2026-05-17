@@ -29,7 +29,7 @@ PR 4 ships as two PRs:
 
 The actual v2 zkey + regenerated `AmoeGroth16Verifier.sol` are produced
 by the independent ceremony workstream described in
-[`circuits/amoe/CEREMONY.md`](../../circuits/amoe/CEREMONY.md). PR 4b
+[`amoe/circuits/CEREMONY.md`](../../amoe/circuits/CEREMONY.md). PR 4b
 ships the contract code and tests against a `MockVerifier`; the
 ceremony lands the production verifier and is its own deployment step.
 
@@ -145,13 +145,13 @@ strict positive lower bound and the `MAX_POINTS_AS_USD` upper bound.
 
 ## 4. Tests
 
-### `test/zk/LotteryAmoeRouter.t.sol` (existing, updated for v2)
+### `amoe/tests/zk/LotteryAmoeRouter.t.sol` (existing, updated for v2)
 
 Updated all 8 `submitAmoeEntryZK_*` cases to the `uint256[8]`
 signature; added defaults for `pointsBurnedAsUSD` and `nullifier`;
 added `setUp` wiring for the points-ledger publisher and root.
 
-### `test/zk/LotteryAmoeRouter.PointsBound.t.sol` (new, 19 tests)
+### `amoe/tests/zk/LotteryAmoeRouter.PointsBound.t.sol` (new, 19 tests)
 
 Organized by behavior:
 
@@ -172,7 +172,7 @@ Organized by behavior:
 Ran 2 test suites: 29 tests passed, 1 failed, 0 skipped (30 total tests)
 
 Failing tests:
-  test/zk/LotteryAmoeRouter.t.sol::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary
+  amoe/tests/zk/LotteryAmoeRouter.t.sol::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary
 ```
 
 The single failure is **pre-existing on `main`** (verified by
@@ -281,4 +281,4 @@ event-only path).
 - **Off-chain pipeline:** `frontend/server/_lib/lottery/lotteryAmoe.ts`
 - **Prior handoffs:** `amoe-pr1-handoff.md`, `amoe-pr2-handoff.md`,
   `amoe-pr3-handoff.md`
-- **Ceremony plan:** `circuits/amoe/CEREMONY.md § Phase 2 — v2 ceremony`
+- **Ceremony plan:** `amoe/circuits/CEREMONY.md § Phase 2 — v2 ceremony`

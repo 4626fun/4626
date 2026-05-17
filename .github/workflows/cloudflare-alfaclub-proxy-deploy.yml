@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - cloudflare-workers/alfaclub-proxy/**
+      - alfaclub/infra/cloudflare-proxy/**
       - .github/workflows/cloudflare-alfaclub-proxy-deploy.yml
   workflow_dispatch:
 
@@ -29,5 +29,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: cloudflare-workers/alfaclub-proxy
+          workingDirectory: alfaclub/infra/cloudflare-proxy
           command: deploy

@@ -24,7 +24,7 @@ paths = [
   '''^docs/llms/developers-ethos-network\.md$''',
   '''^docs/_internal/audits/internal-monorepo-audit-2026-03-30\.md$''',
   '''^docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation\.md$''',
-  '''^circuits/amoe/ceremony/v2/ceremony_transcript_v2\.txt$''',
+  '''^amoe/circuits/ceremony/v2/ceremony_transcript_v2\.txt$''',
   '''^bAlanciaga-master/''',
 ]
 

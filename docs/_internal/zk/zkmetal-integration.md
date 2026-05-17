@@ -13,7 +13,7 @@ freely.
 
 **After.** A new `LotteryAmoeRouter` settles AMOE entries on-chain. The ZK path
 (`submitAmoeEntryZK`) accepts a Groth16 proof produced from
-`circuits/amoe/amoe_eligibility.circom`, which proves:
+`amoe/circuits/amoe_eligibility.circom`, which proves:
 
 - the wallet is in the daily allowlist Merkle root the server already publishes
 - the nonce was bound to (wallet, creator coin) by the server
@@ -36,7 +36,7 @@ EIP-2537 BLS pairing precompile at `0x10`, which makes drand verification
 a single pairing call. quicknet uses scheme `bls-unchained-g1-rfc9380` —
 signatures are on G1 (48 byte compressed → 128 byte EIP-2537), public key on G2
 (96 byte compressed → 256 byte EIP-2537). Hash-to-curve to G1 is computed
-off-chain by the relayer (see `relayer/drand`, which uses zkMetal's
+off-chain by the relayer (see `amoe/relayer/drand`, which uses zkMetal's
 `BLS12381Engine.hashToCurveG1` with DST
 `BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_`) and bound to the round number
 via a keccak commitment so the relayer can't substitute an attacker-chosen G1
@@ -58,10 +58,10 @@ This is wired as a *secondary* source — Chainlink VRF stays primary.
 ## File map
 
 ```
-circuits/amoe/                          Circom 2 sources + build scripts
+amoe/circuits/                          Circom 2 sources + build scripts
 contracts/utilities/lottery/zk/         AmoeGroth16Verifier + Router
 contracts/utilities/lottery/randomness/ IRandomnessSource + DrandRandomnessSource
-relayer/drand/                          Swift package: zkMetal-backed relayer
-test/zk/                                Foundry tests for the router
+amoe/relayer/drand/                          Swift package: zkMetal-backed relayer
+amoe/tests/zk/                                Foundry tests for the router
 docs/_internal/zk/                      This doc
 ```

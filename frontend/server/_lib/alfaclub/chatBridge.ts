@@ -28,7 +28,7 @@
  *     `chat_jwt` row but does not write it.
  */
 
-import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'
+import { executeDeterministicCommand } from '../../agents/core/executeDeterministicCommand.js'
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 import { logger } from '../infra/logger.js'

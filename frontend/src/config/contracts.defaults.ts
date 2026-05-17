@@ -118,7 +118,7 @@ export const BASE_DEFAULTS = {
   uniswapV3Factory: addr('33128a8fC17869897dcE68Ed026d694621f6FDfD'),
 
   // 4626 AlfaClub secondary-market LP factory. Zero until deployed.
-  // Deploy script: `script/alfaclub/DeployAlfaCreatorKeyLPFactory.s.sol`.
+  // Deploy script: `alfaclub/contracts/script/DeployAlfaCreatorKeyLPFactory.s.sol`.
   // Per-environment override at runtime: `VITE_ALFA_CREATOR_KEY_LP_FACTORY`.
   // For Base Sepolia we rely on the env override; the default stays zero so
   // an unconfigured environment fails loudly at the consumer rather than

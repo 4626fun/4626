@@ -30,7 +30,7 @@ vi.mock('./chatIngestStore.js', () => ({
   upsertAlfaClubIngestMessages: vi.fn(async () => []),
 }))
 
-vi.mock('../../agent/core/executeDeterministicCommand.js', () => ({
+vi.mock('../../agents/core/executeDeterministicCommand.js', () => ({
   executeDeterministicCommand: vi.fn(async () => ({ responseText: '' })),
 }))
 

@@ -109,6 +109,11 @@ async function maybeRunProjectionFallback(params: {
   db: Awaited<ReturnType<typeof getDb>>
   lagMeta: ProjectionLagMeta
 }): Promise<void> {
+  if (!params.db) {
+    console.info('[ethos-canonical-sync-hot] projection_fallback:skip', { reason: 'db_unavailable' })
+    return
+  }
+
   if (!isEnabled(process.env.ETHOS_PROJECTION_FALLBACK_ENABLED)) {
     hotProjectionFallbackState.consecutivePipelineSplitStaleTicks = 0
     console.info('[ethos-canonical-sync-hot] projection_fallback:skip', { reason: 'disabled' })

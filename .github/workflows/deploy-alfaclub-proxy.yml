@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - "cloudflare-workers/alfaclub-proxy/**"
+      - "alfaclub/infra/cloudflare-proxy/**"
       - ".github/workflows/deploy-alfaclub-proxy.yml"
   workflow_dispatch:
 
@@ -17,7 +17,7 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
     defaults:
       run:
-        working-directory: cloudflare-workers/alfaclub-proxy
+        working-directory: alfaclub/infra/cloudflare-proxy
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: cloudflare-workers/alfaclub-proxy/pnpm-lock.yaml
+          cache-dependency-path: alfaclub/infra/cloudflare-proxy/pnpm-lock.yaml
       - name: Verify toolchain
         run: |
           node --version

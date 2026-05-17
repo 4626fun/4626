@@ -40,7 +40,7 @@ vi.mock('../../server/_lib/alfaclub/publicationLedger.js', async () => {
 import {
   alfaclubPlugin,
   parseSubcommand,
-} from '../../server/agent/eliza/plugins/alfaclub/index.ts'
+} from '../../server/agents/eliza/plugins/alfaclub/index.ts'
 
 type AnyAction = {
   name?: string

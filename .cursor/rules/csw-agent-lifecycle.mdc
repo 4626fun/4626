@@ -1,7 +1,7 @@
 ---
 description: Canonical Smart Wallet (CSW) to agent identity lifecycle — delegation model, XMTP, ERC-8004, deploy-session
 globs:
-  - frontend/server/agent/**
+  - frontend/server/agents/**
   - frontend/server/_lib/privyXmtpSigner.ts
   - frontend/server/_lib/privyWalletApi.ts
   - frontend/server/_lib/walletSync.ts
@@ -62,7 +62,7 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
   - Wraps signatures in `SignatureWrapper` struct with the CSW owner index.
   - Uses the CSW's `replaySafeHash()` for ERC-1271 validation.
 - The XMTP agent presents as the CSW address, not the Privy EOA.
-- File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agent/eliza/index.ts`
+- File: `frontend/server/_lib/privyXmtpSigner.ts`, `frontend/server/agents/eliza/index.ts`
 - Env: `XMTP_AGENT_CSW_ADDRESS`, `XMTP_AGENT_PRIVY_WALLET_ID`, `XMTP_AGENT_CSW_OWNER_INDEX`
 
 ### 5. ERC-8004 Agent Registration (server action)

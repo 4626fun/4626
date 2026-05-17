@@ -12,7 +12,7 @@ import {
   getClientIp,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { getElizaLlmService } from '../../../server/agent/eliza/llm.js'
+import { getElizaLlmService } from '../../../server/agents/eliza/llm.js'
 import { prepareRemoteAiJsonPayload } from '../../../server/_lib/agentControl/remoteAi.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'

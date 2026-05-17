@@ -86,9 +86,9 @@ Signing and execution split across two distinct tracks — see [4626 Connection 
 ### Outbound remote-AI call sites
 
 - Multi-provider chat completions:
-  - [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
+  - [`frontend/server/agents/eliza/llm.ts`](../../frontend/server/agents/eliza/llm.ts)
 - Embeddings:
-  - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
+  - [`frontend/server/agents/eliza/embeddings.ts`](../../frontend/server/agents/eliza/embeddings.ts)
 - OpenAI image generation and evaluation:
   - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - Keeper AI assessment:
@@ -212,8 +212,8 @@ Remote-AI egress is intentionally centralized around [`frontend/server/_lib/agen
 
 ### Current call sites using the shared wrapper
 
-- [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
-- [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
+- [`frontend/server/agents/eliza/llm.ts`](../../frontend/server/agents/eliza/llm.ts)
+- [`frontend/server/agents/eliza/embeddings.ts`](../../frontend/server/agents/eliza/embeddings.ts)
 - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - [`frontend/api/_handlers/keeper/_aiAssess.ts`](../../frontend/api/_handlers/keeper/_aiAssess.ts)
 

@@ -226,7 +226,7 @@ Value: `2026-04-30T00:00:00Z` → `Date.UTC(2026, 3, 30) / 1000` =
 Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L79)
 
 Daily AMOE epoch length, in seconds. Pinned at 86400 — must match
-`EPOCH_SECONDS` in `circuits/amoe/amoe_eligibility.circom:157`.
+`EPOCH_SECONDS` in `amoe/circuits/amoe_eligibility.circom:157`.
 
 **Single source of truth:** this is now a re-export of
 [AMOE\_EPOCH\_LENGTH\_SECONDS](amoeWitness.md#amoe_epoch_length_seconds) from `amoeWitness.ts`. The two
@@ -302,7 +302,7 @@ Best-effort default for the prover wasm + zkey paths.
 Resolution order:
   1. `AMOE_ZK_WASM_PATH` / `AMOE_ZK_ZKEY_PATH` env vars (preferred for
      Vercel — set them at deploy time).
-  2. Repo-relative fallback under `circuits/amoe/build/...` so local
+  2. Repo-relative fallback under `amoe/circuits/build/...` so local
      `pnpm dev` and the test harness work without env wiring.
 
 PR 6 will swap the env-or-fallback strategy for an

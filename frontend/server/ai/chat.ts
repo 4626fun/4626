@@ -1,14 +1,14 @@
 import { logger } from '../_lib/infra/logger.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
-import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
-import { toAgentError } from '../agent/eliza/_errors.js'
-import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'
-import { withRetry, withTimeout } from '../agent/eliza/_retry.js'
-import { getActionRetryBudget } from '../agent/eliza/_runtimePolicy.js'
-import { buildContinuityContextBlock } from '../agent/eliza/_stateHelpers.js'
-import { resolveCharacterRuntimeConfig } from '../agent/eliza/character.js'
-import { getElizaLlmService } from '../agent/eliza/llm.js'
-import { createRuntimeBridge } from '../agent/eliza/runtimeBridge.js'
+import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agents/core/conversationalInput.js'
+import { toAgentError } from '../agents/eliza/_errors.js'
+import { parsePositiveNumber } from '../agents/eliza/_rateLimit.js'
+import { withRetry, withTimeout } from '../agents/eliza/_retry.js'
+import { getActionRetryBudget } from '../agents/eliza/_runtimePolicy.js'
+import { buildContinuityContextBlock } from '../agents/eliza/_stateHelpers.js'
+import { resolveCharacterRuntimeConfig } from '../agents/eliza/character.js'
+import { getElizaLlmService } from '../agents/eliza/llm.js'
+import { createRuntimeBridge } from '../agents/eliza/runtimeBridge.js'
 import {
   hasVerifiedMemoryContinuity,
   resolveAssistantRuntimeTruth,
@@ -294,14 +294,14 @@ async function getChatRuntimeContext(): Promise<ChatRuntimeContext> {
       { keeprOpsPlugin },
       { knowledgePlugin },
     ] = await Promise.all([
-      import('../agent/eliza/plugins/keepr/index.js'),
-      import('../agent/eliza/plugins/zora/index.js'),
-      import('../agent/eliza/plugins/uniswap/index.js'),
-      import('../agent/eliza/plugins/lens/index.js'),
-      import('../agent/eliza/plugins/walletIntel/index.js'),
-      import('../agent/eliza/plugins/reputation/index.js'),
-      import('../agent/eliza/plugins/keeperOps/index.js'),
-      import('../agent/eliza/plugins/knowledge/index.js'),
+      import('../agents/eliza/plugins/keepr/index.js'),
+      import('../agents/eliza/plugins/zora/index.js'),
+      import('../agents/eliza/plugins/uniswap/index.js'),
+      import('../agents/eliza/plugins/lens/index.js'),
+      import('../agents/eliza/plugins/walletIntel/index.js'),
+      import('../agents/eliza/plugins/reputation/index.js'),
+      import('../agents/eliza/plugins/keeperOps/index.js'),
+      import('../agents/eliza/plugins/knowledge/index.js'),
     ])
     const characterRuntimeConfig = resolveCharacterRuntimeConfig()
     const plugins = [

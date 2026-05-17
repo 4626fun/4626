@@ -43,7 +43,7 @@ Operational source of truth for bot identities, token ownership, and env-variabl
 ### Service/runtime ownership
 
 - **Owning service:** Railway `4626` (`hermit.4626.fun`)
-- **Process:** `frontend/server/agent/hermit/index.ts`
+- **Process:** `frontend/server/agents/hermit/index.ts`
 - **Identity rule:** if logs say `hermit` and social/chat surfaces say `@keepr4626bot`, that is expected and refers to one bot.
 - **Canonical auth refresher model:** in-process refresher disabled; Vercel cron remains canonical token writer.
 

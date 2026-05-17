@@ -72,7 +72,7 @@ jobs:
         # remains the primary enforcer; this step exists to give
         # engineers a chance to plan a module split BEFORE the cap is
         # actually hit. See docs/operations/contract-size-gate.md.
-        run: tools/ci/check_manager_size_warn.sh
+        run: amoe/tools/ci/check_manager_size_warn.sh
         id: manager_size_warn
         continue-on-error: true
 

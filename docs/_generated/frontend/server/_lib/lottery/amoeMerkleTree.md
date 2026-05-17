@@ -88,7 +88,7 @@ The Merkle root.
 Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L89)
 
 Locked Merkle tree depth (DEPTH=20) from
-`circuits/amoe/amoe_eligibility.circom::component main = AmoeEligibility(20)`.
+`amoe/circuits/amoe_eligibility.circom::component main = AmoeEligibility(20)`.
 Bumping this requires regenerating the circuit + zkey.
 
 ***
@@ -119,7 +119,7 @@ In a textbook Merkle tree the empty-subtree value at level `L > 0`
 would be `Poseidon(Z[L-1], Z[L-1])`. The AMOE circuit, however,
 consumes `pathElements[i]` directly as the sibling — there is no
 "is this an empty subtree?" flag — and the canonical fixture
-(`circuits/amoe/build/input_v2.json`) encodes a single-leaf root with
+(`amoe/circuits/build/input_v2.json`) encodes a single-leaf root with
 `pathElements = [0, 0, ..., 0]` at every level. The circuit therefore
 commits to a root computed by hashing `leaf` against literal `0` at
 every level, NOT against zero-subtree hashes.

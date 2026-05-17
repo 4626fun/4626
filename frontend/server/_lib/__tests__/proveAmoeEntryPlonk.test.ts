@@ -3,7 +3,7 @@
 // What this file covers:
 //   1. `parsePlonkSolidityCallData` (pure parser):
 //      * Happy path against the canonical fixture from
-//        `circuits/amoe/build/plonk_fresh/calldata_plonk.txt`. We assert the
+//        `amoe/circuits/build/plonk_fresh/calldata_plonk.txt`. We assert the
 //        24-element proof and 8-element public inputs round-trip back to
 //        the SAME values stored in `proof_plonk.json` / `public_plonk.json`.
 //      * Malformed inputs throw typed AmoeProofGenerationError with stable
@@ -21,7 +21,7 @@
 // What this file deliberately does NOT cover:
 //   * Actual cryptographic proof generation. Running snarkjs against the
 //     real 86 MB `amoe_plonk_final.zkey` is out-of-band — see
-//     `tools/zk/regen_amoe_plonk_verifier.sh` for the offline regen path.
+//     `amoe/tools/zk/regen_amoe_plonk_verifier.sh` for the offline regen path.
 //     Production CI will gain a separate gated job once #403 §1 (trusted
 //     setup ceremony) lands.
 //   * Witness construction (Poseidon hashes, Merkle paths). That work is
@@ -65,7 +65,7 @@ const FIXTURE_PUBLIC = JSON.parse(
 ) as readonly string[]
 
 // The canonical creator coin from the on-chain test fixture
-// (`test/zk/AmoePlonkVerifier.t.sol::_fixture()`). Public input slot 1 stores
+// (`amoe/tests/zk/AmoePlonkVerifier.t.sol::_fixture()`). Public input slot 1 stores
 // `uint256(uint160(this address))`. The fixture's encoded value
 // `256540653394130413744119705557698342592` decodes to 0x00000000... +
 // 16 bytes of `0xc0ffee...` (i.e. only the bottom 128 bits are non-zero, so
@@ -259,7 +259,7 @@ function makeValidWitness(): AmoeEligibilityWitness {
 /**
  * Mock snarkjs that returns the canonical fixture proof/public for any
  * input. The point is to test our wrapper plumbing — proof correctness is
- * covered by `test/zk/AmoePlonkVerifier.t.sol`.
+ * covered by `amoe/tests/zk/AmoePlonkVerifier.t.sol`.
  */
 function makeFixtureSnarkjs(overrides?: {
   fullProveImpl?: SnarkjsLike['plonk']['fullProve']

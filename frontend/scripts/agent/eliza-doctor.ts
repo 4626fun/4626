@@ -86,7 +86,7 @@ function buildChecks(mode: StartupMode): Check[] {
     {
       label: 'Active runtime entrypoint',
       ok: true,
-      detail: 'frontend/server/agent/eliza/index.ts',
+      detail: 'frontend/server/agents/eliza/index.ts',
     },
     {
       label: 'Deployment target',
@@ -218,7 +218,7 @@ function main(): void {
   console.log(`Startup command: pnpm -C frontend agent:start`)
 
   printSection('Where ElizaOS Actually Fits', [
-    'ElizaOS is the orchestration layer inside frontend/server/agent/eliza.',
+    'ElizaOS is the orchestration layer inside frontend/server/agents/eliza.',
     'It does plugin/action/provider routing, memory/state composition, and LLM fallback.',
     'It is not the wallet/auth layer. Privy, CSW identity, Vercel routes, and contracts remain separate systems.',
   ])
@@ -228,11 +228,11 @@ function main(): void {
   ])
 
   printSection('Active End-to-End Flow', [
-    'XMTP ingress arrives through frontend/server/agent/eliza/plugins/xmtp/service.ts.',
-    'frontend/server/agent/eliza/index.ts normalizes the message, rate-limits it, and hands it to the runtime bridge.',
-    'frontend/server/agent/eliza/runtimeBridge.ts uses @elizaos/core shapes for memory, state, plugins, and action ranking.',
-    'Plugins in frontend/server/agent/eliza/plugins/* delegate into the existing 4626 production handlers.',
-    'If no action claims the message, frontend/server/agent/eliza/llm.ts generates the fallback response.',
+    'XMTP ingress arrives through frontend/server/agents/eliza/plugins/xmtp/service.ts.',
+    'frontend/server/agents/eliza/index.ts normalizes the message, rate-limits it, and hands it to the runtime bridge.',
+    'frontend/server/agents/eliza/runtimeBridge.ts uses @elizaos/core shapes for memory, state, plugins, and action ranking.',
+    'Plugins in frontend/server/agents/eliza/plugins/* delegate into the existing 4626 production handlers.',
+    'If no action claims the message, frontend/server/agents/eliza/llm.ts generates the fallback response.',
   ])
 
   printSection('Enabled Channels', [configuredChannels().join(', ')])

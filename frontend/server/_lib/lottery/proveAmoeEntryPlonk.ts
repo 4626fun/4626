@@ -33,7 +33,7 @@
 //     path today; see `frontend/api/_handlers/v1/lottery/_amoeSubmit.ts`).
 //   * `ManagerDeclinedEntry` retry semantics in the relayer.
 //
-// CIRCUIT INPUT SIGNATURE (locked by circuits/amoe/amoe_eligibility.circom)
+// CIRCUIT INPUT SIGNATURE (locked by amoe/circuits/amoe_eligibility.circom)
 // ========================================================================
 //   Public (8, in declaration order — matches `AMOE_PLONK_PUB_INPUT_SLOT`):
 //     walletAddrCommit, creatorCoinAddr, nonceCommit, epoch,
@@ -59,7 +59,7 @@
 // `AMOE_PLONK_PUB_INPUT_SLOT`, so no re-permutation is required here. If
 // you reorder the public-input declarations in the .circom file, this
 // module will silently emit the wrong slot order — the patch guard
-// (`tools/ci/check_amoe_plonk_patch.sh`) and the on-chain calldata→pubInputs
+// (`amoe/tools/ci/check_amoe_plonk_patch.sh`) and the on-chain calldata→pubInputs
 // binding in `LotteryAmoeRouter.submitAmoeEntryZK` will both catch the
 // drift, but at the cost of a guaranteed-revert tx, so keep them in sync.
 
@@ -255,7 +255,7 @@ function _extractScalars(chunk: string): bigint[] {
 
 /**
  * AMOE eligibility circuit witness input. Maps 1:1 onto the 14 declared
- * input signals in `circuits/amoe/amoe_eligibility.circom::AmoeEligibility`.
+ * input signals in `amoe/circuits/amoe_eligibility.circom::AmoeEligibility`.
  *
  * VALUES MUST BE BN254-FIELD-VALID. snarkjs accepts BigInts, decimal-string
  * BigInts, and base-10 numbers; we normalize to decimal strings before

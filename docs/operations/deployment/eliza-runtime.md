@@ -5,7 +5,7 @@ sidebar_position: 7
 
 # Eliza Runtime Deployment Runbook
 
-This runbook covers deploy, rollback, and on-call triage for the long-lived Eliza XMTP runtime (`frontend/server/agent/eliza/index.ts`).
+This runbook covers deploy, rollback, and on-call triage for the long-lived Eliza XMTP runtime (`frontend/server/agents/eliza/index.ts`).
 
 ## Scope
 

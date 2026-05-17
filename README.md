@@ -347,7 +347,7 @@ The Keepr XMTP / Eliza runtime is not part of the normal local frontend dev loop
 
 Authoritative runtime entrypoint:
 
-- `frontend/server/agent/eliza/index.ts`
+- `frontend/server/agents/eliza/index.ts`
 
 Architecture at a glance:
 
@@ -355,8 +355,8 @@ Architecture at a glance:
 - Telegram is a separate webhook + Mini App stack; it does not ingress through the XMTP runtime.
 - Privy + Coinbase Smart Wallet provide identity/signing; ElizaOS provides memory, routing, action ranking, and conversational fallback.
 - Shared agent logic now lives behind channel-specific processors:
-  - `frontend/server/agent/core/processXmtpAgentInput.ts`
-  - `frontend/server/agent/core/processTelegramAgentInput.ts`
+  - `frontend/server/agents/core/processXmtpAgentInput.ts`
+  - `frontend/server/agents/core/processTelegramAgentInput.ts`
 
 Authoritative operating model:
 

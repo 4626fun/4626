@@ -3,7 +3,7 @@ name: Eliza Runtime Guardrails
 on:
   pull_request:
     paths:
-      - 'frontend/server/agent/eliza/**'
+      - 'frontend/server/agents/eliza/**'
       - 'frontend/server/_lib/privyWalletApi.ts'
       - 'frontend/server/_lib/teeAttestationGate.ts'
       - 'frontend/packages/server-core/**'
@@ -46,6 +46,6 @@ jobs:
       - name: Run Eliza runtime unit guardrails
         run: |
           pnpm --dir frontend exec vitest run \
-            server/agent/eliza/__tests__/runtimeBridge.test.ts \
-            server/agent/eliza/__tests__/llm.test.ts \
+            server/agents/eliza/__tests__/runtimeBridge.test.ts \
+            server/agents/eliza/__tests__/llm.test.ts \
             server/_lib/__tests__/teeAttestationGate.test.ts

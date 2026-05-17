@@ -16,7 +16,7 @@ name: ZK pipeline guards
 # "let's just re-export the verifier from snarkjs" workflow cannot
 # silently drop the patch — CI will refuse to merge a regression.
 #
-# We also re-run the regression tests in `test/zk/AmoePlonkVerifier.t.sol`
+# We also re-run the regression tests in `amoe/tests/zk/AmoePlonkVerifier.t.sol`
 # (real proof verifies, tampered rejects, non-canonical rejects, gas
 # measurement) on every push to defend against logic drift.
 
@@ -27,12 +27,12 @@ on:
       - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
       - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
       - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
-      - 'test/zk/AmoePlonkVerifier.t.sol'
-      - 'test/zk/LotteryAmoeRouter*.t.sol'
-      - 'tools/zk/_patch_amoe_plonk_verifier.py'
-      - 'tools/zk/regen_amoe_plonk_verifier.sh'
-      - 'tools/ci/check_amoe_plonk_patch.sh'
-      - 'tools/ci/check_lottery_amoe_failures.py'
+      - 'amoe/tests/zk/AmoePlonkVerifier.t.sol'
+      - 'amoe/tests/zk/LotteryAmoeRouter*.t.sol'
+      - 'amoe/tools/zk/_patch_amoe_plonk_verifier.py'
+      - 'amoe/tools/zk/regen_amoe_plonk_verifier.sh'
+      - 'amoe/tools/ci/check_amoe_plonk_patch.sh'
+      - 'amoe/tools/ci/check_lottery_amoe_failures.py'
       - '.github/workflows/zk-pipeline-guards.yml'
   push:
     branches: [main, master]
@@ -42,7 +42,7 @@ on:
         description: |
           (Optional) Manager address to probe for the AMOE selector
           surface. When set, the `manager-amoe-surface-guard` job runs
-          tools/ci/check_manager_amoe_surface.sh against this address
+          amoe/tools/ci/check_manager_amoe_surface.sh against this address
           and asserts setAuthorizedAmoeRelayer / authorizedAmoeRelayer
           / processAmoeEntry are all present in deployed bytecode.
           Use before flipping any AMOE flag in a deploy script.
@@ -67,7 +67,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Run patch guard
-        run: tools/ci/check_amoe_plonk_patch.sh
+        run: amoe/tools/ci/check_amoe_plonk_patch.sh
 
   manager-amoe-surface-guard:
     name: Manager AMOE selector-surface guard
@@ -86,7 +86,7 @@ jobs:
 
       - name: Probe manager AMOE selector surface
         run: |
-          tools/ci/check_manager_amoe_surface.sh \
+          amoe/tools/ci/check_manager_amoe_surface.sh \
             "${{ github.event.inputs.manager_address }}" \
             "${{ github.event.inputs.manager_rpc }}"
 
@@ -130,14 +130,14 @@ jobs:
           forge_rc=$?
           set -e
 
-          # Set-based allowlist guard. The script lives in tools/ci/ rather
+          # Set-based allowlist guard. The script lives in amoe/tools/ci/ rather
           # than inline because YAML `run: |` blocks preserve leading
           # indentation, which clashes with Python's significant-whitespace
           # parsing inside an indented heredoc and breaks with
           # IndentationError. Extracting it also lets us unit-test the
           # logic locally.
           set +e
-          python3 tools/ci/check_lottery_amoe_failures.py /tmp/result.json
+          python3 amoe/tools/ci/check_lottery_amoe_failures.py /tmp/result.json
           guard_rc=$?
           set -e
 

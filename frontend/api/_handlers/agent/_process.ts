@@ -34,7 +34,7 @@ import {
   resolveXmtpDbDirectory,
 } from '../../../packages/server-core/src/index.js'
 import { createPrivyScwSigner } from '../../../server/_lib/wallet/privyXmtpSigner.js'
-import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
+import { executeDeterministicCommand } from '../../../server/agents/core/executeDeterministicCommand.js'
 
 
 declare const process: { env: Record<string, string | undefined> }

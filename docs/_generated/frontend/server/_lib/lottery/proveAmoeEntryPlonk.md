@@ -57,7 +57,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:92](https://github.com/
 Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:270](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L270)
 
 AMOE eligibility circuit witness input. Maps 1:1 onto the 14 declared
-input signals in `circuits/amoe/amoe_eligibility.circom::AmoeEligibility`.
+input signals in `amoe/circuits/amoe_eligibility.circom::AmoeEligibility`.
 
 VALUES MUST BE BN254-FIELD-VALID. snarkjs accepts BigInts, decimal-string
 BigInts, and base-10 numbers; we normalize to decimal strings before

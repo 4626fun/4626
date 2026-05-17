@@ -1,11 +1,11 @@
 import type { Address } from 'viem'
 
-import { executeConversationalFallback } from '../../agent/core/executeConversationalFallback.js'
+import { executeConversationalFallback } from '../../agents/core/executeConversationalFallback.js'
 import {
   EMPTY_CONVERSATIONAL_PROMPT_RESPONSE,
   isConversationalAgentInput,
   resolveConversationalPrompt,
-} from '../../agent/core/conversationalInput.js'
+} from '../../agents/core/conversationalInput.js'
 import type { KeeprVaultRow } from '../../_lib/keepr/keeprRegistry.js'
 import type { KeeprCommandResult } from '../types.js'
 import { formatGroupConnectGuidance, looksLikeGroupConnectIntent } from './keepr.js'

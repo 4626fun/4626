@@ -53,11 +53,11 @@ export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
 // PR 4 — PLONK ZK path: public-input slot layout.
 //
 // Locked by IAmoePlonkVerifier and verified bit-for-bit in the patch guard
-// (tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
+// (amoe/tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
 // checkField loop). Any change here MUST also be reflected in:
 //   * contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol
 //   * contracts/utilities/lottery/zk/AmoePlonkVerifier.sol (banner)
-//   * the circuit (circuits/amoe/amoe_eligibility.circom)
+//   * the circuit (amoe/circuits/amoe_eligibility.circom)
 // otherwise valid proofs will silently fail to verify on-chain.
 export const AMOE_PLONK_PROOF_LEN = 24 as const
 export const AMOE_PLONK_PUB_INPUTS_LEN = 8 as const

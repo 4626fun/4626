@@ -25,7 +25,7 @@ Instead, the router is a sidecar:
 ## How a creator opts into drand
 
 1. Governance calls `RandomnessRouter.setSourceFor(creatorCoin, drandSource)`.
-2. The keeper (per the `relayer/drand` Swift package or any equivalent service) starts feeding rounds into `DrandRandomnessSource` for that coin's epochs.
+2. The keeper (per the `amoe/relayer/drand` Swift package or any equivalent service) starts feeding rounds into `DrandRandomnessSource` for that coin's epochs.
 3. When the lottery manager fires a roll for that coin, the keeper:
    a. computes `round = drandSource.roundAt(block.timestamp)`,
    b. reads `RandomnessRouter.readPull(coin, round)`,

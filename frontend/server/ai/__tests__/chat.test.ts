@@ -90,37 +90,37 @@ const {
   }
 })
 
-vi.mock('../../agent/eliza/runtimeBridge.js', () => ({
+vi.mock('../../agents/eliza/runtimeBridge.js', () => ({
   createRuntimeBridge: createRuntimeBridgeMock,
 }))
-vi.mock('../../agent/eliza/llm.js', () => ({
+vi.mock('../../agents/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
 }))
-vi.mock('../../agent/eliza/character.js', () => ({
+vi.mock('../../agents/eliza/character.js', () => ({
   resolveCharacterRuntimeConfig: resolveCharacterRuntimeConfigMock,
 }))
-vi.mock('../../agent/eliza/plugins/keepr/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/keepr/index.js', () => ({
   keeprPlugin: { name: 'keepr', actions: [], providers: [keeprProviderMock] },
 }))
-vi.mock('../../agent/eliza/plugins/zora/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/zora/index.js', () => ({
   zoraPlugin: { name: 'zora', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/uniswap/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/uniswap/index.js', () => ({
   uniswapPlugin: { name: 'uniswap', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/lens/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/lens/index.js', () => ({
   lensPlugin: { name: 'lens', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/walletIntel/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/walletIntel/index.js', () => ({
   walletIntelPlugin: { name: 'walletIntel', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/reputation/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/reputation/index.js', () => ({
   reputationPlugin: { name: 'reputation', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/keeperOps/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/keeperOps/index.js', () => ({
   keeprOpsPlugin: { name: 'keeper-ops', actions: [], providers: [] },
 }))
-vi.mock('../../agent/eliza/plugins/knowledge/index.js', () => ({
+vi.mock('../../agents/eliza/plugins/knowledge/index.js', () => ({
   knowledgePlugin: { name: 'knowledge', actions: [], providers: [knowledgeProviderMock] },
 }))
 

@@ -26,7 +26,7 @@ CRE-to-app orchestration bridge files:
 - `frontend/api/_handlers/keeper/_alert.ts`
 - `frontend/api/_handlers/keeper/_aiAssess.ts`
 - `frontend/api/_handlers/_routes.ts`
-- `frontend/server/agent/eliza/llm.ts`
+- `frontend/server/agents/eliza/llm.ts`
 
 ## Simulation-First Proof
 

@@ -18,7 +18,7 @@ pragma solidity ^0.8.20;
 ///   input[6] = pointsLedgerRoot       Merkle root depth 20
 ///   input[7] = pointsBurnNullifier    Poseidon(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch)
 ///
-/// See `circuits/amoe/CEREMONY.md` for the rationale on choosing PLONK over
+/// See `amoe/circuits/CEREMONY.md` for the rationale on choosing PLONK over
 /// per-circuit Groth16 (no trusted-setup ceremony required) and
 /// `docs/security/amoe-pr4-handoff.md` for the public-input layout contract.
 interface IAmoePlonkVerifier {

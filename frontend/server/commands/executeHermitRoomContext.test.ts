@@ -86,7 +86,7 @@ vi.mock('../twitter/commands.js', () => ({
 vi.mock('../_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: vi.fn(async () => null),
 }))
-vi.mock('../agent/core/resolveVaultRole.js', () => ({
+vi.mock('../agents/core/resolveVaultRole.js', () => ({
   resolveVaultAccessRoleFromVault: () => 'MEMBER',
 }))
 vi.mock('./telegramGroupAdminGate.js', () => ({
