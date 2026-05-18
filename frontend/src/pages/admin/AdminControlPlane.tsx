@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Search } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { Spinner } from '@/components/ui/Spinner'
@@ -88,8 +89,21 @@ type AdminControlPlaneOperationDetail = {
   }>
 }
 
-async function fetchControlPlaneStatus(): Promise<AdminControlPlaneStatusResponse> {
-  const res = await apiFetch('/api/admin/control-plane/status', { withCredentials: true })
+function parseBoundedInt(value: string | null, fallback: number, min: number, max: number): number {
+  const n = Number(value ?? fallback)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, Math.floor(n)))
+}
+
+async function fetchControlPlaneStatus(params: {
+  stuckMinutes: number
+  limit: number
+}): Promise<AdminControlPlaneStatusResponse> {
+  const qs = new URLSearchParams({
+    stuckMinutes: String(params.stuckMinutes),
+    limit: String(params.limit),
+  })
+  const res = await apiFetch(`/api/admin/control-plane/status?${qs.toString()}`, { withCredentials: true })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminControlPlaneStatusResponse> | null
   if (!res.ok || !json?.success || !json.data) {
     throw new Error(json?.error || `Failed to load control-plane status (${res.status})`)
@@ -97,8 +111,16 @@ async function fetchControlPlaneStatus(): Promise<AdminControlPlaneStatusRespons
   return json.data
 }
 
-async function fetchOperationDetail(operationId: string): Promise<AdminControlPlaneOperationDetail> {
-  const qs = new URLSearchParams({ operationId })
+async function fetchOperationDetail(params: {
+  operationId: string
+  eventsLimit: number
+  jobsLimit: number
+}): Promise<AdminControlPlaneOperationDetail> {
+  const qs = new URLSearchParams({
+    operationId: params.operationId,
+    eventsLimit: String(params.eventsLimit),
+    jobsLimit: String(params.jobsLimit),
+  })
   const res = await apiFetch(`/api/admin/control-plane/operation?${qs.toString()}`, { withCredentials: true })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminControlPlaneOperationDetail> | null
   if (!res.ok || !json?.success || !json.data) {
@@ -135,18 +157,41 @@ function CountChips(props: { title: string; counts: Record<string, number> }) {
 }
 
 export function AdminControlPlane() {
-  const [operationInput, setOperationInput] = useState('')
-  const [selectedOperationId, setSelectedOperationId] = useState<string | null>(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedOperationId = searchParams.get('operationId')?.trim() || ''
+  const stuckMinutes = parseBoundedInt(searchParams.get('stuckMinutes'), 30, 1, 24 * 60)
+  const limit = parseBoundedInt(searchParams.get('limit'), 20, 1, 200)
+  const eventsLimit = parseBoundedInt(searchParams.get('eventsLimit'), 250, 1, 2_000)
+  const jobsLimit = parseBoundedInt(searchParams.get('jobsLimit'), 100, 1, 1_000)
+  const [operationInput, setOperationInput] = useState(selectedOperationId)
+
+  useEffect(() => {
+    setOperationInput(selectedOperationId)
+  }, [selectedOperationId])
+
+  function updateQueryParams(updates: Record<string, string | null>) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        for (const [key, value] of Object.entries(updates)) {
+          if (!value) next.delete(key)
+          else next.set(key, value)
+        }
+        return next
+      },
+      { replace: true },
+    )
+  }
 
   const statusQuery = useQuery({
-    queryKey: ['admin', 'control-plane', 'status'],
-    queryFn: fetchControlPlaneStatus,
+    queryKey: ['admin', 'control-plane', 'status', stuckMinutes, limit],
+    queryFn: () => fetchControlPlaneStatus({ stuckMinutes, limit }),
     staleTime: 15_000,
   })
 
   const operationQuery = useQuery({
-    queryKey: ['admin', 'control-plane', 'operation', selectedOperationId],
-    queryFn: () => fetchOperationDetail(selectedOperationId!),
+    queryKey: ['admin', 'control-plane', 'operation', selectedOperationId, eventsLimit, jobsLimit],
+    queryFn: () => fetchOperationDetail({ operationId: selectedOperationId, eventsLimit, jobsLimit }),
     enabled: Boolean(selectedOperationId),
     staleTime: 10_000,
   })
@@ -177,6 +222,64 @@ export function AdminControlPlane() {
           {statusQuery.isFetching ? <Spinner size="sm" /> : <RefreshCw className="w-4 h-4" />}
           Refresh
         </button>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+        <div className="text-sm text-zinc-200">View Filters (URL synced)</div>
+        <div className="flex flex-wrap gap-3">
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Stuck Minutes
+            <select
+              value={String(stuckMinutes)}
+              onChange={(event) => updateQueryParams({ stuckMinutes: event.target.value })}
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+            >
+              <option value="15">15</option>
+              <option value="30">30</option>
+              <option value="60">60</option>
+              <option value="120">120</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Status Limit
+            <select
+              value={String(limit)}
+              onChange={(event) => updateQueryParams({ limit: event.target.value })}
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Events Limit
+            <select
+              value={String(eventsLimit)}
+              onChange={(event) => updateQueryParams({ eventsLimit: event.target.value })}
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+            >
+              <option value="100">100</option>
+              <option value="250">250</option>
+              <option value="500">500</option>
+              <option value="1000">1000</option>
+            </select>
+          </label>
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Jobs Limit
+            <select
+              value={String(jobsLimit)}
+              onChange={(event) => updateQueryParams({ jobsLimit: event.target.value })}
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+            >
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="250">250</option>
+              <option value="500">500</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       {statusError ? (
@@ -213,7 +316,7 @@ export function AdminControlPlane() {
                     key={op.operationId}
                     type="button"
                     onClick={() => {
-                      setSelectedOperationId(op.operationId)
+                      updateQueryParams({ operationId: op.operationId })
                       setOperationInput(op.operationId)
                     }}
                     className="w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors"
@@ -261,7 +364,7 @@ export function AdminControlPlane() {
             event.preventDefault()
             const next = operationInput.trim()
             if (!next) return
-            setSelectedOperationId(next)
+            updateQueryParams({ operationId: next })
           }}
         >
           <input
