@@ -22,7 +22,10 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 
 // Mock the DB layer so handler writes don't actually need Postgres.
 const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
-  dbSqlMock: vi.fn(async () => ({ rows: [] as any[], rowCount: 0 })),
+  dbSqlMock: vi.fn(async () => ({
+    rows: [{ graduated_at: new Date().toISOString(), settled_at: null, settlement_stage_updated_at: null }],
+    rowCount: 1,
+  })),
   getDbMock: vi.fn(async () => ({
     sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
   })),
@@ -36,6 +39,24 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
 
 vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
+}))
+
+vi.mock('../../server/_lib/controlPlane/operations.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/controlPlane/operations.js')>(
+    '../../server/_lib/controlPlane/operations.js',
+  )
+  return {
+    ...actual,
+    transitionOperationStatus: vi.fn(async () => undefined),
+    transitionStageStatus: vi.fn(async () => undefined),
+    startControlPlaneOperation: vi.fn(async () => ({ operationId: 'op_settle_1', persisted: true, reused: false })),
+    createControlPlaneStage: vi.fn(async () => ({ stageId: 'stage_settle_1', persisted: true })),
+    addControlPlaneEvent: vi.fn(async () => undefined),
+  }
+})
+
+vi.mock('../../server/_lib/keeperJobs/keeperJobs.js', () => ({
+  enqueueKeeperJob: vi.fn(async () => ({ id: 42 })),
 }))
 
 import keeperMarkSettledHandler from '../_handlers/keeper/_markSettled.ts'
@@ -68,8 +89,9 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
 
   it('accepts graduatedAt-only without any settledAt gate check', async () => {
     const res = await postBody({ vaultAddress: VAULT, graduatedAt: NOW_ISO })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.accepted).toBe(true)
   })
 
   it('accepts settlementStage-only (pending state) without requiring settledAt', async () => {
@@ -77,7 +99,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       vaultAddress: VAULT,
       settlementStage: 'awaiting_owner_hook_config',
     })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
   })
 
@@ -87,7 +109,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: NOW_ISO,
       settlementStage: 'completed',
     })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
   })
 
@@ -135,7 +157,7 @@ describe('/api/keeper/mark-settled — audit §5.1 invariant 5 gate', () => {
       settledAt: nearFuture,
       settlementStage: 'completed',
     })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
   })
 

@@ -102,6 +102,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/control-plane/status': () => import('./keeper/_controlPlaneStatus.js'),
   'keeper/control-plane/provision': () => import('./keeper/control-plane/_provision.js'),
   'keeper/control-plane/maintenance': () => import('./keeper/control-plane/_maintenance.js'),
+  'keeper/control-plane/settle': () => import('./keeper/control-plane/_settle.js'),
   'keeper/control-plane/operator-action': () => import('./keeper/control-plane/_operatorAction.js'),
 
   'flags/discover': () => import('./flags/_discover.js'),
@@ -149,6 +150,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/control-plane/operation': () => import('./admin/control-plane/_operation.js'),
   'admin/control-plane/provision': () => import('./admin/control-plane/_provision.js'),
   'admin/control-plane/maintenance': () => import('./admin/control-plane/_maintenance.js'),
+  'admin/control-plane/settle': () => import('./admin/control-plane/_settle.js'),
   'admin/control-plane/operator-action': () => import('./admin/control-plane/_operatorAction.js'),
   'arch-b/enroll': () => import('./arch-b/_enroll.js'),
   'arch-b/revoke': () => import('./arch-b/_revoke.js'),

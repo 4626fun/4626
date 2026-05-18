@@ -1,7 +1,7 @@
 import type { OperatorAction } from './operatorActions.js'
 import { parseOperatorAction } from './operatorActions.js'
 
-export type AsyncVerbKind = 'vault.provision' | 'vault.maintenance' | 'operator.action'
+export type AsyncVerbKind = 'vault.provision' | 'vault.maintenance' | 'vault.settle' | 'operator.action'
 
 export type ControlPlaneJobSpec = {
   path: string
@@ -11,6 +11,7 @@ export type ControlPlaneJobSpec = {
 
 const PROVISION_PATH = '/api/keeper/control-plane/provision'
 const MAINTENANCE_PATH = '/api/keeper/control-plane/maintenance'
+const SETTLE_PATH = '/api/keeper/control-plane/settle'
 const OPERATOR_ACTION_PATH = '/api/keeper/control-plane/operator-action'
 
 export function buildControlPlaneJobSpec(input: {
@@ -48,6 +49,17 @@ export function buildControlPlaneJobSpec(input: {
           mode: input.payload.mode ?? 'standard',
         },
       }
+    case 'vault.settle':
+      return {
+        path: SETTLE_PATH,
+        stageKind: 'vault.settle',
+        body: {
+          ...base,
+          graduatedAt: input.payload.graduatedAt ?? null,
+          settledAt: input.payload.settledAt ?? null,
+          settlementStage: input.payload.settlementStage ?? null,
+        },
+      }
     case 'operator.action': {
       const action = resolveOperatorAction(input.payload)
       return {
@@ -79,6 +91,7 @@ export function isAllowedControlPlaneInternalPath(path: string): boolean {
   return (
     path === PROVISION_PATH ||
     path === MAINTENANCE_PATH ||
+    path === SETTLE_PATH ||
     path === OPERATOR_ACTION_PATH
   )
 }

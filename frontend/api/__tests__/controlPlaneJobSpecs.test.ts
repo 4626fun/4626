@@ -36,6 +36,21 @@ describe('buildControlPlaneJobSpec', () => {
     expect(spec.body.mode).toBe('standard')
   })
 
+  it('maps vault.settle to settle path', () => {
+    const spec = buildControlPlaneJobSpec({
+      ...base,
+      operationKind: 'vault.settle',
+      payload: {
+        graduatedAt: '2026-01-01T00:00:00.000Z',
+        settlementStage: 'completed',
+        settledAt: '2026-01-02T00:00:00.000Z',
+      },
+    })
+    expect(spec.path).toBe('/api/keeper/control-plane/settle')
+    expect(spec.stageKind).toBe('vault.settle')
+    expect(isAllowedControlPlaneInternalPath(spec.path)).toBe(true)
+  })
+
   it('maps operator.action to operator-action path with parsed action', () => {
     const spec = buildControlPlaneJobSpec({
       ...base,

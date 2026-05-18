@@ -4,8 +4,8 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
   dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
-    rows: [] as any[],
-    rowCount: 0,
+    rows: [{ graduated_at: new Date().toISOString(), settled_at: null, settlement_stage_updated_at: null }],
+    rowCount: 1,
   })),
   getDbMock: vi.fn(async () => ({
     sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
@@ -27,6 +27,24 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   getClientIp: vi.fn(() => '198.51.100.10'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   RATE_LIMITS: { creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 60 } },
+}))
+
+vi.mock('../../server/_lib/controlPlane/operations.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/controlPlane/operations.js')>(
+    '../../server/_lib/controlPlane/operations.js',
+  )
+  return {
+    ...actual,
+    transitionOperationStatus: vi.fn(async () => undefined),
+    transitionStageStatus: vi.fn(async () => undefined),
+    startControlPlaneOperation: vi.fn(async () => ({ operationId: 'op_settle_race', persisted: true, reused: false })),
+    createControlPlaneStage: vi.fn(async () => ({ stageId: 'stage_settle_race', persisted: true })),
+    addControlPlaneEvent: vi.fn(async () => undefined),
+  }
+})
+
+vi.mock('../../server/_lib/keeperJobs/keeperJobs.js', () => ({
+  enqueueKeeperJob: vi.fn(async () => ({ id: 55 })),
 }))
 
 import markSettledHandler from '../_handlers/keeper/_markSettled.ts'
@@ -60,17 +78,17 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
     expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(false)
   })
 
-  it('allows execute-time settlement only when stage is completed', async () => {
+  it('queues execute-time settlement only when stage is completed', async () => {
     const res = await post({
       vaultAddress: VAULT,
       settledAt: new Date().toISOString(),
       settlementStage: 'completed',
     })
 
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode).toBe(202)
     expect(res.body?.success).toBe(true)
-    expect(ensureKeeprSchemaMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.data?.accepted).toBe(true)
     const sqlTexts = dbSqlMock.mock.calls.map((call) => String((call[0] as TemplateStringsArray | undefined)?.[0] ?? ''))
-    expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(true)
+    expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(false)
   })
 })

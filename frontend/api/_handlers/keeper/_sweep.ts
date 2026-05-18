@@ -605,7 +605,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           requestedBy: 'api:keeper/sweep',
           idempotencyKey: `sweep-complete:${markSettled.vaultAddress}`,
         })
-        settlementWrite.applied = true
+        settlementWrite.applied = settleResult.accepted
         settlementWrite.operationId = settleResult.operationId
       } catch (error) {
         settlementWrite.error = error instanceof Error ? error.message : String(error)

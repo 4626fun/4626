@@ -73,4 +73,23 @@ describe('vaultControlPlane queueAsyncVerb', () => {
       }),
     )
   })
+
+  it('enqueues internal_api keeper jobs for vault.settle', async () => {
+    const cp = createVaultControlPlane()
+    await cp.settleVault({
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      settlementStage: 'completed',
+      settledAt: new Date().toISOString(),
+    })
+
+    expect(enqueueKeeperJobMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'internal_api',
+        payload: expect.objectContaining({
+          path: '/api/keeper/control-plane/settle',
+          method: 'POST',
+        }),
+      }),
+    )
+  })
 })

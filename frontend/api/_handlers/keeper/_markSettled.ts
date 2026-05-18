@@ -68,14 +68,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       requestedBy: 'api:keeper/mark-settled',
     })
 
-    return res.status(200).json({
+    return res.status(202).json({
       success: true,
       data: {
-        updated: result.updated,
-        stageUpdated: result.stageUpdated,
+        accepted: result.accepted,
         operationId: result.operationId,
+        stageId: result.stageId ?? null,
       },
-    } satisfies ApiEnvelope<{ updated: boolean; stageUpdated: boolean; operationId: string }>)
+    } satisfies ApiEnvelope<{ accepted: boolean; operationId: string; stageId: string | null }>)
   } catch (err) {
     if (err instanceof VaultControlPlaneError) {
       return res.status(err.statusCode).json({

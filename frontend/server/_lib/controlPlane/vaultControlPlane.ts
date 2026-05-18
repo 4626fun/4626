@@ -3,16 +3,18 @@ import { ensureKeeprSchema } from '../keepr/keeprSchema.js'
 import { enqueueKeeperJob } from '../keeperJobs/keeperJobs.js'
 import {
   addControlPlaneEvent,
-  completeControlPlaneOperation,
   createControlPlaneStage,
   startControlPlaneOperation,
   transitionOperationStatus,
-  transitionStageStatus,
   type OperationStatus,
 } from './operations.js'
 import { parseOperatorAction } from './operatorActions.js'
 import { loadControlPlanePolicy } from './policy.js'
-import { buildControlPlaneJobSpec } from './controlPlaneJobSpecs.js'
+import { buildControlPlaneJobSpec, type AsyncVerbKind } from './controlPlaneJobSpecs.js'
+import {
+  parseSettleVaultInput,
+  SettleVaultExecutionError,
+} from './executors/executeSettleVault.js'
 import {
   enforceMutatingDegradation,
   evaluateFreshness,
@@ -78,9 +80,9 @@ export class VaultControlPlaneError extends Error {
 }
 
 export type SettleVaultResult = {
-  updated: boolean
-  stageUpdated: boolean
+  accepted: boolean
   operationId: string
+  stageId?: string
 }
 
 function normalizeVaultAddress(value: string): `0x${string}` {
@@ -95,45 +97,6 @@ function normalizeVaultAddress(value: string): `0x${string}` {
   return normalized as `0x${string}`
 }
 
-function normalizeSettlementStage(value: string | undefined): string {
-  const stage = String(value || '').trim()
-  if (!stage) return ''
-  if (!/^[a-z0-9_:-]{2,64}$/i.test(stage)) {
-    throw new VaultControlPlaneError({
-      statusCode: 400,
-      code: 'invalid_settlement_stage',
-      message: 'Invalid settlementStage',
-    })
-  }
-  return stage
-}
-
-function validateSettledAt(params: { settledAt: string; normalizedStage: string }): void {
-  if (params.normalizedStage.toLowerCase() !== 'completed') {
-    throw new VaultControlPlaneError({
-      statusCode: 400,
-      code: 'invalid_settled_at_stage',
-      message: 'settledAt may only be written when settlementStage="completed"',
-    })
-  }
-  const parsedSettledAt = Date.parse(params.settledAt)
-  if (!Number.isFinite(parsedSettledAt)) {
-    throw new VaultControlPlaneError({
-      statusCode: 400,
-      code: 'invalid_settled_at_format',
-      message: 'Invalid settledAt — expected ISO-8601 timestamp',
-    })
-  }
-  const maxAllowedMs = Date.now() + 5 * 60 * 1000
-  if (parsedSettledAt > maxAllowedMs) {
-    throw new VaultControlPlaneError({
-      statusCode: 400,
-      code: 'invalid_settled_at_future',
-      message: 'settledAt cannot be in the future',
-    })
-  }
-}
-
 export interface VaultControlPlane {
   provisionVaultEconomy(request: ProvisionVaultEconomyRequest): Promise<{ accepted: boolean; operationId: string; stageId?: string }>
   getVaultLifecycleStatus(vaultAddress: string): Promise<VaultLifecycleStatus | null>
@@ -141,8 +104,6 @@ export interface VaultControlPlane {
   queueOperatorAction(request: QueueOperatorActionRequest): Promise<{ accepted: boolean; operationId: string; stageId?: string }>
   settleVault(request: SettleVaultRequest): Promise<SettleVaultResult>
 }
-
-type AsyncVerbKind = 'vault.provision' | 'vault.maintenance' | 'operator.action'
 
 function normalizeScopeId(params: { vaultAddress: string; chainId?: number }): string {
   return params.chainId ? `${params.vaultAddress}:${params.chainId}` : params.vaultAddress
@@ -194,7 +155,9 @@ async function queueAsyncVerb(input: {
       ? 'provisionVaultEconomy'
       : input.operationKind === 'vault.maintenance'
         ? 'runMaintenanceCycle'
-        : 'queueOperatorAction'
+        : input.operationKind === 'vault.settle'
+          ? 'settleVault'
+          : 'queueOperatorAction'
 
   let degradationContext: DegradationContext
   if (input.operationKind === 'vault.provision') {
@@ -419,122 +382,44 @@ export function createVaultControlPlane(): VaultControlPlane {
 
     async settleVault(request) {
       const vaultAddress = normalizeVaultAddress(request.vaultAddress)
-      const operation = await startControlPlaneOperation({
+      let parsed
+      try {
+        parsed = parseSettleVaultInput({
+          vaultAddress,
+          graduatedAt: request.graduatedAt,
+          settledAt: request.settledAt,
+          settlementStage: request.settlementStage,
+        })
+      } catch (error) {
+        if (error instanceof SettleVaultExecutionError) {
+          throw new VaultControlPlaneError({
+            statusCode: error.statusCode,
+            code: error.code,
+            message: error.message,
+          })
+        }
+        throw error
+      }
+
+      const queued = await queueAsyncVerb({
         operationKind: 'vault.settle',
         vaultAddress,
-        scopeType: 'vault',
         scopeId: vaultAddress,
         lockScope: 'vault.settle',
         lockKey: vaultAddress,
         requestedBy: request.requestedBy,
         idempotencyKey: request.idempotencyKey,
-        schemaVersion: 'v1',
-        policyVersion: loadControlPlanePolicy().policyVersion,
-        input: {
-          graduatedAt: request.graduatedAt ?? null,
-          settledAt: request.settledAt ?? null,
-          settlementStage: request.settlementStage ?? null,
+        payload: {
+          graduatedAt: parsed.graduatedAt || null,
+          settledAt: parsed.settledAt || null,
+          settlementStage: parsed.normalizedStage || null,
         },
       })
-      const stage = await createControlPlaneStage({
-        operationId: operation.operationId,
-        stageKind: 'operation.finalize',
-        status: 'requested',
-      })
-      await transitionOperationStatus({
-        operationId: operation.operationId,
-        nextStatus: 'running',
-        reason: 'settlement_started',
-        actor: request.requestedBy ?? 'system',
-      })
-      await transitionStageStatus({
-        stageId: stage.stageId,
-        nextStatus: 'running',
-        reason: 'settlement_started',
-        actor: request.requestedBy ?? 'system',
-      })
-      const graduatedAt = typeof request.graduatedAt === 'string' ? request.graduatedAt.trim() : ''
-      const settledAt = typeof request.settledAt === 'string' ? request.settledAt.trim() : ''
-      const normalizedStage = normalizeSettlementStage(request.settlementStage)
-      try {
-        if (!graduatedAt && !settledAt && !normalizedStage) {
-          throw new VaultControlPlaneError({
-            statusCode: 400,
-            code: 'missing_settlement_update_fields',
-            message: 'Must provide graduatedAt, settledAt, or settlementStage',
-          })
-        }
-        if (settledAt) {
-          validateSettledAt({ settledAt, normalizedStage })
-        }
 
-        if (!isDbConfigured()) {
-          throw new VaultControlPlaneError({
-            statusCode: 500,
-            code: 'database_not_configured',
-            message: 'Database not configured',
-          })
-        }
-
-        await ensureKeeprSchema()
-        const db = await getDb()
-        if (!db) {
-          throw new VaultControlPlaneError({
-            statusCode: 500,
-            code: 'database_unavailable',
-            message: 'Database unavailable',
-          })
-        }
-
-        await db.sql`
-          UPDATE keepr_vaults
-          SET graduated_at = COALESCE(graduated_at, ${graduatedAt || null}::timestamptz),
-              settled_at = COALESCE(settled_at, ${settledAt || null}::timestamptz),
-              settlement_stage = COALESCE(${normalizedStage || null}::text, settlement_stage),
-              settlement_stage_updated_at =
-                CASE
-                  WHEN ${normalizedStage || null}::text IS NULL THEN settlement_stage_updated_at
-                  ELSE NOW()
-                END,
-              updated_at = NOW()
-          WHERE LOWER(vault_address) = ${vaultAddress};
-        `
-
-        const result = {
-          updated: true,
-          stageUpdated: Boolean(normalizedStage),
-          operationId: operation.operationId,
-        } satisfies SettleVaultResult
-        await completeControlPlaneOperation({
-          operationId: operation.operationId,
-          status: 'succeeded',
-          result: {
-            updated: result.updated,
-            stageUpdated: result.stageUpdated,
-          },
-        })
-        await transitionStageStatus({
-          stageId: stage.stageId,
-          nextStatus: 'succeeded',
-          reason: 'settlement_completed',
-          actor: request.requestedBy ?? 'system',
-        })
-        return result
-      } catch (error) {
-        await transitionStageStatus({
-          stageId: stage.stageId,
-          nextStatus: 'failed',
-          reason: 'settlement_failed',
-          actor: request.requestedBy ?? 'system',
-          errorMessage: error instanceof Error ? error.message : String(error),
-        })
-        await completeControlPlaneOperation({
-          operationId: operation.operationId,
-          status: 'failed',
-          errorCode: error instanceof VaultControlPlaneError ? error.code : 'unexpected_error',
-          errorMessage: error instanceof Error ? error.message : String(error),
-        })
-        throw error
+      return {
+        accepted: true,
+        operationId: queued.operationId,
+        stageId: queued.stageId,
       }
     },
   }
