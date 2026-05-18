@@ -44,7 +44,7 @@ describe('POST /api/v1/alfaclub/chat-token-refresh', () => {
 
   it('returns 503 when CRON_SECRET is not configured', async () => {
     restoreEnv?.()
-    restoreEnv = applyEnv({})
+    restoreEnv = applyEnv({ CRON_SECRET: undefined })
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await refreshHandler(req, res)

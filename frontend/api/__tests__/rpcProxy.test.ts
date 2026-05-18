@@ -43,13 +43,28 @@ function okRpcResponse(): Response {
 }
 
 describe('/api/rpc proxy rate-limit contract', () => {
+  let restoreEnv: (() => void) | null = null
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.resetModules()
+    restoreEnv?.()
+    restoreEnv = applyEnv({
+      BASE_READ_RPC_URL: undefined,
+      BASE_LOGS_RPC_URL: undefined,
+      BASE_RPC_URL: undefined,
+      RPC_PROXY_RATE_LIMIT_MAX_REQUESTS: undefined,
+      RPC_PROXY_RATE_LIMIT_MAX_REQUESTS_PER_IP: undefined,
+      RPC_PROXY_MAX_IN_FLIGHT: undefined,
+      RPC_PROXY_TELEMETRY: undefined,
+      RPC_PROXY_TELEMETRY_WINDOW_MS: undefined,
+    })
     readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
   })
 
   afterEach(() => {
+    restoreEnv?.()
+    restoreEnv = null
     vi.unstubAllGlobals()
   })
 

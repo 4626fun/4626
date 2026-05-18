@@ -349,6 +349,7 @@ describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
+    delete process.env.DEPLOY_SESSION_PERSIST_OWNER
     process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = 'test-deploy-session-hmac-secret'
     isDbConfiguredMock.mockReturnValue(true)
     readDeployAuthFromRequestMock.mockReturnValue({

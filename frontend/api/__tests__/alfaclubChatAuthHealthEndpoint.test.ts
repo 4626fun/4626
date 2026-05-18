@@ -85,7 +85,7 @@ describe('GET /api/v1/alfaclub/chat-auth-health', () => {
 
   it('returns 503 when CRON_SECRET is not configured', async () => {
     restoreEnv?.()
-    restoreEnv = applyEnv({})
+    restoreEnv = applyEnv({ CRON_SECRET: undefined })
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
     await healthHandler(req, res)

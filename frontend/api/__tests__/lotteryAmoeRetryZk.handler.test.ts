@@ -105,13 +105,37 @@ const LOTTERY_ROUTER = '0x000000000000000000000000000000000000abcd'
 function setEnabledEnv(): () => void {
   const prior = process.env.AMOE_ZK_SUBMIT_ENABLED
   const priorRouter = process.env.LOTTERY_AMOE_ROUTER
+  const priorRelayPk = process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  const priorRelayOwnerPk = process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  const priorRelaySmartWallet = process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  const priorRelayBundler = process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  const priorKprPk = process.env.KPR_PRIVATE_KEY
+  const priorPrivatePk = process.env.PRIVATE_KEY
   process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
   process.env.LOTTERY_AMOE_ROUTER = LOTTERY_ROUTER
+  delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  delete process.env.KPR_PRIVATE_KEY
+  delete process.env.PRIVATE_KEY
   return () => {
     if (prior === undefined) delete process.env.AMOE_ZK_SUBMIT_ENABLED
     else process.env.AMOE_ZK_SUBMIT_ENABLED = prior
     if (priorRouter === undefined) delete process.env.LOTTERY_AMOE_ROUTER
     else process.env.LOTTERY_AMOE_ROUTER = priorRouter
+    if (priorRelayPk === undefined) delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+    else process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY = priorRelayPk
+    if (priorRelayOwnerPk === undefined) delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+    else process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY = priorRelayOwnerPk
+    if (priorRelaySmartWallet === undefined) delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+    else process.env.LOTTERY_AMOE_RELAY_SMART_WALLET = priorRelaySmartWallet
+    if (priorRelayBundler === undefined) delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+    else process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL = priorRelayBundler
+    if (priorKprPk === undefined) delete process.env.KPR_PRIVATE_KEY
+    else process.env.KPR_PRIVATE_KEY = priorKprPk
+    if (priorPrivatePk === undefined) delete process.env.PRIVATE_KEY
+    else process.env.PRIVATE_KEY = priorPrivatePk
   }
 }
 

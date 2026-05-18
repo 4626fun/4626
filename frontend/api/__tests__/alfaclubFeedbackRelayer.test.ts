@@ -147,7 +147,14 @@ describe('relayAlfaClubFeedbackOnce — short-circuits', () => {
   })
 
   it('returns skipped=privy_env_missing when required Privy env is absent', async () => {
-    restoreEnv = applyEnv({ ...RELAYER_ENABLED })
+    restoreEnv = applyEnv({
+      ...RELAYER_ENABLED,
+      XMTP_AGENT_PRIVY_WALLET_ID: undefined,
+      PRIVY_APP_ID: undefined,
+      PRIVY_APP_SECRET: undefined,
+      PRIVY_WALLET_AUTHORIZATION_KEY: undefined,
+      CDP_PAYMASTER_URL: undefined,
+    })
     const result = await relayAlfaClubFeedbackOnce()
     expect(result.skipped).toBe('privy_env_missing')
   })

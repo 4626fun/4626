@@ -166,7 +166,7 @@ describe('submitUserOpOrRefuse — bundler + preflight', () => {
       issuer: ISSUER,
       calls: CALLS,
       valueWei: 1n,
-      bundlerUrl: null,
+      bundlerUrl: '',
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.code).toBe('bundler_unavailable')

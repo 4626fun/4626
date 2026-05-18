@@ -232,6 +232,9 @@ describe('deploy session optimistic concurrency', () => {
       expectations: null,
     })
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    delete process.env.DEPLOY_SESSION_PERSIST_OWNER
+    delete process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD
+    delete process.env.MANAGED_TOKENLIST_INGEST_ON_DEPLOY
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })

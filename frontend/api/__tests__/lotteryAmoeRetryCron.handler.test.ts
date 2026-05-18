@@ -76,6 +76,12 @@ function setEnabledEnv(opts: { secretEnv?: 'CRON_SECRET' | 'AMOE_CRON_SECRET' } 
     router: process.env.LOTTERY_AMOE_ROUTER,
     cron: process.env.CRON_SECRET,
     amoecron: process.env.AMOE_CRON_SECRET,
+    relayPk: process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY,
+    relayOwnerPk: process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY,
+    relaySmartWallet: process.env.LOTTERY_AMOE_RELAY_SMART_WALLET,
+    relayBundler: process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL,
+    kprPk: process.env.KPR_PRIVATE_KEY,
+    privatePk: process.env.PRIVATE_KEY,
   }
   process.env.AMOE_ZK_SUBMIT_ENABLED = '1'
   process.env.LOTTERY_AMOE_ROUTER = LOTTERY_ROUTER
@@ -88,12 +94,24 @@ function setEnabledEnv(opts: { secretEnv?: 'CRON_SECRET' | 'AMOE_CRON_SECRET' } 
   } else {
     process.env.CRON_SECRET = VALID_SECRET
   }
+  delete process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY
+  delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  delete process.env.KPR_PRIVATE_KEY
+  delete process.env.PRIVATE_KEY
   return () => {
     for (const [k, v] of Object.entries({
       AMOE_ZK_SUBMIT_ENABLED: prior.enabled,
       LOTTERY_AMOE_ROUTER: prior.router,
       CRON_SECRET: prior.cron,
       AMOE_CRON_SECRET: prior.amoecron,
+      LOTTERY_AMOE_RELAY_PRIVATE_KEY: prior.relayPk,
+      LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY: prior.relayOwnerPk,
+      LOTTERY_AMOE_RELAY_SMART_WALLET: prior.relaySmartWallet,
+      LOTTERY_AMOE_RELAY_BUNDLER_URL: prior.relayBundler,
+      KPR_PRIVATE_KEY: prior.kprPk,
+      PRIVATE_KEY: prior.privatePk,
     })) {
       if (v === undefined) delete process.env[k]
       else process.env[k] = v

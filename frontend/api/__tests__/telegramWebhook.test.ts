@@ -446,6 +446,8 @@ describe('telegram webhook handler', () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     const restoreWebhookSecret = applyEnv({
       TELEGRAM_WEBHOOK_SECRET: undefined,
+      TELEGRAM_BOT_CONFIG_SECRET: undefined,
+      TELEGRAM_LINK_API_SECRET: undefined,
     })
     try {
       const req = createMockReq({

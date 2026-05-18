@@ -106,6 +106,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = INTERNAL_REGISTRATION_SECRET
+    delete process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD
     readDeployAuthMock.mockReturnValue({ address: '0x1111111111111111111111111111111111111111' })
     isAdminAddressMock.mockReturnValue(true)
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })

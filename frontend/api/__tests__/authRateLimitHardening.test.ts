@@ -10,17 +10,25 @@ const { checkRateLimitMock } = vi.hoisted(() => ({
   })),
 }))
 
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
-  checkRateLimit: checkRateLimitMock,
-  getClientIp: vi.fn(() => '203.0.113.11'),
-  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
-  RATE_LIMITS: {
-    authRead: { windowMs: 60_000, maxRequests: 1 },
-    authWrite: { windowMs: 60_000, maxRequests: 1 },
-    authPrivy: { windowMs: 60_000, maxRequests: 1 },
-    authAgentWrite: { windowMs: 60_000, maxRequests: 1 },
-  },
-}))
+vi.mock('../../packages/server-core/src/index.js', async () => {
+  const actual = await vi.importActual<typeof import('../../packages/server-core/src/index.js')>(
+    '../../packages/server-core/src/index.js',
+  )
+  return {
+    ...actual,
+    checkRateLimit: checkRateLimitMock,
+    checkDurableRateLimit: checkRateLimitMock,
+    getClientIp: vi.fn(() => '203.0.113.11'),
+    rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+    RATE_LIMITS: {
+      ...(actual as any).RATE_LIMITS,
+      authRead: { windowMs: 60_000, maxRequests: 1 },
+      authWrite: { windowMs: 60_000, maxRequests: 1 },
+      authPrivy: { windowMs: 60_000, maxRequests: 1 },
+      authAgentWrite: { windowMs: 60_000, maxRequests: 1 },
+    },
+  }
+})
 
 import nonceHandler from '../_handlers/auth/_nonce.ts'
 import verifyHandler from '../_handlers/auth/_verify.ts'

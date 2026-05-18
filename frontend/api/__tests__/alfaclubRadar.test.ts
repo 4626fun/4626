@@ -93,6 +93,7 @@ describe('AlfaClub radar flags and formatter', () => {
       snapshotTs: '2026-04-20T12:00:00Z',
       previousSnapshotTs: '2026-04-19T12:00:00Z',
       flags: FLAGS,
+      labels: new Map(),
       deltas: [
         makeDelta({
           address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
