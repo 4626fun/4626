@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { RefreshCw, Search } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -129,6 +129,60 @@ async function fetchOperationDetail(params: {
   return json.data
 }
 
+async function queueProvision(input: {
+  vaultAddress: string
+  chainId?: number
+  creatorAddress?: string
+  strategyVariant?: string
+}): Promise<{ accepted: boolean; operationId: string; stageId?: string }> {
+  const res = await apiFetch('/api/admin/control-plane/provision', {
+    method: 'POST',
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accepted: boolean; operationId: string; stageId?: string }> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || `Failed to queue provision (${res.status})`)
+  }
+  return json.data
+}
+
+async function queueMaintenance(input: {
+  vaultAddress: string
+}): Promise<{ accepted: boolean; operationId: string; stageId?: string }> {
+  const res = await apiFetch('/api/admin/control-plane/maintenance', {
+    method: 'POST',
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accepted: boolean; operationId: string; stageId?: string }> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || `Failed to queue maintenance (${res.status})`)
+  }
+  return json.data
+}
+
+async function queueCustomOperatorAction(input: {
+  vaultAddress: string
+  actionType: string
+  payload?: Record<string, unknown>
+  idempotencyKey?: string
+}): Promise<{ accepted: boolean; operationId: string; stageId?: string }> {
+  const res = await apiFetch('/api/admin/control-plane/operator-action', {
+    method: 'POST',
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accepted: boolean; operationId: string; stageId?: string }> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || `Failed to queue operator action (${res.status})`)
+  }
+  return json.data
+}
+
 function formatDateTime(value: string | null): string {
   if (!value) return '—'
   const d = new Date(value)
@@ -164,6 +218,16 @@ export function AdminControlPlane() {
   const eventsLimit = parseBoundedInt(searchParams.get('eventsLimit'), 250, 1, 2_000)
   const jobsLimit = parseBoundedInt(searchParams.get('jobsLimit'), 100, 1, 1_000)
   const [operationInput, setOperationInput] = useState(selectedOperationId)
+  const [queueVaultAddress, setQueueVaultAddress] = useState('')
+  const [queueChainId, setQueueChainId] = useState('')
+  const [queueCreatorAddress, setQueueCreatorAddress] = useState('')
+  const [queueStrategyVariant, setQueueStrategyVariant] = useState('default')
+  const [maintenanceVaultAddress, setMaintenanceVaultAddress] = useState('')
+  const [actionVaultAddress, setActionVaultAddress] = useState('')
+  const [actionType, setActionType] = useState('vault.sweep')
+  const [actionPayloadText, setActionPayloadText] = useState('{"ccaStrategyAddress":""}')
+  const [actionIdempotencyKey, setActionIdempotencyKey] = useState('')
+  const [actionPayloadError, setActionPayloadError] = useState<string | null>(null)
 
   useEffect(() => {
     setOperationInput(selectedOperationId)
@@ -198,6 +262,35 @@ export function AdminControlPlane() {
 
   const statusError = statusQuery.error instanceof Error ? statusQuery.error.message : null
   const operationError = operationQuery.error instanceof Error ? operationQuery.error.message : null
+
+  const provisionMutation = useMutation({
+    mutationFn: queueProvision,
+    onSuccess: (data) => {
+      setOperationInput(data.operationId)
+      updateQueryParams({ operationId: data.operationId })
+      void statusQuery.refetch()
+      void operationQuery.refetch()
+    },
+  })
+  const maintenanceMutation = useMutation({
+    mutationFn: queueMaintenance,
+    onSuccess: (data) => {
+      setOperationInput(data.operationId)
+      updateQueryParams({ operationId: data.operationId })
+      void statusQuery.refetch()
+      void operationQuery.refetch()
+    },
+  })
+  const actionMutation = useMutation({
+    mutationFn: queueCustomOperatorAction,
+    onSuccess: (data) => {
+      setActionPayloadError(null)
+      setOperationInput(data.operationId)
+      updateQueryParams({ operationId: data.operationId })
+      void statusQuery.refetch()
+      void operationQuery.refetch()
+    },
+  })
 
   const recentOperationIds = useMemo(
     () => statusQuery.data?.stuck.operations.map((op) => op.operationId) ?? [],
@@ -280,6 +373,164 @@ export function AdminControlPlane() {
             </select>
           </label>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-5">
+        <div className="text-sm text-zinc-200">Queue Control-Plane Operations</div>
+
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const chainId = queueChainId.trim() ? Number(queueChainId.trim()) : undefined
+            if (chainId !== undefined && (!Number.isFinite(chainId) || chainId <= 0)) return
+            provisionMutation.mutate({
+              vaultAddress: queueVaultAddress.trim(),
+              chainId,
+              creatorAddress: queueCreatorAddress.trim() || undefined,
+              strategyVariant: queueStrategyVariant.trim() || undefined,
+            })
+          }}
+        >
+          <div className="text-xs uppercase tracking-wide text-zinc-500">Provision</div>
+          <div className="grid gap-2 md:grid-cols-4">
+            <input
+              value={queueVaultAddress}
+              onChange={(event) => setQueueVaultAddress(event.target.value)}
+              placeholder="vaultAddress"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={queueChainId}
+              onChange={(event) => setQueueChainId(event.target.value)}
+              placeholder="chainId (optional)"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={queueCreatorAddress}
+              onChange={(event) => setQueueCreatorAddress(event.target.value)}
+              placeholder="creatorAddress (optional)"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={queueStrategyVariant}
+              onChange={(event) => setQueueStrategyVariant(event.target.value)}
+              placeholder="strategyVariant"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={provisionMutation.isPending || !queueVaultAddress.trim()}
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/20 disabled:opacity-60"
+          >
+            {provisionMutation.isPending ? 'Queueing...' : 'Queue Provision'}
+          </button>
+          {provisionMutation.error instanceof Error ? (
+            <div className="text-xs text-red-300">{provisionMutation.error.message}</div>
+          ) : null}
+        </form>
+
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            maintenanceMutation.mutate({
+              vaultAddress: maintenanceVaultAddress.trim(),
+            })
+          }}
+        >
+          <div className="text-xs uppercase tracking-wide text-zinc-500">Maintenance</div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={maintenanceVaultAddress}
+              onChange={(event) => setMaintenanceVaultAddress(event.target.value)}
+              placeholder="vaultAddress"
+              className="min-w-[280px] flex-1 rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <button
+              type="submit"
+              disabled={maintenanceMutation.isPending || !maintenanceVaultAddress.trim()}
+              className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/20 disabled:opacity-60"
+            >
+              {maintenanceMutation.isPending ? 'Queueing...' : 'Queue Maintenance'}
+            </button>
+          </div>
+          {maintenanceMutation.error instanceof Error ? (
+            <div className="text-xs text-red-300">{maintenanceMutation.error.message}</div>
+          ) : null}
+        </form>
+
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setActionPayloadError(null)
+            let payload: Record<string, unknown> | undefined = undefined
+            const raw = actionPayloadText.trim()
+            if (raw) {
+              try {
+                const parsed = JSON.parse(raw)
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                  payload = parsed as Record<string, unknown>
+                } else {
+                  throw new Error('Payload must be a JSON object')
+                }
+              } catch (error) {
+                setActionPayloadError(error instanceof Error ? error.message : 'Invalid JSON payload')
+                return
+              }
+            }
+            actionMutation.mutate({
+              vaultAddress: actionVaultAddress.trim(),
+              actionType: actionType.trim(),
+              payload,
+              idempotencyKey: actionIdempotencyKey.trim() || undefined,
+            })
+          }}
+        >
+          <div className="text-xs uppercase tracking-wide text-zinc-500">Operator Action</div>
+          <div className="grid gap-2 md:grid-cols-3">
+            <input
+              value={actionVaultAddress}
+              onChange={(event) => setActionVaultAddress(event.target.value)}
+              placeholder="vaultAddress"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={actionType}
+              onChange={(event) => setActionType(event.target.value)}
+              placeholder="actionType"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={actionIdempotencyKey}
+              onChange={(event) => setActionIdempotencyKey(event.target.value)}
+              placeholder="idempotencyKey (optional)"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+          </div>
+          <textarea
+            value={actionPayloadText}
+            onChange={(event) => {
+              setActionPayloadText(event.target.value)
+              if (actionPayloadError) setActionPayloadError(null)
+            }}
+            rows={4}
+            className="w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+          />
+          <button
+            type="submit"
+            disabled={actionMutation.isPending || !actionVaultAddress.trim() || !actionType.trim()}
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/20 disabled:opacity-60"
+          >
+            {actionMutation.isPending ? 'Queueing...' : 'Queue Operator Action'}
+          </button>
+          {actionPayloadError ? <div className="text-xs text-red-300">{actionPayloadError}</div> : null}
+          {actionMutation.error instanceof Error ? (
+            <div className="text-xs text-red-300">{actionMutation.error.message}</div>
+          ) : null}
+        </form>
       </div>
 
       {statusError ? (
