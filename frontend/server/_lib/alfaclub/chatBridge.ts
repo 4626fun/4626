@@ -214,6 +214,7 @@ type NormalizedHistoryMessage = {
 export type AlfaClubChatBridgeSkipReason =
   | 'kill_switch'
   | 'disabled'
+  | 'railway_blocked'
   | 'env_missing'
   | 'already_running'
 
@@ -252,6 +253,22 @@ export type RunAlfaClubChatBridgeTickOnceResult =
 function parseBool(value: string | undefined): boolean {
   const raw = normalizeEnvScalar(value).toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function isRailwayRuntime(): boolean {
+  return Boolean(
+    normalizeEnvScalar(process.env.RAILWAY_SERVICE_ID) ||
+      normalizeEnvScalar(process.env.RAILWAY_PROJECT_ID) ||
+      normalizeEnvScalar(process.env.RAILWAY_ENVIRONMENT_ID),
+  )
+}
+
+function isRailwayBridgeOverrideEnabled(): boolean {
+  return parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY)
+}
+
+function shouldBlockRailwayBridge(flags: Pick<AlfaClubChatBridgeFlags, 'enabled'>): boolean {
+  return flags.enabled && isRailwayRuntime() && !isRailwayBridgeOverrideEnabled()
 }
 
 function parseBoolWithDefault(value: string | undefined, fallback: boolean): boolean {
@@ -3072,6 +3089,14 @@ export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBr
       roomId: flags.roomId,
     }
   }
+  if (shouldBlockRailwayBridge(flags)) {
+    return {
+      ok: false,
+      reason: 'railway_blocked',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
   if (!flags.enabled) {
     return {
       ok: false,
@@ -3126,6 +3151,19 @@ export function startAlfaClubChatBridge(opts?: {
     return {
       started: false,
       reason: 'kill_switch',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+      stop,
+    }
+  }
+  if (shouldBlockRailwayBridge(flags)) {
+    logger.warn('[alfaclub-chat] bridge disabled on Railway (Vercel cron is canonical)', {
+      flag: 'ALFACLUB_CHAT_BRIDGE_ENABLED',
+      overrideFlag: 'ALFACLUB_CHAT_BRIDGE_ALLOW_RAILWAY',
+    })
+    return {
+      started: false,
+      reason: 'railway_blocked',
       intervalMs: flags.pollIntervalMs,
       roomId: flags.roomId,
       stop,

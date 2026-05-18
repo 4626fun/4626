@@ -27,6 +27,7 @@ type RuntimeState = {
   bridgeStarted: boolean
   bridgeRoomId: string | null
   bridgeReason: string | null
+  bridgeRailwayBlocked: boolean
   lastTickAt: string | null
   lastTick: Pick<AlfaClubChatBridgeTickResult, 'roomId' | 'fetched' | 'unseen' | 'processed' | 'errors'> | null
   lastError: string | null
@@ -47,6 +48,7 @@ const state: RuntimeState = {
   bridgeStarted: false,
   bridgeRoomId: null,
   bridgeReason: null,
+  bridgeRailwayBlocked: false,
   lastTickAt: null,
   lastTick: null,
   lastError: null,
@@ -203,6 +205,7 @@ function startRuntime(): void {
     state.bridgeStarted = bridge.started
     state.bridgeRoomId = bridge.roomId
     state.bridgeReason = bridge.started ? null : bridge.reason ?? 'unknown'
+    state.bridgeRailwayBlocked = bridge.reason === 'railway_blocked'
     stopBridge = bridge.stop
 
     if (bridge.started) {
