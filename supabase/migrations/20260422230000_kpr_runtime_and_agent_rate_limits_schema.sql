@@ -1,7 +1,7 @@
--- Migration: codify CRE runtime tables and agent_rate_limits in the migration pipeline.
+-- Migration: codify KPR runtime tables and agent_rate_limits in the migration pipeline.
 --
 -- Addresses audit findings:
---   - M-31 (4626-340): CRE Tables Created at Runtime by Application Code
+--   - M-31 (4626-340): KPR Tables Created at Runtime by Application Code
 --   - M-32 (4626-341): `agent_rate_limits` Table Created Outside Migration Pipeline
 --   - L-11 (4626-359): duplicate tracker for M-31 (see acceptance doc)
 --
@@ -19,8 +19,8 @@
 --   * All columns and names match the runtime helpers exactly so this
 --     migration is a no-op on any environment where the runtime DDL has
 --     already run. `IF NOT EXISTS` guards each statement.
---   * Indexes on (`cre_runtime_records`, `cre_runtime_decisions`,
---     `cre_runtime_replay_nonces`) are preserved verbatim.
+--   * Indexes on (`kpr_runtime_records`, `kpr_runtime_decisions`,
+--     `kpr_runtime_replay_nonces`) are preserved verbatim.
 --   * RLS is enabled with deny-all policies; the backend connects as
 --     the service role which bypasses RLS, matching how these tables
 --     are currently used (no direct client access).
@@ -28,26 +28,26 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------
--- CRE runtime tables (M-31, L-11)
+-- KPR runtime tables (M-31, L-11)
 -- ---------------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS cre_runtime_records (
+CREATE TABLE IF NOT EXISTS kpr_runtime_records (
   id BIGSERIAL PRIMARY KEY,
   workflow TEXT NOT NULL,
   kind TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
   payload_json JSONB NOT NULL,
-  source TEXT NOT NULL DEFAULT 'cre',
+  source TEXT NOT NULL DEFAULT 'kpr',
   correlation_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (workflow, kind, idempotency_key)
 );
 
-CREATE INDEX IF NOT EXISTS cre_runtime_records_kind_created_idx
-  ON cre_runtime_records (kind, created_at DESC);
+CREATE INDEX IF NOT EXISTS kpr_runtime_records_kind_created_idx
+  ON kpr_runtime_records (kind, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS cre_runtime_decisions (
+CREATE TABLE IF NOT EXISTS kpr_runtime_decisions (
   id BIGSERIAL PRIMARY KEY,
   workflow TEXT NOT NULL,
   idempotency_key TEXT NOT NULL,
@@ -59,35 +59,35 @@ CREATE TABLE IF NOT EXISTS cre_runtime_decisions (
   UNIQUE (workflow, idempotency_key)
 );
 
-CREATE INDEX IF NOT EXISTS cre_runtime_decisions_created_idx
-  ON cre_runtime_decisions (created_at DESC);
+CREATE INDEX IF NOT EXISTS kpr_runtime_decisions_created_idx
+  ON kpr_runtime_decisions (created_at DESC);
 
-CREATE TABLE IF NOT EXISTS cre_runtime_replay_nonces (
+CREATE TABLE IF NOT EXISTS kpr_runtime_replay_nonces (
   nonce TEXT PRIMARY KEY,
   issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   expires_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS cre_runtime_replay_expires_idx
-  ON cre_runtime_replay_nonces (expires_at);
+CREATE INDEX IF NOT EXISTS kpr_runtime_replay_expires_idx
+  ON kpr_runtime_replay_nonces (expires_at);
 
-ALTER TABLE cre_runtime_records ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cre_runtime_decisions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE cre_runtime_replay_nonces ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpr_runtime_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpr_runtime_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE kpr_runtime_replay_nonces ENABLE ROW LEVEL SECURITY;
 
 -- Deny-all baseline: only the service role (which bypasses RLS) can
 -- access these tables. Any future read/write policies must replace
 -- these in the same migration that adds them.
-DROP POLICY IF EXISTS cre_runtime_records_deny_all ON cre_runtime_records;
-CREATE POLICY cre_runtime_records_deny_all ON cre_runtime_records
+DROP POLICY IF EXISTS kpr_runtime_records_deny_all ON kpr_runtime_records;
+CREATE POLICY kpr_runtime_records_deny_all ON kpr_runtime_records
   FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
 
-DROP POLICY IF EXISTS cre_runtime_decisions_deny_all ON cre_runtime_decisions;
-CREATE POLICY cre_runtime_decisions_deny_all ON cre_runtime_decisions
+DROP POLICY IF EXISTS kpr_runtime_decisions_deny_all ON kpr_runtime_decisions;
+CREATE POLICY kpr_runtime_decisions_deny_all ON kpr_runtime_decisions
   FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
 
-DROP POLICY IF EXISTS cre_runtime_replay_nonces_deny_all ON cre_runtime_replay_nonces;
-CREATE POLICY cre_runtime_replay_nonces_deny_all ON cre_runtime_replay_nonces
+DROP POLICY IF EXISTS kpr_runtime_replay_nonces_deny_all ON kpr_runtime_replay_nonces;
+CREATE POLICY kpr_runtime_replay_nonces_deny_all ON kpr_runtime_replay_nonces
   FOR ALL TO PUBLIC USING (false) WITH CHECK (false);
 
 -- ---------------------------------------------------------------------

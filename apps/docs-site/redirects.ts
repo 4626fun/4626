@@ -63,9 +63,9 @@ export const redirects: ClientRedirect[] = [
 
   { from: '/security-scan-overview', to: '/security' },
 
-  { from: '/ajna-erc4626-cre-adversarial-audit', to: '/audits/ajna/adversarial-audit' },
-  { from: '/ajna-erc4626-cre-executive-brief', to: '/audits/ajna/executive-brief' },
-  { from: '/ajna-erc4626-cre-master-qna', to: '/audits/ajna/master-qna' },
+  { from: '/ajna-erc4626-kpr-adversarial-audit', to: '/audits/ajna/adversarial-audit' },
+  { from: '/ajna-erc4626-kpr-executive-brief', to: '/audits/ajna/executive-brief' },
+  { from: '/ajna-erc4626-kpr-master-qna', to: '/audits/ajna/master-qna' },
   {
     from: '/charm-alpha-vaults-v2-4626fun-adversarial-audit',
     to: '/audits/charm/adversarial-audit',

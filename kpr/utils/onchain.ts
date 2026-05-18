@@ -1,5 +1,5 @@
 /**
- * Shared viem client setup and onchain read/write helpers for CRE workflows.
+ * Shared viem client setup and onchain read/write helpers for KPR workflows.
  */
 
 import {
@@ -166,6 +166,20 @@ let _erc4337Config: Erc4337Config | null | undefined = undefined;
 let _publicClient: PublicClient | null = null;
 let _walletClient: WalletClient | null = null;
 
+function readFirstEnvValue(keys: readonly string[]): string {
+  for (const key of keys) {
+    const value = String(process.env[key] ?? '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function requireFirstEnvValue(keys: readonly string[]): string {
+  const value = readFirstEnvValue(keys);
+  if (value) return value;
+  throw new Error(`Missing required env var. Set one of: ${keys.join(', ')}`);
+}
+
 /**
  * Get a singleton public (read-only) client for Base.
  */
@@ -174,7 +188,7 @@ export function getPublicClient() {
     // FIX: LOW-04 — Require BASE_RPC_URL; warn loudly before falling back to public RPC
     const rpcUrl = process.env.BASE_RPC_URL;
     if (!rpcUrl) {
-      console.warn('[CRE] WARNING: BASE_RPC_URL not set — falling back to public RPC https://mainnet.base.org (not recommended for production)');
+      console.warn('[KPR] WARNING: BASE_RPC_URL not set — falling back to public RPC https://mainnet.base.org (not recommended for production)');
     }
     _publicClient = createPublicClient({
       chain: base,
@@ -186,7 +200,7 @@ export function getPublicClient() {
 
 /**
  * Get a singleton wallet client for onchain writes.
- * The private key is loaded from the CRE secret `KPR_PRIVATE_KEY`.
+ * The private key is loaded from the KPR secret `KPR_PRIVATE_KEY`.
  */
 export function getWalletClient() {
   if (!_walletClient) {
@@ -195,7 +209,7 @@ export function getWalletClient() {
     // FIX: LOW-04 — Require BASE_RPC_URL; warn loudly before falling back to public RPC
     const rpcUrl = process.env.BASE_RPC_URL;
     if (!rpcUrl) {
-      console.warn('[CRE] WARNING: BASE_RPC_URL not set for wallet client — falling back to public RPC (not recommended)');
+      console.warn('[KPR] WARNING: BASE_RPC_URL not set for wallet client — falling back to public RPC (not recommended)');
     }
     _walletClient = createWalletClient({
       account,
@@ -207,10 +221,10 @@ export function getWalletClient() {
 }
 
 /**
- * True when ERC-4337 mode is enabled for CRE.
+ * True when ERC-4337 mode is enabled for KPR.
  */
 function isErc4337Enabled(): boolean {
-  return process.env.CRE_ERC4337_ENABLED === 'true';
+  return readFirstEnvValue(['KPR_ERC4337_ENABLED']) === 'true';
 }
 
 /**
@@ -233,10 +247,11 @@ export function getKeeperEoaAddress(): Address {
  */
 function getErc4337OwnerAccountFromPrivateKey() {
   const pk =
-    (process.env.CRE_ERC4337_OWNER_PRIVATE_KEY ?? process.env.KPR_PRIVATE_KEY ?? '').trim();
+    readFirstEnvValue(['KPR_ERC4337_OWNER_PRIVATE_KEY']) ||
+    readFirstEnvValue(['KPR_PRIVATE_KEY']);
   if (!pk) {
     throw new Error(
-      'Missing ERC-4337 signer. Set CRE_ERC4337_OWNER_PRIVATE_KEY (or KPR_PRIVATE_KEY fallback).',
+      'Missing ERC-4337 signer. Set KPR_ERC4337_OWNER_PRIVATE_KEY (or KPR_PRIVATE_KEY fallback).',
     );
   }
   return privateKeyToAccount(pk as `0x${string}`);
@@ -252,16 +267,20 @@ function getErc4337OwnerAccountFromPrivy(params?: {
   account: ReturnType<typeof toAccount>;
   address: Address;
 } {
-  const walletId = (params?.walletId ?? process.env.CRE_ERC4337_PRIVY_WALLET_ID ?? '').trim();
+  const walletId =
+    String(params?.walletId ?? '').trim() ||
+    readFirstEnvValue(['KPR_ERC4337_PRIVY_WALLET_ID']);
   if (!walletId) {
-    throw new Error('CRE_ERC4337_PRIVY_WALLET_ID missing');
+    throw new Error('KPR_ERC4337_PRIVY_WALLET_ID missing');
   }
-  const ownerRaw = String(params?.ownerAddress ?? process.env.CRE_ERC4337_OWNER ?? '').trim();
+  const ownerRaw =
+    String(params?.ownerAddress ?? '').trim() ||
+    readFirstEnvValue(['KPR_ERC4337_OWNER']);
   if (!ownerRaw) {
-    throw new Error('CRE_ERC4337_OWNER required when using CRE_ERC4337_PRIVY_WALLET_ID');
+    throw new Error('KPR_ERC4337_OWNER required when using KPR_ERC4337_PRIVY_WALLET_ID');
   }
   if (!isAddress(ownerRaw)) {
-    throw new Error(`Invalid CRE_ERC4337_OWNER address: ${ownerRaw}`);
+    throw new Error(`Invalid KPR_ERC4337_OWNER address: ${ownerRaw}`);
   }
   const ownerAddress = getAddress(ownerRaw);
   const account = toAccount({
@@ -305,9 +324,8 @@ function getErc4337Config(
 ): Erc4337Config | null {
   const resolvedExecutionContext = normalizeWriteExecutionContext(executionContext);
   if (resolvedExecutionContext) {
-    const bundlerUrl = requireEnv('CRE_ERC4337_BUNDLER_URL');
-    const paymasterUrl =
-      (process.env.CRE_ERC4337_PAYMASTER_URL ?? '').trim() || bundlerUrl;
+    const bundlerUrl = requireFirstEnvValue(['KPR_ERC4337_BUNDLER_URL']);
+    const paymasterUrl = readFirstEnvValue(['KPR_ERC4337_PAYMASTER_URL']) || bundlerUrl;
     const privyOwner = getErc4337OwnerAccountFromPrivy({
       walletId: resolvedExecutionContext.privyWalletId,
       ownerAddress: resolvedExecutionContext.ownerAddress,
@@ -330,14 +348,13 @@ function getErc4337Config(
     return _erc4337Config;
   }
 
-  const smartWalletRaw = requireEnv('CRE_ERC4337_SMART_WALLET');
-  const bundlerUrl = requireEnv('CRE_ERC4337_BUNDLER_URL');
-  const paymasterUrl =
-    (process.env.CRE_ERC4337_PAYMASTER_URL ?? '').trim() || bundlerUrl;
-  const versionRaw = (process.env.CRE_ERC4337_VERSION ?? '1').trim();
+  const smartWalletRaw = requireFirstEnvValue(['KPR_ERC4337_SMART_WALLET']);
+  const bundlerUrl = requireFirstEnvValue(['KPR_ERC4337_BUNDLER_URL']);
+  const paymasterUrl = readFirstEnvValue(['KPR_ERC4337_PAYMASTER_URL']) || bundlerUrl;
+  const versionRaw = readFirstEnvValue(['KPR_ERC4337_VERSION']) || '1';
   const version: '1' | '1.1' = versionRaw === '1.1' ? '1.1' : '1';
 
-  const privyWalletId = (process.env.CRE_ERC4337_PRIVY_WALLET_ID ?? '').trim();
+  const privyWalletId = readFirstEnvValue(['KPR_ERC4337_PRIVY_WALLET_ID']);
   let ownerAccount: Erc4337Config['ownerAccount'];
   let ownerAddress: Address;
   let signerType: Erc4337Config['signerType'] = 'private-key';
@@ -349,14 +366,15 @@ function getErc4337Config(
     signerType = 'privy-wallet';
   } else {
     ownerAccount = getErc4337OwnerAccountFromPrivateKey();
-    const ownerAddressRaw = (process.env.CRE_ERC4337_OWNER ?? ownerAccount.address).trim();
+    const ownerAddressRaw =
+      readFirstEnvValue(['KPR_ERC4337_OWNER']) || ownerAccount.address;
     if (!isAddress(ownerAddressRaw)) {
-      throw new Error(`Invalid CRE_ERC4337_OWNER address: ${ownerAddressRaw}`);
+      throw new Error(`Invalid KPR_ERC4337_OWNER address: ${ownerAddressRaw}`);
     }
     ownerAddress = getAddress(ownerAddressRaw);
     if (ownerAddress !== getAddress(ownerAccount.address)) {
       throw new Error(
-        'CRE_ERC4337_OWNER must match CRE_ERC4337_OWNER_PRIVATE_KEY address when using private-key signing.',
+        'KPR_ERC4337_OWNER must match KPR_ERC4337_OWNER_PRIVATE_KEY address when using private-key signing.',
       );
     }
   }
@@ -496,7 +514,7 @@ async function verifyBundlerSupportsV06(bundlerClient: any): Promise<void> {
     }
     // FIX: INF-04 — Log bundler verification failures to alerting system, not just console
     const errMsg = err instanceof Error ? err.message : String(err);
-    console.warn('[CRE][ERC-4337] Unable to verify bundler EntryPoint support:', err);
+    console.warn('[KPR][ERC-4337] Unable to verify bundler EntryPoint support:', err);
     await alertWarning('erc4337', 'Unable to verify bundler EntryPoint support', { error: errMsg }).catch(() => {});
   }
 }
@@ -509,7 +527,7 @@ async function sendErc4337UserOperation(params: {
 }): Promise<WriteResult> {
   const erc4337 = params.erc4337;
   if (!erc4337) {
-    throw new Error('ERC-4337 not enabled (set CRE_ERC4337_ENABLED=true).');
+    throw new Error('ERC-4337 not enabled (set KPR_ERC4337_ENABLED=true).');
   }
 
   const publicClient = getPublicClient();
@@ -565,7 +583,7 @@ async function sendErc4337UserOperation(params: {
       });
     } catch (simErr: unknown) {
       const simMsg = simErr instanceof Error ? simErr.message : String(simErr);
-      console.warn(`[CRE][ERC-4337] Pre-simulation warning (proceeding): ${simMsg}`);
+      console.warn(`[KPR][ERC-4337] Pre-simulation warning (proceeding): ${simMsg}`);
     }
 
     const userOpHash = await sendUserOperation(bundlerClient, {
@@ -582,7 +600,9 @@ async function sendErc4337UserOperation(params: {
     });
 
     // FIX: MED-04 — Make UserOp receipt timeout configurable via env
-    const userOpTimeout = Number(process.env.CRE_USEROP_RECEIPT_TIMEOUT_MS || '120000');
+    const userOpTimeout = Number(
+      readFirstEnvValue(['KPR_USEROP_RECEIPT_TIMEOUT_MS', 'KPR_USEROP_RECEIPT_TIMEOUT_MS']) || '120000',
+    );
     const receipt = await waitForUserOperationReceipt(bundlerClient, {
       hash: userOpHash,
       timeout: userOpTimeout,

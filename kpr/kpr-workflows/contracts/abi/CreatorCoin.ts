@@ -1,5 +1,5 @@
 /**
- * Zora Creator Coin ABI fragment for CRE payout-integrity workflow.
+ * Zora Creator Coin ABI fragment for KPR payout-integrity workflow.
  *
  * Only the payoutRecipient() view function needed for monitoring.
  */

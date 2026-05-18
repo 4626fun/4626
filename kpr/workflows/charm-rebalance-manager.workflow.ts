@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Charm Rebalance Manager
+ * KPR Workflow: Charm Rebalance Manager
  *
  * Schedule: Every 10 minutes
  * Pattern: onchain read -> conditional onchain write

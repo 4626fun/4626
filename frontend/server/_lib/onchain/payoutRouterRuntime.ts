@@ -92,19 +92,16 @@ export function resolvePayoutRouterZoraToken(fallback?: Address | null): Address
 export function resolvePayoutRouterKeeperAddress(): Address | null {
   const explicit =
     normalizeAddress(process.env.PAYOUT_ROUTER_KEEPER) ??
+    normalizeAddress(process.env.KPR_KEEPER_ADDRESS) ??
     normalizeAddress(process.env.KPR_ADDRESS) ??
-    normalizeAddress(process.env.CRE_KEEPER_ADDRESS) ??
     null
   if (explicit) return explicit
 
-  const erc4337EnabledRaw =
-    process.env.KPR_ERC4337_ENABLED ??
-    process.env.CRE_ERC4337_ENABLED
+  const erc4337EnabledRaw = process.env.KPR_ERC4337_ENABLED
   const erc4337Enabled = String(erc4337EnabledRaw ?? '').trim().toLowerCase() === 'true'
   if (erc4337Enabled) {
     const smartWallet = normalizeAddress(
-      process.env.KPR_ERC4337_SMART_WALLET ??
-      process.env.CRE_ERC4337_SMART_WALLET,
+      process.env.KPR_ERC4337_SMART_WALLET,
     )
     if (smartWallet) return smartWallet
   }

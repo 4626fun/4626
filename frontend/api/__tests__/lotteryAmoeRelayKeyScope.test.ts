@@ -5,7 +5,7 @@
 //
 //   A4 (relay key isolation): assert `_amoeSubmit.ts` never falls back to
 //        the generic `PRIVATE_KEY` / `KPR_PRIVATE_KEY` /
-//        `KPR_ERC4337_OWNER_PRIVATE_KEY`/`CRE_ERC4337_OWNER_PRIVATE_KEY` env vars when no AMOE-scoped key
+//        `KPR_ERC4337_OWNER_PRIVATE_KEY`/`KPR_ERC4337_OWNER_PRIVATE_KEY` env vars when no AMOE-scoped key
 //        is configured. The relayed submit must surface
 //        `amoe_relay_unavailable` instead of silently signing with another
 //        service's key.
@@ -208,7 +208,7 @@ describe('AMOE submit relay key scope (A4)', () => {
       KPR_PRIVATE_KEY: '0x' + '11'.repeat(32),
       PRIVATE_KEY: '0x' + '22'.repeat(32),
       KPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '44'.repeat(32),
-      CRE_ERC4337_OWNER_PRIVATE_KEY: '0x' + '55'.repeat(32),
+      KPR_ERC4337_OWNER_PRIVATE_KEY: '0x' + '55'.repeat(32),
     })
 
     const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')

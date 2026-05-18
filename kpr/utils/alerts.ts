@@ -1,5 +1,5 @@
 /**
- * Alerting / webhook helpers for CRE workflows.
+ * Alerting / webhook helpers for KPR workflows.
  *
  * Supports:
  *  - Generic webhook (Slack, Discord, PagerDuty, etc.)
@@ -35,8 +35,8 @@ const SAFE_WEBHOOK_PREFIXES = [
 export async function sendAlert(payload: AlertPayload): Promise<void> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
 
-  // Always log to console for CRE execution logs
-  const prefix = `[CRE:${payload.workflow}] [${payload.severity.toUpperCase()}]`;
+  // Always log to console for KPR execution logs
+  const prefix = `[KPR:${payload.workflow}] [${payload.severity.toUpperCase()}]`;
   console.log(`${prefix} ${payload.title}`, JSON.stringify(payload.details));
 
   if (!webhookUrl) return;

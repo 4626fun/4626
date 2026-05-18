@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Relay Entries
+ * KPR Workflow: Keepr Solana Relay Entries
  *
  * Schedule: Every 30 seconds
  * Pattern: cron → Solana RPC read (PendingEntries PDA) → Solana write (relay) → Base write

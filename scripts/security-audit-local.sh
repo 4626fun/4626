@@ -6,7 +6,7 @@ cd "$ROOT"
 echo "== forge test (summary) =="
 forge test --summary
 
-echo "== CRE workflow layout + typecheck =="
+echo "== KPR workflow layout + typecheck =="
 bash kpr/kpr-workflows/scripts/validate-workflow-layout.sh
 bash kpr/kpr-workflows/scripts/typecheck-workflows.sh
 

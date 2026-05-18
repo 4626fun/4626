@@ -271,7 +271,7 @@ wallet/aggregator icon visibility (Phantom/Backpack/Jupiter/Meteora) typically
 also depends on metadata indexing and/or token-list ingestion.
 
 For reliable display, run a token badge/metadata workflow after provisioning
-(for example `cre`'s `solana:prepare-token-badge`) and submit to the relevant
+(for example `kpr`'s `solana:prepare-token-badge`) and submit to the relevant
 ecosystem list/indexer as part of launch ops.
 
 ## Security notes

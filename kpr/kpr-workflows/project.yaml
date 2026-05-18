@@ -1,33 +1,33 @@
 # ==========================================================================
-# CRE Project Settings — 4626 Protocol Workflows
+# KPR Project Settings — 4626 Protocol Workflows
 # ==========================================================================
 # Template-aligned target structure:
-# - local-simulation  -> reproducible local `cre workflow simulate`
+# - local-simulation  -> reproducible local `pnpm -C kpr run start`
 # - staging-settings  -> deployment-intent settings with placeholders
 # - production-settings -> production deployment settings with placeholders
 #
 # Notes:
-# - `cre-cli.don-family` is only needed for DON deployment targets.
+# - `kpr-cli.don-family` is only needed for DON deployment targets.
 # - `account.workflow-owner-address` is optional, but required for --unsigned
 #   workflow operations.
 # ==========================================================================
 
 local-simulation:
   rpcs:
-    # CRE CLI requires an Ethereum mainnet RPC for some account/registry ops.
+    # KPR CLI requires an Ethereum mainnet RPC for some account/registry ops.
     - chain-name: ethereum-mainnet
       url: https://ethereum-rpc.publicnode.com
     - chain-name: ethereum-mainnet-base-1
       url: https://mainnet.base.org
 
 staging-settings:
-  cre-cli:
+  kpr-cli:
     # Replace with your assigned DON family once approved.
     don-family: "zone-a"
   rpcs:
     # FIX: M-12 (4626-321) — staging previously referenced
     # publicnode.com / mainnet.base.org. Public endpoints have
-    # 10–100 req/s limits and no SLA; CRE workflows that exceed the
+    # 10–100 req/s limits and no SLA; KPR workflows that exceed the
     # limit fail silently, missing on-chain events (and therefore
     # missing lottery settlements, rebalance cadence, etc.). Staging
     # now uses the same keyed Infura project as production via
@@ -40,11 +40,11 @@ staging-settings:
       url: https://base-mainnet.infura.io/v3/${INFURA_PROJECT_ID_STAGING}
 
 production-settings:
-  cre-cli:
+  kpr-cli:
     don-family: "zone-a"
   rpcs:
     # Audit H-09 / 4626-301: inject Infura project id via ${INFURA_PROJECT_ID} from
-    # CRE Secrets rather than committing a placeholder that ships literal text.
+    # KPR Secrets rather than committing a placeholder that ships literal text.
     - chain-name: ethereum-mainnet
       url: https://mainnet.infura.io/v3/${INFURA_PROJECT_ID}
     - chain-name: ethereum-mainnet-base-1

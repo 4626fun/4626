@@ -17,6 +17,6 @@ for cfg in "$workflows_root"/*/tsconfig.json; do
     continue
   fi
   rel_cfg="${cfg#"$workflows_root"/}"
-  echo "[cre-typecheck] $rel_cfg"
+  echo "[kpr-typecheck] $rel_cfg"
   pnpm -C "$workflows_root" exec tsc --noEmit -p "$rel_cfg"
 done

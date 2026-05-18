@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Price Monitor
+ * KPR Workflow: Keepr Solana Price Monitor
  *
  * Schedule: Every 5 minutes (during launch window only)
  * Pattern:  cron → Solana RPC read (DLMM active bin) → conditional alert/action
@@ -11,10 +11,10 @@
  *   4. Re-centering done via Meteora SDK (remove + add liquidity around new bin)
  *
  * Prerequisites:
- *   - SOLANA_RPC_URL set in CRE secrets
- *   - DLMM_POOL_ADDRESS set in CRE secrets (Solana)
- *   - CCA_STRATEGY set in CRE secrets (Base, for floor price)
- *   - KPR_PRIVATE_KEY set in CRE secrets
+ *   - SOLANA_RPC_URL set in KPR secrets
+ *   - DLMM_POOL_ADDRESS set in KPR secrets (Solana)
+ *   - CCA_STRATEGY set in KPR secrets (Base, for floor price)
+ *   - KPR_PRIVATE_KEY set in KPR secrets
  *
  * Market integrity impact: HIGH (during launch window)
  *   - Prevents excessive price divergence between Base and Solana

@@ -2801,7 +2801,7 @@ describe('telegram webhook handler', () => {
       body: {
         update_id: 11_3,
         callback_query: {
-          id: 'cbq-cre',
+          id: 'cbq-kpr',
           data: 'menu:keeper',
           from: { id: 42 },
           message: { message_id: 17, chat: { id: -100123 } },
@@ -2843,7 +2843,7 @@ describe('telegram webhook handler', () => {
       body: {
         update_id: 11_3_1,
         callback_query: {
-          id: 'cbq-cre-blocked',
+          id: 'cbq-kpr-blocked',
           data: 'menu:keeper',
           from: { id: 99 },
           message: { message_id: 17, chat: { id: -100123 } },

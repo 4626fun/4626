@@ -2,7 +2,7 @@
  * CCA (Creator Coin Auction) Strategy & Auction ABI fragments.
  *
  * Extracted from kpr/config.ts for use with viem's type-safe contract
- * interactions inside CRE SDK workflows.
+ * interactions inside KPR SDK workflows.
  */
 
 export const CCAStrategyABI = [

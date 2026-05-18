@@ -69,7 +69,7 @@ vi.mock('../kpr-workflows/_shared/evm.ts', () => ({
   resolveChainId: resolveChainIdMock,
 }))
 
-vi.mock('@chainlink/cre-sdk', () => ({
+vi.mock('../kpr-workflows/_shared/kprWorkflowRuntime.ts', () => ({
   HTTPClient: class HTTPClient {},
   bytesToHex: (value: Uint8Array) => `0x${Buffer.from(value).toString('hex')}`,
   consensusIdenticalAggregation: vi.fn(() => 'consensus'),
@@ -178,13 +178,13 @@ function restoreEnv(snapshot: Record<string, string | undefined>): void {
 
 const ENV_KEYS = [
   'DRY_RUN',
-  'CRE_ERC4337_ENABLED',
-  'CRE_ERC4337_SMART_WALLET',
-  'CRE_ERC4337_OWNER',
-  'CRE_ERC4337_PRIVY_WALLET_ID',
-  'CRE_ERC4337_BUNDLER_URL',
-  'CRE_ERC4337_PAYMASTER_URL',
-  'CRE_ERC4337_VERSION',
+  'KPR_ERC4337_ENABLED',
+  'KPR_ERC4337_SMART_WALLET',
+  'KPR_ERC4337_OWNER',
+  'KPR_ERC4337_PRIVY_WALLET_ID',
+  'KPR_ERC4337_BUNDLER_URL',
+  'KPR_ERC4337_PAYMASTER_URL',
+  'KPR_ERC4337_VERSION',
   'KPR_PRIVATE_KEY',
   'BASE_RPC_URL',
 ] as const
@@ -203,20 +203,20 @@ describe('canonical sender context plumbing', () => {
       '0x0000000000000000000000000000000000000000000000000000000000000001'
     process.env.BASE_RPC_URL = 'https://mainnet.base.org'
     delete process.env.DRY_RUN
-    delete process.env.CRE_ERC4337_ENABLED
-    delete process.env.CRE_ERC4337_SMART_WALLET
-    delete process.env.CRE_ERC4337_OWNER
-    delete process.env.CRE_ERC4337_PRIVY_WALLET_ID
-    delete process.env.CRE_ERC4337_BUNDLER_URL
-    delete process.env.CRE_ERC4337_PAYMASTER_URL
-    delete process.env.CRE_ERC4337_VERSION
+    delete process.env.KPR_ERC4337_ENABLED
+    delete process.env.KPR_ERC4337_SMART_WALLET
+    delete process.env.KPR_ERC4337_OWNER
+    delete process.env.KPR_ERC4337_PRIVY_WALLET_ID
+    delete process.env.KPR_ERC4337_BUNDLER_URL
+    delete process.env.KPR_ERC4337_PAYMASTER_URL
+    delete process.env.KPR_ERC4337_VERSION
   })
 
   afterEach(() => {
     restoreEnv(ORIGINAL_ENV)
   })
 
-  it('preserves the protected automation block from the CRE active-vault feed', async () => {
+  it('preserves the protected automation block from the KPR active-vault feed', async () => {
     getJsonMock.mockReturnValue({
       success: true,
       data: {
@@ -332,7 +332,7 @@ describe('canonical sender context plumbing', () => {
 
   it('simulates Ajna writes as the per-vault canonical smart wallet in dry-run mode', async () => {
     process.env.DRY_RUN = 'true'
-    process.env.CRE_ERC4337_ENABLED = 'false'
+    process.env.KPR_ERC4337_ENABLED = 'false'
 
     const { writeContract } = await import('../utils/onchain.js')
     const result = await writeContract({
@@ -357,12 +357,12 @@ describe('canonical sender context plumbing', () => {
   })
 
   it('prefers the per-call ERC-4337 context over the global Ajna sender fallback', async () => {
-    process.env.CRE_ERC4337_ENABLED = 'true'
-    process.env.CRE_ERC4337_SMART_WALLET = GLOBAL_SMART_WALLET
-    process.env.CRE_ERC4337_OWNER = GLOBAL_OWNER
-    process.env.CRE_ERC4337_PRIVY_WALLET_ID = 'wallet-global-owner'
-    process.env.CRE_ERC4337_BUNDLER_URL = 'https://bundler.test'
-    process.env.CRE_ERC4337_PAYMASTER_URL = 'https://paymaster.test'
+    process.env.KPR_ERC4337_ENABLED = 'true'
+    process.env.KPR_ERC4337_SMART_WALLET = GLOBAL_SMART_WALLET
+    process.env.KPR_ERC4337_OWNER = GLOBAL_OWNER
+    process.env.KPR_ERC4337_PRIVY_WALLET_ID = 'wallet-global-owner'
+    process.env.KPR_ERC4337_BUNDLER_URL = 'https://bundler.test'
+    process.env.KPR_ERC4337_PAYMASTER_URL = 'https://paymaster.test'
 
     publicReadContractMock.mockImplementation(
       async ({

@@ -60,7 +60,7 @@ Defined in: [server/\_lib/workspace/service.ts:130](https://github.com/wenakita/
 
 ##### source
 
-> **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"cre"`
+> **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"kpr"`
 
 Defined in: [server/\_lib/workspace/service.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/service.ts#L126)
 

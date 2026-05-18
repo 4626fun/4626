@@ -8,7 +8,7 @@
  *   pnpm solana:bridge-supply
  *
  * Required env:
- *   CRE_ETH_PRIVATE_KEY     - Base signer private key (hex, without 0x prefix)
+ *   KPR_ETH_PRIVATE_KEY     - Base signer private key (hex, without 0x prefix)
  *   BASE_RPC_URL             - Base RPC endpoint
  *   SHARE_OFT_ADDRESS        - ShareOFT address on Base
  *   BRIDGE_AMOUNT            - Amount to bridge (in wei / smallest unit)
@@ -24,7 +24,7 @@ import { base } from 'viem/chains';
 import { requireEnv } from '../../../config.js';
 
 const rpcUrl = requireEnv('BASE_RPC_URL');
-const pk = `0x${requireEnv('CRE_ETH_PRIVATE_KEY')}` as Hex;
+const pk = `0x${requireEnv('KPR_ETH_PRIVATE_KEY')}` as Hex;
 const account = privateKeyToAccount(pk);
 
 const shareOft = getAddress(requireEnv('SHARE_OFT_ADDRESS'));

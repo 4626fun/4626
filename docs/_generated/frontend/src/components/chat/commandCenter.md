@@ -32,7 +32,7 @@ Defined in: [src/components/chat/commandCenter.ts:12](https://github.com/wenakit
 
 ### ChatCommandCategoryId
 
-> **ChatCommandCategoryId** = `"vault"` \| `"cre"` \| `"wallet"` \| `"knowledge"` \| `"advanced"`
+> **ChatCommandCategoryId** = `"vault"` \| `"kpr"` \| `"wallet"` \| `"knowledge"` \| `"advanced"`
 
 Defined in: [src/components/chat/commandCenter.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/commandCenter.ts#L3)
 

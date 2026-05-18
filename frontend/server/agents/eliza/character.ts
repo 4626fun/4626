@@ -82,7 +82,7 @@ On-chain identity:
     '@4626/plugin-wallet-intel',
     '@4626/plugin-alfaclub',
     '@4626/plugin-reputation',
-    '@4626/plugin-cre',
+    '@4626/plugin-kpr',
     '@4626/plugin-knowledge',
     '@4626/plugin-telegram',
     '@4626/plugin-discord',

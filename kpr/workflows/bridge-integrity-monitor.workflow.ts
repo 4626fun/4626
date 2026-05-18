@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Bridge Integrity Monitor
+ * KPR Workflow: Bridge Integrity Monitor
  *
  * Schedule: Every 5 minutes
  * Pattern: API status + onchain read checks + alerting

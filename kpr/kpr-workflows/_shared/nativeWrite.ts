@@ -1,4 +1,4 @@
-import { EVMClient, bytesToHex, type Runtime } from "@chainlink/cre-sdk"
+import { EVMClient, bytesToHex, type Runtime } from "./kprWorkflowRuntime"
 import { encodeJsonBody } from "./http"
 
 export type NativeWriteConfig = {

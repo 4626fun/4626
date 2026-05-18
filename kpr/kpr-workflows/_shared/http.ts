@@ -1,4 +1,4 @@
-import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"
+import { HTTPClient, type NodeRuntime } from "./kprWorkflowRuntime"
 import { decodeJsonBody, encodeJsonBody as encodeJsonBodyInternal } from "./determinism"
 
 export type ApiRuntimeConfig = {

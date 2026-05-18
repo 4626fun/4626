@@ -10,9 +10,9 @@ import {
 import { stableJsonStringify } from '../kpr-workflows/_shared/determinism.js';
 
 /**
- * H-01 (audit 2026-04-25) regression coverage. The CRE workflow HTTP-trigger
+ * H-01 (audit 2026-04-25) regression coverage. The KPR workflow HTTP-trigger
  * auth previously used a plain string-equality compare against a secret named
- * CRE_RUNTIME_WEBHOOK_HMAC_SECRET. The fix mirrors the contract enforced by
+ * KPR_RUNTIME_WEBHOOK_HMAC_SECRET. The fix mirrors the contract enforced by
  * frontend/server/_lib/kpr/runtimeBridge.ts:authenticateRuntimeRequest:
  *   - hmac-sha256(secret, `${timestamp}.${nonce}.${canonicalBody}`)
  *   - ±5 minute timestamp skew window

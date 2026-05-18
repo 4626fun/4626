@@ -89,7 +89,8 @@ introduce new on-chain code; the audited contract surface is unchanged.
 - `frontend/api/__tests__/lotteryAmoeRelayKeyScope.test.ts` — A1/A2/A3/A4
   regression suites updated to mock `buildProcessAmoeEntryCall` and stub
   viem on the success paths. The A4 key-isolation invariant (no fall-through
-  to `KPR_PRIVATE_KEY` / `PRIVATE_KEY` / `CRE_ERC4337_OWNER_PRIVATE_KEY`)
+  to `KPR_PRIVATE_KEY` / `PRIVATE_KEY` / `KPR_ERC4337_OWNER_PRIVATE_KEY`
+  (legacy alias: `KPR_ERC4337_OWNER_PRIVATE_KEY`))
   is preserved bit-for-bit.
 
 ---

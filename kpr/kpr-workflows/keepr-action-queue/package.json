@@ -2,12 +2,8 @@
   "name": "keepr-action-queue",
   "version": "1.11.0",
   "private": true,
-  "scripts": {
-    "postinstall": "bunx cre-setup"
-  },
-  "dependencies": {
-    "@chainlink/cre-sdk": "^1.0.7"
-  },
+  "scripts": {},
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "latest"
   }

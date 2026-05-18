@@ -1,8 +1,8 @@
 /**
- * CreatorOVault ABI fragments — only the functions used by CRE workflows.
+ * CreatorOVault ABI fragments — only the functions used by KPR workflows.
  *
  * Extracted from kpr/config.ts for use with viem's type-safe contract
- * interactions inside CRE SDK workflows.
+ * interactions inside KPR SDK workflows.
  */
 
 export const VaultABI = [

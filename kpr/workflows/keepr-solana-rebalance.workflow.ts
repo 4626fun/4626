@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Rebalance
+ * KPR Workflow: Keepr Solana Rebalance
  *
  * Schedule: Every 10 minutes (adapter -> bridge -> optional Meteora
  * Alpha Vault deposit). Non-blocking; logs plan and does not write

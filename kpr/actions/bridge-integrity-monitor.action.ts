@@ -1,5 +1,5 @@
 /**
- * CRE Bridge Integrity Monitor
+ * KPR Bridge Integrity Monitor
  *
  * Monitors bridge integration safety from 4626-owned control points:
  * - signer-set overlap drift (config snapshot based)
@@ -19,7 +19,7 @@ const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as const;
 // FIX: LOW-07 — Log a warning when using the hardcoded default; prefer env override
 const DEFAULT_BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as const;
 if (!process.env.BASE_SOLANA_BRIDGE_ADDRESS) {
-  console.warn('[CRE] WARNING: BASE_SOLANA_BRIDGE_ADDRESS not set — using hardcoded default. Set this env var explicitly for production.');
+  console.warn('[KPR] WARNING: BASE_SOLANA_BRIDGE_ADDRESS not set — using hardcoded default. Set this env var explicitly for production.');
 }
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const BYTES32_RE = /^0x[a-fA-F0-9]{64}$/;

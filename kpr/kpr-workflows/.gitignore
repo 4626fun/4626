@@ -1,4 +1,4 @@
-# CRE build artifacts
+# KPR build artifacts
 *.wasm
 .kpr/
 
@@ -9,7 +9,7 @@
 
 # Local scratch
 tmp.js
-.cre_build_tmp.js
+.kpr_build_tmp.js
 
 # Dependencies
 node_modules/

@@ -1,7 +1,7 @@
 import { hmac } from "@noble/hashes/hmac"
 import { sha256 } from "@noble/hashes/sha2"
 import { bytesToHex } from "@noble/hashes/utils"
-import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"
+import { HTTPClient, type NodeRuntime } from "./kprWorkflowRuntime"
 import { bytesToBase64, decodeJsonBody } from "./determinism"
 
 const EMPTY_PAYLOAD_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"

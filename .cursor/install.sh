@@ -20,7 +20,7 @@ pnpm install --frozen-lockfile
 # ── Frontend dependencies (Vite + React + Vercel API) ─────────────────────────
 pnpm -C frontend install --frozen-lockfile
 
-# ── CRE automation dependencies (keeper bots) ────────────────────────────────
+# ── KPR automation dependencies (keeper bots) ────────────────────────────────
 cd kpr && npm ci && cd ..
 
 # ── Env files (copy examples if missing — never overwrite existing) ───────────

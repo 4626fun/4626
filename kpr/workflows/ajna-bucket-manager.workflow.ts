@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Ajna Bucket Manager
+ * KPR Workflow: Ajna Bucket Manager
  *
  * Schedule: Every 10 minutes
  * Pattern: onchain read → conditional onchain write

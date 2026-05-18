@@ -152,19 +152,19 @@ export async function fetchActiveVaults(chainId?: number): Promise<VaultConfig[]
   const verifiedVaults: VaultConfig[] = [];
   for (const vault of vaults) {
     if (!isAddress(vault.vaultAddress) || !isAddress(vault.creatorCoinAddress)) {
-      console.warn(`[CRE] Skipping vault with invalid addresses: ${vault.vaultAddress}`);
+      console.warn(`[KPR] Skipping vault with invalid addresses: ${vault.vaultAddress}`);
       continue;
     }
     try {
       const binding = await verifyVaultRegistryBinding(vault);
       if (!binding.verified) {
-        console.warn(`[CRE] Skipping unverified vault ${vault.vaultAddress}: ${binding.reason}`);
+        console.warn(`[KPR] Skipping unverified vault ${vault.vaultAddress}: ${binding.reason}`);
         continue;
       }
       verifiedVaults.push(vault);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[CRE] Skipping vault ${vault.vaultAddress} — registry check failed: ${msg}`);
+      console.warn(`[KPR] Skipping vault ${vault.vaultAddress} — registry check failed: ${msg}`);
       continue;
     }
   }

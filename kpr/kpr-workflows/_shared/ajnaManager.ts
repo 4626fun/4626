@@ -1,4 +1,4 @@
-import { HTTPClient, type Runtime, type NodeRuntime, bytesToHex, consensusIdenticalAggregation } from "@chainlink/cre-sdk"
+import { HTTPClient, type Runtime, type NodeRuntime, bytesToHex, consensusIdenticalAggregation } from "./kprWorkflowRuntime"
 import { decodeFunctionResult, zeroAddress } from "viem"
 import {
   AjnaPoolViewABI,
@@ -120,7 +120,7 @@ export function parseAjnaManualPayload(payload: Uint8Array | undefined): AjnaMan
   } catch {
     // FIX: MED-02 — Log a warning when base64 fallback parsing is used (potential injection vector)
     try {
-      console.warn('[CRE][ajna] Manual payload was not valid JSON; attempting base64 decode fallback')
+      console.warn('[KPR][ajna] Manual payload was not valid JSON; attempting base64 decode fallback')
       const decoded = JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as AjnaManualPayload
       // FIX: MED-02 — Validate vaultAddress/strategyAddress against format in forceEnqueue payloads
       if (decoded.forceEnqueue && decoded.vaultAddress && !normalizeVaultAddress(decoded.vaultAddress)) {

@@ -1,10 +1,8 @@
-# CRE Runbook (4626)
+# KPR Runbook (4626)
 
 ## Prerequisites
 
 - Node.js and npm installed
-- CRE CLI installed and available in `PATH`
-- CRE CLI authenticated (`cre login`) when required
 - Bun installed
 - Working directory: repo root (`<repo-root>`, i.e. wherever you cloned the repository — e.g. `$REPO_ROOT` exported from your shell)
 
@@ -13,18 +11,17 @@ Verify the local toolchain before doing anything else:
 ```bash
 node -v
 npm -v
-cre version
+pnpm -C kpr -v
 ```
 
-If `cre` is not found, install the official Chainlink CRE CLI before continuing.  
-Do not rely on `npx cre` in locked-down environments, since registry access may be blocked.
+If `pnpm` is not found, install pnpm before continuing.
 
 ## Fresh Machine Bootstrap
 
 ```bash
 # Run from an existing checkout of this repository:
 # cd <repo-root>     # e.g. $REPO_ROOT, set to your local clone path
-npm --prefix cre install
+pnpm -C kpr install
 cp kpr/kpr-workflows/.env.example kpr/kpr-workflows/.env
 cp kpr/secrets.example.env kpr/.env
 cp frontend/.env.example frontend/.env.local
@@ -32,7 +29,7 @@ cp frontend/.env.example frontend/.env.local
 
 Minimum required for local simulation:
 
-- `CRE_ETH_PRIVATE_KEY`
+- `KPR_ETH_PRIVATE_KEY`
 - `KPR_API_KEY_VALUE`
 - `KPR_API_BASE_URL_VALUE`
 - `KPR_PRIVATE_KEY_VALUE`
@@ -49,84 +46,53 @@ bash kpr/kpr-workflows/scripts/typecheck-workflows.sh
 ### Simulate all workflows (local-simulation)
 
 ```bash
-CRE_SIMULATION_ENABLED=true bash kpr/kpr-workflows/scripts/simulate-workflows.sh
+KPR_SIMULATION_ENABLED=true bash kpr/kpr-workflows/scripts/simulate-workflows.sh
 ```
 
 ### Runtime orchestration workflows
 
-The CRE runtime workflow lane (`runtime-indexer-*`, `runtime-reference-feeds`, `runtime-orchestrator`) is retired and no longer simulated or deployed.
+The KPR runtime workflow lane (`runtime-indexer-*`, `runtime-reference-feeds`, `runtime-orchestrator`) is retired and no longer simulated or deployed.
 
 ### Engine logs (debug mode)
 
 ```bash
-cre workflow simulate <workflow-name> --target local-simulation --engine-logs
+pnpm -C kpr run start -- <workflow-name>
 ```
 
 ### Non-interactive trigger selection
 
 ```bash
-cre workflow simulate <workflow-name> --target local-simulation --non-interactive --trigger-index 0
+pnpm -C kpr run start -- <workflow-name>
 ```
 
 - `trigger-index 0` is cron for all current workflows.
 - For script-based runs:
-  - `CRE_ENGINE_LOGS=true` enables engine logs
-  - `CRE_TRIGGER_INDEX=<n>` overrides trigger index
+  - `KPR_ENGINE_LOGS=true` enables engine logs
+  - `KPR_TRIGGER_INDEX=<n>` overrides trigger index
 
-## Deploy
-
-```bash
-cd kpr/kpr-workflows
-cre workflow deploy <workflow-name> --target staging-settings
-cre workflow deploy <workflow-name> --target production-settings
-```
-
-Capture returned workflow IDs and store them in ops metadata.
-
-## Activate
+## Run modes
 
 ```bash
-cre workflow activate <workflow-id>
-```
+# Run one workflow
+pnpm -C kpr run start -- <workflow-name>
 
-## Update
+# Run all
+pnpm -C kpr run start
 
-```bash
-cre workflow update <workflow-id> --workflow-file <path/to/workflow.yaml> --target <target-name>
-```
-
-After update, verify whether workflow ID changed. If yes, update any allowlists/consumers that validate workflow identity.
-
-## Pause
-
-```bash
-cre workflow pause <workflow-id>
-```
-
-## Delete
-
-```bash
-cre workflow delete <workflow-id>
+# Dry-run all
+pnpm -C kpr run dry-run
 ```
 
 ## Secrets
 
-```bash
-cre secrets set KPR_API_KEY
-cre secrets set KPR_API_BASE_URL
-cre secrets set KPR_PRIVATE_KEY
-```
+Use `kpr/.env` (copied from `kpr/secrets.example.env`) for local secrets.
 
 Workflow mapping file: `kpr/kpr-workflows/secrets.yaml`
 
 ## Troubleshooting
 
-- **`cre: command not found`**
-  - Install the official Chainlink CRE CLI and make sure it is available in `PATH`
-  - Re-run `cre version` before attempting simulation
-- **`npx cre` fails**
-  - This usually means npm registry access is blocked or restricted
-  - Use the official CLI install path instead of registry fallback
+- **`pnpm: command not found`**
+  - Install pnpm and re-run the command
 - **`git clone` fails with proxy / CONNECT / 403**
   - The machine cannot reach GitHub directly
   - Use a machine with normal outbound access or a pre-existing checkout
@@ -142,9 +108,9 @@ Workflow mapping file: `kpr/kpr-workflows/secrets.yaml`
     - `solana-orchestrator.manual.json`
   - CLI payload file paths are resolved relative to the selected workflow folder.
   - Use:
-    - `cre workflow simulate ajna-bucket-manager --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/ajna-bucket-manager.manual.json`
-    - `cre workflow simulate charm-rebalance-manager --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/charm-rebalance-manager.manual.json`
-    - `cre workflow simulate solana-orchestrator --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/solana-orchestrator.manual.json`
+    - `pnpm -C kpr run start -- ajna-bucket-manager`
+    - `pnpm -C kpr run start -- charm-rebalance-manager`
+    - `pnpm -C kpr run start -- solana-orchestrator`
   - Add `--engine-logs` when diagnosing payload/trigger issues.
 - **Log trigger not firing**
   - Verify watched addresses in `strategy-signal-listener/config.*.json`

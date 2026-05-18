@@ -3,7 +3,7 @@ import {
   LAST_FINALIZED_BLOCK_NUMBER,
   encodeCallMsg,
   type Runtime,
-} from "@chainlink/cre-sdk"
+} from "./kprWorkflowRuntime"
 import { encodeFunctionData, zeroAddress } from "viem"
 
 const CHAIN_NAME_TO_CHAIN_ID: Record<string, number> = {

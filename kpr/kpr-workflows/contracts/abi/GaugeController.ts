@@ -1,5 +1,5 @@
 /**
- * CreatorGaugeController ABI fragments for CRE payout-integrity workflow.
+ * CreatorGaugeController ABI fragments for KPR payout-integrity workflow.
  *
  * Only includes the read-only functions needed for monitoring.
  *

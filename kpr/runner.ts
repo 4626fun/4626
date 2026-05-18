@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * Local CRE Workflow Runner
+ * Local KPR Workflow Runner
  *
  * Usage:
  *   tsx runner.ts [workflow-name] [--dry-run]

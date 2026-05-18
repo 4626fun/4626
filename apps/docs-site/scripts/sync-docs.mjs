@@ -54,9 +54,9 @@ const SOURCES = {
     exclude: [],
     label: 'Frontend API (typedoc)',
   },
-  cre: {
-    dir: path.join(REPO_ROOT, 'cre'),
-    destPrefix: 'operations/cre',
+  kpr: {
+    dir: path.join(REPO_ROOT, 'kpr'),
+    destPrefix: 'operations/kpr',
     exclude: [
       'node_modules/**', 'kpr-workflows/**/node_modules/**',
       '**/*.ts', '**/*.js', '**/*.mjs', '**/*.json', '**/*.yaml', '**/*.yml',
@@ -111,7 +111,7 @@ const stats = {
     manual: 0,
     contracts: 0,
     frontend: 0,
-    cre: 0,
+    kpr: 0,
     frontendDocs: 0,
     rootMeta: 0,
     runtimeSkills: 0,
@@ -122,7 +122,7 @@ const stats = {
 const GIT_DATE_PATHS = [
   'docs',
   'frontend/docs',
-  'cre',
+  'kpr',
   'script/agent-runtime/skills',
   'README.md',
   'SECURITY.md',
@@ -406,8 +406,8 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   // Mark workspace-sourced docs
   if (sourceType === 'manual') {
     ensureManualMetadata(parsed.data, relativePath, sourceMetadata);
-  } else if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
-    if (sourceType === 'cre') parsed.data.synced_from = 'kpr/';
+  } else if (sourceType === 'kpr' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
+    if (sourceType === 'kpr') parsed.data.synced_from = 'kpr/';
     if (sourceType === 'frontendDocs') parsed.data.synced_from = 'frontend/';
     if (sourceType === 'rootMeta') parsed.data.synced_from = 'repo-root';
     if (sourceType === 'runtimeSkills') parsed.data.synced_from = 'script/agent-runtime/skills/';
@@ -455,7 +455,7 @@ async function sourceExists(sourceDir) {
  * Keys are sourceKey, values are maps of original filename -> destination filename.
  */
 const RENAME_MAP = {
-  cre: {
+  kpr: {
     'README.md': 'index.md',
   },
   frontendDocs: {
@@ -759,7 +759,7 @@ async function sync() {
   console.log(`   Manual docs:     ${stats.bySource.manual}`);
   console.log(`   Contract API:    ${stats.bySource.contracts}`);
   console.log(`   Frontend API:    ${stats.bySource.frontend}`);
-  console.log(`   Automation flows: ${stats.bySource.cre}`);
+  console.log(`   Automation flows: ${stats.bySource.kpr}`);
   console.log(`   Frontend docs:   ${stats.bySource.frontendDocs}`);
   console.log(`   Repository docs: ${stats.bySource.rootMeta}`);
   console.log(`   Runtime skills:  ${stats.bySource.runtimeSkills}`);

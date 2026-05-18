@@ -12,7 +12,7 @@ required_root_files=(
 
 for path in "${required_root_files[@]}"; do
   if [[ ! -f "$path" ]]; then
-    echo "[cre-layout] missing required file: $path" >&2
+    echo "[kpr-layout] missing required file: $path" >&2
     exit 1
   fi
 done
@@ -35,24 +35,24 @@ for workflow_manifest in "$workflows_root"/*/workflow.yaml; do
 
   for required_path in "${required_workflow_files[@]}"; do
     if [[ ! -f "$required_path" ]]; then
-      echo "[cre-layout] $workflow_name is missing $(basename "$required_path")" >&2
+      echo "[kpr-layout] $workflow_name is missing $(basename "$required_path")" >&2
       exit 1
     fi
   done
 
   if [[ ! -f "$workflow_dir/config.staging.json" ]]; then
-    echo "[cre-layout] $workflow_name is missing config.staging.json" >&2
+    echo "[kpr-layout] $workflow_name is missing config.staging.json" >&2
     exit 1
   fi
   if [[ ! -f "$workflow_dir/config.production.json" ]]; then
-    echo "[cre-layout] $workflow_name is missing config.production.json" >&2
+    echo "[kpr-layout] $workflow_name is missing config.production.json" >&2
     exit 1
   fi
 done
 
 if [[ "$workflow_count" -eq 0 ]]; then
-  echo "[cre-layout] no workflow manifests found under $workflows_root" >&2
+  echo "[kpr-layout] no workflow manifests found under $workflows_root" >&2
   exit 1
 fi
 
-echo "[cre-layout] validated $workflow_count workflows"
+echo "[kpr-layout] validated $workflow_count workflows"

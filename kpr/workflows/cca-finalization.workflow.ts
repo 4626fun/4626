@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: CCA Finalization
+ * KPR Workflow: CCA Finalization
  *
  * Schedule: Every 10 minutes
  * Pattern:  cron → onchain read → conditional onchain write
@@ -11,8 +11,8 @@
  *   4. Then call sweepUnsoldTokens()
  *
  * Prerequisites:
- *   - KPR_PRIVATE_KEY set in CRE secrets (for gas only — no keeper role needed)
- *   - CCA_STRATEGY_ADDRESS set in CRE secrets
+ *   - KPR_PRIVATE_KEY set in KPR secrets (for gas only — no keeper role needed)
+ *   - CCA_STRATEGY_ADDRESS set in KPR secrets
  *
  * Feature impact: COMPLETING
  *   - Without this, graduated auctions sit unsettled indefinitely
@@ -26,7 +26,7 @@ import { alertCritical } from '../utils/alerts.js';
 const WORKFLOW_NAME = 'cca-finalization';
 
 /**
- * CRE entrypoint — called on each cron trigger.
+ * KPR entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   try {
@@ -46,12 +46,12 @@ export async function handler(): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await alertCritical(WORKFLOW_NAME, 'Workflow failed with unhandled error', { error: message });
-    throw err; // Let CRE retry
+    throw err; // Let KPR retry
   }
 }
 
 // ---------------------------------------------------------------------------
-// CRE workflow configuration export
+// KPR workflow configuration export
 // ---------------------------------------------------------------------------
 
 export const workflow = {

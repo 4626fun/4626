@@ -168,7 +168,7 @@ Defined in: [src/lib/workspace/types.ts:159](https://github.com/wenakita/4626/bl
 
 ##### source
 
-> **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"cre"`
+> **source**: `"workspace"` \| `"keepr"` \| `"chat"` \| `"kpr"`
 
 Defined in: [src/lib/workspace/types.ts:155](https://github.com/wenakita/4626/blob/main/frontend/src/lib/workspace/types.ts#L155)
 

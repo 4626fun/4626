@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: 4626 Unified Keeper
+ * KPR Workflow: 4626 Unified Keeper
  *
  * Schedule: Every 5 minutes
  *
@@ -57,7 +57,7 @@ export interface UnifiedResult {
 }
 
 /**
- * CRE entrypoint — called on each cron trigger.
+ * KPR entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   const start = Date.now();
@@ -249,7 +249,7 @@ export async function handler(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// CRE workflow configuration export
+// KPR workflow configuration export
 // ---------------------------------------------------------------------------
 
 export const workflow = {

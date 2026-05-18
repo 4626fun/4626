@@ -30,7 +30,7 @@ gitleaks detect --config gitleaks.toml --report-path /tmp/leaks.json
 | Rule | File (path at time of commit) | Commit |
 |---|---|---|
 | `generic-api-key` | `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` | `04b38d6` |
-| `generic-api-key` | `kpr/secrets.example.env` (`CRE_ERC4337_OWNER_PRIVATE_KEY=`) | `0d3710c` |
+| `generic-api-key` | `kpr/secrets.example.env` (`KPR_ERC4337_OWNER_PRIVATE_KEY=` legacy `KPR_ERC4337_OWNER_PRIVATE_KEY`) | `0d3710c` |
 | `jwt` + `generic-api-key` | `frontend/abis/frontend/.env.{backup,production,vars}` (`VERCEL_OIDC_TOKEN`, `VITE_ETHERSCAN_API_KEY`) | `fcf7532` |
 | `jwt` + `generic-api-key` | `frontend/.env.{backup,production,vars}` (same secrets) | `b393633` |
 | `generic-api-key` | `docs/LAYERZERO_SOLANA_SETUP.md` (`SPL Token`) | `ff76b06` |
@@ -50,7 +50,7 @@ Total: **21 findings across 8 distinct historical commits**.
    - `VITE_ALCHEMY_API_KEY` — regenerate at <https://dashboard.alchemy.com/apps>.
    - `pinataGatewayToken` — regenerate at <https://app.pinata.cloud/keys>.
    - `TELEGRAM_BOT_TOKEN` — issue `/revoke` then `/token` to BotFather.
-   - `CRE_ERC4337_OWNER_PRIVATE_KEY` and the `PRIVATE_KEY=` template — derive a new EOA, transfer any residual funds, and update deployment manifests.
+   - `KPR_ERC4337_OWNER_PRIVATE_KEY` (legacy alias: `KPR_ERC4337_OWNER_PRIVATE_KEY`) and the `PRIVATE_KEY=` template — derive a new EOA, transfer any residual funds, and update deployment manifests.
 2. **Decide remediation path:**
    - **Option A (preferred): commit-fingerprint allowlist.** Once each secret is rotated, add the gitleaks fingerprints to `gitleaks.toml`'s `[allowlist]` `commits = […]` list. This keeps the public-facing history intact and is reversible.
    - **Option B: history rewrite.** Use `git filter-repo --invert-paths --path …` to surgically remove the offending blobs, force-push the rewritten history, and require all collaborators to re-clone. This is irreversible and breaks every existing fork/PR.

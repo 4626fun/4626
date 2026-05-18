@@ -194,7 +194,7 @@ function envFlagEnabled(raw: string | undefined): boolean {
 function isDryRunEnabled(): boolean {
   return (
     envFlagEnabled(process.env.ELIZA_KPR_DRY_RUN)
-    || envFlagEnabled(process.env.ELIZA_CRE_DRY_RUN)
+    || envFlagEnabled(process.env.ELIZA_KPR_DRYRUN)
     || envFlagEnabled(process.env.DRY_RUN)
   )
 }

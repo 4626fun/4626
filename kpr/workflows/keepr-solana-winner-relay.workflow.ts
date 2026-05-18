@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Winner Relay
+ * KPR Workflow: Keepr Solana Winner Relay
  *
  * Schedule: Every 30 seconds (polled)
  * Pattern:  cron → Base event read (LotteryWinnerNotification) → Solana write (record_winner)
@@ -11,10 +11,10 @@
  *   4. Frontend subscribes to WinnerNotified event for "You won!" UX
  *
  * Prerequisites:
- *   - SOLANA_RPC_URL set in CRE secrets
- *   - SOLANA_KEEPER_KEYPAIR set in CRE secrets
- *   - LOTTERY_MANAGER set in CRE secrets
- *   - KPR_PRIVATE_KEY set in CRE secrets
+ *   - SOLANA_RPC_URL set in KPR secrets
+ *   - SOLANA_KEEPER_KEYPAIR set in KPR secrets
+ *   - LOTTERY_MANAGER set in KPR secrets
+ *   - KPR_PRIVATE_KEY set in KPR secrets
  *
  * UX impact: MEDIUM
  *   - Without this, Solana winners won't see "You won!" notification

@@ -2,11 +2,8 @@
   "name": "cca-finalization",
   "version": "1.11.0",
   "private": true,
-  "scripts": {
-    "postinstall": "bunx cre-setup"
-  },
+  "scripts": {},
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.0.7",
     "viem": "^2.21.0"
   },
   "devDependencies": {

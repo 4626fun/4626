@@ -34,7 +34,7 @@ This site publishes curated documentation from multiple sources across the monor
 | Publishes | Markdown files to `docs-site/docs/` |
 | Normalizes | Adds frontmatter (title, sidebar_position) |
 | Enforces metadata | Manual docs get audience/stage/owner/last_reviewed/status |
-| Renames | `README.md` → `index.md` (cre) or `overview.md` (frontend) |
+| Renames | `README.md` → `index.md` (kpr) or `overview.md` (frontend) |
 | Fixes links | Transforms broken links in generated API docs |
 | Validates | Internal links (in strict mode) |
 | Brand assets | Syncs `frontend/public/brand/` → `static/brand/` |

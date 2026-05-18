@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Graduation Sync
+ * KPR Workflow: Keepr Solana Graduation Sync
  *
  * Schedule: Every minute (during launch window only)
  * Pattern:  cron → Base event read (AuctionGraduated) → Solana write (Alpha Vault close)
@@ -10,10 +10,10 @@
  *   3. Hard UTC deadline fallback (~1h after expected graduation)
  *
  * Prerequisites:
- *   - SOLANA_RPC_URL set in CRE secrets
- *   - SOLANA_KEEPER_KEYPAIR set in CRE secrets
- *   - CCA_STRATEGY set in CRE secrets
- *   - ALPHA_VAULT_ADDRESS set in CRE secrets (Solana)
+ *   - SOLANA_RPC_URL set in KPR secrets
+ *   - SOLANA_KEEPER_KEYPAIR set in KPR secrets
+ *   - CCA_STRATEGY set in KPR secrets
+ *   - ALPHA_VAULT_ADDRESS set in KPR secrets (Solana)
  *
  * Infrastructure impact: CRITICAL (during launch window)
  *   - Without this, Solana Alpha Vault stays open after Base CCA graduates

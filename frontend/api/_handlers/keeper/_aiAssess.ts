@@ -216,7 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       systemPrompt,
       vaultContext: '',
       correlationId: `keeper-ai-assess-${Date.now()}`,
-      preferredModel: process.env.CRE_AI_MODEL?.trim() || undefined,
+      preferredModel: process.env.KPR_AI_MODEL?.trim() || undefined,
     })
 
     const raw = parseAssessmentJson(result.text ?? '')

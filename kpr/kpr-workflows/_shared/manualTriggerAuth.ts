@@ -1,4 +1,4 @@
-// Shared HMAC + replay-protected auth gate for CRE workflow HTTP triggers.
+// Shared HMAC + replay-protected auth gate for KPR workflow HTTP triggers.
 //
 // History
 // -------
@@ -10,7 +10,7 @@
 // (commit 847fee0) inside each workflow's `onHttpTrigger`.
 //
 // H-01 (audit 2026-04-25). The shipped fix was a plain string-equality compare
-// against `CRE_RUNTIME_WEBHOOK_HMAC_SECRET`, despite the secret name, secrets
+// against `KPR_RUNTIME_WEBHOOK_HMAC_SECRET`, despite the secret name, secrets
 // manifest, and documentation advertising HMAC discipline. The server-side
 // counterpart in `frontend/server/_lib/kpr/runtimeBridge.ts` has always used
 // HMAC-SHA256 + timestamp + nonce + constant-time compare; the workflow side
@@ -46,10 +46,10 @@
 //
 // Replay protection
 // -----------------
-// The workflow runtime cannot share a process-local nonce store across CRE
+// The workflow runtime cannot share a process-local nonce store across KPR
 // nodes; replay defense relies on (a) the timestamp window narrowing the
 // replay surface to ≤5 minutes, and (b) the downstream server-side replay
-// nonce store (`cre_runtime_replay_nonces`) catching duplicate submissions
+// nonce store (`kpr_runtime_replay_nonces`) catching duplicate submissions
 // when the workflow forwards them. The server-side store is the system of
 // record for cross-instance / cold-start replay protection (M-18 / 4626-327).
 

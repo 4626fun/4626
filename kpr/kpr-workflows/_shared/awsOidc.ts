@@ -3,7 +3,7 @@
  *
  * Replaces long-lived AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY secrets
  * with short-lived credentials obtained via AWS STS
- * AssumeRoleWithWebIdentity. The CRE runtime is given an OIDC ID token
+ * AssumeRoleWithWebIdentity. The KPR runtime is given an OIDC ID token
  * (JWT) as a secret; at workflow invocation time we exchange that token
  * for a temporary {AccessKeyId, SecretAccessKey, SessionToken} triple
  * that expires within ~1 hour.
@@ -25,11 +25,11 @@
  *   - Role permission policy can pin bucket + key prefix tightly so an
  *     overbroad config cannot exfiltrate unrelated objects.
  *
- * See docs/operations/automation/cre-runtime-api.md (retired archive)
+ * See docs/operations/automation/runtime-api.md (retired archive)
  * for the historical matching infra context.
  */
 
-import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"
+import { HTTPClient, type NodeRuntime } from "./kprWorkflowRuntime"
 
 export type OidcCredentials = {
   accessKeyId: string
@@ -41,7 +41,7 @@ export type OidcCredentials = {
 
 export type OidcRuntimeConfig = {
   aws_region: string
-  /** Full ARN of the IAM role to assume, e.g. arn:aws:iam::123:role/cre-kv-writer */
+  /** Full ARN of the IAM role to assume, e.g. arn:aws:iam::123:role/kpr-kv-writer */
   aws_role_arn: string
   /** Role session name — must match the trust-policy condition if set. */
   aws_role_session_name: string
@@ -55,7 +55,7 @@ const STS_REGIONAL_HOST = (region: string): string => `sts.${region}.amazonaws.c
 function readTag(xml: string, tag: string): string | null {
   // Deliberately simple — STS responses are flat and well-formed. We do
   // NOT attempt a general-purpose XML parser here because this runs
-  // inside the deterministic CRE runtime and must be side-effect-free.
+  // inside the deterministic KPR runtime and must be side-effect-free.
   const open = `<${tag}>`
   const close = `</${tag}>`
   const start = xml.indexOf(open)
@@ -115,7 +115,7 @@ export function assumeRoleWithWebIdentity<Config extends OidcRuntimeConfig>(
     },
     // Body is passed verbatim; the STS endpoint is regional so this
     // avoids the global endpoint deprecation and any cross-region
-    // latency surprises for CRE nodes in the same region as S3.
+    // latency surprises for KPR nodes in the same region as S3.
     body: body,
     cacheSettings: { store: false, maxAge: "0s" },
   }).result()

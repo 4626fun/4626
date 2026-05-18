@@ -203,7 +203,7 @@ All already wired into the repo (verified in `privyCoinbaseSmartWallet.ts` and
 
 - `CDP_PAYMASTER_URL` / `CDP_PAYMASTER_AND_BUNDLER_URL`
 - `BUNDLER_URL`
-- `CRE_ERC4337_BUNDLER_URL`
+- `KPR_ERC4337_BUNDLER_URL` (legacy alias: `KPR_ERC4337_BUNDLER_URL`)
 - `PRIVY_APP_ID` / `PRIVY_APP_SECRET`
 - `BASE_RPC_URL`
 

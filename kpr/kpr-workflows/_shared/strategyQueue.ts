@@ -1,4 +1,4 @@
-import { HTTPClient, type NodeRuntime } from "@chainlink/cre-sdk"
+import { HTTPClient, type NodeRuntime } from "./kprWorkflowRuntime"
 import { getJson, postJson, type ApiRuntimeConfig } from "./http"
 
 export type StrategyWorkflowConfig = ApiRuntimeConfig & {

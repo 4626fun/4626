@@ -1,12 +1,12 @@
-# CRE Workflows — 4626
+# KPR Workflows — 4626
 
-Chainlink Runtime Environment (CRE) workflows that automate critical onchain operations for the 4626 protocol.
+Chainlink Runtime Environment (KPR) workflows that automate critical onchain operations for the 4626 protocol.
 
 **A single workflow manages every registered vault automatically.**
 
 ## Files Using Chainlink
 
-Core CRE workflow files:
+Core KPR workflow files:
 - `kpr/kpr-workflows/project.yaml`
 - `kpr/kpr-workflows/keepr-action-queue/main.ts`
 - `kpr/kpr-workflows/keepr-action-queue/workflow.yaml`
@@ -17,7 +17,7 @@ Core CRE workflow files:
 - `kpr/kpr-workflows/payout-integrity/main.ts`
 - `kpr/kpr-workflows/payout-integrity/workflow.yaml`
 
-CRE-to-app orchestration bridge files:
+KPR-to-app orchestration bridge files:
 - `frontend/api/_handlers/vaults/_activeProtected.ts`
 - `frontend/api/_handlers/keeper/_tend.ts`
 - `frontend/api/_handlers/keeper/_report.ts`
@@ -30,7 +30,7 @@ CRE-to-app orchestration bridge files:
 
 ## Simulation-First Proof
 
-All commands below run from `kpr/kpr-workflows` and save logs under `kpr/tmp/evidence`.
+All commands below run from repo root and save logs under `kpr/tmp/evidence`.
 
 ```bash
 # Create local evidence directory
@@ -41,11 +41,11 @@ set -a && source .env && set +a
 node ../scripts/mock-kpr-api-server.mjs
 
 # Terminal B: DeFi + AI orchestration proof
-cre workflow simulate ./payout-integrity --target local-simulation \
+pnpm -C kpr run start -- payout-integrity \
   | tee ../tmp/evidence/kpr-payout-integrity-local-simulation.log
 
 # Terminal B: Queue orchestration proof
-cre workflow simulate ./keepr-action-queue --target local-simulation \
+pnpm -C kpr run start -- keepr-action-queue \
   | tee ../tmp/evidence/kpr-keepr-action-queue-local-simulation.log
 ```
 
@@ -89,32 +89,32 @@ Set `CHARM_REBALANCE_CANONICAL_MODE=direct` only when intentionally overriding t
 - duplicated execution risk under retries and network instability,
 - inconsistent data assumptions across systems.
 
-This CRE layer solves that by making execution deterministic, auditable, and idempotent.
+This KPR layer solves that by making execution deterministic, auditable, and idempotent.
 
 ## Why This Secures Value
 
 - **Reliable prices:** Chainlink Data Feeds and MVR reads provide accurate, reliable, non-manipulable reference inputs.
 - **Tamper-proof randomness:** Chainlink VRF 2.5 gives cryptographic proof randomness was generated from the request path.
-- **Verified offchain orchestration:** CRE executes offchain computation in deterministic workflow paths with capability-level guardrails.
+- **Verified offchain orchestration:** KPR executes offchain computation in deterministic workflow paths with capability-level guardrails.
 - **Operational safety:** idempotency keys, checkpoints, and replay-protection reduce duplicate writes and race-condition failures.
 
 ## Chainlink Product Strengths Used Here
 
 | Product | Strength | Where used |
 |---|---|---|
-| **CRE** | Verified offchain computation with deterministic trigger/capability orchestration | `kpr/kpr-workflows/**` |
+| **KPR** | Verified offchain computation with deterministic trigger/capability orchestration | `kpr/kpr-workflows/**` |
 | **VRF 2.5** | Cryptographically verifiable randomness for fair lottery outcomes | `contracts/utilities/lottery/vrf/CreatorVRFConsumerV2_5.sol`, `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol` |
 
 ## Roadmap (Including Rebalance Direction)
 
-- **Now:** deterministic CRE orchestration for indexing, data fetch, feed verification, and decision checkpointing.
+- **Now:** deterministic KPR orchestration for indexing, data fetch, feed verification, and decision checkpointing.
 - **Next:** broaden low-latency event triggers and protocol guardrail workflows.
 - **Rebalance roadmap:** today automation handles strategy-specific rebalancing (Ajna bucket movement, Charm vault rebalance). Next phase adds cross-strategy reallocation between Ajna, Charm, and idle balances under deterministic policy constraints.
-- **Later:** migrate more write paths to native CRE report receivers for end-to-end verifiable execution.
+- **Later:** migrate more write paths to native KPR report receivers for end-to-end verifiable execution.
 
 ### Payout Integrity Monitor
 
-A dedicated CRE workflow runs every 30 minutes to verify the full fee pipeline:
+A dedicated KPR workflow runs every 30 minutes to verify the full fee pipeline:
 
 | Check | What | Severity |
 |-------|------|----------|
@@ -270,7 +270,7 @@ cron (*/5 * * * *)
  (vault list)   (webhook)
 ```
 
-### CRE SDK Workflows (Chainlink DON)
+### KPR SDK Workflows (Chainlink DON)
 
 ```
 Chainlink DON
@@ -295,7 +295,7 @@ Chainlink DON
             └── HTTPClient → POST /keeper/alert (on failure)
 ```
 
-The CRE stack now has two write models:
+The KPR stack now has two write models:
 
 - most workflows still use the existing **HTTP bridge pattern**, where on-chain
   reads happen directly via `EVMClient` and writes are delegated to Vercel API
@@ -319,17 +319,18 @@ Required:
 - `KPR_PRIVATE_KEY` — EOA private key for the keeper wallet
 - `BASE_RPC_URL` — Base mainnet RPC
 - `KPR_API_BASE_URL` — Your deployment (e.g. `https://4626.fun/api`)
-- `KPR_API_KEY` — API key for CRE-to-Vercel auth
+- `KPR_API_KEY` — API key for KPR-to-Vercel auth
 
 Optional (ERC-4337 smart wallet mode for shared/global keeper workflows):
-- `CRE_ERC4337_ENABLED=true`
-- `CRE_ERC4337_SMART_WALLET` — canonical smart wallet address (UserOp sender)
-- `CRE_ERC4337_BUNDLER_URL` — bundler endpoint (CDP or compatible)
-- `CRE_ERC4337_PAYMASTER_URL` — paymaster endpoint (optional)
-- `CRE_ERC4337_OWNER_PRIVATE_KEY` — EOA signer for UserOps (must be an onchain owner)
-- `CRE_ERC4337_VERSION` — Coinbase Smart Wallet version (`1` or `1.1`)
-- `CRE_ERC4337_PRIVY_WALLET_ID` — use Privy Wallet API for signing
-- `CRE_ERC4337_OWNER` — owner address (required for Privy signer)
+- `KPR_ERC4337_ENABLED=true`
+- `KPR_ERC4337_SMART_WALLET` — canonical smart wallet address (UserOp sender)
+- `KPR_ERC4337_BUNDLER_URL` — bundler endpoint (CDP or compatible)
+- `KPR_ERC4337_PAYMASTER_URL` — paymaster endpoint (optional)
+- `KPR_ERC4337_OWNER_PRIVATE_KEY` — EOA signer for UserOps (must be an onchain owner)
+- `KPR_ERC4337_VERSION` — Coinbase Smart Wallet version (`1` or `1.1`)
+- `KPR_ERC4337_PRIVY_WALLET_ID` — use Privy Wallet API for signing
+- `KPR_ERC4337_OWNER` — owner address (required for Privy signer)
+- Legacy aliases (`KPR_ERC4337_*`) remain accepted during migration.
 - `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY` — required for Privy signer
 
 Optional (alerting):
@@ -387,7 +388,7 @@ cast send $VAULT --rpc-url $RPC "setKeeper(address)" $KEEPER_ADDRESS
 ```
 
 If ERC-4337 is enabled, `KEEPER_ADDRESS` must be the smart wallet
-(`CRE_ERC4337_SMART_WALLET`). Otherwise, use the EOA derived from
+(`KPR_ERC4337_SMART_WALLET`). Otherwise, use the EOA derived from
 `KPR_PRIVATE_KEY`.
 
 Auction settlement is permissionless — no auth needed.
@@ -402,7 +403,7 @@ Legacy vault migration:
 - if older vaults still have `AjnaVaultAuth.admin != canonical CSW`, run the Safe backfill script from the frontend workspace:
   - `pnpm -C frontend exec tsx scripts/ops/ajna-admin-backfill-safe.ts --origin https://4626.fun --only-enabled`
   - then re-run with `--propose --safe-address <SAFE> --safe-owner-pk <PK>` to submit `setAdmin(canonicalCsw)` proposals.
-- CRE Ajna workflows should remain fail-closed until this migration is complete for each mismatched vault.
+- KPR Ajna workflows should remain fail-closed until this migration is complete for each mismatched vault.
 
 ### 4. Fund the Keeper
 
@@ -445,9 +446,9 @@ kpr/
 ├── runner.ts                           # Local CLI runner
 ├── package.json
 │
-├── kpr-workflows/                      # ← Official CRE SDK project
-│   ├── project.yaml                    # CRE project config (RPC, targets)
-│   ├── secrets.yaml                    # CRE secrets references
+├── kpr-workflows/                      # ← Official KPR SDK project
+│   ├── project.yaml                    # KPR project config (RPC, targets)
+│   ├── secrets.yaml                    # KPR secrets references
 │   ├── .env                            # Local simulation secrets
 │   ├── .gitignore                      # Excludes .wasm, .kpr/, .env
 │   ├── contracts/abi/                  # Shared ABI exports
@@ -459,28 +460,28 @@ kpr/
 │   │   ├── ERC20.ts
 │   │   └── index.ts
 │   ├── keepr-action-queue/             # HTTP-only queue processor
-│   │   ├── main.ts                     # CRE workflow (CronCapability + HTTPClient)
+│   │   ├── main.ts                     # KPR workflow (CronCapability + HTTPClient)
 │   │   ├── workflow.yaml
 │   │   ├── config.staging.json
 │   │   ├── config.production.json
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   ├── vault-keeper/                   # EVM reads + HTTP bridge writes
-│   │   ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│   │   ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
 │   │   ├── workflow.yaml
 │   │   ├── config.staging.json
 │   │   ├── config.production.json
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   ├── cca-finalization/               # Smart polling (hourly, DB-tracked)
-│   │   ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│   │   ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
 │   │   ├── workflow.yaml
 │   │   ├── config.staging.json
 │   │   ├── config.production.json
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   └── payout-integrity/              # Fee pipeline monitor (every 30m)
-│       ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
+│       ├── main.ts                     # KPR workflow (EVMClient + HTTPClient)
 │       ├── workflow.yaml
 │       ├── config.staging.json
 │       ├── config.production.json
@@ -544,7 +545,7 @@ WantedBy=multi-user.target
 | `/api/keeper/report` | POST | HTTP bridge — calls `report()` on a vault |
 | `/api/keeper/sweep` | POST | HTTP bridge — canonical completion attempt (`sweepCurrency`, `migrate`, optional hook config, best-effort `sweepUnsoldTokens`) |
 | `/api/keeper/mark-settled` | POST | Records `graduated_at`, `settled_at`, and `settlement_stage` in DB |
-| `/api/keeper/alert` | POST | Receives alerts from CRE workflows, forwards to webhook |
+| `/api/keeper/alert` | POST | Receives alerts from KPR workflows, forwards to webhook |
 | `/api/keeper/aiAssess` | POST | AI advisory classification endpoint for payout-integrity (deterministic checks remain authoritative) |
 | `/api/keepr/actions/enqueue` | POST | Enqueues deduped strategy/XMTP actions |
 | `/api/keepr/actions/pending` | GET | Returns pending queue actions |
@@ -552,45 +553,36 @@ WantedBy=multi-user.target
 
 All require `Authorization: Bearer $KPR_API_KEY`.
 
-## CRE SDK Workflows
+## KPR SDK Workflows
 
 ### Prerequisites
 
-1. **CRE CLI** installed (`cre version` should return v1.0.10+)
+1. **pnpm** installed
 2. **Bun** v1.0+ installed
-3. **CRE account** — run `cre login` to authenticate
+3. Local `.env` configured from `kpr/secrets.example.env`
 
-### Running CRE Workflows
+### Running KPR Workflows
 
 ```bash
 # Install dependencies for a workflow
 cd kpr/kpr-workflows/keepr-action-queue && bun install
 
-# Simulate locally (requires cre login)
-cd kpr/kpr-workflows
-cre workflow simulate keepr-action-queue --target local-simulation
-cre workflow simulate vault-keeper --target local-simulation
-cre workflow simulate cca-finalization --target local-simulation
-cre workflow simulate payout-integrity --target local-simulation
+# Simulate locally
+pnpm -C kpr run start -- keepr-action-queue
+pnpm -C kpr run start -- vault-keeper
+pnpm -C kpr run start -- cca-finalization
+pnpm -C kpr run start -- payout-integrity
 
-# Deploy to DON (requires cre login + funded account)
-cre workflow deploy keepr-action-queue --target production-settings
-cre workflow deploy payout-integrity --target production-settings
+# Run workflow entrypoints
+pnpm -C kpr run start -- keepr-action-queue
+pnpm -C kpr run start -- payout-integrity
 ```
 
-### CRE Secrets
+### KPR Secrets
 
-Set secrets before deploying:
+For local simulation, add these to `kpr/.env` and `kpr/kpr-workflows/.env` as needed.
 
-```bash
-cre secrets set KPR_API_KEY
-cre secrets set KPR_API_BASE_URL
-cre secrets set KPR_PRIVATE_KEY
-```
-
-For local simulation, add these to `kpr/kpr-workflows/.env`.
-
-### CRE Quota Constraints
+### KPR Quota Constraints
 
 | Resource | Limit | Impact |
 |----------|-------|--------|
@@ -600,7 +592,7 @@ For local simulation, add these to `kpr/kpr-workflows/.env`.
 | Concurrent capabilities | 3 | Sequential reads within each workflow |
 | Execution timeout | 5 minutes | All workflows complete well within this |
 
-### CRE Quota Budget
+### KPR Quota Budget
 
 **cca-finalization (hourly)**:
 - 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
@@ -610,22 +602,22 @@ For local simulation, add these to `kpr/kpr-workflows/.env`.
 
 ### HTTP Bridge Pattern
 
-Most CRE workflows cannot directly write to contracts (CRE uses a
+Most KPR workflows cannot directly write to contracts (KPR uses a
 report-and-forwarder model). Instead, those workflows delegate writes to
 Vercel API endpoints:
 
 ```
-CRE Workflow → HTTPClient.sendRequest(POST /keeper/tend) → Vercel API → viem writeContract → Base
+KPR Workflow → HTTPClient.sendRequest(POST /keeper/tend) → Vercel API → viem writeContract → Base
 ```
 
 The bridge endpoints authenticate with `KPR_API_KEY` and use the shared
 keeper wallet (`KPR_PRIVATE_KEY`) to submit transactions.
 
 Canonical Ajna automation is the current exception: Ajna bucket management can
-execute directly from CRE using the vault's stored canonical sender context, or
+execute directly from KPR using the vault's stored canonical sender context, or
 enqueue canonical-only actions through the protected queue path. It does not
 reuse the XMTP server-signer flow and does not downgrade to the shared keeper.
 
 **Phase 4 (Future)**: Deploy `VaultKeeperReceiver` and `AuctionSettlementReceiver`
-Solidity contracts implementing `IReceiver.onReport()` to enable native CRE writes
+Solidity contracts implementing `IReceiver.onReport()` to enable native KPR writes
 via `runtime.report()` + `evmClient.writeReport()`, removing the HTTP bridge.

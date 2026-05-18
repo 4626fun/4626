@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Action Queue
+ * KPR Workflow: Keepr Action Queue
  *
  * Schedule: Every 30 seconds
  * Pattern:  cron → HTTP read (poll API) → execute XMTP ops → HTTP write (update status)
@@ -11,8 +11,8 @@
  *   4. Max 5 attempts per action before permanent failure
  *
  * Prerequisites:
- *   - KPR_API_BASE_URL set in CRE secrets
- *   - KPR_API_KEY set in CRE secrets (shared with Vercel API)
+ *   - KPR_API_BASE_URL set in KPR secrets
+ *   - KPR_API_KEY set in KPR secrets (shared with Vercel API)
  *   - XMTP keys configured (for actual group operations)
  *
  * Infrastructure impact: HIGH
@@ -26,7 +26,7 @@ import { alertCritical } from '../utils/alerts.js';
 const WORKFLOW_NAME = 'keepr-action-queue';
 
 /**
- * CRE entrypoint — called on each cron trigger.
+ * KPR entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   try {
@@ -46,17 +46,17 @@ export async function handler(): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await alertCritical(WORKFLOW_NAME, 'Workflow failed with unhandled error', { error: message });
-    throw err; // Let CRE retry
+    throw err; // Let KPR retry
   }
 }
 
 // ---------------------------------------------------------------------------
-// CRE workflow configuration export
+// KPR workflow configuration export
 // ---------------------------------------------------------------------------
 
 export const workflow = {
   name: WORKFLOW_NAME,
-  schedule: '*/1 * * * *', // Every minute (CRE minimum; action polling handles sub-minute granularity)
+  schedule: '*/1 * * * *', // Every minute (KPR minimum; action polling handles sub-minute granularity)
   handler,
 };
 

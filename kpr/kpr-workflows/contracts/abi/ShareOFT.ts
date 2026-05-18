@@ -1,5 +1,5 @@
 /**
- * CreatorShareOFT minimal ABI fragments used by CRE monitoring workflows.
+ * CreatorShareOFT minimal ABI fragments used by KPR monitoring workflows.
  */
 export const ShareOFTABI = [
   {

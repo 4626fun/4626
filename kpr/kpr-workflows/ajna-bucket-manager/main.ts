@@ -1,46 +1,17 @@
-import {
-  CronCapability,
-  HTTPCapability,
-  type HTTPPayload,
-  handler,
-  Runner,
-  type Runtime,
-} from "@chainlink/cre-sdk"
-import {
-  type AjnaManagerConfig,
-  type AjnaWorkflowResult,
-  evaluateAndEnqueueAjnaActions,
-  parseAjnaManualPayload,
-} from "../_shared/ajnaManager"
-import { assertManualTriggerHmac } from "../_shared/manualTriggerAuth"
-
-type Config = AjnaManagerConfig & {
-  schedule: string
-}
-
-const onCronTrigger = (runtime: Runtime<Config>): AjnaWorkflowResult =>
-  evaluateAndEnqueueAjnaActions(runtime)
-
-const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): AjnaWorkflowResult => {
-  const manual = parseAjnaManualPayload(payload.input)
-  // H-01 (audit 2026-04-25): manual triggers now require an HMAC envelope.
-  // The signing key is the workflow-specific HMAC secret, not KPR_API_KEY.
-  // See kpr/kpr-workflows/_shared/manualTriggerAuth.ts for the wire format.
-  const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
-  assertManualTriggerHmac(manual, hmacSecret)
-  return evaluateAndEnqueueAjnaActions(runtime, manual)
-}
-
-const initWorkflow = (config: Config) => {
-  const cron = new CronCapability()
-  const httpTrigger = new HTTPCapability()
-  return [
-    handler(cron.trigger({ schedule: config.schedule }), onCronTrigger),
-    handler(httpTrigger.trigger({}), onHttpTrigger),
-  ]
-}
+import { executeAjnaBucketManager } from '../../actions/ajna-bucket-manager.action.js'
 
 export async function main() {
-  const runner = await Runner.newRunner<Config>()
-  await runner.run(initWorkflow)
+  const result = await executeAjnaBucketManager()
+  console.log(
+    JSON.stringify({
+      workflow: 'ajna-bucket-manager',
+      timestamp: new Date().toISOString(),
+      totalVaults: result.totalVaults,
+      totalStrategies: result.totalStrategies,
+      moved: result.moved,
+      skipped: result.skipped,
+      errors: result.errors,
+      results: result.results,
+    }),
+  )
 }

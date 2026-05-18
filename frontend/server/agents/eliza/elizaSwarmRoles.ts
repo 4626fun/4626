@@ -10,7 +10,7 @@ export type AgentSwarmRole = 'general' | 'trader' | 'social' | 'knowledge'
 
 export const DEFAULT_SWARM_CAPABILITIES: Record<AgentSwarmRole, string[]> = {
   general: [],
-  trader: ['uniswap', 'zora', 'cre', 'keepr'],
+  trader: ['uniswap', 'zora', 'kpr', 'keepr'],
   social: ['lens'],
   knowledge: ['knowledge', 'reputation', 'wallet'],
 }

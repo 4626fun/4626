@@ -1679,7 +1679,7 @@ function roleBiasForAction(input: {
   const action = input.actionName.toLowerCase()
   const roleWeights: Record<SwarmRole, string[]> = {
     general: [],
-    trader: ['uniswap', 'zora', 'cre', 'keepr'],
+    trader: ['uniswap', 'zora', 'kpr', 'keepr'],
     social: ['lens'],
     knowledge: ['knowledge', 'reputation', 'wallet'],
   }

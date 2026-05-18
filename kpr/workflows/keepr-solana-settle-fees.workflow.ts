@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Solana Fee Settlement
+ * KPR Workflow: Keepr Solana Fee Settlement
  *
  * Schedule: Every 5 minutes
  * Pattern: cron → Solana RPC read (withheld fees) → Solana write (settle) → bridge → Base write

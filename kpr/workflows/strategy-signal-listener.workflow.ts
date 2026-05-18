@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Strategy Signal Listener
+ * KPR Workflow: Strategy Signal Listener
  *
  * Always-on process (no finite cron cycle): subscribes to Base v3 Swap events,
  * evaluates Ajna/Charm thresholds, and enqueues strategy actions.

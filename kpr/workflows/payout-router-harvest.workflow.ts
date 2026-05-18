@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Payout Router Harvest
+ * KPR Workflow: Payout Router Harvest
  *
  * Schedule: Every 5 minutes
  * Pattern: cron -> read router balances -> conditional writes

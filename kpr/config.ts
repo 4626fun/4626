@@ -1,5 +1,5 @@
 /**
- * Shared CRE configuration for 4626 automation workflows.
+ * Shared KPR configuration for 4626 automation workflows.
  *
  * All contract addresses, chain config, and ABI fragments live here so
  * individual workflows stay focused on logic.

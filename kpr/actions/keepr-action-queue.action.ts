@@ -4,7 +4,7 @@
  * Polls the Vercel API for pending keepr_actions, executes XMTP group
  * operations, and updates action status via the API.
  *
- * Unlike the other CRE workflows, this one does NOT interact with
+ * Unlike the other KPR workflows, this one does NOT interact with
  * onchain contracts — it's an offchain queue processor.
  */
 

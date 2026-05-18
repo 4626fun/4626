@@ -53,8 +53,8 @@ type ApiEnvelope<T> =
   | { success: false; error?: string };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const CRE_ROOT = resolve(__dirname, '../../..');
-const REPO_ROOT = resolve(CRE_ROOT, '..');
+const KPR_ROOT = resolve(__dirname, '../../..');
+const REPO_ROOT = resolve(KPR_ROOT, '..');
 const DEFAULT_ORIGIN = 'https://4626.fun';
 const DEFAULT_BATCHER = '0x004684670d284EF607E1B2424fcf8ccBda8ef828';
 const DEFAULT_EXPECTED_SOLANA_AMOUNT = '1000000000';
@@ -65,8 +65,8 @@ function loadBootstrapEnv(): void {
     resolve(REPO_ROOT, 'frontend/.env.local'),
     resolve(REPO_ROOT, 'frontend/.env'),
     resolve(REPO_ROOT, '.env'),
-    resolve(CRE_ROOT, '.env'),
-    resolve(CRE_ROOT, 'kpr-workflows/.env'),
+    resolve(KPR_ROOT, '.env'),
+    resolve(KPR_ROOT, 'kpr-workflows/.env'),
   ];
   for (const envPath of candidates) {
     loadEnv({ path: envPath });
@@ -171,7 +171,7 @@ async function runMeteoraUpsertScript(): Promise<void> {
       'tsx',
       ['scripts/solana/launch/register-meteora-vault.ts'],
       {
-        cwd: CRE_ROOT,
+        cwd: KPR_ROOT,
         env: process.env,
         stdio: 'inherit',
       },
@@ -236,7 +236,7 @@ async function main(): Promise<void> {
   const skipUpsert = envFlag('SKIP_METEORA_UPSERT');
   const skipSmoke = envFlag('SKIP_SMOKE_BUILD');
 
-  console.log('=== Bootstrap Solana Side (CRE) ===');
+  console.log('=== Bootstrap Solana Side (KPR) ===');
   console.log(`Origin:                  ${origin}`);
   console.log(`Creator token:           ${creatorToken}`);
   console.log(`Batcher:                 ${batcherAddress}`);

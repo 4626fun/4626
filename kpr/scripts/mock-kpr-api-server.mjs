@@ -2,9 +2,9 @@
 
 import { createServer } from 'node:http';
 
-const HOST = process.env.CRE_MOCK_API_HOST ?? '127.0.0.1';
-const PORT = Number(process.env.CRE_MOCK_API_PORT ?? '8789');
-const API_KEY = process.env.CRE_MOCK_API_KEY ?? process.env.KPR_API_KEY_VALUE ?? 'local-test-key';
+const HOST = process.env.KPR_MOCK_API_HOST ?? '127.0.0.1';
+const PORT = Number(process.env.KPR_MOCK_API_PORT ?? '8789');
+const API_KEY = process.env.KPR_MOCK_API_KEY ?? process.env.KPR_API_KEY_VALUE ?? 'local-test-key';
 
 const MOCK_VAULT = {
   vaultAddress: '0x82C06EaAE27B1Ca31fA29F22341A162A670A4471',
@@ -139,7 +139,7 @@ const server = createServer((req, res) => {
         });
       }
 
-      const configuredStatus = String(process.env.CRE_MOCK_SOLANA_STATUS ?? 'completed');
+      const configuredStatus = String(process.env.KPR_MOCK_SOLANA_STATUS ?? 'completed');
       const status =
         configuredStatus === 'failed' || configuredStatus === 'skipped_unconfigured'
           ? configuredStatus
@@ -224,5 +224,5 @@ const server = createServer((req, res) => {
 });
 
 server.listen(PORT, HOST, () => {
-  console.log(`[mock-cre-api] listening on http://${HOST}:${PORT}`);
+  console.log(`[mock-kpr-api] listening on http://${HOST}:${PORT}`);
 });

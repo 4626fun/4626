@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Vault Keeper
+ * KPR Workflow: Vault Keeper
  *
  * Schedule: Every 5 minutes
  * Pattern:  cron → onchain read → conditional onchain write
@@ -12,8 +12,8 @@
  *
  * Prerequisites:
  *   - Keeper wallet must be authorized via setKeeper(keeperAddress) on the vault
- *   - KPR_PRIVATE_KEY set in CRE secrets
- *   - VAULT_ADDRESS set in CRE secrets
+ *   - KPR_PRIVATE_KEY set in KPR secrets
+ *   - VAULT_ADDRESS set in KPR secrets
  *
  * Revenue impact: HIGH
  *   - Un-deployed funds = lost yield
@@ -26,7 +26,7 @@ import { alertCritical } from '../utils/alerts.js';
 const WORKFLOW_NAME = 'vault-keeper';
 
 /**
- * CRE entrypoint — called on each cron trigger.
+ * KPR entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   try {
@@ -47,12 +47,12 @@ export async function handler(): Promise<void> {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await alertCritical(WORKFLOW_NAME, 'Workflow failed with unhandled error', { error: message });
-    throw err; // Let CRE retry
+    throw err; // Let KPR retry
   }
 }
 
 // ---------------------------------------------------------------------------
-// CRE workflow configuration export
+// KPR workflow configuration export
 // ---------------------------------------------------------------------------
 
 export const workflow = {

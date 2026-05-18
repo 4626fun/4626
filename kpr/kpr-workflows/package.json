@@ -2,12 +2,9 @@
   "name": "kpr-workflows-shared",
   "private": true,
   "version": "1.11.0",
-  "description": "Shared dependencies for CRE workflow shared modules",
-  "scripts": {
-    "postinstall": "bunx cre-setup"
-  },
+  "description": "Shared dependencies for KPR workflow shared modules",
+  "scripts": {},
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.0.7",
     "@noble/hashes": "^1.8.0",
     "viem": "^2.21.0"
   },

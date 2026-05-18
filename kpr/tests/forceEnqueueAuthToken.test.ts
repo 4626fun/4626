@@ -119,7 +119,7 @@ vi.mock('../kpr-workflows/_shared/evm.ts', () => ({
   resolveChainId: vi.fn(() => 8453),
 }))
 
-vi.mock('@chainlink/cre-sdk', () => ({
+vi.mock('../kpr-workflows/_shared/kprWorkflowRuntime.ts', () => ({
   HTTPClient: class HTTPClient {},
   bytesToHex: (value: Uint8Array) => `0x${Buffer.from(value).toString('hex')}`,
   consensusIdenticalAggregation: vi.fn(() => 'consensus'),
@@ -330,7 +330,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
       '../kpr-workflows/_shared/charmManager.js'
@@ -359,7 +359,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
       '../kpr-workflows/_shared/charmManager.js'
@@ -386,7 +386,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
       '../kpr-workflows/_shared/ajnaManager.js'
@@ -412,7 +412,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
       '../kpr-workflows/_shared/ajnaManager.js'
@@ -439,7 +439,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueCharmActions } = await import(
       '../kpr-workflows/_shared/charmManager.js'
@@ -469,7 +469,7 @@ describe('HMAC envelope vs force-enqueue token cannot be confused [4626-audit-20
     const runtime = buildRuntimeWithSecrets({
       KPR_API_KEY: 'keepr-key',
       FORCE_ENQUEUE_AUTH_TOKEN: FORCE_TOKEN,
-      CRE_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
+      KPR_RUNTIME_WEBHOOK_HMAC_SECRET: HMAC_SECRET,
     })
     const { evaluateAndEnqueueAjnaActions } = await import(
       '../kpr-workflows/_shared/ajnaManager.js'
