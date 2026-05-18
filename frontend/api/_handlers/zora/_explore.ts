@@ -91,6 +91,59 @@ function toFiniteNumberOrNull(value: unknown): number | null {
   return null
 }
 
+async function hasCreatorEthosProjection(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<boolean> {
+  const result = await db.sql`
+    SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
+  `
+  return Boolean(result.rows?.[0]?.has_projection)
+}
+
+async function loadCreatorEthosProjectionPage(params: {
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>
+  offset: number
+  count: number
+  ethosMin: number | null
+}) {
+  const rows = await params.db.sql`
+    SELECT
+      creator_address,
+      coin_address,
+      twitter_username,
+      zora_handle,
+      created_at,
+      market_cap_usd,
+      volume_24h_usd,
+      ethos_score,
+      ethos_level,
+      ethos_score_source
+    FROM public.creator_ethos_projection
+    WHERE (
+      ${params.ethosMin}::numeric IS NULL
+      OR (ethos_score IS NOT NULL AND ethos_score >= ${params.ethosMin})
+    )
+    ORDER BY
+      CASE WHEN ethos_score IS NULL THEN 1 ELSE 0 END ASC,
+      ethos_score DESC NULLS LAST,
+      volume_24h_usd DESC NULLS LAST,
+      market_cap_usd DESC NULLS LAST,
+      creator_address ASC
+    OFFSET ${params.offset}
+    LIMIT ${params.count + 1};
+  `
+  return (rows.rows ?? []) as Array<{
+    creator_address: string
+    coin_address: string
+    twitter_username: string | null
+    zora_handle: string | null
+    created_at: string | null
+    market_cap_usd: string | number | null
+    volume_24h_usd: string | number | null
+    ethos_score: number | string | null
+    ethos_level: string | null
+    ethos_score_source: string | null
+  }>
+}
+
 function isCreatorList(list: ExploreList): boolean {
   return (
     list === 'NEW_CREATORS' ||
@@ -332,10 +385,50 @@ async function buildEthosSortedCreatorList(params: {
   if (!db) throw new Error('db_unavailable')
 
   const offset = Math.max(0, Number.parseInt(params.after ?? '0', 10) || 0)
-  const windowTarget = Math.max(200, (offset + params.count) * 8)
-  const candidateLimit = Math.min(2000, windowTarget)
+  let candidateRows: Array<{
+    coin_address: string
+    creator_address: string
+    twitter_username: string | null
+    zora_handle: string | null
+    created_at: string | null
+    market_cap_usd: string | number | null
+    volume_24h_usd: string | number | null
+    ethos_score: number | string | null
+    ethos_level: string | null
+    ethos_score_source: string | null
+    canonical_social_score: number | string | null
+    canonical_wallet_score: number | string | null
+    owner_class_csw_score: number | string | null
+    owner_class_eoa_score: number | string | null
+    social_cached_score: number | string | null
+    wallet_cached_score: number | string | null
+  }> = []
 
-  const rows = await db.sql`
+  const projectionAvailable = await hasCreatorEthosProjection(db)
+  let usingProjectionRows = false
+  if (projectionAvailable) {
+    const projectionRows = await loadCreatorEthosProjectionPage({
+      db,
+      offset,
+      count: params.count,
+      ethosMin: params.ethosMin,
+    })
+    candidateRows = projectionRows.map((row) => ({
+      ...row,
+      canonical_social_score: null,
+      canonical_wallet_score: null,
+      owner_class_csw_score: null,
+      owner_class_eoa_score: null,
+      social_cached_score: null,
+      wallet_cached_score: null,
+    }))
+    usingProjectionRows = true
+  }
+
+  if (candidateRows.length === 0) {
+    const windowTarget = Math.max(200, (offset + params.count) * 8)
+    const candidateLimit = Math.min(2000, windowTarget)
+    const rows = await db.sql`
     WITH ranked_creator_coins AS (
       SELECT
         cc.coin_address,
@@ -440,6 +533,7 @@ async function buildEthosSortedCreatorList(params: {
       zoc.ethos_score AS owner_class_eoa_score,
       es_social.score AS social_cached_score,
       es_wallet.score AS wallet_cached_score,
+      NULL::text AS ethos_score_source,
       NULLIF(
         GREATEST(
           COALESCE(cs.score, -1),
@@ -519,24 +613,25 @@ async function buildEthosSortedCreatorList(params: {
     LIMIT ${candidateLimit};
   `
 
-  const selected = (rows.rows ?? []) as Array<{
-    coin_address: string
-    creator_address: string
-    twitter_username: string | null
-    zora_handle: string | null
-    created_at: string | null
-    market_cap_usd: string | number | null
-    volume_24h_usd: string | number | null
-    ethos_score: number | string | null
-    ethos_level: string | null
-    canonical_social_score: number | string | null
-    canonical_wallet_score: number | string | null
-    owner_class_csw_score: number | string | null
-    owner_class_eoa_score: number | string | null
-    social_cached_score: number | string | null
-    wallet_cached_score: number | string | null
-  }>
-  const candidateRows = selected
+    candidateRows = (rows.rows ?? []) as Array<{
+      coin_address: string
+      creator_address: string
+      twitter_username: string | null
+      zora_handle: string | null
+      created_at: string | null
+      market_cap_usd: string | number | null
+      volume_24h_usd: string | number | null
+      ethos_score: number | string | null
+      ethos_level: string | null
+      canonical_social_score: number | string | null
+      canonical_wallet_score: number | string | null
+      owner_class_csw_score: number | string | null
+      owner_class_eoa_score: number | string | null
+      social_cached_score: number | string | null
+      wallet_cached_score: number | string | null
+      ethos_score_source: string | null
+    }>
+  }
 
   const freshUserkeys = Array.from(
     new Set(
@@ -580,8 +675,12 @@ async function buildEthosSortedCreatorList(params: {
     return String(a.creator_address).localeCompare(String(b.creator_address))
   })
 
-  const pageRows = candidateRows.slice(offset, offset + params.count)
-  const hasNextPage = candidateRows.length > offset + params.count
+  const pageRows = usingProjectionRows
+    ? candidateRows.slice(0, params.count)
+    : candidateRows.slice(offset, offset + params.count)
+  const hasNextPage = usingProjectionRows
+    ? candidateRows.length > params.count
+    : candidateRows.length > offset + params.count
 
   let coinDetails = new Map<string, any>()
   if (params.key) {
@@ -617,7 +716,7 @@ async function buildEthosSortedCreatorList(params: {
     const finalScore = Math.max(baseScore ?? Number.NEGATIVE_INFINITY, fresh.score ?? Number.NEGATIVE_INFINITY)
     const normalizedFinalScore = Number.isFinite(finalScore) ? finalScore : null
     const finalLevel = (fresh.score != null && normalizedFinalScore === fresh.score ? fresh.level : row.ethos_level) ?? null
-    const baseSource = resolveEthosScoreSource({
+    const baseSource = row.ethos_score_source ?? resolveEthosScoreSource({
       canonicalSocial: toFiniteNumberOrNull(row.canonical_social_score),
       canonicalWallet: toFiniteNumberOrNull(row.canonical_wallet_score),
       ownerClassFromCsw: toFiniteNumberOrNull(row.owner_class_csw_score),

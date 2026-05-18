@@ -8,6 +8,7 @@ import {
   syncEthosScoreUpdates,
   syncEthosUserkeyScores,
 } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
+import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -194,6 +195,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const scoreSyncLimit = readInt(process.env.ETHOS_SCORE_SYNC_LIMIT, 1000, 1, 10_000)
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT, 500, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES, 5, 1, 20)
+  const creatorProjectionLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 50_000, 100, 250_000)
 
   try {
     // Update-driven lane first: keeps hot identities fresh with low latency.
@@ -223,6 +225,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       userkeys: synced.processedUserkeys,
       limit: sweepLimit,
     })
+    const creatorProjection = await refreshCreatorEthosProjection({
+      db,
+      limit: creatorProjectionLimit,
+    })
     const health = await readProjectionHealth(db)
     emitProjectionLagIfNeeded({ health })
 
@@ -231,6 +237,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       seeded,
       synced,
       rollupAfterSync,
+      creatorProjection,
       health,
     })
 
@@ -240,6 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       seeded,
       synced,
       rollupAfterSync,
+      creatorProjection,
       health,
       limits: {
         seedLimit,
@@ -247,6 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         sweepLimit,
         updatePageLimit,
         updateMaxPages,
+        creatorProjectionLimit,
       },
     })
   } catch (error) {

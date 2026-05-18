@@ -28,6 +28,7 @@ import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
+import { fetchZoraProfile } from '@/lib/zora/client'
 import { useAccountContext } from '@/wallet/accountContext'
 import { Spinner } from '@/components/ui/Spinner'
 import { getAgentIdentity } from './agentIdentity'
@@ -292,6 +293,7 @@ export function ChatWindow({
   const [peerAddressCopied, setPeerAddressCopied] = useState(false)
   const [peerAddressHovered, setPeerAddressHovered] = useState(false)
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false)
+  const [peerCreatorCoinAddress, setPeerCreatorCoinAddress] = useState<string | null>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -348,7 +350,8 @@ export function ChatWindow({
       ? (agentIdentity ? '4626 assistant' : identitySecondary)
       : null
   const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
-  const peerProfileHref = copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null
+  const peerCreatorCoinHref = peerCreatorCoinAddress ? `/explore/creators/base/${peerCreatorCoinAddress}` : null
+  const peerProfileHref = peerCreatorCoinHref ?? (copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null)
   const headerAvatar = conversationType === 'dm'
     ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
     : (conversationImageUrl ?? null)
@@ -364,6 +367,37 @@ export function ChatWindow({
     const trimmed = raw.trim().toLowerCase()
     return /^0x[a-fA-F0-9]{40}$/.test(trimmed) ? trimmed : ''
   }, [accountContext.activeAccount, accountContext.activeAccountType, address])
+
+  useEffect(() => {
+    if (conversationType !== 'dm') {
+      setPeerCreatorCoinAddress(null)
+      return
+    }
+    if (!copyablePeerAddress || !isEvmAddress(copyablePeerAddress)) {
+      setPeerCreatorCoinAddress(null)
+      return
+    }
+
+    let cancelled = false
+    void fetchZoraProfile(copyablePeerAddress)
+      .then((profile) => {
+        if (cancelled) return
+        const creatorCoinAddress = profile?.creatorCoin?.address
+        if (creatorCoinAddress && isEvmAddress(creatorCoinAddress)) {
+          setPeerCreatorCoinAddress(creatorCoinAddress.toLowerCase())
+          return
+        }
+        setPeerCreatorCoinAddress(null)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setPeerCreatorCoinAddress(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [conversationType, copyablePeerAddress])
 
   const handleCopyPeerAddress = useCallback(async () => {
     if (!copyablePeerAddress) return
@@ -1030,8 +1064,8 @@ export function ChatWindow({
       <div className="mt-1 space-y-1">
         <HeaderMenuItem
           icon={<UserRound className="h-4 w-4" />}
-          label="View 4626 profile"
-          detail={peerProfileHref ? 'Open portfolio and identity context' : 'Profile opens when address is known'}
+          label={peerCreatorCoinHref ? 'View creator profile' : 'View wallet profile'}
+          detail={peerCreatorCoinHref ? 'Open creator coin token page' : 'Open portfolio and identity context'}
           disabled={!peerProfileHref}
           onClick={() => {
             handleOpenPeerProfile()
@@ -1061,12 +1095,15 @@ export function ChatWindow({
       </div>
       <div className="my-2 border-t border-white/10" />
       <div className="space-y-1">
-        <HeaderMenuItem
-          icon={<ShieldCheck className="h-4 w-4" />}
-          label="XMTP encrypted"
-          detail="Messages use XMTP end-to-end encryption"
-          onClick={() => setHeaderMenuOpen(false)}
-        />
+        <div className="flex items-center gap-3 rounded-xl px-3 py-2">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-white/8 bg-white/[0.045] text-zinc-300">
+            <ShieldCheck className="h-4 w-4" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] font-semibold text-zinc-100">XMTP encrypted</span>
+            <span className="mt-0.5 block truncate text-[10px] text-zinc-500">Messages use end-to-end encryption</span>
+          </span>
+        </div>
         <HeaderMenuItem
           icon={<MessageCircle className="h-4 w-4" />}
           label="Minimize chat"
@@ -1274,7 +1311,7 @@ export function ChatWindow({
         <>
           <div
             ref={scrollRef}
-            className={`flex-1 overflow-y-auto px-3 py-2 space-y-2 ${
+            className={`flex-1 overflow-y-auto px-3 py-2.5 space-y-2.5 ${
               isMobile ? 'bg-black' : ''
             }`}
           >
@@ -1290,7 +1327,7 @@ export function ChatWindow({
               messages.map((msg) => (
                 <div
                   key={msg.id}
-                  className={`flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'}`}
+                  className={`flex flex-col ${msg.isSelf ? 'items-end' : 'items-start'} gap-0.5`}
                 >
                   {/* Sender label for group chats */}
                   {conversationType === 'group' && !msg.isSelf && (
@@ -1299,10 +1336,10 @@ export function ChatWindow({
                     </span>
                   )}
                   <div
-                    className={`max-w-[85%] rounded-2xl px-3 py-1.5 text-sm wrap-break-word ${
+                    className={`max-w-[86%] rounded-2xl px-3 py-2 text-sm leading-relaxed wrap-break-word shadow-[0_10px_24px_-18px_rgba(0,0,0,0.9)] ${
                       msg.isSelf
-                        ? 'bg-brand-primary/20 text-zinc-100 rounded-br-md'
-                        : 'bg-white/10 text-zinc-200 rounded-bl-md'
+                        ? 'bg-[#2374e1] text-white rounded-br-md'
+                        : 'bg-white/[0.13] text-zinc-100 rounded-bl-md border border-white/12'
                     }`}
                   >
                     {msg.replyToId && (
@@ -1325,18 +1362,18 @@ export function ChatWindow({
                       msg.content
                     )}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 px-1">
-                    <span className="text-[9px] text-zinc-600">
+                  <div className="mt-1 flex items-center gap-2 px-1">
+                    <span className="text-[10px] text-zinc-500">
                       {formatTimestamp(msg.sentAt)}
                     </span>
                     {msg.isSelf && (
                       <span
-                        className={`text-[9px] ${
+                        className={`text-[10px] ${
                           msg.status === 'failed'
                             ? 'text-red-300'
                             : msg.status === 'sending'
                               ? 'text-zinc-400'
-                              : 'text-zinc-600'
+                              : 'text-zinc-500'
                         }`}
                       >
                         {msg.status === 'failed' ? 'Failed' : msg.status === 'sending' ? 'Sending…' : 'Sent'}
@@ -1551,7 +1588,7 @@ export function ChatWindow({
           )}
 
           {/* Input */}
-          <div className="space-y-2 px-3 py-2 border-t border-white/10 bg-zinc-800/50 shrink-0">
+          <div className="space-y-2 border-t border-white/10 bg-zinc-900/90 px-3 py-2.5 shrink-0">
             {replyingToMessage && (
               <div className="flex items-start justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
                 <div className="min-w-0">
@@ -1579,13 +1616,13 @@ export function ChatWindow({
               onKeyDown={handleKeyDown}
               placeholder={showCommandCenter ? 'Type a message or tap an action…' : 'Type a message…'}
               disabled={sending}
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-3 py-1.5 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-primary/40 disabled:opacity-50"
+              className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-brand-primary/50 focus:outline-none disabled:opacity-50"
             />
             <button
               type="button"
               onClick={handleSend}
               disabled={sending || !input.trim()}
-              className="p-2 rounded-full bg-brand-primary/20 text-brand-primary hover:bg-brand-primary/30 disabled:opacity-30 disabled:cursor-not-allowed transition-colors shrink-0"
+              className="shrink-0 rounded-full bg-[#2374e1] p-2 text-white transition-colors hover:bg-[#2f80ed] disabled:cursor-not-allowed disabled:opacity-35"
             >
               {sending ? (
                 <Spinner size="sm" />

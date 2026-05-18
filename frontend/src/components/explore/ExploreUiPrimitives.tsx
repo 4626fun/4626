@@ -54,7 +54,7 @@ export function ExploreCopyButton({
 }
 
 type ExploreStatRowProps = {
-  label: string
+  label: ReactNode
   value: string
   note?: string
   icon?: ReactNode

@@ -19,6 +19,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 import { getDb, isDbConfigured } from '../../../server/_lib/db/postgres.js'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
+import { refreshCreatorEthosProjection } from '../../../server/_lib/zora/creatorEthosProjection.js'
 
 function readInt(value: string | undefined, fallback: number, min = 1, max = 10_000): number {
   const parsed = Number(value)
@@ -28,6 +29,12 @@ function readInt(value: string | undefined, fallback: number, min = 1, max = 10_
 
 function enabled(): boolean {
   const raw = String(process.env.ETHOS_CANONICAL_SCORE_SYNC_ENABLED ?? '').trim().toLowerCase()
+  if (!raw) return true
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+function projectionHotEnabled(): boolean {
+  const raw = String(process.env.ETHOS_CREATOR_PROJECTION_HOT_ENABLED ?? '').trim().toLowerCase()
   if (!raw) return true
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
@@ -42,7 +49,13 @@ type KeeperEthosSyncResponse = {
   limits: {
     updatePageLimit: number
     updateMaxPages: number
+    creatorProjectionHotLimit: number
   }
+  creatorProjection: {
+    refreshedRows: number
+    appliedLimit: number
+    available: boolean
+  } | null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -79,6 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
+  const creatorProjectionHotLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_HOT_LIMIT, 10000, 100, 250000)
 
   try {
     const updates = await syncEthosScoreUpdates({
@@ -86,13 +100,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pageLimit: updatePageLimit,
       maxPages: updateMaxPages,
     })
+    const creatorProjection = projectionHotEnabled()
+      ? await refreshCreatorEthosProjection({
+          db,
+          limit: creatorProjectionHotLimit,
+          mode: 'fast',
+        })
+      : null
     return res.status(200).json({
       success: true,
       data: {
         updates,
+        creatorProjection,
         limits: {
           updatePageLimit,
           updateMaxPages,
+          creatorProjectionHotLimit,
         },
       },
     } satisfies ApiEnvelope<KeeperEthosSyncResponse>)

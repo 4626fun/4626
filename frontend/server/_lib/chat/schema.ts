@@ -45,6 +45,21 @@ export async function ensureChatSchema(): Promise<void> {
   await db.sql`CREATE INDEX IF NOT EXISTS chat_presence_sessions_wallet_idx ON chat_presence_sessions (canonical_wallet, last_seen_at DESC);`
 
   await db.sql`
+    CREATE TABLE IF NOT EXISTS chat_friend_requests (
+      requester_wallet TEXT NOT NULL,
+      addressee_wallet TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      responded_at TIMESTAMPTZ NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (requester_wallet, addressee_wallet),
+      CONSTRAINT chat_friend_requests_non_self CHECK (requester_wallet <> addressee_wallet)
+    );
+  `
+  await db.sql`CREATE INDEX IF NOT EXISTS chat_friend_requests_addressee_status_idx ON chat_friend_requests (addressee_wallet, status, updated_at DESC);`
+  await db.sql`CREATE INDEX IF NOT EXISTS chat_friend_requests_requester_status_idx ON chat_friend_requests (requester_wallet, status, updated_at DESC);`
+
+  await db.sql`
     CREATE TABLE IF NOT EXISTS vault_chat_policies (
       vault_address TEXT PRIMARY KEY,
       group_id TEXT NULL,

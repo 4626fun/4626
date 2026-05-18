@@ -117,6 +117,7 @@ type CreatorEthosRecord = {
   coinKey: string
   userkey: string | null
   score: EthosScoreValue | null
+  source: string | null
 }
 
 type ExploreMetrics = {
@@ -178,6 +179,44 @@ function toFiniteNumber(value: unknown): number | null {
   const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN
   if (!Number.isFinite(n)) return null
   return n
+}
+
+function resolveBestEthosScore(...candidates: unknown[]): number | null {
+  let best: number | null = null
+  for (const candidate of candidates) {
+    const parsed = toFiniteNumber(candidate)
+    if (parsed == null || parsed <= 0) continue
+    if (best == null || parsed > best) best = parsed
+  }
+  return best
+}
+
+function resolveBestEthosValue(
+  serverValue: EthosScoreValue | null | undefined,
+  queryValue: EthosScoreValue | null | undefined,
+): EthosScoreValue | null {
+  const serverScore = toFiniteNumber(serverValue?.score)
+  const queryScore = toFiniteNumber(queryValue?.score)
+  const bestScore = resolveBestEthosScore(serverScore, queryScore)
+  if (bestScore == null) return null
+  if (queryScore != null && queryScore === bestScore) return queryValue ?? null
+  if (serverScore != null && serverScore === bestScore) return serverValue ?? null
+  return { score: bestScore, level: queryValue?.level ?? serverValue?.level ?? null }
+}
+
+function resolveBestEthosSource(
+  serverValue: EthosScoreValue | null | undefined,
+  serverSource: string | null | undefined,
+  queryValue: EthosScoreValue | null | undefined,
+  querySource: string | null,
+): string | null {
+  const serverScore = toFiniteNumber(serverValue?.score)
+  const queryScore = toFiniteNumber(queryValue?.score)
+  const bestScore = resolveBestEthosScore(serverScore, queryScore)
+  if (bestScore == null) return null
+  if (queryScore != null && queryScore === bestScore) return querySource
+  if (serverScore != null && serverScore === bestScore) return serverSource ?? null
+  return serverSource ?? querySource
 }
 
 function coalesceMetricValue(...values: Array<number | null | undefined>): number | null {
@@ -541,11 +580,13 @@ export function ExploreCreators() {
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
 
   const profileIdentifiers = useMemo(() => {
-    return baseDisplayCoins.map((coin) => ({
+    return baseDisplayCoins
+      .filter((coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)))
+      .map((coin) => ({
       coinKey: getCoinKey(coin),
       identifier: getZoraCreatorProfileIdentifier(coin),
       immediateUserkey: deriveImmediateEthosUserkey(coin),
-    }))
+      }))
   }, [baseDisplayCoins])
 
   const profileQueries = useQueries({
@@ -595,15 +636,27 @@ export function ExploreCreators() {
           score: Number(coin.ethosScore),
           level: typeof coin.ethosLevel === 'string' ? coin.ethosLevel : null,
         },
+        source: typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : null,
       })
     }
     const entries = Array.from(coinEthosUserkeys.entries())
     entries.forEach(([coinKey, userkey], index) => {
-      if (out.has(coinKey)) return
+      const queryScore = ethosScoreQueries[index]?.data ?? null
+      const existing = out.get(coinKey)
+      if (!existing) {
+        out.set(coinKey, {
+          coinKey,
+          userkey,
+          score: queryScore,
+          source: queryScore ? 'chat_bulk_userkey' : null,
+        })
+        return
+      }
       out.set(coinKey, {
         coinKey,
-        userkey,
-        score: ethosScoreQueries[index]?.data ?? null,
+        userkey: existing.userkey ?? userkey,
+        score: resolveBestEthosValue(existing.score, queryScore),
+        source: resolveBestEthosSource(existing.score, existing.source, queryScore, 'chat_bulk_userkey'),
       })
     })
     return out
@@ -650,13 +703,13 @@ export function ExploreCreators() {
       const aRecord = ethosByCoinKey.get(getCoinKey(a))
       const bRecord = ethosByCoinKey.get(getCoinKey(b))
 
-      const aRawScore = aRecord?.score?.score
-      const bRawScore = bRecord?.score?.score
-      const aHasScore = typeof aRawScore === 'number' && aRawScore > 0
-      const bHasScore = typeof bRawScore === 'number' && bRawScore > 0
+      const aRawScore = resolveBestEthosScore(aRecord?.score?.score, a.ethosScore)
+      const bRawScore = resolveBestEthosScore(bRecord?.score?.score, b.ethosScore)
+      const aHasScore = aRawScore != null
+      const bHasScore = bRawScore != null
       if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
       if (aHasScore && bHasScore) {
-        const delta = (bRawScore as number) - (aRawScore as number)
+        const delta = bRawScore - aRawScore
         if (delta !== 0) return delta
       }
 
@@ -731,13 +784,16 @@ export function ExploreCreators() {
   const ethosTopPreview = useMemo(() => {
     if (currentSort !== 'ethosScore' || displayCoins.length === 0) return null
     const top = displayCoins.slice(0, 5).map((coin) => {
-      const score = typeof coin.ethosScore === 'number' ? coin.ethosScore : null
+      const ethosRecord = ethosByCoinKey.get(getCoinKey(coin))
+      const score = resolveBestEthosScore(ethosRecord?.score?.score, coin.ethosScore)
       const symbol = coin.symbol || coin.name || 'unknown'
-      const source = typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : 'unknown'
+      const source =
+        ethosRecord?.source ??
+        (typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : 'unknown')
       return score != null ? `${symbol}:${score.toFixed(0)} (${source})` : `${symbol}:—`
     })
     return top.join(' | ')
-  }, [currentSort, displayCoins])
+  }, [currentSort, displayCoins, ethosByCoinKey])
   const ethosSliderIndex = Math.max(0, ETHOS_FILTER_SLIDER_STOPS.indexOf(ethosFilter))
   const ethosSliderLabel = ethosFilter === 'all' ? 'All' : `${ethosFilter}+`
 
@@ -904,7 +960,7 @@ export function ExploreCreators() {
                 timeframe={currentTimeFilter}
                 collapseIdentity={collapseIdentity}
                 currentSort={currentSort}
-                onSortChange={handleSortChange}
+                onSortChange={handleCreatorSortChange}
               />
             }
             body={

@@ -66,6 +66,22 @@
 }
 
 @layer components {
+  /* Force react-three-fiber wrapper chain to inherit parent height.
+     Without this, an internal wrapper can collapse and canvas falls back to 150px. */
+  .r3f-force-fill,
+  .r3f-force-fill > div,
+  .r3f-force-fill > div > div {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .r3f-force-fill canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+  }
+
   /* Creator Vaults Brand Kit utilities */
   .noise-overlay {
     position: fixed;

@@ -261,7 +261,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue/i })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /continue/i })).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -312,7 +312,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /continue/i })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: /continue/i })).toBeTruthy()
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {

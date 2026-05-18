@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
-import { ExternalLink, ArrowLeft, Coins, TrendingUp, MessageSquare, Play, FileText, Image as ImageIcon, X } from 'lucide-react'
+import { ExternalLink, ArrowLeft, Coins, TrendingUp, MessageSquare, Image as ImageIcon, X } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
@@ -33,28 +33,6 @@ const CONTENT_COINS_PAGE_SIZE = 20
 gsap.registerPlugin(ScrollTrigger)
 
 type ContentMediaKind = 'video' | 'text' | 'visual'
-type FlybyLayout = {
-  top: string
-  left: string
-  size: string
-  rotate: number
-  startY: number
-  endY: number
-  opacity: number
-}
-
-const FLYBY_LAYOUTS: FlybyLayout[] = [
-  { top: '8%', left: '7%', size: 'w-20 h-20 sm:w-24 sm:h-24', rotate: -7, startY: -140, endY: 60, opacity: 0.65 },
-  { top: '14%', left: '74%', size: 'w-24 h-24 sm:w-28 sm:h-28', rotate: 5, startY: -170, endY: 45, opacity: 0.82 },
-  { top: '28%', left: '18%', size: 'w-16 h-16 sm:w-20 sm:h-20', rotate: 8, startY: -120, endY: 72, opacity: 0.58 },
-  { top: '34%', left: '62%', size: 'w-20 h-20 sm:w-24 sm:h-24', rotate: -5, startY: -110, endY: 80, opacity: 0.68 },
-  { top: '48%', left: '84%', size: 'w-24 h-24 sm:w-32 sm:h-32', rotate: 6, startY: -150, endY: 50, opacity: 0.86 },
-  { top: '59%', left: '11%', size: 'w-20 h-20 sm:w-24 sm:h-24', rotate: -9, startY: -130, endY: 70, opacity: 0.7 },
-  { top: '66%', left: '55%', size: 'w-16 h-16 sm:w-20 sm:h-20', rotate: 7, startY: -100, endY: 75, opacity: 0.56 },
-  { top: '78%', left: '73%', size: 'w-20 h-20 sm:w-24 sm:h-24', rotate: -4, startY: -105, endY: 60, opacity: 0.7 },
-  { top: '83%', left: '29%', size: 'w-16 h-16 sm:w-20 sm:h-20', rotate: 9, startY: -120, endY: 68, opacity: 0.6 },
-  { top: '21%', left: '41%', size: 'w-14 h-14 sm:w-16 sm:h-16', rotate: -6, startY: -90, endY: 82, opacity: 0.5 },
-]
 const ZORA_TOKEN_LOGO_URL = '/brands/zora-token.svg'
 
 function formatNumber(value: string | number | undefined): string {
@@ -181,13 +159,18 @@ function TikTokIcon({ className }: { className?: string }) {
 }
 
 // Calculate total earnings from creatorEarnings array
-function calculateTotalEarnings(earnings: ZoraCoin['creatorEarnings']): string {
-  if (!earnings || !Array.isArray(earnings) || earnings.length === 0) return '$0.00'
+function calculateTotalEarningsValue(earnings: ZoraCoin['creatorEarnings']): number {
+  if (!earnings || !Array.isArray(earnings) || earnings.length === 0) return 0
   let total = 0
   for (const e of earnings) {
     const usd = parseFloat(e.amountUsd || '0')
     if (!isNaN(usd)) total += usd
   }
+  return total
+}
+
+function calculateTotalEarnings(earnings: ZoraCoin['creatorEarnings']): string {
+  const total = calculateTotalEarningsValue(earnings)
   if (total === 0) return '$0.00'
   if (total < 0.01) return `$${total.toFixed(4)}`
   if (total < 1) return `$${total.toFixed(3)}`
@@ -224,32 +207,6 @@ function getContentCoinAssetUrl(coin: ZoraCoin): string | undefined {
       coin.mediaContent?.previewImage?.small ||
       coin.mediaContent?.originalUri
   )
-}
-
-function getMediaTone(kind: ContentMediaKind): {
-  panelClass: string
-  accentClass: string
-  overlayClass: string
-} {
-  if (kind === 'video') {
-    return {
-      panelClass: 'border-cyan-300/25 bg-cyan-500/5 shadow-[0_0_0_1px_rgba(34,211,238,0.08),0_0_20px_rgba(34,211,238,0.12)]',
-      accentClass: 'text-cyan-200',
-      overlayClass: 'from-cyan-400/0 via-cyan-400/16 to-blue-400/0',
-    }
-  }
-  if (kind === 'text') {
-    return {
-      panelClass: 'border-amber-300/25 bg-amber-500/5 shadow-[0_0_0_1px_rgba(251,191,36,0.08),0_0_20px_rgba(251,191,36,0.1)]',
-      accentClass: 'text-amber-200',
-      overlayClass: 'from-amber-400/0 via-amber-300/14 to-orange-400/0',
-    }
-  }
-  return {
-    panelClass: 'border-blue-300/25 bg-blue-500/5 shadow-[0_0_0_1px_rgba(96,165,250,0.08),0_0_20px_rgba(59,130,246,0.12)]',
-    accentClass: 'text-blue-200',
-    overlayClass: 'from-blue-500/0 via-sky-400/16 to-cyan-400/0',
-  }
 }
 
 function getSceneCardEntrance(index: number) {
@@ -292,31 +249,6 @@ function getSceneCardEntrance(index: number) {
     },
   ] as const
   return patterns[index % patterns.length] ?? patterns[0]
-}
-
-function ContentMediaBadge({ kind }: { kind: ContentMediaKind }) {
-  if (kind === 'video') {
-    return (
-      <span className="inline-flex items-center gap-1.5 border border-cyan-300/35 bg-cyan-500/10 px-2 py-1 text-[10px] font-mono uppercase tracking-[1.5px] text-cyan-200 shadow-[0_0_0_1px_rgba(34,211,238,0.12),0_0_16px_rgba(34,211,238,0.18)]">
-        <Play className="w-3 h-3" />
-        Video
-      </span>
-    )
-  }
-  if (kind === 'text') {
-    return (
-      <span className="inline-flex items-center gap-1.5 border border-amber-300/35 bg-amber-500/10 px-2 py-1 text-[10px] font-mono uppercase tracking-[1.5px] text-amber-200 shadow-[0_0_0_1px_rgba(251,191,36,0.12),0_0_16px_rgba(251,191,36,0.16)]">
-        <FileText className="w-3 h-3" />
-        Text
-      </span>
-    )
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 border border-blue-300/35 bg-blue-500/10 px-2 py-1 text-[10px] font-mono uppercase tracking-[1.5px] text-blue-200 shadow-[0_0_0_1px_rgba(96,165,250,0.12),0_0_16px_rgba(59,130,246,0.18)]">
-      <ImageIcon className="w-3 h-3" />
-      Visual
-    </span>
-  )
 }
 
 function ActionAddressHint({
@@ -580,13 +512,14 @@ export function ExploreCreatorDetail() {
   const [showCursor, setShowCursor] = useState(false)
   const [isContentTrayOpen, setIsContentTrayOpen] = useState(false)
   const [activeContentCoin, setActiveContentCoin] = useState<ZoraCoin | null>(null)
-  const [narrativeProgress, setNarrativeProgress] = useState(0)
+  const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
   const [timelineDragging, setTimelineDragging] = useState(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
   const sceneSectionRef = useRef<HTMLElement | null>(null)
+  const timelineSectionRef = useRef<HTMLElement | null>(null)
+  const timelineBodyRef = useRef<HTMLDivElement | null>(null)
   const timelineScrollerRef = useRef<HTMLDivElement | null>(null)
-  const narrativeTargetRef = useRef(0)
-  const narrativeProgressRef = useRef(0)
+  const timelineCameraActiveRef = useRef(false)
   const timelineDragRef = useRef<{ active: boolean; startX: number; scrollLeft: number }>({
     active: false,
     startX: 0,
@@ -630,29 +563,6 @@ export function ExploreCreatorDetail() {
     return createdCoins.filter((c) => c.coinType !== 'CREATOR')
   }, [createdCoins])
 
-  const visualStoryCoins = useMemo(
-    () =>
-      [...contentCoins]
-        .filter((coin) => detectContentMediaKind(coin) !== 'text')
-        .sort((a, b) => parseNumber(b.totalVolume) - parseNumber(a.totalVolume))
-        .slice(0, 8),
-    [contentCoins]
-  )
-  const narrativeFlybyCoins = useMemo(() => {
-    const merged = [...visualStoryCoins, ...contentCoins]
-    const seen = new Set<string>()
-    const picked: ZoraCoin[] = []
-    for (const coin of merged) {
-      const key = coin.address || coin.id || `${coin.name || coin.symbol || 'coin'}-${picked.length}`
-      if (seen.has(key)) continue
-      const image = getContentCoinAssetUrl(coin)
-      if (!image) continue
-      seen.add(key)
-      picked.push(coin)
-      if (picked.length >= 10) break
-    }
-    return picked
-  }, [visualStoryCoins, contentCoins])
   const timelineCoins = useMemo(
     () =>
       [...contentCoins]
@@ -764,24 +674,6 @@ export function ExploreCreatorDetail() {
     }
   }, [])
 
-  useEffect(() => {
-    let rafId = 0
-    const cycleMs = 32000
-    const startAt = performance.now()
-    const animate = () => {
-      const elapsed = performance.now() - startAt
-      narrativeTargetRef.current = elapsed / cycleMs
-      const current = narrativeProgressRef.current
-      const target = narrativeTargetRef.current
-      const next = current + (target - current) * 0.05
-      narrativeProgressRef.current = next
-      setNarrativeProgress(next)
-      rafId = window.requestAnimationFrame(animate)
-    }
-    rafId = window.requestAnimationFrame(animate)
-    return () => window.cancelAnimationFrame(rafId)
-  }, [])
-
   useGSAP(
     () => {
       const cleanups: Array<() => void> = []
@@ -839,6 +731,52 @@ export function ExploreCreatorDetail() {
           })
         }
       }
+      if (timelineSectionRef.current && timelineBodyRef.current && timelineScrollerRef.current && allowParallax) {
+        const section = timelineSectionRef.current
+        const sectionBody = timelineBodyRef.current
+        const scroller = timelineScrollerRef.current
+        const maxTimelineScrollLeft = () => Math.max(0, scroller.scrollWidth - scroller.clientWidth)
+
+        gsap.set(sectionBody, { x: '16vw', autoAlpha: 0.8, willChange: 'transform,opacity' })
+        const introTween = gsap.to(sectionBody, {
+          x: '0vw',
+          autoAlpha: 1,
+          ease: 'power3.out',
+          scrollTrigger: {
+            trigger: section,
+            start: 'top 88%',
+            end: 'top 52%',
+            scrub: 0.9,
+          },
+        })
+        cleanups.push(() => {
+          introTween.scrollTrigger?.kill()
+          introTween.kill()
+          gsap.set(sectionBody, { clearProps: 'all' })
+        })
+
+        if (window.innerWidth >= 1024 && maxTimelineScrollLeft() > 0) {
+          timelineCameraActiveRef.current = true
+          const panTween = gsap.to(scroller, {
+            scrollLeft: () => maxTimelineScrollLeft(),
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: () => `+=${Math.max(900, maxTimelineScrollLeft() + window.innerHeight * 0.45)}`,
+              pin: true,
+              scrub: 1,
+              anticipatePin: 1,
+              invalidateOnRefresh: true,
+            },
+          })
+          cleanups.push(() => {
+            timelineCameraActiveRef.current = false
+            panTween.scrollTrigger?.kill()
+            panTween.kill()
+          })
+        }
+      }
       return () => {
         cleanups.forEach((cleanup) => cleanup())
       }
@@ -854,14 +792,6 @@ export function ExploreCreatorDetail() {
     window.addEventListener('keydown', onKeydown)
     return () => window.removeEventListener('keydown', onKeydown)
   }, [isContentTrayOpen])
-
-  if (!chain || !isSupportedExploreChain(chain)) {
-    return <Navigate replace to="/explore/creators" />
-  }
-
-  if (!tokenAddress) {
-    return <Navigate replace to="/explore/creators" />
-  }
 
   // Profile info
   const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
@@ -883,14 +813,32 @@ export function ExploreCreatorDetail() {
     resetMs: 2000,
     copiedIconClassName: 'w-4 h-4 text-green-500',
   } as const
-  const sceneCandidates = [...contentCoins].sort((a, b) => parseNumber(b.totalVolume) - parseNumber(a.totalVolume))
-  const imageBasedSceneCoins = sceneCandidates.filter(
-    (candidate) => detectContentMediaKind(candidate) === 'visual' && Boolean(getContentCoinAssetUrl(candidate))
+  const sceneCandidates = useMemo(
+    () => [...contentCoins].sort((a, b) => parseNumber(b.totalVolume) - parseNumber(a.totalVolume)),
+    [contentCoins]
   )
-  const fallbackSceneCoins = sceneCandidates.filter(
-    (candidate) => !imageBasedSceneCoins.includes(candidate)
+  const imageBasedSceneCoins = useMemo(
+    () =>
+      sceneCandidates.filter(
+        (candidate) => detectContentMediaKind(candidate) === 'visual' && Boolean(getContentCoinAssetUrl(candidate))
+      ),
+    [sceneCandidates]
   )
-  const sceneCoins = [...imageBasedSceneCoins, ...fallbackSceneCoins].slice(0, 7)
+  const fallbackSceneCoins = useMemo(
+    () => sceneCandidates.filter((candidate) => !imageBasedSceneCoins.includes(candidate)),
+    [sceneCandidates, imageBasedSceneCoins]
+  )
+  const sceneCoins = useMemo(() => [...imageBasedSceneCoins, ...fallbackSceneCoins].slice(0, 7), [imageBasedSceneCoins, fallbackSceneCoins])
+  const topVolumeContentCoins = useMemo(() => sceneCandidates.slice(0, 6), [sceneCandidates])
+
+  if (!chain || !isSupportedExploreChain(chain)) {
+    return <Navigate replace to="/explore/creators" />
+  }
+
+  if (!tokenAddress) {
+    return <Navigate replace to="/explore/creators" />
+  }
+
   const leadSceneCoin = imageBasedSceneCoins[0] ?? sceneCoins[0] ?? null
   const leadSceneCoinImage = (leadSceneCoin ? getContentCoinAssetUrl(leadSceneCoin) : undefined) || avatarUrl || null
   const creatorCoinKind = coin ? detectContentMediaKind(coin) : null
@@ -899,18 +847,17 @@ export function ExploreCreatorDetail() {
       ? getContentCoinAssetUrl(coin)
       : undefined
   const heroIconImage = creatorCoinImage || leadSceneCoinImage || avatarUrl || null
-  const leadSceneCoinName = leadSceneCoin?.name || leadSceneCoin?.symbol || displayName
   const creatorTokenLogo =
     coin?.mediaContent?.previewImage?.small ||
     coin?.mediaContent?.previewImage?.medium ||
     leadSceneCoinImage ||
     null
+  const heroBackgroundImage = creatorTokenLogo || leadSceneCoinImage || null
   const openContentTray = (coin: ZoraCoin) => {
     setActiveContentCoin(coin)
     setIsContentTrayOpen(true)
   }
   const closeContentTray = () => setIsContentTrayOpen(false)
-  const ambientNarrativeProgress = allowParallax ? narrativeProgress : 0.5
   const onTimelinePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const container = timelineScrollerRef.current
     if (!container) return
@@ -949,15 +896,27 @@ export function ExploreCreatorDetail() {
   const onTimelineWheel = (event: React.WheelEvent<HTMLDivElement>) => {
     const container = timelineScrollerRef.current
     if (!container) return
+    if (timelineCameraActiveRef.current) return
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
     event.preventDefault()
     container.scrollBy({ left: event.deltaY * 0.85, behavior: 'smooth' })
+  }
+  const onSceneSectionWheelCapture = (event: React.WheelEvent<HTMLElement>) => {
+    // Keep wheel interactions scoped to the scene while hovered.
+    event.preventDefault()
   }
   const activeCoinMediaKind = activeContentCoin ? detectContentMediaKind(activeContentCoin) : null
   const activeCoinImage = activeContentCoin ? getContentCoinAssetUrl(activeContentCoin) : undefined
   const activeCoinOriginal = activeContentCoin ? toDisplayAssetUrl(activeContentCoin.mediaContent?.originalUri) : undefined
   const activeCoinAddress = activeContentCoin?.address || ''
   const activeCoinDescription = (activeContentCoin?.description || '').trim()
+  const activeCoinEarningsUsd = activeContentCoin ? calculateTotalEarningsValue(activeContentCoin.creatorEarnings) : 0
+  const activeSceneCoinName = sceneActiveCoin?.name || sceneActiveCoin?.symbol || null
+  const activeSceneCoinSymbol = sceneActiveCoin?.symbol || null
+  const shouldShowActiveSceneSymbol = Boolean(
+    activeSceneCoinSymbol &&
+      (!activeSceneCoinName || activeSceneCoinSymbol.toLowerCase() !== activeSceneCoinName.toLowerCase())
+  )
 
   return (
     <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden">
@@ -969,57 +928,8 @@ export function ExploreCreatorDetail() {
       />
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_12%,rgba(59,130,246,0.12),transparent_50%),radial-gradient(circle_at_82%_78%,rgba(56,189,248,0.1),transparent_52%)]" />
-        {narrativeFlybyCoins.map((coin, idx) => {
-          const layout: FlybyLayout = FLYBY_LAYOUTS[idx % FLYBY_LAYOUTS.length] ?? FLYBY_LAYOUTS[0]!
-          const image = getContentCoinAssetUrl(coin)
-          const phase = ambientNarrativeProgress * 0.018 + idx * 0.135
-          const lane = phase - Math.floor(phase)
-          const depth = 1 - Math.abs(lane - 0.5) * 2
-
-          // Match the gallery's intentional fade windows (in/out by lane depth)
-          let depthOpacity = 0
-          if (lane >= 0.05 && lane <= 0.25) {
-            depthOpacity = (lane - 0.05) / 0.2
-          } else if (lane > 0.25 && lane < 0.86) {
-            depthOpacity = 1
-          } else if (lane >= 0.86 && lane <= 0.98) {
-            depthOpacity = 1 - (lane - 0.86) / 0.12
-          }
-
-          // Subtle lane drift so cards feel like moving through depth
-          const xDrift = Math.sin(phase * Math.PI * 2 * 0.62 + idx) * 6
-          const yDrift = Math.cos(phase * Math.PI * 2 * 0.48 + idx * 0.75) * 5
-          const zPush = (depth - 0.5) * 38
-          const scale = 0.84 + depth * 0.26
-          const blur = (1 - depth) * 1.6
-          const flyOpacity = depthOpacity * Math.min(layout.opacity + 0.08, 0.72)
-
-          if (!image) return null
-          return (
-            <div
-              key={coin.address || coin.id || `ambient-flyby-${idx}`}
-              className={`absolute ${layout.size} overflow-hidden rounded-xl transition-opacity`}
-              style={{
-                top: layout.top,
-                left: layout.left,
-                opacity: flyOpacity,
-                zIndex: 1,
-                transform: `perspective(900px) translate3d(${xDrift}px, ${yDrift}px, ${zPush}px) scale(${scale})`,
-                willChange: 'transform, opacity',
-                filter: `blur(${blur}px)`,
-              }}
-            >
-              <img
-                src={image}
-                alt={coin.name || coin.symbol || 'Content coin'}
-                className="w-full h-full object-cover"
-                style={{ filter: `brightness(${0.62 + depth * 0.3}) saturate(${0.7 + depth * 0.18}) contrast(0.92)` }}
-              />
-            </div>
-          )
-        })}
       </div>
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
         {/* Back navigation */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -1036,10 +946,10 @@ export function ExploreCreatorDetail() {
         </motion.div>
 
         {/* Recreated hero scene */}
-        <section className="relative mb-16 sm:mb-20 overflow-hidden bg-black">
-          {leadSceneCoinImage ? (
+        <section className="relative mb-20 sm:mb-24 overflow-hidden bg-black">
+          {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
-              <img src={leadSceneCoinImage} alt={leadSceneCoinName} className="w-full h-full object-cover opacity-40" />
+              <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-40" />
               <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/35" />
               <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/70" />
             </div>
@@ -1058,7 +968,7 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[78vh] p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
+            className="relative min-h-[62vh] p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
           >
             <div className="max-w-4xl">
               <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-400 mb-8">
@@ -1160,172 +1070,170 @@ export function ExploreCreatorDetail() {
 
         <section
           ref={sceneSectionRef}
-          className="relative mb-20 sm:mb-24 -mx-4 sm:-mx-6 px-4 sm:px-6 py-10 sm:py-12 overflow-hidden"
+          className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mt-12 sm:mt-16 mb-48 sm:mb-64 h-[980px] sm:h-[1120px] overflow-hidden"
+          onWheelCapture={onSceneSectionWheelCapture}
         >
+          <div className="pointer-events-none absolute inset-0 bg-black/28" />
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
           <div className="pointer-events-none absolute -top-20 left-1/4 w-72 h-72 bg-blue-500/14 blur-[120px]" />
           <div className="pointer-events-none absolute -bottom-16 right-1/4 w-80 h-80 bg-sky-500/12 blur-[130px]" />
-          <div className="relative mb-10 sm:mb-12 px-2 sm:px-4">
-            <div className="grid lg:grid-cols-12 gap-6 sm:gap-8 items-end">
-              <div className="lg:col-span-7">
-                <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-6">
-                  <span className="w-10 sm:w-12 h-px bg-white/30" />
-                  Collections
-                </span>
-                <h2 className="text-5xl sm:text-6xl lg:text-[96px] font-semibold tracking-tight leading-[0.9]">
-                  Content
-                  <br />
-                  <span className="text-white/35">coins.</span>
-                </h2>
-              </div>
-              <div className="lg:col-span-5 lg:pb-4">
-                <p className="text-base sm:text-lg text-zinc-400 leading-relaxed">
-                  A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a visual scene.
-                </p>
-              </div>
-            </div>
-          </div>
 
           {imageBasedSceneCoins.length > 0 ? (
-            <div className="relative grid grid-cols-1 lg:grid-cols-[1.2fr_1fr] gap-4 sm:gap-5 px-2 sm:px-4">
-              {(() => {
-                const leadCoin = imageBasedSceneCoins[0]
-                const leadCoinName = leadCoin?.name || leadCoin?.symbol || 'Untitled'
-                const leadCoinSymbol = leadCoin?.symbol || '???'
-                const leadCoinImage = leadCoin?.mediaContent?.previewImage?.medium || leadCoin?.mediaContent?.previewImage?.small || null
-                const leadCoinVolume = formatNumber(leadCoin?.totalVolume)
-                const leadCoinKind = leadCoin ? detectContentMediaKind(leadCoin) : 'visual'
-                const leadTone = getMediaTone(leadCoinKind)
-                const sideCoins = sceneCoins.filter((coin) => coin !== leadCoin)
+            <div
+              data-scene-card
+              className="absolute inset-0 z-10 overflow-hidden bg-black/45 backdrop-blur-[1px]"
+            >
+              <InfiniteContentGallery3D
+                coins={imageBasedSceneCoins}
+                onSelect={openContentTray}
+                onActiveCoinChange={setSceneActiveCoin}
+                interactive
+                cameraZ={7.2}
+                cameraFov={46}
+                planeScale={1.02}
+                laneSpacing={2.7}
+                className="absolute inset-0 min-h-0"
+              />
+              <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
+              <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
 
-                return (
-                  <>
-                    <motion.button
+              <div className="absolute left-4 right-4 top-6 sm:left-8 sm:right-8 sm:top-8 z-20">
+                <div className="grid lg:grid-cols-12 gap-6 sm:gap-8 items-end">
+                  <div className="lg:col-span-7">
+                    <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-4 sm:mb-6">
+                      <span className="w-10 sm:w-12 h-px bg-white/30" />
+                      Collections
+                    </span>
+                    <h2 className="text-4xl sm:text-5xl lg:text-[88px] font-semibold tracking-tight leading-[0.9]">
+                      Content
+                      <br />
+                      <span className="text-white/35">coins.</span>
+                    </h2>
+                  </div>
+                  <div className="lg:col-span-5 lg:pb-4">
+                    <p className="text-sm sm:text-base lg:text-lg text-zinc-300/90 leading-relaxed max-w-[54ch]">
+                      A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a visual scene.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="absolute left-3 top-3 z-20 inline-flex items-center gap-2 border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] text-zinc-200 backdrop-blur-sm">
+                <span className="font-mono uppercase tracking-[1.4px] text-zinc-400">Now Showing</span>
+                <span className="font-medium text-white">{activeSceneCoinName || 'Content coin'}</span>
+                {shouldShowActiveSceneSymbol ? (
+                  <span className="font-mono uppercase tracking-[1.2px] text-zinc-400">{activeSceneCoinSymbol}</span>
+                ) : null}
+              </div>
+
+              <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4">
+                <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
+                  Top content volume
+                </div>
+                <div className="space-y-1.5">
+                  {topVolumeContentCoins.map((coin, index) => (
+                    <button
+                      key={coin.address || coin.id || `top-volume-${index}`}
                       type="button"
-                      onClick={() => leadCoin && openContentTray(leadCoin)}
-                      data-scene-card
-                      className="group relative border-0 bg-black/90 overflow-hidden min-h-[380px] sm:min-h-[500px]"
-                      whileHover={{ y: -10, scale: 1.012 }}
+                      onClick={() => openContentTray(coin)}
+                      className="w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm text-zinc-200 hover:text-white transition-colors"
                     >
-                      <div className="absolute inset-0">
-                        {leadCoinImage ? (
-                          <img src={leadCoinImage} alt={leadCoinName} className="w-full h-full object-cover opacity-75 group-hover:scale-[1.045] transition-transform duration-700" />
-                        ) : (
-                          <div className="w-full h-full bg-linear-to-br from-zinc-800 to-zinc-950" />
-                        )}
-                        <div className="absolute inset-0 bg-linear-to-t from-black via-black/55 to-black/5" />
-                        <div className={`absolute inset-0 bg-linear-to-r ${leadTone.overlayClass} opacity-45 group-hover:opacity-70 transition-opacity duration-500`} />
-                      </div>
-                      <div className="relative h-full p-6 sm:p-8 flex flex-col justify-end">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-5xl sm:text-6xl font-semibold tracking-tight text-white/20 leading-none">01</span>
-                          <span className="text-[11px] font-mono uppercase tracking-[2px] text-zinc-300">Featured Content Coin</span>
-                        </div>
-                        <h3 className="text-2xl sm:text-4xl font-semibold tracking-tight text-white">{leadCoinName}</h3>
-                        <div className={`text-sm mt-1 font-mono tracking-[1.2px] uppercase ${leadTone.accentClass}`}>{leadCoinSymbol}</div>
-                        <div className="mt-5">
-                          <div className="text-[10px] uppercase tracking-[1.5px] text-zinc-400">All-time volume</div>
-                          <div className="mt-1 text-xl sm:text-2xl font-medium text-white/95 tracking-tight">{leadCoinVolume}</div>
-                        </div>
-                      </div>
-                    </motion.button>
-
-                    <motion.div
-                      data-scene-card
-                      className="min-h-[380px] sm:min-h-[500px]"
-                      whileHover={{ y: -6, scale: 1.005 }}
-                    >
-                      <InfiniteContentGallery3D
-                        coins={sideCoins}
-                        onSelect={openContentTray}
-                        className="h-full"
-                      />
-                    </motion.div>
-                  </>
-                )
-              })()}
+                      <span className="truncate">
+                        <span className="font-mono text-zinc-500 mr-2">{String(index + 1).padStart(2, '0')}</span>
+                        {coin.name || coin.symbol || 'Untitled'}
+                      </span>
+                      <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="rounded-3xl bg-zinc-900/50 backdrop-blur p-10 text-center text-zinc-500">
+            <div className="absolute inset-0 rounded-3xl bg-zinc-900/50 backdrop-blur p-10 text-center text-zinc-500 flex items-center justify-center">
               No visual content coins available to render the scene yet.
             </div>
           )}
         </section>
 
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-16 sm:mb-20 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-10 sm:py-12">
-          <div className="px-2 sm:px-4 pb-8">
-            <div className="grid lg:grid-cols-12 gap-6 items-end">
-              <div className="lg:col-span-8">
-                <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-700 mb-4">
-                  <span className="w-10 sm:w-12 h-px bg-black/35" />
-                  Content Timeline
-                </span>
-                <h3 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[0.9]">
-                  A trail of creator
-                  <br />
-                  content momentum.
-                </h3>
-              </div>
-              <div className="lg:col-span-4 flex lg:justify-end">
-                <div className="inline-flex items-center gap-3 border border-black/20 bg-white/65 px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px]">
-                  <span className="w-8 h-8 rounded-full bg-white border border-black/20 inline-flex items-center justify-center text-[10px]">
-                    DRAG
+        <section
+          ref={timelineSectionRef}
+          className="relative w-screen ml-[calc(50%-50vw)] mt-36 sm:mt-52 mb-56 sm:mb-72 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+        >
+          <div ref={timelineBodyRef}>
+            <div className="px-2 sm:px-4 pb-8">
+              <div className="grid lg:grid-cols-12 gap-6 items-end">
+                <div className="lg:col-span-8">
+                  <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-700 mb-4">
+                    <span className="w-10 sm:w-12 h-px bg-black/35" />
+                    Content Timeline
                   </span>
-                  Swipe or drag horizontally
+                  <h3 className="text-4xl sm:text-5xl lg:text-6xl font-semibold tracking-tight leading-[0.9]">
+                    A trail of creator
+                    <br />
+                    content momentum.
+                  </h3>
+                </div>
+                <div className="lg:col-span-4 flex lg:justify-end">
+                  <div className="inline-flex items-center gap-3 border border-black/20 bg-white/65 px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px]">
+                    <span className="w-8 h-8 rounded-full bg-white border border-black/20 inline-flex items-center justify-center text-[10px]">
+                      DRAG
+                    </span>
+                    Swipe or drag horizontally
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div
-            ref={timelineScrollerRef}
-            className={`overflow-x-auto scrollbar-hide select-none scroll-smooth snap-x snap-mandatory pl-[10vw] sm:pl-[14vw] lg:pl-[18vw] pr-2 sm:pr-4 ${timelineDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-            onPointerDown={onTimelinePointerDown}
-            onPointerMove={onTimelinePointerMove}
-            onPointerUp={onTimelinePointerUp}
-            onPointerLeave={onTimelinePointerCancel}
-            onPointerCancel={onTimelinePointerCancel}
-            onWheel={onTimelineWheel}
-          >
-            <div className="flex min-w-max">
-              {timelineCoins.length === 0 ? (
-                <div className="px-8 py-10 text-sm text-zinc-700">No content coins available for timeline yet.</div>
-              ) : (
-                timelineCoins.map((coin, idx) => {
-                  const image = getContentCoinAssetUrl(coin)
-                  const monthDay = formatMonthDay(coin.createdAt)
-                  return (
-                    <button
-                      key={coin.address || coin.id || `timeline-${idx}`}
-                      type="button"
-                      onClick={() => openContentTray(coin)}
-                      className={`w-[280px] sm:w-[340px] p-6 text-left hover:bg-black/5 transition-all duration-300 snap-start ${
-                        idx === 0 ? 'ml-2 sm:ml-4 lg:ml-10' : ''
-                      } ${
-                        idx === timelineCoins.length - 1 ? 'mr-8 sm:mr-12 lg:mr-16' : ''
-                      } ${
-                        idx % 3 === 1 ? 'sm:translate-y-10' : idx % 3 === 2 ? 'sm:-translate-y-6' : ''
-                      }`}
-                    >
-                      <div className="text-5xl sm:text-6xl font-semibold tracking-tight leading-none mb-5">{monthDay}</div>
-                      {image ? (
-                        <div className="w-full aspect-[4/3] bg-white/80 overflow-hidden mb-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                          <img src={image} alt={coin.name || coin.symbol || 'Content coin'} className="w-full h-full object-cover" />
-                        </div>
-                      ) : (
-                        <div className="w-full aspect-[4/3] bg-white/60 mb-4 flex items-center justify-center text-zinc-500">
-                          <ImageIcon className="w-5 h-5" />
-                        </div>
-                      )}
-                      <div className="text-lg font-medium leading-tight">{coin.name || coin.symbol || 'Untitled'}</div>
-                      <div className="mt-2 text-xs font-mono uppercase tracking-[1.4px] text-zinc-700">{coin.symbol || '???'}</div>
-                      <p className="mt-3 text-xs text-zinc-800 leading-relaxed line-clamp-3">
-                        {(coin.description || 'Open tray for full content context.').trim()}
-                      </p>
-                    </button>
-                  )
-                })
-              )}
+            <div
+              ref={timelineScrollerRef}
+              className={`overflow-x-auto scrollbar-hide select-none scroll-smooth snap-x snap-mandatory pl-[10vw] sm:pl-[14vw] lg:pl-[18vw] pr-2 sm:pr-4 ${timelineDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+              onPointerDown={onTimelinePointerDown}
+              onPointerMove={onTimelinePointerMove}
+              onPointerUp={onTimelinePointerUp}
+              onPointerLeave={onTimelinePointerCancel}
+              onPointerCancel={onTimelinePointerCancel}
+              onWheel={onTimelineWheel}
+            >
+              <div className="flex min-w-max">
+                {timelineCoins.length === 0 ? (
+                  <div className="px-8 py-10 text-sm text-zinc-700">No content coins available for timeline yet.</div>
+                ) : (
+                  timelineCoins.map((coin, idx) => {
+                    const image = getContentCoinAssetUrl(coin)
+                    const monthDay = formatMonthDay(coin.createdAt)
+                    return (
+                      <button
+                        key={coin.address || coin.id || `timeline-${idx}`}
+                        type="button"
+                        onClick={() => openContentTray(coin)}
+                        className={`w-[280px] sm:w-[340px] p-6 text-left hover:bg-black/5 transition-all duration-300 snap-start ${
+                          idx === 0 ? 'ml-2 sm:ml-4 lg:ml-10' : ''
+                        } ${
+                          idx === timelineCoins.length - 1 ? 'mr-8 sm:mr-12 lg:mr-16' : ''
+                        } ${
+                          idx % 3 === 1 ? 'sm:translate-y-10' : idx % 3 === 2 ? 'sm:-translate-y-6' : ''
+                        }`}
+                      >
+                        <div className="text-5xl sm:text-6xl font-semibold tracking-tight leading-none mb-5">{monthDay}</div>
+                        {image ? (
+                          <div className="w-full aspect-[4/3] bg-white/80 overflow-hidden mb-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+                            <img src={image} alt={coin.name || coin.symbol || 'Content coin'} className="w-full h-full object-cover" />
+                          </div>
+                        ) : (
+                          <div className="w-full aspect-[4/3] bg-white/60 mb-4 flex items-center justify-center text-zinc-500">
+                            <ImageIcon className="w-5 h-5" />
+                          </div>
+                        )}
+                        <div className="text-lg font-medium leading-tight">{coin.name || coin.symbol || 'Untitled'}</div>
+                        <div className="mt-2 text-xs font-mono uppercase tracking-[1.4px] text-zinc-700">{coin.symbol || '???'}</div>
+                        <p className="mt-3 text-xs text-zinc-800 leading-relaxed line-clamp-3">
+                          {(coin.description || 'Open tray for full content context.').trim()}
+                        </p>
+                      </button>
+                    )
+                  })
+                )}
+              </div>
             </div>
           </div>
         </section>
@@ -1698,9 +1606,6 @@ export function ExploreCreatorDetail() {
                     {activeContentCoin.name || activeContentCoin.symbol || 'Untitled'}
                   </h3>
                   <div className="text-sm text-zinc-400 mt-1">{activeContentCoin.symbol || '???'}</div>
-                  <div className="mt-3">
-                    {activeCoinMediaKind ? <ContentMediaBadge kind={activeCoinMediaKind} /> : null}
-                  </div>
                 </div>
               </div>
 
@@ -1736,10 +1641,12 @@ export function ExploreCreatorDetail() {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-blue-500/10 px-3 py-3 rounded-lg">
-                  <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Earned</div>
-                  <div className="text-base text-blue-200 mt-1">{calculateTotalEarnings(activeContentCoin.creatorEarnings)}</div>
-                </div>
+                {activeCoinEarningsUsd > 0 ? (
+                  <div className="bg-blue-500/10 px-3 py-3 rounded-lg">
+                    <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Earned</div>
+                    <div className="text-base text-blue-200 mt-1">{calculateTotalEarnings(activeContentCoin.creatorEarnings)}</div>
+                  </div>
+                ) : null}
                 <div className="bg-zinc-950/20 px-3 py-3 rounded-lg">
                   <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">All-time volume</div>
                   <div className="text-base text-white mt-1">{formatNumber(activeContentCoin.totalVolume)}</div>

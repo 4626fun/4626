@@ -432,7 +432,7 @@ function WaitlistAuthStep(props: {
             {...stagger(2)}
             role="alert"
             aria-live="polite"
-            className="space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-300"
+            className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-left text-sm text-blue-200"
           >
             <div>{error}</div>
             {recoveryRequired ? (

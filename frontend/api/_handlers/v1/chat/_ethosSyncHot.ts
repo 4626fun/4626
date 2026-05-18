@@ -2,7 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { getDb, isDbConfigured } from '../../../../server/_lib/db/postgres.js'
-import { syncEthosScoreUpdates } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
+import { syncEthosScoreUpdates, syncEthosUserkeyScores } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
+import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -239,6 +240,41 @@ async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Prom
   }
 }
 
+async function collectTopCreatorSocialUserkeys(params: {
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>
+  limit: number
+}): Promise<string[]> {
+  const rows = await params.db.sql`
+    WITH candidates AS (
+      SELECT DISTINCT
+        ('service:x.com:username:' || lower(trim(p.twitter_username))) AS ethos_userkey,
+        p.volume_24h_usd
+      FROM public.creator_ethos_projection p
+      WHERE p.twitter_username IS NOT NULL
+        AND trim(p.twitter_username) <> ''
+    ),
+    stale AS (
+      SELECT c.ethos_userkey, c.volume_24h_usd
+      FROM candidates c
+      LEFT JOIN public.ethos_userkey_scores s
+        ON s.ethos_userkey = c.ethos_userkey
+      WHERE s.ethos_userkey IS NULL
+         OR s.status = 'stale'
+         OR s.status = 'unknown'
+         OR s.status = 'error'
+         OR (s.status = 'matched' AND s.fetched_at < NOW() - INTERVAL '24 hours')
+         OR (s.status = 'not_found' AND s.fetched_at < NOW() - INTERVAL '72 hours')
+    )
+    SELECT ethos_userkey
+    FROM stale
+    ORDER BY volume_24h_usd DESC NULLS LAST, ethos_userkey ASC
+    LIMIT ${params.limit};
+  `
+  return (rows.rows ?? [])
+    .map((row: any) => String(row.ethos_userkey ?? ''))
+    .filter((value: string) => value.length > 0)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   if (req.method !== 'GET' && req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'method_not_allowed' })
@@ -265,6 +301,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
 
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
+  const socialSeedLimit = readInt(process.env.ETHOS_HOT_SOCIAL_USERKEY_SEED_LIMIT, 250, 0, 5000)
+  const projectionRefreshLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT_HOT, 5000, 100, 50000)
 
   try {
     const updates = await syncEthosScoreUpdates({
@@ -272,20 +310,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       pageLimit: updatePageLimit,
       maxPages: updateMaxPages,
     })
+    const socialUserkeys = socialSeedLimit > 0
+      ? await collectTopCreatorSocialUserkeys({
+          db,
+          limit: socialSeedLimit,
+        })
+      : []
+    const socialSeedSync = socialUserkeys.length > 0
+      ? await syncEthosUserkeyScores({
+          db,
+          forceUserkeys: socialUserkeys,
+          chunkSize: 100,
+        })
+      : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
+    const creatorProjection = await refreshCreatorEthosProjection({
+      db,
+      limit: projectionRefreshLimit,
+    })
     const health = await readProjectionHealth(db)
     const lagMeta = emitProjectionLagIfNeeded({ health })
     await maybeRunProjectionFallback({ db, lagMeta })
     console.info('[ethos-canonical-sync-hot] tick', {
       updates,
+      socialSeedSync: {
+        attempted: socialSeedSync.attempted,
+        updated: socialSeedSync.updated,
+        failed: socialSeedSync.failed,
+      },
+      creatorProjection,
       health,
     })
     res.status(200).json({
       ok: true,
       updates,
+      socialSeedSync: {
+        attempted: socialSeedSync.attempted,
+        updated: socialSeedSync.updated,
+        failed: socialSeedSync.failed,
+      },
+      creatorProjection,
       health,
       limits: {
         updatePageLimit,
         updateMaxPages,
+        socialSeedLimit,
+        projectionRefreshLimit,
       },
     })
   } catch (error) {

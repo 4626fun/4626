@@ -352,7 +352,7 @@ export function Portfolio() {
   const publicAddress = resolvedAddresses.publicAddress
   const effectiveAddress = resolvedAddresses.effectiveAddress
   const isPublicMode = resolvedAddresses.isPublicMode
-  const [tab, setTab] = useState<PortfolioTab>('overview')
+  const [tab] = useState<PortfolioTab>('tokens')
   const [timeframe, setTimeframe] = useState<Timeframe>('1D')
   const [selectedAmoeCreatorCoin, setSelectedAmoeCreatorCoin] = useState<Address | null>(null)
   const [editDisplayName, setEditDisplayName] = useState('')
@@ -800,20 +800,9 @@ export function Portfolio() {
             ) : null}
 
             <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/8 bg-black/35 p-2">
-              {(['overview', 'tokens', 'nfts', 'activity'] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setTab(value)}
-                  className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
-                    tab === value
-                      ? 'border-white/12 bg-white/8 text-white'
-                      : 'border-transparent text-zinc-500 hover:text-zinc-200'
-                  }`}
-                >
-                  {value === 'nfts' ? 'NFTs' : value[0]!.toUpperCase() + value.slice(1)}
-                </button>
-              ))}
+              <span className="rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[12px] text-white">
+                Tokens
+              </span>
             </div>
 
           </motion.div>
@@ -1130,7 +1119,6 @@ export function Portfolio() {
           {tab === 'tokens' ? (
             <div className="mt-5 space-y-5">
               {holdingsPanel}
-              {!isPublicMode ? walletsPanel : null}
             </div>
           ) : null}
 

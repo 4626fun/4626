@@ -38,15 +38,19 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete
-  const [waitlistChatStatus, setWaitlistChatStatus] = useState<'idle' | 'joining' | 'joined' | 'blocked' | 'error'>('idle')
-  const attemptedIdentityRef = useRef<string | null>(null)
+  const [waitlistChatStatus, setWaitlistChatStatus] = useState<
+    'idle' | 'joining' | 'queued' | 'blocked' | 'config' | 'error'
+  >('idle')
+  const completedIdentityRef = useRef<string | null>(null)
+  const inFlightIdentityRef = useRef<string | null>(null)
 
   useEffect(() => {
     const identity = controller.canonicalCswAddress?.toLowerCase() ?? null
     if (!setupComplete || !identity) return
-    if (attemptedIdentityRef.current === identity) return
+    if (completedIdentityRef.current === identity) return
+    if (inFlightIdentityRef.current === identity) return
 
-    attemptedIdentityRef.current = identity
+    inFlightIdentityRef.current = identity
     let cancelled = false
 
     void (async () => {
@@ -58,14 +62,23 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           const reason = String(payload?.error ?? '')
           if (reason === 'embedded_owner_not_installed') {
             if (!cancelled) setWaitlistChatStatus('blocked')
+            completedIdentityRef.current = identity
+            return
+          }
+          if (reason === 'waitlist_chat_not_configured' || reason === 'waitlist_chat_vault_not_configured') {
+            if (!cancelled) setWaitlistChatStatus('config')
+            completedIdentityRef.current = identity
             return
           }
           if (!cancelled) setWaitlistChatStatus('error')
           return
         }
-        if (!cancelled) setWaitlistChatStatus('joined')
+        if (!cancelled) setWaitlistChatStatus('queued')
+        completedIdentityRef.current = identity
       } catch {
         if (!cancelled) setWaitlistChatStatus('error')
+      } finally {
+        if (inFlightIdentityRef.current === identity) inFlightIdentityRef.current = null
       }
     })()
 
@@ -86,11 +99,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               <p className="bv-kicker text-brand-300">Waitlist chat</p>
               <p className="mt-1 text-sm text-zinc-300">
                 {waitlistChatStatus === 'joining'
-                  ? 'Joining XMTP waitlist group with your Zora CSW identity...'
-                  : waitlistChatStatus === 'joined'
-                    ? 'Joined. Your Zora CSW is queued as your XMTP identity.'
+                  ? 'Queueing your Zora CSW identity for the XMTP waitlist group...'
+                  : waitlistChatStatus === 'queued'
+                    ? 'Queued. Your Zora CSW will be added to the waitlist group shortly.'
                     : waitlistChatStatus === 'blocked'
                       ? 'Enable 4626 signing to join waitlist chat.'
+                    : waitlistChatStatus === 'config'
+                      ? 'Waitlist chat is not configured yet. Ask an admin to set the waitlist XMTP group.'
                       : waitlistChatStatus === 'error'
                         ? 'Chat join is temporarily unavailable. It will retry when this page refreshes.'
                         : 'Waiting to join waitlist chat.'}

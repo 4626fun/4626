@@ -15,7 +15,13 @@ type GalleryItem = {
 type InfiniteContentGallery3DProps = {
   coins: ZoraCoin[]
   onSelect: (coin: ZoraCoin) => void
+  onActiveCoinChange?: (coin: ZoraCoin) => void
   className?: string
+  interactive?: boolean
+  cameraZ?: number
+  cameraFov?: number
+  planeScale?: number
+  laneSpacing?: number
 }
 
 type ScrollState = {
@@ -129,14 +135,25 @@ function GalleryPlanes({
   items,
   scrollRef,
   onSelect,
+  onActiveCoinChange,
+  cameraZ,
+  planeScale,
+  laneSpacing,
 }: {
   items: GalleryItem[]
   scrollRef: React.RefObject<ScrollState>
   onSelect: (coin: ZoraCoin) => void
+  onActiveCoinChange?: (coin: ZoraCoin) => void
+  cameraZ: number
+  planeScale: number
+  laneSpacing: number
 }) {
   const textures = useGalleryTextures(items)
   const materialRef = useRef<Array<THREE.MeshStandardMaterial | null>>([])
   const meshRef = useRef<Array<THREE.Mesh | null>>([])
+  const activeIndexRef = useRef<number | null>(null)
+  const horizontalSpread = 2.15
+  const verticalSpread = 1.12
 
   useFrame((state, delta) => {
     const scroll = scrollRef.current
@@ -149,28 +166,44 @@ function GalleryPlanes({
     scroll.value += scroll.velocity
     scroll.velocity *= 0.93
 
+    let nearestIndex = -1
+    let nearestDepth = Number.POSITIVE_INFINITY
     for (let i = 0; i < items.length; i += 1) {
-      const spacing = 2.6
+      const spacing = laneSpacing
       const loopDepth = items.length * spacing
       const baseZ = i * spacing
-      let z = baseZ - scroll.value * spacing
+      // Reverse lane flow so cards travel toward the viewer by default.
+      let z = baseZ + scroll.value * spacing
       z = ((z % loopDepth) + loopDepth) % loopDepth
       if (z > loopDepth * 0.5) z -= loopDepth
+      const absZ = Math.abs(z)
+      if (absZ < nearestDepth) {
+        nearestDepth = absZ
+        nearestIndex = i
+      }
 
       const mesh = meshRef.current[i]
       if (mesh) {
-        mesh.position.set(Math.sin(i * 1.73) * 1.15, Math.cos(i * 1.27) * 0.58, z)
+        mesh.position.set(
+          Math.sin(i * 1.73) * horizontalSpread,
+          Math.cos(i * 1.27) * verticalSpread,
+          z,
+        )
       }
 
       const mat = materialRef.current[i]
       if (!mat) continue
       const depthT = Math.min(1, Math.abs(z) / (loopDepth * 0.5))
-      mat.opacity = 0.22 + (1 - depthT) * 0.88
+      mat.opacity = 0.62 + (1 - depthT) * 0.34
       mat.roughness = 0.42 + depthT * 0.25
       mat.emissiveIntensity = 0.1 + (1 - depthT) * 0.2
     }
+    if (nearestIndex >= 0 && nearestIndex !== activeIndexRef.current) {
+      activeIndexRef.current = nearestIndex
+      onActiveCoinChange?.(items[nearestIndex]!.coin)
+    }
 
-    state.camera.position.z = 5.8
+    state.camera.position.z = cameraZ
   })
 
   return (
@@ -179,8 +212,8 @@ function GalleryPlanes({
       <directionalLight position={[0, 1.8, 3.4]} intensity={1.05} color="#cde7ff" />
       <directionalLight position={[-3.2, -1.1, -1.5]} intensity={0.35} color="#97f6ff" />
       {items.map((item, index) => {
-        const x = Math.sin(index * 1.73) * 1.15
-        const y = Math.cos(index * 1.27) * 0.58
+        const x = Math.sin(index * 1.73) * horizontalSpread
+        const y = Math.cos(index * 1.27) * verticalSpread
         const rotY = Math.sin(index * 1.19) * 0.22
         const rotX = Math.cos(index * 1.41) * 0.08
 
@@ -201,14 +234,14 @@ function GalleryPlanes({
               }
             }}
           >
-            <planeGeometry args={[2.35, 1.58, 24, 24]} />
+            <planeGeometry args={[2.35 * planeScale, 1.58 * planeScale, 24, 24]} />
             <meshStandardMaterial
               ref={(mat) => {
                 materialRef.current[index] = mat
               }}
               map={textures[index] ?? null}
               transparent
-              opacity={0.95}
+              opacity={1}
               metalness={0.08}
               roughness={0.55}
               emissive={new THREE.Color('#091216')}
@@ -222,8 +255,23 @@ function GalleryPlanes({
   )
 }
 
-export function InfiniteContentGallery3D(props: InfiniteContentGallery3DProps) {
-  const items = useMemo(() => normalizeGalleryItems(props.coins).slice(0, 8), [props.coins])
+export function InfiniteContentGallery3D({
+  coins,
+  onSelect,
+  onActiveCoinChange,
+  className,
+  interactive: interactiveProp,
+  cameraZ: cameraZProp,
+  cameraFov: cameraFovProp,
+  planeScale: planeScaleProp,
+  laneSpacing: laneSpacingProp,
+}: InfiniteContentGallery3DProps) {
+  const items = useMemo(() => normalizeGalleryItems(coins).slice(0, 8), [coins])
+  const interactive = interactiveProp ?? true
+  const cameraZ = cameraZProp ?? 5.8
+  const cameraFov = cameraFovProp ?? 42
+  const planeScale = planeScaleProp ?? 1
+  const laneSpacing = laneSpacingProp ?? 3.2
   const scrollRef = useRef<ScrollState>({
     value: 0,
     velocity: 0,
@@ -231,7 +279,6 @@ export function InfiniteContentGallery3D(props: InfiniteContentGallery3DProps) {
     dragStartX: 0,
     lastInteractionAt: 0,
   })
-  const hostRef = useRef<HTMLDivElement | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
@@ -239,22 +286,13 @@ export function InfiniteContentGallery3D(props: InfiniteContentGallery3DProps) {
   }, [])
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-      const dir = event.key === 'ArrowLeft' ? -1 : 1
-      scrollRef.current.velocity += dir * 0.1
-      scrollRef.current.lastInteractionAt = performance.now()
-    }
-    host.addEventListener('keydown', onKeyDown)
-    return () => host.removeEventListener('keydown', onKeyDown)
-  }, [])
+    if (!onActiveCoinChange || items.length === 0) return
+    onActiveCoinChange(items[0]!.coin)
+  }, [items, onActiveCoinChange])
 
   if (items.length === 0) {
     return (
-      <div className={`h-full min-h-[220px] sm:min-h-[260px] bg-black/70 ${props.className ?? ''}`}>
+      <div className={`relative w-full h-full ${className ?? ''}`}>
         <div className="h-full w-full flex items-center justify-center text-xs text-zinc-400 font-mono uppercase tracking-[1.6px]">
           No visual assets available
         </div>
@@ -263,49 +301,66 @@ export function InfiniteContentGallery3D(props: InfiniteContentGallery3DProps) {
   }
 
   return (
-    <div
-      ref={hostRef}
-      tabIndex={0}
-      className={`group relative h-full min-h-[220px] sm:min-h-[260px] bg-black/90 outline-none ${props.className ?? ''}`}
-      onWheel={(event) => {
-        event.preventDefault()
-        scrollRef.current.velocity += event.deltaY * 0.00065
-        scrollRef.current.lastInteractionAt = performance.now()
-      }}
-      onPointerDown={(event) => {
-        scrollRef.current.dragging = true
-        scrollRef.current.dragStartX = event.clientX
-        scrollRef.current.lastInteractionAt = performance.now()
-        setIsDragging(true)
-      }}
-      onPointerMove={(event) => {
-        if (!scrollRef.current.dragging) return
-        const delta = event.clientX - scrollRef.current.dragStartX
-        scrollRef.current.dragStartX = event.clientX
-        scrollRef.current.velocity -= delta * 0.0021
-      }}
-      onPointerUp={() => {
-        scrollRef.current.dragging = false
-        scrollRef.current.lastInteractionAt = performance.now()
-        setIsDragging(false)
-      }}
-      onPointerCancel={() => {
-        scrollRef.current.dragging = false
-        setIsDragging(false)
-      }}
-      onPointerLeave={() => {
-        scrollRef.current.dragging = false
-        setIsDragging(false)
-      }}
-    >
-      <Canvas camera={{ position: [0, 0, 5.8], fov: 42 }} dpr={[1, 1.8]} className="h-full w-full">
-        <GalleryPlanes items={items} scrollRef={scrollRef} onSelect={props.onSelect} />
+    <>
+      <Canvas
+        camera={{ position: [0, 0, cameraZ], fov: cameraFov }}
+        dpr={[1, 1.8]}
+      tabIndex={interactive ? 0 : -1}
+        className="r3f-force-fill absolute inset-0 h-full w-full"
+        style={{ display: 'block' }}
+        onWheel={interactive ? (event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          scrollRef.current.velocity += event.deltaY * 0.00065
+          scrollRef.current.lastInteractionAt = performance.now()
+        } : undefined}
+        onKeyDown={interactive ? (event) => {
+          if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+          const dir = event.key === 'ArrowLeft' ? -1 : 1
+          scrollRef.current.velocity += dir * 0.1
+          scrollRef.current.lastInteractionAt = performance.now()
+        } : undefined}
+        onPointerDown={interactive ? (event) => {
+          scrollRef.current.dragging = true
+          scrollRef.current.dragStartX = event.clientX
+          scrollRef.current.lastInteractionAt = performance.now()
+          setIsDragging(true)
+        } : undefined}
+        onPointerMove={interactive ? (event) => {
+          if (!scrollRef.current.dragging) return
+          const delta = event.clientX - scrollRef.current.dragStartX
+          scrollRef.current.dragStartX = event.clientX
+          scrollRef.current.velocity -= delta * 0.0021
+        } : undefined}
+        onPointerUp={interactive ? () => {
+          scrollRef.current.dragging = false
+          scrollRef.current.lastInteractionAt = performance.now()
+          setIsDragging(false)
+        } : undefined}
+        onPointerCancel={interactive ? () => {
+          scrollRef.current.dragging = false
+          setIsDragging(false)
+        } : undefined}
+        onPointerLeave={interactive ? () => {
+          scrollRef.current.dragging = false
+          setIsDragging(false)
+        } : undefined}
+      >
+        <GalleryPlanes
+          items={items}
+          scrollRef={scrollRef}
+          onSelect={onSelect}
+          onActiveCoinChange={onActiveCoinChange}
+          cameraZ={cameraZ}
+          planeScale={planeScale}
+          laneSpacing={laneSpacing}
+        />
       </Canvas>
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-linear-to-b from-black/70 to-transparent" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-t from-black/70 to-transparent" />
-      <div className="pointer-events-none absolute right-3 top-3 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
-        {isDragging ? 'Release to glide' : 'Drag / wheel / arrows'}
-      </div>
-    </div>
+      {interactive ? (
+        <div className="pointer-events-none absolute right-3 top-3 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
+          {isDragging ? 'Release to glide' : 'Drag / wheel / arrows'}
+        </div>
+      ) : null}
+    </>
   )
 }

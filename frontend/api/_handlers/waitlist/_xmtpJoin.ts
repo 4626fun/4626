@@ -12,7 +12,7 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
-import { enqueueKeeprAction } from '../../../server/_lib/keepr/keeprRegistry.js'
+import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../../../server/_lib/keepr/keeprRegistry.js'
 import { isCswOwner } from '../../../server/_lib/wallet/cswOwner.js'
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
@@ -64,6 +64,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({
       success: false,
       error: 'waitlist_chat_not_configured',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const waitlistVault = await getKeeprVaultByVaultAddress(WAITLIST_CHAT_VAULT_ADDRESS as `0x${string}`)
+  if (!waitlistVault) {
+    return res.status(503).json({
+      success: false,
+      error: 'waitlist_chat_vault_not_configured',
     } satisfies ApiEnvelope<never>)
   }
 

@@ -10,6 +10,7 @@ The pipeline writes and serves Ethos scores via local Postgres/Supabase tables:
 - `public.ethos_userkey_scores`
 - `public.canonical_ethos_scores`
 - `public.ethos_score_sync_state`
+- `public.creator_ethos_projection` (precomputed creator-score sort surface)
 
 User-facing request paths read local projections and do not need live Ethos API calls when canonical reads are enabled.
 
@@ -39,6 +40,7 @@ Deploy migration:
 
 - `frontend/db/migrations/040_ethos_canonical_score_cache.sql`
 - `frontend/db/migrations/044_schedule_zora_owner_ethos_projection.sql`
+- `frontend/db/migrations/047_creator_ethos_projection.sql`
 
 Verify tables exist:
 
@@ -47,6 +49,7 @@ select to_regclass('public.user_ethos_identity_keys');
 select to_regclass('public.ethos_userkey_scores');
 select to_regclass('public.canonical_ethos_scores');
 select to_regclass('public.ethos_score_sync_state');
+select to_regclass('public.creator_ethos_projection');
 ```
 
 ## 3) Dark launch sync
@@ -72,6 +75,7 @@ Expected response sections:
 - `synced`
 - `rollupAfterSync`
 - `updates`
+- `creatorProjection`
 
 ## 4) Validate first backfill
 
@@ -82,6 +86,7 @@ select count(*) from public.user_ethos_identity_keys;
 select count(*) from public.ethos_userkey_scores;
 select status, count(*) from public.ethos_userkey_scores group by 1 order by 2 desc;
 select count(*) from public.canonical_ethos_scores where score is not null;
+select count(*) from public.creator_ethos_projection where ethos_score is not null;
 ```
 
 Quality checks:
