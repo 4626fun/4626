@@ -21,7 +21,8 @@
  * address (both EIP-191 prefixed and raw) so you can verify which key
  * actually signed.
  *
- * Background: see RECOVERY.md for the full playbook. This script was
+ * Background: see docs/operations/csw-recovery-playbook.md for the full
+ * playbook. This script was
  * written during the May 4 2026 recovery of CSW
  * 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef and validated against the
  * confirmed-good signature from userOpHash

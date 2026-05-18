@@ -28,7 +28,8 @@ import { addOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
  * Submission lane: the canonical Coinbase passkey (owner[0]) signs the
  * replayable `executeWithoutChainIdValidation([addOwnerAddress(privyEoa)])`
  * UserOp via Coinbase `wallet_prepareCalls` / `wallet_sendPreparedCalls`.
- * This is the March 9 recovery shape documented in RECOVERY.md.
+ * This is the March 9 recovery shape documented in
+ * docs/operations/csw-recovery-playbook.md.
  */
 export function AddOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/add-owner' })

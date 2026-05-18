@@ -17,7 +17,7 @@ ccaStrategy.migrate();
 
 ## Automated Completion
 
-Use Gelato or Chainlink Automation to trigger when auction ends:
+Use Gelato or another external scheduler to trigger when auction ends:
 
 ```solidity
 function checkUpkeep() external view returns (bool) {

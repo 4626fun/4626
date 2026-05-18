@@ -1,10 +1,10 @@
 # KPR Workflows — 4626
 
-Chainlink Runtime Environment (KPR) workflows that automate critical onchain operations for the 4626 protocol.
+KPR workflows that automate critical onchain operations for the 4626 protocol.
 
 **A single workflow manages every registered vault automatically.**
 
-## Files Using Chainlink
+## Files Using KPR
 
 Core KPR workflow files:
 - `kpr/kpr-workflows/project.yaml`
@@ -98,7 +98,7 @@ This KPR layer solves that by making execution deterministic, auditable, and ide
 - **Verified offchain orchestration:** KPR executes offchain computation in deterministic workflow paths with capability-level guardrails.
 - **Operational safety:** idempotency keys, checkpoints, and replay-protection reduce duplicate writes and race-condition failures.
 
-## Chainlink Product Strengths Used Here
+## Core Product Strengths Used Here
 
 | Product | Strength | Where used |
 |---|---|---|
@@ -270,10 +270,10 @@ cron (*/5 * * * *)
  (vault list)   (webhook)
 ```
 
-### KPR SDK Workflows (Chainlink DON)
+### KPR SDK Workflows
 
 ```
-Chainlink DON
+KPR runtime
     │
     ├── keepr-action-queue (every 30s)
     │       └── HTTPClient → Vercel API

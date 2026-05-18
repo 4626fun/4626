@@ -10,7 +10,7 @@ Complete automation for 4626 operations.
 ## Components
 
 1. **Keeper Bot** - Profit reporting, distributions
-2. **Gelato/Chainlink Automation** - Scheduled tasks
+2. **Scheduler (Gelato or equivalent)** - Scheduled tasks
 3. **Monitoring** - Alert on issues
 
 ## Gelato Setup
@@ -25,10 +25,10 @@ await gelato.createTask({
 });
 ```
 
-## Chainlink Automation
+## Scheduler-Compatible Upkeep Contract
 
 ```solidity
-contract VaultAutomation is AutomationCompatibleInterface {
+contract VaultAutomation {
   function checkUpkeep(bytes calldata) external view returns (bool, bytes memory) {
     return (shouldPerformUpkeep(), "");
   }

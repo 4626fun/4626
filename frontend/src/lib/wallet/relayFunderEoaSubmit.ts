@@ -3,7 +3,7 @@
  *
  * Two-wallet Relay submission lane.
  *
- * Architecture (see RELAY_OWNER_MUTATION_FLOW.md):
+ * Architecture (see docs/operations/relay-sponsored-owner-mutation-flow.md):
  *
  *   1. Wallet A (signer) signs the inner CSW UserOp client-side. Captures the
  *      handleOps calldata that EntryPoint would execute on Base.

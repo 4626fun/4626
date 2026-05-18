@@ -33,7 +33,8 @@ type RelayQuoteRequest = {
    * Optional. When omitted, defaults to `user` (the legacy single-wallet
    * shape used by /remove-owner's earlier prepareCalls lane). When provided,
    * forwarded to Relay so the quote uses a distinct recipient (e.g. funder
-   * EOA pays, CSW receives the executed call). See RELAY_OWNER_MUTATION_FLOW.md
+   * EOA pays, CSW receives the executed call). See
+   * docs/operations/relay-sponsored-owner-mutation-flow.md
    * for the two-wallet architecture.
    */
   recipient?: unknown
@@ -121,7 +122,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // recipient defaults to user (legacy single-wallet behavior). When the
-  // caller wants the funder/recipient split (see RELAY_OWNER_MUTATION_FLOW.md),
+  // caller wants the funder/recipient split (see
+  // docs/operations/relay-sponsored-owner-mutation-flow.md),
   // they pass `recipient` explicitly and we forward it. Validate it's a real
   // address before trusting it.
   let recipient: string = body.user

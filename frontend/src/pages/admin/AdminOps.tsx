@@ -3084,6 +3084,89 @@ function LegacyWithdrawals() {
   )
 }
 
+type ManualKeeperTickResult = {
+  claimed: number
+  releasedExpiredClaims: number
+  results: Array<{
+    id: number
+    kind: string
+    status: 'succeeded' | 'failed' | 'retry'
+    error: string | null
+    followUpJobId?: number
+  }>
+}
+
+function KeeperTickCard() {
+  const [running, setRunning] = useState(false)
+  const [lastResult, setLastResult] = useState<ManualKeeperTickResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const runTick = useCallback(async () => {
+    setRunning(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/admin/keeper/jobs/run', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ limit: 1 }),
+      })
+      const json = (await response.json().catch(() => null)) as
+        | { success: true; data: ManualKeeperTickResult }
+        | { success: false; error?: string }
+        | null
+      if (!response.ok || !json || json.success !== true) {
+        const message = json && 'error' in json ? json.error : null
+        throw new Error(message || `HTTP ${response.status}`)
+      }
+      setLastResult(json.data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setRunning(false)
+    }
+  }, [])
+
+  const succeededCount = lastResult?.results.filter((item) => item.status === 'succeeded').length ?? 0
+  const failedCount = lastResult?.results.filter((item) => item.status === 'failed').length ?? 0
+  const retriedCount = lastResult?.results.filter((item) => item.status === 'retry').length ?? 0
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/30 px-4 py-4">
+      <div className="text-sm text-zinc-100">Run one keeper tick</div>
+      <div className="mt-1 text-xs text-zinc-500">
+        Manually execute one KPR coordination cycle from admin (server-authenticated; no secrets exposed in browser).
+      </div>
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => {
+            void runTick()
+          }}
+          disabled={running}
+          className="btn-accent disabled:opacity-60"
+        >
+          {running ? 'Running…' : 'Run keeper tick'}
+        </button>
+      </div>
+      {error ? <div className="mt-3 text-xs text-red-400">{error}</div> : null}
+      {lastResult ? (
+        <div className="mt-3 text-xs text-zinc-400 space-y-1">
+          <div>
+            Claimed: <span className="text-zinc-200">{lastResult.claimed}</span> · Released stale claims:{' '}
+            <span className="text-zinc-200">{lastResult.releasedExpiredClaims}</span>
+          </div>
+          <div>
+            Succeeded: <span className="text-emerald-300">{succeededCount}</span> · Failed:{' '}
+            <span className="text-red-300">{failedCount}</span> · Retry:{' '}
+            <span className="text-amber-300">{retriedCount}</span>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function AdminOps() {
   const dashboardItems = useMemo(
     () => [
@@ -3177,6 +3260,8 @@ export function AdminOps() {
                   ),
                 )}
               </div>
+
+              <KeeperTickCard />
             </div>
           </div>
         </div>

@@ -656,7 +656,7 @@ export async function _submitOwnerViaSelfBuiltUserOp(params: {
    * If true, sign and encode the handleOps calldata but do NOT submit to
    * `/api/relay/execute`. The returned `txHash` is `null` and `relayResponse`
    * is `null`. Use this when a separate funder wallet will broadcast the tx
-   * (see RELAY_OWNER_MUTATION_FLOW.md) so the CSW's owner signature is
+   * (see docs/operations/relay-sponsored-owner-mutation-flow.md) so the CSW's owner signature is
    * captured client-side and handed off to a different wallet session.
    */
   signOnly?: boolean

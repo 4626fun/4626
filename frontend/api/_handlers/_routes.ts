@@ -139,6 +139,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
   'admin/waitlist/regenerate-points': () => import('./admin/waitlist/_regeneratePoints.js'),
   'admin/profiles/merge': () => import('./admin/profiles/_merge.js'),
+  'admin/keeper/jobs/run': () => import('./admin/keeper/_run.js'),
   'admin/userop/health': () => import('./admin/userop/_health.js'),
   'arch-b/enroll': () => import('./arch-b/_enroll.js'),
   'arch-b/revoke': () => import('./arch-b/_revoke.js'),
