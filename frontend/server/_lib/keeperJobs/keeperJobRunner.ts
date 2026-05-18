@@ -12,6 +12,11 @@ import {
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
 } from '../agentControl/trustZones.js'
+import {
+  transitionOperationStatus,
+  transitionStageStatus,
+} from '../controlPlane/operations.js'
+import { emitControlPlaneMetric } from '../controlPlane/metrics.js'
 
 const ALLOWED_INTERNAL_API_PREFIXES = [
   '/api/keeper/',
@@ -180,6 +185,12 @@ async function callInternalApi(params: {
 }
 
 function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unknown>): Record<string, unknown> | null {
+  const settlementWrite =
+    result.settlementWrite && typeof result.settlementWrite === 'object' && !Array.isArray(result.settlementWrite)
+      ? (result.settlementWrite as Record<string, unknown>)
+      : null
+  if (settlementWrite?.applied === true) return null
+
   const payloadBody =
     job.payload.body && typeof job.payload.body === 'object' && !Array.isArray(job.payload.body)
       ? (job.payload.body as Record<string, unknown>)
@@ -226,6 +237,25 @@ async function runOneJob(params: {
   retryDelaySeconds: number
 }): Promise<KeeperJobRunResult> {
   try {
+    if (params.job.stageId) {
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: 'running',
+        reason: 'keeper_job_started',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+      })
+    }
+    if (params.job.operationId) {
+      await transitionOperationStatus({
+        operationId: params.job.operationId,
+        nextStatus: 'running',
+        reason: 'keeper_job_started',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+      })
+    }
+
     const result =
       params.job.kind === 'noop'
         ? { ok: true, kind: 'noop' }
@@ -235,12 +265,42 @@ async function runOneJob(params: {
             job: params.job,
           })
 
-    await completeKeeperJob({
+    const completed = await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: 'succeeded',
       result,
     })
+    if (!completed) throw new Error('keeper_job_completion_lost_lease')
+    emitControlPlaneMetric({
+      metric: 'control_plane.job.status',
+      status: 'succeeded',
+      operationId: params.job.operationId,
+      stageId: params.job.stageId,
+      jobId: params.job.id,
+      workerKind: 'keeper_job_runner',
+    })
+
+    if (params.job.stageId) {
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: 'succeeded',
+        reason: 'keeper_job_completed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+        result,
+      })
+    }
+    if (params.job.operationId) {
+      await transitionOperationStatus({
+        operationId: params.job.operationId,
+        nextStatus: 'succeeded',
+        reason: 'keeper_job_completed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind },
+        result,
+      })
+    }
 
     let followUpJobId: number | undefined
     try {
@@ -262,13 +322,57 @@ async function runOneJob(params: {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     const retryable = !message.startsWith('unsupported_job_kind') && !message.includes('_not_allowed')
-    await completeKeeperJob({
+    const completed = await completeKeeperJob({
       id: params.job.id,
       workerId: params.workerId,
       status: retryable ? 'retry' : 'failed',
       error: message,
       retryDelaySeconds: params.retryDelaySeconds,
     })
+    if (!completed) {
+      emitControlPlaneMetric({
+        metric: 'control_plane.job.status',
+        status: 'failed',
+        operationId: params.job.operationId,
+        stageId: params.job.stageId,
+        jobId: params.job.id,
+        workerKind: 'keeper_job_runner',
+      })
+      return {
+        id: params.job.id,
+        kind: params.job.kind,
+        status: 'failed',
+        error: 'keeper_job_completion_lost_lease',
+      }
+    }
+    emitControlPlaneMetric({
+      metric: 'control_plane.job.status',
+      status: retryable ? 'retry' : 'failed',
+      operationId: params.job.operationId,
+      stageId: params.job.stageId,
+      jobId: params.job.id,
+      workerKind: 'keeper_job_runner',
+    })
+    if (params.job.stageId) {
+      await transitionStageStatus({
+        stageId: params.job.stageId,
+        nextStatus: retryable ? 'retrying' : 'failed',
+        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind, error: message },
+        errorMessage: message,
+      })
+    }
+    if (params.job.operationId) {
+      await transitionOperationStatus({
+        operationId: params.job.operationId,
+        nextStatus: retryable ? 'retrying' : 'failed',
+        reason: retryable ? 'keeper_job_retry_scheduled' : 'keeper_job_failed',
+        actor: params.workerId,
+        data: { jobId: params.job.id, kind: params.job.kind, error: message },
+        errorMessage: message,
+      })
+    }
     return {
       id: params.job.id,
       kind: params.job.kind,

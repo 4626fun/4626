@@ -864,6 +864,87 @@ describe('keeper job coordination handlers', () => {
     }
   })
 
+  it('skips mark-settled follow-up when sweep already applied control-plane settlement', async () => {
+    const restoreEnv = applyEnv({
+      KPR_API_KEY: API_KEY,
+      CRON_SECRET: 'cron-secret-for-keeper-runner',
+      KEEPER_COORDINATION_BASE_URL: 'https://app.4626.fun',
+      KEEPER_WORKER_ID: 'test-cron-worker',
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              completed: true,
+              completionStage: 'completed',
+              settlementWrite: {
+                requested: true,
+                applied: true,
+                error: null,
+              },
+            },
+          }),
+        })),
+      )
+      dbSqlMock
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockResolvedValueOnce({
+          rows: [
+            jobRow({
+              id: 301,
+              kind: 'internal_api',
+              status: 'claimed',
+              claimed_by: 'test-cron-worker',
+              payload: {
+                path: '/api/keeper/sweep',
+                body: {
+                  ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+                  markSettled: {
+                    vaultAddress: '0x5555555555555555555555555555555555555555',
+                  },
+                },
+              },
+            }),
+          ],
+          rowCount: 1,
+        })
+        .mockResolvedValueOnce({
+          rows: [jobRow({ id: 301, status: 'succeeded' })],
+          rowCount: 1,
+        })
+
+      const req = createMockReq({
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer cron-secret-for-keeper-runner',
+          host: 'app.4626.fun',
+          'x-forwarded-proto': 'https',
+        },
+      })
+      const res = createMockRes()
+
+      await runHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.results?.[0]).toMatchObject({
+        id: 301,
+        kind: 'internal_api',
+        status: 'succeeded',
+      })
+      expect(res.body?.data?.results?.[0]?.followUpJobId).toBeUndefined()
+      expect(dbSqlMock).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.unstubAllGlobals()
+      if (originalFetch) globalThis.fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
   it('keeps keepr action processing disabled by default', async () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-action-process',

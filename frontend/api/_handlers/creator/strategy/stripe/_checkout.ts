@@ -18,6 +18,7 @@ import { getAddress, isAddress, type Address } from 'viem'
 
 import { getCreatorStrategyFeature } from '../../../../../server/_lib/creatorStrategy/catalog.js'
 import { insertStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
+import { upsertPaymentOrder } from '../../../../../server/_lib/creatorStrategy/paymentOrders.js'
 import {
   applyPriceOverride,
   findActivePriceOverride,
@@ -216,6 +217,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: `Activation insert failed (${insertResult.reason}): ${insertResult.message}`,
     } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    await upsertPaymentOrder({
+      db: db as any,
+      orderId: `activation:${insertResult.row.id}`,
+      status: 'payment_pending',
+      amountAtomic: pricing.effectivePriceUsdc,
+      currency: 'USDC',
+      metadata: {
+        provider: 'stripe',
+        stripeSessionId: session.sessionId,
+        creatorToken,
+        featureKey: feature.key,
+      },
+    })
+  } catch (error) {
+    console.warn('[stripe-checkout] payment order upsert failed', {
+      activationId: insertResult.row.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   return res.status(200).json({

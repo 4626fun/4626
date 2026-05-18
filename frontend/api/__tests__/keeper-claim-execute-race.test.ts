@@ -53,7 +53,8 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
 
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('settlementStage="completed"')
-    expect(dbSqlMock).not.toHaveBeenCalled()
+    const sqlTexts = dbSqlMock.mock.calls.map((call) => String(call[0]?.[0] ?? ''))
+    expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(false)
   })
 
   it('allows execute-time settlement only when stage is completed', async () => {
@@ -66,6 +67,7 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(ensureKeeprSchemaMock).toHaveBeenCalledTimes(1)
-    expect(dbSqlMock).toHaveBeenCalledTimes(1)
+    const sqlTexts = dbSqlMock.mock.calls.map((call) => String(call[0]?.[0] ?? ''))
+    expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(true)
   })
 })

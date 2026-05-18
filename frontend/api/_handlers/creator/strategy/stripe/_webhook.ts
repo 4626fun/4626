@@ -10,6 +10,8 @@ import {
 import { getAddress } from 'viem'
 
 import { finalizeStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
+import { recordPaymentEvent } from '../../../../../server/_lib/creatorStrategy/paymentLedger.js'
+import { upsertPaymentOrder } from '../../../../../server/_lib/creatorStrategy/paymentOrders.js'
 import { dispatchProvisioning } from '../../../../../server/_lib/creatorStrategy/provisioner.js'
 import {
   isStripeWebhookConfigured,
@@ -176,6 +178,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: `Webhook finalize failed (${finalize.reason}): ${finalize.message}`,
     } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    await upsertPaymentOrder({
+      db: db as any,
+      orderId: `activation:${finalize.row.id}`,
+      status: 'provisioning_queued',
+      amountAtomic: priceUsdcPaid,
+      currency: 'USDC',
+      metadata: {
+        provider: 'stripe',
+        eventId: event.id,
+        sessionId: session.id,
+      },
+    })
+    await recordPaymentEvent({
+      db: db as any,
+      provider: 'stripe',
+      providerEventId: event.id,
+      orderId: `activation:${finalize.row.id}`,
+      eventType: event.type,
+      amountAtomic: priceUsdcPaid,
+      currency: 'USDC',
+      payload: {
+        sessionId: session.id,
+        paymentIntentId,
+        creatorToken: finalize.row.creatorToken,
+        featureKey: finalize.row.featureKey,
+      },
+    })
+  } catch (error) {
+    console.warn('[stripe-webhook] payment event ledger write failed', {
+      eventId: event.id,
+      activationId: finalize.row.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   // Payment is verified and the row is in `pending`. Kick the

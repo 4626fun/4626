@@ -36,6 +36,8 @@ import {
   validateX402Authorization,
 } from '../../../../server/_lib/creatorStrategy/x402.js'
 import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
+import { recordPaymentEvent } from '../../../../server/_lib/creatorStrategy/paymentLedger.js'
+import { upsertPaymentOrder } from '../../../../server/_lib/creatorStrategy/paymentOrders.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
 
@@ -224,6 +226,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: `Activation failed (${insertResult.reason}): ${insertResult.message}`,
     } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    await upsertPaymentOrder({
+      db: db as any,
+      orderId: `activation:${insertResult.row.id}`,
+      status: 'provisioning_queued',
+      amountAtomic: settlement.value,
+      currency: 'USDC',
+      metadata: {
+        provider: 'x402',
+        txHash: settlement.txHash,
+        creatorToken,
+        featureKey: feature.key,
+      },
+    })
+    await recordPaymentEvent({
+      db: db as any,
+      provider: 'x402',
+      providerEventId: settlement.txHash,
+      orderId: `activation:${insertResult.row.id}`,
+      eventType: 'x402.authorization_settled',
+      amountAtomic: settlement.value,
+      currency: 'USDC',
+      payload: {
+        creatorToken,
+        featureKey: feature.key,
+        treasury,
+        blockNumber: settlement.blockNumber.toString(),
+      },
+    })
+  } catch (error) {
+    console.warn('[creator-strategy/x402] payment event ledger write failed', {
+      txHash: settlement.txHash,
+      activationId: insertResult.row.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
   }
 
   let provisionerNote: string | null = null

@@ -21,6 +21,7 @@ import {
   getClientIp,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
+import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -155,6 +156,10 @@ type InvariantViolation = {
   actual?: string | number | null
 }
 
+type MarkSettledInput = {
+  vaultAddress: string
+}
+
 function parseLifecycleStatus(raw: unknown): LifecycleSnapshot {
   const lifecycle = raw as any
   return {
@@ -183,6 +188,14 @@ function parseAddressAllowlist(raw: string | undefined): Set<`0x${string}`> {
   return out
 }
 
+function parseMarkSettledInput(raw: unknown): MarkSettledInput | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const markSettled = raw as { vaultAddress?: unknown }
+  const vaultAddress = typeof markSettled.vaultAddress === 'string' ? markSettled.vaultAddress.trim().toLowerCase() : ''
+  if (!/^0x[a-f0-9]{40}$/.test(vaultAddress)) return null
+  return { vaultAddress }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -206,6 +219,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as {
     ccaStrategyAddress?: string
     enforceInvariants?: boolean
+    markSettled?: {
+      vaultAddress?: string
+    }
     invariants?: {
       creatorCoinAddress?: string
       shareTokenAddress?: string
@@ -216,6 +232,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } | null
   const { ccaStrategyAddress, enforceInvariants, invariants } = body ?? {}
+  const markSettled = parseMarkSettledInput(body?.markSettled)
   if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid ccaStrategyAddress' } satisfies ApiEnvelope<never>)
   }
@@ -572,6 +589,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       completionStage = 'awaiting_owner_hook_config'
     }
 
+    const settlementWrite = {
+      requested: Boolean(markSettled),
+      applied: false,
+      operationId: null as string | null,
+      error: null as string | null,
+    }
+    if (completed && markSettled) {
+      try {
+        const controlPlane = createVaultControlPlane()
+        const settleResult = await controlPlane.settleVault({
+          vaultAddress: markSettled.vaultAddress,
+          settledAt: new Date().toISOString(),
+          settlementStage: 'completed',
+          requestedBy: 'api:keeper/sweep',
+          idempotencyKey: `sweep-complete:${markSettled.vaultAddress}`,
+        })
+        settlementWrite.applied = true
+        settlementWrite.operationId = settleResult.operationId
+      } catch (error) {
+        settlementWrite.error = error instanceof Error ? error.message : String(error)
+        console.warn('[keeper/sweep] control-plane settle failed (will rely on follow-up):', {
+          vaultAddress: markSettled.vaultAddress,
+          error: settlementWrite.error,
+        })
+      }
+    }
+
     const responseData = {
       sweepTxHash,
       migrateTxHash,
@@ -591,6 +635,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       invariantsEnforced: enforceCompletionInvariants,
       invariantChecksRun,
       invariantViolations,
+      settlementWrite,
     }
 
     if (invariantGateFailed) {
@@ -623,6 +668,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       invariantsEnforced: boolean
       invariantChecksRun: number
       invariantViolations: InvariantViolation[]
+      settlementWrite: { requested: boolean; applied: boolean; operationId: string | null; error: string | null }
     }>)
   } catch (err) {
     console.error('[keeper/sweep] Error:', err)

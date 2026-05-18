@@ -13,15 +13,16 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-  getDb,
   isDbConfigured,
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-
-import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
+import {
+  createVaultControlPlane,
+  VaultControlPlaneError,
+} from '../../../server/_lib/controlPlane/vaultControlPlane.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -54,79 +55,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const settledAt = typeof body?.settledAt === 'string' ? body.settledAt.trim() : ''
   const settlementStage = typeof body?.settlementStage === 'string' ? body.settlementStage.trim() : ''
 
-  if (!vaultAddress || !vaultAddress.startsWith('0x') || vaultAddress.length !== 42) {
-    return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
-  }
-
-  const normalizedStage = typeof settlementStage === 'string' ? settlementStage.trim() : ''
-  if (normalizedStage && !/^[a-z0-9_:-]{2,64}$/i.test(normalizedStage)) {
-    return res.status(400).json({ success: false, error: 'Invalid settlementStage' } satisfies ApiEnvelope<never>)
-  }
-
-  if (!graduatedAt && !settledAt && !normalizedStage) {
-    return res.status(400).json({
-      success: false,
-      error: 'Must provide graduatedAt, settledAt, or settlementStage',
-    } satisfies ApiEnvelope<never>)
-  }
-
-  if (settledAt) {
-    if (normalizedStage.toLowerCase() !== 'completed') {
-      return res.status(400).json({
-        success: false,
-        error: 'settledAt may only be written when settlementStage="completed"',
-      } satisfies ApiEnvelope<never>)
-    }
-    const parsedSettledAt = Date.parse(settledAt)
-    if (!Number.isFinite(parsedSettledAt)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid settledAt — expected ISO-8601 timestamp',
-      } satisfies ApiEnvelope<never>)
-    }
-    const maxAllowedMs = Date.now() + 5 * 60 * 1000
-    if (parsedSettledAt > maxAllowedMs) {
-      return res.status(400).json({
-        success: false,
-        error: 'settledAt cannot be in the future',
-      } satisfies ApiEnvelope<never>)
-    }
-  }
-
-  if (!isDbConfigured()) {
-    return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
-  }
-
   try {
-    await ensureKeeprSchema()
-    const db = await getDb()
-    if (!db) {
-      return res.status(500).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
+    if (!isDbConfigured()) {
+      return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
     }
-
-    const addr = vaultAddress.toLowerCase()
-    await db.sql`
-      UPDATE keepr_vaults
-      SET graduated_at = COALESCE(graduated_at, ${graduatedAt ?? null}::timestamptz),
-          settled_at = COALESCE(settled_at, ${settledAt ?? null}::timestamptz),
-          settlement_stage = COALESCE(${normalizedStage || null}::text, settlement_stage),
-          settlement_stage_updated_at =
-            CASE
-              WHEN ${normalizedStage || null}::text IS NULL THEN settlement_stage_updated_at
-              ELSE NOW()
-            END,
-          updated_at = NOW()
-      WHERE LOWER(vault_address) = ${addr};
-    `
+    const controlPlane = createVaultControlPlane()
+    const result = await controlPlane.settleVault({
+      vaultAddress,
+      graduatedAt,
+      settledAt,
+      settlementStage,
+      requestedBy: 'api:keeper/mark-settled',
+    })
 
     return res.status(200).json({
       success: true,
       data: {
-        updated: true,
-        stageUpdated: Boolean(normalizedStage),
+        updated: result.updated,
+        stageUpdated: result.stageUpdated,
+        operationId: result.operationId,
       },
-    } satisfies ApiEnvelope<{ updated: boolean; stageUpdated: boolean }>)
+    } satisfies ApiEnvelope<{ updated: boolean; stageUpdated: boolean; operationId: string }>)
   } catch (err) {
+    if (err instanceof VaultControlPlaneError) {
+      return res.status(err.statusCode).json({
+        success: false,
+        error: err.message,
+      } satisfies ApiEnvelope<never>)
+    }
     console.error('[keeper/mark-settled] Error:', err)
     return res.status(500).json({
       success: false,
