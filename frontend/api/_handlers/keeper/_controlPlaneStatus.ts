@@ -8,6 +8,7 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
+import { createVaultControlPlane } from '../../../server/_lib/controlPlane/vaultControlPlane.js'
 
 type ControlPlaneStatusResponse = {
   operationCounts: Record<string, number>
@@ -32,6 +33,17 @@ type ControlPlaneStatusResponse = {
     message: string
     createdAt: string
   }>
+  vaultLifecycle?: {
+    vaultAddress: string
+    graduatedAt: string | null
+    settledAt: string | null
+    settlementStage: string | null
+    settlementStageUpdatedAt: string | null
+    freshness?: 'fresh' | 'stale'
+    lastUpdatedAt?: string | null
+    degradationMode?: 'allow_stale_read'
+    warning?: string
+  } | null
 }
 
 function parsePositiveInt(value: unknown, fallback: number, min: number, max: number): number {
@@ -150,6 +162,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         message: String(row.message ?? ''),
         createdAt: String(row.created_at),
       })),
+    }
+
+    const vaultAddress =
+      typeof req.query.vaultAddress === 'string' ? req.query.vaultAddress.trim().toLowerCase() : ''
+    if (/^0x[a-f0-9]{40}$/.test(vaultAddress)) {
+      data.vaultLifecycle = await createVaultControlPlane().getVaultLifecycleStatus(vaultAddress)
     }
 
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ControlPlaneStatusResponse>)

@@ -16,8 +16,9 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
+  getDb,
+  isDbConfigured,
 } from '../../../packages/server-core/src/index.js'
-import { getDb, isDbConfigured } from '../../../server/_lib/db/postgres.js'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
 import { refreshCreatorEthosProjection } from '../../../server/_lib/zora/creatorEthosProjection.js'
 

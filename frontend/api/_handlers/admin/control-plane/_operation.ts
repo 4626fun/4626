@@ -21,6 +21,7 @@ type AdminControlPlaneOperationDetail = {
     lockScope: string | null
     lockKey: string | null
     idempotencyKey: string | null
+    idempotencyFingerprint: string | null
     policyVersion: string | null
     schemaVersion: string | null
     requestedBy: string | null
@@ -134,6 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lock_scope: string | null
       lock_key: string | null
       idempotency_key: string | null
+      idempotency_fingerprint: string | null
       policy_version: string | null
       schema_version: string | null
       requested_by: string | null
@@ -154,6 +156,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lock_scope,
         lock_key,
         idempotency_key,
+        idempotency_fingerprint,
         policy_version,
         schema_version,
         requested_by,
@@ -267,6 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lockScope: opRow.lock_scope ? String(opRow.lock_scope) : null,
         lockKey: opRow.lock_key ? String(opRow.lock_key) : null,
         idempotencyKey: opRow.idempotency_key ? String(opRow.idempotency_key) : null,
+        idempotencyFingerprint: opRow.idempotency_fingerprint ? String(opRow.idempotency_fingerprint) : null,
         policyVersion: opRow.policy_version ? String(opRow.policy_version) : null,
         schemaVersion: opRow.schema_version ? String(opRow.schema_version) : null,
         requestedBy: opRow.requested_by ? String(opRow.requested_by) : null,

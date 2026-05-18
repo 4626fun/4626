@@ -3,11 +3,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMockReq, createMockRes } from './helpers'
 
 const { dbSqlMock, getDbMock, getSessionAddressMock, isAdminAddressMock } = vi.hoisted(() => ({
-  dbSqlMock: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+  dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
+    rows: [] as any[],
+    rowCount: 0,
+  })),
   getDbMock: vi.fn(async () => ({
     sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
   })),
-  getSessionAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
+  getSessionAddressMock: vi.fn<() => string | null>(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
 }))
 

@@ -12,6 +12,14 @@ import {
 } from './operations.js'
 import { parseOperatorAction } from './operatorActions.js'
 import { loadControlPlanePolicy } from './policy.js'
+import { buildControlPlaneJobSpec } from './controlPlaneJobSpecs.js'
+import {
+  enforceMutatingDegradation,
+  evaluateFreshness,
+  resolveDegradationMode,
+  type DegradationContext,
+} from './policyDegradation.js'
+import { findDeploySessionByVaultAddress } from './executors/provisionVaultEconomy.js'
 
 type SettlementStage =
   | 'in_progress'
@@ -140,6 +148,32 @@ function normalizeScopeId(params: { vaultAddress: string; chainId?: number }): s
   return params.chainId ? `${params.vaultAddress}:${params.chainId}` : params.vaultAddress
 }
 
+async function loadDegradationContextForVault(vaultAddress: `0x${string}`): Promise<DegradationContext> {
+  if (!isDbConfigured()) return { hasKeeprVault: false, isStale: true }
+  await ensureKeeprSchema()
+  const db = await getDb()
+  if (!db) return { hasKeeprVault: false, isStale: true }
+  const rows = (await db.sql`
+    SELECT graduated_at, settled_at, settlement_stage_updated_at
+    FROM keepr_vaults
+    WHERE LOWER(vault_address) = ${vaultAddress}
+    LIMIT 1;
+  `) as {
+    rows?: Array<{
+      graduated_at: string | null
+      settled_at: string | null
+      settlement_stage_updated_at: string | null
+    }>
+  }
+  const row = rows.rows?.[0]
+  if (!row) return { hasKeeprVault: false, isStale: true }
+  const lastUpdatedAt = row.settlement_stage_updated_at ?? row.settled_at ?? row.graduated_at ?? null
+  return {
+    hasKeeprVault: true,
+    isStale: evaluateFreshness(lastUpdatedAt).freshness === 'stale',
+  }
+}
+
 async function queueAsyncVerb(input: {
   operationKind: AsyncVerbKind
   vaultAddress: `0x${string}`
@@ -154,6 +188,42 @@ async function queueAsyncVerb(input: {
   for (const warning of policy.criticalWarnings) {
     console.error('[control-plane/policy] critical warning', { warning })
   }
+
+  const verb =
+    input.operationKind === 'vault.provision'
+      ? 'provisionVaultEconomy'
+      : input.operationKind === 'vault.maintenance'
+        ? 'runMaintenanceCycle'
+        : 'queueOperatorAction'
+
+  let degradationContext: DegradationContext
+  if (input.operationKind === 'vault.provision') {
+    const session = await findDeploySessionByVaultAddress(input.vaultAddress)
+    degradationContext = { hasDeploySession: Boolean(session) }
+  } else {
+    degradationContext = await loadDegradationContextForVault(input.vaultAddress)
+  }
+
+  const degradation = enforceMutatingDegradation({
+    verb,
+    context: degradationContext,
+  })
+  if (degradation.blocked) {
+    throw new VaultControlPlaneError({
+      statusCode: 409,
+      code: degradation.message ?? 'operation_blocked',
+      message: degradation.message ?? 'Operation blocked by policy',
+    })
+  }
+
+  const jobSpec = buildControlPlaneJobSpec({
+    operationKind: input.operationKind,
+    operationId: '',
+    stageId: '',
+    vaultAddress: input.vaultAddress,
+    payload: input.payload,
+  })
+
   const operation = await startControlPlaneOperation({
     operationKind: input.operationKind,
     vaultAddress: input.vaultAddress,
@@ -175,24 +245,37 @@ async function queueAsyncVerb(input: {
   })
   const stage = await createControlPlaneStage({
     operationId: operation.operationId,
-    stageKind: 'queue.enqueue',
+    stageKind: jobSpec.stageKind,
     status: 'queued',
     input: {
-      queueKind: 'noop',
+      queueKind: 'internal_api',
       operationKind: input.operationKind,
+      path: jobSpec.path,
     },
   })
+
+  const jobBody = {
+    ...jobSpec.body,
+    operationId: operation.operationId,
+    stageId: stage.stageId,
+    requestedBy: input.requestedBy ?? null,
+  }
+
+  const degradationMode = resolveDegradationMode(verb)
+  const runAtDelaySeconds =
+    degradationMode === 'queue_for_retry' && input.operationKind === 'vault.maintenance' ? 30 : 0
+
   await enqueueKeeperJob({
     operationId: operation.operationId,
     stageId: stage.stageId,
-    kind: 'noop',
+    kind: 'internal_api',
     source: 'control-plane',
     dedupeKey: `${input.operationKind}:${input.lockKey}`,
+    runAt: runAtDelaySeconds > 0 ? new Date(Date.now() + runAtDelaySeconds * 1000).toISOString() : undefined,
     payload: {
-      operationId: operation.operationId,
-      stageId: stage.stageId,
-      operationKind: input.operationKind,
-      ...input.payload,
+      path: jobSpec.path,
+      method: 'POST',
+      body: jobBody,
     },
   })
   await addControlPlaneEvent({
@@ -201,9 +284,12 @@ async function queueAsyncVerb(input: {
     eventType: 'queue.job_enqueued',
     message: 'Execution job queued',
     data: {
-      queueKind: 'noop',
+      queueKind: 'internal_api',
+      path: jobSpec.path,
       lockKey: input.lockKey,
-      degradedMode: 'queue_for_retry',
+      policyVersion: policy.policyVersion,
+      degradationMode,
+      ...(runAtDelaySeconds > 0 ? { runAtDelaySeconds } : null),
     },
   })
   return { operationId: operation.operationId, stageId: stage.stageId }
@@ -243,27 +329,38 @@ export function createVaultControlPlane(): VaultControlPlane {
       await ensureKeeprSchema()
       const db = await getDb()
       if (!db) return null
-      const rows = await db.sql<{
-        graduated_at: string | null
-        settled_at: string | null
-        settlement_stage: string | null
-        settlement_stage_updated_at: string | null
-      }>`
+      const rows = (await db.sql`
         SELECT graduated_at, settled_at, settlement_stage, settlement_stage_updated_at
         FROM keepr_vaults
         WHERE LOWER(vault_address) = ${normalizedVaultAddress}
         LIMIT 1;
-      `
-      const row = rows.rows[0]
+      `) as {
+        rows?: Array<{
+          graduated_at: string | null
+          settled_at: string | null
+          settlement_stage: string | null
+          settlement_stage_updated_at: string | null
+        }>
+      }
+      const row = rows.rows?.[0]
       if (!row) return null
+      const lastUpdatedAt = row.settlement_stage_updated_at ?? row.settled_at ?? row.graduated_at ?? null
+      const { freshness, ageMinutes } = evaluateFreshness(lastUpdatedAt)
+      const degradationMode = resolveDegradationMode('getVaultLifecycleStatus')
       return {
         vaultAddress: normalizedVaultAddress,
         graduatedAt: row.graduated_at,
         settledAt: row.settled_at,
         settlementStage: row.settlement_stage,
         settlementStageUpdatedAt: row.settlement_stage_updated_at,
-        freshness: 'fresh',
-        lastUpdatedAt: row.settlement_stage_updated_at ?? row.settled_at ?? row.graduated_at ?? null,
+        freshness,
+        lastUpdatedAt,
+        ...(freshness === 'stale' && degradationMode === 'allow_stale_read'
+          ? {
+              degradationMode: 'allow_stale_read' as const,
+              warning: `lifecycle_data_stale:${ageMinutes ?? 'unknown'}m`,
+            }
+          : null),
       }
     },
 

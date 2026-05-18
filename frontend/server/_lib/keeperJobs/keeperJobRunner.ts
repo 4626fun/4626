@@ -282,20 +282,28 @@ async function runOneJob(params: {
     })
 
     if (params.job.stageId) {
+      const terminalStatus =
+        result && typeof result === 'object' && (result as Record<string, unknown>).overall === 'partial'
+          ? 'manual_review'
+          : 'succeeded'
       await transitionStageStatus({
         stageId: params.job.stageId,
-        nextStatus: 'succeeded',
-        reason: 'keeper_job_completed',
+        nextStatus: terminalStatus,
+        reason: terminalStatus === 'manual_review' ? 'keeper_job_partial_success' : 'keeper_job_completed',
         actor: params.workerId,
         data: { jobId: params.job.id, kind: params.job.kind },
         result,
       })
     }
     if (params.job.operationId) {
+      const terminalStatus =
+        result && typeof result === 'object' && (result as Record<string, unknown>).overall === 'partial'
+          ? 'manual_review'
+          : 'succeeded'
       await transitionOperationStatus({
         operationId: params.job.operationId,
-        nextStatus: 'succeeded',
-        reason: 'keeper_job_completed',
+        nextStatus: terminalStatus,
+        reason: terminalStatus === 'manual_review' ? 'keeper_job_partial_success' : 'keeper_job_completed',
         actor: params.workerId,
         data: { jobId: params.job.id, kind: params.job.kind },
         result,

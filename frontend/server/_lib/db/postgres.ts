@@ -126,11 +126,62 @@ function isSelfSignedCertChainError(err: unknown): boolean {
   return message.includes('self-signed certificate in certificate chain')
 }
 
-type DbResult = { rows: any[]; rowCount?: number }
+type DbResult<T = any> = { rows: T[]; rowCount?: number }
 type DbPool = {
-  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult>
+  sql: <T = any>(strings: TemplateStringsArray, ...values: any[]) => Promise<DbResult<T>>
   // Preferred: explicit query API (helps satisfy scanners and is unambiguous parameterization).
   query?: (text: string, params?: any[]) => Promise<DbResult>
+}
+
+export type { DbPool }
+
+function buildClientDb(client: { query: (text: string, params?: any[]) => Promise<any> }): DbPool {
+  return {
+    sql: async (strings: TemplateStringsArray, ...values: any[]) => {
+      let text = ''
+      for (let i = 0; i < strings.length; i++) {
+        text += strings[i]
+        if (i < values.length) text += `$${i + 1}`
+      }
+      const res = await client.query(text, values)
+      const rows = res.rows ?? []
+      return {
+        rows,
+        rowCount: Number.isFinite(Number(res.rowCount)) ? Number(res.rowCount) : rows.length,
+      }
+    },
+    query: async (text: string, params?: any[]) => {
+      const res = await client.query(text, params)
+      const rows = res.rows ?? []
+      return {
+        rows,
+        rowCount: Number.isFinite(Number(res.rowCount)) ? Number(res.rowCount) : rows.length,
+      }
+    },
+  }
+}
+
+export async function runInTransaction<T>(fn: (db: DbPool) => Promise<T>): Promise<T | null> {
+  const db = await getDb()
+  if (!db) return null
+  const pool = cachedRawPool
+  if (!pool || typeof pool.connect !== 'function') {
+    return fn(db)
+  }
+
+  const client = await pool.connect()
+  const txDb = buildClientDb(client)
+  try {
+    await client.query('BEGIN')
+    const result = await fn(txDb)
+    await client.query('COMMIT')
+    return result
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 let cachedDb: DbPool | null = null

@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
-  dbSqlMock: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+  dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
+    rows: [] as any[],
+    rowCount: 0,
+  })),
   getDbMock: vi.fn(async () => ({
     sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
   })),
@@ -53,7 +56,7 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
 
     expect(res.statusCode).toBe(400)
     expect(String(res.body?.error ?? '')).toContain('settlementStage="completed"')
-    const sqlTexts = dbSqlMock.mock.calls.map((call) => String(call[0]?.[0] ?? ''))
+    const sqlTexts = dbSqlMock.mock.calls.map((call) => String((call[0] as TemplateStringsArray | undefined)?.[0] ?? ''))
     expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(false)
   })
 
@@ -67,7 +70,7 @@ describe('keeper explicit intent: claim/execute race settlement gate', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(ensureKeeprSchemaMock).toHaveBeenCalledTimes(1)
-    const sqlTexts = dbSqlMock.mock.calls.map((call) => String(call[0]?.[0] ?? ''))
+    const sqlTexts = dbSqlMock.mock.calls.map((call) => String((call[0] as TemplateStringsArray | undefined)?.[0] ?? ''))
     expect(sqlTexts.some((text) => text.includes('UPDATE keepr_vaults'))).toBe(true)
   })
 })

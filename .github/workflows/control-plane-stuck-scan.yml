@@ -1,0 +1,27 @@
+name: Control Plane Stuck Scan
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  stuck-scan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run control-plane stuck scan
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          CONTROL_PLANE_STUCK_FAIL_ON_FOUND: '1'
+          CONTROL_PLANE_ALERT_WEBHOOK_URL: ${{ secrets.CONTROL_PLANE_ALERT_WEBHOOK_URL }}
+        run: npm run control-plane:stuck-scan

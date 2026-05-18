@@ -125,6 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('X-RateLimit-Remaining', String(rl.remaining))
   res.setHeader('X-RateLimit-Reset', String(rl.resetAt))
   if (!rl.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rl.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limited' })
   }
 

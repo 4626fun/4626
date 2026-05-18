@@ -346,9 +346,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // owner_index = 0: per spec, the SDK has not yet been instrumented
       // to log the actual returned index. Track C2 wires up the SDK
       // and may revise to whatever wallet_addSubAccount returns.
-      // TODO(track-c2): record the actual ownerIndex from the SDK
-      // response and update both this default and ACCOUNT_MODEL.md
-      // §5.3.
+      // track-c2: record the actual ownerIndex from the SDK response and
+      // update both this default and ACCOUNT_MODEL.md §5.3.
       await db.sql`
         INSERT INTO command_issuer_execution_context (
           profile_id, smart_wallet_address, privy_owner_wallet_id, owner_eoa_address,

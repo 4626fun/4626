@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
+import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
-import { getDb, isDbConfigured } from '../../../../server/_lib/db/postgres.js'
 import { syncEthosScoreUpdates, syncEthosUserkeyScores } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
 import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
 

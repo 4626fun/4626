@@ -1,9 +1,12 @@
 import crypto from 'node:crypto'
-import { getDb, isDbConfigured } from '../../../packages/server-core/src/index.js'
+import { getDb, isDbConfigured, runInTransaction } from '../../../packages/server-core/src/index.js'
 import { emitControlPlaneMetric } from './metrics.js'
 
 type Db = {
-  sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[] }>
+  sql: <T = any>(
+    strings: TemplateStringsArray,
+    ...values: any[]
+  ) => Promise<{ rows?: T[]; rowCount?: number }>
 }
 
 export type OperationStatus =
@@ -431,29 +434,39 @@ export async function transitionOperationStatus(input: TransitionOperationStatus
         message: `Invalid operation transition ${previousStatus} -> ${input.nextStatus}`,
       })
     }
-    await db.sql`
-      UPDATE public.control_plane_operations
-      SET status = ${input.nextStatus},
-          result_json = COALESCE(${JSON.stringify(canonicalize(input.result ?? {}))}::jsonb, result_json),
-          error_code = COALESCE(${input.errorCode ?? null}, error_code),
-          error_message = COALESCE(${input.errorMessage ?? null}, error_message),
-          updated_at = NOW(),
-          finished_at = CASE WHEN ${NON_TERMINAL_OPERATION_STATUSES.has(input.nextStatus)} THEN finished_at ELSE NOW() END
-      WHERE operation_id = ${input.operationId};
-    `
-    await safeInsertEvent({
-      db,
-      operationId: input.operationId,
-      eventType: 'operation.status_transition',
-      message: input.reason,
-      data: {
-        previousStatus,
-        nextStatus: input.nextStatus,
-        reason: input.reason,
-        actor: input.actor ?? 'system',
-        policyVersion: current.policy_version,
-        ...(input.data ?? {}),
-      },
+    const policyVersion = current.policy_version
+    await runInTransaction(async (txDb) => {
+      const updateResult = await txDb.sql`
+        UPDATE public.control_plane_operations
+        SET status = ${input.nextStatus},
+            result_json = COALESCE(${JSON.stringify(canonicalize(input.result ?? {}))}::jsonb, result_json),
+            error_code = COALESCE(${input.errorCode ?? null}, error_code),
+            error_message = COALESCE(${input.errorMessage ?? null}, error_message),
+            updated_at = NOW(),
+            finished_at = CASE WHEN ${NON_TERMINAL_OPERATION_STATUSES.has(input.nextStatus)} THEN finished_at ELSE NOW() END
+        WHERE operation_id = ${input.operationId}
+          AND status = ${previousStatus};
+      `
+      if ((updateResult.rowCount ?? 0) === 0) {
+        throw new ControlPlaneOperationError({
+          code: 'transition_race',
+          message: `Operation transition lost race ${previousStatus} -> ${input.nextStatus}`,
+        })
+      }
+      await safeInsertEvent({
+        db: txDb as Db,
+        operationId: input.operationId,
+        eventType: 'operation.status_transition',
+        message: input.reason,
+        data: {
+          previousStatus,
+          nextStatus: input.nextStatus,
+          reason: input.reason,
+          actor: input.actor ?? 'system',
+          policyVersion,
+          ...(input.data ?? {}),
+        },
+      })
     })
     emitControlPlaneMetric({
       metric: 'control_plane.operation.status',
@@ -492,31 +505,41 @@ export async function transitionStageStatus(input: TransitionStageStatusInput): 
         message: `Invalid stage transition ${previousStatus} -> ${input.nextStatus}`,
       })
     }
-    await db.sql`
-      UPDATE public.control_plane_stages
-      SET status = ${input.nextStatus},
-          result_json = COALESCE(${JSON.stringify(canonicalize(input.result ?? {}))}::jsonb, result_json),
-          error_code = COALESCE(${input.errorCode ?? null}, error_code),
-          error_message = COALESCE(${input.errorMessage ?? null}, error_message),
-          started_at = CASE WHEN ${input.nextStatus} = 'running' AND started_at IS NULL THEN NOW() ELSE started_at END,
-          finished_at = CASE WHEN ${NON_TERMINAL_OPERATION_STATUSES.has(input.nextStatus)} THEN finished_at ELSE NOW() END,
-          attempt_count = CASE WHEN ${input.nextStatus} IN ('running', 'retrying') THEN attempt_count + 1 ELSE attempt_count END
-      WHERE stage_id = ${input.stageId};
-    `
-    await safeInsertEvent({
-      db,
-      operationId: current.operation_id,
-      stageId: input.stageId,
-      eventType: 'stage.status_transition',
-      message: input.reason,
-      data: {
-        previousStatus,
-        nextStatus: input.nextStatus,
-        reason: input.reason,
-        actor: input.actor ?? 'system',
-        attemptCount: current.attempt_count,
-        ...(input.data ?? {}),
-      },
+    const operationId = current.operation_id
+    await runInTransaction(async (txDb) => {
+      const updateResult = await txDb.sql`
+        UPDATE public.control_plane_stages
+        SET status = ${input.nextStatus},
+            result_json = COALESCE(${JSON.stringify(canonicalize(input.result ?? {}))}::jsonb, result_json),
+            error_code = COALESCE(${input.errorCode ?? null}, error_code),
+            error_message = COALESCE(${input.errorMessage ?? null}, error_message),
+            started_at = CASE WHEN ${input.nextStatus} = 'running' AND started_at IS NULL THEN NOW() ELSE started_at END,
+            finished_at = CASE WHEN ${NON_TERMINAL_OPERATION_STATUSES.has(input.nextStatus)} THEN finished_at ELSE NOW() END,
+            attempt_count = CASE WHEN ${input.nextStatus} IN ('running', 'retrying') THEN attempt_count + 1 ELSE attempt_count END
+        WHERE stage_id = ${input.stageId}
+          AND status = ${previousStatus};
+      `
+      if ((updateResult.rowCount ?? 0) === 0) {
+        throw new ControlPlaneOperationError({
+          code: 'transition_race',
+          message: `Stage transition lost race ${previousStatus} -> ${input.nextStatus}`,
+        })
+      }
+      await safeInsertEvent({
+        db: txDb as Db,
+        operationId,
+        stageId: input.stageId,
+        eventType: 'stage.status_transition',
+        message: input.reason,
+        data: {
+          previousStatus,
+          nextStatus: input.nextStatus,
+          reason: input.reason,
+          actor: input.actor ?? 'system',
+          attemptCount: current.attempt_count,
+          ...(input.data ?? {}),
+        },
+      })
     })
     emitControlPlaneMetric({
       metric: 'control_plane.stage.status',

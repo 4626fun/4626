@@ -78,6 +78,33 @@ async function main() {
   if (failOnStuck && rows.length > 0) {
     process.exitCode = 1
   }
+
+  const webhook = String(process.env.CONTROL_PLANE_ALERT_WEBHOOK_URL ?? '').trim()
+  if (webhook && rows.length > 0) {
+    try {
+      await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: `Control plane stuck scan found ${rows.length} operation(s) older than ${thresholdMinutes}m`,
+          attachments: rows.map((row) => ({
+            color: 'warning',
+            fields: [
+              { title: 'operationId', value: row.operation_id, short: false },
+              { title: 'kind', value: row.operation_kind, short: true },
+              { title: 'status', value: row.status, short: true },
+              { title: 'ageMinutes', value: String(row.age_minutes), short: true },
+            ],
+          })),
+        }),
+      })
+    } catch (error) {
+      console.warn(
+        'control_plane_stuck_webhook_failed',
+        error instanceof Error ? error.message : String(error),
+      )
+    }
+  }
 }
 
 main().catch((error) => {

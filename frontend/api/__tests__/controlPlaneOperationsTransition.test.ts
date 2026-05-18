@@ -1,0 +1,101 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const { dbSqlMock, getDbMock, runInTransactionMock } = vi.hoisted(() => ({
+  dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
+    rows: [] as any[],
+    rowCount: 0,
+  })),
+  getDbMock: vi.fn(async () => ({
+    sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
+  })),
+  runInTransactionMock: vi.fn(async (fn: (db: unknown) => Promise<unknown>) => {
+    const db = await getDbMock()
+    return fn(db)
+  }),
+}))
+
+vi.mock('../../packages/server-core/src/index.js', async () => {
+  const actual = await vi.importActual<Record<string, unknown>>('../../packages/server-core/src/index.js')
+  return {
+    ...actual,
+    getDb: getDbMock,
+    isDbConfigured: () => true,
+    runInTransaction: runInTransactionMock,
+  }
+})
+
+import {
+  ControlPlaneOperationError,
+  transitionOperationStatus,
+} from '../../server/_lib/controlPlane/operations.js'
+
+describe('transitionOperationStatus atomic updates', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('throws transition_race when update affects zero rows', async () => {
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ status: 'running', policy_version: 'cpol_test' }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+
+    await expect(
+      transitionOperationStatus({
+        operationId: 'op_1',
+        nextStatus: 'succeeded',
+        reason: 'test_complete',
+      }),
+    ).rejects.toMatchObject({ code: 'transition_race' })
+  })
+
+  it('allows only one concurrent transition to win', async () => {
+    dbSqlMock.mockImplementation(async (strings: TemplateStringsArray) => {
+      const query = strings.join(' ')
+      if (query.includes('SELECT status')) {
+        return { rows: [{ status: 'running', policy_version: 'cpol_test' }] }
+      }
+      if (query.includes('UPDATE public.control_plane_operations')) {
+        return { rows: [], rowCount: 0 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const results = await Promise.allSettled([
+      transitionOperationStatus({
+        operationId: 'op_race',
+        nextStatus: 'succeeded',
+        reason: 'winner',
+      }),
+      transitionOperationStatus({
+        operationId: 'op_race',
+        nextStatus: 'failed',
+        reason: 'loser',
+      }),
+    ])
+
+    const races = results.filter(
+      (result) => result.status === 'rejected' && (result.reason as { code?: string })?.code === 'transition_race',
+    )
+    expect(races.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('writes status update and timeline event inside one transaction', async () => {
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ status: 'running', policy_version: 'cpol_test' }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+
+    await transitionOperationStatus({
+      operationId: 'op_tx',
+      nextStatus: 'succeeded',
+      reason: 'test_complete',
+    })
+
+    expect(runInTransactionMock).toHaveBeenCalledTimes(1)
+    expect(dbSqlMock).toHaveBeenCalledTimes(3)
+  })
+})

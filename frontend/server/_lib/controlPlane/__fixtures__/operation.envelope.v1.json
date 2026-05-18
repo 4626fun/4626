@@ -1,0 +1,21 @@
+{
+  "operationId": "",
+  "operationKind": "",
+  "status": "",
+  "scopeType": "",
+  "scopeId": "",
+  "lockScope": "",
+  "lockKey": "",
+  "idempotencyKey": "",
+  "idempotencyFingerprint": "",
+  "policyVersion": "",
+  "schemaVersion": "",
+  "requestedBy": "",
+  "errorCode": "",
+  "errorMessage": "",
+  "input": {},
+  "result": null,
+  "createdAt": "",
+  "updatedAt": "",
+  "finishedAt": null
+}

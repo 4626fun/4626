@@ -45,6 +45,7 @@ type AdminControlPlaneOperationDetail = {
     lockScope: string | null
     lockKey: string | null
     idempotencyKey: string | null
+    idempotencyFingerprint: string | null
     policyVersion: string | null
     schemaVersion: string | null
     requestedBy: string | null
@@ -72,6 +73,7 @@ type AdminControlPlaneOperationDetail = {
     eventType: string
     stageId: string | null
     message: string
+    data?: Record<string, unknown>
     createdAt: string
   }>
   jobs: Array<{
@@ -84,6 +86,9 @@ type AdminControlPlaneOperationDetail = {
     dedupeKey: string | null
     source: string
     lastError: string | null
+    runAt?: string
+    claimedBy?: string | null
+    claimExpiresAt?: string | null
     createdAt: string
     updatedAt: string
   }>
@@ -664,6 +669,19 @@ export function AdminControlPlane() {
                 Created {formatDateTime(operationQuery.data.operation.createdAt)} · Updated{' '}
                 {formatDateTime(operationQuery.data.operation.updatedAt)}
               </div>
+              <div className="mt-2 grid gap-1 text-[11px] text-zinc-500">
+                <div>
+                  Policy {operationQuery.data.operation.policyVersion ?? '—'} · Lock{' '}
+                  {operationQuery.data.operation.lockScope ?? '—'}:
+                  {operationQuery.data.operation.lockKey ?? '—'}
+                </div>
+                <div>
+                  Idempotency key {operationQuery.data.operation.idempotencyKey ?? '—'}
+                </div>
+                <div className="mono break-all">
+                  Fingerprint {operationQuery.data.operation.idempotencyFingerprint ?? '—'}
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-3 lg:grid-cols-3">
@@ -699,6 +717,11 @@ export function AdminControlPlane() {
                           {formatDateTime(event.createdAt)}
                         </div>
                         <div className="text-zinc-400">{event.message}</div>
+                        {event.data && Object.keys(event.data).length > 0 ? (
+                          <pre className="mt-1 overflow-x-auto rounded bg-black/40 p-2 text-[10px] text-zinc-400">
+                            {JSON.stringify(event.data, null, 2)}
+                          </pre>
+                        ) : null}
                       </div>
                     ))
                   )}
@@ -717,6 +740,16 @@ export function AdminControlPlane() {
                         <div className="text-zinc-500">
                           {job.status} · attempts {job.attemptCount}/{job.maxAttempts}
                         </div>
+                        <div className="text-zinc-500">
+                          dedupe {job.dedupeKey ?? '—'}
+                          {job.runAt ? ` · run ${formatDateTime(job.runAt)}` : ''}
+                        </div>
+                        {job.claimedBy ? (
+                          <div className="text-zinc-500">
+                            lease {job.claimedBy}
+                            {job.claimExpiresAt ? ` until ${formatDateTime(job.claimExpiresAt)}` : ''}
+                          </div>
+                        ) : null}
                         {job.lastError ? <div className="text-amber-300">{job.lastError}</div> : null}
                       </div>
                     ))

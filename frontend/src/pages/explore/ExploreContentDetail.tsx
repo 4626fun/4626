@@ -6,7 +6,6 @@ import {
   CircleHelp,
   Droplets,
   ExternalLink,
-  Image as ImageIcon,
   Share2,
   TrendingUp,
   X,

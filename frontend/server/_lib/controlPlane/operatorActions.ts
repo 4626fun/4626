@@ -18,6 +18,8 @@ export type StrategyAjnaRebucketAction = {
   type: 'strategy.ajna.rebucket'
   vaultAddress: string
   targetBucket: number
+  authAddress?: string
+  strategyAddress?: string
 }
 
 export type StrategyCharmRebalanceAction = {
@@ -88,6 +90,8 @@ export function parseOperatorAction(payload: unknown): OperatorAction {
         type,
         vaultAddress: readAddress(payload.vaultAddress),
         targetBucket: readInt(payload.targetBucket, 'invalid_target_bucket'),
+        ...(payload.authAddress != null ? { authAddress: readAddress(payload.authAddress) } : null),
+        ...(payload.strategyAddress != null ? { strategyAddress: readAddress(payload.strategyAddress) } : null),
       }
     case 'strategy.charm.rebalance':
       return {

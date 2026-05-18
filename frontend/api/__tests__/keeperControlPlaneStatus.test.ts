@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const { dbSqlMock, getDbMock } = vi.hoisted(() => ({
-  dbSqlMock: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+  dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
+    rows: [] as any[],
+    rowCount: 0,
+  })),
   getDbMock: vi.fn(async () => ({
     sql: (...args: unknown[]) => (dbSqlMock as unknown as (...a: unknown[]) => Promise<unknown>)(...args),
   })),

@@ -10,7 +10,7 @@ const {
   runMaintenanceCycleMock,
   queueOperatorActionMock,
 } = vi.hoisted(() => ({
-  getSessionAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
+  getSessionAddressMock: vi.fn<() => string | null>(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
   readBoundedJsonObjectBodyMock: vi.fn(async (req: { body?: unknown }) => req.body ?? {}),
   provisionVaultEconomyMock: vi.fn(async () => ({ accepted: true, operationId: 'op_provision_1', stageId: 'stg_1' })),

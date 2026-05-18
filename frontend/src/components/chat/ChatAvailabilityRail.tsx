@@ -4,7 +4,6 @@ import {
   AlertCircle,
   Bot,
   ChevronRight,
-  Hash,
   PanelRightClose,
   Plus,
   Search,
