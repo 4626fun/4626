@@ -78,6 +78,24 @@ function isPoolAcquireTimeoutError(err: unknown): boolean {
   return msg.includes('timeout exceeded when trying to connect') || msg.includes('timeout acquiring a client')
 }
 
+function isDeployDryRunContext(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
+function isLikelyDbConnectivityFailure(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === '08006' || code === 'ETIMEDOUT') return true
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return (
+    msg.includes('timeout') ||
+    msg.includes('failed to connect to database') ||
+    msg.includes('authentication did not complete') ||
+    msg.includes('unable to check out connection from the pool')
+  )
+}
+
 function toNumber(v: unknown): number | null {
   const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
   if (!Number.isFinite(n)) return null
@@ -151,7 +169,13 @@ function noteRefreshFailure(err: unknown): void {
   staleRefreshBlockedUntilMs = now + backoffMs
   const signature = errorSignature(err)
   if (shouldLogRefreshError(signature, now)) {
-    console.error('[zora/metrics] background refresh failed', err)
+    if (isDeployDryRunContext() && isLikelyDbConnectivityFailure(err)) {
+      console.info(
+        `[zora/metrics] dry-run DB unavailable; skipping background refresh for ${Math.round(backoffMs / 1000)}s`,
+      )
+    } else {
+      console.error('[zora/metrics] background refresh failed', err)
+    }
   }
 }
 

@@ -351,7 +351,7 @@ export function ChatWindow({
       : null
   const copyablePeerAddress = conversationType === 'dm' ? dmPeerAddress : null
   const peerCreatorCoinHref = peerCreatorCoinAddress ? `/explore/creators/base/${peerCreatorCoinAddress}` : null
-  const peerProfileHref = peerCreatorCoinHref ?? (copyablePeerAddress ? `/portfolio/${copyablePeerAddress}` : null)
+  const peerProfileHref = peerCreatorCoinHref ?? (copyablePeerAddress ? `https://basescan.org/address/${copyablePeerAddress}` : null)
   const headerAvatar = conversationType === 'dm'
     ? (conversationImageUrl ?? agentIdentity?.avatar ?? dmIdentity.avatar ?? null)
     : (conversationImageUrl ?? null)

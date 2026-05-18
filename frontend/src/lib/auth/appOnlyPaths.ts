@@ -4,7 +4,6 @@ export const APP_ONLY_PATHS = [
   '/swap',
   '/telegram',
   '/positions',
-  '/portfolio',
   '/deploy',
   '/vault',
   '/vote',

@@ -75,6 +75,16 @@ fi
 source "$PRESET_FILE"
 set +a
 
+# Dry-run defaults should not require a live Postgres connection.
+# This avoids local startup failures when frontend/.env carries an unreachable
+# DATABASE_URL from another workflow. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=1 to opt
+# back into DB-backed routes during dry-run.
+if [[ "${DEPLOY_DRY_RUN_KEEP_DB_ENV:-0}" != "1" ]]; then
+  unset DATABASE_URL
+  unset POSTGRES_URL
+  unset POSTGRES_URL_NON_POOLING
+fi
+
 : "${BASE_FORK_UPSTREAM_RPC_URL:?Set BASE_FORK_UPSTREAM_RPC_URL in $PRESET_FILE or your shell environment.}"
 
 FORK_HOST="${DEPLOY_DRY_RUN_FORK_HOST:-127.0.0.1}"

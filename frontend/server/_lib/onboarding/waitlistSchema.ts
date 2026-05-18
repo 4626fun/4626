@@ -7,6 +7,25 @@ type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ 
 let waitlistSchemaEnsured = false
 let waitlistSchemaEnsurePromise: Promise<void> | null = null
 
+function isDeployDryRunContext(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
+function isLikelyDbConnectivityFailure(error: unknown): boolean {
+  const message = String((error as any)?.message ?? error ?? '').toLowerCase()
+  const code = String((error as any)?.code ?? '').trim().toUpperCase()
+  return (
+    code === '08006' ||
+    code === 'ETIMEDOUT' ||
+    message.includes('timeout') ||
+    message.includes('failed to connect to database') ||
+    message.includes('authentication did not complete') ||
+    message.includes('unable to check out connection from the pool')
+  )
+}
+
 export async function ensureWaitlistSchema(db: Db): Promise<void> {
   if (waitlistSchemaEnsured) return
   if (waitlistSchemaEnsurePromise) return waitlistSchemaEnsurePromise
@@ -96,6 +115,10 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
         /_schema_migration_required:/.test(error.message)
       ) {
         throw error
+      }
+      if (isDeployDryRunContext() && isLikelyDbConnectivityFailure(error)) {
+        // Dry-run must be able to proceed without a live DB.
+        return
       }
       throw new Error('waitlist_schema_ensure_failed')
     } finally {

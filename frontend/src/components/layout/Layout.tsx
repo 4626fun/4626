@@ -12,6 +12,11 @@ import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
+import {
+  ACCOUNT_WALLET_SUMMARY_EVENT,
+  requestOpenAccountTray,
+  type AccountWalletSummaryDetail,
+} from '@/components/account/trayEvents'
 
 const LazyChatSurface = lazy(async () => {
   const mod = await import('../chat/ChatSurface')
@@ -34,7 +39,7 @@ const navItems: MobileNavItem[] = [
   { path: '/swap', icon: ArrowLeftRight, label: 'Trade', activePrefixes: ['/swap'] },
   { path: '/explore/creators', icon: Search, label: 'Explore', activePrefixes: ['/explore'] },
   { path: '/deploy', icon: Vault, label: 'Deploy', activePrefixes: ['/deploy', '/status', '/vault'] },
-  { path: '/portfolio', icon: Wallet, label: 'Wallet', activePrefixes: ['/portfolio'] },
+  { path: '/wallet', icon: Wallet, label: 'Wallet', activePrefixes: [] },
 ]
 
 const navItemsPublic: MobileNavItem[] = [
@@ -65,6 +70,15 @@ function isBaseInAppBrowser(): boolean {
     ua.includes('baseapp') ||
     ua.includes(' base/')
   )
+}
+
+function formatUsdCompact(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '--'
+  const amount = Number(value)
+  if (amount >= 1_000_000_000) return `$${(amount / 1_000_000_000).toFixed(2)}B`
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(2)}M`
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(2)}K`
+  return `$${amount.toFixed(2)}`
 }
 
 function hasCoinbaseInjectedProvider(): boolean {
@@ -108,6 +122,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
+  const [mobileWalletUsd, setMobileWalletUsd] = useState<number | null>(null)
   const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
@@ -135,6 +150,17 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
 
     window.addEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleWalletSummary = (event: Event) => {
+      const customEvent = event as CustomEvent<AccountWalletSummaryDetail>
+      const nextValue = customEvent.detail?.activeNetworkUsd
+      setMobileWalletUsd(typeof nextValue === 'number' && Number.isFinite(nextValue) ? nextValue : null)
+    }
+    window.addEventListener(ACCOUNT_WALLET_SUMMARY_EVENT, handleWalletSummary as EventListener)
+    return () => window.removeEventListener(ACCOUNT_WALLET_SUMMARY_EVENT, handleWalletSummary as EventListener)
   }, [])
 
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
@@ -340,6 +366,30 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                 >
                   {content}
                 </a>
+              )
+            }
+            if (path === '/wallet' && interactive && hostMode === 'app') {
+              return (
+                <button
+                  key={path}
+                  type="button"
+                  aria-label={label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className="flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl transition-all duration-200 active:scale-[0.97] hover:-translate-y-px hover:bg-white/6"
+                  role="listitem"
+                  onClick={() => requestOpenAccountTray({ section: 'portfolio', tab: 'tokens', source: 'mobile-nav' })}
+                >
+                  <img
+                    src="/base/base-chain-light.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 object-contain"
+                    loading="lazy"
+                  />
+                  <span className={`text-[9px] font-semibold tabular-nums ${isActive ? 'text-vault-text' : 'text-vault-subtext'}`}>
+                    {formatUsdCompact(mobileWalletUsd)}
+                  </span>
+                </button>
               )
             }
             return (

@@ -3,6 +3,25 @@ type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ 
 let canonicalWalletsSchemaEnsured = false
 let canonicalWalletsSchemaEnsurePromise: Promise<void> | null = null
 
+function isDeployDryRunContext(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
+function isLikelyDbConnectivityFailure(error: unknown): boolean {
+  const message = String((error as any)?.message ?? error ?? '').toLowerCase()
+  const code = String((error as any)?.code ?? '').trim().toUpperCase()
+  return (
+    code === '08006' ||
+    code === 'ETIMEDOUT' ||
+    message.includes('timeout') ||
+    message.includes('failed to connect to database') ||
+    message.includes('authentication did not complete') ||
+    message.includes('unable to check out connection from the pool')
+  )
+}
+
 async function assertNoDuplicatePrivyUserIds(db: Db): Promise<void> {
   const dupes = await db.sql`
     SELECT privy_user_id
@@ -96,6 +115,10 @@ export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
         error.message.startsWith('canonical_wallets_schema_migration_required:')
       ) {
         throw error
+      }
+      if (isDeployDryRunContext() && isLikelyDbConnectivityFailure(error)) {
+        // Dry-run should remain usable even if DB-backed identity tables are unavailable.
+        return
       }
       throw new Error('canonical_wallets_schema_ensure_failed')
     } finally {

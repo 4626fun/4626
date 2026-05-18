@@ -186,7 +186,6 @@ export const AlfaClubLiquidity = lazyNamed(
   'AlfaClubLiquidity',
 )
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
-export const Portfolio = lazyNamed(() => import('../pages/Portfolio'), 'Portfolio')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
 export const AddOwnerPage = lazyNamed(() => import('../pages/AddOwner'), 'AddOwnerPage')
 export const RemoveOwnerPage = lazyNamed(() => import('../pages/RemoveOwner'), 'RemoveOwnerPage')

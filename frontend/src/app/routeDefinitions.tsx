@@ -46,7 +46,6 @@ import {
   Faq,
   FaqHowItWorks,
   GaugeVoting,
-  Portfolio,
   Positions,
   Status,
   Swap,
@@ -192,8 +191,6 @@ export const EXPLORE_ROUTES: PathRouteDef[] = [
 export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
   { path: '/amoe/tasks', element: <AmoeQuickTasks /> },
   { path: '/swap', element: <Swap /> },
-  { path: '/portfolio', element: <Portfolio /> },
-  { path: '/portfolio/:address', element: <Portfolio /> },
   {
     path: '/deploy',
     element: (

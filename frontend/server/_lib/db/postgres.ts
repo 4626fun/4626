@@ -179,6 +179,23 @@ function getAuthInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_AUTH) ?? 300_000
 }
 
+function isDeployDryRunContext(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
+function isLikelyConnectivityTimeout(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === 'ETIMEDOUT') return true
+  const message = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return (
+    message.includes('timeout') ||
+    message.includes('authentication did not complete') ||
+    message.includes('failed to connect to database')
+  )
+}
+
 function isDbAuthConfigError(err: unknown): boolean {
   const code = String((err as any)?.code ?? '').trim().toUpperCase()
   if (code === '28P01' || code === '28000') return true
@@ -499,13 +516,21 @@ export async function getDb(): Promise<DbPool | null> {
           }
         } else if (authLike) {
           if (shouldLogInitError(signature, retryWindow)) {
-            console.error(
-              `Postgres auth/config error; backing off retries for ${Math.round(retryWindow / 1000)}s`,
-              {
-                code: code || undefined,
-                message,
-              },
-            )
+            if (isDeployDryRunContext() && isLikelyConnectivityTimeout(err)) {
+              console.info(
+                `[postgres] dry-run DB auth/connectivity unavailable; continuing without DB for now (retry in ${Math.round(
+                  retryWindow / 1000,
+                )}s)`,
+              )
+            } else {
+              console.error(
+                `Postgres auth/config error; backing off retries for ${Math.round(retryWindow / 1000)}s`,
+                {
+                  code: code || undefined,
+                  message,
+                },
+              )
+            }
           }
         } else {
           if (
@@ -518,7 +543,15 @@ export async function getDb(): Promise<DbPool | null> {
             )
           }
           if (shouldLogInitError(signature, retryWindow)) {
-            console.error('Failed to initialize Postgres pool', err)
+            if (isDeployDryRunContext() && isLikelyConnectivityTimeout(err)) {
+              console.info(
+                `[postgres] dry-run DB connectivity timeout; continuing without DB for now (retry in ${Math.round(
+                  retryWindow / 1000,
+                )}s)`,
+              )
+            } else {
+              console.error('Failed to initialize Postgres pool', err)
+            }
           }
         }
         initError = message || 'Failed to initialize Postgres pool'

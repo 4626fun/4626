@@ -148,7 +148,7 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
   { label: 'Link Google or Apple', points: 20, hint: 'Per platform', to: '/waitlist' },
   { label: 'Link X / Telegram / TikTok', points: 16, hint: 'Per platform', to: '/waitlist' },
   { label: 'Verify email', points: 10, hint: 'One-time' },
-  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 6, hint: 'Once per day', to: '/portfolio' },
+  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 6, hint: 'Once per day', to: '/swap' },
   // Referral reward is dynamic — referrer earns 50% of every point the
   // referee scores via `recordReferralPassthrough` on the server. The
   // numeric `points` here is 0 because the amount is not fixed; any

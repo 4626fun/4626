@@ -8,6 +8,11 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
+import {
+  OPEN_ACCOUNT_TRAY_EVENT,
+  publishAccountWalletSummary,
+  type AccountTrayOpenDetail,
+} from '@/components/account/trayEvents'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { fetchDebankTokenList, fetchDebankTotalBalanceBatch, type DebankToken } from '@/lib/debank/client'
@@ -684,6 +689,31 @@ export function ConnectButton({
       mountedRef.current = false
     }
   }, [])
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleOpenTray = (event: Event) => {
+      if (buttonState === 'signed-out') {
+        setShowMenu(false)
+        setShowOptions(true)
+        return
+      }
+      if (buttonState === 'hydrating') return
+      const customEvent = event as CustomEvent<AccountTrayOpenDetail>
+      const section = customEvent.detail?.section ?? 'portfolio'
+      const nextTab = customEvent.detail?.tab ?? (section === 'portfolio' ? 'tokens' : trayTab)
+      setTraySection(section)
+      setTrayTab(nextTab)
+      setShowOptions(false)
+      setShowMenu(true)
+    }
+    window.addEventListener(OPEN_ACCOUNT_TRAY_EVENT, handleOpenTray as EventListener)
+    return () => window.removeEventListener(OPEN_ACCOUNT_TRAY_EVENT, handleOpenTray as EventListener)
+  }, [buttonState, trayTab])
+  useEffect(() => {
+    publishAccountWalletSummary({
+      activeNetworkUsd: buttonState === 'signed-out' ? null : trayHoldings.activeNetworkUsd,
+    })
+  }, [buttonState, trayHoldings.activeNetworkUsd])
   const closeMenuAfterTrayClose = useCallback(() => {
     const close = () => {
       if (mountedRef.current) setShowMenu(false)
@@ -839,11 +869,11 @@ export function ConnectButton({
                     <span className="label block text-zinc-300">Help</span>
                   </button>
                   <Link
-                    to="/portfolio"
+                    to="/accounts"
                     onClick={() => setShowMenu(false)}
                     className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
                   >
-                    <span className="label block text-zinc-300">Profile</span>
+                    <span className="label block text-zinc-300">Accounts</span>
                   </Link>
                   <Link
                     to="/accounts"
@@ -971,11 +1001,11 @@ export function ConnectButton({
                   <span className="label block text-zinc-300">Help</span>
                 </button>
                 <Link
-                  to="/portfolio"
+                  to="/accounts"
                   onClick={() => setShowMenu(false)}
                   className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
                 >
-                  <span className="label block text-zinc-300">Profile</span>
+                  <span className="label block text-zinc-300">Accounts</span>
                 </Link>
                 <Link
                   to="/accounts"

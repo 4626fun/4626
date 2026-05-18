@@ -369,11 +369,11 @@ export function DeploymentSuccess({
     
     steps.push({
       icon: <Wallet className="w-5 h-5" />,
-      title: 'Check Your Portfolio',
-      description: 'View all your holdings, wallet addresses, and deployed contracts.',
+      title: 'Review Wallet Setup',
+      description: 'Open account settings for wallet lanes, signing status, and linked identities.',
       action: {
-        label: 'View Portfolio',
-        to: '/portfolio',
+        label: 'Open Accounts',
+        to: '/accounts',
       },
     })
     
@@ -633,10 +633,10 @@ export function DeploymentSuccess({
           View Your Vault
         </Link>
         <Link
-          to="/portfolio"
+          to="/accounts"
           className="btn-secondary rounded-xl py-3 text-center text-sm font-medium"
         >
-          Go to Portfolio
+          Open Accounts
         </Link>
       </div>
     </motion.div>
@@ -675,10 +675,10 @@ export function AlreadyDeployedBanner({ deployment, tokenSymbol }: { deployment:
               <ArrowRight className="w-4 h-4" />
             </Link>
             <Link
-              to="/portfolio"
+              to="/accounts"
               className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-300 transition-colors"
             >
-              Go to Portfolio
+              Open Accounts
               <ArrowRight className="w-4 h-4" />
             </Link>
           </div>

@@ -14,6 +14,20 @@ type WaitlistStatsResponse = {
   spotsRemaining: number
 }
 
+function emptyStats(): WaitlistStatsResponse {
+  return {
+    signedUpCount: 0,
+    capacity: 0,
+    spotsRemaining: 0,
+  }
+}
+
+function shouldFailOpenForDryRun(): boolean {
+  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
+  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
+  return deploymentVersion.includes('dryrun')
+}
+
 function parsePositiveInt(value: string | undefined): number | null {
   if (!value) return null
   const parsed = Number(value)
@@ -41,28 +55,39 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const db = await getDb()
-  if (!db) {
-    return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
+  try {
+    const db = await getDb()
+    if (!db) {
+      if (shouldFailOpenForDryRun()) {
+        return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
+      }
+      return res.status(500).json({ success: false, error: 'DB unavailable' } satisfies ApiEnvelope<never>)
+    }
+
+    await ensureWaitlistSchema(db as any)
+
+    const countResult = await db.sql`
+      SELECT COUNT(*)::int AS count
+      FROM profiles
+      WHERE email IS NOT NULL;
+    `
+    const signedUpCountRaw = Number(countResult?.rows?.[0]?.count ?? 0)
+    const signedUpCount = Number.isFinite(signedUpCountRaw) ? Math.max(0, Math.floor(signedUpCountRaw)) : 0
+    const capacity = resolveCapacity(signedUpCount)
+    const spotsRemaining = Math.max(0, capacity - signedUpCount)
+
+    const data: WaitlistStatsResponse = {
+      signedUpCount,
+      capacity,
+      spotsRemaining,
+    }
+
+    return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
+  } catch (error) {
+    if (shouldFailOpenForDryRun()) {
+      return res.status(200).json({ success: true, data: emptyStats() } satisfies ApiEnvelope<WaitlistStatsResponse>)
+    }
+    const message = error instanceof Error && error.message ? error.message : 'waitlist_stats_failed'
+    return res.status(500).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
-
-  await ensureWaitlistSchema(db as any)
-
-  const countResult = await db.sql`
-    SELECT COUNT(*)::int AS count
-    FROM profiles
-    WHERE email IS NOT NULL;
-  `
-  const signedUpCountRaw = Number(countResult?.rows?.[0]?.count ?? 0)
-  const signedUpCount = Number.isFinite(signedUpCountRaw) ? Math.max(0, Math.floor(signedUpCountRaw)) : 0
-  const capacity = resolveCapacity(signedUpCount)
-  const spotsRemaining = Math.max(0, capacity - signedUpCount)
-
-  const data: WaitlistStatsResponse = {
-    signedUpCount,
-    capacity,
-    spotsRemaining,
-  }
-
-  return res.status(200).json({ success: true, data } satisfies ApiEnvelope<WaitlistStatsResponse>)
 }

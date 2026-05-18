@@ -30,6 +30,97 @@ function normalizeHandle(value: unknown): string | null {
   return normalized
 }
 
+type ProfileIdentity = {
+  twitterUsername: string | null
+  zoraHandle: string | null
+  lastRefreshedAtMs: number
+}
+
+type CswOwnerEntry = {
+  baseOwner: string | null
+  owners: string[]
+}
+
+function chooseBetterProfile(current: ProfileIdentity | undefined, next: ProfileIdentity): ProfileIdentity {
+  if (!current) return next
+  const currentHasTwitter = Boolean(current.twitterUsername)
+  const nextHasTwitter = Boolean(next.twitterUsername)
+  if (nextHasTwitter && !currentHasTwitter) return next
+  if (!nextHasTwitter && currentHasTwitter) return current
+  if (next.lastRefreshedAtMs > current.lastRefreshedAtMs) return next
+  return current
+}
+
+function buildAddressProfileMap(rows: any[]): Map<string, ProfileIdentity> {
+  const map = new Map<string, ProfileIdentity>()
+  for (const row of rows) {
+    const twitterUsername = normalizeHandle(row.twitter_username)
+    const zoraHandle = normalizeHandle(row.handle)
+    if (!twitterUsername && !zoraHandle) continue
+    const refreshedRaw = row.last_refreshed_at ? Date.parse(String(row.last_refreshed_at)) : Number.NaN
+    const lastRefreshedAtMs = Number.isFinite(refreshedRaw) ? refreshedRaw : 0
+    const profile: ProfileIdentity = { twitterUsername, zoraHandle, lastRefreshedAtMs }
+    const addresses = [
+      normalizeAddress(row.signing_eoa),
+      normalizeAddress(row.primary_wallet),
+      normalizeAddress(row.payout_recipient),
+      normalizeAddress(row.smart_wallet_address),
+      normalizeAddress(row.privy_wallet_address),
+    ]
+    for (const address of addresses) {
+      if (!address) continue
+      map.set(address, chooseBetterProfile(map.get(address), profile))
+    }
+  }
+  return map
+}
+
+async function loadAddressProfileMap(db: NonNullable<Db>): Promise<Map<string, ProfileIdentity>> {
+  const profiles = await db.sql`
+    SELECT
+      p.twitter_username,
+      p.handle,
+      p.last_refreshed_at,
+      p.signing_eoa,
+      p.primary_wallet,
+      p.payout_recipient,
+      p.smart_wallet_address,
+      p.privy_wallet_address
+    FROM public.zora_profiles p
+    WHERE (p.twitter_username IS NOT NULL AND trim(p.twitter_username) <> '')
+      OR (p.handle IS NOT NULL AND trim(p.handle) <> '');
+  `
+  return buildAddressProfileMap(profiles.rows ?? [])
+}
+
+async function loadCswOwnerMap(db: NonNullable<Db>): Promise<Map<string, CswOwnerEntry>> {
+  let result: { rows?: any[]; rowCount?: number }
+  try {
+    result = await db.sql`
+      SELECT
+        lower(zco.csw_address) AS csw_address,
+        lower(NULLIF(zco.base_owner, '')) AS base_owner,
+        COALESCE(zco.current_owners, ARRAY[]::text[]) AS current_owners
+      FROM public.zora_csw_owners zco;
+    `
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown_error'
+    console.warn('[ethos-creator-social-backfill] csw_owner_map_unavailable', { error: message })
+    return new Map<string, CswOwnerEntry>()
+  }
+  const map = new Map<string, CswOwnerEntry>()
+  for (const row of result.rows ?? []) {
+    const cswAddress = normalizeAddress(row.csw_address)
+    if (!cswAddress) continue
+    const baseOwner = normalizeAddress(row.base_owner)
+    const owners = Array.isArray(row.current_owners)
+      ? row.current_owners.map((value: unknown) => normalizeAddress(value)).filter((value: string | null): value is string => Boolean(value))
+      : []
+    map.set(cswAddress, { baseOwner, owners })
+  }
+  return map
+}
+
 async function fetchCreatorBatch(params: {
   db: NonNullable<Db>
   offset: number
@@ -38,69 +129,24 @@ async function fetchCreatorBatch(params: {
   const baseRows = await params.db.sql`
     SELECT
       p.creator_address,
-      p.volume_24h_usd
+      p.volume_24h_usd,
+      p.twitter_username
     FROM public.creator_ethos_projection p
+    WHERE p.twitter_username IS NOT NULL
+      AND trim(p.twitter_username) <> ''
     ORDER BY p.creator_address ASC
     LIMIT ${params.limit}
     OFFSET ${Math.max(0, params.offset)};
   `
 
-  const creators = (baseRows.rows ?? [])
+  return (baseRows.rows ?? [])
     .map((row: any) => {
       const creatorAddress = normalizeAddress(row.creator_address)
+      const twitterUsername = normalizeHandle(row.twitter_username)
       const volume24hUsdRaw = typeof row.volume_24h_usd === 'number' ? row.volume_24h_usd : Number(row.volume_24h_usd)
       const volume24hUsd = Number.isFinite(volume24hUsdRaw) ? volume24hUsdRaw : null
-      if (!creatorAddress) return null
-      return { creatorAddress, volume24hUsd }
-    })
-    .filter((row): row is { creatorAddress: string; volume24hUsd: number | null } => Boolean(row))
-
-  if (creators.length === 0) return []
-
-  const creatorAddresses = creators.map((row) => row.creatorAddress)
-  const profileRows = await params.db.sql`
-    WITH input AS (
-      SELECT unnest(${creatorAddresses}::text[]) AS creator_address
-    ),
-    profile_identity AS (
-      SELECT
-        i.creator_address,
-        NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
-        p.last_refreshed_at,
-        ROW_NUMBER() OVER (
-          PARTITION BY i.creator_address
-          ORDER BY
-            CASE WHEN NULLIF(lower(trim(p.twitter_username)), '') IS NOT NULL THEN 0 ELSE 1 END,
-            p.last_refreshed_at DESC NULLS LAST
-        ) AS rn
-      FROM input i
-      JOIN zora_profiles p
-        ON i.creator_address = lower(NULLIF(p.signing_eoa, ''))
-        OR i.creator_address = lower(NULLIF(p.primary_wallet, ''))
-        OR i.creator_address = lower(NULLIF(p.payout_recipient, ''))
-        OR i.creator_address = lower(NULLIF(p.smart_wallet_address, ''))
-        OR i.creator_address = lower(NULLIF(p.privy_wallet_address, ''))
-    )
-    SELECT creator_address, twitter_username
-    FROM profile_identity
-    WHERE rn = 1
-      AND twitter_username IS NOT NULL
-      AND trim(twitter_username) <> '';
-  `
-
-  const twitterMap = new Map<string, string>()
-  for (const row of profileRows.rows ?? []) {
-    const creatorAddress = normalizeAddress(row.creator_address)
-    const twitterUsername = normalizeHandle(row.twitter_username)
-    if (!creatorAddress || !twitterUsername) continue
-    twitterMap.set(creatorAddress, twitterUsername)
-  }
-
-  return creators
-    .map((row: any) => {
-      const twitterUsername = twitterMap.get(row.creatorAddress) ?? null
-      if (!twitterUsername) return null
-      return { creatorAddress: row.creatorAddress, twitterUsername, volume24hUsd: row.volume24hUsd }
+      if (!creatorAddress || !twitterUsername) return null
+      return { creatorAddress, twitterUsername, volume24hUsd }
     })
     .filter((row): row is { creatorAddress: string; twitterUsername: string; volume24hUsd: number | null } => Boolean(row))
 }
@@ -250,6 +296,8 @@ async function refreshProjectionScoresForCreators(params: {
 
 async function hydrateProjectionTwitterBatch(params: {
   db: NonNullable<Db>
+  addressProfileMap: Map<string, ProfileIdentity>
+  cswOwnerMap: Map<string, CswOwnerEntry>
   afterAddress: string | null
   limit: number
 }): Promise<{ scanned: number; updated: number; cursorAfter: string | null }> {
@@ -268,43 +316,88 @@ async function hydrateProjectionTwitterBatch(params: {
     return { scanned: 0, updated: 0, cursorAfter: params.afterAddress }
   }
 
+  const creatorUpdates: Array<{ creatorAddress: string; twitterUsername: string | null; zoraHandle: string | null }> = []
+  for (const creatorAddress of creatorAddresses) {
+    const candidates: Array<{ address: string; rank: number }> = [{ address: creatorAddress, rank: 0 }]
+    const ownerEntry = params.cswOwnerMap.get(creatorAddress)
+    if (ownerEntry?.baseOwner) candidates.push({ address: ownerEntry.baseOwner, rank: 1 })
+    for (const ownerAddress of ownerEntry?.owners ?? []) {
+      candidates.push({ address: ownerAddress, rank: 2 })
+    }
+    const deduped = new Map<string, number>()
+    for (const candidate of candidates) {
+      const prev = deduped.get(candidate.address)
+      if (prev === undefined || candidate.rank < prev) deduped.set(candidate.address, candidate.rank)
+    }
+
+    let best: { twitterUsername: string | null; zoraHandle: string | null; rank: number; refreshedAtMs: number } | null = null
+    for (const [candidateAddress, rank] of deduped.entries()) {
+      const profile = params.addressProfileMap.get(candidateAddress)
+      if (!profile) continue
+      const candidate = {
+        twitterUsername: profile.twitterUsername,
+        zoraHandle: profile.zoraHandle,
+        rank,
+        refreshedAtMs: profile.lastRefreshedAtMs,
+      }
+      if (!best) {
+        best = candidate
+        continue
+      }
+      const bestHasTwitter = Boolean(best.twitterUsername)
+      const candidateHasTwitter = Boolean(candidate.twitterUsername)
+      if (candidateHasTwitter && !bestHasTwitter) {
+        best = candidate
+        continue
+      }
+      if (!candidateHasTwitter && bestHasTwitter) continue
+      if (candidate.rank < best.rank) {
+        best = candidate
+        continue
+      }
+      if (candidate.rank > best.rank) continue
+      if (candidate.refreshedAtMs > best.refreshedAtMs) best = candidate
+    }
+    if (!best) continue
+    if (!best.twitterUsername && !best.zoraHandle) continue
+    creatorUpdates.push({
+      creatorAddress,
+      twitterUsername: best.twitterUsername,
+      zoraHandle: best.zoraHandle,
+    })
+  }
+
+  if (creatorUpdates.length === 0) {
+    return {
+      scanned: creatorAddresses.length,
+      updated: 0,
+      cursorAfter: creatorAddresses[creatorAddresses.length - 1] ?? params.afterAddress,
+    }
+  }
+
+  const updateCreators = creatorUpdates.map((row) => row.creatorAddress)
+  const updateTwitter = creatorUpdates.map((row) => row.twitterUsername)
+  const updateHandles = creatorUpdates.map((row) => row.zoraHandle)
   const updated = await params.db.sql`
-    WITH input AS (
-      SELECT unnest(${creatorAddresses}::text[]) AS creator_address
-    ),
-    profile_identity AS (
-      SELECT
-        i.creator_address,
-        NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
-        NULLIF(lower(trim(p.handle)), '') AS zora_handle,
-        p.last_refreshed_at,
-        ROW_NUMBER() OVER (
-          PARTITION BY i.creator_address
-          ORDER BY
-            CASE WHEN NULLIF(lower(trim(p.twitter_username)), '') IS NOT NULL THEN 0 ELSE 1 END,
-            p.last_refreshed_at DESC NULLS LAST
-        ) AS rn
-      FROM input i
-      JOIN zora_profiles p
-        ON i.creator_address = lower(NULLIF(p.signing_eoa, ''))
-        OR i.creator_address = lower(NULLIF(p.primary_wallet, ''))
-        OR i.creator_address = lower(NULLIF(p.payout_recipient, ''))
-        OR i.creator_address = lower(NULLIF(p.smart_wallet_address, ''))
-        OR i.creator_address = lower(NULLIF(p.privy_wallet_address, ''))
-    ),
-    best AS (
-      SELECT creator_address, twitter_username, zora_handle
-      FROM profile_identity
-      WHERE rn = 1
+    WITH payload AS (
+      SELECT *
+      FROM unnest(
+        ${updateCreators}::text[],
+        ${updateTwitter}::text[],
+        ${updateHandles}::text[]
+      ) AS t(creator_address, twitter_username, zora_handle)
     )
     UPDATE public.creator_ethos_projection p
     SET
-      twitter_username = b.twitter_username,
-      zora_handle = COALESCE(p.zora_handle, b.zora_handle),
+      twitter_username = COALESCE(payload.twitter_username, p.twitter_username),
+      zora_handle = COALESCE(p.zora_handle, payload.zora_handle),
       refreshed_at = NOW()
-    FROM best b
-    WHERE p.creator_address = b.creator_address
-      AND b.twitter_username IS NOT NULL;
+    FROM payload
+    WHERE p.creator_address = payload.creator_address
+      AND (
+        (payload.twitter_username IS NOT NULL AND (p.twitter_username IS NULL OR trim(p.twitter_username) = ''))
+        OR (payload.zora_handle IS NOT NULL AND p.zora_handle IS NULL)
+      );
   `
   return {
     scanned: creatorAddresses.length,
@@ -661,6 +754,14 @@ async function main(): Promise<void> {
 
   const before = await readProjectionSummary(db)
   console.info('[ethos-creator-social-backfill] before', before)
+  console.info('[ethos-creator-social-backfill] loading_profile_map')
+  const addressProfileMap = await loadAddressProfileMap(db)
+  console.info('[ethos-creator-social-backfill] loading_csw_owner_map')
+  const cswOwnerMap = await loadCswOwnerMap(db)
+  console.info('[ethos-creator-social-backfill] profile_map_loaded', {
+    profileAddresses: addressProfileMap.size,
+    cswOwnerEntries: cswOwnerMap.size,
+  })
 
   let hydrateCursor: string | null = null
   let hydratedScanned = 0
@@ -668,6 +769,8 @@ async function main(): Promise<void> {
   for (let batch = 1; batch <= hydrateMaxBatches; batch += 1) {
     const hydrated = await hydrateProjectionTwitterBatch({
       db,
+      addressProfileMap,
+      cswOwnerMap,
       afterAddress: hydrateCursor,
       limit: hydrateBatchSize,
     })
@@ -757,6 +860,7 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   const message = error instanceof Error ? error.message : 'unknown_error'
-  console.error('[ethos-creator-social-backfill] failed', { error: message })
+  const stack = error instanceof Error ? error.stack : null
+  console.error('[ethos-creator-social-backfill] failed', { error: message, stack })
   process.exit(1)
 })
