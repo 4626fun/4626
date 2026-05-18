@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { listAllCreators } from './creators.js'
+import { getBasenameName } from '../identity/basenameResolver.js'
+import { getEnsName } from '../identity/ensResolver.js'
 import {
   getLatestSnapshotTs,
   getSnapshotAt,
@@ -18,6 +20,7 @@ const DEFAULT_MARKET_TIMEOUT_MS = 12_000
 const DEFAULT_TOP_ROWS = 5
 const DEFAULT_MOVER_ROWS = 5
 const DEFAULT_RECENT_PUBLICATIONS_LIMIT = 500
+const DEFAULT_APP_ORIGIN = 'https://app.4626.fun'
 
 const MAJOR_TOKENS = [
   { symbol: 'BTC', id: 'bitcoin' },
@@ -54,6 +57,8 @@ type SnapshotDelta = {
   scoreDelta: number | null
   isNew: boolean
 }
+
+type CreatorLabelMap = Map<string, string>
 
 export type AlfaClubDailyBriefResult = {
   ok: boolean
@@ -218,6 +223,69 @@ function shortAddress(value: string): string {
   return `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
+function creatorLabel(row: MetricsSnapshotRow): string {
+  return `#${row.tokenId.toString()} ${shortAddress(row.creatorAddress)}`
+}
+
+function creatorUrl(address: string): string {
+  const origin = (process.env.VITE_APP_ORIGIN ?? '').trim() || DEFAULT_APP_ORIGIN
+  return `${origin.replace(/\/+$/, '')}/explore/creators/base/${address}`
+}
+
+function normalizeUsername(raw: string): string {
+  const trimmed = raw.trim().replace(/^@+/, '')
+  return trimmed ? `@${trimmed}` : ''
+}
+
+async function readCreatorLabels(addresses: string[]): Promise<CreatorLabelMap> {
+  const labels: CreatorLabelMap = new Map()
+  const normalized = [...new Set(addresses.map((value) => value.toLowerCase()))]
+  if (normalized.length === 0) return labels
+  const db = await getDb()
+  if (!db) return labels
+  try {
+    const result = await db.sql`
+      SELECT DISTINCT ON (LOWER(sender_address))
+        LOWER(sender_address) AS sender_address,
+        username
+      FROM alfaclub.chat_ingest
+      WHERE LOWER(sender_address) = ANY(${normalized})
+        AND username IS NOT NULL
+        AND LENGTH(TRIM(username)) > 0
+      ORDER BY LOWER(sender_address), COALESCE(message_date, ingested_at) DESC, ingested_at DESC;
+    `
+    const rows = (result.rows ?? []) as Array<{ sender_address: string; username: string | null }>
+    for (const row of rows) {
+      const username = typeof row.username === 'string' ? normalizeUsername(row.username) : ''
+      if (username) labels.set(String(row.sender_address).toLowerCase(), username)
+    }
+  } catch {
+    // Best-effort enrichment; fallback labels keep the brief resilient.
+  }
+
+  const unresolved = normalized.filter((address) => !labels.has(address))
+  if (unresolved.length > 0) {
+    await Promise.all(
+      unresolved.map(async (address) => {
+        const basename = await getBasenameName(address).catch(() => null)
+        if (basename) {
+          labels.set(address, basename)
+          return
+        }
+        const ens = await getEnsName(address).catch(() => null)
+        if (ens) labels.set(address, ens)
+      }),
+    )
+  }
+  return labels
+}
+
+function creatorIdentity(row: MetricsSnapshotRow, labels: CreatorLabelMap): string {
+  const label = labels.get(row.creatorAddress.toLowerCase())
+  if (label) return `${label} · #${row.tokenId.toString()}`
+  return creatorLabel(row)
+}
+
 function formatPct(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return 'n/a'
   const sign = value > 0 ? '+' : ''
@@ -241,6 +309,26 @@ function formatRankDelta(value: number | null): string {
   if (value > 0) return `up ${value}`
   if (value < 0) return `down ${Math.abs(value)}`
   return 'flat'
+}
+
+function stakeRatio(row: MetricsSnapshotRow | null): number | null {
+  if (!row || row.totalSupply <= 0n) return null
+  const total = Number(row.totalSupply)
+  const staked = Number(row.stakedSupply)
+  if (!Number.isFinite(total) || !Number.isFinite(staked) || total <= 0) return null
+  return staked / total
+}
+
+function formatRatioPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function formatRatioDeltaPct(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a'
+  const pct = value * 100
+  const sign = pct > 0 ? '+' : ''
+  return `${sign}${pct.toFixed(1)}pp`
 }
 
 async function fetchMajorTokenPrices(timeoutMs: number): Promise<MarketRow[]> {
@@ -314,6 +402,7 @@ function buildBriefText(params: {
   marketRows: MarketRow[]
   topRows: number
   moverRows: number
+  labels: CreatorLabelMap
 }): string {
   const deltas = buildDeltas(params.currentRows, params.previousRows)
   const previousTopSet = new Set(params.previousRows.slice(0, params.topRows).map((row) => row.creatorAddress.toLowerCase()))
@@ -339,6 +428,25 @@ function buildBriefText(params: {
       return a.current.rank - b.current.rank
     })
     .slice(0, params.moverRows)
+  const downside = [...deltas]
+    .filter((delta) => (delta.scoreDelta ?? 0) < 0 || (delta.rankDelta ?? 0) < 0)
+    .sort((a, b) => {
+      const aRisk = Math.abs(Math.min(0, a.rankDelta ?? 0)) * 0.8 + Math.abs(Math.min(0, a.scoreDelta ?? 0)) * 20
+      const bRisk = Math.abs(Math.min(0, b.rankDelta ?? 0)) * 0.8 + Math.abs(Math.min(0, b.scoreDelta ?? 0)) * 20
+      if (bRisk !== aRisk) return bRisk - aRisk
+      return a.current.rank - b.current.rank
+    })
+    .slice(0, 3)
+  const stakeShifts = deltas
+    .map((delta) => {
+      const nowRatio = stakeRatio(delta.current)
+      const prevRatio = stakeRatio(delta.previous)
+      const ratioDelta = nowRatio !== null && prevRatio !== null ? nowRatio - prevRatio : null
+      return { delta, nowRatio, ratioDelta }
+    })
+    .filter((entry) => entry.ratioDelta !== null && Math.abs(entry.ratioDelta) >= 0.05)
+    .sort((a, b) => Math.abs(b.ratioDelta ?? 0) - Math.abs(a.ratioDelta ?? 0))
+    .slice(0, 3)
 
   const lines: string[] = []
   lines.push('**Daily AlfaClub Brief**')
@@ -359,23 +467,56 @@ function buildBriefText(params: {
   lines.push('')
   lines.push(`**Top ${params.topRows} leaderboard**`)
   for (const row of params.currentRows.slice(0, params.topRows)) {
-    lines.push(`- #${row.rank} ${shortAddress(row.creatorAddress)} — score ${formatScore(row.score)} · supply ${row.totalSupply.toString()} · staked ${row.stakedSupply.toString()}`)
+    lines.push(`- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)} · supply ${row.totalSupply.toString()} · staked ${row.stakedSupply.toString()}`)
+    lines.push(`  ${creatorUrl(row.creatorAddress)}`)
   }
   lines.push('')
-  lines.push('**Top movers**')
+  lines.push('**Actionable breakouts**')
   for (const delta of movers) {
-    lines.push(`- #${delta.current.rank} ${shortAddress(delta.current.creatorAddress)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'new' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · supply ${delta.current.totalSupply.toString()}`)
+    lines.push(`- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'new' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · supply ${delta.current.totalSupply.toString()}`)
+    lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
+  }
+  if (downside.length > 0) {
+    lines.push('')
+    lines.push('**Risks / breakdowns**')
+    for (const delta of downside) {
+      lines.push(
+        `- #${delta.current.rank} ${creatorIdentity(delta.current, params.labels)} — ${formatRankDelta(delta.rankDelta)} · score ${delta.scoreDelta === null ? 'n/a' : `${delta.scoreDelta > 0 ? '+' : ''}${delta.scoreDelta.toFixed(3)}`} · pnl ${formatUsd(delta.current.pnl30dUsd)}`,
+      )
+      lines.push(`  ${creatorUrl(delta.current.creatorAddress)}`)
+    }
+  }
+  if (stakeShifts.length > 0) {
+    lines.push('')
+    lines.push('**Positioning shifts (staked ratio)**')
+    for (const entry of stakeShifts) {
+      lines.push(
+        `- #${entry.delta.current.rank} ${creatorIdentity(entry.delta.current, params.labels)} — now ${formatRatioPct(entry.nowRatio)} (${formatRatioDeltaPct(entry.ratioDelta)})`,
+      )
+      lines.push(`  ${creatorUrl(entry.delta.current.creatorAddress)}`)
+    }
   }
   if (entrantRows.length > 0) {
     lines.push('')
     lines.push(`**New top-${params.topRows} entrants**`)
-    for (const row of entrantRows) lines.push(`- #${row.rank} ${shortAddress(row.creatorAddress)} — score ${formatScore(row.score)}`)
+    for (const row of entrantRows) {
+      lines.push(`- #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`)
+      lines.push(`  ${creatorUrl(row.creatorAddress)}`)
+    }
   }
   if (exitRows.length > 0) {
     lines.push('')
     lines.push(`**Dropped from top-${params.topRows}**`)
-    for (const row of exitRows) lines.push(`- was #${row.rank} ${shortAddress(row.creatorAddress)} — score ${formatScore(row.score)}`)
+    for (const row of exitRows) {
+      lines.push(`- was #${row.rank} ${creatorIdentity(row, params.labels)} — score ${formatScore(row.score)}`)
+      lines.push(`  ${creatorUrl(row.creatorAddress)}`)
+    }
   }
+  lines.push('')
+  lines.push('**Watch next (24h)**')
+  lines.push('- Track whether breakout names hold rank after the next snapshot (avoid one-tick noise).')
+  lines.push('- Watch downside names for follow-through in both score and staked ratio.')
+  lines.push('- Prioritize entrants that keep top-rank position for 2+ snapshots before treating as regime change.')
   lines.push('')
   lines.push('**Read**')
   lines.push(
@@ -461,6 +602,7 @@ export async function runAlfaClubDailyBrief(params: {
     }
   }
 
+  const labels = await readCreatorLabels(currentRows.map((row) => row.creatorAddress))
   const messageText = buildBriefText({
     snapshotTs,
     previousSnapshotTs,
@@ -471,6 +613,7 @@ export async function runAlfaClubDailyBrief(params: {
     marketRows,
     topRows: flags.topRows,
     moverRows: flags.moverRows,
+    labels,
   })
   const send = await sendAlfaClubRoomText({
     text: messageText,
