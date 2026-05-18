@@ -30,6 +30,13 @@ import {
   applyPriceOverride,
   findActivePriceOverride,
 } from '../../../../server/_lib/creatorStrategy/priceOverrides.js'
+import { recordPaymentEvent } from '../../../../server/_lib/creatorStrategy/paymentLedger.js'
+import { upsertPaymentOrder } from '../../../../server/_lib/creatorStrategy/paymentOrders.js'
+import {
+  recordPaymentActivationQueued,
+  recordPaymentProvisioningDispatch,
+  type RecordPaymentActivationQueuedResult,
+} from '../../../../server/_lib/controlPlane/paymentControlPlane.js'
 import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
@@ -185,9 +192,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  let paymentControlPlane: RecordPaymentActivationQueuedResult | null = null
+  try {
+    await upsertPaymentOrder({
+      db: db as any,
+      orderId: `activation:${insertResult.row.id}`,
+      status: 'provisioning_queued',
+      amountAtomic: verification.value,
+      currency: 'USDC',
+      metadata: {
+        provider: 'usdc_base',
+        txHash: verification.txHash,
+        creatorToken,
+        featureKey: feature.key,
+      },
+    })
+    await recordPaymentEvent({
+      db: db as any,
+      provider: 'manual',
+      providerEventId: verification.txHash,
+      orderId: `activation:${insertResult.row.id}`,
+      eventType: 'usdc.transfer_verified',
+      amountAtomic: verification.value,
+      currency: 'USDC',
+      payload: {
+        creatorToken,
+        featureKey: feature.key,
+        treasury,
+        blockNumber: verification.blockNumber.toString(),
+        paymentSource: 'usdc_base',
+      },
+    })
+    paymentControlPlane = await recordPaymentActivationQueued({
+      orderId: `activation:${insertResult.row.id}`,
+      activationId: insertResult.row.id,
+      provider: 'manual',
+      providerEventId: verification.txHash,
+      creatorToken,
+      featureKey: feature.key,
+      paymentSource: 'usdc_base',
+      amountAtomic: verification.value,
+      currency: 'USDC',
+      requestedBy: sessionAddress,
+      metadata: { txHash: verification.txHash },
+    })
+  } catch (error) {
+    console.warn('[creator-strategy/activate] payment event ledger write failed', {
+      txHash: verification.txHash,
+      activationId: insertResult.row.id,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
   // Kick the provisioning dispatcher (non-fatal). Operator picks up
   // the `pending` row and runs the feature-specific script regardless.
   let provisionerNote: string | null = null
+  let provisionOk = false
   try {
     const provision = await dispatchProvisioning({
       creatorToken,
@@ -196,9 +256,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentSource: 'usdc_base',
       paymentRef: verification.txHash,
     })
+    provisionOk = provision.ok
     provisionerNote = provision.ok ? provision.note : `dispatch failed: ${provision.reason}`
   } catch (error) {
     provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
+  }
+
+  if (paymentControlPlane?.stageId) {
+    try {
+      await recordPaymentProvisioningDispatch({
+        operationId: paymentControlPlane.operationId,
+        stageId: paymentControlPlane.stageId,
+        ok: provisionOk,
+        note: provisionerNote ?? 'dispatch completed',
+        actor: sessionAddress,
+      })
+    } catch (error) {
+      console.warn('[creator-strategy/activate] control-plane dispatch tracking failed', {
+        operationId: paymentControlPlane.operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   return res.status(200).json({

@@ -12,6 +12,11 @@ import { getAddress } from 'viem'
 import { finalizeStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
 import { recordPaymentEvent } from '../../../../../server/_lib/creatorStrategy/paymentLedger.js'
 import { upsertPaymentOrder } from '../../../../../server/_lib/creatorStrategy/paymentOrders.js'
+import {
+  recordPaymentActivationQueued,
+  recordPaymentProvisioningDispatch,
+  type RecordPaymentActivationQueuedResult,
+} from '../../../../../server/_lib/controlPlane/paymentControlPlane.js'
 import { dispatchProvisioning } from '../../../../../server/_lib/creatorStrategy/provisioner.js'
 import {
   isStripeWebhookConfigured,
@@ -180,6 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  let paymentControlPlane: RecordPaymentActivationQueuedResult | null = null
   try {
     await upsertPaymentOrder({
       db: db as any,
@@ -208,6 +214,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         featureKey: finalize.row.featureKey,
       },
     })
+    paymentControlPlane = await recordPaymentActivationQueued({
+      orderId: `activation:${finalize.row.id}`,
+      activationId: finalize.row.id,
+      provider: 'stripe',
+      providerEventId: event.id,
+      creatorToken: finalize.row.creatorToken,
+      featureKey: finalize.row.featureKey,
+      paymentSource: 'stripe',
+      amountAtomic: priceUsdcPaid,
+      currency: 'USDC',
+      metadata: { sessionId: session.id, paymentIntentId },
+    })
   } catch (error) {
     console.warn('[stripe-webhook] payment event ledger write failed', {
       eventId: event.id,
@@ -223,6 +241,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // webhook isn't retried — the row's `pending` state is the source of
   // truth and operators poll from there.
   let provisionerNote: string | null = null
+  let provisionOk = false
   try {
     const provision = await dispatchProvisioning({
       creatorToken: finalize.row.creatorToken,
@@ -231,6 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentSource: 'stripe',
       paymentRef: paymentIntentId ?? session.id,
     })
+    provisionOk = provision.ok
     if (provision.ok) {
       provisionerNote = provision.note
     } else {
@@ -249,6 +269,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       activationId: finalize.row.id,
       error,
     })
+  }
+
+  if (paymentControlPlane?.stageId) {
+    try {
+      await recordPaymentProvisioningDispatch({
+        operationId: paymentControlPlane.operationId,
+        stageId: paymentControlPlane.stageId,
+        ok: provisionOk,
+        note: provisionerNote ?? 'dispatch completed',
+      })
+    } catch (error) {
+      console.warn('[stripe-webhook] control-plane dispatch tracking failed', {
+        operationId: paymentControlPlane.operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   return res.status(200).json({

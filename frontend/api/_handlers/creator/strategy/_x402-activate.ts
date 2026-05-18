@@ -38,6 +38,11 @@ import {
 import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
 import { recordPaymentEvent } from '../../../../server/_lib/creatorStrategy/paymentLedger.js'
 import { upsertPaymentOrder } from '../../../../server/_lib/creatorStrategy/paymentOrders.js'
+import {
+  recordPaymentActivationQueued,
+  recordPaymentProvisioningDispatch,
+  type RecordPaymentActivationQueuedResult,
+} from '../../../../server/_lib/controlPlane/paymentControlPlane.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
 
@@ -228,6 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  let paymentControlPlane: RecordPaymentActivationQueuedResult | null = null
   try {
     await upsertPaymentOrder({
       db: db as any,
@@ -257,6 +263,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         blockNumber: settlement.blockNumber.toString(),
       },
     })
+    paymentControlPlane = await recordPaymentActivationQueued({
+      orderId: `activation:${insertResult.row.id}`,
+      activationId: insertResult.row.id,
+      provider: 'x402',
+      providerEventId: settlement.txHash,
+      creatorToken,
+      featureKey: feature.key,
+      paymentSource: 'x402_base',
+      amountAtomic: settlement.value,
+      currency: 'USDC',
+      requestedBy: sessionAddress,
+      metadata: { txHash: settlement.txHash },
+    })
   } catch (error) {
     console.warn('[creator-strategy/x402] payment event ledger write failed', {
       txHash: settlement.txHash,
@@ -266,6 +285,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let provisionerNote: string | null = null
+  let provisionOk = false
   try {
     const provision = await dispatchProvisioning({
       creatorToken,
@@ -274,9 +294,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       paymentSource: 'x402_base',
       paymentRef: settlement.txHash,
     })
+    provisionOk = provision.ok
     provisionerNote = provision.ok ? provision.note : `dispatch failed: ${provision.reason}`
   } catch (error) {
     provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
+  }
+
+  if (paymentControlPlane?.stageId) {
+    try {
+      await recordPaymentProvisioningDispatch({
+        operationId: paymentControlPlane.operationId,
+        stageId: paymentControlPlane.stageId,
+        ok: provisionOk,
+        note: provisionerNote ?? 'dispatch completed',
+        actor: sessionAddress,
+      })
+    } catch (error) {
+      console.warn('[creator-strategy/x402] control-plane dispatch tracking failed', {
+        operationId: paymentControlPlane.operationId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
 
   return res.status(200).json({
