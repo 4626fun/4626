@@ -13,6 +13,7 @@ import {
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import { detectInAppEnvironment } from '@/lib/wallet/inAppBrowser'
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -189,6 +190,7 @@ export function CswFundingPage() {
         functionName: 'depositTo',
         args: [canonicalCswAddress as `0x${string}`],
       })
+      const attributedData = appendBuilderSuffixToHex(data, { chainId: base.id }) ?? data
       // eth_sendTransaction returns a tx hash. value goes as hex.
       const provider = (window as unknown as {
         ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
@@ -203,7 +205,7 @@ export function CswFundingPage() {
           {
             from: ownerSignerAddress,
             to: ENTRY_POINT_V06,
-            data,
+            data: attributedData,
             value: valueHex,
           },
         ],

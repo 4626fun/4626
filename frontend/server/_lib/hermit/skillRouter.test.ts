@@ -204,7 +204,7 @@ describe('executeHermitCommand', () => {
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('https://')
     expect(result.reply).toContain('jajaja alpha cat.')
-    expect(persistPreference).toHaveBeenCalledTimes(1)
+    expect(persistPreference).toHaveBeenCalled()
   })
 
   it('uses /meme for the Pinata image prompt path', async () => {

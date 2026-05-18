@@ -318,8 +318,8 @@ describe('defaultAmoeZkAssetPaths', () => {
     delete process.env.AMOE_ZK_WASM_PATH
     delete process.env.AMOE_ZK_ZKEY_PATH
     const got = defaultAmoeZkAssetPaths()
-    expect(got.wasmPath).toMatch(/circuits\/amoe\/build\/amoe_eligibility_js\/amoe_eligibility\.wasm$/)
-    expect(got.zkeyPath).toMatch(/circuits\/amoe\/build\/amoe_plonk_final\.zkey$/)
+    expect(got.wasmPath).toMatch(/amoe\/circuits\/build\/amoe_eligibility_js\/amoe_eligibility\.wasm$/)
+    expect(got.zkeyPath).toMatch(/amoe\/circuits\/build\/amoe_plonk_final\.zkey$/)
   })
 
   it('falls back per-path independently when only one env is set', () => {

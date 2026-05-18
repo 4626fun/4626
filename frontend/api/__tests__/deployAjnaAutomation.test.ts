@@ -101,6 +101,27 @@ describe('deploy ajna automation endpoints', () => {
   })
 
   it('updates automation control for owner', async () => {
+    getAjnaVaultRegistryEntryMock.mockResolvedValueOnce({
+      chainId: 8453,
+      creatorToken: '0x1111111111111111111111111111111111111111',
+      creatorVault: '0x3333333333333333333333333333333333333333',
+      strategyAdapter: '0x2222222222222222222222222222222222222222',
+      innerAjnaVault: '0x4444444444444444444444444444444444444444',
+      ajnaAuth: '0x5555555555555555555555555555555555555555',
+      ajnaPool: '0x6666666666666666666666666666666666666666',
+      ownerAddress: '0x1111111111111111111111111111111111111111',
+      bufferRatioBps: 2000,
+      minBucketIndex: 4156,
+      maxBucketStep: 20,
+      maxAssetsPerMove: 1000n,
+      automationStatus: 'dry_run',
+      lastRunAt: null,
+      lastSuccessTx: null,
+      lastError: null,
+      metadata: {},
+      createdAt: '2026-05-12T06:00:00.000Z',
+      updatedAt: '2026-05-12T06:00:00.000Z',
+    } as AjnaVaultRegistryRow)
     updateAjnaVaultAutomationConfigMock.mockResolvedValueOnce({
       chainId: 8453,
       creatorToken: '0x1111111111111111111111111111111111111111',

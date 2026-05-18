@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
-import { ExternalLink, ArrowLeft, Globe, Users, Coins, TrendingUp, MessageSquare, Play, FileText, Image as ImageIcon, X } from 'lucide-react'
+import { ExternalLink, ArrowLeft, Coins, TrendingUp, MessageSquare, Play, FileText, Image as ImageIcon, X } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
@@ -11,13 +11,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
-import { EthosAvatarScoreForUserkey, getEthosScorePalette, useEthosScoreForUserkey } from '@/components/chat/EthosScorePill'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
-import { buildEthosSocialUserkeyFromZoraProfile } from '@/lib/ethos/zoraSocial'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 import {
@@ -58,40 +56,6 @@ const FLYBY_LAYOUTS: FlybyLayout[] = [
   { top: '21%', left: '41%', size: 'w-14 h-14 sm:w-16 sm:h-16', rotate: -6, startY: -90, endY: 82, opacity: 0.5 },
 ]
 const ZORA_TOKEN_LOGO_URL = '/brands/zora-token.svg'
-
-function CreatorHeaderAvatar({
-  avatarUrl,
-  displayName,
-  ethosSocialUserkey,
-}: {
-  avatarUrl?: string | null
-  displayName: string
-  ethosSocialUserkey: string | null
-}) {
-  const ethosScore = useEthosScoreForUserkey(ethosSocialUserkey)
-  const scoreValue = ethosScore.data?.score
-  const hasPositiveScore = typeof scoreValue === 'number' && scoreValue > 0
-  const palette = getEthosScorePalette(scoreValue ?? null, ethosScore.data?.level ?? null)
-  const ringClass = hasPositiveScore
-    ? `${palette.borderClass} shadow-[0_0_0_1px_rgba(0,0,0,0.9)]`
-    : 'border-white/10'
-
-  return (
-    <div className="relative h-[68px] w-14 shrink-0 sm:h-[92px] sm:w-20">
-      {avatarUrl ? (
-        <img src={avatarUrl} alt={displayName} className={`h-14 w-14 rounded-xl border-2 object-cover sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`} />
-      ) : (
-        <div className={`flex h-14 w-14 items-center justify-center rounded-xl border-2 bg-linear-to-br from-zinc-600 to-zinc-700 sm:h-20 sm:w-20 sm:rounded-2xl ${ringClass}`}>
-          <span className="text-lg sm:text-2xl font-medium text-zinc-300">{displayName.slice(0, 2).toUpperCase()}</span>
-        </div>
-      )}
-      <EthosAvatarScoreForUserkey
-        userkey={ethosSocialUserkey}
-        className="absolute bottom-1 left-1/2 -translate-x-1/2 scale-110 sm:bottom-2"
-      />
-    </div>
-  )
-}
 
 function formatNumber(value: string | number | undefined): string {
   if (!value) return '-'
@@ -327,7 +291,7 @@ function getSceneCardEntrance(index: number) {
       delay: 0.05 * index,
     },
   ] as const
-  return patterns[index % patterns.length]
+  return patterns[index % patterns.length] ?? patterns[0]
 }
 
 function ContentMediaBadge({ kind }: { kind: ContentMediaKind }) {
@@ -901,7 +865,6 @@ export function ExploreCreatorDetail() {
 
   // Profile info
   const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
-  const ethosSocialUserkey = buildEthosSocialUserkeyFromZoraProfile(profile)
   const avatarUrl = profile?.avatar?.medium || profile?.avatar?.small || coin?.mediaContent?.previewImage?.medium || coin?.creatorProfile?.avatar?.previewImage?.medium
   const displayName = profile?.displayName || coin?.name || 'Creator'
   const handle = profile?.handle || coin?.creatorProfile?.handle
@@ -936,7 +899,6 @@ export function ExploreCreatorDetail() {
       ? getContentCoinAssetUrl(coin)
       : undefined
   const heroIconImage = creatorCoinImage || leadSceneCoinImage || avatarUrl || null
-  const leadSceneCoinAddress = leadSceneCoin?.address || ''
   const leadSceneCoinName = leadSceneCoin?.name || leadSceneCoin?.symbol || displayName
   const creatorTokenLogo =
     coin?.mediaContent?.previewImage?.small ||
@@ -1008,7 +970,7 @@ export function ExploreCreatorDetail() {
       <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_12%,rgba(59,130,246,0.12),transparent_50%),radial-gradient(circle_at_82%_78%,rgba(56,189,248,0.1),transparent_52%)]" />
         {narrativeFlybyCoins.map((coin, idx) => {
-          const layout = FLYBY_LAYOUTS[idx % FLYBY_LAYOUTS.length]
+          const layout: FlybyLayout = FLYBY_LAYOUTS[idx % FLYBY_LAYOUTS.length] ?? FLYBY_LAYOUTS[0]!
           const image = getContentCoinAssetUrl(coin)
           const phase = ambientNarrativeProgress * 0.018 + idx * 0.135
           const lane = phase - Math.floor(phase)

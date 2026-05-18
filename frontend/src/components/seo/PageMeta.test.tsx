@@ -4,6 +4,7 @@ import { describe, expect, it, beforeEach } from 'vitest'
 import { render } from '@testing-library/react'
 
 import { PageMeta } from './PageMeta'
+import { SITE_IMAGE_ALT } from '@/lib/seo/siteMeta'
 
 function queryMeta(name: string, attr: 'name' | 'property' = 'name'): HTMLMetaElement | null {
   return document.querySelector(`meta[${attr}="${name}"]`)
@@ -38,12 +39,8 @@ describe('PageMeta', () => {
     )
     expect(queryMeta('twitter:site', 'name')?.getAttribute('content')).toBe('@4626fun')
     expect(queryMeta('twitter:creator', 'name')?.getAttribute('content')).toBe('@wenakita')
-    expect(queryMeta('og:image:alt', 'property')?.getAttribute('content')).toBe(
-      '4626.fun - ERC-4626 creator vaults on Base',
-    )
-    expect(queryMeta('twitter:image:alt', 'name')?.getAttribute('content')).toBe(
-      '4626.fun - ERC-4626 creator vaults on Base',
-    )
+    expect(queryMeta('og:image:alt', 'property')?.getAttribute('content')).toBe(SITE_IMAGE_ALT)
+    expect(queryMeta('twitter:image:alt', 'name')?.getAttribute('content')).toBe(SITE_IMAGE_ALT)
   })
 
   it('creates, updates, and removes page JSON-LD script', () => {

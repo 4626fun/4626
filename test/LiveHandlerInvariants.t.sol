@@ -34,6 +34,7 @@ import {
 } from "./DeploymentBatcher.Phase1EndpointPoisoning.t.sol";
 import {
     IDeploymentBatcherPermit2,
+    DeploymentBatcherHarness,
     MockCreatorTokenPermit2,
     MockOwnableTransferPermit2,
     MockPermit2Deployment,
@@ -803,7 +804,7 @@ contract BatcherPhase2Handler is Test {
     function _fixture(uint32 seed)
         internal
         returns (
-            DeploymentBatcher batcher,
+            DeploymentBatcherHarness batcher,
             MockCreatorTokenPermit2 creatorToken,
             MockShareOFTPermit2 shareOFT,
             MockWrapperPermit2 wrapper,
@@ -826,7 +827,7 @@ contract BatcherPhase2Handler is Test {
         oracle = new MockOwnableTransferPermit2();
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
-        batcher = new DeploymentBatcher(
+        batcher = new DeploymentBatcherHarness(
             makeAddr("registry"),
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
@@ -857,7 +858,7 @@ contract BatcherPhase2Handler is Test {
             makeAddr("vaultActivationBatcher"),
             address(batcher)
         );
-        vm.store(address(batcher), bytes32(uint256(8)), bytes32(uint256(uint160(address(phase2)))));
+        batcher.setPhase2ModuleForTest(phase2);
 
         creatorToken.mint(ownerAddr, 100_000_000 ether);
         vm.prank(ownerAddr);
@@ -866,11 +867,7 @@ contract BatcherPhase2Handler is Test {
         string memory version = string.concat("v-test-", vm.toString(seed));
         bytes32 baseSalt =
             keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", version));
-        bytes32 base = keccak256(abi.encode(baseSalt, uint256(4)));
-        vm.store(address(batcher), bytes32(uint256(base) + 1), bytes32(uint256(uint160(address(vault)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 2), bytes32(uint256(uint160(address(wrapper)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 3), bytes32(uint256(uint160(address(shareOFT)))));
-        vm.store(address(batcher), bytes32(uint256(base) + 7), bytes32(uint256(0x0101)));
+        batcher.seedPhase1StateForTest(baseSalt, address(vault), address(wrapper), address(shareOFT), true, true);
     }
 
     function _permit(address token, uint256 amount)

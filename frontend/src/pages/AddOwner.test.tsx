@@ -6,6 +6,10 @@ import { MemoryRouter } from 'react-router-dom'
 
 let mockController: Record<string, unknown> = {}
 
+vi.mock('wagmi', () => ({
+  useWalletClient: () => ({ data: null }),
+}))
+
 vi.mock('@/features/accountSetup/useAccountSetupController', () => ({
   useAccountSetupController: () => mockController,
 }))

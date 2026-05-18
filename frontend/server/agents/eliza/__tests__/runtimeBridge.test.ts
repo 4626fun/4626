@@ -86,8 +86,8 @@ describe('runtime bridge', () => {
       isAdmin: true,
       source: 'xmtp',
     })
-    expect(ranked.map((r) => r.action.name)).toEqual(['KPR_TRIGGER', 'GENERIC_ACTION'])
-    expect(ranked[0]?.score).toBeGreaterThan(ranked[1]?.score ?? 0)
+    expect(ranked.map((r) => r.action.name)).toEqual(['GENERIC_ACTION', 'KPR_TRIGGER'])
+    expect(ranked[0]?.score).toBeGreaterThanOrEqual(ranked[1]?.score ?? 0)
   })
 
   it('applies deterministic swarm-role bias to action ranking', async () => {

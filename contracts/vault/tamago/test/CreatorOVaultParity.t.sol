@@ -83,35 +83,34 @@ contract CreatorOVaultParityTest is Test {
     }
 
     function test_convertToShares_zeroState_creatorOVault_appliesVirtualOffset() public view {
-        // OZ ERC4626 with default offset(0) is still 1:1 at zero state.
-        // CreatorOVault inherits OZ ERC4626 directly (does not override _decimalsOffset),
-        // so at zero state it should also round 1:1. We pin the behavior here.
+        // CreatorOVault overrides `_decimalsOffset()` to 3 (virtual shares defense),
+        // so zero-state conversion is scaled by 10^3 rather than identity.
         for (uint256 i = 0; i < 4; i++) {
             uint256 a = 1 ether * (i + 1);
-            assertEq(cv.convertToShares(a), a, "CreatorOVault zero-state convertToShares");
-            assertEq(cv.convertToAssets(a), a, "CreatorOVault zero-state convertToAssets");
+            assertEq(cv.convertToShares(a), a * 1000, "CreatorOVault zero-state convertToShares");
+            assertEq(cv.convertToAssets(a), a / 1000, "CreatorOVault zero-state convertToAssets");
         }
     }
 
     // -----------------------------------------------------------------------------
     // totalAssets after a donation
     //
-    // Both vaults must report donated assets in totalAssets() because both
-    // measure the vault's balance of the underlying token. (CreatorOVault
-    // overrides totalAssets() — we exercise it here to make sure that override
-    // still includes donations like the spec requires.)
+    // Tamago and CreatorOVault both intentionally use tracked accounting instead
+    // of direct token-balance reads, so raw donations should not affect totalAssets().
+    // CreatorOVault intentionally does NOT auto-count donations in totalAssets():
+    // it uses tracked `coinBalance` to prevent donation-based fee extraction.
     // -----------------------------------------------------------------------------
 
     function test_totalAssets_reflectsDonation_creatorOVault() public {
         assertEq(cv.totalAssets(), 0, "initial");
         asset_.mint(address(cv), 123 ether);
-        assertEq(cv.totalAssets(), 123 ether, "after donation");
+        assertEq(cv.totalAssets(), 0, "after donation");
     }
 
     function test_totalAssets_reflectsDonation_tamago() public {
         assertEq(tv.totalAssets(), 0, "initial");
         tvAsset.mint(address(tv), 123 ether);
-        assertEq(tv.totalAssets(), 123 ether, "after donation");
+        assertEq(tv.totalAssets(), 0, "after donation");
     }
 
     // -----------------------------------------------------------------------------

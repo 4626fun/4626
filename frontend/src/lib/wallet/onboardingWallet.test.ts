@@ -259,7 +259,7 @@ describe('sendPreparedOwnerTx', () => {
 
 
 
-  it('routes self-auth embedded-owner installs through direct eth_sendTransaction first', async () => {
+  it('routes self-auth embedded-owner installs through replayable prepared-calls first', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -283,8 +283,24 @@ describe('sendPreparedOwnerTx', () => {
         },
       }),
     )
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_sendTransaction') return TX_HASH
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x307838396239663138306435326431343533376466313535346630323035313266623134646539393566303834613836633163666435303566633531353963313664' },
+          userOp: { dummy: true },
+        }
+      }
+      if (args.method === 'personal_sign') return signatureWrapper
+      if (args.method === 'wallet_sendPreparedCalls') return 'bundle-1'
+      if (args.method === 'wallet_getCallsStatus') {
+        return {
+          status: 200,
+          receipts: [{ transactionHash: TX_HASH }],
+        }
+      }
       throw new Error(`Unexpected method ${args.method}`)
     })
 
@@ -303,17 +319,17 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses direct eth_sendTransaction for embedded-owner self-auth canonical signer', async () => {
+  it('uses replayable prepared-calls for embedded-owner self-auth canonical signer', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response(
@@ -337,8 +353,24 @@ describe('sendPreparedOwnerTx', () => {
         },
       }),
     )
+    const signatureWrapper = makeWebAuthnOwnerSignatureWrapper(0n)
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_sendTransaction') return TX_HASH
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x307838396239663138306435326431343533376466313535346630323035313266623134646539393566303834613836633163666435303566633531353963313664' },
+          userOp: { dummy: true },
+        }
+      }
+      if (args.method === 'personal_sign') return signatureWrapper
+      if (args.method === 'wallet_sendPreparedCalls') return 'bundle-1'
+      if (args.method === 'wallet_getCallsStatus') {
+        return {
+          status: 200,
+          receipts: [{ transactionHash: TX_HASH }],
+        }
+      }
       throw new Error(`Unexpected method ${args.method}`)
     })
 
@@ -357,18 +389,26 @@ describe('sendPreparedOwnerTx', () => {
       canonicalSmartWalletAddress: CANONICAL_CSW,
     })
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
+    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('does not fall back to userop lanes when canonical self-auth eth_sendTransaction fails', async () => {
+  it('does not fall back to relay/userop lanes when replayable self-auth signing fails', async () => {
     const request = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_sendTransaction') {
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x307838396239663138306435326431343533376466313535346630323035313266623134646539393566303834613836633163666435303566633531353963313664' },
+          userOp: { dummy: true },
+        }
+      }
+      if (args.method === 'personal_sign') {
         throw new Error('execution reverted')
       }
       throw new Error(`Unexpected method ${args.method}`)
@@ -389,13 +429,12 @@ describe('sendPreparedOwnerTx', () => {
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
       }),
-    ).rejects.toThrow(
-      'Canonical Base Account self-auth approval failed. Reopen this in Base App and retry the approval there.',
-    )
+    ).rejects.toThrow('execution reverted')
 
-    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
-    expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_prepareCalls' }))
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
   })
 
@@ -494,27 +533,28 @@ describe('sendPreparedOwnerTx', () => {
       throw new Error(`Unexpected method ${args.method}`)
     })
 
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
-        request,
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      ownerAddress: OWNER_EOA,
-      signerAddress: OWNER_EOA,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-    })
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        ownerAddress: OWNER_EOA,
+        signerAddress: OWNER_EOA,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+      }),
+    ).rejects.toThrow('Provider request failed')
 
     expect(request).toHaveBeenCalledWith(expect.objectContaining({ method: 'personal_sign' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendCalls' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'eth_sendTransaction' }))
     expect(request).not.toHaveBeenCalledWith(expect.objectContaining({ method: 'wallet_sendPreparedCalls' }))
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/relay/execute', expect.anything())
-    expect(result.txHash).toBe(TX_HASH)
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/relay/execute', expect.anything())
   })
 
   it('surfaces canonical self-auth guidance when popup self-call is blocked', async () => {
@@ -562,7 +602,7 @@ describe('sendPreparedOwnerTx', () => {
         canonicalSmartWalletAddress: CANONICAL_CSW,
       }),
     ).rejects.toThrow(
-      'Canonical Base Account self-auth approval failed. Reopen this in Base App and retry the approval there.',
+      'Expected a Coinbase/Base App WebAuthn owner[0] signature. Re-open in Base App and approve with the canonical passkey.',
     )
   })
 

@@ -130,10 +130,9 @@ describe('ExploreCreatorDetail', () => {
   it('renders recent creator transactions and a creator chat CTA', () => {
     const html = renderToStaticMarkup(React.createElement(ExploreCreatorDetail))
 
-    expect(html).toContain('Recent transactions')
-    expect(html).toContain('Latest swaps from the primary pool')
+    expect(html).toContain('Recent Activity')
+    expect(html).toContain('Latest swaps from the highest-liquidity pool')
     expect(html).toContain('$125.00')
-    expect(html).toContain('Chat with Creator')
-    expect(html).toContain('chatPeer=')
+    expect(html).toContain('Message Creator')
   })
 })

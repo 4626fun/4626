@@ -28,7 +28,7 @@
     "server/cdp/**/*.ts",
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
-    "server/agent/**/*.ts",
+    "server/agents/**/*.ts",
     "scripts/**/*.d.ts",
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",

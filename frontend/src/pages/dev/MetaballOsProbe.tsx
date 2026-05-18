@@ -54,6 +54,8 @@ function useMetaballShader(
       premultipliedAlpha: false,
     })
     if (!gl) return
+    const activeCanvas = canvas
+    const activeGl = gl
 
     const vertSrc = `
       attribute vec2 a_pos;
@@ -152,48 +154,48 @@ function useMetaballShader(
     `
 
     let raf = 0
-    const program = createProgram(gl, vertSrc, fragSrc)
+    const program = createProgram(activeGl, vertSrc, fragSrc)
     if (!program) return
 
-    const positionBuffer = gl.createBuffer()
+    const positionBuffer = activeGl.createBuffer()
     if (!positionBuffer) return
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-    gl.bufferData(
-      gl.ARRAY_BUFFER,
+    activeGl.bindBuffer(activeGl.ARRAY_BUFFER, positionBuffer)
+    activeGl.bufferData(
+      activeGl.ARRAY_BUFFER,
       new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
-      gl.STATIC_DRAW,
+      activeGl.STATIC_DRAW,
     )
 
-    const aPos = gl.getAttribLocation(program, 'a_pos')
-    const uRes = gl.getUniformLocation(program, 'u_res')
-    const uTime = gl.getUniformLocation(program, 'u_time')
-    const uReveal = gl.getUniformLocation(program, 'u_reveal')
-    const uPointer = gl.getUniformLocation(program, 'u_pointer')
+    const aPos = activeGl.getAttribLocation(program, 'a_pos')
+    const uRes = activeGl.getUniformLocation(program, 'u_res')
+    const uTime = activeGl.getUniformLocation(program, 'u_time')
+    const uReveal = activeGl.getUniformLocation(program, 'u_reveal')
+    const uPointer = activeGl.getUniformLocation(program, 'u_pointer')
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
 
     function resize() {
       const width = window.innerWidth
       const height = window.innerHeight
-      canvas.width = Math.floor(width * dpr)
-      canvas.height = Math.floor(height * dpr)
-      canvas.style.width = `${width}px`
-      canvas.style.height = `${height}px`
-      gl.viewport(0, 0, canvas.width, canvas.height)
+      activeCanvas.width = Math.floor(width * dpr)
+      activeCanvas.height = Math.floor(height * dpr)
+      activeCanvas.style.width = `${width}px`
+      activeCanvas.style.height = `${height}px`
+      activeGl.viewport(0, 0, activeCanvas.width, activeCanvas.height)
     }
 
     function render(now: number) {
       const t = now * 0.001
       const startAt = startedAtRef.current
       const reveal = startAt ? Math.min(1, (now - startAt) / 1700) : 0
-      gl.useProgram(program)
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-      gl.enableVertexAttribArray(aPos)
-      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0)
-      gl.uniform2f(uRes, canvas.width, canvas.height)
-      gl.uniform1f(uTime, t)
-      gl.uniform1f(uReveal, reveal)
-      gl.uniform2f(uPointer, pointerRef.current.x, pointerRef.current.y)
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+      activeGl.useProgram(program)
+      activeGl.bindBuffer(activeGl.ARRAY_BUFFER, positionBuffer)
+      activeGl.enableVertexAttribArray(aPos)
+      activeGl.vertexAttribPointer(aPos, 2, activeGl.FLOAT, false, 0, 0)
+      activeGl.uniform2f(uRes, activeCanvas.width, activeCanvas.height)
+      activeGl.uniform1f(uTime, t)
+      activeGl.uniform1f(uReveal, reveal)
+      activeGl.uniform2f(uPointer, pointerRef.current.x, pointerRef.current.y)
+      activeGl.drawArrays(activeGl.TRIANGLE_STRIP, 0, 4)
       raf = requestAnimationFrame(render)
     }
 
@@ -203,8 +205,8 @@ function useMetaballShader(
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', resize)
-      gl.deleteBuffer(positionBuffer)
-      gl.deleteProgram(program)
+      activeGl.deleteBuffer(positionBuffer)
+      activeGl.deleteProgram(program)
     }
   }, [canvasRef, pointerRef, startedAtRef])
 }

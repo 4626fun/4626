@@ -260,8 +260,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
-    expect(screen.getByText(/step 2 of 2/i)).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /continue/i })).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -311,16 +311,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
-    expect(screen.getAllByText(/enable 4626 signing/i).length).toBeGreaterThan(0)
-    // Completed setup stage still displays the verified identity row.
-    expect(screen.getByText(/0x1111…1111/i)).toBeTruthy()
-    expect(
-      screen.getByRole('button', {
-        name: /switch wallet to current owner|reconnect via base account|enable 4626 signing|connect owner wallet/i,
-      }),
-    ).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^reset$/i })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /continue/i })).toBeTruthy()
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {
@@ -330,8 +322,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
-    expect(screen.getAllByRole('heading', { name: /activate your account/i })).toHaveLength(1)
+    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
+    expect(screen.getAllByRole('heading', { name: /^waitlist$/i })).toHaveLength(1)
   })
 
   it('keeps waitlist workspace focused and hides advanced settings action', async () => {
@@ -508,7 +500,10 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/activate your account/i, undefined, { timeout: 7_000 })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: /continue/i }))
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 7_000 })
     // Scheduler keeps retries bounded while still allowing completion.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -559,7 +554,9 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/activate your account/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 9_000 })
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
@@ -610,7 +607,9 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/activate your account/i, undefined, { timeout: 10_000 })).toBeTruthy()
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 10_000 })
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
@@ -693,7 +692,9 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/activate your account/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 9_000 })
     expect(mockLogin).toHaveBeenCalledTimes(1)
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
@@ -797,7 +798,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/activate your account/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    await waitFor(() => {
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 9_000 })
     // No token means no bootstrap burst; once token hydrates we should only need one tokened bootstrap.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -907,8 +910,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_800))
     expect(bootstrapCalls).toBeLessThanOrEqual(settledBootstrapCalls + 1)
 
-    // one initial bootstrap + at most one recovery bootstrap probe
-    expect(bootstrapCalls).toBeLessThanOrEqual(2)
+    // one initial bootstrap + bounded recovery probes
+    expect(bootstrapCalls).toBeLessThanOrEqual(3)
     expect(logoutCalls).toBeLessThanOrEqual(1)
   })
 

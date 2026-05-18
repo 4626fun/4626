@@ -6,8 +6,8 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC1155} from "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import {ERC1155Supply} from "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 
-import {AlfaCreatorKeyLPFactory} from "../../contracts/alfaclub/AlfaCreatorKeyLPFactory.sol";
-import {AlfaCreatorKeyPool} from "../../contracts/alfaclub/AlfaCreatorKeyPool.sol";
+import {AlfaCreatorKeyLPFactory} from "../../../contracts/alfaclub/AlfaCreatorKeyLPFactory.sol";
+import {AlfaCreatorKeyPool} from "../../../contracts/alfaclub/AlfaCreatorKeyPool.sol";
 
 contract MockCreatorCoin is ERC20 {
     constructor() ERC20("Creator Coin", "CREATOR") {}

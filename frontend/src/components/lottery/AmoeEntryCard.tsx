@@ -449,8 +449,7 @@ export function AmoeEntryCard(props: {
     (walletAddress || protocolEntryMode) &&
       hasEnoughForFloor &&
       !entryBusy &&
-      !checkinBusy &&
-      !xmtpCheckinBusy,
+      !checkinBusy,
   )
   const selectedPoints = clampPoints(pointsBurned, sliderMax)
 
@@ -576,7 +575,7 @@ export function AmoeEntryCard(props: {
           <button
             type="button"
             onClick={() => openXPost()}
-            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy || xmtpCheckinBusy}
+            disabled={(!walletAddress && !protocolEntryMode) || checkinBusy || entryBusy}
             className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl ${hasEnoughForFloor ? 'border border-white/12 bg-white/[0.03] text-zinc-100' : 'bg-brand-primary text-white shadow-[0_12px_26px_-16px_rgb(var(--brand-primary)/0.95)]'} px-3 text-xs font-medium transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {checkinBusy ? (

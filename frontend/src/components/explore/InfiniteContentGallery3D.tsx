@@ -91,7 +91,7 @@ async function loadTextureSafe(url: string, fallbackLabel: string): Promise<THRE
     loader.setCrossOrigin('anonymous')
     loader.load(
       url,
-      (texture) => {
+      (texture: THREE.Texture) => {
         texture.colorSpace = THREE.SRGBColorSpace
         resolve(texture)
       },
@@ -109,11 +109,11 @@ function useGalleryTextures(items: GalleryItem[]): THREE.Texture[] {
     const previous = textures
     void Promise.all(items.map((item) => loadTextureSafe(item.imageUrl, item.title))).then((nextTextures) => {
       if (cancelled) {
-        nextTextures.forEach((texture) => texture.dispose())
+        nextTextures.forEach((texture: THREE.Texture) => texture.dispose())
         return
       }
       setTextures(nextTextures)
-      previous.forEach((texture) => texture.dispose())
+      previous.forEach((texture: THREE.Texture) => texture.dispose())
     })
     return () => {
       cancelled = true
