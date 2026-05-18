@@ -35,6 +35,15 @@ type AdminControlPlaneStatusResponse = {
     message: string
     createdAt: string
   }>
+  recentOperations: Array<{
+    operationId: string
+    operationKind: string
+    status: string
+    scopeType: string
+    scopeId: string
+    createdAt: string
+    updatedAt: string
+  }>
   vaultLifecycle?: {
     vaultAddress: string
     graduatedAt: string | null
@@ -52,6 +61,20 @@ function parsePositiveInt(value: unknown, fallback: number, min: number, max: nu
   const n = Number(value ?? fallback)
   if (!Number.isFinite(n)) return fallback
   return Math.min(max, Math.max(min, Math.floor(n)))
+}
+
+const ALLOWED_OPERATION_KINDS = new Set([
+  'payment.activation',
+  'vault.provision',
+  'vault.maintenance',
+  'vault.settle',
+  'operator.action',
+])
+
+function parseOperationKindFilter(value: unknown): string | null {
+  const kind = typeof value === 'string' ? value.trim() : ''
+  if (!kind) return null
+  return ALLOWED_OPERATION_KINDS.has(kind) ? kind : null
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -73,6 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const thresholdMinutes = parsePositiveInt(req.query.stuckMinutes, 30, 1, 24 * 60)
   const limit = parsePositiveInt(req.query.limit, 20, 1, 200)
+  const operationKind = parseOperationKindFilter(req.query.operationKind)
 
   try {
     const db = await getDb()
@@ -80,7 +104,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
     }
 
-    const [operationCountsRes, stageCountsRes, jobCountsRes, stuckRes, failuresRes] = await Promise.all([
+    const [operationCountsRes, stageCountsRes, jobCountsRes, stuckRes, failuresRes, recentOperationsRes] =
+      await Promise.all([
       db.sql<{ status: string; count: number }>`
         SELECT status, COUNT(*)::int AS count
         FROM public.control_plane_operations
@@ -116,6 +141,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         FROM public.control_plane_operations
         WHERE status IN ('requested','queued','running','blocked','retrying','manual_review')
           AND updated_at <= NOW() - (${thresholdMinutes} || ' minutes')::interval
+          AND (${operationKind}::text IS NULL OR operation_kind = ${operationKind})
         ORDER BY updated_at ASC
         LIMIT ${limit};
       `,
@@ -134,6 +160,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             OR message ILIKE '%retry%'
             OR message ILIKE '%manual_review%'
           )
+        ORDER BY created_at DESC
+        LIMIT ${limit};
+      `,
+      db.sql<{
+        operation_id: string
+        operation_kind: string
+        status: string
+        scope_type: string
+        scope_id: string
+        created_at: string
+        updated_at: string
+      }>`
+        SELECT
+          operation_id,
+          operation_kind,
+          status,
+          scope_type,
+          scope_id,
+          created_at,
+          updated_at
+        FROM public.control_plane_operations
+        WHERE (${operationKind}::text IS NULL OR operation_kind = ${operationKind})
         ORDER BY created_at DESC
         LIMIT ${limit};
       `,
@@ -168,6 +216,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         eventType: String(row.event_type),
         message: String(row.message ?? ''),
         createdAt: String(row.created_at),
+      })),
+      recentOperations: (recentOperationsRes.rows ?? []).map((row) => ({
+        operationId: String(row.operation_id),
+        operationKind: String(row.operation_kind),
+        status: String(row.status),
+        scopeType: String(row.scope_type),
+        scopeId: String(row.scope_id),
+        createdAt: String(row.created_at),
+        updatedAt: String(row.updated_at),
       })),
     }
 

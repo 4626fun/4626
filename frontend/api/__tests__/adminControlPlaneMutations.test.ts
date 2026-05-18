@@ -9,6 +9,7 @@ const {
   provisionVaultEconomyMock,
   runMaintenanceCycleMock,
   queueOperatorActionMock,
+  settleVaultMock,
 } = vi.hoisted(() => ({
   getSessionAddressMock: vi.fn<() => string | null>(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
@@ -16,6 +17,7 @@ const {
   provisionVaultEconomyMock: vi.fn(async () => ({ accepted: true, operationId: 'op_provision_1', stageId: 'stg_1' })),
   runMaintenanceCycleMock: vi.fn(async () => ({ accepted: true, operationId: 'op_maintenance_1', stageId: 'stg_2' })),
   queueOperatorActionMock: vi.fn(async () => ({ accepted: true, operationId: 'op_action_1', stageId: 'stg_3' })),
+  settleVaultMock: vi.fn(async () => ({ accepted: true, operationId: 'op_settle_1', stageId: 'stg_4' })),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', async () => {
@@ -43,6 +45,7 @@ vi.mock('../../server/_lib/controlPlane/vaultControlPlane.js', () => ({
     provisionVaultEconomy: provisionVaultEconomyMock,
     runMaintenanceCycle: runMaintenanceCycleMock,
     queueOperatorAction: queueOperatorActionMock,
+    settleVault: settleVaultMock,
   }),
 }))
 
@@ -50,6 +53,7 @@ import { getApiHandler } from '../_handlers/_routes.js'
 import maintenanceHandler from '../_handlers/admin/control-plane/_maintenance.ts'
 import operatorActionHandler from '../_handlers/admin/control-plane/_operatorAction.ts'
 import provisionHandler from '../_handlers/admin/control-plane/_provision.ts'
+import settleHandler from '../_handlers/admin/control-plane/_settle.ts'
 
 describe('admin control-plane mutation handlers', () => {
   beforeEach(() => {
@@ -62,6 +66,7 @@ describe('admin control-plane mutation handlers', () => {
   it('registers new admin control-plane mutation routes', async () => {
     await expect(getApiHandler('admin/control-plane/provision')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('admin/control-plane/maintenance')).resolves.toBeTypeOf('function')
+    await expect(getApiHandler('admin/control-plane/settle')).resolves.toBeTypeOf('function')
     await expect(getApiHandler('admin/control-plane/operator-action')).resolves.toBeTypeOf('function')
   })
 
@@ -101,6 +106,23 @@ describe('admin control-plane mutation handlers', () => {
 
     expect(res.statusCode).toBe(202)
     expect(runMaintenanceCycleMock).toHaveBeenCalledWith('0x1111111111111111111111111111111111111111')
+  })
+
+  it('queues settle operation', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        settlementStage: 'completed',
+        settledAt: '2026-05-18T12:00:00.000Z',
+      },
+    })
+    const res = createMockRes()
+    await settleHandler(req, res)
+
+    expect(res.statusCode).toBe(202)
+    expect(settleVaultMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.data?.operationId).toBe('op_settle_1')
   })
 
   it('queues operator action operation', async () => {

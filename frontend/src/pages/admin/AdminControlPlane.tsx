@@ -32,6 +32,15 @@ type AdminControlPlaneStatusResponse = {
     message: string
     createdAt: string
   }>
+  recentOperations: Array<{
+    operationId: string
+    operationKind: string
+    status: string
+    scopeType: string
+    scopeId: string
+    createdAt: string
+    updatedAt: string
+  }>
   vaultLifecycle?: {
     vaultAddress: string
     graduatedAt: string | null
@@ -115,6 +124,7 @@ async function fetchControlPlaneStatus(params: {
   stuckMinutes: number
   limit: number
   vaultAddress?: string
+  operationKind?: string
 }): Promise<AdminControlPlaneStatusResponse> {
   const qs = new URLSearchParams({
     stuckMinutes: String(params.stuckMinutes),
@@ -123,6 +133,10 @@ async function fetchControlPlaneStatus(params: {
   const vaultAddress = params.vaultAddress?.trim().toLowerCase() ?? ''
   if (/^0x[a-f0-9]{40}$/.test(vaultAddress)) {
     qs.set('vaultAddress', vaultAddress)
+  }
+  const operationKind = params.operationKind?.trim() ?? ''
+  if (operationKind) {
+    qs.set('operationKind', operationKind)
   }
   const res = await apiFetch(`/api/admin/control-plane/status?${qs.toString()}`, { withCredentials: true })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminControlPlaneStatusResponse> | null
@@ -181,6 +195,26 @@ async function queueMaintenance(input: {
   const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accepted: boolean; operationId: string; stageId?: string }> | null
   if (!res.ok || !json?.success || !json.data) {
     throw new Error(json?.error || `Failed to queue maintenance (${res.status})`)
+  }
+  return json.data
+}
+
+async function queueSettle(input: {
+  vaultAddress: string
+  graduatedAt?: string
+  settledAt?: string
+  settlementStage?: string
+  idempotencyKey?: string
+}): Promise<{ accepted: boolean; operationId: string; stageId?: string }> {
+  const res = await apiFetch('/api/admin/control-plane/settle', {
+    method: 'POST',
+    withCredentials: true,
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<{ accepted: boolean; operationId: string; stageId?: string }> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error || `Failed to queue settle (${res.status})`)
   }
   return json.data
 }
@@ -294,10 +328,20 @@ function CountChips(props: { title: string; counts: Record<string, number> }) {
   )
 }
 
+const OPERATION_KIND_FILTERS = [
+  { value: '', label: 'All kinds' },
+  { value: 'payment.activation', label: 'payment.activation' },
+  { value: 'vault.provision', label: 'vault.provision' },
+  { value: 'vault.maintenance', label: 'vault.maintenance' },
+  { value: 'vault.settle', label: 'vault.settle' },
+  { value: 'operator.action', label: 'operator.action' },
+] as const
+
 export function AdminControlPlane() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedOperationId = searchParams.get('operationId')?.trim() || ''
   const vaultAddressFilter = searchParams.get('vaultAddress')?.trim().toLowerCase() || ''
+  const operationKindFilter = searchParams.get('operationKind')?.trim() || ''
   const stuckMinutes = parseBoundedInt(searchParams.get('stuckMinutes'), 30, 1, 24 * 60)
   const limit = parseBoundedInt(searchParams.get('limit'), 20, 1, 200)
   const eventsLimit = parseBoundedInt(searchParams.get('eventsLimit'), 250, 1, 2_000)
@@ -309,6 +353,11 @@ export function AdminControlPlane() {
   const [queueCreatorAddress, setQueueCreatorAddress] = useState('')
   const [queueStrategyVariant, setQueueStrategyVariant] = useState('default')
   const [maintenanceVaultAddress, setMaintenanceVaultAddress] = useState('')
+  const [settleVaultAddress, setSettleVaultAddress] = useState('')
+  const [settleGraduatedAt, setSettleGraduatedAt] = useState('')
+  const [settleSettledAt, setSettleSettledAt] = useState('')
+  const [settleStage, setSettleStage] = useState('completed')
+  const [settleIdempotencyKey, setSettleIdempotencyKey] = useState('')
   const [actionVaultAddress, setActionVaultAddress] = useState('')
   const [actionType, setActionType] = useState('vault.sweep')
   const [actionPayloadText, setActionPayloadText] = useState('{"ccaStrategyAddress":""}')
@@ -340,12 +389,13 @@ export function AdminControlPlane() {
   }
 
   const statusQuery = useQuery({
-    queryKey: ['admin', 'control-plane', 'status', stuckMinutes, limit, normalizedVaultAddressFilter],
+    queryKey: ['admin', 'control-plane', 'status', stuckMinutes, limit, normalizedVaultAddressFilter, operationKindFilter],
     queryFn: () =>
       fetchControlPlaneStatus({
         stuckMinutes,
         limit,
         vaultAddress: normalizedVaultAddressFilter || undefined,
+        operationKind: operationKindFilter || undefined,
       }),
     staleTime: 15_000,
   })
@@ -378,6 +428,15 @@ export function AdminControlPlane() {
       void operationQuery.refetch()
     },
   })
+  const settleMutation = useMutation({
+    mutationFn: queueSettle,
+    onSuccess: (data) => {
+      setOperationInput(data.operationId)
+      updateQueryParams({ operationId: data.operationId })
+      void statusQuery.refetch()
+      void operationQuery.refetch()
+    },
+  })
   const actionMutation = useMutation({
     mutationFn: queueCustomOperatorAction,
     onSuccess: (data) => {
@@ -389,10 +448,11 @@ export function AdminControlPlane() {
     },
   })
 
-  const recentOperationIds = useMemo(
-    () => statusQuery.data?.stuck.operations.map((op) => op.operationId) ?? [],
-    [statusQuery.data?.stuck.operations],
-  )
+  const recentOperationIds = useMemo(() => {
+    const stuckIds = statusQuery.data?.stuck.operations.map((op) => op.operationId) ?? []
+    const recentIds = statusQuery.data?.recentOperations.map((op) => op.operationId) ?? []
+    return [...new Set([...stuckIds, ...recentIds])]
+  }, [statusQuery.data?.recentOperations, statusQuery.data?.stuck.operations])
 
   return (
     <div className="space-y-6">
@@ -417,6 +477,20 @@ export function AdminControlPlane() {
       <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
         <div className="text-sm text-zinc-200">View Filters (URL synced)</div>
         <div className="flex flex-wrap gap-3">
+          <label className="text-xs text-zinc-400 flex items-center gap-2">
+            Operation Kind
+            <select
+              value={operationKindFilter}
+              onChange={(event) => updateQueryParams({ operationKind: event.target.value || null })}
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-xs text-zinc-200"
+            >
+              {OPERATION_KIND_FILTERS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="text-xs text-zinc-400 flex items-center gap-2">
             Stuck Minutes
             <select
@@ -598,6 +672,68 @@ export function AdminControlPlane() {
           className="space-y-2"
           onSubmit={(event) => {
             event.preventDefault()
+            settleMutation.mutate({
+              vaultAddress: settleVaultAddress.trim(),
+              graduatedAt: settleGraduatedAt.trim() || undefined,
+              settledAt: settleSettledAt.trim() || undefined,
+              settlementStage: settleStage.trim() || undefined,
+              idempotencyKey: settleIdempotencyKey.trim() || undefined,
+            })
+          }}
+        >
+          <div className="text-xs uppercase tracking-wide text-zinc-500">Settle</div>
+          <div className="grid gap-2 md:grid-cols-2">
+            <input
+              value={settleVaultAddress}
+              onChange={(event) => setSettleVaultAddress(event.target.value)}
+              placeholder="vaultAddress"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={settleStage}
+              onChange={(event) => setSettleStage(event.target.value)}
+              placeholder="settlementStage"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={settleGraduatedAt}
+              onChange={(event) => setSettleGraduatedAt(event.target.value)}
+              placeholder="graduatedAt ISO (optional)"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={settleSettledAt}
+              onChange={(event) => setSettleSettledAt(event.target.value)}
+              placeholder="settledAt ISO (optional, requires completed)"
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+            <input
+              value={settleIdempotencyKey}
+              onChange={(event) => setSettleIdempotencyKey(event.target.value)}
+              placeholder="idempotencyKey (optional)"
+              className="md:col-span-2 rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={
+              settleMutation.isPending ||
+              !settleVaultAddress.trim() ||
+              (!settleGraduatedAt.trim() && !settleSettledAt.trim() && !settleStage.trim())
+            }
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/20 disabled:opacity-60"
+          >
+            {settleMutation.isPending ? 'Queueing...' : 'Queue Settle'}
+          </button>
+          {settleMutation.error instanceof Error ? (
+            <div className="text-xs text-red-300">{settleMutation.error.message}</div>
+          ) : null}
+        </form>
+
+        <form
+          className="space-y-2"
+          onSubmit={(event) => {
+            event.preventDefault()
             setActionPayloadError(null)
             let payload: Record<string, unknown> | undefined = undefined
             const raw = actionPayloadText.trim()
@@ -690,6 +826,44 @@ export function AdminControlPlane() {
               lifecycle={statusQuery.data.vaultLifecycle}
             />
           ) : null}
+
+          <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
+              <div className="text-sm text-zinc-200">
+                Recent Operations
+                {operationKindFilter ? (
+                  <span className="ml-2 text-[11px] text-zinc-500">{operationKindFilter}</span>
+                ) : null}
+              </div>
+              <div className="text-[11px] text-zinc-500">{statusQuery.data.recentOperations.length} loaded</div>
+            </div>
+            {statusQuery.data.recentOperations.length === 0 ? (
+              <div className="px-4 py-5 text-sm text-zinc-500">No recent operations for this filter.</div>
+            ) : (
+              <div className="divide-y divide-white/10">
+                {statusQuery.data.recentOperations.map((op) => (
+                  <button
+                    key={op.operationId}
+                    type="button"
+                    onClick={() => {
+                      updateQueryParams({ operationId: op.operationId })
+                      setOperationInput(op.operationId)
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white/[0.03] transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="mono text-xs text-zinc-200">{op.operationId}</div>
+                      <div className="text-[11px] text-zinc-400">{op.status}</div>
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      {op.operationKind} · {op.scopeType}:{op.scopeId}
+                    </div>
+                    <div className="mt-1 text-[11px] text-zinc-600">Created {formatDateTime(op.createdAt)}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
             <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">

@@ -82,6 +82,19 @@ describe('/api/admin/control-plane/status', () => {
           },
         ],
       })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            operation_id: 'op_pay_1',
+            operation_kind: 'payment.activation',
+            status: 'succeeded',
+            scope_type: 'payment',
+            scope_id: 'pay_1',
+            created_at: '2026-05-18T15:00:00.000Z',
+            updated_at: '2026-05-18T15:05:00.000Z',
+          },
+        ],
+      })
 
     const req = createMockReq({ method: 'GET', query: { stuckMinutes: '15', limit: '10' } })
     const res = createMockRes()
@@ -93,6 +106,52 @@ describe('/api/admin/control-plane/status', () => {
     expect(res.body?.data?.operationCounts?.running).toBe(2)
     expect(res.body?.data?.stuck?.thresholdMinutes).toBe(15)
     expect(res.body?.data?.stuck?.operations?.[0]?.operationId).toBe('op_123')
+    expect(res.body?.data?.recentOperations?.[0]?.operationKind).toBe('payment.activation')
+  })
+
+  it('filters stuck and recent operations by operationKind', async () => {
+    dbSqlMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            operation_id: 'op_pay_stuck',
+            operation_kind: 'payment.activation',
+            status: 'running',
+            scope_type: 'payment',
+            scope_id: 'pay_2',
+            updated_at: '2026-05-18T16:00:00.000Z',
+            age_minutes: 120,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            operation_id: 'op_pay_recent',
+            operation_kind: 'payment.activation',
+            status: 'queued',
+            scope_type: 'payment',
+            scope_id: 'pay_3',
+            created_at: '2026-05-18T17:00:00.000Z',
+            updated_at: '2026-05-18T17:00:00.000Z',
+          },
+        ],
+      })
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { operationKind: 'payment.activation', limit: '5' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.stuck?.operations?.[0]?.operationId).toBe('op_pay_stuck')
+    expect(res.body?.data?.recentOperations?.[0]?.operationId).toBe('op_pay_recent')
   })
 
   it('includes vault lifecycle when vaultAddress query is valid', async () => {
@@ -109,6 +168,7 @@ describe('/api/admin/control-plane/status', () => {
     })
 
     dbSqlMock
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({ rows: [] })
