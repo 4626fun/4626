@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const { dbSqlMock, getDbMock, getSessionAddressMock, isAdminAddressMock } = vi.hoisted(() => ({
+const { dbSqlMock, getDbMock, getSessionAddressMock, isAdminAddressMock, getVaultLifecycleStatusMock } = vi.hoisted(() => ({
   dbSqlMock: vi.fn<(...args: any[]) => Promise<{ rows: any[]; rowCount?: number }>>(async () => ({
     rows: [] as any[],
     rowCount: 0,
@@ -12,6 +12,13 @@ const { dbSqlMock, getDbMock, getSessionAddressMock, isAdminAddressMock } = vi.h
   })),
   getSessionAddressMock: vi.fn<() => string | null>(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
+  getVaultLifecycleStatusMock: vi.fn<() => Promise<Record<string, unknown> | null>>(async () => null),
+}))
+
+vi.mock('../../server/_lib/controlPlane/vaultControlPlane.js', () => ({
+  createVaultControlPlane: () => ({
+    getVaultLifecycleStatus: getVaultLifecycleStatusMock,
+  }),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', async () => {
@@ -86,6 +93,39 @@ describe('/api/admin/control-plane/status', () => {
     expect(res.body?.data?.operationCounts?.running).toBe(2)
     expect(res.body?.data?.stuck?.thresholdMinutes).toBe(15)
     expect(res.body?.data?.stuck?.operations?.[0]?.operationId).toBe('op_123')
+  })
+
+  it('includes vault lifecycle when vaultAddress query is valid', async () => {
+    getVaultLifecycleStatusMock.mockResolvedValueOnce({
+      vaultAddress: '0x1111111111111111111111111111111111111111',
+      graduatedAt: '2026-05-18T10:00:00.000Z',
+      settledAt: null,
+      settlementStage: 'awaiting_owner_hook_config',
+      settlementStageUpdatedAt: '2026-05-18T11:00:00.000Z',
+      freshness: 'stale',
+      lastUpdatedAt: '2026-05-18T11:00:00.000Z',
+      degradationMode: 'allow_stale_read',
+      warning: 'lifecycle_data_stale:120m',
+    })
+
+    dbSqlMock
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { vaultAddress: '0x1111111111111111111111111111111111111111' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getVaultLifecycleStatusMock).toHaveBeenCalledWith('0x1111111111111111111111111111111111111111')
+    expect(res.body?.data?.vaultLifecycle?.freshness).toBe('stale')
+    expect(res.body?.data?.vaultLifecycle?.warning).toContain('lifecycle_data_stale')
   })
 })
 

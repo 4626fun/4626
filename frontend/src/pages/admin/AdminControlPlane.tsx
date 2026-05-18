@@ -32,6 +32,17 @@ type AdminControlPlaneStatusResponse = {
     message: string
     createdAt: string
   }>
+  vaultLifecycle?: {
+    vaultAddress: string
+    graduatedAt: string | null
+    settledAt: string | null
+    settlementStage: string | null
+    settlementStageUpdatedAt: string | null
+    freshness?: 'fresh' | 'stale'
+    lastUpdatedAt?: string | null
+    degradationMode?: 'allow_stale_read'
+    warning?: string
+  } | null
 }
 
 type AdminControlPlaneOperationDetail = {
@@ -103,11 +114,16 @@ function parseBoundedInt(value: string | null, fallback: number, min: number, ma
 async function fetchControlPlaneStatus(params: {
   stuckMinutes: number
   limit: number
+  vaultAddress?: string
 }): Promise<AdminControlPlaneStatusResponse> {
   const qs = new URLSearchParams({
     stuckMinutes: String(params.stuckMinutes),
     limit: String(params.limit),
   })
+  const vaultAddress = params.vaultAddress?.trim().toLowerCase() ?? ''
+  if (/^0x[a-f0-9]{40}$/.test(vaultAddress)) {
+    qs.set('vaultAddress', vaultAddress)
+  }
   const res = await apiFetch(`/api/admin/control-plane/status?${qs.toString()}`, { withCredentials: true })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<AdminControlPlaneStatusResponse> | null
   if (!res.ok || !json?.success || !json.data) {
@@ -195,6 +211,69 @@ function formatDateTime(value: string | null): string {
   return d.toLocaleString()
 }
 
+function VaultLifecyclePanel(props: {
+  vaultAddress: string
+  lifecycle: AdminControlPlaneStatusResponse['vaultLifecycle']
+}) {
+  const { vaultAddress, lifecycle } = props
+  const isStale = lifecycle?.freshness === 'stale'
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
+      <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between gap-3 flex-wrap">
+        <div className="text-sm text-zinc-200">Vault Lifecycle</div>
+        {lifecycle?.freshness ? (
+          <span
+            className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+              isStale
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-200'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+            }`}
+          >
+            {lifecycle.freshness}
+          </span>
+        ) : null}
+      </div>
+      <div className="px-4 py-4 space-y-3">
+        <div className="mono text-xs text-zinc-300 break-all">{vaultAddress}</div>
+        {!lifecycle ? (
+          <div className="text-sm text-zinc-500">Vault not found in keepr registry.</div>
+        ) : (
+          <>
+            {lifecycle.warning ? (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+                {lifecycle.warning}
+                {lifecycle.degradationMode ? (
+                  <span className="text-amber-300/70"> · policy {lifecycle.degradationMode}</span>
+                ) : null}
+              </div>
+            ) : lifecycle.degradationMode ? (
+              <div className="text-xs text-zinc-500">Degradation mode: {lifecycle.degradationMode}</div>
+            ) : null}
+            <div className="grid gap-2 sm:grid-cols-2 text-xs">
+              <div className="rounded-md border border-white/10 bg-black/30 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">Settlement stage</div>
+                <div className="mt-1 text-zinc-200">{lifecycle.settlementStage ?? '—'}</div>
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  Updated {formatDateTime(lifecycle.settlementStageUpdatedAt)}
+                </div>
+              </div>
+              <div className="rounded-md border border-white/10 bg-black/30 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-wide text-zinc-500">Lifecycle timestamps</div>
+                <div className="mt-1 text-zinc-400">Graduated {formatDateTime(lifecycle.graduatedAt)}</div>
+                <div className="text-zinc-400">Settled {formatDateTime(lifecycle.settledAt)}</div>
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  Last updated {formatDateTime(lifecycle.lastUpdatedAt ?? null)}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function CountChips(props: { title: string; counts: Record<string, number> }) {
   const entries = Object.entries(props.counts).sort((a, b) => b[1] - a[1])
   return (
@@ -218,11 +297,13 @@ function CountChips(props: { title: string; counts: Record<string, number> }) {
 export function AdminControlPlane() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedOperationId = searchParams.get('operationId')?.trim() || ''
+  const vaultAddressFilter = searchParams.get('vaultAddress')?.trim().toLowerCase() || ''
   const stuckMinutes = parseBoundedInt(searchParams.get('stuckMinutes'), 30, 1, 24 * 60)
   const limit = parseBoundedInt(searchParams.get('limit'), 20, 1, 200)
   const eventsLimit = parseBoundedInt(searchParams.get('eventsLimit'), 250, 1, 2_000)
   const jobsLimit = parseBoundedInt(searchParams.get('jobsLimit'), 100, 1, 1_000)
   const [operationInput, setOperationInput] = useState(selectedOperationId)
+  const [vaultAddressInput, setVaultAddressInput] = useState(vaultAddressFilter)
   const [queueVaultAddress, setQueueVaultAddress] = useState('')
   const [queueChainId, setQueueChainId] = useState('')
   const [queueCreatorAddress, setQueueCreatorAddress] = useState('')
@@ -237,6 +318,12 @@ export function AdminControlPlane() {
   useEffect(() => {
     setOperationInput(selectedOperationId)
   }, [selectedOperationId])
+
+  useEffect(() => {
+    setVaultAddressInput(vaultAddressFilter)
+  }, [vaultAddressFilter])
+
+  const normalizedVaultAddressFilter = /^0x[a-f0-9]{40}$/.test(vaultAddressFilter) ? vaultAddressFilter : ''
 
   function updateQueryParams(updates: Record<string, string | null>) {
     setSearchParams(
@@ -253,8 +340,13 @@ export function AdminControlPlane() {
   }
 
   const statusQuery = useQuery({
-    queryKey: ['admin', 'control-plane', 'status', stuckMinutes, limit],
-    queryFn: () => fetchControlPlaneStatus({ stuckMinutes, limit }),
+    queryKey: ['admin', 'control-plane', 'status', stuckMinutes, limit, normalizedVaultAddressFilter],
+    queryFn: () =>
+      fetchControlPlaneStatus({
+        stuckMinutes,
+        limit,
+        vaultAddress: normalizedVaultAddressFilter || undefined,
+      }),
     staleTime: 15_000,
   })
 
@@ -308,7 +400,7 @@ export function AdminControlPlane() {
         <div>
           <div className="font-display text-2xl text-white">Control Plane</div>
           <div className="text-xs text-zinc-500 mt-1">
-            Read-only operator view for lifecycle status, stuck operations, and operation timelines.
+            Operator view for lifecycle status, stuck operations, operation timelines, and per-vault degradation.
           </div>
         </div>
         <button
@@ -378,6 +470,42 @@ export function AdminControlPlane() {
             </select>
           </label>
         </div>
+        <form
+          className="flex flex-wrap gap-2 items-end"
+          onSubmit={(event) => {
+            event.preventDefault()
+            const next = vaultAddressInput.trim().toLowerCase()
+            updateQueryParams({ vaultAddress: next || null })
+          }}
+        >
+          <label className="flex-1 min-w-[280px] text-xs text-zinc-400">
+            Vault Address (lifecycle + degradation)
+            <input
+              value={vaultAddressInput}
+              onChange={(event) => setVaultAddressInput(event.target.value)}
+              placeholder="0x..."
+              className="mt-1 w-full rounded-md border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 mono"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-200 hover:border-white/20"
+          >
+            Load Lifecycle
+          </button>
+          {vaultAddressFilter ? (
+            <button
+              type="button"
+              onClick={() => {
+                setVaultAddressInput('')
+                updateQueryParams({ vaultAddress: null })
+              }}
+              className="rounded-lg bg-white/5 border border-white/10 px-3 py-1.5 text-xs text-zinc-400 hover:border-white/20"
+            >
+              Clear
+            </button>
+          ) : null}
+        </form>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-5">
@@ -555,6 +683,13 @@ export function AdminControlPlane() {
             <CountChips title="Stages" counts={statusQuery.data.stageCounts} />
             <CountChips title="Keeper Jobs" counts={statusQuery.data.keeperJobCounts} />
           </div>
+
+          {normalizedVaultAddressFilter ? (
+            <VaultLifecyclePanel
+              vaultAddress={normalizedVaultAddressFilter}
+              lifecycle={statusQuery.data.vaultLifecycle}
+            />
+          ) : null}
 
           <div className="rounded-xl border border-white/10 bg-black/20 overflow-hidden">
             <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
