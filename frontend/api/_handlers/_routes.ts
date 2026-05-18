@@ -99,6 +99,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/aiAssess': () => import('./keeper/_aiAssess.js'),
   'keeper/solana/reconcile': () => import('./keeper/_solanaReconcile.js'),
   'keeper/ajna/rebalance': () => import('./keeper/_ajnaRebalance.js'),
+  'keeper/control-plane/status': () => import('./keeper/_controlPlaneStatus.js'),
 
   'flags/discover': () => import('./flags/_discover.js'),
   'flags/evaluate': () => import('./flags/_evaluate.js'),

@@ -57,6 +57,7 @@
     "agent:eliza:doctor": "tsx --env-file=.env scripts/agent/eliza-doctor.ts",
     "agent:eliza:standby:smoke": "bash -lc 'tmp_xmtp_db_dir=$(mktemp -d); trap \"rm -rf \\\"$tmp_xmtp_db_dir\\\"\" EXIT; timeout 20s env PORT=${PORT:-8081} AGENT_RUNTIME_ROLE=standby AGENT_CONSUME_XMTP=false XMTP_DB_DIRECTORY=\"$tmp_xmtp_db_dir\" pnpm agent:eliza; code=$?; if [ \"$code\" -eq 124 ]; then exit 0; fi; exit \"$code\"'",
     "keeper:jobs:worker": "tsx --env-file=.env scripts/keeper-job-worker.ts",
+    "control-plane:stuck-scan": "tsx --env-file=.env scripts/control-plane-stuck-operations.ts",
     "alfaclub:chat:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts",
     "alfaclub:gmeow:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts --preset gmeow",
     "relay:add-owner:smoke": "tsx --env-file=.env scripts/smoke-relay-add-owner.ts",
