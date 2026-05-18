@@ -146,6 +146,10 @@ export const AdminUserOpHealth = lazyNamed(
   () => import('../pages/admin/AdminUserOpHealth'),
   'AdminUserOpHealth',
 )
+export const AdminControlPlane = lazyNamed(
+  () => import('../pages/admin/AdminControlPlane'),
+  'AdminControlPlane',
+)
 export const GaugeVoting = lazyDefault(() => import('../pages/GaugeVoting'))
 export const AuctionDemo = lazyDefault(() => import('../pages/auction/AuctionDemo'))
 export const AgentDirectory = lazyNamed(() => import('../pages/agents/AgentDirectory'), 'AgentDirectory')

@@ -42,6 +42,11 @@ const ADMIN_TABS = [
     to: '/admin/userop-health',
     description: 'ERC-4337 / paymaster telemetry',
   },
+  {
+    label: 'Control Plane',
+    to: '/admin/control-plane',
+    description: 'Operation lifecycle, timelines, stuck runs',
+  },
 ] as const
 
 /**
@@ -154,7 +159,7 @@ export function AdminLayout() {
       ) : null}
       {/* Tab navigation */}
       <div className="rounded-xl border border-white/10 bg-black/30 p-2">
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-8">
           {ADMIN_TABS.map((tab) => {
             const active = activeTab?.to === tab.to
             return (

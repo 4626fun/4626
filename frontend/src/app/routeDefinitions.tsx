@@ -13,6 +13,7 @@ import {
   AdminDeployStrategies,
   AdminImageGeneration,
   AdminOps,
+  AdminControlPlane,
   AdminUserOpHealth,
   AlfaClubVigilante,
   AdminWaitlist,
@@ -262,6 +263,7 @@ export const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
     ),
   },
   { path: 'userop-health', element: <AdminUserOpHealth /> },
+  { path: 'control-plane', element: <AdminControlPlane /> },
   {
     path: 'alfaclub-vigilante',
     element: (
