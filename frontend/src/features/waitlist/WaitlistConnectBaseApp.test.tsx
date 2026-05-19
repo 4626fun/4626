@@ -193,6 +193,8 @@ describe('WaitlistConnectBaseApp', () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
     await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
+    expect(screen.getByText(/could not save your base app link/i)).toBeTruthy()
+    expect(screen.queryByText('unexpected_error')).toBeNull()
     expect(screen.getByTestId('retry-base-app-button')).toBeTruthy()
 
     // Retry path: a second call should re-invoke setupSubAccount + fetch.

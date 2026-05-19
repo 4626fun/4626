@@ -14,13 +14,14 @@ import { createMockReq, createMockRes } from '../helpers'
 // Hoisted mocks (server-core boundary)
 // ---------------------------------------------------------------------------
 
-const mocks = vi.hoisted(() => ({
-  handleOptions: vi.fn(() => false),
-  setCors: vi.fn(),
-  setNoStore: vi.fn(),
-  readBoundedJsonObjectBody: vi.fn(async () => ({})),
-  getDb: vi.fn(),
-  isDbConfigured: vi.fn(() => true),
+const mocks = vi.hoisted(() => {
+  const bag = {
+    handleOptions: vi.fn(() => false),
+    setCors: vi.fn(),
+    setNoStore: vi.fn(),
+    readBoundedJsonObjectBody: vi.fn(async () => ({})),
+    getDb: vi.fn(),
+    isDbConfigured: vi.fn(() => true),
   getClientIp: vi.fn(() => '127.0.0.1'),
   checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 29, resetAt: Date.now() + 60_000 })),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
@@ -28,8 +29,15 @@ const mocks = vi.hoisted(() => ({
   // We don't use the on-chain sanity read in tests — the handler test
   // seam (`__setHandlerHooksForTest`) injects a no-op so it never tries
   // to reach Base RPC.
-  getBasePublicClient: vi.fn(() => ({})),
-}))
+    getBasePublicClient: vi.fn(() => ({})),
+    runInTransaction: vi.fn(async (fn: (db: unknown) => Promise<unknown>) => {
+      const db = await bag.getDb()
+      if (!db) return null
+      return fn(db)
+    }),
+  }
+  return bag
+})
 
 vi.mock('../../../packages/server-core/src/index.js', () => ({
   handleOptions: mocks.handleOptions,
@@ -37,6 +45,7 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   setNoStore: mocks.setNoStore,
   readBoundedJsonObjectBody: mocks.readBoundedJsonObjectBody,
   getDb: mocks.getDb,
+  runInTransaction: mocks.runInTransaction,
   isDbConfigured: mocks.isDbConfigured,
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
@@ -341,7 +350,7 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     })
   })
 
-  it('upserts CIEC, wallets, and profile_wallets within a single transaction', async () => {
+  it('upserts CIEC, wallets, profile_wallets, and profiles via runInTransaction', async () => {
     const db = makeFakeDb({
       selectResponses: [
         profilesSelectResponse(EMBEDDED_EOA),
@@ -354,9 +363,9 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(200)
 
+    expect(mocks.runInTransaction).toHaveBeenCalledTimes(1)
+
     const sqlText = db.calls.map((c) => c.sql).join('\n--SEP--\n')
-    expect(sqlText).toContain('BEGIN')
-    expect(sqlText).toContain('COMMIT')
     expect(sqlText).toContain('command_issuer_execution_context')
     expect(sqlText).toContain('provisioning_source')
     expect(sqlText).toContain('INTO wallets')
@@ -368,6 +377,8 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     expect(sqlText).toMatch(/UPDATE profile_wallets[\s\S]*is_canonical_smart_wallet = false/i)
     // And it sets is_canonical_smart_wallet = true on the parent CSW row.
     expect(sqlText).toMatch(/INSERT INTO profile_wallets[\s\S]*is_canonical_smart_wallet/i)
+    expect(sqlText).toContain('base_sub_account')
+    expect(sqlText).toContain('csw_address')
   })
 
   it('is idempotent: same body twice produces 200 both times', async () => {
@@ -401,7 +412,7 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
 
   // -------------------------- Rollback / partial failure --------------------------
 
-  it('rolls back the transaction when profile_wallets upsert fails mid-flight', async () => {
+  it('returns unexpected_error when profile_wallets upsert fails mid-flight', async () => {
     const db = makeFakeDb({
       selectResponses: [
         profilesSelectResponse(EMBEDDED_EOA),
@@ -419,10 +430,7 @@ describe('POST /api/arch-b/sub-account/baseapp/register', () => {
     expect(res.statusCode).toBe(500)
     expect(res.body.error).toBe('unexpected_error')
 
-    // ROLLBACK must have been issued.
-    const sqlText = db.calls.map((c) => c.sql).join('\n--SEP--\n')
-    expect(sqlText).toContain('ROLLBACK')
-    expect(sqlText).not.toContain('COMMIT')
+    expect(mocks.runInTransaction).toHaveBeenCalledTimes(1)
   })
 
   // -------------------------- Rate limit --------------------------

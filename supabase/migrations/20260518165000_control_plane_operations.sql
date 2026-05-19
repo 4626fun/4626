@@ -6,7 +6,7 @@ BEGIN;
 CREATE TABLE IF NOT EXISTS public.control_plane_operations (
   id BIGSERIAL PRIMARY KEY,
   operation_id TEXT NOT NULL UNIQUE,
-  operation_kind TEXT NOT NULL CHECK (operation_kind ~ '^[a-z][a-z0-9_:-]{2,63}$'),
+  operation_kind TEXT NOT NULL CHECK (operation_kind ~ '^[a-z][a-z0-9_.:-]{2,63}$'),
   vault_address TEXT,
   status TEXT NOT NULL CHECK (status IN ('running', 'succeeded', 'failed')),
   requested_by TEXT,

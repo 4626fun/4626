@@ -77,8 +77,30 @@ function mapRegisterError(code: string, fallback: string): { message: string; ca
         canRetry: false,
         autoSkip: true,
       }
-    default:
-      return { message: fallback || 'Could not register your Base App wallet.', canRetry: true, autoSkip: false }
+    case 'unexpected_error':
+    case 'db_unavailable':
+      return {
+        message:
+          'We could not save your Base App link right now. Please try again in a moment, or skip and finish setup later.',
+        canRetry: true,
+        autoSkip: false,
+      }
+    case 'profile_not_ready':
+      return {
+        message: 'Finish email verification first, then return to connect Base App.',
+        canRetry: false,
+        autoSkip: false,
+      }
+    default: {
+      const looksLikeCode = /^[a-z][a-z0-9_]*$/.test(code)
+      return {
+        message: looksLikeCode
+          ? 'Could not register your Base App wallet. Please try again.'
+          : fallback || 'Could not register your Base App wallet.',
+        canRetry: true,
+        autoSkip: false,
+      }
+    }
   }
 }
 
