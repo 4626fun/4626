@@ -76,16 +76,31 @@ function isHttpUrl(value: string): boolean {
   return /^https?:\/\/\S+$/i.test(value.trim())
 }
 
+function isLikelyImageUrl(value: string): boolean {
+  const trimmed = value.trim()
+  if (!isHttpUrl(trimmed)) return false
+  try {
+    const parsed = new URL(trimmed)
+    const path = parsed.pathname.toLowerCase()
+    if (/\.(gif|jpe?g|png|webp)$/.test(path)) return true
+    const filename = String(parsed.searchParams.get('filename') ?? '').toLowerCase()
+    if (/\.(gif|jpe?g|png|webp)$/.test(filename)) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
 function truncateWithEllipsis(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value
   if (maxLength <= 1) return '…'
   return `${value.slice(0, maxLength - 1).trimEnd()}…`
 }
 
-function buildGmeowTweetText(params: {
+function buildHermitTweetText(params: {
   reply: string
-  memeCaption?: string
-  memeUrl?: string
+  fallbackCaption?: string
+  mediaUrl?: string
 }): string {
   const lines = params.reply
     .split('\n')
@@ -93,9 +108,9 @@ function buildGmeowTweetText(params: {
     .filter(Boolean)
     .filter((line) => !line.startsWith('— Want me to remember your style?'))
 
-  const mediaUrl = params.memeUrl || lines.find((line) => isHttpUrl(line)) || ''
+  const mediaUrl = params.mediaUrl || lines.find((line) => isHttpUrl(line)) || ''
   const textLine =
-    lines.find((line) => !isHttpUrl(line)) || params.memeCaption || 'cat laugh from the Hermit cave.'
+    lines.find((line) => !isHttpUrl(line)) || params.fallbackCaption || 'cat laugh from the Hermit cave.'
 
   if (!mediaUrl) return truncateWithEllipsis(textLine, 280)
   const combined = `${textLine}\n${mediaUrl}`
@@ -103,6 +118,28 @@ function buildGmeowTweetText(params: {
 
   const maxTextLength = Math.max(1, 280 - mediaUrl.length - 1)
   return `${truncateWithEllipsis(textLine, maxTextLength)}\n${mediaUrl}`
+}
+
+function pickFirstHermitMediaUrl(
+  attachments: Array<{ url?: string }> | undefined,
+): string | null {
+  if (!attachments || attachments.length === 0) return null
+  for (const attachment of attachments) {
+    const url = typeof attachment.url === 'string' ? attachment.url.trim() : ''
+    if (isLikelyImageUrl(url)) return url
+  }
+  return null
+}
+
+function pickFirstImageUrlFromReplyText(reply: string): string | null {
+  const lines = reply
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  for (const line of lines) {
+    if (isLikelyImageUrl(line)) return line
+  }
+  return null
 }
 
 function extractTweetUrl(response: string): string | null {
@@ -359,12 +396,17 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
         })
         let response = result.reply
         let suppressMediaAttachments = false
-        if (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled()) {
+        const mediaUrl =
+          pickFirstHermitMediaUrl(result.mediaAttachments ?? []) ??
+          pickFirstImageUrlFromReplyText(result.reply)
+        const shouldPostToXFirst =
+          Boolean(mediaUrl) || (result.kind === 'gmeow' && isGmeowPostToXFirstEnabled())
+        if (shouldPostToXFirst) {
           const tweet = await postTweetFromSystem({
-            text: buildGmeowTweetText({
+            text: buildHermitTweetText({
               reply: result.reply,
-              memeCaption: result.meme?.caption,
-              memeUrl: result.meme?.url,
+              fallbackCaption: result.meme?.caption,
+              mediaUrl: mediaUrl ?? result.meme?.url,
             }),
             groupId: params.groupId,
             senderWallet: params.senderWallet,

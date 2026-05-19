@@ -2602,6 +2602,7 @@ async function executeCommandBatch(params: {
               botToken: params.flags.botToken,
               roomId: params.roomId,
               text: responseText,
+              replyToMessageId: command.id,
               proxySecret: resolveAlfaClubProxySecret(params.flags),
               idempotencyKey,
               timeoutMs: params.flags.sendTimeoutMs,
@@ -2611,12 +2612,12 @@ async function executeCommandBatch(params: {
               roomId: params.roomId,
               messageId: command.id,
               sender: command.sender,
-              lane: 'bot_token_without_reply_id',
+              lane: 'bot_token_with_reply_id_retry',
               sendResult,
             })
           } catch (error) {
             const detail = error instanceof Error ? error.message : String(error)
-            logger.warn('[alfaclub-chat] bot_reply_without_reply_id_failed', {
+            logger.warn('[alfaclub-chat] bot_reply_with_reply_id_retry_failed', {
               roomId: params.roomId,
               messageId: command.id,
               error: detail.slice(0, 180),
