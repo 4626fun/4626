@@ -27,9 +27,9 @@
 //
 // FAILURE MODE
 // ============
-// We always return 200 with `tick: 'errored'` on RPC/DB exceptions so
-// the schedule keeps ticking and observability sees a consistent
-// envelope. 401 / 503 are the only non-200 responses (auth / config).
+// We always return 200 for scheduled invocations (including disabled/
+// unconfigured states) so the schedule keeps ticking and observability
+// sees a consistent envelope. 401 is reserved for auth failures only.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
@@ -192,7 +192,14 @@ export default async function handler(
   }
 
   if (!isZoraCswIndexerEnabled()) {
-    res.status(503).json({ ok: false, error: 'feature_disabled' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'feature_disabled',
+      from_block: null,
+      to_block: null,
+      new_csws: 0,
+    })
     return
   }
 
@@ -202,11 +209,25 @@ export default async function handler(
   }
 
   if (!__testHooks.db && !isSupabaseAdminConfigured()) {
-    res.status(503).json({ ok: false, error: 'supabase_not_configured' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'supabase_not_configured',
+      from_block: null,
+      to_block: null,
+      new_csws: 0,
+    })
     return
   }
   if (!__testHooks.getTipBlock && !String(process.env.BASE_RPC_URL ?? '').trim()) {
-    res.status(503).json({ ok: false, error: 'base_rpc_url_not_configured' })
+    res.status(200).json({
+      ok: true,
+      tick: 'skipped',
+      reason: 'base_rpc_url_not_configured',
+      from_block: null,
+      to_block: null,
+      new_csws: 0,
+    })
     return
   }
 
