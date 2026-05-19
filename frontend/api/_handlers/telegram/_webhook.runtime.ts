@@ -44,6 +44,11 @@ import {
   upsertHolderRoomMember,
 } from '../../../packages/server-core/src/index.js'
 
+import {
+  resolveTelegramWebhookIngressLane,
+  shouldRelayTelegramToAlfaclubOnCanonicalWebhook,
+} from './webhook/ingress.js'
+import { handleHermitTelegramWebhookIngress } from './webhook/hermitWebhookIngress.js'
 import { checkSharesEligibility } from '../../../server/_lib/keepr/keeprGating.js'
 import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/identity/accountsIdentity.js'
 import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keepr/keeprRegistry.js'
@@ -7199,6 +7204,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
+  if (resolveTelegramWebhookIngressLane(req) === 'hermit') {
+    return handleHermitTelegramWebhookIngress(req, res)
+  }
+
   const webhookConfig = getTelegramWebhookConfig()
   const botToken = webhookConfig.botToken
   if (!botToken) {
@@ -7817,39 +7826,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<TelegramWebhookOk>)
   }
 
-  const relayText = asTrimmed(message.text ?? message.caption ?? '')
-  const relayThreadId =
-    typeof message.message_thread_id === 'number' && Number.isFinite(message.message_thread_id)
-      ? message.message_thread_id
-      : null
-  try {
-    const { relayTelegramMessageToAlfaClub } = await import(
-      '../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
-    )
-    const relayResult = await relayTelegramMessageToAlfaClub({
-      chatId,
-      messageId,
-      messageThreadId: relayThreadId,
-      text: relayText,
-      username: message.from?.username ?? null,
-      userId,
-    })
-    if (relayResult.status === 'relayed') {
-      return res.status(200).json({
-        success: true,
-        data: {
-          ok: true,
-          updateId: update.update_id ?? null,
-          alfaclubRelay: { roomId: relayResult.roomId, lane: relayResult.lane },
-        } satisfies TelegramWebhookOk,
-      } satisfies ApiEnvelope<TelegramWebhookOk>)
+  if (shouldRelayTelegramToAlfaclubOnCanonicalWebhook()) {
+    const relayText = asTrimmed(message.text ?? message.caption ?? '')
+    const relayThreadId =
+      typeof message.message_thread_id === 'number' && Number.isFinite(message.message_thread_id)
+        ? message.message_thread_id
+        : null
+    try {
+      const { relayTelegramMessageToAlfaClub } = await import(
+        '../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
+      )
+      const relayResult = await relayTelegramMessageToAlfaClub({
+        chatId,
+        messageId,
+        messageThreadId: relayThreadId,
+        text: relayText,
+        username: message.from?.username ?? null,
+        userId,
+      })
+      if (relayResult.status === 'relayed') {
+        return res.status(200).json({
+          success: true,
+          data: {
+            ok: true,
+            updateId: update.update_id ?? null,
+            alfaclubRelay: { roomId: relayResult.roomId, lane: relayResult.lane },
+          } satisfies TelegramWebhookOk,
+        } satisfies ApiEnvelope<TelegramWebhookOk>)
+      }
+    } catch (relayError) {
+      console.warn('[telegram/webhook] alfaclub relay hook failed', {
+        updateId: update.update_id ?? null,
+        chatId,
+        err: relayError instanceof Error ? relayError.message : String(relayError),
+      })
     }
-  } catch (relayError) {
-    console.warn('[telegram/webhook] alfaclub relay hook failed', {
-      updateId: update.update_id ?? null,
-      chatId,
-      err: relayError instanceof Error ? relayError.message : String(relayError),
-    })
   }
 
   if (sharedSelection) {
