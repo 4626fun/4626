@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  applyWaitlistSubAccountConnectOverlay,
+  isWaitlistSigningReady,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
@@ -205,6 +207,41 @@ describe('resolveWaitlistStep', () => {
         subAccountStepCompleted: true,
       }),
     ).toBe('done')
+  })
+
+  it('treats registered baseSubAccount as signing-ready even when executionTrack lags', () => {
+    expect(
+      isWaitlistSigningReady({
+        accountSignals: {
+          executionTrack: 'none-yet',
+          baseSubAccount: { address: '0xabc', registered: true, isDistinctFromCsw: true },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('applyWaitlistSubAccountConnectOverlay upgrades none-yet accounts after connect', () => {
+    const merged = applyWaitlistSubAccountConnectOverlay(
+      {
+        emailVerified: true,
+        appAccessStatus: null,
+        baseSubAccount: null,
+        accountSignals: {
+          linked: true,
+          canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+          executionTrack: 'none-yet',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+      },
+      {
+        parentAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+        subAccountAddress: '0x00000000000000000000000000000000000000dd',
+      },
+      true,
+    )
+    expect(merged.accountSignals.executionTrack).toBe('sub-account')
+    expect(merged.baseSubAccount).toBe('0x00000000000000000000000000000000000000dd')
+    expect(isWaitlistSigningReady(merged)).toBe(true)
   })
 })
 

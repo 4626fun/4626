@@ -7,6 +7,7 @@ import { useAccountSetupController } from '@/features/accountSetup/useAccountSet
 import { apiFetch } from '@/lib/api/apiBase'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
+import { isWaitlistSigningReady } from './waitlistFlowState'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -32,10 +33,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   })
   const currentAccount = controller.me ?? initialAccount
   const signingStepComplete =
-    currentAccount.accountSignals.executionTrack === 'sub-account' ||
-    currentAccount.accountSignals.executionTrack === 'migration-pending' ||
-    currentAccount.accountSignals.executionTrack === 'legacy-owner-install' ||
-    currentAccount.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
+    isWaitlistSigningReady(currentAccount) ||
     /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete

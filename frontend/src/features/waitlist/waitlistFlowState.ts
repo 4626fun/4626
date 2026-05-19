@@ -5,6 +5,11 @@ type WaitlistAccountWithCanonical = {
     canonicalCswAddress?: string | null
     executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
     privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
+    baseSubAccount?: {
+      address?: string | null
+      registered?: boolean
+      isDistinctFromCsw?: boolean
+    }
   }
 }
 
@@ -26,8 +31,45 @@ function hasLegacyOwnerInstallSigning(
 export function isWaitlistSigningReady(account: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
+  if (account.accountSignals?.baseSubAccount?.registered === true) return true
   const track = account.accountSignals?.executionTrack
   return hasLegacyOwnerInstallSigning(account.accountSignals) || hasRegisteredSubAccountExecution(track)
+}
+
+export type WaitlistSubAccountConnectOverlay = {
+  parentAddress: string
+  subAccountAddress: string
+}
+
+/** Keep waitlist UI signing-ready while bootstrap catches up after Base App connect. */
+export function applyWaitlistSubAccountConnectOverlay<T extends WaitlistAccountWithCanonical>(
+  account: T,
+  overlay: WaitlistSubAccountConnectOverlay | null | undefined,
+  subAccountStepCompleted: boolean,
+): T {
+  if (!overlay || !subAccountStepCompleted) return account
+  if (isWaitlistSigningReady(account)) return account
+
+  const canonical =
+    (typeof account.accountSignals.canonicalCswAddress === 'string' &&
+    account.accountSignals.canonicalCswAddress.trim()
+      ? account.accountSignals.canonicalCswAddress.trim()
+      : null) ?? overlay.parentAddress
+
+  return {
+    ...account,
+    ...('baseSubAccount' in account ? { baseSubAccount: overlay.subAccountAddress } : {}),
+    accountSignals: {
+      ...account.accountSignals,
+      canonicalCswAddress: canonical,
+      executionTrack: 'sub-account',
+      baseSubAccount: {
+        address: overlay.subAccountAddress,
+        isDistinctFromCsw: true,
+        registered: true,
+      },
+    },
+  } as T
 }
 
 type CanonicalBootstrapResult = {

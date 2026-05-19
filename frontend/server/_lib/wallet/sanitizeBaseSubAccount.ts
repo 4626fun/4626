@@ -136,7 +136,19 @@ async function readBaseAppWaitlistSubAccount(params: {
 
   const parent = normalizeAddress(row?.parent_csw_address)
   const canonical = normalizeAddress(params.canonicalCswAddress)
-  if (canonical && parent && parent !== canonical) return null
+  if (parent) {
+    const allowedParents = new Set<string>()
+    if (canonical) allowedParents.add(canonical)
+    const profileCswResult = await params.db.sql`
+      SELECT csw_address
+      FROM profiles
+      WHERE id = ${params.profileId}
+      LIMIT 1;
+    `
+    const profileCsw = normalizeAddress(profileCswResult.rows?.[0]?.csw_address)
+    if (profileCsw) allowedParents.add(profileCsw)
+    if (allowedParents.size > 0 && !allowedParents.has(parent)) return null
+  }
 
   return subAccount
 }

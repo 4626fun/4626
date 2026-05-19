@@ -929,7 +929,7 @@ export async function buildAccountsMePayload(params: {
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
   const profileStatusResult = await db.sql`
-    SELECT id, app_access_status, base_sub_account
+    SELECT id, app_access_status, base_sub_account, csw_address
     FROM profiles
     WHERE privy_user_id = ${privyUserId}
     ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
@@ -944,7 +944,9 @@ export async function buildAccountsMePayload(params: {
   const delegationState = await loadCanonicalDelegationState({ db, privyUserId }).catch(() => null)
 
   const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
-  const canonicalCswAddressForTrack = delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress
+  const profileCswAddress = normalizeEvmAddress(profileStatusRow?.csw_address)
+  const canonicalCswAddressForTrack =
+    delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress ?? profileCswAddress
   const profileIdForTrack = (() => {
     const raw = profileStatusRow?.id ?? delegationState?.profileId ?? null
     const numeric = Number(raw)

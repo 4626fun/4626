@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { Modal } from '@/components/ui/Modal'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
+import { isWaitlistSigningReady } from './waitlistFlowState'
 
 type WaitlistSetupTrayProps = {
   account: AccountSetupMe
@@ -22,11 +23,7 @@ export function WaitlistSetupTray(props: WaitlistSetupTrayProps) {
   const completedIdentityRef = useRef<string | null>(null)
   const inFlightIdentityRef = useRef<string | null>(null)
 
-  const signingStepComplete =
-    account.accountSignals.executionTrack === 'sub-account' ||
-    account.accountSignals.executionTrack === 'migration-pending' ||
-    account.accountSignals.executionTrack === 'legacy-owner-install' ||
-    account.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
+  const signingStepComplete = isWaitlistSigningReady(account)
   const setupComplete = Boolean(account.accountSignals.linked && account.accountSignals.canonicalCswAddress && signingStepComplete)
   const canEnterNow = canEnterApp && setupComplete
 

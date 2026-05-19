@@ -19,10 +19,13 @@ import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'
 
 import {
+  applyWaitlistSubAccountConnectOverlay,
   mergeCanonicalWaitlistAccount,
   type WaitlistStep,
+  type WaitlistSubAccountConnectOverlay,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  isWaitlistSigningReady,
 } from './waitlistFlowState'
 import {
   clearStoredWaitlistSessionToken,
@@ -36,7 +39,7 @@ import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupTray } from './WaitlistSetupTray'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
-import { WaitlistConnectBaseApp } from './WaitlistConnectBaseApp'
+import { WaitlistConnectBaseApp, type WaitlistConnectBaseAppResult } from './WaitlistConnectBaseApp'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
 type AccountsSummary = {
@@ -474,6 +477,7 @@ export function WaitlistFlow(props: {
   const [step, setStep] = useState<WaitlistStep>('auth')
   const [subAccountStepCompletedAccountKey, setSubAccountStepCompletedAccountKey] = useState<string | null>(null)
   const subAccountStepCompletedAccountKeyRef = useRef<string | null>(null)
+  const subAccountConnectOverlayRef = useRef<WaitlistSubAccountConnectOverlay | null>(null)
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
 
   const {
@@ -576,6 +580,7 @@ export function WaitlistFlow(props: {
   const resetResolvedAccountState = useCallback(() => {
     setAccount(null)
     subAccountStepCompletedAccountKeyRef.current = null
+    subAccountConnectOverlayRef.current = null
     setSubAccountStepCompletedAccountKey(null)
   }, [])
 
@@ -710,7 +715,14 @@ export function WaitlistFlow(props: {
         return null
       }
 
-      const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
+      const nextAccount = applyWaitlistSubAccountConnectOverlay(
+        mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet),
+        subAccountConnectOverlayRef.current,
+        subAccountStepCompleted,
+      )
+      if (isWaitlistSigningReady(nextAccount)) {
+        subAccountConnectOverlayRef.current = null
+      }
       setAccount(nextAccount)
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
@@ -1074,12 +1086,24 @@ export function WaitlistFlow(props: {
     setStep('done')
   }, [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted])
 
-  const handleSubAccountComplete = useCallback(() => {
-    markSubAccountStepCompleted(account)
-    clearBaseAppSetupDeepLink()
-    setStep('done')
-    void requestBootstrap({ forceNew: true }).catch(() => null)
-  }, [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted, requestBootstrap])
+  const handleSubAccountComplete = useCallback(
+    (result: WaitlistConnectBaseAppResult) => {
+      subAccountConnectOverlayRef.current = {
+        parentAddress: result.parentAddress,
+        subAccountAddress: result.subAccountAddress,
+      }
+      markSubAccountStepCompleted(account)
+      clearBaseAppSetupDeepLink()
+      setAccount((current) => {
+        const base = current ?? account
+        if (!base) return current
+        return applyWaitlistSubAccountConnectOverlay(base, subAccountConnectOverlayRef.current, true)
+      })
+      setStep('done')
+      void requestBootstrap({ forceNew: true }).catch(() => null)
+    },
+    [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted, requestBootstrap],
+  )
 
   useEffect(() => {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {
