@@ -1240,7 +1240,14 @@ export function useSwapExecution(params: {
   }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired, permit2DisabledForSwap])
 
   const handleReviewTrade = useCallback(async () => {
-    if (!params.executionAddress || !params.executionReady) return
+    if (!params.executionAddress) {
+      setError('Connect your execution wallet before swapping.')
+      return
+    }
+    if (!params.executionReady) {
+      setError('Swap signer is not ready yet. Finish wallet setup and try again.')
+      return
+    }
     if (!swapSessionGate.ok) {
       if (swapSessionGate.code === 'session-hydrating') {
         setStatus(swapSessionGate.message)
@@ -1249,7 +1256,10 @@ export function useSwapExecution(params: {
       }
       return
     }
-    if (!isReady) return
+    if (!isReady) {
+      setError('Swap is not ready yet. Reconnect Base App and refresh your quote.')
+      return
+    }
     const runId = ++quoteRunRef.current
     setBusy('review')
     setError('')
