@@ -19,24 +19,45 @@ describe('resolveWaitlistStep', () => {
     ).toBe('auth')
   })
 
-  it('keeps verified-email accounts on auth until signer install is complete', () => {
+  it('keeps verified-email accounts on auth until signing is ready when sub-account flow is off', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
           appAccessStatus: null,
         },
+        subAccountFlowEnabled: false,
       }),
     ).toBe('auth')
   })
 
-  it('keeps verified-but-unapproved accounts on auth when signer install is incomplete', () => {
+  it('routes verified Base App users to connect-base-app before legacy owner install when flag is on', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+            executionTrack: 'none-yet',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: false,
+      }),
+    ).toBe('connect-base-app')
+  })
+
+  it('keeps verified-but-unapproved accounts on auth when signer install is incomplete and sub-account flow is off', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
           appAccessStatus: null,
         },
+        subAccountFlowEnabled: false,
       }),
     ).toBe('auth')
   })
@@ -94,22 +115,23 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('Track C2 — routes verified accounts to connect-base-app when flag enabled and embedded EOA exists', () => {
+  it('Track C2 — routes to done when sub-account execution track is already registered', () => {
     expect(
       resolveWaitlistStep({
         account: {
           emailVerified: true,
           appAccessStatus: null,
           accountSignals: {
-            executionTrack: 'legacy-owner-install',
-            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+            canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+            executionTrack: 'sub-account',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
           },
         },
         subAccountFlowEnabled: true,
         embeddedEoaAvailable: true,
         subAccountStepCompleted: false,
       }),
-    ).toBe('connect-base-app')
+    ).toBe('done')
   })
 
   it('Track C2 — does not route to connect-base-app when flag is off', () => {

@@ -2,8 +2,32 @@ export type WaitlistStep = 'auth' | 'connect-base-app' | 'done'
 
 type WaitlistAccountWithCanonical = {
   accountSignals: {
-    canonicalCswAddress: string | null
+    canonicalCswAddress?: string | null
+    executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
   }
+}
+
+function hasRegisteredSubAccountExecution(
+  track: WaitlistAccountWithCanonical['accountSignals']['executionTrack'] | undefined,
+): boolean {
+  return track === 'sub-account' || track === 'migration-pending'
+}
+
+function hasLegacyOwnerInstallSigning(
+  accountSignals: WaitlistAccountWithCanonical['accountSignals'] | undefined,
+): boolean {
+  return (
+    accountSignals?.executionTrack === 'legacy-owner-install' ||
+    accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
+  )
+}
+
+export function isWaitlistSigningReady(account: {
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+}): boolean {
+  const track = account.accountSignals?.executionTrack
+  return hasLegacyOwnerInstallSigning(account.accountSignals) || hasRegisteredSubAccountExecution(track)
 }
 
 type CanonicalBootstrapResult = {
@@ -14,37 +38,47 @@ type CanonicalBootstrapResult = {
  * Resolve the next waitlist step from the current account snapshot.
  *
  * Track C2 — when `subAccountFlowEnabled` is true and the bootstrap
- * surfaced a Privy embedded EOA (i.e. profile is created), verified-email
- * accounts route through the optional `connect-base-app` step before
- * `done`. With the flag off, behaviour matches the prior `auth → done`
- * shape exactly so the existing waitlist surface is untouched.
+ * surfaced a Privy embedded EOA plus a canonical CSW, verified-email
+ * accounts route through the optional `connect-base-app` step. Base App
+ * users can complete sub-account provisioning without legacy
+ * `addOwnerAddress` on the parent CSW. With the flag off, behaviour
+ * matches the prior `auth → done` shape for legacy owner-install only.
  */
 export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean
     appAccessStatus: string | null
-    accountSignals?: {
-      executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
-      privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
-    }
+    accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
   subAccountFlowEnabled?: boolean
   embeddedEoaAvailable?: boolean
   subAccountStepCompleted?: boolean
 }): WaitlistStep {
   const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted } = params
-  const signingReady =
-    account.accountSignals?.executionTrack === 'legacy-owner-install' ||
-    account.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
   if (!account.emailVerified) return 'auth'
-  // Only reveal the post-auth completion tray once the canonical signer step
-  // is actually complete (embedded EOA owner install on parent CSW).
-  if (!signingReady) return 'auth'
-  if (subAccountFlowEnabled && embeddedEoaAvailable && !subAccountStepCompleted) {
+
+  const track = account.accountSignals?.executionTrack
+  const hasSubAccount = hasRegisteredSubAccountExecution(track)
+  const signingReady = isWaitlistSigningReady(account)
+  const hasCanonicalCsw = Boolean(
+    typeof account.accountSignals?.canonicalCswAddress === 'string' &&
+      account.accountSignals.canonicalCswAddress.trim(),
+  )
+
+  const shouldOfferSubAccountStep =
+    subAccountFlowEnabled === true &&
+    embeddedEoaAvailable === true &&
+    subAccountStepCompleted !== true &&
+    !hasSubAccount &&
+    hasCanonicalCsw
+
+  // Base App path: sub-account setup does not require legacy owner install first.
+  if (shouldOfferSubAccountStep) {
     return 'connect-base-app'
   }
-  // Keep waitlist onboarding one-tap: verified accounts move to completion UI.
-  // Any wallet/canonical setup can continue in background or dedicated account surfaces.
+
+  if (!signingReady) return 'auth'
+
   return 'done'
 }
 

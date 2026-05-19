@@ -19,6 +19,7 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
@@ -191,6 +192,7 @@ export function AccountSetupWorkspaceView(props: {
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
 
   if (loading && !me) {
     return (
@@ -208,7 +210,13 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
+  const preferBaseAppSubAccountSetup =
+    subAccountFlowEnabled &&
+    Boolean(canonicalCswAddress) &&
+    executionTrack === 'none-yet'
   const signingStepComplete =
+    executionTrack === 'sub-account' ||
+    executionTrack === 'migration-pending' ||
     executionTrack === 'legacy-owner-install' ||
     me.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
     /4626 signing is enabled|already enabled/i.test(notice ?? '')
@@ -573,11 +581,34 @@ export function AccountSetupWorkspaceView(props: {
 
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
+                    {preferBaseAppSubAccountSetup ? (
+                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
+                        <span className="font-semibold">Base App wallet detected.</span>{' '}
+                        Use the waitlist sub-account flow instead of adding an owner on the parent
+                        smart wallet from this site.
+                        <a
+                          href="/waitlist?setup=base-app"
+                          className="mt-2 inline-flex text-brand-200 underline decoration-dotted underline-offset-2"
+                        >
+                          Connect Base App sub-account
+                        </a>
+                      </div>
+                    ) : null}
                     {shouldHintBaseAccountForZora ? (
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
                         in the wallet connector. Your Zora smart wallet is passkey-controlled,
                         so 4626 can approve embedded signing on the canonical smart wallet.
+                      </div>
+                    ) : null}
+                    {!preferBaseAppSubAccountSetup && error && (connectedCanonicalWalletSelected || inTelegramMiniApp) ? (
+                      <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+                        Owner install from a third-party dapp often fails inside the Base App
+                        in-app browser. Open{' '}
+                        <a href="/add-owner" className="font-medium text-amber-50 underline decoration-dotted">
+                          /add-owner
+                        </a>{' '}
+                        in Safari or Chrome, or use the sub-account flow when available.
                       </div>
                     ) : null}
                     <div className="flex flex-wrap gap-2">

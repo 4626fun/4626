@@ -43,6 +43,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
@@ -878,7 +879,7 @@ export function Swap() {
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
   const subAccountRuntime = useSwapSubAccountRuntime({
-    enabled: false,
+    enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
     canonicalAddress,
     baseSubAccountAddress,
     baseAccountWallet,
@@ -1057,9 +1058,6 @@ export function Swap() {
 
   const executionMode: WalletMode =
     accountContext.activeAccountType === 'SMART_WALLET' ? 'canonical' : 'eoa'
-  const preferParentCswCanonical4337 = executionMode === 'canonical'
-  const canonicalGateExecutionTrack =
-    preferParentCswCanonical4337 && subAccountTrack ? 'legacy-owner-install' : executionTrack
   const canonicalAuthStatus = useMemo<CanonicalAuthStatus>(() => {
     if (privyClientStatus !== 'ready') return 'unknown'
     if (privyReady !== true) return 'unknown'
@@ -1083,10 +1081,10 @@ export function Swap() {
     () =>
       evaluateCanonicalSignerGate({
         executionMode,
-        executionTrack: canonicalGateExecutionTrack,
+        executionTrack,
         canonicalAddress,
         baseSubAccountAddress,
-        subAccountProviderReady: false,
+        subAccountProviderReady: subAccountRuntime.ready,
         clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
@@ -1095,10 +1093,11 @@ export function Swap() {
         ownerCheckStatus: canonicalOwnerCheckStatus,
       }),
     [
-      canonicalGateExecutionTrack,
+      executionTrack,
       executionMode,
       canonicalAddress,
       baseSubAccountAddress,
+      subAccountRuntime.ready,
       privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
@@ -1106,9 +1105,15 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const useSubAccountCanonicalSigner = false
+  const useSubAccountCanonicalSigner =
+    executionMode === 'canonical' &&
+    subAccountTrack &&
+    subAccountRuntime.ready &&
+    canonicalSignerGate.code === 'ok'
   const usePrivyEmbeddedCanonicalSigner =
-    executionMode === 'canonical' && canonicalSignerGate.ready
+    executionMode === 'canonical' &&
+    !useSubAccountCanonicalSigner &&
+    canonicalSignerGate.ready
   const canonicalSignerAddress =
     executionMode === 'canonical'
       ? (useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null)
@@ -1161,9 +1166,11 @@ export function Swap() {
         : canonicalAddress
       : (accountContext.activeAccount ?? null)
   const routerExecutionTrack =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
-      ? 'legacy-owner-install'
-      : executionTrack
+    executionMode === 'canonical' && useSubAccountCanonicalSigner
+      ? executionTrack
+      : executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
+        ? 'legacy-owner-install'
+        : executionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
@@ -1184,9 +1191,25 @@ export function Swap() {
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
   const canonicalExecutionSetupRequired =
     executionMode === 'canonical' && canonicalSignerGate.code === 'execution-setup-required'
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const handleEnableCanonicalSigning = useCallback(() => {
-    navigate('/waitlist?setup=owner-install')
-  }, [navigate])
+    const needsSubAccountSetup =
+      subAccountFlowEnabled &&
+      (executionTrack === 'none-yet' ||
+        (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
+    if (needsSubAccountSetup) {
+      navigate('/waitlist?setup=base-app')
+      return
+    }
+    navigate('/accounts?setup=owner-install')
+  }, [
+    canonicalSignerGate.code,
+    executionTrack,
+    navigate,
+    subAccountFlowEnabled,
+    subAccountRuntime.ready,
+    subAccountTrack,
+  ])
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&

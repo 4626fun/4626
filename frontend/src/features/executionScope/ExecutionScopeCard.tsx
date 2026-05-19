@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ExternalLink, ShieldOff, RefreshCw } from 'lucide-react'
 
 import { CopyableAddress } from '@/components/account/CopyableAddress'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
 import { useRevokeSubAccount } from './useRevokeSubAccount'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
@@ -31,6 +32,13 @@ export function ExecutionScopeCard() {
   const revoke = useRevokeSubAccount()
   const reprovision = useReprovisionSubAccount()
   const ownerCheck = useCswOwnerSigner()
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const ownerInstallHref = subAccountFlowEnabled
+    ? '/waitlist?setup=base-app'
+    : '/waitlist?setup=owner-install'
+  const ownerInstallLabel = subAccountFlowEnabled
+    ? 'Connect Base App sub-account'
+    : 'Open owner-install flow'
   const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const onRevokeClick = async () => {
@@ -108,10 +116,24 @@ export function ExecutionScopeCard() {
               can sign the spend permission yet.
             </p>
             <p className="text-[11px] text-zinc-500">
-              The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
-              waitlist — it installs your 4626 app signer as an owner of your smart wallet
-              (one-time setup). If you manage your CSW manually, you can also connect the wallet
-              you used to create it (Rabby, MetaMask, Coinbase Wallet).
+              {subAccountFlowEnabled ? (
+                <>
+                  For Base App smart wallets, finish the <strong>Connect Base App sub-account</strong>{' '}
+                  step on the waitlist — it provisions a 4626-scoped sub-account without changing
+                  parent wallet owners. Legacy owner-install remains available at{' '}
+                  <a href="/add-owner" className="text-zinc-300 underline decoration-dotted">
+                    /add-owner
+                  </a>{' '}
+                  in an external browser.
+                </>
+              ) : (
+                <>
+                  The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
+                  waitlist — it installs your 4626 app signer as an owner of your smart wallet
+                  (one-time setup). If you manage your CSW manually, you can also connect the wallet
+                  you used to create it (Rabby, MetaMask, Coinbase Wallet).
+                </>
+              )}
             </p>
           </div>
         )}
@@ -129,10 +151,10 @@ export function ExecutionScopeCard() {
           </button>
           {!hasOwnerSigner && !ownerCheck.loading ? (
             <a
-              href="/waitlist?setup=owner-install"
+              href={ownerInstallHref}
               className="inline-flex items-center gap-1 text-[11px] text-brand-accent hover:text-white underline decoration-dotted"
             >
-              Open owner-install flow
+              {ownerInstallLabel}
             </a>
           ) : null}
         </div>

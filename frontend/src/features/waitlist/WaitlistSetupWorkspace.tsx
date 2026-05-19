@@ -32,6 +32,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   })
   const currentAccount = controller.me ?? initialAccount
   const signingStepComplete =
+    currentAccount.accountSignals.executionTrack === 'sub-account' ||
+    currentAccount.accountSignals.executionTrack === 'migration-pending' ||
     currentAccount.accountSignals.executionTrack === 'legacy-owner-install' ||
     currentAccount.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
     /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')

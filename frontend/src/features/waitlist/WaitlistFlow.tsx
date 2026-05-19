@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
@@ -469,6 +470,7 @@ export function WaitlistFlow(props: {
   const { getAccessToken } = privy
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
+  const [searchParams] = useSearchParams()
   const [step, setStep] = useState<WaitlistStep>('auth')
   const [subAccountStepCompletedAccountKey, setSubAccountStepCompletedAccountKey] = useState<string | null>(null)
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
@@ -487,6 +489,13 @@ export function WaitlistFlow(props: {
   const [completionBusy, setCompletionBusy] = useState(false)
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
+
+  useEffect(() => {
+    const setup = (searchParams.get('setup') ?? '').trim().toLowerCase()
+    if (setup !== 'base-app' || !subAccountFlowEnabled) return
+    if (!account?.emailVerified) return
+    setStep('connect-base-app')
+  }, [account?.emailVerified, searchParams, subAccountFlowEnabled])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)

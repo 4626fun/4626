@@ -23,6 +23,8 @@ export function WaitlistSetupTray(props: WaitlistSetupTrayProps) {
   const inFlightIdentityRef = useRef<string | null>(null)
 
   const signingStepComplete =
+    account.accountSignals.executionTrack === 'sub-account' ||
+    account.accountSignals.executionTrack === 'migration-pending' ||
     account.accountSignals.executionTrack === 'legacy-owner-install' ||
     account.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
   const setupComplete = Boolean(account.accountSignals.linked && account.accountSignals.canonicalCswAddress && signingStepComplete)
