@@ -64,14 +64,24 @@ describe('matchesTelegramToAlfaclubSource', () => {
 })
 
 describe('formatTelegramToAlfaclubBody', () => {
-  it('includes username and optional prefix', () => {
+  it('puts slash commands first so the bridge can detect them', () => {
     expect(
       formatTelegramToAlfaclubBody({
         text: '/alfa status',
         username: 'akitav',
         prefix: '[TG]',
       }),
-    ).toBe('[TG] @akitav: /alfa status')
+    ).toBe('[TG] /alfa status\n(tg @akitav)')
+  })
+
+  it('keeps attribution prefix form for non-command chatter', () => {
+    expect(
+      formatTelegramToAlfaclubBody({
+        text: 'Trend signal pair',
+        username: 'akitav',
+        prefix: '',
+      }),
+    ).toBe('@akitav: Trend signal pair')
   })
 })
 
@@ -102,7 +112,7 @@ describe('relayTelegramMessageToAlfaClub', () => {
     expect(sendAlfaClubRoomText).toHaveBeenCalledWith(
       expect.objectContaining({
         roomId: '1043',
-        text: '@akitav: /alfa status',
+        text: '/alfa status\n(tg @akitav)',
         replyToMessageId: 'telegram:-1003709479662:42',
       }),
     )

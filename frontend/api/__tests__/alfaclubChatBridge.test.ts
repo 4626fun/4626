@@ -259,6 +259,29 @@ describe('collectAlfaClubCommandMessages', () => {
     })
   })
 
+  it('collects slash commands from legacy telegram relay attribution lines', () => {
+    const commands = collectAlfaClubCommandMessages({
+      seenMessageIds: new Set<string>(),
+      selfAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      messages: [
+        {
+          id: 'm-tg-relay',
+          date: 100,
+          sender: '0x1111111111111111111111111111111111111111',
+          text: '@akitav: /alfa status',
+        },
+      ],
+    })
+    expect(commands).toEqual([
+      {
+        id: 'm-tg-relay',
+        date: 100,
+        sender: '0x1111111111111111111111111111111111111111',
+        text: '/alfa status',
+      },
+    ])
+  })
+
   describe('bare gmeow from trusted sender', () => {
     const MANITO = '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5'
     const SELF = '0xab6d5c10b03300326cd7fab7267ae192842967b5'

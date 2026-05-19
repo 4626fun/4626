@@ -100,6 +100,12 @@ export function formatTelegramToAlfaclubBody(params: {
   const userId = String(params.userId ?? '').trim()
   const who = handle ? `@${handle.replace(/^@/, '')}` : userId ? `tg:${userId}` : 'telegram'
   const core = text || '(no text)'
+  // Slash commands must lead with `/` so AlfaClub bridge command detection works.
+  if (core.startsWith('/')) {
+    const attribution = `(tg ${who})`
+    if (prefix) return `${prefix} ${core}\n${attribution}`.trim()
+    return `${core}\n${attribution}`.trim()
+  }
   if (prefix) return `${prefix} ${who}: ${core}`.trim()
   return `${who}: ${core}`
 }

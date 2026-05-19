@@ -31,6 +31,7 @@
 import { executeDeterministicCommand } from '../../agents/core/executeDeterministicCommand.js'
 import { matchesAnyCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { extractTelegramRelayCommandText } from './telegramChatRef.js'
 import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
 import {
@@ -606,13 +607,14 @@ export function collectAlfaClubCommandMessages(params: {
     if (!isHexAddress(entry.sender)) continue
     if (self && entry.sender === self) continue
     if (entry.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
-    const trustedBareGmeow = isBareGmeowFromTrustedSender(entry.text, entry.sender)
-    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(entry.text)) continue
+    const commandText = extractTelegramRelayCommandText(entry.text)
+    const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
+    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(commandText)) continue
     commands.push({
       id: entry.id,
       date: entry.date,
       sender: entry.sender,
-      text: trustedBareGmeow ? '/gmeow' : entry.text.trim(),
+      text: trustedBareGmeow ? '/gmeow' : commandText.trim(),
     })
   }
   return commands

@@ -52,3 +52,23 @@ export function parseTelegramChatRef(value: string | null): {
 export function normalizeTelegramChatIdForMatch(chatId: string): string {
   return String(chatId ?? '').trim()
 }
+
+/**
+ * Telegram → AlfaClub relay posts often prefix the payload (`@user: /alfa …`).
+ * The chat bridge only treats lines that start with `/` as slash commands.
+ */
+export function extractTelegramRelayCommandText(rawText: string): string {
+  const trimmed = String(rawText ?? '').trim()
+  if (!trimmed) return trimmed
+  if (trimmed.startsWith('/')) {
+    const firstLine = trimmed.split('\n', 1)[0]?.trim() ?? trimmed
+    return firstLine
+  }
+  const relayMatch = /^(?:\[[^\]]+\]\s+)?(?:@[\w]+|tg:\d+):\s+(\S[\s\S]*)$/i.exec(trimmed)
+  if (relayMatch?.[1]) {
+    const inner = relayMatch[1].trim()
+    const firstLine = inner.split('\n', 1)[0]?.trim() ?? inner
+    if (firstLine.startsWith('/')) return firstLine
+  }
+  return trimmed
+}
