@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+
+import * as subAccountOwnerInstall from './subAccountOwnerInstall'
 import {
   getExistingSubAccount,
   createSubAccount,
@@ -7,6 +9,15 @@ import {
   type SubAccount,
   type SubAccountSetupStageEvent,
 } from './subAccountSetup'
+
+beforeEach(() => {
+  vi.spyOn(subAccountOwnerInstall, 'installEmbeddedOwnerOnSubAccount').mockResolvedValue({
+    installed: true,
+    alreadyOwner: false,
+    transactionHash: null,
+    callBundleId: 'bundle_test',
+  })
+})
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -212,6 +223,7 @@ describe('setupSubAccount', () => {
     expect(result.created).toBe(true)
     expect(params.baseAccountSdk.subAccount.setToOwnerAccount).toHaveBeenCalledTimes(1)
     expect(stages.some((s) => s.stage === 'create_sub_account' && s.status === 'success')).toBe(true)
+    expect(stages.some((s) => s.stage === 'install_embedded_owner' && s.status === 'success')).toBe(true)
     expect(stages.some((s) => s.stage === 'done' && s.status === 'success')).toBe(true)
   })
 
