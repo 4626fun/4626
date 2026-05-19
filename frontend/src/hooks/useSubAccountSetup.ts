@@ -170,6 +170,25 @@ export function useSubAccountSetup() {
   const finalizeSigner = useCallback(
     async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
       return runWithGuard(async () => {
+        const embedded = embeddedWallet as {
+          address: string
+          getEthereumProvider?: () => Promise<unknown>
+        } | null
+        if (embedded && typeof setActiveWallet === 'function') {
+          try {
+            await Promise.resolve(setActiveWallet(embedded as never))
+          } catch {
+            /* best-effort — configureSubAccountSigner only needs toViemAccount */
+          }
+        }
+        if (embedded && typeof embedded.getEthereumProvider === 'function') {
+          try {
+            await embedded.getEthereumProvider()
+          } catch {
+            /* provider may attach lazily on first sign; proceed to SDK wiring */
+          }
+        }
+
         const bundle = buildWalletBundle({
           baseAccountWallet,
           embeddedWallet,
@@ -185,7 +204,7 @@ export function useSubAccountSetup() {
         return true
       })
     },
-    [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard],
+    [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard, setActiveWallet],
   )
 
   const connectBaseAccountWallet = useCallback(async (): Promise<boolean> => {

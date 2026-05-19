@@ -1033,7 +1033,8 @@ export function WaitlistFlow(props: {
   const handleSubAccountComplete = useCallback(() => {
     setSubAccountStepCompletedAccountKey(getSubAccountCompletionAccountKey(account))
     setStep('done')
-  }, [account])
+    void requestBootstrap({ forceNew: true }).catch(() => null)
+  }, [account, requestBootstrap])
 
   useEffect(() => {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {

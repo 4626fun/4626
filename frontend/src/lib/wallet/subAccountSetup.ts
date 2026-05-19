@@ -92,7 +92,7 @@ type SubAccountRpcProvider = {
  * Privy's ConnectedWallet provider does not forward `wallet_addSubAccount`,
  * which surfaces as `-32604 method not supported` inside Base App.
  */
-async function resolveSubAccountProvider(params: SubAccountWalletBundle): Promise<SubAccountRpcProvider> {
+export async function resolveSubAccountProvider(params: SubAccountWalletBundle): Promise<SubAccountRpcProvider> {
   const sdk = params.baseAccountSdk as SubAccountWalletBundle['baseAccountSdk'] & {
     getProvider?: () => SubAccountRpcProvider
   }
@@ -445,12 +445,11 @@ export async function finalizeSubAccountSigner(params: SubAccountWalletBundle & 
 
 /**
  * Full sub-account setup flow (all phases in one call):
- *   1. Discover or create sub-account
- *   2. Configure Privy embedded wallet as SDK signer
+ *   1. Discover or create sub-account (passkey only when creating)
+ *   2. Configure Privy embedded wallet as SDK signer (silent)
  *
- * On-chain addOwnerAddress on the sub-account is not required for the Base App
- * waitlist track — wallet_addSubAccount registers the embedded EOA as the app
- * signer key and executionTrack=sub-account is derived from the persisted row.
+ * On-chain addOwnerAddress is not part of the waitlist Base App track — see
+ * docs/ACCOUNT_MODEL.md §5.3 and docs/sub-accounts-baseapp-design.md.
  */
 export async function setupSubAccount(params: {
   /** The Privy ConnectedWallet for the Base Account (CSW). */

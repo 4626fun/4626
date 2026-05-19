@@ -63,7 +63,7 @@ import {
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
-import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
+import { configureSubAccountSigner, getExistingSubAccount, resolveSubAccountProvider } from '@/lib/wallet/subAccountSetup'
 import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
@@ -311,7 +311,12 @@ function useSwapSubAccountRuntime(params: {
           await params.baseAccountWallet.switchChain(BASE_CHAIN_ID).catch(() => null)
         }
 
-        const provider = await getWalletProvider(params.baseAccountWallet)
+        const provider = await resolveSubAccountProvider({
+          baseAccountWallet: params.baseAccountWallet,
+          embeddedWallet: params.embeddedWallet,
+          baseAccountSdk: params.baseAccountSdk,
+          toViemAccountFn: toViemAccount,
+        }).catch(() => null)
         if (!provider?.request) {
           if (!cancelled) {
             setState({

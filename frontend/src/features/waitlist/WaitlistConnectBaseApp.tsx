@@ -6,9 +6,9 @@
  *   2. Wire the Privy embedded EOA as the sub-account signer (silent SDK step).
  *   3. POST /api/arch-b/sub-account/baseapp/register
  *
- * Sub-account execution does not require an on-chain addOwnerAddress self-call.
- * wallet_addSubAccount registers the embedded EOA as the app signer key; the
- * server marks executionTrack=sub-account after register.
+ * Per docs/ACCOUNT_MODEL.md §5.3, this track does not call addOwnerAddress on the
+ * parent CSW or the sub-account — wallet_addSubAccount keys + setToOwnerAccount
+ * are the signing surface.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -191,7 +191,6 @@ export function WaitlistConnectBaseApp(props: Props) {
     if (view.kind !== 'connecting') return null
     const live = lastStage?.stage
     if (live && STAGE_LABELS[live]) return STAGE_LABELS[live]
-    if (live === 'install_embedded_owner') return 'Linking your 4626 signer…'
     return 'Connecting your Base App wallet…'
   }, [view.kind, lastStage])
 
@@ -320,7 +319,8 @@ export function WaitlistConnectBaseApp(props: Props) {
         <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">Connect Base App</h2>
         <p className="text-sm leading-relaxed text-zinc-400">
           Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded
-          4626 key — your main Base App wallet stays unchanged.
+          4626 key — your main Base App wallet stays unchanged. Base App only asks for a passkey when creating a new app
+          wallet; linking your signer afterward is silent.
         </p>
       </div>
 

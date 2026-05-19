@@ -396,6 +396,132 @@ describe('buildAccountsMePayload', () => {
     })
   })
 
+  it("trusts counterfactual baseapp_waitlist CIEC rows for executionTrack even without bytecode", async () => {
+    const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
+    const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
+    const SUB_ACCOUNT = '0x00000000000000000000000000000000000000dd'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+        if (query.includes('to_regclass')) {
+          return {
+            rows: [
+              {
+                has_accounts: true,
+                has_profiles: true,
+                has_account_linked_methods: true,
+                has_account_zora_signals: true,
+                has_canonical_csw_address: true,
+                has_referral_clicks: true,
+                has_referral_conversions: true,
+                has_points: true,
+                has_wallets: true,
+                has_profile_wallets: true,
+                has_app_access_status: true,
+                has_verifications: true,
+                has_profile_completed_at: true,
+                has_primary_smart_wallet: true,
+                has_primary_embedded_eoa: true,
+                has_privy_is_owner: true,
+                has_referral_status: true,
+                has_referral_qualified_at: true,
+                has_canonical_solana_wallet: true,
+                has_profile_wallets_canonical_solana: true,
+                has_profile_wallets_operational_solana: true,
+                has_profiles_referral_code: true,
+                has_profiles_referred_by_signup_id: true,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select email') && query.includes('from accounts')) {
+          return { rows: [{ email: 'baseapp@example.com', email_verified: true }] }
+        }
+
+        if (query.includes('from account_linked_methods')) return { rows: [] }
+
+        if (query.includes('from account_zora_signals')) {
+          return {
+            rows: [
+              {
+                zora_linked: true,
+                canonical_csw_address: CANONICAL_CSW,
+                creator_coin_address: null,
+                zora_handle: null,
+                last_resolved_at: null,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+          return { rows: [{ id: 99 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
+        }
+
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
+          return {
+            rows: [{ id: 99, app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
+          }
+        }
+
+        if (query.includes('from command_issuer_execution_context')) {
+          return {
+            rows: [
+              {
+                sub_account_address: SUB_ACCOUNT,
+                parent_csw_address: CANONICAL_CSW,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+          return { rows: [] }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
+          return {
+            rows: [
+              {
+                profile_id: 99,
+                chain_id: 8453,
+                canonical_csw_address: CANONICAL_CSW,
+                canonical_source: 'base_account',
+                privy_embedded_eoa_address: EMBEDDED_EOA,
+                privy_is_owner: false,
+                last_checked_at: new Date().toISOString(),
+                address: CANONICAL_CSW,
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const payload = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: 'did:privy:baseapp-waitlist',
+      privyUser: null,
+    })
+
+    expect(payload.accountSignals.executionTrack).toBe('sub-account')
+    expect(payload.accountSignals.baseSubAccount).toEqual({
+      address: SUB_ACCOUNT,
+      isDistinctFromCsw: true,
+      registered: true,
+    })
+  })
+
   it('classifies the Base App probe CSW as none-yet before sub-account or owner install', async () => {
     const CANONICAL_CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
     const EMBEDDED_EOA = '0x00000000000000000000000000000000000000cc'

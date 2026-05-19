@@ -111,6 +111,37 @@ async function readWalletSyncFallbackSubAccount(params: {
 }
 
 /**
+ * Waitlist Base App connect persists counterfactual sub-accounts before they
+ * have Base bytecode. Trust the CIEC row written by
+ * `/api/arch-b/sub-account/baseapp/register` so executionTrack resolves to
+ * `sub-account` immediately after register.
+ */
+async function readBaseAppWaitlistSubAccount(params: {
+  db: Db
+  profileId: number
+  candidate: string
+  canonicalCswAddress: string | null
+}): Promise<string | null> {
+  const result = await params.db.sql`
+    SELECT sub_account_address, parent_csw_address
+    FROM command_issuer_execution_context
+    WHERE profile_id = ${params.profileId}
+      AND provisioning_source = 'baseapp_waitlist'
+      AND revoked_at IS NULL
+    LIMIT 1;
+  `
+  const row = result.rows?.[0] ?? null
+  const subAccount = normalizeAddress(row?.sub_account_address)
+  if (!subAccount || subAccount !== params.candidate) return null
+
+  const parent = normalizeAddress(row?.parent_csw_address)
+  const canonical = normalizeAddress(params.canonicalCswAddress)
+  if (canonical && parent && parent !== canonical) return null
+
+  return subAccount
+}
+
+/**
  * Harden persisted `profiles.base_sub_account` before exposing it as an execution
  * sub-account. Rejects identity-only EOAs and stale zora_readonly candidates.
  */
@@ -152,6 +183,14 @@ export async function sanitizePersistedSubAccountAddress(params: {
   ) {
     return walletSyncFallback
   }
+
+  const baseAppWaitlistSubAccount = await readBaseAppWaitlistSubAccount({
+    db: params.db,
+    profileId: params.profileId,
+    candidate,
+    canonicalCswAddress: canonical,
+  })
+  if (baseAppWaitlistSubAccount) return baseAppWaitlistSubAccount
 
   if (params.privyUser) {
     const classification = classifyLinkedAccounts(params.privyUser)
