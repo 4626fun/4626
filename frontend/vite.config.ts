@@ -240,6 +240,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/zora/explore': () => import('./api/_handlers/zora/_explore'),
         '/api/zora/link/status': () => import('./api/_handlers/zora/link/_status'),
         '/api/zora/metrics': () => import('./api/_handlers/zora/_metrics'),
+        '/api/zora/migratedCoins': () => import('./api/_handlers/zora/_migratedCoins'),
         '/api/zora/refresh': () => import('./api/_handlers/zora/_refresh'),
         '/api/zora/profile': () => import('./api/_handlers/zora/_profile'),
         '/api/zora/profileCoins': () => import('./api/_handlers/zora/_profileCoins'),

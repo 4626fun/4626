@@ -16,6 +16,7 @@ export const zoraRouteLoaders: ApiRouteLoaders = {
   'explore': () => import('./zora/_explore.js'),
   'link/status': () => import('./zora/link/_status.js'),
   'metrics': () => import('./zora/_metrics.js'),
+  'migratedCoins': () => import('./zora/_migratedCoins.js'),
   'refresh': () => import('./zora/_refresh.js'),
   'profile': () => import('./zora/_profile.js'),
   'profileCoins': () => import('./zora/_profileCoins.js'),

@@ -35,6 +35,7 @@
     "src/lib/deploy/create2Salts.ts",
     "src/lib/deploy/deploymentBatcherConfigError.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",
+    "src/lib/zora/migrationScan.ts",
     "src/lib/viteManualChunks.ts",
     "shared/deploy/bytecode.generated.ts",
     "shared/deploy/create2Salts.ts",
