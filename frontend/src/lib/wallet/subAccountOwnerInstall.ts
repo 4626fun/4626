@@ -12,7 +12,7 @@
 import { createPublicClient, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { addOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
+import { addOwnerViaBaseAppSendCalls, encodeAddOwnerCall } from '@/lib/wallet/baseAppOwnerCalls'
 
 const COINBASE_SMART_WALLET_OWNER_ABI = [
   {
@@ -33,8 +33,20 @@ export type InstallEmbeddedOwnerResult = {
   callBundleId: string | null
 }
 
-function walletRequestFromProvider(provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }) {
+type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
+
+function walletRequestFromProvider(provider: { request: WalletRequest }) {
   return async (args: { method: string; params?: unknown[] }) => provider.request(args)
+}
+
+function isTxHash(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
+
+function isUserRejectedWalletAction(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
 export function createBaseSubAccountReadClient() {
@@ -68,18 +80,48 @@ export async function readEmbeddedOwnerOnSubAccount(params: {
   }
 }
 
+async function addOwnerViaEthSendTransaction(params: {
+  walletRequest: WalletRequest
+  subAccountAddress: Address
+  embeddedEoaAddress: Address
+}): Promise<{ transactionHash: Hex | null }> {
+  const call = encodeAddOwnerCall({
+    csw: params.subAccountAddress,
+    ownerToAdd: params.embeddedEoaAddress,
+  })
+  const result = await params.walletRequest({
+    method: 'eth_sendTransaction',
+    params: [
+      {
+        from: params.subAccountAddress,
+        to: call.to,
+        data: call.data,
+        value: call.value,
+      },
+    ],
+  })
+  if (isTxHash(result)) {
+    return { transactionHash: result }
+  }
+  throw new Error('eth_sendTransaction did not return a transaction hash.')
+}
+
 /**
- * Install the Privy embedded EOA as an owner of the sub-account CSW via
- * `wallet_sendCalls` (Base App prepared-calls lane).
+ * Install the Privy embedded EOA as an owner of the sub-account CSW.
+ *
+ * Primary lane: `eth_sendTransaction` self-call (Base App allows this for
+ * addOwnerAddress). Fallback: `wallet_sendCalls` when the direct lane fails
+ * for non-user-rejection reasons.
  */
 export async function installEmbeddedOwnerOnSubAccount(params: {
-  provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+  provider: { request: WalletRequest }
   subAccountAddress: Address
   embeddedEoaAddress: Address
   publicClient?: ReturnType<typeof createBaseSubAccountReadClient>
   chainId?: number
 }): Promise<InstallEmbeddedOwnerResult> {
   const chainId = params.chainId ?? base.id
+  const walletRequest = walletRequestFromProvider(params.provider)
   const ownerState = await readEmbeddedOwnerOnSubAccount({
     publicClient: params.publicClient,
     subAccountAddress: params.subAccountAddress,
@@ -94,17 +136,35 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
     }
   }
 
-  const submitted = await addOwnerViaBaseAppSendCalls({
-    walletRequest: walletRequestFromProvider(params.provider),
-    csw: params.subAccountAddress,
-    ownerToAdd: params.embeddedEoaAddress,
-    chainId,
-  })
+  try {
+    const direct = await addOwnerViaEthSendTransaction({
+      walletRequest,
+      subAccountAddress: params.subAccountAddress,
+      embeddedEoaAddress: params.embeddedEoaAddress,
+    })
+    return {
+      installed: true,
+      alreadyOwner: false,
+      transactionHash: direct.transactionHash,
+      callBundleId: null,
+    }
+  } catch (directError) {
+    if (isUserRejectedWalletAction(directError)) {
+      throw directError
+    }
 
-  return {
-    installed: true,
-    alreadyOwner: false,
-    transactionHash: submitted.transactionHash,
-    callBundleId: submitted.callBundleId,
+    const submitted = await addOwnerViaBaseAppSendCalls({
+      walletRequest,
+      csw: params.subAccountAddress,
+      ownerToAdd: params.embeddedEoaAddress,
+      chainId,
+    })
+
+    return {
+      installed: true,
+      alreadyOwner: false,
+      transactionHash: submitted.transactionHash,
+      callBundleId: submitted.callBundleId,
+    }
   }
 }

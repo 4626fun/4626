@@ -13,7 +13,7 @@ import type { Address } from 'viem'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
-import type { SubAccountSetupStage } from '@/lib/wallet/subAccountSetup'
+import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
 
 export type WaitlistConnectBaseAppResult = {
   parentAddress: Address
@@ -111,6 +111,31 @@ function shortAddress(address: Address): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`
 }
 
+function mapSetupFailureMessage(params: {
+  error: Error | null
+  lastStage: SubAccountSetupStageEvent | null
+  fallback: string
+}): string {
+  const combined = [params.error?.message, params.lastStage?.message].filter(Boolean).join(' ')
+  const lower = combined.toLowerCase()
+
+  if (
+    lower.includes('user rejected') ||
+    lower.includes('user denied') ||
+    lower.includes('rejected the request')
+  ) {
+    return 'You declined the Base App request. Tap Enable 4626 signing to try again.'
+  }
+  if (lower.includes('base account wallet')) {
+    return 'Connect Base App first, then try again.'
+  }
+  if (lower.includes('self calls are not allowed')) {
+    return 'Base App could not finish signing on this device. Try again or skip for now.'
+  }
+  if (params.error?.message) return params.error.message
+  return params.fallback
+}
+
 async function registerBaseAppLink(body: Record<string, string>): Promise<{ ok: boolean; message: string }> {
   let response: Response
   try {
@@ -150,6 +175,8 @@ export function WaitlistConnectBaseApp(props: Props) {
     provisionSubAccount,
     confirmSubAccountEmbeddedOwner,
     finalizeSubAccountSigner,
+    connectBaseAccountWallet,
+    getLastSetupError,
     isSettingUp,
     lastStage,
     embeddedWallet,
@@ -219,12 +246,32 @@ export function WaitlistConnectBaseApp(props: Props) {
     if (isSettingUp) return
     setView({ kind: 'provisioning' })
 
+    const connected = await connectBaseAccountWallet()
+    if (cancelledRef.current) return
+    if (!connected) {
+      setView({
+        kind: 'error',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback: 'Connect Base App first, then try again.',
+        }),
+        canRetry: true,
+        retryFrom: 'start',
+      })
+      return
+    }
+
     const provisioned = await provisionSubAccount()
     if (cancelledRef.current) return
     if (!provisioned) {
       setView({
         kind: 'error',
-        message: 'Could not prepare your Base App wallet. Make sure Base App is connected and try again.',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback: 'Could not prepare your Base App wallet. Make sure Base App is connected and try again.',
+        }),
         canRetry: true,
         retryFrom: 'start',
       })
@@ -239,7 +286,7 @@ export function WaitlistConnectBaseApp(props: Props) {
     }
     pendingRef.current = pending
     setView({ kind: 'ready_to_sign', pending })
-  }, [isSettingUp, provisionSubAccount])
+  }, [connectBaseAccountWallet, getLastSetupError, isSettingUp, lastStage, provisionSubAccount])
 
   const handleEnableSigning = useCallback(async () => {
     if (view.kind !== 'ready_to_sign' || isSettingUp) return
@@ -255,7 +302,11 @@ export function WaitlistConnectBaseApp(props: Props) {
     if (!ownerResult) {
       setView({
         kind: 'error',
-        message: '4626 signing was not enabled. Approve the request in Base App or try again.',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback: '4626 signing was not enabled. Approve the request in Base App or try again.',
+        }),
         canRetry: true,
         retryFrom: 'sign',
       })
@@ -271,7 +322,11 @@ export function WaitlistConnectBaseApp(props: Props) {
     if (!finalized) {
       setView({
         kind: 'error',
-        message: 'Could not finish linking your 4626 signer. Try again.',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback: 'Could not finish linking your 4626 signer. Try again.',
+        }),
         canRetry: true,
         retryFrom: 'sign',
       })
@@ -282,7 +337,9 @@ export function WaitlistConnectBaseApp(props: Props) {
   }, [
     confirmSubAccountEmbeddedOwner,
     finalizeSubAccountSigner,
+    getLastSetupError,
     isSettingUp,
+    lastStage,
     persistAndComplete,
     view,
   ])

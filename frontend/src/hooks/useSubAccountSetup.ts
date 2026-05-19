@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { useWallets, useBaseAccountSdk, toViemAccount } from '@privy-io/react-auth'
+import { useWallets, useBaseAccountSdk, useConnectWallet, useActiveWallet, toViemAccount } from '@privy-io/react-auth'
 import type { Address } from 'viem'
 import {
   provisionSubAccount,
@@ -47,6 +47,8 @@ function buildWalletBundle(params: {
 export function useSubAccountSetup() {
   const { wallets } = useWallets()
   const { baseAccountSdk } = useBaseAccountSdk()
+  const { connectWallet } = useConnectWallet()
+  const { setActiveWallet } = useActiveWallet()
 
   const [state, setState] = useState<SubAccountSetupState>({
     subAccountAddress: null,
@@ -58,6 +60,7 @@ export function useSubAccountSetup() {
   })
 
   const setupInProgressRef = useRef(false)
+  const lastSetupErrorRef = useRef<Error | null>(null)
 
   const baseAccountWallet = useMemo(
     () =>
@@ -91,11 +94,13 @@ export function useSubAccountSetup() {
         if (!embeddedWallet) missing.push('Privy embedded wallet')
         if (!baseAccountSdk) missing.push('Base Account SDK')
         const err = new Error(`Sub-account setup requires: ${missing.join(', ')}`)
+        lastSetupErrorRef.current = err
         setState((prev) => ({ ...prev, error: err }))
         return null
       }
 
       setupInProgressRef.current = true
+      lastSetupErrorRef.current = null
       setState((prev) => ({
         ...prev,
         isSettingUp: true,
@@ -107,6 +112,7 @@ export function useSubAccountSetup() {
         return await fn()
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err))
+        lastSetupErrorRef.current = error
         setState((prev) => ({ ...prev, isSettingUp: false, error }))
         return null
       } finally {
@@ -182,6 +188,43 @@ export function useSubAccountSetup() {
     [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard],
   )
 
+  const connectBaseAccountWallet = useCallback(async (): Promise<boolean> => {
+    if (canSetup) return true
+    if (!embeddedWallet || !baseAccountSdk) return false
+
+    try {
+      const result = await connectWallet({
+        walletList: ['base_account', 'coinbase_wallet'],
+        walletChainType: 'ethereum-only',
+        description: 'Connect your Base App wallet to enable 4626 signing.',
+      }).catch((connectError: unknown) => {
+        const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+        if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) {
+          return null
+        }
+        throw connectError
+      })
+
+      const selectedWallet =
+        result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
+          ? ((result as { wallet?: unknown }).wallet ?? null)
+          : (result ?? null)
+
+      if (selectedWallet && typeof setActiveWallet === 'function') {
+        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+      }
+
+      return Boolean(selectedWallet)
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err))
+      lastSetupErrorRef.current = error
+      setState((prev) => ({ ...prev, error }))
+      return false
+    }
+  }, [baseAccountSdk, canSetup, connectWallet, embeddedWallet, setActiveWallet])
+
+  const getLastSetupError = useCallback(() => lastSetupErrorRef.current ?? state.error, [state.error])
+
   const setup = useCallback(async (): Promise<SubAccountSetupResult | null> => {
     return runWithGuard(async () => {
       const result = await runSubAccountSetup(
@@ -217,5 +260,7 @@ export function useSubAccountSetup() {
     canSetup,
     baseAccountWallet,
     embeddedWallet,
+    connectBaseAccountWallet,
+    getLastSetupError,
   }
 }

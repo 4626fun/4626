@@ -218,6 +218,14 @@ async function resolveSubAccountContext(params: SubAccountWalletBundle): Promise
   }
 
   const provider = await getProviderFromWallet(params.baseAccountWallet)
+
+  // Base App returns 4100 when sub-account RPC runs before account authorization.
+  try {
+    await provider.request({ method: 'eth_requestAccounts' })
+  } catch {
+    /* best-effort — proceed if the wallet already authorized this session */
+  }
+
   return { parentAddress, embeddedAddress, provider }
 }
 
