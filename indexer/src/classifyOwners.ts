@@ -33,6 +33,12 @@ import { createIndexerSupabase } from "./supabase.js";
  *     extension. Rare; most Privy wallets are single-chain.
  */
 
+function readIntEnv(name: string, fallback: number, min: number, max: number): number {
+  const value = Number(process.env[name] ?? "");
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(value)));
+}
+
 const CONCURRENCY = Number(process.env.CLASSIFY_CONCURRENCY ?? "20");
 /**
  * By default, also classify single-owner CSWs (they're ~98% of the
@@ -44,6 +50,14 @@ const MULTI_OWNER_ONLY =
   process.env.CLASSIFY_MULTI_OWNER_ONLY === "1" ||
   process.env.CLASSIFY_MULTI_OWNER_ONLY === "true";
 const PERSIST_BATCH_SIZE = Number(process.env.CLASSIFY_PERSIST_BATCH ?? "500");
+
+/** Default cap prevents loading the full ~1.5M enriched CSW set into Node on prod. */
+const CLASSIFY_UNLIMITED =
+  process.env.CLASSIFY_UNLIMITED === "1" || process.env.CLASSIFY_UNLIMITED === "true";
+const MAX_ENRICHED_ROWS = CLASSIFY_UNLIMITED
+  ? Number.POSITIVE_INFINITY
+  : readIntEnv("CLASSIFY_MAX_ENRICHED_ROWS", 25_000, 1, 500_000);
+const MIN_CREATION_BLOCK = readIntEnv("CLASSIFY_MIN_CREATION_BLOCK", 0, 0, 2_000_000_000);
 
 type Classification = "likely_privy_embedded" | "likely_extension_eoa";
 
@@ -98,22 +112,34 @@ async function main() {
   });
 
   console.log("[classify] pulling enriched Zora CSWs from Supabase (keyset-paginated)…");
+  console.log(
+    `[classify] enriched row cap: ${
+      CLASSIFY_UNLIMITED ? "unlimited (CLASSIFY_UNLIMITED=1)" : MAX_ENRICHED_ROWS
+    }`,
+  );
+  if (MIN_CREATION_BLOCK > 0) {
+    console.log(`[classify] cohort filter: creation_block >= ${MIN_CREATION_BLOCK}`);
+  }
   type Row = { csw_address: string; base_owner: string; current_owners: string[] };
   const PAGE = 1000;
   const enrichedRows: Row[] = [];
+  let hitRowCap = false;
   // Keyset pagination instead of offset: OFFSET N with ORDER BY can
   // blow past Supabase's statement timeout once N is large because
   // Postgres still scans all N prior rows. Instead we track the last
   // csw_address seen and filter strictly greater than it — O(1) per
   // page regardless of total size.
   let cursor: string | null = null;
-  while (true) {
+  while (enrichedRows.length < MAX_ENRICHED_ROWS) {
+    const remaining = MAX_ENRICHED_ROWS - enrichedRows.length;
+    const pageSize = Math.min(PAGE, remaining);
     let q = supabase
       .from("zora_csw_owners")
       .select("csw_address, base_owner, current_owners")
       .not("last_owner_sync_at", "is", null)
       .order("csw_address", { ascending: true })
-      .limit(PAGE);
+      .limit(pageSize);
+    if (MIN_CREATION_BLOCK > 0) q = q.gte("creation_block", MIN_CREATION_BLOCK);
     if (cursor !== null) q = q.gt("csw_address", cursor);
     const { data, error: pageErr } = await q;
     if (pageErr) throw pageErr;
@@ -121,10 +147,20 @@ async function main() {
     if (batch.length === 0) break;
     enrichedRows.push(...batch);
     cursor = batch[batch.length - 1].csw_address;
-    if (enrichedRows.length % 20000 === 0 || batch.length < PAGE) {
+    if (enrichedRows.length >= MAX_ENRICHED_ROWS) {
+      hitRowCap = !CLASSIFY_UNLIMITED;
+      break;
+    }
+    if (enrichedRows.length % 20000 === 0 || batch.length < pageSize) {
       console.log(`[classify]   loaded ${enrichedRows.length} rows…`);
     }
-    if (batch.length < PAGE) break;
+    if (batch.length < pageSize) break;
+  }
+  if (hitRowCap) {
+    console.log(
+      `[classify] stopped at CLASSIFY_MAX_ENRICHED_ROWS=${MAX_ENRICHED_ROWS}. ` +
+        "Set CLASSIFY_MIN_CREATION_BLOCK for a cohort, or CLASSIFY_UNLIMITED=1 only for intentional full passes.",
+    );
   }
   const multiOwnerRows = enrichedRows.filter(
     (r) => Array.isArray(r.current_owners) && r.current_owners.length >= 2,

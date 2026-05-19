@@ -183,7 +183,9 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     await expect(_runAlfaClubChatBridgeTickForTests(makeFlags())).rejects.toThrow(
       /room_history_failed:500/,
     )
-    expect(requestImmediatePrivyRefreshMock).not.toHaveBeenCalled()
+    // Prior 401 tick marked the JWT bad; the next cron tick refreshes before history fetch.
+    expect(requestImmediatePrivyRefreshMock).toHaveBeenCalledTimes(1)
+    expect(requestImmediatePrivyRefreshMock).toHaveBeenCalledWith('bridge_auth_fail')
   })
 
   it('memoizes a known-bad JWT and suppresses repeat live-socket attempts', async () => {

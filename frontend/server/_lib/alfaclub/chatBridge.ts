@@ -1549,6 +1549,7 @@ const bridgeAuthState = {
   lastBadJwt: null as string | null,
   lastBadJwtAt: 0,
   lastBadJwtWarnAt: Number.NEGATIVE_INFINITY,
+  privyRefreshKickedThisTick: false,
   badJwtTtlMs: BAD_JWT_TTL_MS,
   socketBackoffMs: 0,
   socketBackoffUntil: 0,
@@ -2737,14 +2738,29 @@ type RunBridgeTickOptions = {
   seedHistoryOnlyOnFirstTick?: boolean
 }
 
+async function kickPrivyRefreshOncePerTick(): Promise<void> {
+  if (bridgeAuthState.privyRefreshKickedThisTick) return
+  bridgeAuthState.privyRefreshKickedThisTick = true
+  await requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+}
+
 async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
   options: RunBridgeTickOptions = {},
 ): Promise<AlfaClubChatBridgeTickResult> {
+  bridgeAuthState.privyRefreshKickedThisTick = false
   const seedHistoryOnlyOnFirstTick = options.seedHistoryOnlyOnFirstTick ?? true
   const roomId = flags.roomId as string
-  const resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
-  const commandJwt = resolvedCommandJwt.jwt
+  let resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
+  let commandJwt = resolvedCommandJwt.jwt
+  if (commandJwt && isKnownBadJwt(commandJwt)) {
+    await kickPrivyRefreshOncePerTick()
+    resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
+    commandJwt = resolvedCommandJwt.jwt
+    if (commandJwt && !isKnownBadJwt(commandJwt)) {
+      clearBadJwt()
+    }
+  }
   const explicitIngestJwt = (flags.ingestJwt ?? '').trim() || null
   const ingestJwt = explicitIngestJwt || commandJwt
 
@@ -2845,7 +2861,7 @@ async function runBridgeTick(
     rememberBadJwt(historyErrorJwt, now)
     recordBridgeAuthFailure(new Date(now).toISOString())
     bridgeState.liveFallbackActive = true
-    void requestImmediatePrivyRefresh('bridge_auth_fail').catch(() => {})
+    void kickPrivyRefreshOncePerTick()
     warnRoomHistoryAuthFallback({
       roomId,
       jwtSource: resolvedCommandJwt.source,
@@ -3380,6 +3396,7 @@ export function _resetAlfaClubChatBridgeStateForTests(): void {
   bridgeAuthState.lastBadJwt = null
   bridgeAuthState.lastBadJwtAt = 0
   bridgeAuthState.lastBadJwtWarnAt = Number.NEGATIVE_INFINITY
+  bridgeAuthState.privyRefreshKickedThisTick = false
   bridgeAuthState.badJwtTtlMs = BAD_JWT_TTL_MS
   bridgeAuthState.socketBackoffMs = 0
   bridgeAuthState.socketBackoffUntil = 0

@@ -13,7 +13,7 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-  getDb,
+  getDbForCron,
   isDbConfigured,
   RATE_LIMITS,
   checkRateLimit,
@@ -127,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     await ensureKeeprSchema()
-    const db = await getDb()
+    const db = await getDbForCron()
     if (!db) {
       return res.status(200).json({
         success: true,
@@ -153,24 +153,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         payload,
       },
     })
-    await transitionOperationStatus({
-      operationId: operation.operationId,
-      nextStatus: 'running',
-      reason: 'solana_reconcile_started',
-      actor: 'keeper',
-    })
-    const stage = await createControlPlaneStage({
-      operationId: operation.operationId,
-      stageKind: resolveStageKind(action),
-      status: 'requested',
-      input: { workflow, checkpointKey, action },
-    })
-    await transitionStageStatus({
-      stageId: stage.stageId,
-      nextStatus: 'running',
-      reason: 'solana_reconcile_started',
-      actor: 'keeper',
-    })
+    const controlPlaneActive = operation.persisted
+    let stageId: string | null = null
+    if (controlPlaneActive) {
+      await transitionOperationStatus({
+        operationId: operation.operationId,
+        nextStatus: 'running',
+        reason: 'solana_reconcile_started',
+        actor: 'keeper',
+      })
+      const stage = await createControlPlaneStage({
+        operationId: operation.operationId,
+        stageKind: resolveStageKind(action),
+        status: 'requested',
+        input: { workflow, checkpointKey, action },
+      })
+      stageId = stage.persisted ? stage.stageId : null
+      if (stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'running',
+          reason: 'solana_reconcile_started',
+          actor: 'keeper',
+        })
+      }
+    }
 
     const prior = await db.sql`
       SELECT status, response_json
@@ -180,18 +187,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `
     const priorRow = prior.rows[0] as { status?: string; response_json?: unknown } | undefined
     if (priorRow?.status === 'completed') {
-      await transitionStageStatus({
-        stageId: stage.stageId,
-        nextStatus: 'succeeded',
-        reason: 'checkpoint_already_processed',
-        actor: 'keeper',
-      })
-      await completeControlPlaneOperation({
-        operationId: operation.operationId,
-        status: 'succeeded',
-        result: { alreadyProcessed: true, workflow, checkpointKey },
-        actor: 'keeper',
-      })
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'succeeded',
+          reason: 'checkpoint_already_processed',
+          actor: 'keeper',
+        })
+      }
+      if (controlPlaneActive) {
+        await completeControlPlaneOperation({
+          operationId: operation.operationId,
+          status: 'succeeded',
+          result: { alreadyProcessed: true, workflow, checkpointKey },
+          actor: 'keeper',
+        })
+      }
       const existing: ReconcileResult = {
         workflow,
         action,
@@ -259,40 +270,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at = NOW();
     `
     if (status === 'completed') {
-      await transitionStageStatus({
-        stageId: stage.stageId,
-        nextStatus: 'succeeded',
-        reason: 'solana_reconcile_completed',
-        actor: 'keeper',
-      })
-      await completeControlPlaneOperation({
-        operationId: operation.operationId,
-        status: 'succeeded',
-        result: {
-          workflow,
-          action,
-          checkpointKey,
-          executed,
-          status,
-        },
-        actor: 'keeper',
-      })
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: 'succeeded',
+          reason: 'solana_reconcile_completed',
+          actor: 'keeper',
+        })
+      }
+      if (controlPlaneActive) {
+        await completeControlPlaneOperation({
+          operationId: operation.operationId,
+          status: 'succeeded',
+          result: {
+            workflow,
+            action,
+            checkpointKey,
+            executed,
+            status,
+          },
+          actor: 'keeper',
+        })
+      }
     } else {
       const failStatus = status === 'failed' ? 'failed' : 'manual_review'
-      await transitionStageStatus({
-        stageId: stage.stageId,
-        nextStatus: failStatus,
-        reason: 'solana_reconcile_not_completed',
-        actor: 'keeper',
-        errorMessage: String(upstreamStatusCode ?? 'upstream_unavailable'),
-      })
-      await completeControlPlaneOperation({
-        operationId: operation.operationId,
-        status: 'failed',
-        errorCode: 'solana_reconcile_not_completed',
-        errorMessage: typeof upstreamResponse === 'string' ? upstreamResponse : JSON.stringify(upstreamResponse ?? {}),
-        actor: 'keeper',
-      })
+      if (controlPlaneActive && stageId) {
+        await transitionStageStatus({
+          stageId,
+          nextStatus: failStatus,
+          reason: 'solana_reconcile_not_completed',
+          actor: 'keeper',
+          errorMessage: String(upstreamStatusCode ?? 'upstream_unavailable'),
+        })
+      }
+      if (controlPlaneActive) {
+        await completeControlPlaneOperation({
+          operationId: operation.operationId,
+          status: 'failed',
+          errorCode: 'solana_reconcile_not_completed',
+          errorMessage: typeof upstreamResponse === 'string' ? upstreamResponse : JSON.stringify(upstreamResponse ?? {}),
+          actor: 'keeper',
+        })
+      }
     }
 
     const result: ReconcileResult = {

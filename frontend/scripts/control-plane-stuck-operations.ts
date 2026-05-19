@@ -49,9 +49,9 @@ async function main() {
     `
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (/control_plane_operations/i.test(message) && /does not exist|relation/i.test(message)) {
+    if (/control_plane_operations/i.test(message) && /does not exist/i.test(message)) {
       console.error(
-        'control_plane_schema_missing: apply control-plane migrations to DATABASE_URL target before running stuck scan',
+        'control_plane_schema_missing: apply control-plane migrations 048 and 049 to DATABASE_URL before running stuck scan',
       )
       process.exitCode = 2
       return

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  getDb,
+  getDbForCron,
   handleOptions,
   isDbConfigured,
   setCors,
@@ -101,7 +101,7 @@ function maxVaults(): number {
 async function readVaultRows(): Promise<ActiveVaultRow[]> {
   if (!isDbConfigured()) throw new Error('db_not_configured')
   await ensureKeeprSchema()
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_unavailable')
   const chainId = chainIdFilter()
   const limit = maxVaults()

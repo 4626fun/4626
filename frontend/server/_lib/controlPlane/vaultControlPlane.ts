@@ -200,6 +200,13 @@ async function queueAsyncVerb(input: {
     policyVersion: policy.policyVersion,
     input: input.payload,
   })
+  if (!operation.persisted) {
+    throw new VaultControlPlaneError({
+      statusCode: 503,
+      code: 'control_plane_schema_not_ready',
+      message: 'Control plane tracking unavailable until migrations 048 and 049 are applied',
+    })
+  }
   await transitionOperationStatus({
     operationId: operation.operationId,
     nextStatus: 'queued',

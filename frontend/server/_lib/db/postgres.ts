@@ -186,6 +186,8 @@ export async function runInTransaction<T>(fn: (db: DbPool) => Promise<T>): Promi
 
 let cachedDb: DbPool | null = null
 let cachedRawPool: any = null
+/** Bumped when the pool is reset so stale DbPool handles re-bind via getDb(). */
+let activePoolGeneration = 0
 let initError: string | null = null
 let initPromise: Promise<DbPool | null> | null = null
 let initErrorAtMs = 0
@@ -276,6 +278,7 @@ function shouldLogInitError(signature: string, throttleMs: number): boolean {
 }
 
 function resetCachedPool(): void {
+  activePoolGeneration += 1
   cachedDb = null
   initPromise = null
   initError = null
@@ -285,6 +288,23 @@ function resetCachedPool(): void {
   if (raw && typeof raw.end === 'function') {
     raw.end().catch(() => {})
   }
+}
+
+async function runOnCurrentDb<T>(
+  generation: number,
+  run: (db: DbPool) => Promise<T>,
+): Promise<T> {
+  if (generation !== activePoolGeneration) {
+    const fresh = await getDb()
+    if (!fresh) throw new Error('db_unavailable')
+    return run(fresh)
+  }
+  if (!cachedDb) {
+    const fresh = await getDb()
+    if (!fresh) throw new Error('db_unavailable')
+    return run(fresh)
+  }
+  return run(cachedDb)
 }
 
 const QUERY_RETRY_BASE_MS = 250
@@ -348,6 +368,36 @@ export function isDbConfigured(): boolean {
 
 export function getDbInitError(): string | null {
   return initError
+}
+
+/**
+ * Cron handlers should use this instead of bare `getDb()` so a saturated Supabase pool
+ * does not hold the Vercel function until maxDuration (connection acquire can retry
+ * for tens of seconds per query).
+ */
+export async function getDbForCron(deadlineMs?: number): Promise<DbPool | null> {
+  const ms =
+    deadlineMs ??
+    parsePositiveInt(process.env.CRON_DB_CONNECT_DEADLINE_MS) ??
+    8_000
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const db = await Promise.race([
+      getDb(),
+      new Promise<DbPool | null>((resolve) => {
+        timer = setTimeout(() => resolve(null), ms)
+      }),
+    ])
+    if (!db) {
+      console.warn('[postgres] cron db connect deadline exceeded', {
+        deadlineMs: ms,
+        initError: getDbInitError(),
+      })
+    }
+    return db
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 export async function getDb(): Promise<DbPool | null> {
@@ -484,6 +534,7 @@ export async function getDb(): Promise<DbPool | null> {
           }
           cachedRawPool = pool
           const queryRetries = getQueryRetryCount()
+          const poolGeneration = activePoolGeneration
           const db: DbPool = {
             sql: async (strings: TemplateStringsArray, ...values: any[]) => {
               let text = ''
@@ -491,40 +542,69 @@ export async function getDb(): Promise<DbPool | null> {
                 text += strings[i]
                 if (i < values.length) text += `$${i + 1}`
               }
-              return withSessionRetry(
-                async () => {
-                  const res = await pool.query(text, values)
-                  const rows = res.rows ?? []
-                  return {
-                    rows,
-                    rowCount: Number.isFinite(Number(res.rowCount))
-                      ? Number(res.rowCount)
-                      : rows.length,
-                  }
-                },
-                db,
-                queryRetries,
+              return runOnCurrentDb(poolGeneration, async (activeDb) =>
+                withSessionRetry(
+                  async () => {
+                    const activePool = cachedRawPool
+                    if (!activePool || poolGeneration !== activePoolGeneration) {
+                      const rebound = await getDb()
+                      if (!rebound) throw new Error('db_unavailable')
+                      return rebound.sql(strings, ...values)
+                    }
+                    const res = await activePool.query(text, values)
+                    const rows = res.rows ?? []
+                    return {
+                      rows,
+                      rowCount: Number.isFinite(Number(res.rowCount))
+                        ? Number(res.rowCount)
+                        : rows.length,
+                    }
+                  },
+                  activeDb,
+                  queryRetries,
+                ),
               )
             },
-            query: async (text: string, params?: any[]) => {
-              return withSessionRetry(
-                async () => {
-                  const res = await pool.query(text, params)
-                  const rows = res.rows ?? []
-                  return {
-                    rows,
-                    rowCount: Number.isFinite(Number(res.rowCount))
-                      ? Number(res.rowCount)
-                      : rows.length,
-                  }
-                },
-                db,
-                queryRetries,
-              )
-            },
+            query: async (text: string, params?: any[]) =>
+              runOnCurrentDb(poolGeneration, async (activeDb) =>
+                withSessionRetry(
+                  async () => {
+                    const activePool = cachedRawPool
+                    if (!activePool || poolGeneration !== activePoolGeneration) {
+                      const rebound = await getDb()
+                      if (!rebound?.query) throw new Error('db_unavailable')
+                      return rebound.query(text, params)
+                    }
+                    const res = await activePool.query(text, params)
+                    const rows = res.rows ?? []
+                    return {
+                      rows,
+                      rowCount: Number.isFinite(Number(res.rowCount))
+                        ? Number(res.rowCount)
+                        : rows.length,
+                    }
+                  },
+                  activeDb,
+                  queryRetries,
+                ),
+              ),
           }
-          // Sanity check connectivity (retried via withSessionRetry above).
-          await db.sql`SELECT 1;`
+          // Sanity check connectivity on the raw pool (avoid runOnCurrentDb → getDb during init).
+          let initCheckErr: unknown
+          for (let attempt = 0; attempt <= queryRetries; attempt += 1) {
+            try {
+              await pool.query('SELECT 1')
+              initCheckErr = null
+              break
+            } catch (err) {
+              initCheckErr = err
+              const sessionModeMaxClients = isSessionModeMaxClientsError(err)
+              const poolAcquireTimeout = isPoolAcquireTimeoutError(err)
+              if ((!sessionModeMaxClients && !poolAcquireTimeout) || attempt >= queryRetries) break
+              await sleep(QUERY_RETRY_BASE_MS * Math.pow(2, attempt))
+            }
+          }
+          if (initCheckErr) throw initCheckErr
           return db
         }
 

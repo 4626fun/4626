@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
+import { getDbForCron, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { syncEthosScoreUpdates, syncEthosUserkeyScores } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
 import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
@@ -107,7 +107,7 @@ function emitProjectionLagIfNeeded(params: { health: EthosProjectionHealth }): P
 }
 
 async function maybeRunProjectionFallback(params: {
-  db: Awaited<ReturnType<typeof getDb>>
+  db: Awaited<ReturnType<typeof getDbForCron>>
   lagMeta: ProjectionLagMeta
 }): Promise<void> {
   if (!params.db) {
@@ -170,7 +170,7 @@ async function maybeRunProjectionFallback(params: {
   }
 }
 
-async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Promise<EthosProjectionHealth> {
+async function readProjectionHealth(db: Awaited<ReturnType<typeof getDbForCron>>): Promise<EthosProjectionHealth> {
   if (!db) return null
   try {
     const result = await db.sql`
@@ -241,7 +241,7 @@ async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Prom
 }
 
 async function collectTopCreatorSocialUserkeys(params: {
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>
+  db: NonNullable<Awaited<ReturnType<typeof getDbForCron>>>
   limit: number
 }): Promise<string[]> {
   const rows = await params.db.sql`
@@ -293,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) {
     res.status(503).json({ ok: false, error: 'db_unavailable' })
     return
@@ -302,7 +302,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
   const socialSeedLimit = readInt(process.env.ETHOS_HOT_SOCIAL_USERKEY_SEED_LIMIT, 250, 0, 5000)
-  const projectionRefreshLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT_HOT, 5000, 100, 50000)
+  const projectionRefreshLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT_HOT, 2000, 100, 50000)
+  const syncBudgetMs = readInt(process.env.ETHOS_HOT_SYNC_BUDGET_MS, 52_000, 5_000, 55_000)
+  const startedAtMs = Date.now()
+  const remainingMs = () => Math.max(0, syncBudgetMs - (Date.now() - startedAtMs))
 
   try {
     const updates = await syncEthosScoreUpdates({
@@ -310,26 +313,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       pageLimit: updatePageLimit,
       maxPages: updateMaxPages,
     })
-    const socialUserkeys = socialSeedLimit > 0
-      ? await collectTopCreatorSocialUserkeys({
-          db,
-          limit: socialSeedLimit,
-        })
-      : []
-    const socialSeedSync = socialUserkeys.length > 0
-      ? await syncEthosUserkeyScores({
-          db,
-          forceUserkeys: socialUserkeys,
-          chunkSize: 100,
-        })
-      : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
-    const creatorProjection = await refreshCreatorEthosProjection({
-      db,
-      limit: projectionRefreshLimit,
-    })
-    const health = await readProjectionHealth(db)
+    const socialUserkeys =
+      socialSeedLimit > 0 && remainingMs() > 8_000
+        ? await collectTopCreatorSocialUserkeys({
+            db,
+            limit: socialSeedLimit,
+          })
+        : []
+    const socialSeedSync =
+      socialUserkeys.length > 0 && remainingMs() > 5_000
+        ? await syncEthosUserkeyScores({
+            db,
+            forceUserkeys: socialUserkeys,
+            chunkSize: 100,
+          })
+        : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
+    const creatorProjection =
+      remainingMs() > 10_000
+        ? await refreshCreatorEthosProjection({
+            db,
+            limit: projectionRefreshLimit,
+            mode: 'fast',
+          })
+        : { refreshedRows: 0, appliedLimit: 0, available: false }
+    const health = remainingMs() > 3_000 ? await readProjectionHealth(db) : null
     const lagMeta = emitProjectionLagIfNeeded({ health })
-    await maybeRunProjectionFallback({ db, lagMeta })
+    if (remainingMs() > 15_000) {
+      await maybeRunProjectionFallback({ db, lagMeta })
+    }
     console.info('[ethos-canonical-sync-hot] tick', {
       updates,
       socialSeedSync: {
@@ -339,6 +350,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       },
       creatorProjection,
       health,
+      remainingMs: remainingMs(),
     })
     res.status(200).json({
       ok: true,
@@ -359,8 +371,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error'
-    console.warn('[ethos-canonical-sync-hot] failed', { error: message })
-    res.status(200).json({
+    const poolSaturated = /timeout exceeded when trying to connect|maxclientsinsessionmode|pool after calling end/i.test(
+      message,
+    )
+    console.warn('[ethos-canonical-sync-hot] failed', { error: message, poolSaturated })
+    res.status(poolSaturated ? 503 : 200).json({
       ok: false,
       error: message.slice(0, 500),
     })

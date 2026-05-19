@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
+import { getDbForCron, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import {
   materializeCanonicalEthosScores,
@@ -97,7 +97,7 @@ function emitProjectionLagIfNeeded(params: { health: EthosProjectionHealth }): P
   return meta
 }
 
-async function readProjectionHealth(db: Awaited<ReturnType<typeof getDb>>): Promise<EthosProjectionHealth> {
+async function readProjectionHealth(db: Awaited<ReturnType<typeof getDbForCron>>): Promise<EthosProjectionHealth> {
   if (!db) return null
   try {
     const result = await db.sql`
@@ -185,7 +185,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) {
     res.status(503).json({ ok: false, error: 'db_unavailable' })
     return
@@ -195,7 +195,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   const scoreSyncLimit = readInt(process.env.ETHOS_SCORE_SYNC_LIMIT, 1000, 1, 10_000)
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT, 500, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES, 5, 1, 20)
-  const creatorProjectionLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 50_000, 100, 250_000)
+  const creatorProjectionLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 10_000, 100, 250_000)
+  const syncBudgetMs = readInt(process.env.ETHOS_SYNC_BUDGET_MS, 52_000, 5_000, 55_000)
+  const startedAtMs = Date.now()
+  const remainingMs = () => Math.max(0, syncBudgetMs - (Date.now() - startedAtMs))
 
   try {
     // Update-driven lane first: keeps hot identities fresh with low latency.
@@ -211,25 +214,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       ? Math.min(scoreSyncLimit, 250)
       : scoreSyncLimit
 
-    const seeded = await seedEthosIdentityKeys({
-      db,
-      limit: seedLimit,
-    })
-    const synced = await syncEthosUserkeyScores({
-      db,
-      limit: sweepLimit,
-      chunkSize: 100,
-    })
-    const rollupAfterSync = await materializeCanonicalEthosScores({
-      db,
-      userkeys: synced.processedUserkeys,
-      limit: sweepLimit,
-    })
-    const creatorProjection = await refreshCreatorEthosProjection({
-      db,
-      limit: creatorProjectionLimit,
-    })
-    const health = await readProjectionHealth(db)
+    const seeded =
+      remainingMs() > 20_000
+        ? await seedEthosIdentityKeys({
+            db,
+            limit: seedLimit,
+          })
+        : { profilesProcessed: 0, keysUpserted: 0, keysDerived: 0 }
+    const synced =
+      remainingMs() > 12_000
+        ? await syncEthosUserkeyScores({
+            db,
+            limit: sweepLimit,
+            chunkSize: 100,
+          })
+        : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
+    const rollupAfterSync =
+      synced.processedUserkeys.length > 0 && remainingMs() > 8_000
+        ? await materializeCanonicalEthosScores({
+            db,
+            userkeys: synced.processedUserkeys,
+            limit: sweepLimit,
+          })
+        : { processed: 0, updated: 0 }
+    const creatorProjection =
+      remainingMs() > 10_000
+        ? await refreshCreatorEthosProjection({
+            db,
+            limit: creatorProjectionLimit,
+            mode: 'fast',
+          })
+        : { refreshedRows: 0, appliedLimit: 0, available: false }
+    const health = remainingMs() > 3_000 ? await readProjectionHealth(db) : null
     emitProjectionLagIfNeeded({ health })
 
     console.info('[ethos-canonical-sync] tick', {
@@ -239,6 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       rollupAfterSync,
       creatorProjection,
       health,
+      remainingMs: remainingMs(),
     })
 
     res.status(200).json({

@@ -12,6 +12,7 @@ const { dbSqlMock, getDbMock, ensureKeeprSchemaMock } = vi.hoisted(() => ({
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
+  getDbForCron: getDbMock,
   isDbConfigured: () => true,
 }))
 

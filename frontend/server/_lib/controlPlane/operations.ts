@@ -181,13 +181,46 @@ async function getDbSafe(): Promise<Db | null> {
   return (db as Db | null) ?? null
 }
 
-function isMissingTableError(error: unknown): boolean {
+function isControlPlaneSchemaUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
-  return /(control_plane_operations|control_plane_stages|control_plane_events)/i.test(message) &&
-    (/does not exist/i.test(message) || /relation/i.test(message))
+  if (!/(control_plane_operations|control_plane_stages|control_plane_events)/i.test(message)) {
+    return false
+  }
+  if (/violates (foreign key|check|unique|not-null|null value) constraint/i.test(message)) {
+    return false
+  }
+  return (
+    /does not exist/i.test(message) ||
+    /undefined column/i.test(message) ||
+    /(column|relation|table) .* does not exist/i.test(message)
+  )
 }
 
-let warnedMissingTable = false
+function isControlPlaneParentMissingError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /control_plane_stages_operation_id_fkey/i.test(message)
+}
+
+function isControlPlaneMigrationIncompleteError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return (
+    /control_plane_operations_status_check/i.test(message) ||
+    /column "scope_type"/i.test(message) ||
+    /column "lock_scope"/i.test(message)
+  )
+}
+
+let warnedMissingSchema = false
+
+async function operationRowExists(db: Db, operationId: string): Promise<boolean> {
+  const rows = await db.sql<{ operation_id: string }>`
+    SELECT operation_id
+    FROM public.control_plane_operations
+    WHERE operation_id = ${operationId}
+    LIMIT 1;
+  `
+  return Boolean(rows.rows?.[0]?.operation_id)
+}
 
 async function safeInsertEvent(params: {
   db: Db
@@ -227,7 +260,7 @@ export async function addControlPlaneEvent(params: {
   try {
     await safeInsertEvent({ db, ...params })
   } catch (error) {
-    if (isMissingTableError(error)) return
+    if (isControlPlaneSchemaUnavailableError(error)) return
     console.warn('[control-plane/operations] Failed to persist event', {
       operationId: params.operationId,
       eventType: params.eventType,
@@ -281,7 +314,10 @@ export async function startControlPlaneOperation(
             message: 'Idempotency key already used with different payload',
           })
         }
-        return { operationId: String(prior.operation_id), persisted: true, reused: true }
+        const reusedOperationId = String(prior.operation_id)
+        if (await operationRowExists(db, reusedOperationId)) {
+          return { operationId: reusedOperationId, persisted: true, reused: true }
+        }
       }
     }
 
@@ -342,12 +378,27 @@ export async function startControlPlaneOperation(
       scopeId,
       idempotencyKey,
     })
+    if (!(await operationRowExists(db, operationId))) {
+      console.warn('[control-plane/operations] Operation insert did not persist; tracking disabled', {
+        operationId,
+      })
+      return { operationId, persisted: false, reused: false }
+    }
     return { operationId, persisted: true, reused: false }
   } catch (error) {
     if (error instanceof ControlPlaneOperationError) throw error
-    if (isMissingTableError(error) && !warnedMissingTable) {
-      warnedMissingTable = true
-      console.warn('[control-plane/operations] control-plane tables missing; tracking disabled until migration is applied')
+    if (isControlPlaneSchemaUnavailableError(error) && !warnedMissingSchema) {
+      warnedMissingSchema = true
+      console.warn(
+        '[control-plane/operations] control-plane schema unavailable; apply migrations 048 and 049 before enabling tracking',
+      )
+      return { operationId, persisted: false, reused: false }
+    }
+    if (isControlPlaneMigrationIncompleteError(error) && !warnedMissingSchema) {
+      warnedMissingSchema = true
+      console.warn(
+        '[control-plane/operations] control-plane migration incomplete; apply migration 049 (stages/events/status enum) before enabling tracking',
+      )
       return { operationId, persisted: false, reused: false }
     }
     console.warn('[control-plane/operations] Failed to persist operation start', {
@@ -404,7 +455,15 @@ export async function createControlPlaneStage(input: CreateOperationStageInput):
     })
     return { stageId, persisted: true }
   } catch (error) {
-    if (isMissingTableError(error)) return { stageId, persisted: false }
+    if (isControlPlaneSchemaUnavailableError(error)) return { stageId, persisted: false }
+    if (isControlPlaneParentMissingError(error)) {
+      console.warn('[control-plane/operations] Failed to persist stage create; parent operation missing (apply migrations 048+049)', {
+        operationId: input.operationId,
+        stageId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return { stageId, persisted: false }
+    }
     console.warn('[control-plane/operations] Failed to persist stage create', {
       operationId: input.operationId,
       stageId,
@@ -475,7 +534,7 @@ export async function transitionOperationStatus(input: TransitionOperationStatus
     })
   } catch (error) {
     if (error instanceof ControlPlaneOperationError) throw error
-    if (isMissingTableError(error)) return
+    if (isControlPlaneSchemaUnavailableError(error)) return
     console.warn('[control-plane/operations] Failed operation transition', {
       operationId: input.operationId,
       nextStatus: input.nextStatus,
@@ -549,7 +608,7 @@ export async function transitionStageStatus(input: TransitionStageStatusInput): 
     })
   } catch (error) {
     if (error instanceof ControlPlaneOperationError) throw error
-    if (isMissingTableError(error)) return
+    if (isControlPlaneSchemaUnavailableError(error)) return
     console.warn('[control-plane/operations] Failed stage transition', {
       stageId: input.stageId,
       nextStatus: input.nextStatus,

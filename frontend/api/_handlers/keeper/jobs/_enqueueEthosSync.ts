@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
+  getDbForCron,
   handleOptions,
   setCors,
   setNoStore,
@@ -43,16 +44,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<EthosSyncEnqueueResponse>)
   }
 
-  const job = await enqueueKeeperJob({
-    kind: 'internal_api',
-    dedupeKey: 'ethos-sync:default',
-    source: 'keeper-ethos-sync',
-    payload: {
-      path: '/api/keeper/ethos-sync',
-      body: {},
-    },
-    maxAttempts: 3,
-  })
+  const db = await getDbForCron()
+  if (!db) {
+    return res.status(503).json({
+      success: false,
+      error: 'db_unavailable',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  let job: KeeperJob
+  try {
+    job = await enqueueKeeperJob({
+      kind: 'internal_api',
+      dedupeKey: 'ethos-sync:default',
+      source: 'keeper-ethos-sync',
+      payload: {
+        path: '/api/keeper/ethos-sync',
+        body: {},
+      },
+      maxAttempts: 3,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (/pool after calling end|pool is closed/i.test(message)) {
+      const retryJob = await enqueueKeeperJob({
+        kind: 'internal_api',
+        dedupeKey: 'ethos-sync:default',
+        source: 'keeper-ethos-sync',
+        payload: {
+          path: '/api/keeper/ethos-sync',
+          body: {},
+        },
+        maxAttempts: 3,
+      })
+      job = retryJob
+    } else {
+      throw error
+    }
+  }
 
   return res.status(200).json({
     success: true,

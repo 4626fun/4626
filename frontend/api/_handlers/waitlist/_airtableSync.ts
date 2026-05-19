@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   type ApiEnvelope,
-  getDb,
+  getDbForCron,
   handleOptions,
   setCors,
   setNoStore,
@@ -62,7 +62,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         dryRun,
       })
     } else {
-      const db = await getDb()
+      const db = await getDbForCron()
       if (!db) {
         res.status(503).json({ success: false, error: 'database_not_configured' } satisfies ApiEnvelope<never>)
         return

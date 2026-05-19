@@ -1,4 +1,4 @@
-import { getDb } from '../db/postgres.js'
+import { getDbForCron } from '../db/postgres.js'
 
 export type KeeperJobStatus = 'pending' | 'claimed' | 'succeeded' | 'failed' | 'retry'
 
@@ -132,7 +132,7 @@ function mapJobRow(row: any): KeeperJob {
 }
 
 export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<KeeperJob> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const kind = normalizeKind(input.kind)
@@ -189,7 +189,7 @@ export async function enqueueKeeperJob(input: EnqueueKeeperJobInput): Promise<Ke
 }
 
 export async function claimDueKeeperJobs(input: ClaimKeeperJobsInput): Promise<KeeperJob[]> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const workerId = normalizeWorkerId(input.workerId)
@@ -223,7 +223,7 @@ export async function claimDueKeeperJobs(input: ClaimKeeperJobsInput): Promise<K
 }
 
 export async function completeKeeperJob(input: CompleteKeeperJobInput): Promise<KeeperJob | null> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const id = Number(input.id)
@@ -266,7 +266,7 @@ export async function completeKeeperJob(input: CompleteKeeperJobInput): Promise<
 }
 
 export async function releaseExpiredKeeperJobClaims(): Promise<number> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const result = await db.sql`
@@ -296,7 +296,7 @@ export async function releaseExpiredKeeperJobClaims(): Promise<number> {
 }
 
 export async function listKeeperJobs(input: ListKeeperJobsInput = {}): Promise<KeeperJob[]> {
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) throw new Error('db_not_configured')
 
   const status = normalizeStatus(input.status)

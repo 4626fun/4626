@@ -43,7 +43,7 @@
   "crons": [
     {
       "path": "/api/sync-creator-metrics",
-      "schedule": "*/5 * * * *"
+      "schedule": "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
     },
     {
       "path": "/api/waitlist/airtable-sync",
@@ -67,11 +67,11 @@
     },
     {
       "path": "/api/v1/alfaclub/chat-token-refresh",
-      "schedule": "13,43 * * * *"
+      "schedule": "*/10 * * * *"
     },
     {
       "path": "/api/v1/lottery/amoe/retry-cron",
-      "schedule": "*/5 * * * *"
+      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
     {
       "path": "/api/v1/lottery/amoe/publish-cron",
@@ -91,15 +91,15 @@
     },
     {
       "path": "/api/v1/chat/ethos-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "4,19,34,49 * * * *"
     },
     {
       "path": "/api/v1/chat/ethos-sync-hot",
-      "schedule": "* * * * *"
+      "schedule": "*/2 * * * *"
     },
     {
       "path": "/api/keeper/jobs/run",
-      "schedule": "*/5 * * * *"
+      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-sweep-canary",
@@ -115,7 +115,7 @@
     },
     {
       "path": "/api/keeper/jobs/process-keepr-actions",
-      "schedule": "*/5 * * * *"
+      "schedule": "3,8,13,18,23,28,33,38,43,48,53,58 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-bridge-integrity",
@@ -123,7 +123,7 @@
     },
     {
       "path": "/api/keeper/jobs/enqueue-ethos-sync",
-      "schedule": "*/5 * * * *"
+      "schedule": "5,10,15,20,25,30,35,40,45,50,55 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-strategy-canary",
@@ -135,7 +135,7 @@
     },
     {
       "path": "/api/keeper/jobs/enqueue-strategy-signals",
-      "schedule": "*/5 * * * *"
+      "schedule": "6,11,16,21,26,31,36,41,46,51,56 * * * *"
     }
   ],
   "routes": [

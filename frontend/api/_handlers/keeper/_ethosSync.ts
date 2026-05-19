@@ -16,7 +16,7 @@ import {
   requireKeeprApiKey,
   setCors,
   setNoStore,
-  getDb,
+  getDbForCron,
   isDbConfigured,
 } from '../../../packages/server-core/src/index.js'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
@@ -86,14 +86,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const db = await getDb()
+  const db = await getDbForCron()
   if (!db) {
     return res.status(503).json({ success: false, error: 'db_unavailable' } satisfies ApiEnvelope<never>)
   }
 
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
-  const creatorProjectionHotLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_HOT_LIMIT, 10000, 100, 250000)
+  const creatorProjectionHotLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_HOT_LIMIT, 2000, 100, 250000)
 
   try {
     const updates = await syncEthosScoreUpdates({

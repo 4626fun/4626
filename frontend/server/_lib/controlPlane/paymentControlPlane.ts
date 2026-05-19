@@ -66,6 +66,15 @@ export async function recordPaymentActivationQueued(
     }
   }
 
+  if (!operation.persisted) {
+    return {
+      operationId: operation.operationId,
+      stageId: '',
+      persisted: false,
+      reused: false,
+    }
+  }
+
   const stage = await createControlPlaneStage({
     operationId: operation.operationId,
     stageKind: 'payment.provision_dispatch',
