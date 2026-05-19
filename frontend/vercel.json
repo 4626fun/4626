@@ -20,8 +20,7 @@
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/agent/process.ts": {
-      "maxDuration": 60,
-      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
+      "maxDuration": 10
     },
     "api/[...path].ts": {
       "maxDuration": 60,

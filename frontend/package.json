@@ -245,7 +245,8 @@
       "@react-spring/web>react-dom": "$react-dom",
       "postcss": "8.5.10",
       "underscore": "1.13.8",
-      "ip-address": "10.1.1"
+      "ip-address": "10.1.1",
+      "@xmtp/node-bindings": "1.9.1"
     },
     "patchedDependencies": {
       "elliptic@6.6.1": "patches/elliptic@6.6.1.patch",

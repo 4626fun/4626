@@ -58,6 +58,7 @@ overrides:
   postcss: 8.5.10
   underscore: 1.13.8
   ip-address: 10.1.1
+  '@xmtp/node-bindings': 1.9.1
 
 patchedDependencies:
   '@coinbase/wallet-sdk@4.3.7':
@@ -3506,10 +3507,6 @@ packages:
 
   '@xmtp/content-type-primitives@3.0.1':
     resolution: {integrity: sha512-qM8d3+9A2aKwYuHkkl84BnnECtKop21PMzu7l8NYsTX1qvEkM+sfIqCwiLw4CgYD87OMAzDVCxDNGj1E/g/pWg==}
-
-  '@xmtp/node-bindings@1.8.0':
-    resolution: {integrity: sha512-dyppg1pQNsEdGH13RfsbkbXdnUdjufak6ea1YahjCROgmaJClDpMHcMcSfMzoJzASanU58MwEdCgYUF638NKgw==}
-    engines: {node: '>=22'}
 
   '@xmtp/node-bindings@1.9.1':
     resolution: {integrity: sha512-0cnAq7j8dPvxDZ5d7JpdbWTgSIKDiN421dxZj4sy1qw7QLOH4yTUKuuMY7CxoChoGa7/QPZGm+0sIIx/Gs2bAg==}
@@ -12964,13 +12961,11 @@ snapshots:
 
   '@xmtp/content-type-primitives@3.0.0':
     dependencies:
-      '@xmtp/node-bindings': 1.8.0
+      '@xmtp/node-bindings': 1.9.1
 
   '@xmtp/content-type-primitives@3.0.1':
     dependencies:
       '@xmtp/node-bindings': 1.9.1
-
-  '@xmtp/node-bindings@1.8.0': {}
 
   '@xmtp/node-bindings@1.9.1': {}
 
