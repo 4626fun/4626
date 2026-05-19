@@ -27,6 +27,7 @@ import {
   completeControlPlaneOperation,
   createControlPlaneStage,
   startControlPlaneOperation,
+  transitionOperationStatus,
   transitionStageStatus,
 } from '../../../server/_lib/controlPlane/operations.js'
 import { loadControlPlanePolicy } from '../../../server/_lib/controlPlane/policy.js'
@@ -155,12 +156,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const controlPlaneActive = operation.persisted
     let stageId: string | null = null
+    let resumedFromTerminal = false
     if (controlPlaneActive) {
-      await beginOperationExecution({
+      const execution = await beginOperationExecution({
         operationId: operation.operationId,
         reason: 'solana_reconcile_started',
         actor: 'keeper',
       })
+      resumedFromTerminal = execution.resumedFromTerminal
       const stage = await createControlPlaneStage({
         operationId: operation.operationId,
         stageKind: resolveStageKind(action),
@@ -293,23 +296,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else {
       const failStatus = status === 'failed' ? 'failed' : 'manual_review'
+      const errorCode =
+        status === 'skipped_unconfigured'
+          ? 'solana_orchestrator_not_configured'
+          : 'solana_reconcile_not_completed'
+      const errorMessage =
+        status === 'skipped_unconfigured'
+          ? 'SOLANA_ORCHESTRATOR_URL is not set on the Vercel deployment'
+          : typeof upstreamResponse === 'string'
+            ? upstreamResponse
+            : JSON.stringify(upstreamResponse ?? {})
       if (controlPlaneActive && stageId) {
         await transitionStageStatus({
           stageId,
           nextStatus: failStatus,
-          reason: 'solana_reconcile_not_completed',
+          reason: errorCode,
           actor: 'keeper',
-          errorMessage: String(upstreamStatusCode ?? 'upstream_unavailable'),
+          errorMessage:
+            status === 'skipped_unconfigured'
+              ? errorMessage
+              : String(upstreamStatusCode ?? 'upstream_unavailable'),
         })
       }
       if (controlPlaneActive) {
-        await completeControlPlaneOperation({
-          operationId: operation.operationId,
-          status: 'failed',
-          errorCode: 'solana_reconcile_not_completed',
-          errorMessage: typeof upstreamResponse === 'string' ? upstreamResponse : JSON.stringify(upstreamResponse ?? {}),
-          actor: 'keeper',
-        })
+        if (failStatus === 'failed') {
+          await completeControlPlaneOperation({
+            operationId: operation.operationId,
+            status: 'failed',
+            errorCode,
+            errorMessage,
+            actor: 'keeper',
+          })
+        } else {
+          await transitionOperationStatus({
+            operationId: operation.operationId,
+            nextStatus: 'manual_review',
+            reason: errorCode,
+            actor: 'keeper',
+            errorCode,
+            errorMessage,
+          })
+        }
       }
     }
 
@@ -322,6 +349,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ...(upstreamStatusCode !== undefined ? { upstreamStatusCode } : {}),
       ...(upstreamResponse !== null ? { upstreamResponse } : {}),
     }
+
+    console.info('[keeper/solana/reconcile] completed', {
+      workflow,
+      action,
+      checkpointKey,
+      status: result.status,
+      executed: result.executed,
+      orchestratorConfigured: Boolean(solanaOrchestratorUrl),
+      upstreamStatusCode: result.upstreamStatusCode ?? null,
+      operationId: controlPlaneActive ? operation.operationId : null,
+      operationReused: operation.reused,
+      resumedFromTerminal,
+    })
 
     return res.status(200).json({
       success: true,

@@ -1,0 +1,18 @@
+# Add alongside provisioner Caddy config on the Vultr host.
+# DNS: orchestrator.4626.fun -> this host (A record or Cloudflare tunnel).
+
+orchestrator.4626.fun {
+  encode zstd gzip
+
+  @health path /healthz
+  handle @health {
+    reverse_proxy 127.0.0.1:8789
+  }
+
+  @reconcile path /reconcile
+  handle @reconcile {
+    reverse_proxy 127.0.0.1:8789
+  }
+
+  respond "Not found" 404
+}

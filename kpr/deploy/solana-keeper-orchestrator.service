@@ -1,0 +1,24 @@
+[Unit]
+Description=4626 Solana keeper orchestrator (KPR /reconcile HTTP)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=app4626
+Group=app4626
+# install-systemd.sh rewrites these placeholders per host.
+WorkingDirectory=/opt/4626/kpr
+EnvironmentFile=/etc/4626/solana-keeper-orchestrator.env
+ExecStart=/usr/bin/env pnpm start:solana-orchestrator
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
