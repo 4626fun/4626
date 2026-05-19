@@ -25,7 +25,8 @@
     },
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "server/_lib/alfaclub/assets/**"
+      "includeFiles": "server/_lib/alfaclub/assets/**",
+      "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/social-preview.ts": {
       "maxDuration": 10

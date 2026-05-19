@@ -1,6 +1,6 @@
 import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
-import { executeKeeprAction } from '../../../keepr/xmtpQueueExecutor.js'
+import { executeKeeprStrategyAction } from '../../../keepr/strategyActionExecutor.js'
 import type { OperatorAction } from '../operatorActions.js'
 import {
   executeVaultReport,
@@ -142,9 +142,7 @@ export async function executeOperatorAction(input: {
       return { actionType: action.type, executed: true, result }
     }
     case 'strategy.ajna.rebucket': {
-      const keeprResult = await executeKeeprAction({
-        id: 0,
-        groupId: 'control-plane-operator',
+      const keeprResult = await executeKeeprStrategyAction({
         vaultAddress,
         actionType: 'strategy.ajna.rebucket',
         action: {
@@ -172,9 +170,7 @@ export async function executeOperatorAction(input: {
       }
     }
     case 'strategy.charm.rebalance': {
-      const keeprResult = await executeKeeprAction({
-        id: 0,
-        groupId: 'control-plane-operator',
+      const keeprResult = await executeKeeprStrategyAction({
         vaultAddress,
         actionType: 'strategy.charm.rebalance',
         action: {
