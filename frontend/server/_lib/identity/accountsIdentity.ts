@@ -983,7 +983,7 @@ export async function buildAccountsMePayload(params: {
     linkedMethods,
     accountSignals: {
       linked: zoraRow.zoraLinked,
-      canonicalCswAddress: zoraRow.canonicalCswAddress,
+      canonicalCswAddress: canonicalCswAddressForTrack ?? zoraRow.canonicalCswAddress,
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
       zoraHandle: zoraRow.zoraHandle,
       lastResolvedAt: zoraRow.lastResolvedAt,

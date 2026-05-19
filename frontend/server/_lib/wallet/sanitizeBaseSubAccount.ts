@@ -110,16 +110,28 @@ async function readWalletSyncFallbackSubAccount(params: {
   return normalizeAddress(result.rows?.[0]?.address)
 }
 
+async function readProfileCswAddress(db: Db, profileId: number): Promise<string | null> {
+  const profileCswResult = await db.sql`
+    SELECT csw_address
+    FROM profiles
+    WHERE id = ${profileId}
+    LIMIT 1;
+  `
+  return normalizeAddress(profileCswResult.rows?.[0]?.csw_address)
+}
+
 /**
  * Waitlist Base App connect persists counterfactual sub-accounts before they
  * have Base bytecode. Trust the CIEC row written by
  * `/api/arch-b/sub-account/baseapp/register` so executionTrack resolves to
  * `sub-account` immediately after register.
+ *
+ * Prefer the CIEC row over `profiles.base_sub_account` when the profile
+ * column is stale — register updates both, but older rows can drift.
  */
-async function readBaseAppWaitlistSubAccount(params: {
+async function readTrustedBaseAppWaitlistSubAccount(params: {
   db: Db
   profileId: number
-  candidate: string
   canonicalCswAddress: string | null
 }): Promise<string | null> {
   const result = await params.db.sql`
@@ -132,20 +144,14 @@ async function readBaseAppWaitlistSubAccount(params: {
   `
   const row = result.rows?.[0] ?? null
   const subAccount = normalizeAddress(row?.sub_account_address)
-  if (!subAccount || subAccount !== params.candidate) return null
+  if (!subAccount) return null
 
   const parent = normalizeAddress(row?.parent_csw_address)
   const canonical = normalizeAddress(params.canonicalCswAddress)
   if (parent) {
     const allowedParents = new Set<string>()
     if (canonical) allowedParents.add(canonical)
-    const profileCswResult = await params.db.sql`
-      SELECT csw_address
-      FROM profiles
-      WHERE id = ${params.profileId}
-      LIMIT 1;
-    `
-    const profileCsw = normalizeAddress(profileCswResult.rows?.[0]?.csw_address)
+    const profileCsw = await readProfileCswAddress(params.db, params.profileId)
     if (profileCsw) allowedParents.add(profileCsw)
     if (allowedParents.size > 0 && !allowedParents.has(parent)) return null
   }
@@ -171,6 +177,13 @@ export async function sanitizePersistedSubAccountAddress(params: {
     canonicalCswAddress: canonical,
   })
 
+  const trustedBaseAppSubAccount = await readTrustedBaseAppWaitlistSubAccount({
+    db: params.db,
+    profileId: params.profileId,
+    canonicalCswAddress: canonical,
+  })
+  if (trustedBaseAppSubAccount) return trustedBaseAppSubAccount
+
   const candidate = normalizeAddress(params.baseSubAccountAddress)
   if (!candidate) return walletSyncFallback
 
@@ -195,14 +208,6 @@ export async function sanitizePersistedSubAccountAddress(params: {
   ) {
     return walletSyncFallback
   }
-
-  const baseAppWaitlistSubAccount = await readBaseAppWaitlistSubAccount({
-    db: params.db,
-    profileId: params.profileId,
-    candidate,
-    canonicalCswAddress: canonical,
-  })
-  if (baseAppWaitlistSubAccount) return baseAppWaitlistSubAccount
 
   if (params.privyUser) {
     const classification = classifyLinkedAccounts(params.privyUser)

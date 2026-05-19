@@ -28,6 +28,11 @@ import {
   isWaitlistSigningReady,
 } from './waitlistFlowState'
 import {
+  clearPersistedSubAccountConnectOverlay,
+  readPersistedSubAccountConnectOverlay,
+  writePersistedSubAccountConnectOverlay,
+} from './waitlistSubAccountConnectCache'
+import {
   clearStoredWaitlistSessionToken,
   isAlreadyLoggedInAuthError,
   isEmailAlreadyLinkedAuthError,
@@ -715,13 +720,30 @@ export function WaitlistFlow(props: {
         return null
       }
 
+      const bootstrappedAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
+      const accountCompletionKey = getSubAccountCompletionAccountKey(bootstrappedAccount)
+      if (!subAccountConnectOverlayRef.current && accountCompletionKey) {
+        const persistedOverlay = readPersistedSubAccountConnectOverlay(accountCompletionKey)
+        if (persistedOverlay) {
+          subAccountConnectOverlayRef.current = persistedOverlay
+          subAccountStepCompletedAccountKeyRef.current = accountCompletionKey
+          setSubAccountStepCompletedAccountKey(accountCompletionKey)
+        }
+      }
+      const subAccountStepCompleted = Boolean(
+        accountCompletionKey &&
+          (subAccountStepCompletedAccountKey === accountCompletionKey ||
+            subAccountStepCompletedAccountKeyRef.current === accountCompletionKey),
+      )
+
       const nextAccount = applyWaitlistSubAccountConnectOverlay(
-        mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet),
+        bootstrappedAccount,
         subAccountConnectOverlayRef.current,
         subAccountStepCompleted,
       )
       if (isWaitlistSigningReady(nextAccount)) {
         subAccountConnectOverlayRef.current = null
+        clearPersistedSubAccountConnectOverlay(getSubAccountCompletionAccountKey(nextAccount))
       }
       setAccount(nextAccount)
       finalizingAutoRetryCountRef.current = 0
@@ -738,13 +760,7 @@ export function WaitlistFlow(props: {
       // Track C2 requires the actual Privy embedded EOA signer. Linked
       // external wallets can also hydrate on `privy.user.wallet`, so only
       // trust the embedded-wallet helper used by the signer setup path.
-      const accountCompletionKey = getSubAccountCompletionAccountKey(nextAccount)
       const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
-      const subAccountStepCompleted = Boolean(
-        accountCompletionKey &&
-          (subAccountStepCompletedAccountKey === accountCompletionKey ||
-            subAccountStepCompletedAccountKeyRef.current === accountCompletionKey),
-      )
       setStep(
         resolveWaitlistStep({
           account: nextAccount,
@@ -1092,7 +1108,11 @@ export function WaitlistFlow(props: {
         parentAddress: result.parentAddress,
         subAccountAddress: result.subAccountAddress,
       }
-      markSubAccountStepCompleted(account)
+      const completionKey = getSubAccountCompletionAccountKey(account)
+      if (completionKey) {
+        writePersistedSubAccountConnectOverlay(completionKey, subAccountConnectOverlayRef.current)
+        markSubAccountStepCompleted(account)
+      }
       clearBaseAppSetupDeepLink()
       setAccount((current) => {
         const base = current ?? account
