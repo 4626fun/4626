@@ -10,7 +10,7 @@ import { base } from 'viem/chains'
 import {
   runWrapToken,
   toExecErrorText as toErrorText,
-} from '../_lib/solanaBridgeCliRunner.js'
+} from '../_lib/onchain/solanaBridgeCliRunner.js'
 import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
@@ -19,12 +19,12 @@ import {
   normalizeWrapTokenName,
   normalizeWrapTokenSymbol,
   readBridgeTokenMetadata,
-} from '../_lib/solanaBridgeTokenMetadata.js'
+} from '../_lib/onchain/solanaBridgeTokenMetadata.js'
 import {
   parseMintPubkeyFromAlreadyExistsError,
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
-} from '../_lib/solanaBridgePubkey.js'
+} from '../_lib/onchain/solanaBridgePubkey.js'
 
 const execFileAsync = promisify(execFile)
 const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as Address
