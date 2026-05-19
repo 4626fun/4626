@@ -198,7 +198,7 @@ export type AlfaClubChatBridgeFlags = {
 export type AlfaClubCommandMessage = {
   id: string
   date: number
-  sender: `0x${string}`
+  sender: string
   text: string
 }
 
@@ -550,6 +550,8 @@ const BARE_GMEOW_TRUSTED_SENDERS: ReadonlySet<string> = new Set([
   '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
 ])
 
+const UNKNOWN_RELAY_SENDER_WALLET: `0x${string}` = '0x0000000000000000000000000000000000000000'
+
 function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boolean {
   if (!BARE_GMEOW_TRUSTED_SENDERS.has(senderLower)) return false
   return /^gmeow+\b/.test(rawText.trim().toLowerCase())
@@ -595,6 +597,10 @@ function shouldSuppressDeterministicReply(responseText: string): boolean {
   const normalized = responseText.trim().toLowerCase()
   if (!normalized) return false
   return SUPPRESSED_BRIDGE_REPLY_TEXTS.has(normalized)
+}
+
+function resolveCommandSenderWallet(sender: string): `0x${string}` {
+  return isHexAddress(sender) ? (sender as `0x${string}`) : UNKNOWN_RELAY_SENDER_WALLET
 }
 
 /** Exposed for unit tests. */
@@ -2528,7 +2534,7 @@ async function executeCommandBatch(params: {
     try {
       const result = await executeDeterministicCommand({
         groupId: params.flags.groupId,
-        senderWallet: command.sender,
+        senderWallet: resolveCommandSenderWallet(command.sender),
         text: command.text,
         chatId: `alfaclub:${params.roomId}`,
         userId: command.sender,

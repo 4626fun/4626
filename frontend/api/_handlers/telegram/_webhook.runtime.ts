@@ -254,6 +254,7 @@ type TelegramChatShared = {
 
 type TelegramMessage = {
   message_id?: number
+  message_thread_id?: number
   text?: string
   caption?: string
   from?: TelegramFrom

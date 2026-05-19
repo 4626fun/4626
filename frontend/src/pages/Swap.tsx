@@ -238,7 +238,7 @@ function useSafeSwapPrivyHook(enabled: boolean) {
 function isBaseAccountWallet(wallet: unknown): boolean {
   const record = wallet && typeof wallet === 'object' ? (wallet as Record<string, unknown>) : null
   const type = normalizePrivyText(record?.walletClientType ?? record?.wallet_client_type ?? record?.connector_type)
-  return type === 'base_account'
+  return type === 'base_account' || type === 'coinbase_wallet'
 }
 
 async function getWalletProvider(wallet: any): Promise<any | null> {
