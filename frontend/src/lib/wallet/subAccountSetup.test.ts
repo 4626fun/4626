@@ -227,6 +227,34 @@ describe('setupSubAccount', () => {
     expect(stages.some((s) => s.stage === 'done' && s.status === 'success')).toBe(true)
   })
 
+  it('prefers baseAccountSdk.getProvider() over Privy wallet provider for sub-account RPCs', async () => {
+    const walletProvider = mockProvider({
+      wallet_getSubAccounts: () => {
+        throw new Error('-32604 method not supported')
+      },
+    })
+    const sdkProvider = mockProvider({
+      wallet_getSubAccounts: { subAccounts: [] },
+      wallet_addSubAccount: mockSubAccount(),
+    })
+
+    const params = createSetupParams({ provider: walletProvider })
+    params.baseAccountSdk = {
+      getProvider: () => sdkProvider,
+      subAccount: {
+        create: vi.fn().mockResolvedValue(mockSubAccount()),
+        setToOwnerAccount: params.baseAccountSdk.subAccount.setToOwnerAccount,
+      },
+    }
+
+    const result = await setupSubAccount(params)
+
+    expect(result.created).toBe(true)
+    expect(walletProvider.request).not.toHaveBeenCalled()
+    expect(sdkProvider.request).toHaveBeenCalled()
+    expect(params.baseAccountSdk.subAccount.create).toHaveBeenCalledTimes(1)
+  })
+
   it('reuses an existing sub-account', async () => {
     const existing = mockSubAccount()
     const params = createSetupParams({ existingSubAccount: existing })

@@ -115,7 +115,12 @@ function mapSetupFailureMessage(params: {
   const lower = combined.toLowerCase()
 
   if (
-    lower.includes('user rejected') ||
+    lower.includes('not supported') &&
+    (lower.includes('wallet_addsubaccount') || lower.includes('method'))
+  ) {
+    return 'Base App could not create your app wallet. Update the app and try Connect Base App again.'
+  }
+  if (lower.includes('user rejected') ||
     lower.includes('user denied') ||
     lower.includes('rejected the request')
   ) {

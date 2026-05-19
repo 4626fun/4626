@@ -82,6 +82,35 @@ async function getProviderFromWallet(wallet: {
   throw new Error('Cannot get EIP-1193 provider from wallet.')
 }
 
+type SubAccountRpcProvider = {
+  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+}
+
+/**
+ * Base App injects sub-account RPCs on the Base Account SDK provider
+ * (`baseAccountSdk.getProvider()` → `window.ethereum.isCoinbaseBrowser`).
+ * Privy's ConnectedWallet provider does not forward `wallet_addSubAccount`,
+ * which surfaces as `-32604 method not supported` inside Base App.
+ */
+async function resolveSubAccountProvider(params: SubAccountWalletBundle): Promise<SubAccountRpcProvider> {
+  const sdk = params.baseAccountSdk as SubAccountWalletBundle['baseAccountSdk'] & {
+    getProvider?: () => SubAccountRpcProvider
+  }
+
+  if (typeof sdk.getProvider === 'function') {
+    try {
+      const sdkProvider = sdk.getProvider()
+      if (sdkProvider && typeof sdkProvider.request === 'function') {
+        return sdkProvider
+      }
+    } catch {
+      /* fall through to Privy wallet provider */
+    }
+  }
+
+  return getProviderFromWallet(params.baseAccountWallet)
+}
+
 // ── Core Functions ─────────────────────────────────────────────────
 
 /**
@@ -125,26 +154,33 @@ export async function getExistingSubAccount(params: {
 export async function createSubAccount(params: {
   provider: any
   embeddedWalletAddress: Address
+  baseAccountSdk?: SubAccountWalletBundle['baseAccountSdk']
 }): Promise<SubAccount> {
-  const { provider, embeddedWalletAddress } = params
+  const { provider, embeddedWalletAddress, baseAccountSdk } = params
 
-  const result = await provider.request({
-    method: 'wallet_addSubAccount',
-    params: [
+  const accountParam = {
+    type: 'create' as const,
+    keys: [
       {
-        version: '1',
-        account: {
-          type: 'create',
-          keys: [
-            {
-              type: 'address',
-              publicKey: embeddedWalletAddress,
-            },
-          ],
-        },
+        type: 'address' as const,
+        publicKey: embeddedWalletAddress,
       },
     ],
-  })
+  }
+
+  const sdkCreate = baseAccountSdk?.subAccount?.create
+  const result =
+    typeof sdkCreate === 'function'
+      ? await sdkCreate(accountParam)
+      : await provider.request({
+          method: 'wallet_addSubAccount',
+          params: [
+            {
+              version: '1',
+              account: accountParam,
+            },
+          ],
+        })
 
   if (!result || typeof result !== 'object' || !('address' in result)) {
     throw new Error('wallet_addSubAccount did not return a valid sub-account.')
@@ -167,7 +203,12 @@ export async function createSubAccount(params: {
  */
 export function configureSubAccountSigner(params: {
   baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
     subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
       setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
     }
   }
@@ -195,7 +236,12 @@ type SubAccountWalletBundle = {
     provider?: any
   }
   baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
     subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
       setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
     }
   }
@@ -217,7 +263,7 @@ async function resolveSubAccountContext(params: SubAccountWalletBundle): Promise
     await params.baseAccountWallet.switchChain(base.id)
   }
 
-  const provider = await getProviderFromWallet(params.baseAccountWallet)
+  const provider = await resolveSubAccountProvider(params)
 
   // Base App returns 4100 when sub-account RPC runs before account authorization.
   try {
@@ -266,6 +312,7 @@ export async function provisionSubAccount(
       subAccount = await createSubAccount({
         provider,
         embeddedWalletAddress: embeddedAddress,
+        baseAccountSdk: params.baseAccountSdk,
       })
       created = true
       onStageEvent?.({
@@ -421,7 +468,12 @@ export async function setupSubAccount(params: {
   }
   /** The Base Account SDK instance from `useBaseAccountSdk()`. */
   baseAccountSdk: {
+    getProvider?: () => SubAccountRpcProvider
     subAccount: {
+      create?: (account: {
+        type: 'create'
+        keys: Array<{ type: 'address'; publicKey: Address }>
+      }) => Promise<SubAccount>
       setToOwnerAccount: (fn: () => Promise<{ account: any }>) => void
     }
   }
