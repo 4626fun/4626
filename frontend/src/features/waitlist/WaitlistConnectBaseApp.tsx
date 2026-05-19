@@ -1,10 +1,14 @@
 /**
  * Track C2 — sub-accounts on the waitlist (frontend).
  *
- * Two-step Base App connect:
- *   1. Provision the per-app sub-account (one passkey when creating).
- *   2. User signs addOwnerAddress(privyEmbeddedEoa) on the sub-account.
- *   3. Silent SDK signer wiring + server register.
+ * Base App connect flow:
+ *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
+ *   2. Wire the Privy embedded EOA as the sub-account signer (silent SDK step).
+ *   3. POST /api/arch-b/sub-account/baseapp/register
+ *
+ * Sub-account execution does not require an on-chain addOwnerAddress self-call.
+ * wallet_addSubAccount registers the embedded EOA as the app signer key; the
+ * server marks executionTrack=sub-account after register.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -29,26 +33,17 @@ type PendingProvision = {
   parentAddress: Address
   subAccountAddress: Address
   created: boolean
-  provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
 }
 
 type ViewState =
   | { kind: 'idle' }
-  | { kind: 'provisioning' }
-  | { kind: 'ready_to_sign'; pending: PendingProvision }
-  | { kind: 'signing_owner'; pending: PendingProvision }
-  | { kind: 'finishing'; pending: PendingProvision }
-  | { kind: 'registering'; parentAddress: Address; subAccountAddress: Address }
+  | { kind: 'connecting' }
   | { kind: 'complete'; parentAddress: Address; subAccountAddress: Address }
-  | { kind: 'error'; message: string; canRetry: boolean; retryFrom?: 'start' | 'sign' }
+  | { kind: 'error'; message: string; canRetry: boolean }
 
-const PROVISION_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
+const STAGE_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
   check_existing: 'Checking for your 4626 app wallet…',
   create_sub_account: 'Creating your app wallet (one passkey)…',
-}
-
-const SIGN_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
-  install_embedded_owner: 'Confirm 4626 signing in Base App…',
   configure_signer: 'Linking your 4626 signer…',
 }
 
@@ -124,13 +119,10 @@ function mapSetupFailureMessage(params: {
     lower.includes('user denied') ||
     lower.includes('rejected the request')
   ) {
-    return 'You declined the Base App request. Tap Enable 4626 signing to try again.'
+    return 'You declined the Base App request. Tap Connect Base App to try again.'
   }
   if (lower.includes('base account wallet')) {
     return 'Connect Base App first, then try again.'
-  }
-  if (lower.includes('self calls are not allowed')) {
-    return 'Base App could not finish signing on this device. Try again or skip for now.'
   }
   if (params.error?.message) return params.error.message
   return params.fallback
@@ -173,7 +165,6 @@ export function WaitlistConnectBaseApp(props: Props) {
   const { onSkip, onComplete } = props
   const {
     provisionSubAccount,
-    confirmSubAccountEmbeddedOwner,
     finalizeSubAccountSigner,
     connectBaseAccountWallet,
     getLastSetupError,
@@ -184,7 +175,6 @@ export function WaitlistConnectBaseApp(props: Props) {
 
   const [view, setView] = useState<ViewState>({ kind: 'idle' })
   const cancelledRef = useRef(false)
-  const pendingRef = useRef<PendingProvision | null>(null)
 
   useEffect(() => {
     return () => {
@@ -193,17 +183,11 @@ export function WaitlistConnectBaseApp(props: Props) {
   }, [])
 
   const progressLabel = useMemo(() => {
-    if (view.kind === 'provisioning') {
-      const live = lastStage?.stage
-      if (live && PROVISION_LABELS[live]) return PROVISION_LABELS[live]
-      return 'Preparing your 4626 app wallet…'
-    }
-    if (view.kind === 'signing_owner' || view.kind === 'finishing') {
-      const live = lastStage?.stage
-      if (live && SIGN_LABELS[live]) return SIGN_LABELS[live]
-      return 'Enabling 4626 signing…'
-    }
-    return null
+    if (view.kind !== 'connecting') return null
+    const live = lastStage?.stage
+    if (live && STAGE_LABELS[live]) return STAGE_LABELS[live]
+    if (live === 'install_embedded_owner') return 'Linking your 4626 signer…'
+    return 'Connecting your Base App wallet…'
   }, [view.kind, lastStage])
 
   const persistAndComplete = useCallback(
@@ -214,12 +198,9 @@ export function WaitlistConnectBaseApp(props: Props) {
           kind: 'error',
           message: 'Could not resolve your 4626 embedded signer address. Try again or skip.',
           canRetry: true,
-          retryFrom: 'sign',
         })
         return
       }
-
-      setView({ kind: 'registering', parentAddress: pending.parentAddress, subAccountAddress: pending.subAccountAddress })
 
       const registered = await registerBaseAppLink({
         parentAddress: pending.parentAddress,
@@ -229,7 +210,7 @@ export function WaitlistConnectBaseApp(props: Props) {
 
       if (cancelledRef.current) return
       if (!registered.ok) {
-        setView({ kind: 'error', message: registered.message, canRetry: true, retryFrom: 'sign' })
+        setView({ kind: 'error', message: registered.message, canRetry: true })
         return
       }
 
@@ -243,8 +224,8 @@ export function WaitlistConnectBaseApp(props: Props) {
   )
 
   const handleConnect = useCallback(async () => {
-    if (isSettingUp) return
-    setView({ kind: 'provisioning' })
+    if (isSettingUp || view.kind === 'connecting') return
+    setView({ kind: 'connecting' })
 
     const connected = await connectBaseAccountWallet()
     if (cancelledRef.current) return
@@ -257,7 +238,6 @@ export function WaitlistConnectBaseApp(props: Props) {
           fallback: 'Connect Base App first, then try again.',
         }),
         canRetry: true,
-        retryFrom: 'start',
       })
       return
     }
@@ -273,7 +253,6 @@ export function WaitlistConnectBaseApp(props: Props) {
           fallback: 'Could not prepare your Base App wallet. Make sure Base App is connected and try again.',
         }),
         canRetry: true,
-        retryFrom: 'start',
       })
       return
     }
@@ -282,38 +261,8 @@ export function WaitlistConnectBaseApp(props: Props) {
       parentAddress: provisioned.parentAddress,
       subAccountAddress: provisioned.subAccountAddress,
       created: provisioned.created,
-      provider: provisioned.provider,
-    }
-    pendingRef.current = pending
-    setView({ kind: 'ready_to_sign', pending })
-  }, [connectBaseAccountWallet, getLastSetupError, isSettingUp, lastStage, provisionSubAccount])
-
-  const handleEnableSigning = useCallback(async () => {
-    if (view.kind !== 'ready_to_sign' || isSettingUp) return
-    const pending = view.pending
-    setView({ kind: 'signing_owner', pending })
-
-    const ownerResult = await confirmSubAccountEmbeddedOwner({
-      parentAddress: pending.parentAddress,
-      subAccountAddress: pending.subAccountAddress,
-      provider: pending.provider,
-    })
-    if (cancelledRef.current) return
-    if (!ownerResult) {
-      setView({
-        kind: 'error',
-        message: mapSetupFailureMessage({
-          error: getLastSetupError(),
-          lastStage,
-          fallback: '4626 signing was not enabled. Approve the request in Base App or try again.',
-        }),
-        canRetry: true,
-        retryFrom: 'sign',
-      })
-      return
     }
 
-    setView({ kind: 'finishing', pending })
     const finalized = await finalizeSubAccountSigner({
       parentAddress: pending.parentAddress,
       subAccountAddress: pending.subAccountAddress,
@@ -325,31 +274,27 @@ export function WaitlistConnectBaseApp(props: Props) {
         message: mapSetupFailureMessage({
           error: getLastSetupError(),
           lastStage,
-          fallback: 'Could not finish linking your 4626 signer. Try again.',
+          fallback: 'Could not link your 4626 signer to the app wallet. Try again.',
         }),
         canRetry: true,
-        retryFrom: 'sign',
       })
       return
     }
 
     await persistAndComplete(pending)
   }, [
-    confirmSubAccountEmbeddedOwner,
+    connectBaseAccountWallet,
     finalizeSubAccountSigner,
     getLastSetupError,
     isSettingUp,
     lastStage,
     persistAndComplete,
-    view,
+    provisionSubAccount,
+    view.kind,
   ])
 
   const handleRetry = useCallback(() => {
-    if (view.kind !== 'error') return
-    if (view.retryFrom === 'sign' && pendingRef.current) {
-      setView({ kind: 'ready_to_sign', pending: pendingRef.current })
-      return
-    }
+    if (view.kind !== 'error' || !view.canRetry) return
     void handleConnect()
   }, [handleConnect, view])
 
@@ -369,8 +314,8 @@ export function WaitlistConnectBaseApp(props: Props) {
         </p>
         <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">Connect Base App</h2>
         <p className="text-sm leading-relaxed text-zinc-400">
-          Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet, then you confirm one
-          signing step — your main Base App wallet stays unchanged.
+          Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded
+          4626 key — your main Base App wallet stays unchanged.
         </p>
       </div>
 
@@ -395,62 +340,11 @@ export function WaitlistConnectBaseApp(props: Props) {
         </div>
       ) : null}
 
-      {view.kind === 'provisioning' ? (
-        <div className="space-y-3" role="status" aria-live="polite" data-testid="waitlist-connect-base-app-provisioning">
+      {view.kind === 'connecting' ? (
+        <div className="space-y-3" role="status" aria-live="polite" data-testid="waitlist-connect-base-app-connecting">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200">
             <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.92)" />
-            <span data-testid="provisioning-stage-label">{progressLabel}</span>
-          </div>
-        </div>
-      ) : null}
-
-      {view.kind === 'ready_to_sign' ? (
-        <div className="space-y-4 text-left" data-testid="waitlist-connect-base-app-ready">
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-100">
-            <div className="font-medium text-emerald-50">App wallet ready</div>
-            <div className="mt-1 font-mono text-xs text-emerald-200/80">{shortAddress(view.pending.subAccountAddress)}</div>
-            <p className="mt-2 text-xs leading-relaxed text-emerald-200/90">
-              {view.pending.created
-                ? 'Your 4626 app wallet was created. One more step enables signing from this app.'
-                : 'We found your existing 4626 app wallet. Confirm signing to finish linking.'}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn-accent btn-no-icon w-full"
-            onClick={() => void handleEnableSigning()}
-            data-testid="enable-signing-button"
-          >
-            Enable 4626 signing
-          </button>
-          <p className="text-center text-xs text-zinc-500">
-            You will approve one request in Base App. We add your 4626 signer to the app wallet only — not your main
-            wallet.
-          </p>
-          <button
-            type="button"
-            className="w-full text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
-            onClick={onSkip}
-          >
-            Skip for now
-          </button>
-        </div>
-      ) : null}
-
-      {view.kind === 'signing_owner' || view.kind === 'finishing' ? (
-        <div className="space-y-3" role="status" aria-live="polite">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200">
-            <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.92)" />
-            <span>{progressLabel}</span>
-          </div>
-        </div>
-      ) : null}
-
-      {view.kind === 'registering' ? (
-        <div className="space-y-3" role="status" aria-live="polite" data-testid="waitlist-connect-base-app-registering">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200">
-            <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.92)" />
-            <span>Saving link to your 4626 account…</span>
+            <span data-testid="connect-stage-label">{progressLabel}</span>
           </div>
         </div>
       ) : null}
@@ -460,6 +354,7 @@ export function WaitlistConnectBaseApp(props: Props) {
           <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-left text-sm text-emerald-200">
             <div className="font-medium text-emerald-100">Base App connected</div>
             <div className="mt-1 break-all font-mono text-xs text-emerald-200/80">{view.subAccountAddress}</div>
+            <div className="mt-1 font-mono text-xs text-emerald-200/60">{shortAddress(view.subAccountAddress)}</div>
             <a
               href={basescanAddressUrl(view.subAccountAddress)}
               target="_blank"

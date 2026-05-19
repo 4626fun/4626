@@ -223,7 +223,7 @@ describe('setupSubAccount', () => {
     expect(result.created).toBe(true)
     expect(params.baseAccountSdk.subAccount.setToOwnerAccount).toHaveBeenCalledTimes(1)
     expect(stages.some((s) => s.stage === 'create_sub_account' && s.status === 'success')).toBe(true)
-    expect(stages.some((s) => s.stage === 'install_embedded_owner' && s.status === 'success')).toBe(true)
+    expect(stages.some((s) => s.stage === 'configure_signer' && s.status === 'success')).toBe(true)
     expect(stages.some((s) => s.stage === 'done' && s.status === 'success')).toBe(true)
   })
 

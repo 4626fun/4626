@@ -399,8 +399,11 @@ export async function finalizeSubAccountSigner(params: SubAccountWalletBundle & 
 /**
  * Full sub-account setup flow (all phases in one call):
  *   1. Discover or create sub-account
- *   2. addOwnerAddress(embedded EOA) on the sub-account
- *   3. Configure Privy embedded wallet as SDK signer
+ *   2. Configure Privy embedded wallet as SDK signer
+ *
+ * On-chain addOwnerAddress on the sub-account is not required for the Base App
+ * waitlist track — wallet_addSubAccount registers the embedded EOA as the app
+ * signer key and executionTrack=sub-account is derived from the persisted row.
  */
 export async function setupSubAccount(params: {
   /** The Privy ConnectedWallet for the Base Account (CSW). */
@@ -428,13 +431,6 @@ export async function setupSubAccount(params: {
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
 }): Promise<SubAccountSetupResult> {
   const provisioned = await provisionSubAccount(params)
-  await confirmSubAccountEmbeddedOwner({
-    provider: provisioned.provider,
-    parentAddress: provisioned.parentAddress,
-    subAccountAddress: provisioned.subAccountAddress,
-    embeddedEoaAddress: params.embeddedWallet.address as Address,
-    onStageEvent: params.onStageEvent,
-  })
   await finalizeSubAccountSigner({
     ...params,
     parentAddress: provisioned.parentAddress,
