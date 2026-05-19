@@ -31,6 +31,7 @@ import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
@@ -1203,7 +1204,7 @@ export function Swap() {
       (executionTrack === 'none-yet' ||
         (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
     if (needsSubAccountSetup) {
-      navigate('/waitlist?setup=base-app')
+      window.location.assign(buildWaitlistSetupUrl('base-app'))
       return
     }
     navigate('/accounts?setup=owner-install')

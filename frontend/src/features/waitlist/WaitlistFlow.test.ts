@@ -187,6 +187,25 @@ describe('resolveWaitlistStep', () => {
       }),
     ).toBe('done')
   })
+
+  it('Track C2 — session-local connect-base-app completion stays on done before bootstrap reflects executionTrack', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+            executionTrack: 'none-yet',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: true,
+      }),
+    ).toBe('done')
+  })
 })
 
 describe('shouldAutoBootstrapWaitlistSession', () => {

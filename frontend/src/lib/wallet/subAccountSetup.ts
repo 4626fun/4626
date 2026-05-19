@@ -25,6 +25,7 @@ import type { Address, Hex } from 'viem'
 import { isAddress } from 'viem'
 import { base } from 'viem/chains'
 
+import { getSubAccountAppDomain } from '@/lib/env/host'
 import { installEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -128,7 +129,7 @@ export async function getExistingSubAccount(params: {
     params: [
       {
         account: parentAddress,
-        domain: typeof window !== 'undefined' ? window.location.origin : '',
+        domain: getSubAccountAppDomain(),
       },
     ],
   })

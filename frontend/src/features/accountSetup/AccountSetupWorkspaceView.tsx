@@ -20,6 +20,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
@@ -587,7 +588,7 @@ export function AccountSetupWorkspaceView(props: {
                         Use the waitlist sub-account flow instead of adding an owner on the parent
                         smart wallet from this site.
                         <a
-                          href="/waitlist?setup=base-app"
+                          href={buildWaitlistSetupUrl('base-app')}
                           className="mt-2 inline-flex text-brand-200 underline decoration-dotted underline-offset-2"
                         >
                           Connect Base App sub-account

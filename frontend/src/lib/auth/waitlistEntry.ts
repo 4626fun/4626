@@ -1,4 +1,4 @@
-import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/env/host'
+import { getMarketingBaseUrl, getSubAccountAppDomain, getWaitlistReferralBaseUrl } from '@/lib/env/host'
 
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
@@ -78,6 +78,15 @@ export function getPrivyCapableWaitlistEntryUrl(): string {
 
 export function getMarketingWaitlistEntryUrl(): string {
   return buildWaitlistEntryUrl(getMarketingBaseUrl())
+}
+
+export type WaitlistSetupIntent = 'base-app' | 'owner-install'
+
+/** Canonical marketing-host URL for waitlist setup deep links. */
+export function buildWaitlistSetupUrl(setup: WaitlistSetupIntent): string {
+  const url = new URL(buildWaitlistEntryUrl(getSubAccountAppDomain()))
+  url.searchParams.set('setup', setup)
+  return url.toString()
 }
 
 export function readStoredWaitlistReferralCode(): string | null {

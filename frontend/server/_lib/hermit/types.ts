@@ -83,6 +83,11 @@ export type HermitPreferenceClearer = () => Promise<boolean>
 export type HermitExecutionParams = {
   commandText: string
   senderAddress: `0x${string}`
+  /**
+   * Optional caller source identity (for routing guards), e.g.
+   * `alfaclub-bridge-runner` or `openclaw-control-ui`.
+   */
+  sourceIdentity?: string | null
   /** AlfaClub room id (digits in prod). Undefined for non-room callers. */
   roomId?: string
   /** Resolved user preferences for this (room, sender). */

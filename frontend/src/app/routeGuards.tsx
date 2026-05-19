@@ -97,6 +97,11 @@ export function MarketingOnlyRoute(props: { children: ReactNode }) {
   return <ReplaceOnMount to={target} />
 }
 
+/** Waitlist onboarding must run on 4626.fun so sub-accounts bind to the marketing domain. */
+export function MarketingWaitlistRoute(props: { children: ReactNode }) {
+  return <MarketingOnlyRoute>{props.children}</MarketingOnlyRoute>
+}
+
 export function marketingOnlyElement(element: ReactNode) {
   return <MarketingOnlyRoute>{element}</MarketingOnlyRoute>
 }

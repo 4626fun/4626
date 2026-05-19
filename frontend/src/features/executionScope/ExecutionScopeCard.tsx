@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ExternalLink, ShieldOff, RefreshCw } from 'lucide-react'
 
 import { CopyableAddress } from '@/components/account/CopyableAddress'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
 import { useRevokeSubAccount } from './useRevokeSubAccount'
@@ -34,8 +35,8 @@ export function ExecutionScopeCard() {
   const ownerCheck = useCswOwnerSigner()
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const ownerInstallHref = subAccountFlowEnabled
-    ? '/waitlist?setup=base-app'
-    : '/waitlist?setup=owner-install'
+    ? buildWaitlistSetupUrl('base-app')
+    : buildWaitlistSetupUrl('owner-install')
   const ownerInstallLabel = subAccountFlowEnabled
     ? 'Connect Base App sub-account'
     : 'Open owner-install flow'

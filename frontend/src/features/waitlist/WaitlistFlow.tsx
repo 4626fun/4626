@@ -470,9 +470,10 @@ export function WaitlistFlow(props: {
   const { getAccessToken } = privy
   const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [step, setStep] = useState<WaitlistStep>('auth')
   const [subAccountStepCompletedAccountKey, setSubAccountStepCompletedAccountKey] = useState<string | null>(null)
+  const subAccountStepCompletedAccountKeyRef = useRef<string | null>(null)
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
 
   const {
@@ -490,12 +491,38 @@ export function WaitlistFlow(props: {
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
 
+  const resolveSubAccountStepCompleted = useCallback(
+    (targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): boolean => {
+      const accountCompletionKey = getSubAccountCompletionAccountKey(targetAccount)
+      if (!accountCompletionKey) return false
+      return (
+        subAccountStepCompletedAccountKey === accountCompletionKey ||
+        subAccountStepCompletedAccountKeyRef.current === accountCompletionKey
+      )
+    },
+    [subAccountStepCompletedAccountKey],
+  )
+
   useEffect(() => {
     const setup = (searchParams.get('setup') ?? '').trim().toLowerCase()
     if (setup !== 'base-app' || !subAccountFlowEnabled) return
     if (!account?.emailVerified) return
-    setStep('connect-base-app')
-  }, [account?.emailVerified, searchParams, subAccountFlowEnabled])
+    const nextStep = resolveWaitlistStep({
+      account,
+      subAccountFlowEnabled,
+      embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+      subAccountStepCompleted: resolveSubAccountStepCompleted(account),
+    })
+    if (nextStep === 'connect-base-app') {
+      setStep('connect-base-app')
+    }
+  }, [
+    account,
+    embeddedEoaAddress,
+    resolveSubAccountStepCompleted,
+    searchParams,
+    subAccountFlowEnabled,
+  ])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
@@ -548,6 +575,7 @@ export function WaitlistFlow(props: {
 
   const resetResolvedAccountState = useCallback(() => {
     setAccount(null)
+    subAccountStepCompletedAccountKeyRef.current = null
     setSubAccountStepCompletedAccountKey(null)
   }, [])
 
@@ -701,7 +729,9 @@ export function WaitlistFlow(props: {
       const accountCompletionKey = getSubAccountCompletionAccountKey(nextAccount)
       const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
       const subAccountStepCompleted = Boolean(
-        accountCompletionKey && subAccountStepCompletedAccountKey === accountCompletionKey,
+        accountCompletionKey &&
+          (subAccountStepCompletedAccountKey === accountCompletionKey ||
+            subAccountStepCompletedAccountKeyRef.current === accountCompletionKey),
       )
       setStep(
         resolveWaitlistStep({
@@ -1025,16 +1055,31 @@ export function WaitlistFlow(props: {
     }
   }, [completionBusy, enterAppUrl, navigateWithSessionHandoff])
 
+  const markSubAccountStepCompleted = useCallback((targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null) => {
+    const completionKey = getSubAccountCompletionAccountKey(targetAccount)
+    subAccountStepCompletedAccountKeyRef.current = completionKey
+    setSubAccountStepCompletedAccountKey(completionKey)
+  }, [])
+
+  const clearBaseAppSetupDeepLink = useCallback(() => {
+    if ((searchParams.get('setup') ?? '').trim().toLowerCase() !== 'base-app') return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('setup')
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
   const handleSubAccountSkip = useCallback(() => {
-    setSubAccountStepCompletedAccountKey(getSubAccountCompletionAccountKey(account))
+    markSubAccountStepCompleted(account)
+    clearBaseAppSetupDeepLink()
     setStep('done')
-  }, [account])
+  }, [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted])
 
   const handleSubAccountComplete = useCallback(() => {
-    setSubAccountStepCompletedAccountKey(getSubAccountCompletionAccountKey(account))
+    markSubAccountStepCompleted(account)
+    clearBaseAppSetupDeepLink()
     setStep('done')
     void requestBootstrap({ forceNew: true }).catch(() => null)
-  }, [account, requestBootstrap])
+  }, [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted, requestBootstrap])
 
   useEffect(() => {
     if (!shouldAutoBootstrapWaitlistSession({ step, privyAuthed, recoveryRequired })) {

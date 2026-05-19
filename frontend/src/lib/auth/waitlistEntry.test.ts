@@ -8,6 +8,7 @@ import {
   buildWaitlistEntryUrl,
   buildWaitlistReferralPath,
   buildWaitlistReferralUrl,
+  buildWaitlistSetupUrl,
   clearStoredWaitlistReferralCode,
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
@@ -34,6 +35,11 @@ describe('waitlistEntry', () => {
   it('builds the canonical marketing waitlist path and URL', () => {
     expect(getCanonicalMarketingWaitlistPath()).toBe('/waitlist')
     expect(buildCanonicalMarketingWaitlistUrl('https://4626.fun/')).toBe('https://4626.fun/waitlist')
+  })
+
+  it('builds setup deep links on the marketing waitlist host', () => {
+    expect(buildWaitlistSetupUrl('base-app')).toBe('http://localhost:3000/waitlist?setup=base-app')
+    expect(buildWaitlistSetupUrl('owner-install')).toBe('http://localhost:3000/waitlist?setup=owner-install')
   })
 
   it('normalizes referral codes into short url-safe values', () => {

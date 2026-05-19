@@ -65,6 +65,11 @@ export function resolveWaitlistStep(params: {
       account.accountSignals.canonicalCswAddress.trim(),
   )
 
+  // Session-local completion: stay on done while bootstrap catches up.
+  if (subAccountStepCompleted === true) {
+    return 'done'
+  }
+
   const shouldOfferSubAccountStep =
     subAccountFlowEnabled === true &&
     embeddedEoaAvailable === true &&

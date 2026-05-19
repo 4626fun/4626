@@ -55,6 +55,87 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+const HERMIT_STRICT_JSON_SYSTEM_LINE = 'You are Hermit crafting one short meme line for AlfaChat.'
+const HERMIT_STRICT_JSON_OUTPUT_LINE = 'Output STRICT JSON only:'
+const HERMIT_STRICT_JSON_SCHEMA_LINE = '{"line":"string"}'
+const HERMIT_STRICT_JSON_WEBCHAT_DENY_REGEX =
+  /You are Hermit crafting one short meme line for AlfaChat\.[\s\S]*Output STRICT JSON only:[\s\S]*\{"line":"string"\}/m
+
+function isStrictJsonHermitWorkerPrompt(text: string): boolean {
+  const body = text.trim()
+  if (!body) return false
+  return (
+    body.includes(HERMIT_STRICT_JSON_SYSTEM_LINE) &&
+    body.includes(HERMIT_STRICT_JSON_OUTPUT_LINE) &&
+    body.includes(HERMIT_STRICT_JSON_SCHEMA_LINE)
+  )
+}
+
+function readHermitWebchatHumanIdentity(): string {
+  const configured = asTrimmed(process.env.HERMIT_WEBCHAT_HUMAN_IDENTITY).toLowerCase()
+  if (configured) return configured
+  // Default to the canonical 4626 human identity unless overridden.
+  return '0xb05cf01231cf2ff99499682e64d3780d57c80fdd'
+}
+
+function readHermitWebchatDenySources(): Set<string> {
+  const raw = asTrimmed(process.env.HERMIT_WEBCHAT_DENY_SOURCES)
+  const values = (raw ? raw : 'openclaw-control-ui,alfaclub-bridge-runner')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+  return new Set(values)
+}
+
+function isHermitSourceDeniedForWebchat(sourceIdentity: string): boolean {
+  if (!sourceIdentity) return false
+  return readHermitWebchatDenySources().has(sourceIdentity.toLowerCase())
+}
+
+function readHermitWorkerSessionKey(): string {
+  const value = asTrimmed(process.env.HERMIT_WORKER_SESSION_KEY)
+  return value || 'alfaclub-worker'
+}
+
+function readHermitWebchatSessionKey(): string {
+  const value = asTrimmed(process.env.HERMIT_WEBCHAT_SESSION_KEY)
+  return value || 'main'
+}
+
+type HermitGatewayRoute = {
+  sessionKey: string
+  mode: 'webchat' | 'worker'
+  deliver: boolean
+  sourceIdentity: string
+}
+
+function selectHermitGatewayRoute(params: {
+  prompt: string
+  sourceIdentity: string
+  senderAddress: string
+}): HermitGatewayRoute {
+  const sourceIdentity = params.sourceIdentity.trim().toLowerCase()
+  const isStrictJson = isStrictJsonHermitWorkerPrompt(params.prompt)
+  const sourceDenied = isHermitSourceDeniedForWebchat(sourceIdentity)
+  const humanIdentity = readHermitWebchatHumanIdentity()
+  const isHumanSender = params.senderAddress.trim().toLowerCase() === humanIdentity
+  const allowWebchat = isHumanSender && !isStrictJson && !sourceDenied
+  if (!allowWebchat) {
+    return {
+      sessionKey: readHermitWorkerSessionKey(),
+      mode: 'worker',
+      deliver: false,
+      sourceIdentity,
+    }
+  }
+  return {
+    sessionKey: readHermitWebchatSessionKey(),
+    mode: 'webchat',
+    deliver: false,
+    sourceIdentity,
+  }
+}
+
 function isLikelyPinataProviderErrorText(value: string): boolean {
   const text = value.trim().toLowerCase()
   if (!text) return false
@@ -328,9 +409,16 @@ async function runPinataDraftOverGateway(params: {
   endpoint: string
   bearer: string
   prompt: string
+  senderAddress?: string
+  sourceIdentity?: string | null
 }): Promise<PinataChatResult | null> {
   const gateway = toGatewaySocketUrl(params.endpoint)
   if (!gateway) return null
+  const route = selectHermitGatewayRoute({
+    prompt: params.prompt,
+    sourceIdentity: asTrimmed(params.sourceIdentity),
+    senderAddress: asTrimmed(params.senderAddress),
+  })
 
   return await new Promise<PinataChatResult | null>((resolve) => {
     const socket = new WebSocket(gateway.wsUrl, {
@@ -378,7 +466,7 @@ async function runPinataDraftOverGateway(params: {
           id: 'openclaw-control-ui',
           version: 'control-ui',
           platform: 'node',
-          mode: 'webchat',
+          mode: route.mode,
           instanceId: `hermit-${Date.now()}`,
         },
         role: 'operator',
@@ -431,10 +519,14 @@ async function runPinataDraftOverGateway(params: {
         const nextRunId = `hermit-${Date.now()}`
         runId = nextRunId
         sendReq('chat-send-1', 'chat.send', {
-          sessionKey: 'main',
+          sessionKey: route.sessionKey,
           message: params.prompt,
-          deliver: false,
+          deliver: route.deliver,
           idempotencyKey: nextRunId,
+          metadata: {
+            source: route.sourceIdentity || 'none',
+            lane: route.mode,
+          },
         })
         return
       }
@@ -459,16 +551,34 @@ async function runPinataDraftOverGateway(params: {
   })
 }
 
-async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> {
+async function runPinataDraft(params: {
+  prompt: string
+  senderAddress?: string
+  sourceIdentity?: string | null
+}): Promise<PinataChatResult | null> {
   const cfg = readPinataHermitConfig()
   if (!cfg) return null
 
   const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
   if (gatewayTarget) {
+    const route = selectHermitGatewayRoute({
+      prompt: params.prompt,
+      sourceIdentity: asTrimmed(params.sourceIdentity),
+      senderAddress: asTrimmed(params.senderAddress),
+    })
+    if (route.mode === 'webchat' && HERMIT_STRICT_JSON_WEBCHAT_DENY_REGEX.test(params.prompt)) {
+      logger.warn('[hermit] dropped_webchat_strict_json_prompt', {
+        sourceIdentity: route.sourceIdentity || 'none',
+        sessionKey: route.sessionKey,
+      })
+      return null
+    }
     const viaGateway = await runPinataDraftOverGateway({
       endpoint: cfg.endpoint,
       bearer: cfg.bearer,
-      prompt,
+      prompt: params.prompt,
+      senderAddress: params.senderAddress,
+      sourceIdentity: params.sourceIdentity,
     })
     return viaGateway?.text ? viaGateway : null
   }
@@ -487,7 +597,7 @@ async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> 
         Authorization: `Bearer ${cfg.bearer}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt: params.prompt }),
       signal: controller.signal,
     })
   } catch {
@@ -1242,14 +1352,16 @@ export async function executeHermitCommand(
     let draft: PinataChatResult | null = null
     let fallbackReason: 'pinata_throw' | 'pinata_provider_error_text' | null = null
     try {
-      draft = await runPinataDraft(
-        buildPinataPromptForGmeow({
+      draft = await runPinataDraft({
+        prompt: buildPinataPromptForGmeow({
           userPrompt: args,
           memeCaption: meme.caption,
           memeTags: meme.tags,
           userPreferences,
         }),
-      )
+        senderAddress: params.senderAddress,
+        sourceIdentity: params.sourceIdentity ?? null,
+      })
     } catch (error) {
       fallbackReason = 'pinata_throw'
       logger.warn('[hermit] /gmeow draft failed; using local fallback', {
@@ -1291,7 +1403,11 @@ export async function executeHermitCommand(
 
   if (command === '/meme') {
     const explicitSignalSource = classifyExplicitSignal(args)
-    const draft = await runPinataDraft(buildPinataPromptForHermitImage(args, userPreferences))
+    const draft = await runPinataDraft({
+      prompt: buildPinataPromptForHermitImage(args, userPreferences),
+      senderAddress: params.senderAddress,
+      sourceIdentity: params.sourceIdentity ?? null,
+    })
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, args, explicitSignalSource)
     }
@@ -1369,13 +1485,15 @@ export async function executeHermitCommand(
 
     const { mode, prompt } = parseHermitDraftMode(args)
     const explicitSignalSource = classifyExplicitSignal(prompt)
-    const draft = await runPinataDraft(
-      buildPinataPromptForHermit({
+    const draft = await runPinataDraft({
+      prompt: buildPinataPromptForHermit({
         mode,
         userPrompt: prompt,
         userPreferences,
       }),
-    )
+      senderAddress: params.senderAddress,
+      sourceIdentity: params.sourceIdentity ?? null,
+    })
     if (explicitSignalSource) {
       await persistExplicitDialectSignal(params, prompt, explicitSignalSource)
     }

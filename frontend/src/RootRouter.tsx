@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'r
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
+import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
@@ -81,7 +82,14 @@ export function RootRouter() {
         <Routes>
           <Route element={<MarketingLayout />}>
             <Route path="/" element={<Home />} />
-            <Route path="/waitlist" element={<Waitlist />} />
+            <Route
+              path="/waitlist"
+              element={
+                <MarketingWaitlistRoute>
+                  <Waitlist />
+                </MarketingWaitlistRoute>
+              }
+            />
             <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
           </Route>
 
