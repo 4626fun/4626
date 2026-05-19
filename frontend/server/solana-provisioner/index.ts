@@ -71,8 +71,17 @@ type MeteoraIxsBody = {
 }
 
 const PROVISIONER_MAX_BODY_BYTES = 64 * 1024
-const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv(process.env.PROVISIONER_HEALTH_DEBUG, false)
-const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv(process.env.PROVISIONER_EXTENDED_ENDPOINTS, false)
+
+function parseBooleanEnv(name: string, fallback: boolean): boolean {
+  const raw = String(process.env[name] ?? '').trim().toLowerCase()
+  if (!raw) return fallback
+  if (raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on') return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return fallback
+}
+
+const PROVISIONER_HEALTH_DEBUG_ENABLED = parseBooleanEnv('PROVISIONER_HEALTH_DEBUG', false)
+const PROVISIONER_EXTENDED_ENDPOINTS_ENABLED = parseBooleanEnv('PROVISIONER_EXTENDED_ENDPOINTS', false)
 
 type ProvisionerMintCompatibilityHints = {
   tokenProgram: 'spl-token' | 'token-2022' | null
