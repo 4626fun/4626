@@ -45,6 +45,7 @@ import {
 import { upsertAlfaClubIngestMessages, type AlfaClubIngestMessage } from './chatIngestStore.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 import { requestImmediatePrivyRefresh } from './privyTokenRefresher.js'
+import { parseTelegramChatRef } from './telegramChatRef.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -302,34 +303,6 @@ function normalizeEnvScalar(raw: string | undefined): string {
     return value.slice(1, -1).trim()
   }
   return value
-}
-
-function parseTelegramChatRef(value: string | null): {
-  chatId: string | null
-  inferredThreadId: number | null
-} {
-  const raw = String(value ?? '').trim()
-  if (!raw) return { chatId: null, inferredThreadId: null }
-
-  const privateRoomUrlMatch = /^https?:\/\/t\.me\/c\/(\d+)(?:\/(\d+))?\/?$/i.exec(raw)
-  if (privateRoomUrlMatch) {
-    const roomDigits = privateRoomUrlMatch[1]
-    return {
-      chatId: `-100${roomDigits}`,
-      inferredThreadId: parseOptionalPositiveInt(privateRoomUrlMatch[2], 2_000_000_000),
-    }
-  }
-
-  const publicChatUrlMatch = /^https?:\/\/t\.me\/([A-Za-z0-9_]{5,})(?:\/(\d+))?\/?$/i.exec(raw)
-  if (publicChatUrlMatch) {
-    const handle = publicChatUrlMatch[1]
-    return {
-      chatId: `@${handle}`,
-      inferredThreadId: parseOptionalPositiveInt(publicChatUrlMatch[2], 2_000_000_000),
-    }
-  }
-
-  return { chatId: raw, inferredThreadId: null }
 }
 
 function normalizeApiBaseUrl(raw: string | undefined): string {

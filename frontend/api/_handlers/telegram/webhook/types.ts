@@ -39,6 +39,7 @@ export type TelegramMessage = {
   message_id?: number
   text?: string
   caption?: string
+  message_thread_id?: number
   from?: TelegramFrom
   chat?: TelegramChat
   reply_to_message?: TelegramMessage

@@ -313,6 +313,7 @@ type TelegramWebhookOk = {
   ok: true
   ignored?: boolean
   updateId?: number | null
+  alfaclubRelay?: { roomId: string; lane: string }
 }
 
 function asTrimmed(value: unknown): string {
@@ -7814,6 +7815,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       data: { ok: true, ignored: true, updateId: update.update_id ?? null } satisfies TelegramWebhookOk,
     } satisfies ApiEnvelope<TelegramWebhookOk>)
+  }
+
+  const relayText = asTrimmed(message.text ?? message.caption ?? '')
+  const relayThreadId =
+    typeof message.message_thread_id === 'number' && Number.isFinite(message.message_thread_id)
+      ? message.message_thread_id
+      : null
+  try {
+    const { relayTelegramMessageToAlfaClub } = await import(
+      '../../../server/_lib/alfaclub/telegramToAlfaclubRelay.js'
+    )
+    const relayResult = await relayTelegramMessageToAlfaClub({
+      chatId,
+      messageId,
+      messageThreadId: relayThreadId,
+      text: relayText,
+      username: message.from?.username ?? null,
+      userId,
+    })
+    if (relayResult.status === 'relayed') {
+      return res.status(200).json({
+        success: true,
+        data: {
+          ok: true,
+          updateId: update.update_id ?? null,
+          alfaclubRelay: { roomId: relayResult.roomId, lane: relayResult.lane },
+        } satisfies TelegramWebhookOk,
+      } satisfies ApiEnvelope<TelegramWebhookOk>)
+    }
+  } catch (relayError) {
+    console.warn('[telegram/webhook] alfaclub relay hook failed', {
+      updateId: update.update_id ?? null,
+      chatId,
+      err: relayError instanceof Error ? relayError.message : String(relayError),
+    })
   }
 
   if (sharedSelection) {
