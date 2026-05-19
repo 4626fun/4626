@@ -13,6 +13,7 @@ import {
   resolveKeeprTrustZone,
 } from '../agentControl/trustZones.js'
 import {
+  beginOperationExecution,
   transitionOperationStatus,
   transitionStageStatus,
 } from '../controlPlane/operations.js'
@@ -247,9 +248,8 @@ async function runOneJob(params: {
       })
     }
     if (params.job.operationId) {
-      await transitionOperationStatus({
+      await beginOperationExecution({
         operationId: params.job.operationId,
-        nextStatus: 'running',
         reason: 'keeper_job_started',
         actor: params.workerId,
         data: { jobId: params.job.id, kind: params.job.kind },

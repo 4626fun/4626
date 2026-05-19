@@ -4,12 +4,14 @@ const {
   claimDueKeeperJobsMock,
   completeKeeperJobMock,
   releaseExpiredKeeperJobClaimsMock,
+  beginOperationExecutionMock,
   transitionOperationStatusMock,
   transitionStageStatusMock,
 } = vi.hoisted(() => ({
   claimDueKeeperJobsMock: vi.fn<() => Promise<any[]>>(async () => []),
   completeKeeperJobMock: vi.fn(async () => true),
   releaseExpiredKeeperJobClaimsMock: vi.fn(async () => 0),
+  beginOperationExecutionMock: vi.fn(async () => ({ status: 'running', resumedFromTerminal: false })),
   transitionOperationStatusMock: vi.fn(async () => undefined),
   transitionStageStatusMock: vi.fn(async () => undefined),
 }))
@@ -22,6 +24,7 @@ vi.mock('../../server/_lib/keeperJobs/keeperJobs.js', () => ({
 }))
 
 vi.mock('../../server/_lib/controlPlane/operations.js', () => ({
+  beginOperationExecution: beginOperationExecutionMock,
   transitionOperationStatus: transitionOperationStatusMock,
   transitionStageStatus: transitionStageStatusMock,
 }))
@@ -84,6 +87,12 @@ describe('runKeeperJobTick control-plane internal_api jobs', () => {
         stageId: 'stage_cp_1',
         nextStatus: 'manual_review',
         reason: 'keeper_job_partial_success',
+      }),
+    )
+    expect(beginOperationExecutionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: 'op_cp_1',
+        reason: 'keeper_job_started',
       }),
     )
     expect(transitionOperationStatusMock).toHaveBeenCalledWith(

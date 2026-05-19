@@ -25,6 +25,7 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
 })
 
 import {
+  beginOperationExecution,
   ControlPlaneOperationError,
   transitionOperationStatus,
 } from '../../server/_lib/controlPlane/operations.js'
@@ -97,5 +98,52 @@ describe('transitionOperationStatus atomic updates', () => {
 
     expect(runInTransactionMock).toHaveBeenCalledTimes(1)
     expect(dbSqlMock).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('beginOperationExecution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('resumes a terminal failed operation through retrying before running', async () => {
+    dbSqlMock
+      .mockResolvedValueOnce({
+        rows: [{ status: 'failed', policy_version: 'cpol_test' }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ status: 'failed', policy_version: 'cpol_test' }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({
+        rows: [{ status: 'retrying', policy_version: 'cpol_test' }],
+      })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 })
+
+    const result = await beginOperationExecution({
+      operationId: 'op_failed_retry',
+      reason: 'solana_reconcile_started',
+      actor: 'keeper',
+    })
+
+    expect(result).toEqual({ status: 'running', resumedFromTerminal: true })
+    expect(runInTransactionMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not transition when the operation already succeeded', async () => {
+    dbSqlMock.mockResolvedValueOnce({
+      rows: [{ status: 'succeeded', policy_version: 'cpol_test' }],
+    })
+
+    const result = await beginOperationExecution({
+      operationId: 'op_done',
+      reason: 'solana_reconcile_started',
+      actor: 'keeper',
+    })
+
+    expect(result).toEqual({ status: 'succeeded', resumedFromTerminal: false })
+    expect(runInTransactionMock).not.toHaveBeenCalled()
   })
 })

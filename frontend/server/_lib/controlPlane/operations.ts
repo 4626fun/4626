@@ -40,9 +40,9 @@ const OPERATION_TRANSITIONS: Record<OperationStatus, Set<OperationStatus>> = {
   blocked: new Set(['queued', 'running', 'manual_review', 'cancelled', 'failed']),
   manual_review: new Set(['queued', 'running', 'cancelled', 'failed']),
   succeeded: new Set(),
-  failed: new Set(),
+  failed: new Set(['retrying']),
   cancelled: new Set(),
-  expired: new Set(),
+  expired: new Set(['retrying']),
 }
 
 const STAGE_TRANSITIONS: Record<StageStatus, Set<StageStatus>> = {
@@ -471,6 +471,72 @@ export async function createControlPlaneStage(input: CreateOperationStageInput):
     })
     return { stageId, persisted: false }
   }
+}
+
+export async function getOperationStatus(operationId: string): Promise<OperationStatus | null> {
+  const db = await getDbSafe()
+  if (!db) return null
+  try {
+    const rows = await db.sql<{ status: OperationStatus }>`
+      SELECT status
+      FROM public.control_plane_operations
+      WHERE operation_id = ${operationId}
+      LIMIT 1;
+    `
+    return rows.rows?.[0]?.status ?? null
+  } catch (error) {
+    if (isControlPlaneSchemaUnavailableError(error)) return null
+    console.warn('[control-plane/operations] Failed to read operation status', {
+      operationId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
+}
+
+/**
+ * Move an operation into `running` for a new execution attempt.
+ * Reuses idempotent rows stuck in terminal `failed` / `expired` via `retrying`.
+ */
+export async function beginOperationExecution(input: {
+  operationId: string
+  reason: string
+  actor?: string | null
+  data?: Record<string, unknown> | null
+}): Promise<{ status: OperationStatus | null; resumedFromTerminal: boolean }> {
+  const status = await getOperationStatus(input.operationId)
+  if (!status) return { status: null, resumedFromTerminal: false }
+
+  const transition = (nextStatus: OperationStatus) =>
+    transitionOperationStatus({
+      operationId: input.operationId,
+      nextStatus,
+      reason: input.reason,
+      actor: input.actor,
+      data: input.data,
+    })
+
+  if (status === 'running') {
+    return { status, resumedFromTerminal: false }
+  }
+
+  if (status === 'succeeded' || status === 'cancelled') {
+    return { status, resumedFromTerminal: false }
+  }
+
+  if (status === 'failed' || status === 'expired') {
+    await transition('retrying')
+    await transition('running')
+    return { status: 'running', resumedFromTerminal: true }
+  }
+
+  if (status === 'retrying') {
+    await transition('running')
+    return { status: 'running', resumedFromTerminal: false }
+  }
+
+  await transition('running')
+  return { status: 'running', resumedFromTerminal: false }
 }
 
 export async function transitionOperationStatus(input: TransitionOperationStatusInput): Promise<void> {

@@ -23,10 +23,10 @@ import {
 
 import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
 import {
+  beginOperationExecution,
   completeControlPlaneOperation,
   createControlPlaneStage,
   startControlPlaneOperation,
-  transitionOperationStatus,
   transitionStageStatus,
 } from '../../../server/_lib/controlPlane/operations.js'
 import { loadControlPlanePolicy } from '../../../server/_lib/controlPlane/policy.js'
@@ -156,9 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const controlPlaneActive = operation.persisted
     let stageId: string | null = null
     if (controlPlaneActive) {
-      await transitionOperationStatus({
+      await beginOperationExecution({
         operationId: operation.operationId,
-        nextStatus: 'running',
         reason: 'solana_reconcile_started',
         actor: 'keeper',
       })
