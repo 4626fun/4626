@@ -502,6 +502,22 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     expect(commands[0]?.text).toBe('/gmeow')
   })
 
+  it('accepts Telegram-relayed slash commands from non-hex bot sender envelopes', () => {
+    const commands = collectAlfaClubCommandMessages({
+      messages: [
+        {
+          id: 'm-telegram-relay',
+          date: Date.now(),
+          sender: 'keepr4626bot',
+          text: '/alfa status\n(tg @akita)',
+        },
+      ],
+      seenMessageIds: new Set<string>(),
+    })
+    expect(commands).toHaveLength(1)
+    expect(commands[0]?.text).toBe('/alfa status')
+  })
+
   it('processes recent slash commands on first seed tick', async () => {
     const nowMs = Date.now()
     mockHistoryMessages([

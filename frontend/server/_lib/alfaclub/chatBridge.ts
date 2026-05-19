@@ -555,6 +555,17 @@ function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boo
   return /^gmeow+\b/.test(rawText.trim().toLowerCase())
 }
 
+function isTelegramRelayedSlashCommand(rawText: string, extractedCommandText: string): boolean {
+  const command = String(extractedCommandText ?? '').trim()
+  if (!command.startsWith('/')) return false
+  const text = String(rawText ?? '').trim()
+  if (!text) return false
+  return (
+    /\(tg\s+(?:@[\w]+|tg:\d+)\)\s*$/i.test(text) ||
+    /^(?:\[[^\]]+\]\s+)?(?:@[\w]+|tg:\d+):\s+\/\S+/i.test(text)
+  )
+}
+
 /**
  * Outbound reply texts the bridge MUST NOT send back into an AlfaClub
  * room. Today's only entry is the deterministic-executor's
@@ -604,10 +615,11 @@ export function collectAlfaClubCommandMessages(params: {
   for (const entry of normalized) {
     if (params.seenMessageIds.has(entry.id)) continue
     if (!entry.text.trim()) continue
-    if (!isHexAddress(entry.sender)) continue
+    const commandText = extractTelegramRelayCommandText(entry.text)
+    const telegramRelayedCommand = isTelegramRelayedSlashCommand(entry.text, commandText)
+    if (!isHexAddress(entry.sender) && !telegramRelayedCommand) continue
     if (self && entry.sender === self) continue
     if (entry.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
-    const commandText = extractTelegramRelayCommandText(entry.text)
     const trustedBareGmeow = isBareGmeowFromTrustedSender(commandText, entry.sender)
     if (!trustedBareGmeow && !isAlfaClubSlashCommandText(commandText)) continue
     commands.push({
