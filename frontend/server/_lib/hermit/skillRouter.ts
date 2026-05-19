@@ -386,6 +386,44 @@ function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: strin
   return { wsUrl, origin }
 }
 
+function toPinataHttpChatUrl(rawEndpoint: string): string {
+  const gateway = toGatewaySocketUrl(rawEndpoint)
+  if (!gateway) return rawEndpoint
+  try {
+    const parsed = new URL(rawEndpoint)
+    const httpProtocol =
+      parsed.protocol === 'wss:' ? 'https:' : parsed.protocol === 'ws:' ? 'http:' : parsed.protocol
+    const path = !parsed.pathname || parsed.pathname === '/' ? '' : parsed.pathname
+    return `${httpProtocol}//${parsed.host}${path}`
+  } catch {
+    return rawEndpoint
+  }
+}
+
+function readPinataBridgeHttpOnlyEnabled(): boolean {
+  const raw = asTrimmed(process.env.HERMIT_PINATA_BRIDGE_HTTP_ONLY).toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
+/**
+ * AlfaClub bridge calls Pinata for generation only — Vercel posts the
+ * formatted reply. OpenClaw gateway `chat.send` on a Pinata agent that
+ * also has an AlfaClub channel/skill mirrors the full worker prompt and
+ * raw JSON assistant output into the live room as duplicate "4626" /
+ * "Agent Hermit" messages. Prefer the stateless HTTP draft path for
+ * bridge-initiated strict-JSON creative calls so nothing hits the
+ * session-bound channel plugin.
+ */
+export function shouldPreferPinataHttpDraft(params: {
+  sourceIdentity?: string | null
+  prompt: string
+}): boolean {
+  if (readPinataBridgeHttpOnlyEnabled()) return true
+  const source = asTrimmed(params.sourceIdentity).toLowerCase()
+  if (source !== 'alfaclub-bridge-runner') return false
+  return isStrictJsonHermitWorkerPrompt(params.prompt)
+}
+
 function extractChatFinalText(payload: Record<string, unknown> | undefined): string | null {
   if (!payload) return null
   const state = typeof payload.state === 'string' ? payload.state : ''
@@ -551,6 +589,47 @@ async function runPinataDraftOverGateway(params: {
   })
 }
 
+async function runPinataDraftOverHttp(params: {
+  endpoint: string
+  bearer: string
+  prompt: string
+}): Promise<PinataChatResult | null> {
+  // Bound by `HERMIT_PINATA_HTTP_TIMEOUT_MS` so a hung creative backend
+  // cannot stall the AlfaClub chat-bridge tick or leave a /hermit
+  // serverless invocation running until Vercel kills it.
+  const controller = new AbortController()
+  const timeoutHandle = setTimeout(() => controller.abort(), readPinataHttpTimeoutMs())
+  let res: Response
+  try {
+    res = await fetch(toPinataHttpChatUrl(params.endpoint), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${params.bearer}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt: params.prompt }),
+      signal: controller.signal,
+    })
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeoutHandle)
+  }
+  if (!res.ok) return null
+
+  try {
+    const body = (await res.json()) as Record<string, unknown>
+    const text =
+      asTrimmed(body.text) ||
+      asTrimmed(body.response) ||
+      asTrimmed(body.output) ||
+      asTrimmed(body.message)
+    return text ? { text } : null
+  } catch {
+    return null
+  }
+}
+
 async function runPinataDraft(params: {
   prompt: string
   senderAddress?: string
@@ -558,6 +637,24 @@ async function runPinataDraft(params: {
 }): Promise<PinataChatResult | null> {
   const cfg = readPinataHermitConfig()
   if (!cfg) return null
+
+  const preferHttp = shouldPreferPinataHttpDraft({
+    sourceIdentity: params.sourceIdentity,
+    prompt: params.prompt,
+  })
+  if (preferHttp) {
+    const viaHttp = await runPinataDraftOverHttp({
+      endpoint: cfg.endpoint,
+      bearer: cfg.bearer,
+      prompt: params.prompt,
+    })
+    if (viaHttp?.text) return viaHttp
+    logger.warn('[hermit] bridge_http_draft_empty; skipping_gateway_to_avoid_channel_echo', {
+      sourceIdentity: asTrimmed(params.sourceIdentity) || 'none',
+      promptHead: params.prompt.slice(0, 64),
+    })
+    return null
+  }
 
   const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
   if (gatewayTarget) {
@@ -583,41 +680,11 @@ async function runPinataDraft(params: {
     return viaGateway?.text ? viaGateway : null
   }
 
-  // HTTP fallback path. Bound by `HERMIT_PINATA_HTTP_TIMEOUT_MS` so a hung
-  // creative backend cannot stall the AlfaClub chat-bridge tick or leave a
-  // /hermit serverless invocation running until Vercel kills it. On timeout
-  // or any non-2xx, returns null and the caller surfaces a fallback reply.
-  const controller = new AbortController()
-  const timeoutHandle = setTimeout(() => controller.abort(), readPinataHttpTimeoutMs())
-  let res: Response
-  try {
-    res = await fetch(cfg.endpoint, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${cfg.bearer}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ prompt: params.prompt }),
-      signal: controller.signal,
-    })
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeoutHandle)
-  }
-  if (!res.ok) return null
-
-  try {
-    const body = (await res.json()) as Record<string, unknown>
-    const text =
-      asTrimmed(body.text) ||
-      asTrimmed(body.response) ||
-      asTrimmed(body.output) ||
-      asTrimmed(body.message)
-    return text ? { text } : null
-  } catch {
-    return null
-  }
+  return runPinataDraftOverHttp({
+    endpoint: cfg.endpoint,
+    bearer: cfg.bearer,
+    prompt: params.prompt,
+  })
 }
 
 export type SpanishDialect =

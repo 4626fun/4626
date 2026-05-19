@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv } from '../../../api/__tests__/helpers'
-import { _hermitPromptBuildersForTests, executeHermitCommand } from './skillRouter'
+import {
+  _hermitPromptBuildersForTests,
+  executeHermitCommand,
+  shouldPreferPinataHttpDraft,
+} from './skillRouter'
 
 describe('executeHermitCommand', () => {
   let restoreEnv: (() => void) | null = null
@@ -137,6 +141,49 @@ describe('executeHermitCommand', () => {
     expect(result.provider).toBe('pinata')
     expect(result.reply).toContain('cat laugh alpha unlocked.')
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses HTTP draft (not gateway) for AlfaClub bridge /gmeow to avoid channel echo', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://x7lmjaxx.agents.pinata.cloud',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'bridge-safe cat laugh.' }) }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      sourceIdentity: 'alfaclub-bridge-runner',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.provider).toBe('pinata')
+    expect(result.reply).toContain('bridge-safe cat laugh.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://x7lmjaxx.agents.pinata.cloud')
+  })
+
+  it('shouldPreferPinataHttpDraft is true for bridge strict-json prompts', () => {
+    const prompt = _hermitPromptBuildersForTests.buildGmeow({
+      userPrompt: 'gmeow',
+      memeCaption: 'cat laugh from the Hermit cave.',
+      memeTags: ['laugh', 'cat', 'meme'],
+    })
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'alfaclub-bridge-runner',
+        prompt,
+      }),
+    ).toBe(true)
+    expect(
+      shouldPreferPinataHttpDraft({
+        sourceIdentity: 'telegram',
+        prompt,
+      }),
+    ).toBe(false)
   })
 
   it('/gmeow falls back to local caption when pinata returns provider auth error text', async () => {
