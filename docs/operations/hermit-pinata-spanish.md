@@ -16,6 +16,7 @@ cron, or production secret changes.
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/USER.md`](../../frontend/server/_lib/hermit/seed/USER.md) | Per-user/room context placeholder. |
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/MEMORY.md`](../../frontend/server/_lib/hermit/seed/MEMORY.md) | Append-only **global** style learnings (room-wide vocabulary corrections). Per-`(room, sender)` dialect preferences live in the AlfaClub control-plane DB (`alfaclub.user_preference`), not here. |
 | Pinata workspace seeds (this repo) | [`frontend/server/_lib/hermit/seed/SPANISH.md`](../../frontend/server/_lib/hermit/seed/SPANISH.md) | Spanish style guide. |
+| Full workspace mirror (this repo) | [`frontend/server/_lib/hermit/workspace/`](../../frontend/server/_lib/hermit/workspace/) | All Pinata workspace md files + `avatars/pinnie.png`; kept in sync via `import-pinata` / `pull-pinata`. |
 | Host prompt builder | [`frontend/server/_lib/hermit/skillRouter.ts`](../../frontend/server/_lib/hermit/skillRouter.ts) | `buildPinataPromptForHermit / Image / Gmeow` now embed a language directive. |
 
 ## What the language directive does
@@ -59,6 +60,15 @@ bash frontend/scripts/hermit-seed-sync.sh diff-local
 # Stage seeds into a directory or tarball for upload to the Pinata UI
 bash frontend/scripts/hermit-seed-sync.sh bundle /tmp/hermit-seed/
 bash frontend/scripts/hermit-seed-sync.sh tar    /tmp/hermit-seed.tar.gz
+
+# Full workspace (AGENTS.md, BOOTSTRAP.md, avatars/, …) — versioned under server/_lib/hermit/workspace/
+bash frontend/scripts/hermit-seed-sync.sh verify-workspace
+bash frontend/scripts/hermit-seed-sync.sh bundle-workspace /tmp/hermit-workspace/
+bash frontend/scripts/hermit-seed-sync.sh tar-workspace /tmp/hermit-workspace.tar.gz
+
+# Pull latest from Pinata agent git (clone once at repo root: agent-hermit-x7lmjaxx/)
+bash frontend/scripts/hermit-seed-sync.sh pull-pinata
+bash frontend/scripts/hermit-seed-sync.sh import-pinata   # after manual edits in the clone only
 ```
 
 When the agent is bootstrapped or re-deployed:
