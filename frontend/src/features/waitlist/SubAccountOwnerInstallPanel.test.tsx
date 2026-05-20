@@ -81,4 +81,15 @@ describe('SubAccountOwnerInstallPanel', () => {
     expect(await screen.findByText(/4626 signing is enabled/i)).toBeTruthy()
     expect(screen.queryByTestId('sub-account-owner-install-button')).toBeNull()
   })
+
+  it('keeps install actionable when owner read is unknown/null', async () => {
+    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(null)
+
+    render(
+      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
+    )
+
+    expect(await screen.findByTestId('sub-account-owner-install-button')).toBeTruthy()
+    expect(screen.queryByText(/Could not verify signing status/i)).toBeNull()
+  })
 })

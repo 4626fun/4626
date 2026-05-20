@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react'
+import { CheckCircle2, ChevronDown } from 'lucide-react'
 import { getAddress, isAddress, type Address } from 'viem'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
@@ -19,7 +19,7 @@ type SubAccountOwnerInstallPanelProps = {
   onSuccess?: () => void
 }
 
-type OwnerCheckState = 'idle' | 'checking' | 'needs_install' | 'already_owner' | 'unknown'
+type OwnerCheckState = 'idle' | 'checking' | 'needs_install' | 'already_owner'
 
 function normalizeAddress(value: string | null | undefined): Address | null {
   if (typeof value !== 'string') return null
@@ -114,7 +114,10 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       setOwnerCheck('needs_install')
       return
     }
-    setOwnerCheck('unknown')
+    // Base RPC can return empty call data (`0x`) for contract reads under load or
+    // while a sub-account is still settling; default to install-needed so users
+    // can proceed instead of getting stuck behind a non-actionable status check.
+    setOwnerCheck('needs_install')
   }, [embeddedEoa, subAccount])
 
   useEffect(() => {
@@ -183,23 +186,6 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
             Your embedded key can sign for the app wallet.
           </p>
         </div>
-      </div>
-    )
-  }
-
-  if (ownerCheck === 'unknown') {
-    return (
-      <div className={`space-y-2 text-left ${className}`}>
-        <p className="text-sm text-zinc-300">Could not verify signing status.</p>
-        <p className="text-xs text-zinc-500">Base may be slow — try again in a moment.</p>
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-400 transition-colors hover:text-zinc-200"
-          onClick={() => void refreshOwnerCheck()}
-        >
-          <RefreshCw className="h-3 w-3" aria-hidden />
-          Check again
-        </button>
       </div>
     )
   }

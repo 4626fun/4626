@@ -16,6 +16,8 @@ type LeaderboardIdentityCellProps = {
   avatarUrl?: string | null
   showZoraBadge?: boolean
   showBaseAppBadge?: boolean
+  /** Centered column for podium cards. */
+  layout?: 'inline' | 'stacked'
 }
 
 function formatShortAddress(address: string): string {
@@ -54,11 +56,12 @@ function WalletBadge({
 function LeaderboardAvatar({
   address,
   imageUrl,
+  size = 26,
 }: {
   address: Address
   imageUrl: string | null | undefined
+  size?: number
 }) {
-  const size = 26
   if (imageUrl) {
     return (
       <span className="relative shrink-0" style={{ width: size, height: size }}>
@@ -68,7 +71,8 @@ function LeaderboardAvatar({
           alt=""
           width={size}
           height={size}
-          className="absolute inset-0 h-[26px] w-[26px] rounded-full object-cover"
+          className="absolute inset-0 rounded-full object-cover"
+          style={{ width: size, height: size }}
           onError={(event) => {
             event.currentTarget.style.display = 'none'
           }}
@@ -90,6 +94,7 @@ export function LeaderboardIdentityCell({
   avatarUrl = null,
   showZoraBadge = false,
   showBaseAppBadge = false,
+  layout = 'inline',
 }: LeaderboardIdentityCellProps) {
   const csw = cswAddress && isAddress(cswAddress) ? (cswAddress as Address) : null
   const basename = useBasenameForAddress(csw)
@@ -122,18 +127,53 @@ export function LeaderboardIdentityCell({
     </span>
   )
 
+  const stacked = layout === 'stacked'
+  const avatarSize = stacked ? 40 : 26
+
   return (
-    <div className="flex items-center gap-2 min-w-0 flex-1">
-      {csw ? <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} /> : null}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5 min-w-0">
+    <div
+      className={
+        stacked
+          ? 'flex flex-col items-center gap-2 min-w-0 w-full text-center'
+          : 'flex items-center gap-2 min-w-0 flex-1'
+      }
+    >
+      {csw ? (
+        <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} size={avatarSize} />
+      ) : (
+        <span
+          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-zinc-400"
+          aria-hidden
+        >
+          {resolvedLabel.slice(0, 1).toUpperCase()}
+        </span>
+      )}
+      <div className={stacked ? 'min-w-0 w-full' : 'min-w-0 flex-1'}>
+        <div
+          className={
+            stacked
+              ? 'flex flex-col items-center gap-1 min-w-0'
+              : 'flex items-center gap-1.5 min-w-0'
+          }
+        >
           {showZoraBadge ? <WalletBadge src={ZORA_LOGO_URL} title="Zora Coinbase Smart Wallet" /> : null}
           {showBaseAppBadge ? <WalletBadge src={BASE_APP_LOGO_URL} title="Base App" /> : null}
-          <div className="min-w-0 text-[13px] sm:text-sm truncate">{labelNode}</div>
-          {cswAddress ? <WalletBadge src={COINBASE_WALLET_LOGO_URL} title="Coinbase Smart Wallet" /> : null}
+          <div className={stacked ? 'min-w-0 w-full text-sm truncate' : 'min-w-0 text-[13px] sm:text-sm truncate'}>
+            {labelNode}
+          </div>
+          {!stacked && cswAddress ? (
+            <WalletBadge src={COINBASE_WALLET_LOGO_URL} title="Coinbase Smart Wallet" />
+          ) : null}
         </div>
         {showCswSubtitle ? (
-          <div className="mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-500 truncate" title={cswAddress ?? undefined}>
+          <div
+            className={
+              stacked
+                ? 'mt-1 font-mono text-[10px] text-zinc-500 truncate max-w-full'
+                : 'mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-500 truncate'
+            }
+            title={cswAddress ?? undefined}
+          >
             {cswShortLabel}
           </div>
         ) : null}
