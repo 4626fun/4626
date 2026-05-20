@@ -361,13 +361,17 @@ export function AccountSetupWorkspaceView(props: {
             </div>
           </div>
 
+          {subAccountOwnerInstallPanel ? (
+            <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+              {subAccountOwnerInstallPanel}
+            </section>
+          ) : null}
+
           {summaryActions ? (
             <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
               {summaryActions}
             </section>
           ) : null}
-
-          {!signingStepComplete ? subAccountOwnerInstallPanel : null}
 
           <WaitlistAdvancedSection controller={controller} label="Account settings" />
 

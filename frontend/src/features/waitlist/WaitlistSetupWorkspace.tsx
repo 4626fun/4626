@@ -60,6 +60,12 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       controller={controller}
       summaryActions={
         <div className="w-full space-y-4">
+          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
+
+          {chatStatusMessage ? (
+            <p className="text-xs text-zinc-500">{chatStatusMessage}</p>
+          ) : null}
+
           {canEnterNow ? (
             <button
               type="button"
@@ -79,12 +85,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
                 View leaderboard
               </a>
             </div>
-          ) : null}
-
-          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
-
-          {chatStatusMessage ? (
-            <p className="text-xs text-zinc-500">{chatStatusMessage}</p>
           ) : null}
         </div>
       }
