@@ -48,6 +48,13 @@ function formatPointsTooltip(row: LeaderboardRow): string {
   return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
+function rankTone(rank: number): string {
+  if (rank === 1) return 'text-amber-300'
+  if (rank === 2) return 'text-slate-200'
+  if (rank === 3) return 'text-orange-300'
+  return 'text-zinc-400'
+}
+
 export function Leaderboard() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -161,47 +168,48 @@ export function Leaderboard() {
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
       <PageMeta title={META.leaderboard.title} description={META.leaderboard.description} canonicalPath="/leaderboard" />
-      <div className="relative max-w-3xl mx-auto px-6 py-12">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[10px] font-medium text-zinc-600 mb-2">4626</div>
-            <div className="headline text-3xl sm:text-4xl leading-tight">Leaderboard</div>
-            <div className="text-sm text-zinc-600 font-light mt-2">
-              Ranked by total points. Hover any score to see the invite and agent breakdown.
+      <div className="relative max-w-5xl mx-auto px-3 sm:px-6 py-8 sm:py-12">
+        <div className="rounded-2xl border border-white/10 bg-vault-card/55 px-4 sm:px-7 py-4 sm:py-6">
+          <div className="flex flex-col gap-5 sm:gap-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500 mb-2">4626</div>
+                <h1 className="headline text-2xl sm:text-4xl leading-tight">Leaderboard</h1>
+                <p className="text-[13px] sm:text-sm text-zinc-400 mt-2 max-w-xl">
+                  Ranked by total points. Hover a score to view invite and agent point breakdowns.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                {myRankShare ? (
+                  <ShareVaultButton
+                    url={myRankShare.url}
+                    text={myRankShare.text}
+                    label={`Share rank #${data?.me?.rank ?? ''}`}
+                    showLabel
+                  />
+                ) : null}
+                <Link
+                  to={getCanonicalMarketingWaitlistPath()}
+                  className="btn-accent btn-compact inline-flex items-center whitespace-nowrap text-xs sm:text-sm"
+                >
+                  Invite friends
+                </Link>
+              </div>
             </div>
-            {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-2.5 sm:px-3 py-0.5 sm:py-1 text-[11px] sm:text-[12px] text-zinc-100">
+                Total points
+              </div>
+              {subtitle ? (
+                <div className="rounded-full border border-white/10 bg-black/20 px-2.5 sm:px-3 py-0.5 sm:py-1 text-[11px] sm:text-[12px] text-zinc-300">
+                  {subtitle}
+                </div>
+              ) : null}
+              <div className="text-[10px] sm:text-[11px] text-zinc-500 sm:ml-auto">
+                {busy ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : 'Hover any score for breakdown'}
+              </div>
+            </div>
           </div>
-          {/*
-            Right-side actions: keep Share + Invite on one line at all
-            screen sizes. `flex-nowrap shrink-0 whitespace-nowrap` defends
-            against the parent flex deciding to wrap when the title column
-            grows; `self-center` aligns this group against the centerline
-            of the title block (which is `items-start` — without this, the
-            button group floats to the visual top of that row).
-          */}
-          <div className="flex flex-nowrap items-center gap-3 shrink-0 self-center whitespace-nowrap">
-            {myRankShare ? (
-              <ShareVaultButton
-                url={myRankShare.url}
-                text={myRankShare.text}
-                label={`Share rank #${data?.me?.rank ?? ''}`}
-                showLabel
-              />
-            ) : null}
-            <Link
-              to={getCanonicalMarketingWaitlistPath()}
-              className="btn-accent btn-compact inline-flex items-center whitespace-nowrap"
-            >
-              Invite friends
-            </Link>
-          </div>
-        </div>
-
-        <div className="mt-8 flex items-center justify-between gap-3">
-          <div className="rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 py-1 text-[12px] text-zinc-200">
-            Total points
-          </div>
-          <div className="text-[11px] text-zinc-700">{busy ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : 'Hover any score for the breakdown'}</div>
         </div>
 
         {error ? (
@@ -210,13 +218,13 @@ export function Leaderboard() {
           </Alert>
         ) : null}
 
-        <div className="mt-6 rounded-xl border border-white/8 bg-vault-card/40 overflow-hidden">
+        <div className="mt-4 sm:mt-5 rounded-2xl border border-white/10 bg-vault-card/45 overflow-hidden">
           <Table variant="ruled" compact accessibilityLabel="Leaderboard rankings">
             <TableHeader>
               <TableRow disableHoverIndicator>
-                <TableCell title="Rank" width="20%" />
-                <TableCell title="User" width="50%" />
-                <TableCell title="Points" width="30%" justifyContent="flex-end" />
+                <TableCell title="Rank" width="18%" />
+                <TableCell title="User" width="54%" />
+                <TableCell title="Points" width="28%" justifyContent="flex-end" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,13 +234,17 @@ export function Leaderboard() {
                   return (
                     <TableRow
                       key={`${r.rank}-${r.signupId}`}
-                      className={isMe ? 'bg-brand-primary/6' : undefined}
+                      className={
+                        isMe
+                          ? 'bg-brand-primary/10 hover:bg-brand-primary/15'
+                          : 'hover:bg-white/[0.03]'
+                      }
                     >
                       <TableCell>
-                        <span className="text-sm text-zinc-300">#{r.rank}</span>
+                        <span className={`text-[13px] sm:text-sm font-semibold tabular-nums ${rankTone(r.rank)}`}>#{r.rank}</span>
                       </TableCell>
                       <TableCell>
-                        <div className="text-sm text-zinc-200">
+                        <div className="text-[13px] sm:text-sm text-zinc-100">
                           <div className="flex items-center gap-2 min-w-0">
                             <LeaderboardIdentityCell
                               display={r.display}
@@ -244,16 +256,23 @@ export function Leaderboard() {
                             />
 
                             {isMe ? (
-                              <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                              <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/15 px-2 py-0.5 text-[10px] font-semibold text-brand-200">
                                 You
                               </div>
                             ) : null}
                           </div>
-                          {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
+                          {r.referralCode ? (
+                            <div className="mt-1 text-[10px] sm:text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                              code: {r.referralCode}
+                            </div>
+                          ) : null}
                         </div>
                       </TableCell>
                       <TableCell justifyContent="flex-end">
-                        <span className="text-sm text-zinc-200 tabular-nums" title={formatPointsTooltip(r)}>
+                        <span
+                          className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[12px] sm:text-sm font-semibold text-zinc-100 tabular-nums"
+                          title={formatPointsTooltip(r)}
+                        >
                           {formatWholeNumber(r.pointsTotal)}
                         </span>
                       </TableCell>
@@ -272,16 +291,18 @@ export function Leaderboard() {
         </div>
 
         {data?.me && !meInTop ? (
-          <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/5 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-white/8 text-[11px] font-medium text-brand-300">Your rank</div>
+          <div className="mt-4 rounded-2xl border border-brand-primary/30 bg-brand-primary/8 overflow-hidden">
+            <div className="px-4 py-2 border-b border-white/8 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.08em] text-brand-200">
+              Your rank
+            </div>
             <Table variant="ruled" compact accessibilityLabel="Your ranking">
               <TableBody>
                 <TableRow disableHoverIndicator>
                   <TableCell width="20%">
-                    <span className="text-sm text-zinc-300">#{data.me.rank}</span>
+                    <span className={`text-[13px] sm:text-sm font-semibold tabular-nums ${rankTone(data.me.rank)}`}>#{data.me.rank}</span>
                   </TableCell>
                   <TableCell width="50%">
-                    <div className="text-sm text-zinc-200">
+                    <div className="text-[13px] sm:text-sm text-zinc-100">
                       <div className="flex items-center gap-2 min-w-0">
                         <LeaderboardIdentityCell
                           display={data.me.display}
@@ -292,15 +313,22 @@ export function Leaderboard() {
                           showBaseAppBadge={data.me.showBaseAppBadge}
                         />
 
-                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/15 px-2 py-0.5 text-[10px] font-semibold text-brand-200">
                           You
                         </div>
                       </div>
-                      {data.me.referralCode ? <div className="text-[11px] text-zinc-700">code: {data.me.referralCode}</div> : null}
+                      {data.me.referralCode ? (
+                        <div className="mt-1 text-[10px] sm:text-[11px] uppercase tracking-[0.08em] text-zinc-500">
+                          code: {data.me.referralCode}
+                        </div>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell width="30%" justifyContent="flex-end">
-                    <span className="text-sm text-zinc-200 tabular-nums" title={formatPointsTooltip(data.me)}>
+                    <span
+                      className="inline-flex items-center rounded-full border border-white/10 bg-black/20 px-2 sm:px-2.5 py-0.5 sm:py-1 text-[12px] sm:text-sm font-semibold text-zinc-100 tabular-nums"
+                      title={formatPointsTooltip(data.me)}
+                    >
                       {formatWholeNumber(data.me.pointsTotal)}
                     </span>
                   </TableCell>

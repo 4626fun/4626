@@ -9,6 +9,7 @@ const legacyManifestPath = path.join(publicRoot, 'manifest.json')
 const marketingHtmlPath = path.join(frontendRoot, 'index.html')
 const appHtmlPath = path.join(frontendRoot, 'app.html')
 const telegramLinkHtmlPath = path.join(frontendRoot, 'telegram-link.html')
+const siteConfigPath = path.join(frontendRoot, 'shared/site-config.json')
 const trustPagePaths = [
   path.join(publicRoot, 'about/index.html'),
   path.join(publicRoot, 'privacy/index.html'),
@@ -17,10 +18,20 @@ const trustPagePaths = [
   path.join(publicRoot, 'terms/index.html'),
 ]
 const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
-const OG_SOCIAL_IMAGE_URL = 'https://4626.fun/assets/og-image.png?v=3'
-const TWITTER_SOCIAL_IMAGE_URL = 'https://4626.fun/assets/twitter-card.png?v=3'
+const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as { brandAssetVersion?: number }
+const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
+const FAVICON_32 = `/assets/favicon-32x32.png?v=${BRAND_ASSET_VERSION}`
+const FAVICON_16 = `/assets/favicon-16x16.png?v=${BRAND_ASSET_VERSION}`
+const FAVICON_SVG = `/assets/favicon.svg?v=${BRAND_ASSET_VERSION}`
+const APPLE_TOUCH = `/assets/apple-touch-icon.png?v=${BRAND_ASSET_VERSION}`
+const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}`
+const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
+const MASKABLE_192 = `/assets/maskable-icon-192x192.png?v=${BRAND_ASSET_VERSION}`
+const MASKABLE_512 = `/assets/maskable-icon-512x512.png?v=${BRAND_ASSET_VERSION}`
+const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
+const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
-const MINIAPP_SPLASH_URL = 'https://4626.fun/assets/logo-mark-opaque-1024.png?v=3'
+const MINIAPP_SPLASH_URL = `https://4626.fun/assets/logo-mark-opaque-1024.png?v=${BRAND_ASSET_VERSION}`
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -54,10 +65,10 @@ describe('public manifest assets', () => {
 
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ src: '/assets/android-chrome-192x192.png?v=3', sizes: '192x192' }),
-        expect.objectContaining({ src: '/assets/android-chrome-512x512.png?v=3', sizes: '512x512' }),
-        expect.objectContaining({ src: '/assets/maskable-icon-192x192.png?v=3', purpose: 'maskable' }),
-        expect.objectContaining({ src: '/assets/maskable-icon-512x512.png?v=3', purpose: 'maskable' }),
+        expect.objectContaining({ src: ANDROID_192, sizes: '192x192' }),
+        expect.objectContaining({ src: ANDROID_512, sizes: '512x512' }),
+        expect.objectContaining({ src: MASKABLE_192, purpose: 'maskable' }),
+        expect.objectContaining({ src: MASKABLE_512, purpose: 'maskable' }),
       ]),
     )
   })
@@ -66,10 +77,10 @@ describe('public manifest assets', () => {
     for (const htmlPath of htmlEntryPaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain('<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png?v=3" />')
-      expect(html).toContain('<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png?v=3" />')
-      expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=3" />')
-      expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=3" />')
+      expect(html).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${FAVICON_32}" />`)
+      expect(html).toContain(`<link rel="icon" type="image/png" sizes="16x16" href="${FAVICON_16}" />`)
+      expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}" />`)
+      expect(html).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}" />`)
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
       expect(html).toContain('<meta name="theme-color" content="#020204" />')
     }

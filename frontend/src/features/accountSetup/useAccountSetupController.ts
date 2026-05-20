@@ -695,7 +695,6 @@ export function useAccountSetupController(params: {
       await performClientSideLink(provider)
       if (provider === 'external_eoa') {
         let linked = false
-        let lastError: Error | null = null
         for (let attempt = 0; attempt < 4; attempt += 1) {
           try {
             await callLinkEndpoint(provider)
@@ -706,15 +705,13 @@ export function useAccountSetupController(params: {
             if (!/No linked value found for provider "external_eoa"\./i.test(message)) {
               throw linkError
             }
-            lastError = linkError instanceof Error ? linkError : new Error(message)
             await sleep(500)
           }
         }
         if (!linked) {
           await loadMe({ showSpinner: false })
-          throw (
-            lastError ??
-            new Error('No external owner wallet was linked in Privy yet. Connect a real Base wallet and retry.')
+          throw new Error(
+            'External wallet link is still syncing. Connect Base App (or your external wallet) again and retry in a moment.',
           )
         }
       } else {

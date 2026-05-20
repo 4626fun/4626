@@ -23,6 +23,10 @@ function formatShortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`
 }
 
+function isHexLabel(label: string): boolean {
+  return label.startsWith('0x')
+}
+
 function basescanUrl(address: string): string {
   return `https://basescan.org/address/${address}`
 }
@@ -54,7 +58,7 @@ function LeaderboardAvatar({
   address: Address
   imageUrl: string | null | undefined
 }) {
-  const size = 24
+  const size = 26
   if (imageUrl) {
     return (
       <span className="relative shrink-0" style={{ width: size, height: size }}>
@@ -64,7 +68,7 @@ function LeaderboardAvatar({
           alt=""
           width={size}
           height={size}
-          className="absolute inset-0 h-6 w-6 rounded-full object-cover"
+          className="absolute inset-0 h-[26px] w-[26px] rounded-full object-cover"
           onError={(event) => {
             event.currentTarget.style.display = 'none'
           }}
@@ -99,19 +103,21 @@ export function LeaderboardIdentityCell({
   )
   const title = cswAddress ?? resolvedLabel
   const resolvedAvatar = basename.avatar ?? avatarUrl ?? null
+  const monospaceLabel = isHexLabel(resolvedLabel)
+  const labelTextClass = monospaceLabel ? 'font-mono' : 'font-medium'
 
   const labelNode = cswAddress ? (
     <a
       href={basescanUrl(cswAddress)}
       target="_blank"
       rel="noopener noreferrer"
-      className="truncate font-mono text-zinc-200 hover:text-brand-300 transition-colors"
+      className={`truncate ${labelTextClass} text-zinc-100 hover:text-brand-300 transition-colors`}
       title={cswAddress}
     >
       {resolvedLabel}
     </a>
   ) : (
-    <span className="truncate text-zinc-200" title={title}>
+    <span className={`truncate ${labelTextClass} text-zinc-100`} title={title}>
       {resolvedLabel}
     </span>
   )
@@ -123,11 +129,11 @@ export function LeaderboardIdentityCell({
         <div className="flex items-center gap-1.5 min-w-0">
           {showZoraBadge ? <WalletBadge src={ZORA_LOGO_URL} title="Zora Coinbase Smart Wallet" /> : null}
           {showBaseAppBadge ? <WalletBadge src={BASE_APP_LOGO_URL} title="Base App" /> : null}
-          <div className="min-w-0 text-sm truncate">{labelNode}</div>
+          <div className="min-w-0 text-[13px] sm:text-sm truncate">{labelNode}</div>
           {cswAddress ? <WalletBadge src={COINBASE_WALLET_LOGO_URL} title="Coinbase Smart Wallet" /> : null}
         </div>
         {showCswSubtitle ? (
-          <div className="mt-0.5 font-mono text-[11px] text-zinc-600 truncate" title={cswAddress ?? undefined}>
+          <div className="mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-500 truncate" title={cswAddress ?? undefined}>
             {cswShortLabel}
           </div>
         ) : null}

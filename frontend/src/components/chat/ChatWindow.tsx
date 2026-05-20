@@ -1636,7 +1636,11 @@ export function ChatWindow({
           )}
 
           {/* Input */}
-          <div className="space-y-2 border-t border-white/10 bg-zinc-900/90 px-3 py-2.5 shrink-0">
+          <div
+            className={`space-y-2 border-t border-white/10 bg-zinc-900/90 px-3 py-2.5 shrink-0 ${
+              isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+3.25rem)]' : ''
+            }`}
+          >
             {replyingToMessage && (
               <div className="flex items-start justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-2">
                 <div className="min-w-0">

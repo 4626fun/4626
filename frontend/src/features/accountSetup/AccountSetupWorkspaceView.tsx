@@ -213,7 +213,6 @@ export function AccountSetupWorkspaceView(props: {
     me.baseSubAccount?.trim() ||
     null
   const subAccountOwnerInstallPanel =
-    context !== 'waitlist' &&
     subAccountFlowEnabled &&
     canonicalCswAddress &&
     persistedSubAccountAddress ? (
@@ -264,7 +263,7 @@ export function AccountSetupWorkspaceView(props: {
     // Shared classes
     const stepBase = 'border-b border-white/[0.06] last:border-0 transition-colors duration-150 cursor-pointer'
     const doneRow = `${stepBase} bg-white/[0.015] hover:bg-white/[0.03]`
-    const activeRow = `${stepBase} bg-brand-primary/[0.12] border-l-2 border-l-brand-primary/70`
+    const activeRow = `${stepBase} bg-brand-primary/[0.16] border-l-2 border-l-brand-primary/85 ring-1 ring-inset ring-brand-primary/25`
     const badgeDone = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] text-[11px] font-bold text-emerald-400'
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
 
@@ -299,9 +298,19 @@ export function AccountSetupWorkspaceView(props: {
             </div>
           ) : null}
 
-          <div className="space-y-1">
+          <div className="space-y-2">
             <h2 className="text-2xl font-semibold tracking-tight text-white">You&apos;re live</h2>
             <p className="text-sm text-zinc-500">Your account is activated and ready.</p>
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                <CheckCircle2 className="h-3 w-3" />
+                Step 1 complete
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+                <CheckCircle2 className="h-3 w-3" />
+                Step 2 complete
+              </span>
+            </div>
           </div>
 
           <div className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
@@ -354,7 +363,7 @@ export function AccountSetupWorkspaceView(props: {
             </section>
           ) : null}
 
-          {subAccountOwnerInstallPanel}
+          {!signingStepComplete ? subAccountOwnerInstallPanel : null}
 
           <WaitlistAdvancedSection controller={controller} label="Account settings" />
 
@@ -386,7 +395,12 @@ export function AccountSetupWorkspaceView(props: {
         <div className="flex items-start justify-between gap-3">
           <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">{allDone ? 'Account activated' : 'Activate your account'}</h2>
-          <p className="mt-1 text-sm text-zinc-500">{allDone ? 'All steps completed' : `Step ${resolvedOpen} of 2`}</p>
+          <p className="mt-1 text-sm text-zinc-500">{allDone ? 'All steps completed' : 'Complete both steps to unlock app access'}</p>
+          {!allDone ? (
+            <div className="mt-2 inline-flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[11px] text-zinc-300">
+              Step {resolvedOpen} of 2
+            </div>
+          ) : null}
           </div>
         </div>
 
@@ -413,6 +427,9 @@ export function AccountSetupWorkspaceView(props: {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full object-cover opacity-80" />
+                      <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-400">
+                        Step 1
+                      </span>
                       <span className="text-sm font-medium text-white">Link your Zora identity</span>
                     </div>
 
@@ -585,6 +602,11 @@ export function AccountSetupWorkspaceView(props: {
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
                   <div className="min-w-0 flex-1">
+                    <div className="mb-0.5">
+                      <span className="rounded-full border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.12em] text-zinc-400">
+                        Step 2
+                      </span>
+                    </div>
                     <span className="text-sm font-medium text-white">Enable 4626 signing</span>
                     {s === 'done' ? (
                       <p className="mt-0.5 text-[11px] text-zinc-500">Signing enabled on your canonical wallet</p>

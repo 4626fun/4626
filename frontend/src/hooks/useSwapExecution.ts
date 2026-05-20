@@ -1245,7 +1245,11 @@ export function useSwapExecution(params: {
       return
     }
     if (!params.executionReady) {
-      setError('Swap signer is not ready yet. Finish wallet setup and try again.')
+      setError(
+        params.executionTrack === 'none-yet'
+          ? 'Swap signer is not ready yet. Open /waitlist?setup=base-app and complete "Enable 4626 signing".'
+          : 'Swap signer is not ready yet. Finish wallet setup and try again.',
+      )
       return
     }
     if (!swapSessionGate.ok) {
@@ -1399,6 +1403,7 @@ export function useSwapExecution(params: {
     syncPermitRequirement,
     signPermitIfRequired,
     params.executionAddress,
+    params.executionTrack,
     params.executionReady,
     swapDebugEnabled,
     swapSessionGate,

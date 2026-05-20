@@ -3,11 +3,9 @@ import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupW
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
-import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { WalletProviders } from '@/web3/Web3Providers'
-import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { isWaitlistSigningReadyForUi, resolveSubAccountAddress } from './waitlistFlowState'
+import { isSubAccountExecutionReady, isWaitlistSigningReadyForUi } from './waitlistFlowState'
 import { useWaitlistChatJoin, waitlistChatStatusMessage } from './useWaitlistChatJoin'
 
 type WaitlistSetupWorkspaceProps = {
@@ -41,19 +39,11 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     initialData: { me: initialAccount, zoraStatus: null },
     zoraReturnPath: '/waitlist',
   })
-  const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
   const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const currentAccount = controller.me ?? initialAccount
-  const signingStepComplete = isWaitlistSigningReadyForUi(currentAccount, controller.notice)
-  const persistedSubAccountAddress = resolveSubAccountAddress({
-    baseSubAccount: currentAccount.baseSubAccount,
-    accountSignals: currentAccount.accountSignals,
-  })
-  const showSubAccountOwnerInstall =
-    subAccountFlowEnabled &&
-    !signingStepComplete &&
-    controller.canonicalCswAddress &&
-    persistedSubAccountAddress
+  const signingStepComplete = subAccountFlowEnabled
+    ? isSubAccountExecutionReady(currentAccount.accountSignals)
+    : isWaitlistSigningReadyForUi(currentAccount, controller.notice)
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete
@@ -65,15 +55,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
 
   return (
     <div className="mx-auto w-full max-w-[640px] space-y-6">
-      {showSubAccountOwnerInstall ? (
-        <SubAccountOwnerInstallPanel
-          variant="recovery"
-          showHeader={!signingStepComplete}
-          parentAddress={controller.canonicalCswAddress}
-          subAccountAddress={persistedSubAccountAddress}
-          embeddedEoaAddress={embeddedEoaAddress}
-        />
-      ) : null}
       <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}

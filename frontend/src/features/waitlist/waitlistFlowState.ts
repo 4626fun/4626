@@ -144,7 +144,7 @@ export function shouldForceBaseAppConnectStep(params: {
   if (setup !== 'base-app') return false
   if (params.subAccountFlowEnabled !== true) return false
   if (!params.account.emailVerified) return false
-  return !isWaitlistSigningReady(params.account)
+  return !isSubAccountExecutionReady(params.account.accountSignals)
 }
 
 export function resolveWaitlistStep(params: {
@@ -163,7 +163,10 @@ export function resolveWaitlistStep(params: {
 
   const track = account.accountSignals?.executionTrack
   const hasSubAccount = hasRegisteredSubAccountExecution(track)
-  const signingReady = isWaitlistSigningReady(account)
+  const signingReady =
+    subAccountFlowEnabled === true
+      ? isSubAccountExecutionReady(account.accountSignals)
+      : isWaitlistSigningReady(account)
   const hasCanonicalCsw = Boolean(
     typeof account.accountSignals?.canonicalCswAddress === 'string' &&
       account.accountSignals.canonicalCswAddress.trim(),
