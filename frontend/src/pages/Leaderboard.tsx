@@ -10,6 +10,7 @@ import { getCanonicalMarketingWaitlistPath, getMarketingWaitlistReferralUrl } fr
 import { getMarketingBaseUrl } from '@/lib/env/host'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
+import { LeaderboardIdentityCell } from '@/features/waitlist/LeaderboardIdentityCell'
 
 type LeaderboardRow = {
   rank: number
@@ -240,15 +241,8 @@ export function Leaderboard() {
                       <TableCell>
                         <div className="text-sm text-zinc-200">
                           <div className="flex items-center gap-2 min-w-0">
-                            <div className="font-mono truncate">{r.display}</div>
-                            {r.cswAddress ? (
-                              <div
-                                title={r.cswAddress}
-                                className="shrink-0 inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
-                              >
-                                CSW
-                              </div>
-                            ) : null}
+                            <LeaderboardIdentityCell display={r.display} cswAddress={r.cswAddress} />
+
                             {isMe ? (
                               <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                                 You
@@ -294,15 +288,8 @@ export function Leaderboard() {
                   <TableCell width="50%">
                     <div className="text-sm text-zinc-200">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="font-mono truncate">{data.me.display}</div>
-                        {data.me.cswAddress ? (
-                          <div
-                            title={data.me.cswAddress}
-                            className="shrink-0 inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
-                          >
-                            CSW
-                          </div>
-                        ) : null}
+                        <LeaderboardIdentityCell display={data.me.display} cswAddress={data.me.cswAddress} />
+
                         <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                           You
                         </div>

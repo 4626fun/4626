@@ -1,6 +1,5 @@
 import { logger } from '../_lib/infra/logger.js'
-
-declare const process: { env: Record<string, string | undefined> }
+import { readTwitterBearerToken } from './twitterEnv.js'
 
 export type VerifiedTweet = {
   tweetId: string
@@ -8,13 +7,6 @@ export type VerifiedTweet = {
   text: string
   authorId: string | null
   authorUsername: string | null
-}
-
-function readTwitterBearerToken(): string | null {
-  const token = String(
-    process.env.TWITTER_BEARER_TOKEN ?? process.env.HERMIT_TWITTER_BEARER_TOKEN ?? '',
-  ).trim()
-  return token.length > 0 ? token : null
 }
 
 export function extractTweetIdFromInput(params: {

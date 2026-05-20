@@ -24,7 +24,7 @@
     },
     "api/[...path].ts": {
       "maxDuration": 60,
-      "includeFiles": "server/_lib/alfaclub/assets/**",
+      "includeFiles": "{server/_lib/alfaclub/assets/**,server/_lib/lottery/amoe-zk-assets/**}",
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/social-preview.ts": {
@@ -88,6 +88,10 @@
     {
       "path": "/api/v1/zora-csw/enrich-cron",
       "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/v1/zora-profiles/refresh-cron",
+      "schedule": "15 */6 * * *"
     },
     {
       "path": "/api/v1/chat/ethos-sync",

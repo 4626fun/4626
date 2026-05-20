@@ -40,7 +40,7 @@
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
 CIRCUITS="$ROOT/amoe/circuits"
 BUILD="$CIRCUITS/build"
 FRESH="$BUILD/plonk_fresh"

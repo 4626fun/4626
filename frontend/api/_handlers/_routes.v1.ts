@@ -37,6 +37,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'lottery/amoe/xmtp-checkin': () => import('./v1/lottery/_amoeXmtpCheckin.js'),
   'zora-csw/scan-cron': () => import('./v1/zora-csw/_scanCron.js'),
   'zora-csw/enrich-cron': () => import('./v1/zora-csw/_enrichCron.js'),
+  'zora-profiles/refresh-cron': () => import('./v1/zora-profiles/_refreshCron.js'),
   'lottery/amoe/twitter-checkin': () => import('./v1/lottery/_amoeTwitterCheckin.js'),
   'gauge/epoch': () => import('./v1/gauge/_epoch.js'),
   'gauge/vaults': () => import('./v1/gauge/_vaults.js'),

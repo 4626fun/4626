@@ -30,6 +30,8 @@ broadcast/
 
 # KPR build artifacts
 *.wasm
+!frontend/server/_lib/lottery/amoe-zk-assets/*.wasm
+!frontend/server/_lib/lottery/amoe-zk-assets/*.zkey
 .kpr/
 .kpr_build_tmp*
 

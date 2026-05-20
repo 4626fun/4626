@@ -24,7 +24,8 @@
 //   * Snapshot state is sourced from `amoeLedgerSnapshotStub` until PR 5
 //     wires the real publisher.
 
-import { resolve as resolvePath } from 'node:path'
+import { dirname, resolve as resolvePath } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   AMOE_PLONK_PUB_INPUT_SLOT,
@@ -198,31 +199,27 @@ export interface AmoeSubmitZkOrchestrationResult {
  * Resolution order:
  *   1. `AMOE_ZK_WASM_PATH` / `AMOE_ZK_ZKEY_PATH` env vars (preferred for
  *      Vercel — set them at deploy time).
- *   2. Repo-relative fallback under `amoe/circuits/build/...` so local
- *      `pnpm dev` and the test harness work without env wiring.
+ *   2. Bundled assets under `amoe-zk-assets/` next to this module
+ *      (included in Vercel via `includeFiles` on `api/[...path].ts`).
  *
  * PR 6 will swap the env-or-fallback strategy for an
  * `S3-presigned-URL` strategy at module-load. Until then, disk paths.
  */
+const AMOE_ZK_ASSETS_DIR = resolvePath(
+  dirname(fileURLToPath(import.meta.url)),
+  'amoe-zk-assets',
+)
+
 export function defaultAmoeZkAssetPaths(): { wasmPath: string; zkeyPath: string } {
   const envWasm = String(process.env.AMOE_ZK_WASM_PATH ?? '').trim()
   const envZkey = String(process.env.AMOE_ZK_ZKEY_PATH ?? '').trim()
 
-  // process.cwd() in Vercel is the deployment root; in pnpm dev it's the
-  // workspace root — both resolve `amoe/circuits/build/...` correctly so
-  // long as the deployment includes the build artifacts. PR 6 deferred.
-  const repoWasm = resolvePath(
-    process.cwd(),
-    'amoe/circuits/build/amoe_eligibility_js/amoe_eligibility.wasm',
-  )
-  const repoZkey = resolvePath(
-    process.cwd(),
-    'amoe/circuits/build/amoe_plonk_final.zkey',
-  )
+  const bundledWasm = resolvePath(AMOE_ZK_ASSETS_DIR, 'amoe_eligibility.wasm')
+  const bundledZkey = resolvePath(AMOE_ZK_ASSETS_DIR, 'amoe_plonk_final.zkey')
 
   return {
-    wasmPath: envWasm.length > 0 ? envWasm : repoWasm,
-    zkeyPath: envZkey.length > 0 ? envZkey : repoZkey,
+    wasmPath: envWasm.length > 0 ? envWasm : bundledWasm,
+    zkeyPath: envZkey.length > 0 ? envZkey : bundledZkey,
   }
 }
 

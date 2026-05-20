@@ -1,5 +1,7 @@
 import type { Plugin, IAgentRuntime, Memory, State } from '@elizaos/core'
 
+import { readTwitterBearerToken } from '../../../../twitter/twitterEnv.js'
+
 declare const process: { env: Record<string, string | undefined> }
 
 export const twitterPlugin: Plugin = {
@@ -11,7 +13,7 @@ export const twitterPlugin: Plugin = {
       description: 'Adds Twitter channel state to runtime context when enabled.',
       async get(_runtime: IAgentRuntime, _message: Memory, _state: State) {
         const enabled = String(process.env.ELIZA_CHANNEL_TWITTER_ENABLED ?? '').trim().toLowerCase()
-        const tokenConfigured = Boolean(String(process.env.TWITTER_BEARER_TOKEN ?? '').trim())
+        const tokenConfigured = Boolean(readTwitterBearerToken())
         return {
           text: enabled === 'true' || enabled === '1'
             ? `Twitter channel integration is enabled (${tokenConfigured ? 'token configured' : 'token missing'}).`

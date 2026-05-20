@@ -1,0 +1,12 @@
+{
+  "name": "circuits",
+  "version": "1.0.0",
+  "description": "Circom 2 circuit that powers `LotteryAmoeRouter.submitAmoeEntryZK` in `contracts/utilities/lottery/zk`. See `amoe_eligibility.circom` for the full spec; the short version:",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

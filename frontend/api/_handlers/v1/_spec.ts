@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/lottery/amoe/nonce': { get: { summary: 'Issue AMOE nonce + signable challenge', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/credits': { get: { summary: 'Read AMOE credit balance for a wallet', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/submit': { post: { summary: 'Verify AMOE challenge signature and return attested onchain payload', responses: { '200': { description: 'OK' } } } },
-      '/v1/lottery/amoe/twitter-checkin': { post: { summary: 'Claim daily Twitter AMOE credit after server-verified tweet proof (100 credits/day)', responses: { '200': { description: 'OK' } } } },
+      '/v1/lottery/amoe/twitter-checkin': { post: { summary: 'Claim daily Twitter AMOE credit after server-verified tweet proof (1 credit/day)', responses: { '200': { description: 'OK' } } } },
       '/v1/lottery/amoe/xmtp-checkin': { post: { summary: 'Deprecated manual XMTP check-in endpoint (credits now auto-awarded from server-verified inbound DM)', responses: { '410': { description: 'Gone' } } } },
       '/v1/chat/ethos-sync': { post: { summary: 'Cron: canonical Ethos sync (updates + sweep reconciliation)', responses: { '200': { description: 'OK' } } } },
       '/v1/chat/ethos-sync-hot': { post: { summary: 'Cron: hot-lane Ethos score sync from update feed', responses: { '200': { description: 'OK' } } } },

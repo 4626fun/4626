@@ -39,18 +39,30 @@ function shortAddr(a: string | null): string | null {
   return `${s.slice(0, 6)}…${s.slice(-4)}`
 }
 
+/** Canonical asset-holding CSW only — never primary_wallet / embedded EOA. */
+function resolveCanonicalCswAddress(raw: any): string | null {
+  const fromColumn =
+    typeof raw?.csw_address === 'string' && raw.csw_address.trim()
+      ? String(raw.csw_address).trim()
+      : null
+  const fromSmart =
+    typeof raw?.primary_smart_wallet === 'string' && raw.primary_smart_wallet.trim()
+      ? String(raw.primary_smart_wallet).trim()
+      : null
+  const fromRollup =
+    typeof raw?.canonical_csw === 'string' && raw.canonical_csw.trim()
+      ? String(raw.canonical_csw).trim()
+      : null
+  return fromRollup ?? fromColumn ?? fromSmart
+}
+
 function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean }): WaitlistLeaderboardRow {
   const signupId = safeInt(raw?.signup_id)
   const referralCodeRaw = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
-  const cswRaw = typeof raw?.primary_smart_wallet === 'string' && raw.primary_smart_wallet
-    ? String(raw.primary_smart_wallet)
-    : null
-  const fallbackRaw = typeof raw?.primary_wallet === 'string' ? raw.primary_wallet : null
+  const cswRaw = resolveCanonicalCswAddress(raw)
   const personaRaw = typeof raw?.persona === 'string' ? String(raw.persona).trim() : ''
   const display =
-    shortAddr(cswRaw) ??
-    shortAddr(fallbackRaw) ??
-    (personaRaw.length > 0 ? personaRaw : `user#${signupId}`)
+    shortAddr(cswRaw) ?? (personaRaw.length > 0 ? personaRaw : `user#${signupId}`)
   const referralCode = options?.includeReferralCode ? referralCodeRaw : null
   return {
     rank: safeInt(raw?.rank),
@@ -116,8 +128,7 @@ export async function getWaitlistLeaderboardData(params: {
     eligible AS (
       SELECT
         p.id,
-        COALESCE(NULLIF(p.primary_wallet, ''), NULLIF(p.embedded_wallet, '')) AS primary_wallet,
-        NULLIF(p.primary_smart_wallet, '') AS primary_smart_wallet,
+        COALESCE(NULLIF(p.csw_address, ''), NULLIF(p.primary_smart_wallet, '')) AS canonical_csw,
         p.referral_code,
         p.border_tier,
         p.persona
@@ -130,8 +141,7 @@ export async function getWaitlistLeaderboardData(params: {
     scored AS (
       SELECT
         e.id::bigint AS signup_id,
-        e.primary_wallet,
-        e.primary_smart_wallet,
+        e.canonical_csw,
         e.referral_code,
         e.border_tier,
         e.persona,
@@ -158,13 +168,12 @@ export async function getWaitlistLeaderboardData(params: {
       FROM eligible e
       LEFT JOIN point_totals pt ON pt.signup_id = e.id
       LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY e.id, e.primary_wallet, e.primary_smart_wallet, e.referral_code, e.border_tier, e.persona, pt.points_total
+      GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, e.persona, pt.points_total
     ),
     ranked AS (
       SELECT
         signup_id,
-        primary_wallet,
-        primary_smart_wallet,
+        canonical_csw,
         referral_code,
         border_tier,
         persona,
@@ -192,7 +201,7 @@ export async function getWaitlistLeaderboardData(params: {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, primary_wallet, primary_smart_wallet, referral_code, border_tier, persona, total_points, invite_points, agent_points
+    SELECT rank, signup_id, canonical_csw, referral_code, border_tier, persona, total_points, invite_points, agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
@@ -235,8 +244,7 @@ export async function getWaitlistLeaderboardData(params: {
       eligible AS (
         SELECT
           p.id,
-          COALESCE(NULLIF(p.primary_wallet, ''), NULLIF(p.embedded_wallet, '')) AS primary_wallet,
-          NULLIF(p.primary_smart_wallet, '') AS primary_smart_wallet,
+          COALESCE(NULLIF(p.csw_address, ''), NULLIF(p.primary_smart_wallet, '')) AS canonical_csw,
           p.referral_code,
           p.border_tier,
           p.persona
@@ -249,8 +257,7 @@ export async function getWaitlistLeaderboardData(params: {
       scored AS (
         SELECT
           e.id::bigint AS signup_id,
-          e.primary_wallet,
-          e.primary_smart_wallet,
+          e.canonical_csw,
           e.referral_code,
           e.border_tier,
           e.persona,
@@ -277,13 +284,12 @@ export async function getWaitlistLeaderboardData(params: {
         FROM eligible e
         LEFT JOIN point_totals pt ON pt.signup_id = e.id
         LEFT JOIN points l ON l.signup_id = e.id
-        GROUP BY e.id, e.primary_wallet, e.primary_smart_wallet, e.referral_code, e.border_tier, e.persona, pt.points_total
+        GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, e.persona, pt.points_total
       ),
       ranked AS (
         SELECT
           signup_id,
-          primary_wallet,
-          primary_smart_wallet,
+          canonical_csw,
           referral_code,
           border_tier,
           persona,
@@ -311,7 +317,7 @@ export async function getWaitlistLeaderboardData(params: {
           )::int AS rank
         FROM scored
       )
-      SELECT rank, signup_id, primary_wallet, primary_smart_wallet, referral_code, border_tier, persona, total_points, invite_points, agent_points
+      SELECT rank, signup_id, canonical_csw, referral_code, border_tier, persona, total_points, invite_points, agent_points
       FROM ranked
       WHERE signup_id = ${authorizedProfileId}
       LIMIT 1;

@@ -4,8 +4,12 @@ import type { Address } from 'viem'
 
 import { buildAlfaRoomChart } from '../_lib/alfaclub/roomCharts.js'
 import { logger } from '../_lib/infra/logger.js'
-
-declare const process: { env: Record<string, string | undefined> }
+import {
+  isHermitTwitterStrictModeEnabled,
+  missingTwitterOauth1EnvKeys,
+  readTwitterOauth1Credentials,
+  type TwitterOauth1Credentials,
+} from './twitterEnv.js'
 
 export type TwitterRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
@@ -187,12 +191,7 @@ function parseTwitterChartArgs(args: string[]): {
   return { hasConfirm, kindRaw, limit, tweetText }
 }
 
-type TwitterOauthConfig = {
-  apiKey: string
-  apiSecret: string
-  accessToken: string
-  accessSecret: string
-}
+type TwitterOauthConfig = TwitterOauth1Credentials
 
 type TweetMediaInput = {
   url: string
@@ -207,32 +206,10 @@ type TwitterVerifiedAccount = {
   canWrite: boolean | null
 }
 
-function isHermitTwitterStrictModeEnabled(): boolean {
-  const raw = String(process.env.HERMIT_TWITTER_STRICT ?? '')
-    .trim()
-    .toLowerCase()
-  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
-}
-
-function readEnvWithPrefix(baseKey: string, strictHermitOnly: boolean): string {
-  const hermitScoped = String(process.env[`HERMIT_${baseKey}`] ?? '').trim()
-  if (hermitScoped) return hermitScoped
-  if (strictHermitOnly) return ''
-  return String(process.env[baseKey] ?? '').trim()
-}
-
 function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { ok: false; response: string } {
   const strictHermitOnly = isHermitTwitterStrictModeEnabled()
-  const apiKey = readEnvWithPrefix('TWITTER_API_KEY', strictHermitOnly)
-  const apiSecret = readEnvWithPrefix('TWITTER_API_SECRET', strictHermitOnly)
-  const accessToken = readEnvWithPrefix('TWITTER_ACCESS_TOKEN', strictHermitOnly)
-  const accessSecret = readEnvWithPrefix('TWITTER_ACCESS_SECRET', strictHermitOnly)
-
-  const missing: string[] = []
-  if (!apiKey) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_API_KEY' : 'TWITTER_API_KEY')
-  if (!apiSecret) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_API_SECRET' : 'TWITTER_API_SECRET')
-  if (!accessToken) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_ACCESS_TOKEN' : 'TWITTER_ACCESS_TOKEN')
-  if (!accessSecret) missing.push(strictHermitOnly ? 'HERMIT_TWITTER_ACCESS_SECRET' : 'TWITTER_ACCESS_SECRET')
+  const config = readTwitterOauth1Credentials({ strictHermitOnly })
+  const missing = missingTwitterOauth1EnvKeys(config, strictHermitOnly)
 
   if (missing.length > 0) {
     return {
@@ -243,12 +220,7 @@ function readTwitterOauthConfig(): { ok: true; config: TwitterOauthConfig } | { 
 
   return {
     ok: true,
-    config: {
-      apiKey,
-      apiSecret,
-      accessToken,
-      accessSecret,
-    },
+    config,
   }
 }
 

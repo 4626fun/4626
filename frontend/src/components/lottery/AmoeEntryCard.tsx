@@ -17,6 +17,13 @@ import { getMarketingBaseUrl } from '@/lib/env/host'
 // here is for display only.
 const AMOE_MIN_POINTS = 100
 const AMOE_MAX_POINTS = 1_000_000
+// Mirrors `AMOE_DAILY_*_CREDIT` in `frontend/server/_lib/lottery/lotteryAmoe.ts`.
+const AMOE_DAILY_TWITTER_CREDIT = 1
+const AMOE_DAILY_XMTP_CREDIT = 1
+
+function formatDailyCreditLabel(credits: number): string {
+  return credits === 1 ? '1 point' : `${credits} points`
+}
 const BASE_CEILING_PPM = 40_000 // 4%, hard ceiling at $10K-equivalent
 const AMOE_XMTP_AGENT_ADDRESS = (
   import.meta.env.VITE_AGENT_XMTP_ADDRESS ?? '0xab6d5c10b03300326cd7fab7267ae192842967b5'
@@ -273,7 +280,7 @@ export function AmoeEntryCard(props: {
       setNextEntryAtCredits(Math.max(Number(json.data.creditsPerEntry ?? 100), Number(json.data.credits ?? 0)))
       setStatusMessage(
         json.data.awarded
-          ? `Daily X check-in complete (+${json.data.awardedCredits} points)`
+          ? `Daily X check-in complete (+${formatDailyCreditLabel(json.data.awardedCredits)})`
           : 'Daily check-in already claimed today',
       )
       setTweetProofUrl('')
@@ -607,7 +614,9 @@ export function AmoeEntryCard(props: {
             }
             className={`${hasEnoughForFloor ? '' : 'col-span-2'} h-9 rounded-xl border border-white/12 bg-white/[0.03] px-3 text-xs font-medium text-zinc-100 transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50`}
           >
-            {checkinBusy ? 'Verifying tweet…' : 'Verify posted tweet for 100 points'}
+            {checkinBusy
+              ? 'Verifying tweet…'
+              : `Verify posted tweet for ${formatDailyCreditLabel(AMOE_DAILY_TWITTER_CREDIT)}`}
           </button>
           <button
             type="button"
@@ -617,7 +626,9 @@ export function AmoeEntryCard(props: {
           >
             <span className="inline-flex items-center justify-center gap-1.5">
               <MessageCircle className="h-3.5 w-3.5" />
-              {hasEnoughForFloor ? 'Message Akita on XMTP for 100 points' : 'Earn via XMTP task'}
+              {hasEnoughForFloor
+                ? `Message Akita on XMTP for ${formatDailyCreditLabel(AMOE_DAILY_XMTP_CREDIT)}`
+                : 'Earn via XMTP task'}
             </span>
           </button>
           {hasEnoughForFloor ? (

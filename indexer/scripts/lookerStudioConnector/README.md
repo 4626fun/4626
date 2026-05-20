@@ -56,6 +56,11 @@ view that joins `zora_profiles` with cached Ethos scores from
 
 ## Refresh behavior
 
+- **Database freshness:** production uses `/api/v1/zora-profiles/refresh-cron`
+  (every 6 hours) to upsert explore metrics into `zora_profiles`. Enable with
+  `ZORA_PROFILES_REFRESH_ENABLED=1` on Vercel. Ops view:
+  `SELECT * FROM v_zora_profiles_refresh_freshness;` — see
+  `docs/operations/zora-profiles-refresh-runbook.md`.
 - Looker Studio caches query results for 12 hours by default. To force
   a fresh pull, click the refresh icon (circular arrow) in the report
   toolbar. This re-invokes `getData()` and hits Supabase.
