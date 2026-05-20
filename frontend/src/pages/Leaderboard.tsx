@@ -64,14 +64,36 @@ export function Leaderboard() {
         setError(null)
       }
       try {
-        const res = await apiFetch(`${API_ENDPOINTS.waitlist.leaderboard}?pointsType=total&page=1&limit=50`, {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-        })
-        const json = (await res.json().catch(() => null)) as ApiEnvelope<LeaderboardResponse> | null
-        if (!res.ok || !json) throw new Error('Leaderboard request failed')
-        if (!json.success || !json.data) throw new Error(json.error || 'Leaderboard request failed')
-        setData(json.data)
+        const pageSize = 100
+        let page = 1
+        let merged: LeaderboardResponse | null = null
+
+        while (true) {
+          const res = await apiFetch(
+            `${API_ENDPOINTS.waitlist.leaderboard}?pointsType=total&page=${page}&limit=${pageSize}`,
+            {
+              method: 'GET',
+              headers: { Accept: 'application/json' },
+            },
+          )
+          const json = (await res.json().catch(() => null)) as ApiEnvelope<LeaderboardResponse> | null
+          if (!res.ok || !json) throw new Error('Leaderboard request failed')
+          if (!json.success || !json.data) throw new Error(json.error || 'Leaderboard request failed')
+
+          if (!merged) {
+            merged = { ...json.data, leaderboard: [...json.data.leaderboard] }
+          } else {
+            merged = {
+              ...json.data,
+              leaderboard: [...merged.leaderboard, ...json.data.leaderboard],
+            }
+          }
+
+          if (!json.data.hasMore) break
+          page += 1
+        }
+
+        setData(merged)
         if (!opts?.silent) setError(null)
       } catch (e: any) {
         if (!opts?.silent) {

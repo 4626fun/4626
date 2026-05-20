@@ -278,6 +278,8 @@ function WaitlistAuthStep(props: {
   referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
+  onSignOut: () => void | Promise<void>
+  signOutBusy: boolean
   disableMotion?: boolean
 }) {
   const {
@@ -290,11 +292,13 @@ function WaitlistAuthStep(props: {
     referralCode,
     onContinueAuth,
     onRecoverAccount,
+    onSignOut,
+    signOutBusy,
     disableMotion = false,
   } = props
 
   const privyReady = privyClientStatus === 'ready'
-  const buttonsDisabled = busy || !privyReady
+  const buttonsDisabled = busy || signOutBusy || !privyReady
   const motionEnabled = !disableMotion
   const signedUpCount = Math.max(0, Number(waitlistStats?.signedUpCount ?? 0))
   const capacity = Math.max(0, Number(waitlistStats?.capacity ?? 0))
@@ -433,6 +437,14 @@ function WaitlistAuthStep(props: {
               {urgencyLabel}
             </p>
           ) : null}
+          <button
+            type="button"
+            disabled={busy || signOutBusy}
+            onClick={() => void onSignOut()}
+            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {signOutBusy ? 'Signing out...' : 'Sign out'}
+          </button>
         </motion.div>
 
         {/* error */}
@@ -499,6 +511,7 @@ export function WaitlistFlow(props: {
   const [completionBusy, setCompletionBusy] = useState(false)
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
+  const [signOutBusy, setSignOutBusy] = useState(false)
 
   const resolveSubAccountStepCompleted = useCallback(
     (targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): boolean => {
@@ -1035,6 +1048,31 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
   ])
 
+  const onSignOut = useCallback(async () => {
+    if (signOutBusy) return
+    setSignOutBusy(true)
+    try {
+      await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+      await waitForPrivyLogoutSettlement().catch(() => undefined)
+      resetResolvedAccountState()
+      authBootstrapAutoAttemptedRef.current = false
+      finalizingAutoRetryCountRef.current = 0
+      finalizingBackgroundRetryCountRef.current = 0
+      tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
+      recoveryRequiredBootstrapCooldownUntilRef.current = 0
+      bootstrapRequestSeqRef.current += 1
+      bootstrapInFlightPromiseRef.current = null
+      setStep('auth')
+      setBusy(false)
+      setRecoveryRequired(false)
+      setError(null)
+    } catch {
+      setError('Could not fully sign out. Please retry.')
+    } finally {
+      setSignOutBusy(false)
+    }
+  }, [resetResolvedAccountState, setBusy, setError, setRecoveryRequired, shouldDestroyPrivySession, signOutBusy, waitForPrivyLogoutSettlement])
+
   const navigateWithSessionHandoff = useCallback(
     async (initialTarget: string) => {
       let target = initialTarget
@@ -1334,6 +1372,8 @@ export function WaitlistFlow(props: {
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
+            onSignOut={onSignOut}
+            signOutBusy={signOutBusy}
             disableMotion
           />
         ) : step === 'connect-base-app' ? (
@@ -1347,6 +1387,8 @@ export function WaitlistFlow(props: {
               canEnterApp={canEnterApp}
               completionBusy={completionBusy}
               onEnterApp={onEnterApp}
+              onSignOut={onSignOut}
+              signOutBusy={signOutBusy}
             />
           </div>
         ) : null
@@ -1364,6 +1406,8 @@ export function WaitlistFlow(props: {
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
+              onSignOut={onSignOut}
+              signOutBusy={signOutBusy}
             />
           ) : step === 'connect-base-app' ? (
             <motion.div
@@ -1389,6 +1433,8 @@ export function WaitlistFlow(props: {
                 canEnterApp={canEnterApp}
                 completionBusy={completionBusy}
                 onEnterApp={onEnterApp}
+                onSignOut={onSignOut}
+                signOutBusy={signOutBusy}
               />
             </motion.div>
           ) : null}

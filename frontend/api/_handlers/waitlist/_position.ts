@@ -168,10 +168,28 @@ export default async function handler(req: any, res: any) {
   const pointsAgg = await db.sql`
     SELECT
       (
-        SELECT COALESCE(credits, 0)::int
-        FROM points_amoe_eligible_balance
+        SELECT COALESCE(
+          ROUND(
+            SUM(
+              CASE
+                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
+                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
+                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+                WHEN source IN (
+                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
+                ) THEN amount * 0.60
+                ELSE 0
+              END
+            )
+          ),
+          0
+        )::int
+        FROM points
         WHERE signup_id = ${signupId}
-        LIMIT 1
       ) AS total,
       COALESCE(ROUND(SUM(CASE WHEN source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN amount * 0.60 ELSE 0 END)), 0)::int AS invite,
       COALESCE(ROUND(SUM(CASE WHEN source = 'waitlist_signup' THEN amount * 1.00 ELSE 0 END)), 0)::int AS signup,
@@ -216,38 +234,75 @@ export default async function handler(req: any, res: any) {
   const pendingCap = 10
   const pendingCountCapped = Math.min(pendingCount, pendingCap)
 
-  // Leaderboard rank (invite and total) among profile-complete profiles.
+  // Leaderboard rank mirrors `/api/waitlist/leaderboard` (Supabase points ledger).
   const totalCountQ = await db.sql`
     SELECT COUNT(*)::int AS c
     FROM profiles
-    WHERE profile_completed_at IS NOT NULL;
+    WHERE email IS NOT NULL
+      AND merged_into_profile_id IS NULL;
   `
   const totalCount = Math.max(0, safeInt(totalCountQ?.rows?.[0]?.c))
 
   const inviteRankQ = await db.sql`
-    WITH eligible AS (
+    WITH point_totals AS (
+      SELECT
+        signup_id,
+        COALESCE(
+          ROUND(
+            SUM(
+              CASE
+                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
+                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
+                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+                WHEN source IN (
+                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
+                ) THEN amount * 0.60
+                ELSE 0
+              END
+            )
+          ),
+          0
+        )::int AS total_points
+      FROM points
+      GROUP BY signup_id
+    ),
+    eligible AS (
       SELECT id
       FROM profiles
-      WHERE profile_completed_at IS NOT NULL
+      WHERE email IS NOT NULL
+        AND merged_into_profile_id IS NULL
     ),
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(MAX(b.credits), 0)::int AS total_points,
+        COALESCE(pt.total_points, 0)::int AS total_points,
         COALESCE(
           ROUND(SUM(
             CASE
+              WHEN l.source = 'referral_passthrough' THEN l.amount * 1.00
               WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
               ELSE 0
             END
           )),
           0
         )::int AS invite_points,
-        COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
+        COALESCE(
+          ROUND(SUM(
+            CASE
+              WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+              ELSE 0
+            END
+          )),
+          0
+        )::int AS agent_points
       FROM eligible e
+      LEFT JOIN point_totals pt ON pt.signup_id = e.id
       LEFT JOIN points l ON l.signup_id = e.id
-      LEFT JOIN points_amoe_eligible_balance b ON b.signup_id = e.id
-      GROUP BY e.id
+      GROUP BY e.id, pt.total_points
     ),
     ranked AS (
       SELECT
@@ -263,29 +318,65 @@ export default async function handler(req: any, res: any) {
   const inviteRank = typeof inviteRankQ?.rows?.[0]?.rank_invite === 'number' ? (inviteRankQ.rows[0].rank_invite as number) : null
 
   const totalRankQ = await db.sql`
-    WITH eligible AS (
+    WITH point_totals AS (
+      SELECT
+        signup_id,
+        COALESCE(
+          ROUND(
+            SUM(
+              CASE
+                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
+                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
+                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+                WHEN source IN (
+                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
+                ) THEN amount * 0.60
+                ELSE 0
+              END
+            )
+          ),
+          0
+        )::int AS total_points
+      FROM points
+      GROUP BY signup_id
+    ),
+    eligible AS (
       SELECT id
       FROM profiles
-      WHERE profile_completed_at IS NOT NULL
+      WHERE email IS NOT NULL
+        AND merged_into_profile_id IS NULL
     ),
     scored AS (
       SELECT
         e.id AS signup_id,
-        COALESCE(MAX(b.credits), 0)::int AS total_points,
+        COALESCE(pt.total_points, 0)::int AS total_points,
         COALESCE(
           ROUND(SUM(
             CASE
+              WHEN l.source = 'referral_passthrough' THEN l.amount * 1.00
               WHEN l.source IN ('referral_qualified', 'referral_signup', 'referral_csw_link') THEN l.amount * 0.60
               ELSE 0
             END
           )),
           0
         )::int AS invite_points,
-        COALESCE(ROUND(SUM(CASE WHEN l.source IN ('agent_feedback', 'agent_reputation') THEN l.amount * 0.40 ELSE 0 END)), 0)::int AS agent_points
+        COALESCE(
+          ROUND(SUM(
+            CASE
+              WHEN l.source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN l.amount * 0.40
+              ELSE 0
+            END
+          )),
+          0
+        )::int AS agent_points
       FROM eligible e
+      LEFT JOIN point_totals pt ON pt.signup_id = e.id
       LEFT JOIN points l ON l.signup_id = e.id
-      LEFT JOIN points_amoe_eligible_balance b ON b.signup_id = e.id
-      GROUP BY e.id
+      GROUP BY e.id, pt.total_points
     ),
     ranked AS (
       SELECT

@@ -12,10 +12,12 @@ type WaitlistSetupTrayProps = {
   canEnterApp: boolean
   completionBusy: boolean
   onEnterApp: () => void | Promise<void>
+  onSignOut: () => void | Promise<void>
+  signOutBusy?: boolean
 }
 
 export function WaitlistSetupTray(props: WaitlistSetupTrayProps) {
-  const { account, canEnterApp, completionBusy, onEnterApp } = props
+  const { account, canEnterApp, completionBusy, onEnterApp, onSignOut, signOutBusy = false } = props
   const [trayOpen, setTrayOpen] = useState(false)
   const [waitlistChatStatus, setWaitlistChatStatus] = useState<
     'idle' | 'joining' | 'queued' | 'blocked' | 'config' | 'error'
@@ -129,6 +131,14 @@ export function WaitlistSetupTray(props: WaitlistSetupTrayProps) {
           className="btn-secondary btn-no-icon inline-flex"
         >
           Account settings
+        </button>
+        <button
+          type="button"
+          onClick={() => void onSignOut()}
+          disabled={signOutBusy}
+          className="btn-secondary btn-no-icon inline-flex disabled:opacity-50 disabled:grayscale"
+        >
+          {signOutBusy ? 'Signing out...' : 'Sign out'}
         </button>
       </div>
 
