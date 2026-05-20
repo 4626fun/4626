@@ -106,37 +106,46 @@ export function WaitlistSetupTray(props: WaitlistSetupTrayProps) {
         <WaitlistUnlocksPanel score={account.score} email={account.email} />
       </section>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex w-full items-center gap-1.5 sm:gap-2">
         {canEnterNow ? (
           <button
             type="button"
             onClick={() => void onEnterApp()}
             disabled={completionBusy}
-            className="btn-accent btn-no-icon inline-flex disabled:opacity-50 disabled:grayscale"
+            className="btn-accent btn-no-icon inline-flex min-w-0 flex-1 justify-center px-2 text-[11px] sm:px-3 sm:text-sm disabled:opacity-50 disabled:grayscale"
           >
-            {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
+            {completionBusy ? (
+              'Entering...'
+            ) : (
+              <>
+                <span className="sm:hidden">Enter</span>
+                <span className="hidden sm:inline">{`${SHARE_SYMBOL_PREFIX} Enter App`}</span>
+              </>
+            )}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => setTrayOpen(true)}
-            className="btn-accent btn-no-icon inline-flex"
+            className="btn-accent btn-no-icon inline-flex min-w-0 flex-1 justify-center px-2 text-[11px] sm:px-3 sm:text-sm"
           >
-            Finish setup
+            <span className="sm:hidden">Finish</span>
+            <span className="hidden sm:inline">Finish setup</span>
           </button>
         )}
         <button
           type="button"
           onClick={() => setTrayOpen(true)}
-          className="btn-secondary btn-no-icon inline-flex"
+          className="btn-secondary btn-no-icon inline-flex min-w-0 flex-1 justify-center px-2 text-[11px] sm:px-3 sm:text-sm"
         >
-          Account settings
+          <span className="sm:hidden">Settings</span>
+          <span className="hidden sm:inline">Account settings</span>
         </button>
         <button
           type="button"
           onClick={() => void onSignOut()}
           disabled={signOutBusy}
-          className="btn-secondary btn-no-icon inline-flex disabled:opacity-50 disabled:grayscale"
+          className="inline-flex min-w-0 flex-1 items-center justify-center rounded-lg px-2 py-2 text-[11px] font-medium text-rose-400 transition hover:text-rose-300 disabled:opacity-50 disabled:grayscale sm:px-3 sm:text-sm"
         >
           {signOutBusy ? 'Signing out...' : 'Sign out'}
         </button>

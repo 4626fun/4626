@@ -35,9 +35,6 @@ type OwnerApprovalStageEvent = {
 const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
 const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
 const WALLET_SEND_CALLS_REQUEST_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 50 : 60_000
-const DEBUG_SESSION_ID = '345a30'
-const DEBUG_ENDPOINT = 'http://127.0.0.1:7706/ingest/3a1085e1-3d80-4358-aa04-a03ce8273573'
-
 export type PreparedCallsSignaturePayloadMode =
   | 'auto'
   | 'inner_secp256k1'
@@ -107,68 +104,6 @@ export function normalizePreparedCallValueToDecimal(
   }
   if (/^[0-9]+$/.test(trimmed)) return trimmed
   return '0'
-}
-
-function emitPreparedCallsDebug(params: {
-  runId: string
-  hypothesisId: string
-  location: string
-  message: string
-  data: Record<string, unknown>
-}): void {
-  if (typeof fetch !== 'function') return
-  // #region agent log
-  fetch(DEBUG_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':DEBUG_SESSION_ID},body:JSON.stringify({sessionId:DEBUG_SESSION_ID,runId:params.runId,hypothesisId:params.hypothesisId,location:params.location,message:params.message,data:params.data,timestamp:Date.now()})}).catch(()=>{})
-  // #endregion
-}
-
-function summarizeUserOp(userOp: unknown): Record<string, unknown> {
-  const record = userOp && typeof userOp === 'object' ? userOp as Record<string, unknown> : null
-  const nonce = typeof record?.nonce === 'string' ? record.nonce : null
-  const callData = typeof record?.callData === 'string' && record.callData.startsWith('0x')
-    ? record.callData as `0x${string}`
-    : null
-  const signature = typeof record?.signature === 'string' && record.signature.startsWith('0x')
-    ? record.signature as `0x${string}`
-    : null
-  return {
-    hasUserOp: Boolean(record),
-    sender: typeof record?.sender === 'string' ? record.sender : null,
-    nonce,
-    nonceKeyHex: nonce && /^0x[0-9a-fA-F]+$/.test(nonce)
-      ? `0x${(BigInt(nonce) >> 64n).toString(16)}`
-      : null,
-    callDataSelector: callData ? callData.slice(0, 10) : null,
-    callDataBytes: callData ? hexByteLength(callData) : null,
-    hasUserOpSignature: Boolean(signature),
-    userOpSignatureBytes: signature ? hexByteLength(signature) : null,
-  }
-}
-
-function summarizePreparedSignaturePayload(payload: unknown): Record<string, unknown> {
-  const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null
-  const data = record?.data && typeof record.data === 'object' ? record.data as Record<string, unknown> : null
-  const signature = typeof data?.signature === 'string' && data.signature.startsWith('0x')
-    ? data.signature as `0x${string}`
-    : null
-  return {
-    type: typeof record?.type === 'string' ? record.type : null,
-    address: typeof data?.address === 'string' ? data.address : null,
-    signatureBytes: signature ? hexByteLength(signature) : null,
-  }
-}
-
-function summarizeWalletError(error: unknown): Record<string, unknown> {
-  const record = error && typeof error === 'object' ? error as Record<string, unknown> : null
-  const cause = record?.cause && typeof record.cause === 'object'
-    ? record.cause as Record<string, unknown>
-    : null
-  return {
-    message: error instanceof Error ? error.message : String(error ?? 'unknown error'),
-    shortMessage: typeof record?.shortMessage === 'string' ? record.shortMessage : null,
-    details: typeof record?.details === 'string' ? record.details : null,
-    causeMessage: typeof cause?.message === 'string' ? cause.message : null,
-  }
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error): Promise<T> {
@@ -424,22 +359,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
   const hashToSign = params.signHashMode === 'raw_signature_request'
     ? signatureRequestHashRaw
     : unwrappedHashToSign
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H1_prepare_userop_shape',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:prepareResult',
-    message: 'wallet_prepareCalls returned prepared userOp shape',
-    data: {
-      prepareResultType: prepareResult.type ?? null,
-      prepareResultChainId: prepareResult.chainId ?? null,
-      signHashMode: params.signHashMode ?? 'unwrapped',
-      signRequestMode: params.signRequestMode ?? 'personal_sign_data_address',
-      signatureRequestHashRaw,
-      unwrappedHashToSign,
-      hashToSign,
-      ...summarizeUserOp(prepareResult.userOp),
-    },
-  })
   const signRequestMode = params.signRequestMode ?? 'personal_sign_data_address'
   const signature = await params.walletRequest(
     signRequestMode === 'eth_sign_address_data'
@@ -460,8 +379,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
   if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
     throw new Error('personal_sign did not return a valid signature.')
   }
-  const signatureBytes = hexByteLength(signature)
-  const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
   const webAuthnClassification = classifyWebAuthnOwnerSignature(signature)
   if (params.requireWebAuthnOwnerIndexZero) {
     if (!webAuthnClassification.ok || webAuthnClassification.ownerIndex !== 0) {
@@ -472,7 +389,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
   }
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
-  let guardSummary: Record<string, unknown> | null = null
   try {
     const guardOutcome = await preflightOwnerKeyMismatch({
       walletRequest: params.walletRequest,
@@ -490,7 +406,6 @@ export async function _submitOwnerViaPreparedCalls(params: {
           `that is not on-chain. Try the EOA-owner submission lane (sendPreparedOwnerCallsWithEoaOwner).`,
       )
     }
-    guardSummary = guardOutcome
     if (guardOutcome.kind === 'ok' && guardOutcome.parsedOwnerAddress) {
       preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
     }
@@ -501,51 +416,13 @@ export async function _submitOwnerViaPreparedCalls(params: {
     if (guardError instanceof Error && guardError.message.startsWith('Signature does not match parsed owner')) {
       throw guardError
     }
-    guardSummary = summarizeWalletError(guardError)
   }
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H2_signer_owner_slot_and_signature_kind',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:signature',
-    message: 'personal_sign returned prepared-calls owner signature summary',
-    data: {
-      signHashMode: params.signHashMode ?? 'unwrapped',
-      signRequestMode,
-      signatureBytes,
-      wrappedOwnerIndex: wrappedSignature?.ownerIndex ?? null,
-      wrappedSignatureDataBytes: wrappedSignature ? hexByteLength(wrappedSignature.signatureData) : null,
-      wrappedInnerSignatureKind: webAuthnClassification.innerSignatureKind,
-      webAuthnOwnerSignatureOk: webAuthnClassification.ok,
-      webAuthnOwnerIndex: webAuthnClassification.ownerIndex,
-      preparedCallsSignerAddress,
-      guardSummary,
-    },
-  })
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.sender,
     signature,
     signerAddress: preparedCallsSignerAddress,
     mode: params.signaturePayloadMode,
-  })
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H3_send_prepared_signature_payload_shape',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:beforeSendPreparedCalls',
-    message: 'wallet_sendPreparedCalls signature payload summary',
-    data: {
-      signHashMode: params.signHashMode ?? 'unwrapped',
-      signRequestMode,
-      requestedMode: params.signaturePayloadMode ?? 'auto',
-      usedWrappedInnerSignature: Boolean(
-        wrappedSignature &&
-          hexByteLength(wrappedSignature.signatureData) === 65 &&
-          (params.signaturePayloadMode ?? 'auto') !== 'full_wrapper_secp256k1' &&
-          (params.signaturePayloadMode ?? 'auto') !== 'full_wrapper_webauthn',
-      ),
-      ...summarizePreparedSignaturePayload(signaturePayload),
-      userOpSummaryBeforeSend: summarizeUserOp(prepareResult.userOp),
-    },
   })
 
   let sendResult: unknown
@@ -561,34 +438,8 @@ export async function _submitOwnerViaPreparedCalls(params: {
       }],
     }) as unknown
   } catch (sendErr: unknown) {
-    emitPreparedCallsDebug({
-      runId: params.approvalRunId,
-      hypothesisId: 'H4_send_prepared_rejection_reason',
-      location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:sendPreparedCallsError',
-      message: 'wallet_sendPreparedCalls rejected prepared owner-add payload',
-      data: {
-        signHashMode: params.signHashMode ?? 'unwrapped',
-        signRequestMode,
-        requestedMode: params.signaturePayloadMode ?? 'auto',
-        payloadSummary: summarizePreparedSignaturePayload(signaturePayload),
-        error: summarizeWalletError(sendErr),
-      },
-    })
     throw sendErr
   }
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H4_send_prepared_rejection_reason',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCalls:sendPreparedCallsSuccess',
-    message: 'wallet_sendPreparedCalls accepted prepared owner-add payload',
-    data: {
-      signHashMode: params.signHashMode ?? 'unwrapped',
-      signRequestMode,
-      requestedMode: params.signaturePayloadMode ?? 'auto',
-      sendResultKind: Array.isArray(sendResult) ? 'array' : typeof sendResult,
-      callsId: extractWalletCallsId(sendResult),
-    },
-  })
 
   const callsId = extractWalletCallsId(sendResult)
   if (!callsId) throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
@@ -684,18 +535,6 @@ export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
   if (!prepareResult.userOp) throw new Error('wallet_prepareCalls did not return a userOp.')
 
   const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as `0x${string}`)
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H8_normal_owner2_prepared_calls',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCallsAllowAnyOwner:prepareResult',
-    message: 'normal owner[2] prepared-calls shape',
-    data: {
-      prepareResultType: prepareResult.type ?? null,
-      prepareResultChainId: prepareResult.chainId ?? null,
-      hashToSign,
-      ...summarizeUserOp(prepareResult.userOp),
-    },
-  })
   const signature = await params.walletRequest({
     method: 'personal_sign',
     params: [hashToSign, params.sender],
@@ -710,17 +549,6 @@ export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
     signature,
     signerAddress: signerAddress as `0x${string}`,
     mode: 'inner_secp256k1',
-  })
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H8_normal_owner2_prepared_calls',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaPreparedCallsAllowAnyOwner:signature',
-    message: 'normal owner[2] prepared-calls signature shape',
-    data: {
-      wrappedOwnerIndex: wrappedSignature?.ownerIndex ?? null,
-      wrappedSignatureDataBytes: wrappedSignature ? hexByteLength(wrappedSignature.signatureData) : null,
-      signaturePayload: summarizePreparedSignaturePayload(signaturePayload),
-    },
   })
 
   const sendResult = await params.walletRequest({
@@ -790,19 +618,6 @@ export async function _submitOwnerViaWalletSendCalls(params: {
     calls: [{ to: params.to, data: params.data, value: '0x0' }],
     capabilities,
   }
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H5_native_sendcalls_passkey_route',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:beforeSendCalls',
-    message: 'wallet_sendCalls add-owner payload summary',
-    data: {
-      sender: params.sender,
-      chainId: chainIdHex,
-      callSelector: params.data.slice(0, 10),
-      callDataBytes: hexByteLength(params.data),
-      hasPaymasterCapability: Boolean(params.paymasterUrl),
-    },
-  })
   let sendResult: unknown
   try {
     sendResult = await withTimeout(
@@ -816,27 +631,8 @@ export async function _submitOwnerViaWalletSendCalls(params: {
       ),
     )
   } catch (sendCallsError) {
-    emitPreparedCallsDebug({
-      runId: params.approvalRunId,
-      hypothesisId: 'H5_native_sendcalls_passkey_route',
-      location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:sendCallsError',
-      message: 'wallet_sendCalls rejected add-owner self-call',
-      data: {
-        error: summarizeWalletError(sendCallsError),
-      },
-    })
     throw sendCallsError
   }
-  emitPreparedCallsDebug({
-    runId: params.approvalRunId,
-    hypothesisId: 'H5_native_sendcalls_passkey_route',
-    location: 'frontend/src/lib/wallet/onboardingWalletPrepared.ts:_submitOwnerViaWalletSendCalls:sendCallsSuccess',
-    message: 'wallet_sendCalls accepted add-owner self-call',
-    data: {
-      sendResultKind: Array.isArray(sendResult) ? 'array' : typeof sendResult,
-      callsId: extractWalletCallsId(sendResult),
-    },
-  })
   const callsId = extractWalletCallsId(sendResult)
   if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id.')
 

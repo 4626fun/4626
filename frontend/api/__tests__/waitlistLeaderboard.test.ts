@@ -39,13 +39,17 @@ describe('waitlist/leaderboard', () => {
         if (text.includes('select count(*)::int as c')) {
           return { rows: [{ c: 2 }] }
         }
-        if (text.includes('select rank, signup_id, canonical_csw, referral_code')) {
+        if (text.includes('select rank, signup_id, canonical_csw, label_hint')) {
           return {
             rows: [
               {
                 rank: 1,
                 signup_id: 42,
                 canonical_csw: '0x00000000000000000000000000000000000000cc',
+                label_hint: 'akita',
+                avatar_url: 'https://cdn.example/akita.png',
+                show_zora_badge: true,
+                show_base_app_badge: false,
                 referral_code: 'C2',
                 border_tier: 0,
                 total_points: 150,
@@ -56,6 +60,10 @@ describe('waitlist/leaderboard', () => {
                 rank: 2,
                 signup_id: 43,
                 canonical_csw: null,
+                label_hint: null,
+                avatar_url: null,
+                show_zora_badge: false,
+                show_base_app_badge: false,
                 referral_code: 'AKITA',
                 border_tier: 1,
                 total_points: 90,
@@ -94,5 +102,9 @@ describe('waitlist/leaderboard', () => {
     expect(res.body?.data?.leaderboard?.[1]?.cswAddress).toBeNull()
     expect(res.body?.data?.leaderboard?.[1]?.display).toBe('user#43')
     expect(res.body?.data?.leaderboard?.[1]?.display).not.toMatch(/creator/i)
+    expect(res.body?.data?.leaderboard?.[0]?.labelHint).toBe('akita')
+    expect(res.body?.data?.leaderboard?.[0]?.avatarUrl).toBe('https://cdn.example/akita.png')
+    expect(res.body?.data?.leaderboard?.[0]?.showZoraBadge).toBe(true)
+    expect(res.body?.data?.leaderboard?.[0]?.showBaseAppBadge).toBe(false)
   })
 })

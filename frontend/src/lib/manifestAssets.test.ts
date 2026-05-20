@@ -9,6 +9,13 @@ const legacyManifestPath = path.join(publicRoot, 'manifest.json')
 const marketingHtmlPath = path.join(frontendRoot, 'index.html')
 const appHtmlPath = path.join(frontendRoot, 'app.html')
 const telegramLinkHtmlPath = path.join(frontendRoot, 'telegram-link.html')
+const trustPagePaths = [
+  path.join(publicRoot, 'about/index.html'),
+  path.join(publicRoot, 'privacy/index.html'),
+  path.join(publicRoot, 'risks/index.html'),
+  path.join(publicRoot, 'security/index.html'),
+  path.join(publicRoot, 'terms/index.html'),
+]
 const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
 const OG_SOCIAL_IMAGE_URL = 'https://4626.fun/assets/og-image.png?v=2'
 const TWITTER_SOCIAL_IMAGE_URL = 'https://4626.fun/assets/twitter-card.png?v=2'
@@ -94,5 +101,16 @@ describe('public manifest assets', () => {
     expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_HERO_URL}" />`)
     expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_HERO_URL}" />`)
     expect(telegramLinkHtml).not.toContain('app-hero.png?v=6')
+  })
+
+  it('keeps trust/legal static pages on the canonical favicon kit', () => {
+    for (const htmlPath of trustPagePaths) {
+      const html = readFileSync(htmlPath, 'utf8')
+
+      expect(html).toContain('<link rel="icon" href="/assets/favicon.ico?v=2" sizes="any">')
+      expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=2">')
+      expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=2">')
+      expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
+    }
   })
 })

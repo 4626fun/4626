@@ -84,8 +84,16 @@ function inferProvider(clientType: string): WalletProvider {
   return 'unknown'
 }
 
+function isBaseAccountClientType(value: string): boolean {
+  return (
+    value.includes('base_account') ||
+    value.includes('coinbase_smart_wallet') ||
+    value === 'coinbase_wallet'
+  )
+}
+
 function extractClientType(raw: any): string {
-  return normalizeLower(
+  const fromFields = normalizeLower(
     raw?.walletClientType ??
       raw?.wallet_client_type ??
       raw?.walletType ??
@@ -96,11 +104,18 @@ function extractClientType(raw: any): string {
       raw?.client_type ??
       raw?.provider,
   )
+  if (fromFields) return fromFields
+
+  // Privy Base Account login can surface connector identity on `type` instead of
+  // `walletClientType` (for example `{ type: "base_account", address: "0x…" }`).
+  const rawType = normalizeLower(raw?.type)
+  if (isBaseAccountClientType(rawType)) return rawType
+  return ''
 }
 
 function getWalletType(rawType: string, clientType: string): WalletType {
   if (rawType === 'smart_wallet') return 'smart_wallet'
-  if (clientType.includes('base_account') || clientType.includes('coinbase_smart_wallet')) return 'smart_wallet'
+  if (isBaseAccountClientType(rawType) || isBaseAccountClientType(clientType)) return 'smart_wallet'
   if (clientType.includes('privy') || clientType.includes('embedded')) return 'embedded_eoa'
   return 'external_eoa'
 }

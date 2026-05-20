@@ -27,9 +27,7 @@ import {
   CompleteAuction,
   CreatorEarnings,
   CreatorStrategyFeatures,
-  CswSignatureProbe,
   MetaballOsProbe,
-  ToshiProbe,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -51,7 +49,6 @@ import {
   Status,
   Swap,
   Vault,
-  ZoraConnectorProbe,
 } from './lazyRoutes'
 import { SmartWalletRoute } from './routeGuards'
 
@@ -142,27 +139,6 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
         <CswFundingPage />
       </SmartWalletRoute>
     ),
-  },
-  // Dev probe for Privy Connect-mode cross-app capability with Zora.
-  // The connector itself is flag-gated in `wagmi.ts`; the page renders a
-  // "probe disabled" panel when the flag is off, so it's safe to leave this
-  // route live even in production.
-  {
-    path: '/dev/zora-connector-probe',
-    element: <ZoraConnectorProbe />,
-  },
-  {
-    path: '/dev/csw-signature-probe',
-    element: <CswSignatureProbe />,
-  },
-  // `/dev/toshi-probe` — minimal mobile diagnostic for /add-owner failures.
-  // Runs each candidate wallet method (capabilities, signTypedData,
-  // prepareCalls, sendCalls+paymaster, eth_sendTransaction) one tap at a time
-  // against the connected provider so we can identify exactly which lane
-  // Toshi/Base App accepts vs rejects without rebuilding the production page.
-  {
-    path: '/dev/toshi-probe',
-    element: <ToshiProbe />,
   },
 ]
 

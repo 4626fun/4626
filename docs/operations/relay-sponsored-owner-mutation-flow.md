@@ -61,9 +61,10 @@ This avoids requiring in-app `wallet_prepareCalls` from the funding side.
 
 ## Current implementation anchors
 
-- `frontend/src/lib/wallet/relayFunderEoaSubmit.ts`
 - `frontend/api/_handlers/relay/_quote.ts`
+- `frontend/api/_handlers/relay/_execute.ts`
 - `frontend/src/lib/wallet/onboardingWalletReplayable.ts`
+- `frontend/src/lib/removeOwner/removeOwnerHelpers.ts`
 - `frontend/src/pages/RemoveOwner.tsx`
 
 ## Related

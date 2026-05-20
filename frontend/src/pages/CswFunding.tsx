@@ -15,6 +15,7 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import { detectInAppEnvironment } from '@/lib/wallet/inAppBrowser'
+import { RELAY_DEPOSITORY_BASE } from '@/lib/wallet/cswOwnerAbi'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Constants
@@ -22,12 +23,6 @@ import { detectInAppEnvironment } from '@/lib/wallet/inAppBrowser'
 
 /** EntryPoint v0.6 on Base (and all chains; deterministic deployment). */
 const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
-
-/**
- * Relay's depository on Base. Reference tx where this CSW deposited:
- * https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
- */
-const RELAY_DEPOSITORY_BASE = '0x4cD00E387622C35bDDB9b4c962C136462338BC31' as const
 
 /**
  * EntryPoint v0.6 deposit balance accessor. `balanceOf` returns the per-account
@@ -378,7 +373,7 @@ export function CswFundingPage() {
                     Aggregate ETH held by the depository \u2014 your CSW&apos;s
                     per-order credits live in <code className="font-mono">RelayNativeDeposit</code>{' '}
                     events, not in a per-user storage slot. Visible here for
-                    sanity-checking when running the Relay funder-EOA lane on{' '}
+                    sanity-checking when funding Relay-backed owner removal on{' '}
                     <Link to="/remove-owner" className="underline underline-offset-2">
                       /remove-owner
                     </Link>

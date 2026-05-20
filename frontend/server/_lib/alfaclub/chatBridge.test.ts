@@ -308,7 +308,7 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
     })
   })
 
-  it('escalates persistent benign ws_error windows for the same room', () => {
+  it('marks persistent benign ws_error windows without warning-level spam', () => {
     const flags = makeFlags()
 
     _ensureLiveCommandSocketForTests({
@@ -333,9 +333,9 @@ describe('AlfaClub chat bridge auth-loop hardening', () => {
       ([message]) => message === '[alfaclub-chat] ws_error',
     )
 
-    expect(wsErrorInfos.length).toBeGreaterThanOrEqual(4)
-    expect(wsErrorWarns).toHaveLength(1)
-    expect(wsErrorWarns[0]?.[1]).toMatchObject({
+    expect(wsErrorWarns).toHaveLength(0)
+    expect(wsErrorInfos.length).toBeGreaterThanOrEqual(5)
+    expect(wsErrorInfos[wsErrorInfos.length - 1]?.[1]).toMatchObject({
       roomId: '1043',
       benignEscalated: true,
       benignWindowsInLast10m: 5,

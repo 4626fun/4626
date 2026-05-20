@@ -277,12 +277,12 @@ export function AccountSetupWorkspaceView(props: {
           {error ? (
             <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
               <div>{error}</div>
-              {sponsorshipDiagnostic ? (
+              {import.meta.env.DEV && sponsorshipDiagnostic ? (
                 <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                   Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
                 </div>
               ) : null}
-              {ownerApprovalDiagnostic ? (
+              {import.meta.env.DEV && ownerApprovalDiagnostic ? (
                 <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                   Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
                 </div>
@@ -357,12 +357,12 @@ export function AccountSetupWorkspaceView(props: {
         {error ? (
           <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
             <div>{error}</div>
-            {sponsorshipDiagnostic ? (
+            {import.meta.env.DEV && sponsorshipDiagnostic ? (
               <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                 Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
               </div>
             ) : null}
-            {ownerApprovalDiagnostic ? (
+            {import.meta.env.DEV && ownerApprovalDiagnostic ? (
               <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                 Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
               </div>
@@ -708,12 +708,12 @@ export function AccountSetupWorkspaceView(props: {
           className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
         >
           <div>{error}</div>
-          {sponsorshipDiagnostic ? (
+          {import.meta.env.DEV && sponsorshipDiagnostic ? (
             <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
               Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
             </div>
           ) : null}
-          {ownerApprovalDiagnostic ? (
+          {import.meta.env.DEV && ownerApprovalDiagnostic ? (
             <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
               Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
             </div>

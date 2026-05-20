@@ -20,6 +20,20 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+const rootCompatibilityCopies = [
+  ['assets/favicon.ico', 'favicon.ico'],
+  ['assets/favicon.svg', 'favicon.svg'],
+  ['assets/apple-touch-icon.png', 'apple-touch-icon.png'],
+  ['assets/logo-mark-1024.png', 'icon.png'],
+  ['assets/logo-mark-1024.png', 'logo.png'],
+  ['assets/og-image.png', 'og.png'],
+]
+
+const docsBrandCopies = [
+  ['assets/logo-mark.svg', 'brand/logo.svg'],
+  ['assets/favicon.svg', 'brand/favicon.svg'],
+]
+
 function parseArg(flag, fallback) {
   const i = process.argv.indexOf(flag)
   if (i === -1) return fallback
@@ -53,6 +67,25 @@ const requiredKitIconAssets = [
   'assets/safari-pinned-tab.svg',
 ]
 
+async function syncCompatibilityAssets(outDir, copies, label) {
+  for (const [sourceRelativePath, destRelativePath] of copies) {
+    const sourcePath = path.join(outDir, sourceRelativePath)
+    const destPath = path.join(outDir, destRelativePath)
+
+    if (!(await exists(sourcePath))) {
+      // eslint-disable-next-line no-console
+      console.error(`Missing canonical source for ${label}: ${sourceRelativePath}`)
+      process.exitCode = 1
+      return false
+    }
+
+    await fs.mkdir(path.dirname(destPath), { recursive: true })
+    await fs.copyFile(sourcePath, destPath)
+  }
+
+  return true
+}
+
 async function verifyCanonicalKitIconAssets() {
   const root = process.cwd()
   const outRel = parseArg('--out', 'public')
@@ -72,8 +105,16 @@ async function verifyCanonicalKitIconAssets() {
     return
   }
 
+  const syncedRoot = await syncCompatibilityAssets(outDir, rootCompatibilityCopies, 'root compatibility icons')
+  if (!syncedRoot) return
+
+  const syncedDocsBrand = await syncCompatibilityAssets(outDir, docsBrandCopies, 'docs-site brand icons')
+  if (!syncedDocsBrand) return
+
   // eslint-disable-next-line no-console
   console.log(`verified committed v2 brand-kit icon assets in ${outRel}`)
+  // eslint-disable-next-line no-console
+  console.log('synced root compatibility icons and docs-site brand/favicon.svg + brand/logo.svg from canonical assets')
 }
 
 await verifyCanonicalKitIconAssets()

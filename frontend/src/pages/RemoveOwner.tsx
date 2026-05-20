@@ -2,15 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { encodeFunctionData, formatEther, type PublicClient } from 'viem'
+import { encodeFunctionData, type PublicClient } from 'viem'
 import { useQuote } from '@relayprotocol/relay-kit-hooks'
-import {
-  createClient,
-  MAINNET_RELAY_API,
-  type paths,
-  type ProgressData,
-} from '@relayprotocol/relay-sdk'
-import { base as baseChain } from 'viem/chains'
+import { type paths, type ProgressData } from '@relayprotocol/relay-sdk'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { RemoveOwnerActionPanel } from '@/features/accountSetup/removeOwner/RemoveOwnerActionPanel'
@@ -20,147 +14,33 @@ import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAp
 import { apiFetch } from '@/lib/api/apiBase'
 import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
-import * as RemoveOwnerHelpers from '@/lib/removeOwner/removeOwnerHelpers'
+import {
+  CSW_OWNER_READ_ABI,
+  EXECUTE_WITHOUT_CHAIN_ID_SELECTOR,
+  NATIVE_CURRENCY_ADDRESS,
+  RELAY_DEPOSITORY_ABI,
+  RELAY_MULTICALL_SELECTOR,
+  REMOVE_OWNER_AT_INDEX_SELECTOR,
+} from '@/lib/wallet/cswOwnerAbi'
+import {
+  decodeOwnerAddress,
+  extractExecuteQuotePayload,
+  extractRelayExecutionTxHash,
+  getWalletErrorMessage,
+  formatCompactEth,
+  INITIAL_DIAGNOSTICS,
+  loadLiveCswDiagnostics,
+  mapRemoveOwnerSubmissionError,
+  normalizeRelayStatusEndpoint,
+  pollRelayStatusEndpoint,
+  toRelayAmountDecimal,
+  validatePreviewRelayUserCallIsNativeDepository,
+  type LiveDiagnostics,
+  type RemoveOwnerPreview,
+} from '@/lib/removeOwner/removeOwnerHelpers'
+import { createRemoveOwnerRelayClient } from '@/lib/removeOwner/removeOwnerRelayClient'
 
-// Relay Protocol's depository on Base. Reference tx where this CSW deposited:
-// https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
-// (UserOp executeBatch -> RelayDepository.depositNative(depositor, id))
-const RELAY_DEPOSITORY_BASE = RemoveOwnerHelpers.RELAY_DEPOSITORY_BASE
-type RemoveOwnerPreview = RemoveOwnerHelpers.RemoveOwnerPreview
-type OnchainOwnerRow = RemoveOwnerHelpers.OnchainOwnerRow
-type LiveDiagnostics = RemoveOwnerHelpers.LiveDiagnostics
-
-const normalizeRelayStatusEndpoint = RemoveOwnerHelpers.normalizeRelayStatusEndpoint
-const validatePreviewRelayUserCallIsNativeDepository =
-  RemoveOwnerHelpers.validatePreviewRelayUserCallIsNativeDepository
-const pollRelayStatusEndpoint = RemoveOwnerHelpers.pollRelayStatusEndpoint
-const extractExecuteQuotePayload = RemoveOwnerHelpers.extractExecuteQuotePayload
-const INITIAL_DIAGNOSTICS = RemoveOwnerHelpers.INITIAL_DIAGNOSTICS
-const CSW_OWNER_ABI = RemoveOwnerHelpers.CSW_OWNER_ABI
-const classifyOwnerBytes = RemoveOwnerHelpers.classifyOwnerBytes
-const decodeOwnerAddress = RemoveOwnerHelpers.decodeOwnerAddress
-const REMOVE_OWNER_AT_INDEX_SELECTOR = '0x89625b57'
-const RELAY_MULTICALL_SELECTOR = '0xcd6e13f7'
-const EXECUTE_WITHOUT_CHAIN_ID_SELECTOR = '0x2c2abd1e'
-const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000'
-const RELAY_DEPOSITORY_ABI = [
-  {
-    type: 'function',
-    name: 'depositNative',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'depositor', type: 'address' },
-      { name: 'id', type: 'bytes32' },
-    ],
-    outputs: [],
-  },
-] as const
 type RelayQuoteBody = paths['/quote/v2']['post']['requestBody']['content']['application/json']
-type RelayChainConfig = {
-  id: number
-  name: string
-  displayName: string
-  httpRpcUrl: string
-  wsRpcUrl: string
-  icon: { dark: string; light: string; squaredDark: string; squaredLight: string }
-  currency: { address: string; name: string; symbol: string; decimals: number }
-  explorerUrl: string
-  vmType: 'evm'
-  depositEnabled: boolean
-  viemChain: typeof baseChain
-}
-
-const RELAY_BASE_CHAIN: RelayChainConfig = {
-  id: baseChain.id,
-  name: 'base',
-  displayName: 'Base',
-  httpRpcUrl: baseChain.rpcUrls.default.http[0] ?? 'https://mainnet.base.org',
-  wsRpcUrl:
-    ((((baseChain as unknown as { rpcUrls?: { default?: { webSocket?: string[] } } }).rpcUrls?.default
-      ?.webSocket?.[0] as string | undefined) ??
-      '')),
-  icon: {
-    dark: `https://assets.relay.link/icons/${baseChain.id}/dark.png`,
-    light: `https://assets.relay.link/icons/${baseChain.id}/light.png`,
-    squaredDark: `https://assets.relay.link/icons/square/${baseChain.id}/dark.png`,
-    squaredLight: `https://assets.relay.link/icons/square/${baseChain.id}/light.png`,
-  },
-  currency: {
-    address: NATIVE_CURRENCY_ADDRESS,
-    name: baseChain.nativeCurrency.name,
-    symbol: baseChain.nativeCurrency.symbol,
-    decimals: baseChain.nativeCurrency.decimals,
-  },
-  explorerUrl: baseChain.blockExplorers?.default.url ?? 'https://basescan.org',
-  vmType: 'evm',
-  depositEnabled: true,
-  viemChain: baseChain,
-}
-
-function toRelayAmountDecimal(value: string | null | undefined): string | null {
-  if (!value) return null
-  if (/^[1-9][0-9]*$/.test(value)) return value
-  if (/^0x[0-9a-fA-F]+$/.test(value)) {
-    const wei = BigInt(value)
-    return wei > 0n ? wei.toString(10) : null
-  }
-  return null
-}
-
-function extractRelayExecutionTxHash(raw: unknown): `0x${string}` | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  const txHashes = Array.isArray(obj.txHashes) ? obj.txHashes : []
-  for (const tx of txHashes) {
-    if (!tx || typeof tx !== 'object') continue
-    const txHash = (tx as Record<string, unknown>).txHash
-    if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-      return txHash as `0x${string}`
-    }
-  }
-  const steps = Array.isArray(obj.steps) ? obj.steps : []
-  for (const step of steps) {
-    if (!step || typeof step !== 'object') continue
-    const items = Array.isArray((step as Record<string, unknown>).items)
-      ? ((step as Record<string, unknown>).items as unknown[])
-      : []
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue
-      const itemObj = item as Record<string, unknown>
-      const receipt = itemObj.receipt
-      if (receipt && typeof receipt === 'object') {
-        const txHash = (receipt as Record<string, unknown>).transactionHash
-        if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-          return txHash as `0x${string}`
-        }
-      }
-      const itemTxHashes = Array.isArray(itemObj.txHashes) ? (itemObj.txHashes as unknown[]) : []
-      for (const tx of itemTxHashes) {
-        if (!tx || typeof tx !== 'object') continue
-        const txHash = (tx as Record<string, unknown>).txHash
-        if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-          return txHash as `0x${string}`
-        }
-      }
-    }
-  }
-  return null
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error && typeof error.message === 'string' && error.message.trim()) {
-    return error.message
-  }
-  if (typeof error === 'string' && error.trim()) return error
-  if (error && typeof error === 'object') {
-    const maybeMessage = (error as Record<string, unknown>).message
-    if (typeof maybeMessage === 'string' && maybeMessage.trim()) return maybeMessage
-    try {
-      return JSON.stringify(error)
-    } catch {}
-  }
-  return 'unknown error'
-}
 
 export function RemoveOwnerPage() {
   const controller = useAccountSetupController({ zoraReturnPath: '/remove-owner' })
@@ -195,15 +75,7 @@ export function RemoveOwnerPage() {
 
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
   const publicClient = wagmiPublicClient as PublicClient | undefined
-  const relayClient = useMemo(
-    () =>
-      createClient({
-        baseApiUrl: MAINNET_RELAY_API,
-        source: '4626-remove-owner',
-        chains: [RELAY_BASE_CHAIN],
-      }),
-    [],
-  )
+  const relayClient = useMemo(() => createRemoveOwnerRelayClient(), [])
   const relayQuoteOptions = useMemo<RelayQuoteBody | undefined>(() => {
     if (!preview || !canonicalCswAddress || !ownerSignerAddress) return undefined
     if (!preview.relay) return undefined
@@ -258,79 +130,12 @@ export function RemoveOwnerPage() {
       }
     }
     setDiagnostics({ ...INITIAL_DIAGNOSTICS, status: 'loading' })
-    void (async () => {
-      try {
-        const cswAddress = canonicalCswAddress as `0x${string}`
-        const [ownerCountRaw, nextOwnerIndexRaw, cswBalance, depositoryBalance] = await Promise.all([
-          publicClient.readContract({
-            address: cswAddress,
-            abi: CSW_OWNER_ABI,
-            functionName: 'ownerCount',
-          }),
-          publicClient.readContract({
-            address: cswAddress,
-            abi: CSW_OWNER_ABI,
-            functionName: 'nextOwnerIndex',
-          }),
-          publicClient.getBalance({ address: cswAddress }),
-          publicClient.getBalance({ address: RELAY_DEPOSITORY_BASE }),
-        ])
-        const nextOwnerIndex = Number(nextOwnerIndexRaw)
-        const SCAN_HARD_CEILING = 256
-        const rawScanLimit = Math.max(nextOwnerIndex, Number(ownerCountRaw))
-        const scanLimit = Math.min(rawScanLimit, SCAN_HARD_CEILING)
-        const slotResults = await Promise.allSettled(
-          Array.from({ length: scanLimit }, (_, idx) =>
-            publicClient.readContract({
-              address: cswAddress,
-              abi: CSW_OWNER_ABI,
-              functionName: 'ownerAtIndex',
-              args: [BigInt(idx)],
-            }),
-          ),
-        )
-        const owners: OnchainOwnerRow[] = slotResults.map((result, idx) => {
-          if (result.status === 'rejected') {
-            const message =
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason ?? 'read failed')
-            return {
-              index: idx,
-              ownerBytes: '0x',
-              ownerAddress: null,
-              type: 'unreadable',
-              readError: message,
-            }
-          }
-          const ownerBytes = result.value as `0x${string}`
-          return {
-            index: idx,
-            ownerBytes,
-            ownerAddress: decodeOwnerAddress(ownerBytes),
-            type: classifyOwnerBytes(ownerBytes),
-            readError: null,
-          }
-        })
-        if (cancelled) return
-        setDiagnostics({
-          status: 'ready',
-          ownerCount: Number(ownerCountRaw),
-          nextOwnerIndex,
-          owners,
-          cswEthBalance: cswBalance,
-          relayDepositoryEthBalance: depositoryBalance,
-          error: null,
-        })
-      } catch (err: any) {
-        if (cancelled) return
-        setDiagnostics({
-          ...INITIAL_DIAGNOSTICS,
-          status: 'error',
-          error: typeof err?.message === 'string' ? err.message : 'Failed to load on-chain diagnostics.',
-        })
-      }
-    })()
+    void loadLiveCswDiagnostics({
+      publicClient,
+      cswAddress: canonicalCswAddress as `0x${string}`,
+    }).then((next) => {
+      if (!cancelled) setDiagnostics(next)
+    })
     return () => {
       cancelled = true
     }
@@ -341,9 +146,9 @@ export function RemoveOwnerPage() {
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, ownerSignerAddress])
 
-  const appendEvent = (row: string) => {
-    setEventLog((prev) => [...prev, row].slice(-40))
-  }
+  const appendEvent = import.meta.env.DEV
+    ? (row: string) => setEventLog((prev) => [...prev, row].slice(-40))
+    : () => {}
 
   const submitSelfAuthViaSendCalls = async (params: {
     calls: Array<{ to: `0x${string}`; data: `0x${string}`; value: `0x${string}` }>
@@ -390,56 +195,6 @@ export function RemoveOwnerPage() {
       throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
     }
     return resolution.transactionHash
-  }
-
-  const formatEthAmount = (value: bigint): string => {
-    const raw = formatEther(value)
-    const [whole = '0', fraction = ''] = raw.split('.')
-    const trimmedFraction = fraction.replace(/0+$/, '').slice(0, 6)
-    return trimmedFraction ? `${whole}.${trimmedFraction}` : whole
-  }
-
-  const mapRemoveOwnerSubmissionError = (params: {
-    error: unknown
-    requiredDepositWei: bigint | null
-    latestCswBalanceWei: bigint | null
-  }): string | null => {
-    const message =
-      params.error instanceof Error
-        ? params.error.message
-        : typeof params.error === 'string'
-          ? params.error
-          : ''
-    const normalized = message.toLowerCase()
-
-    if (normalized.includes('networkid must be provided and not empty')) {
-      return (
-        'Relay quote metadata is missing a network identifier. Refresh the preview, keep your wallet on Base, and retry. ' +
-        'If this keeps happening, regenerate the preview from the owner list before submitting.'
-      )
-    }
-
-    if (
-      normalized.includes('failed to estimate gas for user operation') &&
-      normalized.includes('useroperation reverted')
-    ) {
-      const depositHint =
-        params.requiredDepositWei && params.requiredDepositWei > 0n
-          ? ` Required relay deposit: ${formatEthAmount(params.requiredDepositWei)} ETH.`
-          : ''
-      const balanceHint =
-        params.latestCswBalanceWei !== null
-          ? ` Current CSW balance: ${formatEthAmount(params.latestCswBalanceWei)} ETH.`
-          : ''
-      return (
-        'Coinbase Wallet could not simulate this remove-owner UserOp. ' +
-        'This usually means the targeted owner slot changed, the signer context is stale, or the CSW does not have enough ETH for Relay deposit.' +
-        depositHint +
-        balanceHint +
-        ' Re-open the owner list to rebuild preview state, confirm the same owner is still at that index, and fund the CSW if needed.'
-      )
-    }
-    return null
   }
 
   const fetchPreview = async (index: number) => {
@@ -546,7 +301,7 @@ export function RemoveOwnerPage() {
         appendEvent('precheck:owner_slot_refresh=start')
         const latestTargetOwnerBytes = (await publicClient.readContract({
           address: canonicalCswAddress as `0x${string}`,
-          abi: CSW_OWNER_ABI,
+          abi: CSW_OWNER_READ_ABI,
           functionName: 'ownerAtIndex',
           args: [BigInt(preview.preflight.targetOwnerIndex)],
         })) as `0x${string}`
@@ -566,7 +321,7 @@ export function RemoveOwnerPage() {
         appendEvent(`precheck:csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
         if (requiredDepositWei > 0n && latestCswBalanceWei < requiredDepositWei) {
           throw new Error(
-            `Canonical CSW balance (${formatEthAmount(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatEthAmount(requiredDepositWei)} ETH). Fund the CSW and retry.`,
+            `Canonical CSW balance (${formatCompactEth(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatCompactEth(requiredDepositWei)} ETH). Fund the CSW and retry.`,
           )
         }
       }
@@ -764,7 +519,7 @@ export function RemoveOwnerPage() {
 
       const slotAfter = (await publicClient?.readContract({
         address: canonicalCswAddress as `0x${string}`,
-        abi: CSW_OWNER_ABI,
+        abi: CSW_OWNER_READ_ABI,
         functionName: 'ownerAtIndex',
         args: [BigInt(preview.preflight.targetOwnerIndex)],
       })) as `0x${string}` | undefined
@@ -783,7 +538,7 @@ export function RemoveOwnerPage() {
       setPreview(null)
       setSelectedIndex(null)
     } catch (err: any) {
-      appendEvent(`error:${getErrorMessage(err).slice(0, 260)}`)
+      appendEvent(`error:${getWalletErrorMessage(err).slice(0, 260)}`)
       if (err && typeof err === 'object') {
         const revertDataCandidate =
           typeof err.data === 'string' ? err.data : typeof err.revertData === 'string' ? err.revertData : null
@@ -804,7 +559,7 @@ export function RemoveOwnerPage() {
         requiredDepositWei,
         latestCswBalanceWei,
       })
-      setPageError(mapped ?? getErrorMessage(err))
+      setPageError(mapped ?? getWalletErrorMessage(err))
     } finally {
       setBusy(false)
     }

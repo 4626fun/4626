@@ -1,3 +1,5 @@
+import { normalizeLeaderboardLabelHint } from './waitlistLeaderboardIdentity.js'
+
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[] }> }
 
 export type WaitlistLeaderboardPointsType = 'total' | 'invite' | 'agent'
@@ -9,6 +11,10 @@ export type WaitlistLeaderboardRow = {
   signupId: number
   display: string
   cswAddress: string | null
+  labelHint: string | null
+  avatarUrl: string | null
+  showZoraBadge: boolean
+  showBaseAppBadge: boolean
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
@@ -62,11 +68,18 @@ function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean })
   const cswRaw = resolveCanonicalCswAddress(raw)
   const display = shortAddr(cswRaw) ?? `user#${signupId}`
   const referralCode = options?.includeReferralCode ? referralCodeRaw : null
+  const avatarRaw = typeof raw?.avatar_url === 'string' ? String(raw.avatar_url).trim() : ''
   return {
     rank: safeInt(raw?.rank),
     signupId,
     display,
     cswAddress: cswRaw,
+    labelHint: normalizeLeaderboardLabelHint(
+      typeof raw?.label_hint === 'string' ? raw.label_hint : null,
+    ),
+    avatarUrl: avatarRaw.length > 0 ? avatarRaw : null,
+    showZoraBadge: raw?.show_zora_badge === true,
+    showBaseAppBadge: raw?.show_base_app_badge === true,
     referralCode,
     pointsTotal: safeInt(raw?.total_points),
     pointsInvite: safeInt(raw?.invite_points),
@@ -126,14 +139,47 @@ export async function getWaitlistLeaderboardData(params: {
     eligible AS (
       SELECT
         p.id,
-        COALESCE(
-          NULLIF(p.csw_address, ''),
-          NULLIF(p.primary_smart_wallet, ''),
-          canonical_pw.address
-        ) AS canonical_csw,
         p.referral_code,
-        p.border_tier
+        p.border_tier,
+        COALESCE(
+          NULLIF(TRIM(p.csw_address), ''),
+          CASE
+            WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
+              AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+                lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
+                lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
+                lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
+              )
+            THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+            ELSE NULL
+          END,
+          NULLIF(TRIM(canonical_pw.address), ''),
+          NULLIF(TRIM(azs.canonical_csw_address), ''),
+          NULLIF(TRIM(zora_owned_csw.csw_address), ''),
+          NULLIF(TRIM(zp_row.smart_wallet_address), '')
+        ) AS canonical_csw,
+        COALESCE(
+          NULLIF(TRIM(zp_row.basename), ''),
+          NULLIF(TRIM(azs.zora_handle), ''),
+          NULLIF(TRIM(p.preprov_zora_handle), ''),
+          NULLIF(TRIM(zp_row.handle), '')
+        ) AS label_hint,
+        COALESCE(
+          NULLIF(TRIM(zp_row.basename_avatar), ''),
+          NULLIF(TRIM(zp_row.avatar_image_url), ''),
+          NULLIF(TRIM(p.avatar_url), ''),
+          NULLIF(TRIM(p.preprov_farcaster_pfp), '')
+        ) AS avatar_url,
+        (
+          COALESCE(azs.zora_linked, false)
+          OR zp_row.handle IS NOT NULL
+          OR zora_owned_csw.csw_address IS NOT NULL
+          OR NULLIF(TRIM(p.preprov_zora_handle), '') IS NOT NULL
+          OR COALESCE(zp_row.is_in_csw_index, false)
+        ) AS show_zora_badge,
+        (NULLIF(TRIM(p.base_sub_account), '') IS NOT NULL) AS show_base_app_badge
       FROM profiles p
+      LEFT JOIN account_zora_signals azs ON azs.privy_user_id = p.privy_user_id
       LEFT JOIN LATERAL (
         SELECT pw.address
         FROM profile_wallets pw
@@ -141,6 +187,44 @@ export async function getWaitlistLeaderboardData(params: {
           AND pw.is_canonical_smart_wallet = true
         LIMIT 1
       ) canonical_pw ON true
+      LEFT JOIN LATERAL (
+        SELECT w.csw_address
+        FROM zora_csw_owners w
+        WHERE w.current_owners IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements_text(w.current_owners::jsonb) AS owner(addr)
+            WHERE lower(owner.addr) IN (
+              lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
+              lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
+              lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
+            )
+          )
+        LIMIT 1
+      ) zora_owned_csw ON true
+      LEFT JOIN LATERAL (
+        SELECT
+          zp.smart_wallet_address,
+          zp.basename,
+          zp.basename_avatar,
+          zp.avatar_image_url,
+          zp.handle,
+          zp.is_in_csw_index
+        FROM zora_profiles zp
+        WHERE (
+          NULLIF(TRIM(p.primary_embedded_eoa), '') IS NOT NULL
+          AND (
+            lower(zp.privy_wallet_address) = lower(TRIM(p.primary_embedded_eoa))
+            OR lower(zp.signing_eoa) = lower(TRIM(p.primary_embedded_eoa))
+          )
+        )
+        OR (
+          NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+          AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
+        )
+        ORDER BY zp.last_refreshed_at DESC NULLS LAST
+        LIMIT 1
+      ) zp_row ON true
       WHERE p.email IS NOT NULL
         AND p.merged_into_profile_id IS NULL
       ORDER BY p.id ASC
@@ -150,6 +234,10 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         e.id::bigint AS signup_id,
         e.canonical_csw,
+        e.label_hint,
+        e.avatar_url,
+        e.show_zora_badge,
+        e.show_base_app_badge,
         e.referral_code,
         e.border_tier,
         COALESCE(pt.points_total, 0)::int AS total_points,
@@ -175,12 +263,25 @@ export async function getWaitlistLeaderboardData(params: {
       FROM eligible e
       LEFT JOIN point_totals pt ON pt.signup_id = e.id
       LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, pt.points_total
+      GROUP BY
+        e.id,
+        e.canonical_csw,
+        e.label_hint,
+        e.avatar_url,
+        e.show_zora_badge,
+        e.show_base_app_badge,
+        e.referral_code,
+        e.border_tier,
+        pt.points_total
     ),
     ranked AS (
       SELECT
         signup_id,
         canonical_csw,
+        label_hint,
+        avatar_url,
+        show_zora_badge,
+        show_base_app_badge,
         referral_code,
         border_tier,
         total_points,
@@ -207,7 +308,19 @@ export async function getWaitlistLeaderboardData(params: {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, canonical_csw, referral_code, border_tier, total_points, invite_points, agent_points
+    SELECT
+      rank,
+      signup_id,
+      canonical_csw,
+      label_hint,
+      avatar_url,
+      show_zora_badge,
+      show_base_app_badge,
+      referral_code,
+      border_tier,
+      total_points,
+      invite_points,
+      agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
@@ -250,14 +363,47 @@ export async function getWaitlistLeaderboardData(params: {
       eligible AS (
         SELECT
           p.id,
-          COALESCE(
-            NULLIF(p.csw_address, ''),
-            NULLIF(p.primary_smart_wallet, ''),
-            canonical_pw.address
-          ) AS canonical_csw,
           p.referral_code,
-          p.border_tier
+          p.border_tier,
+          COALESCE(
+            NULLIF(TRIM(p.csw_address), ''),
+            CASE
+              WHEN NULLIF(TRIM(p.primary_smart_wallet), '') IS NOT NULL
+                AND lower(TRIM(p.primary_smart_wallet)) NOT IN (
+                  lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
+                  lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
+                  lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
+                )
+              THEN NULLIF(TRIM(p.primary_smart_wallet), '')
+              ELSE NULL
+            END,
+            NULLIF(TRIM(canonical_pw.address), ''),
+            NULLIF(TRIM(azs.canonical_csw_address), ''),
+            NULLIF(TRIM(zora_owned_csw.csw_address), ''),
+            NULLIF(TRIM(zp_row.smart_wallet_address), '')
+          ) AS canonical_csw,
+          COALESCE(
+            NULLIF(TRIM(zp_row.basename), ''),
+            NULLIF(TRIM(azs.zora_handle), ''),
+            NULLIF(TRIM(p.preprov_zora_handle), ''),
+            NULLIF(TRIM(zp_row.handle), '')
+          ) AS label_hint,
+          COALESCE(
+            NULLIF(TRIM(zp_row.basename_avatar), ''),
+            NULLIF(TRIM(zp_row.avatar_image_url), ''),
+            NULLIF(TRIM(p.avatar_url), ''),
+            NULLIF(TRIM(p.preprov_farcaster_pfp), '')
+          ) AS avatar_url,
+          (
+            COALESCE(azs.zora_linked, false)
+            OR zp_row.handle IS NOT NULL
+            OR zora_owned_csw.csw_address IS NOT NULL
+            OR NULLIF(TRIM(p.preprov_zora_handle), '') IS NOT NULL
+            OR COALESCE(zp_row.is_in_csw_index, false)
+          ) AS show_zora_badge,
+          (NULLIF(TRIM(p.base_sub_account), '') IS NOT NULL) AS show_base_app_badge
         FROM profiles p
+        LEFT JOIN account_zora_signals azs ON azs.privy_user_id = p.privy_user_id
         LEFT JOIN LATERAL (
           SELECT pw.address
           FROM profile_wallets pw
@@ -265,6 +411,44 @@ export async function getWaitlistLeaderboardData(params: {
             AND pw.is_canonical_smart_wallet = true
           LIMIT 1
         ) canonical_pw ON true
+        LEFT JOIN LATERAL (
+          SELECT w.csw_address
+          FROM zora_csw_owners w
+          WHERE w.current_owners IS NOT NULL
+            AND EXISTS (
+              SELECT 1
+              FROM jsonb_array_elements_text(w.current_owners::jsonb) AS owner(addr)
+              WHERE lower(owner.addr) IN (
+                lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
+                lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
+                lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
+              )
+            )
+          LIMIT 1
+        ) zora_owned_csw ON true
+        LEFT JOIN LATERAL (
+          SELECT
+            zp.smart_wallet_address,
+            zp.basename,
+            zp.basename_avatar,
+            zp.avatar_image_url,
+            zp.handle,
+            zp.is_in_csw_index
+          FROM zora_profiles zp
+          WHERE (
+            NULLIF(TRIM(p.primary_embedded_eoa), '') IS NOT NULL
+            AND (
+              lower(zp.privy_wallet_address) = lower(TRIM(p.primary_embedded_eoa))
+              OR lower(zp.signing_eoa) = lower(TRIM(p.primary_embedded_eoa))
+            )
+          )
+          OR (
+            NULLIF(TRIM(p.primary_wallet), '') IS NOT NULL
+            AND lower(zp.primary_wallet) = lower(TRIM(p.primary_wallet))
+          )
+          ORDER BY zp.last_refreshed_at DESC NULLS LAST
+          LIMIT 1
+        ) zp_row ON true
         WHERE p.email IS NOT NULL
           AND p.merged_into_profile_id IS NULL
         ORDER BY p.id ASC
@@ -274,6 +458,10 @@ export async function getWaitlistLeaderboardData(params: {
         SELECT
           e.id::bigint AS signup_id,
           e.canonical_csw,
+          e.label_hint,
+          e.avatar_url,
+          e.show_zora_badge,
+          e.show_base_app_badge,
           e.referral_code,
           e.border_tier,
           COALESCE(pt.points_total, 0)::int AS total_points,
@@ -299,12 +487,25 @@ export async function getWaitlistLeaderboardData(params: {
         FROM eligible e
         LEFT JOIN point_totals pt ON pt.signup_id = e.id
         LEFT JOIN points l ON l.signup_id = e.id
-        GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, pt.points_total
+        GROUP BY
+          e.id,
+          e.canonical_csw,
+          e.label_hint,
+          e.avatar_url,
+          e.show_zora_badge,
+          e.show_base_app_badge,
+          e.referral_code,
+          e.border_tier,
+          pt.points_total
       ),
       ranked AS (
         SELECT
           signup_id,
           canonical_csw,
+          label_hint,
+          avatar_url,
+          show_zora_badge,
+          show_base_app_badge,
           referral_code,
           border_tier,
           total_points,
@@ -331,7 +532,19 @@ export async function getWaitlistLeaderboardData(params: {
           )::int AS rank
         FROM scored
       )
-      SELECT rank, signup_id, canonical_csw, referral_code, border_tier, total_points, invite_points, agent_points
+      SELECT
+        rank,
+        signup_id,
+        canonical_csw,
+        label_hint,
+        avatar_url,
+        show_zora_badge,
+        show_base_app_badge,
+        referral_code,
+        border_tier,
+        total_points,
+        invite_points,
+        agent_points
       FROM ranked
       WHERE signup_id = ${authorizedProfileId}
       LIMIT 1;

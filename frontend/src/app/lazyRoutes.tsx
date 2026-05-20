@@ -194,15 +194,6 @@ export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPa
 export const AddOwnerPage = lazyNamed(() => import('../pages/AddOwner'), 'AddOwnerPage')
 export const RemoveOwnerPage = lazyNamed(() => import('../pages/RemoveOwner'), 'RemoveOwnerPage')
 export const CswFundingPage = lazyNamed(() => import('../pages/CswFunding'), 'CswFundingPage')
-export const ZoraConnectorProbe = lazyNamed(
-  () => import('../pages/dev/ZoraConnectorProbe'),
-  'ZoraConnectorProbe',
-)
-export const CswSignatureProbe = lazyNamed(
-  () => import('../pages/dev/CswSignatureProbe'),
-  'CswSignatureProbe',
-)
-export const ToshiProbe = lazyNamed(() => import('../pages/dev/ToshiProbe'), 'ToshiProbe')
 export const MetaballOsProbe = lazyNamed(
   () => import('../pages/dev/MetaballOsProbe'),
   'MetaballOsProbe',

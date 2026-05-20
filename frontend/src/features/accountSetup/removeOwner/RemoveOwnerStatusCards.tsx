@@ -77,7 +77,7 @@ export function RemoveOwnerStatusCards(props: RemoveOwnerStatusCardsProps) {
         </div>
       ) : null}
 
-      {eventLog.length > 0 ? (
+      {import.meta.env.DEV && eventLog.length > 0 ? (
         <details className="rounded-xl border border-white/10 bg-black/30 p-3 text-[11px] text-zinc-300">
           <summary className="cursor-pointer text-[10px] uppercase tracking-[0.18em] text-zinc-500">
             Lane events ({eventLog.length})

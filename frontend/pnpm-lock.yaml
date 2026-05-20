@@ -133,9 +133,6 @@ importers:
       '@lens-protocol/client':
         specifier: 0.0.0-canary-20250430134539
         version: 0.0.0-canary-20250430134539(ethers@6.16.0(bufferutil@4.1.0)(utf-8-validate@5.0.10))(typescript@5.9.3)(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
-      '@privy-io/cross-app-connect':
-        specifier: ^0.5.7
-        version: 0.5.7(@wagmi/core@2.22.1(@tanstack/query-core@5.90.20)(@types/react@19.2.13)(immer@11.1.3)(react@19.2.4)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.4))(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
       '@privy-io/react-auth':
         specifier: ^3.13.1
         version: 3.13.1(eed267efbc3677454d3e3148b97a981e)
@@ -1969,21 +1966,6 @@ packages:
   '@privy-io/chains@0.0.6':
     resolution: {integrity: sha512-tcDYv2r4HJBQkEzGS3hau01WmZ4zLmEgaitPUorKvW4IC6qOzxcIXJIqeX6HT6JJjoV8I6xNey0pCsF+VS59ew==}
 
-  '@privy-io/cross-app-connect@0.5.7':
-    resolution: {integrity: sha512-YzueieKEQm1jrvBXyzFzsRugMFjT59qAw/PGQHuzl1YyppmI+Rc2Bni2RDt2xl1Tw/eJcgsQ9HmbATcuLfwr1Q==}
-    peerDependencies:
-      '@rainbow-me/rainbowkit': ^2.2.3
-      '@wagmi/core': ^2.16.4
-      viem: 2.47.4
-    peerDependenciesMeta:
-      '@rainbow-me/rainbowkit':
-        optional: true
-      '@wagmi/core':
-        optional: true
-
-  '@privy-io/encoding@0.1.2':
-    resolution: {integrity: sha512-gCGVP5IRqCAmPJgHxWsrxNLcgN2nYUjLqa0TxbZ8I77hY5wKUgpleZJnWqayRjp1BZok0zdttYCN4l0NwNWfKA==}
-
   '@privy-io/ethereum@0.0.7':
     resolution: {integrity: sha512-8eRl2Nk34r16gMft4r1WkQvB4w+TKtmo/EB/lrqVcGpD9jc5Hqq2+SPlZ+PJr2NClioiuhYHq6BItM95l86VGA==}
     peerDependencies:
@@ -2002,9 +1984,6 @@ packages:
 
   '@privy-io/popup@0.0.2':
     resolution: {integrity: sha512-kkxzZ5TFseqnZRDVhBR1Si9mTHc1jW+hLSbYviauK80enJOGsOGmxeeC/U0t0kLZGLpn0Jj5v5lNS2bmQ4as/Q==}
-
-  '@privy-io/popup@0.0.3':
-    resolution: {integrity: sha512-wmh0uv87pRre832JFaVjbaJlzA4ogoz8sTrvGjpUa3ye/1ZJzR2W4qAJieXXPeHubaak9k45JfWwu4uVMIkKLw==}
 
   '@privy-io/public-api@2.45.2':
     resolution: {integrity: sha512-TSuaFq65PPInb0CBJ9dO/vLh4u4oWXVpv5KxShbVsuaArZ8lig+Orl/HUR1Hri6643zXoBqWlWx9wDt4MQvz9A==}
@@ -9349,22 +9328,6 @@ snapshots:
 
   '@privy-io/chains@0.0.6': {}
 
-  '@privy-io/cross-app-connect@0.5.7(@wagmi/core@2.22.1(@tanstack/query-core@5.90.20)(@types/react@19.2.13)(immer@11.1.3)(react@19.2.4)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.4))(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)))(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
-    dependencies:
-      '@noble/curves': 1.9.7
-      '@noble/hashes': 1.8.0
-      '@privy-io/encoding': 0.1.2
-      '@privy-io/popup': 0.0.3
-      '@scure/base': 1.1.9
-      fflate: 0.8.2
-      viem: 2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
-    optionalDependencies:
-      '@wagmi/core': 2.22.1(@tanstack/query-core@5.90.20)(@types/react@19.2.13)(immer@11.1.3)(react@19.2.4)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.2.4))(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))
-
-  '@privy-io/encoding@0.1.2':
-    dependencies:
-      '@scure/base': 1.2.6
-
   '@privy-io/ethereum@0.0.7(viem@2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6))':
     dependencies:
       viem: 2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
@@ -9389,8 +9352,6 @@ snapshots:
       viem: 2.45.1(patch_hash=bd25974c37f64aa4d42fcbf1f0a1975afc7ff3acf0a6934758402138fef6d1e3)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
 
   '@privy-io/popup@0.0.2': {}
-
-  '@privy-io/popup@0.0.3': {}
 
   '@privy-io/public-api@2.45.2(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)':
     dependencies:

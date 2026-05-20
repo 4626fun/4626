@@ -206,36 +206,6 @@ export const injectedConnectorFlag = defineFlag<boolean>({
 })
 
 /**
- * Diagnostic flag: registers `@privy-io/cross-app-connect` as a wagmi
- * connector so a tester can re-evaluate Privy Connect-mode cross-app
- * behavior with Zora's app at `clpgf04wn04hnkw0fv1m11mnb`.
- *
- * Empirical result (recorded for future re-testing):
- *   - Connect step works → Zora authorizes the 4626 appId for Connect mode.
- *   - Sign / transact step is refused by `privy.zora.co` (read-only).
- *   - The address surfaced even with `smartWalletMode: true` is a Privy
- *     embedded EOA that is NOT one of the user's CBSW owners (those are
- *     P256 passkeys in Coinbase Wallet / Base Account), so this connector
- *     cannot be used to add owners to a Zora CBSW even if read-only is
- *     fixed on Zora's side.
- *
- * Therefore this flag stays OFF by default. Keep it as a one-line probe
- * for re-testing if Privy/Zora change their cross-app config. Full
- * write-up in `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts`.
- */
-export const zoraGlobalWalletConnectorFlag = defineFlag<boolean>({
-  key: 'zora-global-wallet-connector',
-  description:
-    'Diagnostic only — register @privy-io/cross-app-connect for Zora. Verified non-viable for adding CBSW owners (read-only + signer mismatch). OFF in prod.',
-  category: 'operational',
-  defaultValue: false,
-  options: [{ value: false, label: 'Disabled' }, { value: true, label: 'Enabled' }],
-  decide() {
-    return isTruthyEnv(import.meta.env.VITE_ZORA_GLOBAL_WALLET_CONNECTOR)
-  },
-})
-
-/**
  * Track C2 — sub-accounts on the waitlist (frontend half).
  *
  * Gates the waitlist `connect-base-app` step that runs the
@@ -353,7 +323,6 @@ export const allFlags: FeatureFlag<unknown>[] = [
   publicSiteModeFlag,
   swapProviderFlag,
   injectedConnectorFlag,
-  zoraGlobalWalletConnectorFlag,
   lensGroveFlag,
   debugLogsFlag,
   xmtpDebugFlag,

@@ -1949,11 +1949,10 @@ function warnWsError(params: {
     ? recordBenignWsErrorWindow({ roomId: params.roomId, now })
     : { windowsInLast10m: 0 }
   const benignShouldEscalate = benign && benignWindowStats.windowsInLast10m >= WS_BENIGN_ESCALATION_ROLLUP_WINDOWS
-  const emit = benignShouldEscalate
-    ? logger.warn.bind(logger)
-    : benign
-      ? logger.info.bind(logger)
-      : logger.warn.bind(logger)
+  // Benign ws handshake churn (non-101/network flap) is expected under
+  // upstream instability and should not page operators. Keep it at info
+  // level, but surface sustained windows via `benignEscalated` metadata.
+  const emit = benign ? logger.info.bind(logger) : logger.warn.bind(logger)
   emit('[alfaclub-chat] ws_error', {
     roomId: params.roomId,
     repeats: 1,

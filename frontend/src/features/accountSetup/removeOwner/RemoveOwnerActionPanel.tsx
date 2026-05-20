@@ -168,7 +168,7 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
               </div>
             ) : null}
           </div>
-          {preview.preflight.relayQuoteDiagnostics ? (
+          {import.meta.env.DEV && preview.preflight.relayQuoteDiagnostics ? (
             <details className="rounded-md border border-white/10 bg-black/20 p-2 text-[10px] text-zinc-300">
               <summary className="cursor-pointer uppercase tracking-[0.16em] text-zinc-500">
                 Relay quote diagnostics

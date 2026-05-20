@@ -442,7 +442,7 @@ function WaitlistAuthStep(props: {
             type="button"
             disabled={busy || signOutBusy}
             onClick={() => void onSignOut()}
-            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-rose-400 transition hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {signOutBusy ? 'Signing out...' : 'Sign out'}
           </button>

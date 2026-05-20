@@ -32,7 +32,13 @@ const REPO_ROOT = process.env.DOCS_REPO_ROOT
 const DEST_DIR = path.resolve(__dirname, '../docs');
 const STATIC_DIR = path.resolve(__dirname, '../static');
 const BRAND_SOURCE = path.join(REPO_ROOT, 'frontend/public/brand');
+const BRAND_ASSET_SOURCE = path.join(REPO_ROOT, 'frontend/public/assets');
 const BRAND_DEST = path.join(STATIC_DIR, 'brand');
+
+const DOCS_BRAND_CANONICAL_COPIES = [
+  ['logo-mark.svg', 'logo.svg'],
+  ['favicon.svg', 'favicon.svg'],
+];
 
 // Source directories
 const SOURCES = {
@@ -679,6 +685,25 @@ async function syncBrandAssets() {
   console.log(`   ✓ ${copied} brand assets copied`);
   for (const file of copiedFiles) {
     console.log(`     - ${file}`);
+  }
+
+  for (const [assetFile, brandFile] of DOCS_BRAND_CANONICAL_COPIES) {
+    const sourcePath = path.resolve(BRAND_ASSET_SOURCE, assetFile);
+    const destPath = path.resolve(BRAND_DEST, brandFile);
+
+    if (!(await sourceExists(sourcePath))) {
+      stats.warnings.push(`Brand assets: missing canonical source ${assetFile}`);
+      continue;
+    }
+
+    try {
+      await fs.mkdir(BRAND_DEST, { recursive: true });
+      await fs.copyFile(sourcePath, destPath);
+      console.log(`     - ${brandFile} (from assets/${assetFile})`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      stats.warnings.push(`Brand asset ${brandFile}: ${message}`);
+    }
   }
 }
 

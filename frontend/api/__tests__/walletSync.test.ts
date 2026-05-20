@@ -85,6 +85,17 @@ describe('wallet mapping + sync', () => {
     expect(classified.embeddedEoa?.address).toBe('0x00000000000000000000000000000000000000c1')
   })
 
+  it('classifies base_account linked accounts when connector identity is on type', () => {
+    const user = {
+      id: 'did:privy:base-account-type',
+      linkedAccounts: [{ type: 'base_account', address: '0x00000000000000000000000000000000000000d1' }],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000d1')
+    expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000d1')
+  })
+
   it('tracks the active owner wallet separately from the canonical smart wallet', () => {
     const user = {
       id: 'did:privy:owner-split',

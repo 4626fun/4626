@@ -4,15 +4,18 @@ import { isAddress } from 'viem'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
 import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
 
-/** Same mark as account chrome — Coinbase Wallet / Smart Wallet. */
 const COINBASE_WALLET_LOGO_URL =
   'https://gist.githubusercontent.com/taycaldwell/2291907115c0bb5589bc346661435007/raw/cbw.svg'
+const ZORA_LOGO_URL = '/brands/zora-token.svg'
+const BASE_APP_LOGO_URL = '/base/base-square-blue.svg'
 
 type LeaderboardIdentityCellProps = {
-  /** Server fallback when no CSW is on file (`user#id`). */
   display: string
-  /** Full canonical Coinbase Smart Wallet when known. */
   cswAddress: string | null
+  labelHint?: string | null
+  avatarUrl?: string | null
+  showZoraBadge?: boolean
+  showBaseAppBadge?: boolean
 }
 
 function formatShortAddress(address: string): string {
@@ -24,65 +27,104 @@ function basescanUrl(address: string): string {
   return `https://basescan.org/address/${address}`
 }
 
+function WalletBadge({
+  src,
+  title,
+}: {
+  src: string
+  title: string
+}) {
+  return (
+    <img
+      src={src}
+      alt=""
+      width={16}
+      height={16}
+      loading="lazy"
+      title={title}
+      className="h-4 w-4 shrink-0 object-contain opacity-90"
+    />
+  )
+}
+
+function LeaderboardAvatar({
+  address,
+  imageUrl,
+}: {
+  address: Address
+  imageUrl: string | null | undefined
+}) {
+  const size = 24
+  if (imageUrl) {
+    return (
+      <span className="relative shrink-0" style={{ width: size, height: size }}>
+        <JazziconAvatar address={address} size={size} className="rounded-full opacity-35" />
+        <img
+          src={imageUrl}
+          alt=""
+          width={size}
+          height={size}
+          className="absolute inset-0 h-6 w-6 rounded-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = 'none'
+          }}
+        />
+      </span>
+    )
+  }
+  return <JazziconAvatar address={address} size={size} className="shrink-0 rounded-full" />
+}
+
 /**
- * Public waitlist leaderboard identity — basename on the canonical CSW when
- * available, otherwise shortened CSW. Never surfaces Privy embedded EOAs.
+ * Public waitlist leaderboard identity — basename on CSW when available,
+ * otherwise shortened CSW. Never surfaces Privy embedded EOAs or persona labels.
  */
-export function LeaderboardIdentityCell({ display, cswAddress }: LeaderboardIdentityCellProps) {
+export function LeaderboardIdentityCell({
+  display,
+  cswAddress,
+  labelHint = null,
+  avatarUrl = null,
+  showZoraBadge = false,
+  showBaseAppBadge = false,
+}: LeaderboardIdentityCellProps) {
   const csw = cswAddress && isAddress(cswAddress) ? (cswAddress as Address) : null
   const basename = useBasenameForAddress(csw)
 
   const cswShortLabel = csw ? formatShortAddress(csw) : null
-  const primaryLabel = basename.displayName ?? cswShortLabel ?? display
-  const showCswSubtitle = Boolean(basename.displayName && cswShortLabel && cswShortLabel !== primaryLabel)
-  const title = cswAddress ?? primaryLabel
-  const avatarAddress = csw ?? undefined
+  const primaryLabel =
+    basename.displayName ?? labelHint ?? cswShortLabel ?? (csw ? null : display)
+  const resolvedLabel = primaryLabel ?? cswShortLabel ?? display
+  const showCswSubtitle = Boolean(
+    basename.displayName && cswShortLabel && basename.displayName !== cswShortLabel,
+  )
+  const title = cswAddress ?? resolvedLabel
+  const resolvedAvatar = basename.avatar ?? avatarUrl ?? null
 
   const labelNode = cswAddress ? (
     <a
       href={basescanUrl(cswAddress)}
       target="_blank"
       rel="noopener noreferrer"
-      className="truncate text-zinc-200 hover:text-brand-300 transition-colors"
-      title={title}
+      className="truncate font-mono text-zinc-200 hover:text-brand-300 transition-colors"
+      title={cswAddress}
     >
-      {primaryLabel}
+      {resolvedLabel}
     </a>
   ) : (
     <span className="truncate text-zinc-200" title={title}>
-      {primaryLabel}
+      {resolvedLabel}
     </span>
   )
 
   return (
     <div className="flex items-center gap-2 min-w-0 flex-1">
-      {avatarAddress ? (
-        basename.avatar ? (
-          <img
-            src={basename.avatar}
-            alt=""
-            width={24}
-            height={24}
-            className="h-6 w-6 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <JazziconAvatar address={avatarAddress} size={24} className="shrink-0" />
-        )
-      ) : null}
+      {csw ? <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} /> : null}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 min-w-0">
+          {showZoraBadge ? <WalletBadge src={ZORA_LOGO_URL} title="Zora Coinbase Smart Wallet" /> : null}
+          {showBaseAppBadge ? <WalletBadge src={BASE_APP_LOGO_URL} title="Base App" /> : null}
           <div className="min-w-0 text-sm truncate">{labelNode}</div>
-          {cswAddress ? (
-            <img
-              src={COINBASE_WALLET_LOGO_URL}
-              alt=""
-              width={16}
-              height={16}
-              loading="lazy"
-              title="Coinbase Smart Wallet"
-              className="h-4 w-4 shrink-0 object-contain opacity-90"
-            />
-          ) : null}
+          {cswAddress ? <WalletBadge src={COINBASE_WALLET_LOGO_URL} title="Coinbase Smart Wallet" /> : null}
         </div>
         {showCswSubtitle ? (
           <div className="mt-0.5 font-mono text-[11px] text-zinc-600 truncate" title={cswAddress ?? undefined}>

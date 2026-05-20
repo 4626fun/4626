@@ -1,57 +1,7 @@
 import { encodeFunctionData, getAddress, type Hex, type PublicClient } from 'viem'
 
+import { CSW_OWNER_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash, type CswSendCallsTelemetry } from './cswSendCalls'
-
-const CSW_OWNER_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'ownerCount',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'nextOwnerIndex',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'ownerAtIndex',
-    stateMutability: 'view',
-    inputs: [{ name: 'index', type: 'uint256' }],
-    outputs: [{ type: 'bytes' }],
-  },
-  {
-    type: 'function',
-    name: 'removeOwnerAtIndex',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'index', type: 'uint256' },
-      { name: 'owner', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'removeLastOwner',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'index', type: 'uint256' },
-      { name: 'owner', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-] as const
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 

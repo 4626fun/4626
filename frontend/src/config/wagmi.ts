@@ -3,9 +3,8 @@ import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/base/baseBuilderCodes'
 import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/base/baseReadRpcPolicy'
-import { injectedConnectorFlag, zoraGlobalWalletConnectorFlag } from '@/lib/flags/featureFlags'
+import { injectedConnectorFlag } from '@/lib/flags/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
-import { zoraGlobalWalletConnector } from '@/lib/wallet/zoraGlobalWalletConnector'
 
 /**
  * Minimal Wagmi Config
@@ -14,23 +13,11 @@ import { zoraGlobalWalletConnector } from '@/lib/wallet/zoraGlobalWalletConnecto
  * 1. Coinbase Wallet / Base Account (includes Smart Wallet — primary path
  *    for adding 4626 as a CBSW owner via the sub-account flow).
  * 2. Injected (browser extension fallback, incl. Rabby targeted connector).
- * 3. [flagged, OFF] Zora Global Wallet — Privy Connect-mode cross-app
- *    connector. Diagnostic only. Empirically verified non-viable for
- *    adding owners to a Zora CBSW; see
- *    `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts` for the
- *    detailed write-up of why (read-only mode + signer mismatch).
  *
- * Cross-app Privy is split across two SDKs and they do different things:
- *   - `@privy-io/react-auth` Auth-mode (`useCrossAppAccounts`): identity
- *     linking via OAuth2. Wired in `PrivyClientProvider.externalWallets.crossApp`.
- *     Surfaces the user's Zora handle + canonical CBSW address but provides
- *     no signer. This is appropriate and what we use today.
- *   - `@privy-io/cross-app-connect` Connect-mode: full EIP-1193 wagmi
- *     connector. Probe-tested. Returns a Privy-side EOA that is NOT on the
- *     CBSW owner list (owners are passkeys in Coinbase Wallet / Base Account),
- *     so it cannot satisfy CBSW UserOp validation. Kept behind the flag
- *     for future re-testing if Privy/Zora change their config.
- *
+ * Cross-app Privy auth-mode (`useCrossAppAccounts`) is wired in
+ * `PrivyClientProvider.externalWallets.crossApp` for Zora identity linking.
+ * It surfaces the user's Zora handle + canonical CBSW address but provides
+ * no signer — appropriate for read/link flows only.
  * For users whose CBSW is exclusively passkey-controlled, the only working
  * onboarding path is to reconnect through Base Account SDK and use the
  * sub-account derivation in `useAccountSetupController.onEnable4626Signing`.
@@ -316,18 +303,6 @@ function buildConnectors() {
   const connectors = shouldUseInjected
     ? [...baseConnectors, injected({ shimDisconnect: true })]
     : baseConnectors
-
-  // Zora Global Wallet (Privy Connect-mode) — flagged probe. Any failure to
-  // instantiate is non-fatal; the other connectors remain usable.
-  if (zoraGlobalWalletConnectorFlag()) {
-    try {
-      connectors.push(zoraGlobalWalletConnector())
-    } catch (err) {
-      if (IS_BROWSER) {
-        console.warn('[wagmi] Zora global wallet connector failed to initialize:', err)
-      }
-    }
-  }
 
   return connectors as any
 }

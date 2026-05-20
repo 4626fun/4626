@@ -24,57 +24,14 @@ import { base } from 'viem/chains'
 import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { getRelayQuote } from '../../../server/_lib/relay/getQuote.js'
 
+import { CSW_OWNER_ABI, RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
+
 const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
 const RELAY_QUOTE_OUTPUT_MULTIPLIER = 6n
-const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
-
-const CSW_OWNER_ABI = [
-  {
-    type: 'function',
-    name: 'ownerCount',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'nextOwnerIndex',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'ownerAtIndex',
-    stateMutability: 'view',
-    inputs: [{ name: 'index', type: 'uint256' }],
-    outputs: [{ type: 'bytes' }],
-  },
-  {
-    type: 'function',
-    name: 'removeOwnerAtIndex',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'index', type: 'uint256' },
-      { name: 'owner', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-  {
-    type: 'function',
-    name: 'removeLastOwner',
-    stateMutability: 'nonpayable',
-    inputs: [
-      { name: 'index', type: 'uint256' },
-      { name: 'owner', type: 'bytes' },
-    ],
-    outputs: [],
-  },
-] as const
 
 /**
  * One EIP-5792 call. Mirrors the shape passed to wallet_sendCalls.calls[].
@@ -119,30 +76,16 @@ type RelayFlow = {
 }
 
 type RemoveOwnerPreviewResponse = {
-  /**
-   * Legacy single-call shape kept for backward compatibility. This is the
-   * raw destination-call (Part 2) calldata; only useful for the funder-EOA
-   * fallback lane where the page hand-builds the UserOp itself.
-   */
+  /** Raw mutation calldata used for Relay quote reconstruction and on-chain checks. */
   txRequest: {
     chainId: 8453
     to: `0x${string}`
     data: `0x${string}`
     value: '0x0'
   }
-  /**
-   * The EIP-5792 call array to pass to wallet_sendCalls. When `relay` is
-   * present this is exactly one entry: the Relay-router deposit transaction.
-   * Relay's solver runs the destination mutation behind the scenes. When the
-   * Relay quote failed, this falls back to the raw mutation call (useful only
-   * for the funder-EOA lane, which can't actually dispatch it without Relay).
-   */
+  /** EIP-5792 calls; Relay path submits the deposit userCall. */
   calls: Eip5792Call[]
-  /**
-   * Relay quote metadata. Null when the upstream /quote call failed. The page
-   * should surface the failure (no Relay-orchestrated lane available) and
-   * offer the funder-EOA fallback (which itself depends on Relay being up).
-   */
+  /** Relay quote metadata. Null when the upstream /quote call failed. */
   relay: RelayFlow | null
   preflight: {
     selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
@@ -499,9 +442,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     //                                   signed off-chain by session-key)
     // Both in block 45,600,637.
     //
-    // If the quote fails (rate limit, Relay downtime, unsupported pair), we
-    // still return a single-call response containing just the raw mutation
-    // calldata so the page can fall back to the funder-EOA lane.
+    // If the quote fails (rate limit, Relay downtime, unsupported pair), relay
+    // stays null and the page blocks submission until preview is rebuilt.
     // ─────────────────────────────────────────────────────────────────────
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
@@ -667,10 +609,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteError = `Relay quote threw: ${errorMessage(error)}`
     }
 
-    // Build the EIP-5792 calls array. When we have a working relay quote we
-    // emit just the Relay-router deposit transaction; Relay's solver runs the
-    // destination mutation off-chain. When the quote failed, fall back to the
-    // raw mutation calldata so the funder-EOA lane can still proceed.
+    // Build the EIP-5792 calls array. When Relay quote succeeds, emit the
+    // deposit userCall; otherwise include raw mutation calldata for diagnostics only.
     const calls: Eip5792Call[] = relay
       ? [relay.userCall]
       : [

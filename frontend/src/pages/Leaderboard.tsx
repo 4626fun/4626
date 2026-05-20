@@ -16,13 +16,11 @@ type LeaderboardRow = {
   rank: number
   signupId: number
   display: string
-  /**
-   * Full canonical Coinbase Smart Wallet address for this profile, when
-   * registered. Server already shortens the `display` label; the full
-   * `cswAddress` is sent so the client can show a Basescan link / copy
-   * button if we want to surface that later.
-   */
   cswAddress: string | null
+  labelHint: string | null
+  avatarUrl: string | null
+  showZoraBadge: boolean
+  showBaseAppBadge: boolean
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
@@ -228,12 +226,7 @@ export function Leaderboard() {
                   return (
                     <TableRow
                       key={`${r.rank}-${r.signupId}`}
-                      className={[
-                        isMe ? 'bg-brand-primary/6' : '',
-                        r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[rgb(var(--brand-primary)/0.3)]' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
+                      className={isMe ? 'bg-brand-primary/6' : undefined}
                     >
                       <TableCell>
                         <span className="text-sm text-zinc-300">#{r.rank}</span>
@@ -241,16 +234,18 @@ export function Leaderboard() {
                       <TableCell>
                         <div className="text-sm text-zinc-200">
                           <div className="flex items-center gap-2 min-w-0">
-                            <LeaderboardIdentityCell display={r.display} cswAddress={r.cswAddress} />
+                            <LeaderboardIdentityCell
+                              display={r.display}
+                              cswAddress={r.cswAddress}
+                              labelHint={r.labelHint}
+                              avatarUrl={r.avatarUrl}
+                              showZoraBadge={r.showZoraBadge}
+                              showBaseAppBadge={r.showBaseAppBadge}
+                            />
 
                             {isMe ? (
                               <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                                 You
-                              </div>
-                            ) : null}
-                            {r.borderTier >= 1 ? (
-                              <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-                                Tier {r.borderTier}
                               </div>
                             ) : null}
                           </div>
@@ -288,7 +283,14 @@ export function Leaderboard() {
                   <TableCell width="50%">
                     <div className="text-sm text-zinc-200">
                       <div className="flex items-center gap-2 min-w-0">
-                        <LeaderboardIdentityCell display={data.me.display} cswAddress={data.me.cswAddress} />
+                        <LeaderboardIdentityCell
+                          display={data.me.display}
+                          cswAddress={data.me.cswAddress}
+                          labelHint={data.me.labelHint}
+                          avatarUrl={data.me.avatarUrl}
+                          showZoraBadge={data.me.showZoraBadge}
+                          showBaseAppBadge={data.me.showBaseAppBadge}
+                        />
 
                         <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                           You

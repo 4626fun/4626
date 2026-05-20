@@ -1324,7 +1324,10 @@ export function Swap() {
     }
 
     setShowSwapWalletOptions(false)
-    void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
+    void signIn({
+      method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto',
+      preferBaseAccountWallet: executionMode === 'canonical',
+    })
   }, [
     authBusy,
     canonicalSignInMethod,
@@ -2098,7 +2101,7 @@ export function Swap() {
               label: authBusy ? 'Signing in...' : 'Sign in with Privy',
               onClick: () => {
                 if (authBusy || privyClientStatus !== 'ready') return
-                void signIn({ method: canonicalSignInMethod })
+                void signIn({ method: canonicalSignInMethod, preferBaseAccountWallet: true })
               },
             }}
           >
