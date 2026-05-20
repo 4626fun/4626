@@ -18,9 +18,9 @@ export function isZoraProfilesRefreshEnabled(): boolean {
 
 export function readProfileRefreshTargetCount(): number {
   const raw = String(process.env.PROFILE_REFRESH_TARGET_COUNT ?? '').trim()
-  if (!raw) return 500
+  if (!raw) return 250
   const n = Number(raw)
-  if (!Number.isFinite(n) || n <= 0) return 500
+  if (!Number.isFinite(n) || n <= 0) return 250
   return Math.min(Math.floor(n), 2000)
 }
 
@@ -34,17 +34,17 @@ export function readProfileRefreshPageSize(): number {
 
 export function readProfileRefreshRequestIntervalMs(): number {
   const raw = String(process.env.PROFILE_REFRESH_INTERVAL_MS ?? '').trim()
-  if (!raw) return 250
+  if (!raw) return 0
   const n = Number(raw)
-  if (!Number.isFinite(n) || n < 0) return 250
+  if (!Number.isFinite(n) || n < 0) return 0
   return Math.floor(n)
 }
 
 export function readProfileRefreshWalletBudget(): number {
   const raw = String(process.env.PROFILE_REFRESH_WALLET_BUDGET ?? '').trim()
-  if (!raw) return 75
+  if (!raw) return 25
   const n = Number(raw)
-  if (!Number.isFinite(n) || n <= 0) return 75
+  if (!Number.isFinite(n) || n < 0) return 25
   return Math.min(Math.floor(n), 500)
 }
 

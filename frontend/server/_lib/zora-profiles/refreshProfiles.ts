@@ -3,14 +3,14 @@
 // One cron tick: Zora explore scan → wallet enrichment → CSW index flag.
 
 import { getSupabaseAdmin } from '../db/supabaseAdmin.js'
-import { enrichProfileWallets } from './enrichProfileWallets.js'
+import { enrichProfileWallets, type ProfileWalletEnrichResult } from './enrichProfileWallets.js'
 import {
   LAST_REFRESH_TICK_KEY,
   resolveZoraServerApiKey,
   ZORA_PROFILES_REFRESH_STATE_TABLE,
 } from './cronConfig.js'
 import { reconcileZoraProfilesCswIndexFlag } from './reconcileCswIndexFlag.js'
-import { scanTopProfilesFromExplore } from './scanTopProfiles.js'
+import { scanTopProfilesFromExplore, type ProfileScanResult } from './scanTopProfiles.js'
 
 export type ProfileRefreshTickResult =
   | {
@@ -70,31 +70,23 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
 
   const db = getSupabaseAdmin()
 
+  let scan: ProfileScanResult | null = null
+  let wallets: ProfileWalletEnrichResult | null = null
+  let cswIndexRowsUpdated = 0
+
   try {
-    const scan = await scanTopProfilesFromExplore(db, apiKey)
-    const wallets = await enrichProfileWallets(db, apiKey)
-    const { rowsUpdated: cswIndexRowsUpdated } = await reconcileZoraProfilesCswIndexFlag()
-
-    const completedAt = new Date().toISOString()
+    scan = await scanTopProfilesFromExplore(db, apiKey)
     await writeLastTickState(db, {
-      completed_at: completedAt,
+      phase: 'scan_complete',
+      completed_at: new Date().toISOString(),
       scan,
-      wallets,
-      csw_index_rows_updated: cswIndexRowsUpdated,
     })
-
-    return {
-      ok: true,
-      tick: 'refreshed',
-      scan,
-      wallets,
-      cswIndexRowsUpdated,
-    }
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'profile_refresh_failed'
+    const message = err instanceof Error ? err.message : 'profile_refresh_scan_failed'
     try {
       await writeLastTickState(db, {
         completed_at: new Date().toISOString(),
+        phase: 'scan_failed',
         error: message.slice(0, 500),
       })
     } catch {
@@ -105,5 +97,47 @@ export async function runZoraProfilesRefreshTick(): Promise<ProfileRefreshTickRe
       tick: 'errored',
       error: message.slice(0, 500),
     }
+  }
+
+  try {
+    wallets = await enrichProfileWallets(db, apiKey)
+    ;({ rowsUpdated: cswIndexRowsUpdated } = await reconcileZoraProfilesCswIndexFlag())
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'profile_refresh_enrich_failed'
+    try {
+      await writeLastTickState(db, {
+        phase: 'enrich_failed',
+        completed_at: new Date().toISOString(),
+        scan,
+        wallets,
+        error: message.slice(0, 500),
+      })
+    } catch {
+      // non-fatal
+    }
+    return {
+      ok: true,
+      tick: 'refreshed',
+      scan,
+      wallets,
+      cswIndexRowsUpdated,
+    }
+  }
+
+  const completedAt = new Date().toISOString()
+  await writeLastTickState(db, {
+    phase: 'complete',
+    completed_at: completedAt,
+    scan,
+    wallets,
+    csw_index_rows_updated: cswIndexRowsUpdated,
+  })
+
+  return {
+    ok: true,
+    tick: 'refreshed',
+    scan,
+    wallets,
+    cswIndexRowsUpdated,
   }
 }

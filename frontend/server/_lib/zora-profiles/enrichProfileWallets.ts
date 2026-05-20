@@ -78,6 +78,9 @@ export async function enrichProfileWallets(
 ): Promise<ProfileWalletEnrichResult> {
   const budget = readProfileRefreshWalletBudget()
   const concurrency = readProfileRefreshWalletConcurrency()
+  if (budget === 0) {
+    return { selected: 0, updated: 0, withSmartWallet: 0, failed: 0 }
+  }
 
   const { data, error } = await db
     .from(ZORA_PROFILES_TABLE)
