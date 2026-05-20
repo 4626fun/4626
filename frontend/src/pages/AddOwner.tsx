@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
@@ -157,13 +158,13 @@ export function AddOwnerPage() {
             <p className="text-sm text-zinc-300">
               Sign in to install the signing key on your wallet.
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)}
-              className="btn-accent btn-no-icon inline-flex"
             >
               Sign in / Continue
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -310,8 +311,9 @@ export function AddOwnerPage() {
                 ) : null}
 
                 <div className="space-y-3">
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     disabled={
                       advancedBusy ||
                       selfAuthBusy ||
@@ -319,7 +321,6 @@ export function AddOwnerPage() {
                       ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession)
                     }
                     onClick={() => void handleInstall()}
-                    className="btn-accent btn-no-icon inline-flex"
                   >
                     {advancedBusy || selfAuthBusy
                       ? 'Installing…'
@@ -328,7 +329,7 @@ export function AddOwnerPage() {
                         : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession
                           ? 'Open in browser to install'
                           : 'Install signing key'}
-                  </button>
+                  </Button>
                   <p className="text-[11px] leading-relaxed text-zinc-500">
                     The Coinbase passkey owner will sign the replayable owner-install request
                     for{' '}

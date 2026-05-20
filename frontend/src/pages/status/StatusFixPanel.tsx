@@ -6,6 +6,7 @@ import { Wrench } from 'lucide-react'
 
 import { CONTRACTS } from '@/config/contracts'
 import { isAddressLike, type ResolvedStatusFixContext } from '@/features/status/statusShared'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 
 const SHAREOFT_ADMIN_ABI = [
@@ -335,8 +336,10 @@ export default function StatusFixPanel(props: {
                     <div className="text-[10px] text-zinc-700 mt-1">{ownerHint}</div>
                   ) : null}
                 </div>
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  className="btn-compact px-4 py-2 text-xs rounded-lg whitespace-nowrap"
                   disabled={disabled}
                   onClick={async () => {
                     try {
@@ -347,10 +350,9 @@ export default function StatusFixPanel(props: {
                       setFixingId(null)
                     }
                   }}
-                  className="btn-accent btn-compact btn-no-icon px-4 py-2 text-xs rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {isBusy || !!fixHash ? 'Fixing…' : 'Fix'}
-                </button>
+                </Button>
               </div>
             </div>
           )

@@ -9,6 +9,7 @@ import { ArrowLeft } from 'lucide-react'
 import { isLensGroveEnabled } from '@/lib/flags/flags'
 import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 
 const ZORA_COIN_READ_ABI = [
@@ -304,10 +305,12 @@ export function CoinManage() {
                     />
                   </div>
 
-                  <button
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full"
                     onClick={updatePayout}
                     disabled={busy !== null || !newPayoutIsValid}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {busy === 'payout' ? (
                       <>
@@ -317,7 +320,7 @@ export function CoinManage() {
                     ) : (
                       'Update payout recipient'
                     )}
-                  </button>
+                  </Button>
                 </div>
 
                 {/* Metadata URI */}
@@ -337,10 +340,12 @@ export function CoinManage() {
                     </div>
                   </div>
 
-                  <button
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="w-full"
                     onClick={updateUri}
                     disabled={busy !== null || !uriLooksValid}
-                    className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {busy === 'uri' ? (
                       <>
@@ -350,7 +355,7 @@ export function CoinManage() {
                     ) : (
                       'Update coin URI'
                     )}
-                  </button>
+                  </Button>
 
                   <div className="pt-6 border-t border-zinc-900/50 space-y-3">
                     <div className="label">Build metadata JSON (upload to IPFS)</div>
@@ -408,15 +413,16 @@ export function CoinManage() {
                         >
                           Copy JSON
                         </button>
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="flex-1"
                           onClick={downloadMetadataJson}
                           disabled={!canBuildMetadataJson}
-                          className="btn-accent flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                           title="Downloads metadata.json (upload it to IPFS)"
                         >
                           Download
-                        </button>
+                        </Button>
                       </div>
                     </div>
 
@@ -453,14 +459,15 @@ export function CoinManage() {
                             {busy === 'grove-image' ? 'Uploading image…' : 'Upload image to Lens Grove'}
                           </button>
                         </div>
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="w-full"
                           onClick={() => void uploadMetadataJsonToGrove()}
                           disabled={busy !== null || !canBuildMetadataJson}
-                          className="btn-accent w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                         >
                           {busy === 'grove-metadata' ? 'Uploading metadata…' : 'Upload metadata JSON to Lens Grove'}
-                        </button>
+                        </Button>
                         <input
                           value={metadataLensUri}
                           onChange={(e) => setMetadataLensUri(e.target.value)}

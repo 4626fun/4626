@@ -3,6 +3,7 @@ import { CheckCircle2, Clock, MailQuestion, XCircle } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
 
+import { Button } from '@/components/ui/Button'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
@@ -155,14 +156,15 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
       <div className="text-xs text-zinc-600">
         Creator Vault launches are allowlist-only during early access.
       </div>
-      <button
+      <Button
         type="button"
+        variant="primary"
+        className="w-full sm:w-auto rounded-lg px-5 py-3 text-sm"
         onClick={() => requestMutation.mutate()}
         disabled={requestMutation.isPending || statusQuery.isFetching}
-        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg btn-accent btn-no-icon px-5 py-3 text-sm"
       >
         {requestMutation.isPending ? 'Requesting…' : 'Request allowlist'}
-      </button>
+      </Button>
       {requestMutation.error instanceof Error ? (
         <div className="text-[11px] text-red-400/90">{requestMutation.error.message}</div>
       ) : null}

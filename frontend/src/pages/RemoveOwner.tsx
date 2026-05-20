@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { RemoveOwnerActionPanel } from '@/features/accountSetup/removeOwner/RemoveOwnerActionPanel'
 import { RemoveOwnerOwnerSlotsCard } from '@/features/accountSetup/removeOwner/RemoveOwnerOwnerSlotsCard'
@@ -62,13 +63,13 @@ export function RemoveOwnerPage() {
             <p className="text-sm text-zinc-300">
               Sign in to manage owners on your wallet.
             </p>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => void login({ loginMethods: ['email', 'wallet'] } as any)}
-              className="btn-accent btn-no-icon inline-flex"
             >
               Sign in / Continue
-            </button>
+            </Button>
           </div>
         ) : null}
 

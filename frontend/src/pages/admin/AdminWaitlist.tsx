@@ -18,6 +18,7 @@ import { useAccount } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 
 type WaitlistListItem = {
@@ -277,14 +278,16 @@ function DetailPanel({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
               type="button"
-              className="btn-accent btn-compact btn-no-icon text-xs px-3 py-1.5 sm:px-4 sm:py-2"
+              variant="primary"
+              size="sm"
+              className="btn-compact text-xs px-3 py-1.5 sm:px-4 sm:py-2"
               disabled={decisionBusy}
               onClick={onApprove}
             >
               Approve
-            </button>
+            </Button>
             <button
               type="button"
               className="btn-secondary btn-compact text-xs px-3 py-1.5 sm:px-4 sm:py-2"

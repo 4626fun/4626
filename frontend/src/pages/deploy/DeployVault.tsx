@@ -114,6 +114,7 @@ import {
   assertEntryPointV06,
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { Button } from '@/components/ui/Button'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import {
   DEPLOY_TIMELINE_STAGE_INDEX,
@@ -858,20 +859,12 @@ class DeployVaultErrorBoundary extends Component<
                 </div>
               ) : null}
               <div className="flex gap-3">
-                <button
-                  type="button"
-                  className="btn-accent"
-                  onClick={this.handleRetry}
-                >
+                <Button type="button" variant="primary" onClick={this.handleRetry}>
                   Retry
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => window.location.reload()}
-                >
+                </Button>
+                <Button type="button" variant="secondary" onClick={() => window.location.reload()}>
                   Reload page
-                </button>
+                </Button>
               </div>
               <div className="text-xs text-zinc-600">
                 Tip: Try disabling other wallet extensions (MetaMask, Rabby) if this persists.
@@ -9926,13 +9919,14 @@ function DeployVaultMain() {
                   <LoadingInline intent="session" labelOverride="Loading..." />
                 </div>
               ) : !privyAuthenticated ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-accent w-full"
+                  variant="primary"
+                  className="w-full"
                   onClick={() => void login({ loginMethods: ['wallet'] })}
                 >
                   Sign in to Deploy
-                </button>
+                </Button>
               ) : !hasWallet ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300/80">Connect your wallet to continue</div>

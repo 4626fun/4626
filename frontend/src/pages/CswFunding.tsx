@@ -11,6 +11,7 @@ import {
   type Hex,
 } from 'viem'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
@@ -253,13 +254,9 @@ export function CswFundingPage() {
             <p className="text-sm text-zinc-300">
               Connect first to see balances for your canonical CSW.
             </p>
-            <button
-              type="button"
-              onClick={() => void login()}
-              className="btn-accent btn-no-icon inline-flex"
-            >
+            <Button type="button" variant="primary" onClick={() => void login()}>
               Connect
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -421,11 +418,11 @@ export function CswFundingPage() {
                 />
               </label>
 
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={() => void handleTopUp()}
                 disabled={topUpBusy || !amountWei || !ownerSignerAddress}
-                className="btn-accent btn-no-icon inline-flex"
               >
                 {topUpBusy
                   ? 'Submitting deposit…'
@@ -434,7 +431,7 @@ export function CswFundingPage() {
                     : !amountWei
                       ? 'Enter a positive ETH amount'
                       : `Deposit ${amountEthInput} ETH to EntryPoint`}
-              </button>
+              </Button>
 
               {topUpError ? (
                 <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">

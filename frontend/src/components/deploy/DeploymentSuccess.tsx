@@ -8,6 +8,7 @@ import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles, Sh
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { Button } from '@/components/ui/Button'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -626,18 +627,12 @@ export function DeploymentSuccess({
 
       {/* Primary CTAs */}
       <div className="grid grid-cols-2 gap-3">
-        <Link
-          to={`/vault/${deployment.contracts.vault}`}
-          className="btn-accent rounded-xl py-3 text-center text-sm font-medium"
-        >
-          View Your Vault
-        </Link>
-        <Link
-          to="/accounts"
-          className="btn-secondary rounded-xl py-3 text-center text-sm font-medium"
-        >
-          Open Accounts
-        </Link>
+        <Button variant="primary" className="rounded-xl py-3 text-center text-sm font-medium" asChild>
+          <Link to={`/vault/${deployment.contracts.vault}`}>View Your Vault</Link>
+        </Button>
+        <Button variant="secondary" className="rounded-xl py-3 text-center text-sm font-medium" asChild>
+          <Link to="/accounts">Open Accounts</Link>
+        </Button>
       </div>
     </motion.div>
   )

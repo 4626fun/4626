@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/Button'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 import {
@@ -54,13 +55,13 @@ export function AccountsPage(props: {
         {!privyAuthed ? (
           <div className="card space-y-3 rounded-2xl border border-white/10 bg-black/40 p-6">
             <p className="text-sm text-zinc-300">Sign in with Privy to manage account identities.</p>
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => void controller.login({ loginMethods: ['email', 'wallet'] } as any)}
-              className="btn-accent btn-no-icon inline-flex"
             >
               Sign in / Continue
-            </button>
+            </Button>
             <a href={getMarketingWaitlistEntryUrl()} className="text-xs text-zinc-500 hover:text-zinc-300">
               Back to waitlist
             </a>
