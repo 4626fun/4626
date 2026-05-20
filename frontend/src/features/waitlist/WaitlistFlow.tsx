@@ -384,91 +384,93 @@ function WaitlistAuthStep(props: {
         </div>
       ) : null}
 
-      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
-        {/* headline */}
-        <motion.div {...stagger(0)} className="space-y-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
-            Secure onboarding
-          </p>
-          <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">{authUi.title}</h2>
-          {progressLabel ? (
-            <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
-          ) : null}
-        </motion.div>
-
-        {/* Referral greeting — only renders when a code is present and resolves. */}
-        {referralCode ? (
-          <motion.div {...stagger(0)} className="text-left">
-            <ReferrerGreetingBanner referralCode={referralCode} />
-          </motion.div>
-        ) : null}
-
-        {/* CTA — uses the refined btn-accent base; full width on this
-            hero surface. We only hard-`disabled` the button while the
-            user's action is actively processing (`busy`). During Privy
-            boot (`!privyReady`), we keep the button at full brightness
-            and block interaction via aria-disabled + a click guard —
-            that way the hero reads as intentional, not grayed out.
-
-            Busy content uses PixelWaveLoader (not the CDS Spinner wrapper)
-            so the button stays at its canonical 42px height instead of
-            being stretched by an opinionated spinner container. */}
-        <motion.div {...stagger(1)} className="space-y-3">
-          <button
-            type="button"
-            disabled={busy}
-            aria-disabled={buttonsDisabled}
-            onClick={() => {
-              if (buttonsDisabled) return
-              void onContinueAuth()
-            }}
-            className="btn-accent btn-no-icon w-full"
-          >
-            {busy || !privyReady ? (
-              <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
-                <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
-                <span>{busy ? authUi.busyLabel : 'Loading secure sign-in…'}</span>
-              </span>
-            ) : (
-              authUi.ctaLabel
-            )}
-          </button>
-          {urgencyLabel ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-              {urgencyLabel}
+      <div className="relative z-10 w-full max-w-md text-center">
+        <motion.div
+          {...stagger(0)}
+          className="rounded-2xl border border-white/10 bg-black/35 px-4 py-4 shadow-2xl shadow-black/35 backdrop-blur sm:px-6 sm:py-5"
+        >
+          {/* headline */}
+          <div className="space-y-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
+              Secure onboarding
             </p>
-          ) : null}
-          <button
-            type="button"
-            disabled={busy || signOutBusy}
-            onClick={() => void onSignOut()}
-            className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-rose-400 transition hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {signOutBusy ? 'Signing out...' : 'Sign out'}
-          </button>
-        </motion.div>
+            <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white sm:text-[2.2rem]">{authUi.title}</h2>
+          </div>
 
-        {/* error */}
-        {error ? (
-          <motion.div
-            {...stagger(2)}
-            role="alert"
-            aria-live="polite"
-            className="space-y-3 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-left text-sm text-blue-200"
-          >
-            <div>{error}</div>
-            {recoveryRequired ? (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onRecoverAccount()}
-                className="inline-flex items-center rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
-              >
-                Try existing account sign-in
-              </button>
+          {/* status chips */}
+          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2 text-[9px] font-semibold uppercase tracking-[0.11em]">
+            {progressLabel ? (
+              <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-zinc-300">
+                {progressLabel}
+              </span>
             ) : null}
+            {urgencyLabel ? (
+              <span className="inline-flex items-center rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-300">
+                {urgencyLabel}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Referral greeting — only renders when a code is present and resolves. */}
+          {referralCode ? (
+            <div className="mt-3.5 text-left">
+              <ReferrerGreetingBanner referralCode={referralCode} />
+            </div>
+          ) : null}
+
+          {/* CTA */}
+          <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
+            <button
+              type="button"
+              disabled={busy}
+              aria-disabled={buttonsDisabled}
+              onClick={() => {
+                if (buttonsDisabled) return
+                void onContinueAuth()
+              }}
+              className="btn-accent btn-no-icon w-full"
+            >
+              {busy || !privyReady ? (
+                <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
+                  <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
+                  <span>{busy ? authUi.busyLabel : 'Loading sign-in…'}</span>
+                </span>
+              ) : (
+                authUi.ctaLabel
+              )}
+            </button>
+            <button
+              type="button"
+              disabled={busy || signOutBusy}
+              onClick={() => void onSignOut()}
+              className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-rose-400 transition hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {signOutBusy ? 'Signing out…' : 'Sign out'}
+            </button>
           </motion.div>
-        ) : null}
+
+          {/* error */}
+          {error ? (
+            <motion.div
+              {...stagger(2)}
+              role="alert"
+              aria-live="polite"
+              className="mt-3.5 space-y-2.5 rounded-xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-left text-sm text-blue-200"
+            >
+              <div>{error}</div>
+              {recoveryRequired ? (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void onRecoverAccount()}
+                  className="inline-flex items-center rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
+                >
+                  Use existing account
+                </button>
+              ) : null}
+            </motion.div>
+          ) : null}
+        </motion.div>
       </div>
     </motion.div>
   )

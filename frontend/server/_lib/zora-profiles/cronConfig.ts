@@ -56,6 +56,14 @@ export function readProfileRefreshWalletConcurrency(): number {
   return Math.min(Math.floor(n), 20)
 }
 
+export function readProfileRefreshUpsertBatchSize(): number {
+  const raw = String(process.env.PROFILE_REFRESH_UPSERT_BATCH_SIZE ?? '').trim()
+  if (!raw) return 10
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n <= 0) return 10
+  return Math.min(Math.floor(n), 50)
+}
+
 export function readProfileRefreshListType(): string {
   return String(process.env.PROFILE_REFRESH_LIST_TYPE ?? 'most_valuable_creators').trim() || 'most_valuable_creators'
 }

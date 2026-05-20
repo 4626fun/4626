@@ -60,8 +60,9 @@ Expected success shape:
 | `PROFILE_REFRESH_PAGE_SIZE` | `50` | Explore page size |
 | `PROFILE_REFRESH_INTERVAL_MS` | `250` | Pause between explore pages |
 | `PROFILE_REFRESH_LIST_TYPE` | `most_valuable_creators` | Explore list |
-| `PROFILE_REFRESH_WALLET_BUDGET` | `75` | Profiles without `wallets_synced_at` per tick |
+| `PROFILE_REFRESH_WALLET_BUDGET` | `25` | Profiles without `wallets_synced_at` per tick |
 | `PROFILE_REFRESH_WALLET_CONCURRENCY` | `6` | Parallel `getProfile` calls |
+| `PROFILE_REFRESH_UPSERT_BATCH_SIZE` | `10` | Supabase upsert chunk size (avoids statement timeouts) |
 
 ## Looker Studio
 

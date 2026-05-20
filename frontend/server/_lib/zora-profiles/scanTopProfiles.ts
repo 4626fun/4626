@@ -8,6 +8,7 @@ import {
   readProfileRefreshPageSize,
   readProfileRefreshRequestIntervalMs,
   readProfileRefreshTargetCount,
+  readProfileRefreshUpsertBatchSize,
   ZORA_PROFILES_TABLE,
 } from './cronConfig.js'
 
@@ -68,6 +69,26 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export function chunkProfileRows<T>(items: T[], batchSize: number): T[][] {
+  const size = Math.max(1, Math.floor(batchSize))
+  const chunks: T[][] = []
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size))
+  }
+  return chunks
+}
+
+async function upsertProfileRowsInBatches(
+  db: SupabaseUpsertClient,
+  rows: Array<Record<string, unknown>>,
+  batchSize: number,
+): Promise<void> {
+  for (const batch of chunkProfileRows(rows, batchSize)) {
+    const { error } = await db.from(ZORA_PROFILES_TABLE).upsert(batch, { onConflict: 'handle' })
+    if (error) throw new Error(`profile_upsert_failed:${error.message}`)
+  }
+}
+
 export async function scanTopProfilesFromExplore(
   db: SupabaseUpsertClient,
   apiKey: string,
@@ -76,6 +97,7 @@ export async function scanTopProfilesFromExplore(
   const pageSize = readProfileRefreshPageSize()
   const listType = readProfileRefreshListType()
   const requestIntervalMs = readProfileRefreshRequestIntervalMs()
+  const upsertBatchSize = readProfileRefreshUpsertBatchSize()
 
   const sdk: any = await import('@zoralabs/coins-sdk')
   sdk.setApiKey(apiKey)
@@ -143,15 +165,13 @@ export async function scanTopProfilesFromExplore(
           payout_recipient: payout,
           primary_wallet: (node.creatorProfile?.publicWallet?.walletAddress ?? '').toLowerCase() || null,
           source: `explore:${listType}`,
-          raw_profile: node,
           last_refreshed_at: refreshedAt,
         }
       })
       .filter((r): r is NonNullable<typeof r> => r !== null)
 
     if (rows.length > 0) {
-      const { error } = await db.from(ZORA_PROFILES_TABLE).upsert(rows, { onConflict: 'handle' })
-      if (error) throw new Error(`profile_upsert_failed:${error.message}`)
+      await upsertProfileRowsInBatches(db, rows, upsertBatchSize)
       totalUpserted += rows.length
     }
 

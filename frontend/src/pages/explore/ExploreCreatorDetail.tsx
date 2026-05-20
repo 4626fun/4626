@@ -946,12 +946,12 @@ export function ExploreCreatorDetail() {
         </motion.div>
 
         {/* Recreated hero scene */}
-        <section className="relative mb-20 sm:mb-24 overflow-hidden bg-black">
+        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-20 sm:mb-24 overflow-hidden bg-black min-h-[92vh] sm:min-h-screen">
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
-              <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-40" />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/35" />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-transparent to-black/70" />
+              <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-65" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/45 to-black/25" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/58" />
             </div>
           ) : null}
           <div className="absolute inset-0 opacity-15 pointer-events-none">
@@ -968,7 +968,7 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[62vh] p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
+            className="relative min-h-[88vh] sm:min-h-screen p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
           >
             <div className="max-w-4xl">
               <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-400 mb-8">
