@@ -7,9 +7,6 @@ import { getAddress, isAddress } from 'viem'
 // Re-declared locally to avoid a circular import with provider.tsx.
 // Keep in sync with provider.tsx exports.
 type ChatMessageContentType = 'text' | 'json' | 'code'
-type SendChatMessageOptions = {
-  replyToId?: string | null
-}
 
 // ---------------------------------------------------------------------------
 // Address + byte utilities
@@ -45,6 +42,17 @@ export type ParsedWireContent = {
   contentType: ChatMessageContentType
   richPreview?: string
   replyToId: string | null
+  actions?: {
+    promptId: string
+    description: string
+    buttons: Array<{ id: string; label: string; style?: 'primary' | 'secondary' | 'danger' }>
+  } | null
+  walletSendCalls?: {
+    from: string
+    chainId: string
+    calls: Array<{ to: string; data: string; metadata?: { description?: string } }>
+  } | null
+  reactionEmoji?: string | null
 }
 
 const REPLY_PREFIX_RE = /^\[reply:([a-zA-Z0-9._:-]{1,160})\]\s*/i
@@ -103,9 +111,18 @@ export function parseWireContent(raw: string): ParsedWireContent {
     content,
     contentType: 'text',
     replyToId,
+    actions: null,
+    walletSendCalls: null,
+    reactionEmoji: null,
   }
 }
 
+export type SendChatMessageOptions = {
+  replyToId?: string | null
+  replyToSenderInboxId?: string | null
+}
+
+/** Legacy wire prefix — prefer native XMTP Reply when both clients support it. */
 export function encodeWireContent(text: string, options?: SendChatMessageOptions): string {
   const body = text.trim()
   const replyToId = options?.replyToId?.trim()

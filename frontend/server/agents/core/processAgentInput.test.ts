@@ -316,4 +316,47 @@ describe('processXmtpAgentInput', () => {
       responseText: 'Ask me anything about this vault or DeFi on Base.',
     })
   })
+
+  it('routes bare welcome menu numbers to deterministic commands', async () => {
+    executeDeterministicCommandMock.mockResolvedValue({
+      ok: true,
+      responseText: 'help menu',
+    })
+
+    const result = await processXmtpAgentInput({
+      text: '1',
+      groupId: 'xmtp:conversation-4',
+      senderWallet: '0x4444444444444444444444444444444444444444',
+      runtimeContext: {
+        runtimeBridge: {} as any,
+        inboundMemory: { id: 'mem-4' },
+        state: {},
+      },
+    })
+
+    expect(executeDeterministicCommandMock).toHaveBeenCalledWith({
+      groupId: 'xmtp:conversation-4',
+      senderWallet: '0x4444444444444444444444444444444444444444',
+      text: '/help',
+    })
+    expect(result).toEqual({ responseText: 'help menu' })
+    expect(executeConversationalFallbackMock).not.toHaveBeenCalled()
+  })
+
+  it('returns numbered fallback for invalid menu selections', async () => {
+    const result = await processXmtpAgentInput({
+      text: '9',
+      groupId: 'xmtp:conversation-5',
+      senderWallet: '0x5555555555555555555555555555555555555555',
+      runtimeContext: {
+        runtimeBridge: {} as any,
+        inboundMemory: { id: 'mem-5' },
+        state: {},
+      },
+    })
+
+    expect(result.responseText).toContain('No option 9.')
+    expect(executeConversationalFallbackMock).not.toHaveBeenCalled()
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+  })
 })

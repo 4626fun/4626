@@ -60,7 +60,7 @@ Cron route:
 
 The route is scheduled in `frontend/vercel.json`:
 
-- `*/15 * * * *`
+- `15 4 * * *` (once daily, 04:15 UTC)
 
 Manual trigger (ops):
 
@@ -131,7 +131,7 @@ This returns reads to legacy request-time Ethos behavior without schema rollback
 
 Explore (`/explore/creators`) lists **creator coins**, not raw `zora_csw_owner_class` rows. Scores reach the UI through:
 
-1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync`, `/api/v1/chat/ethos-sync-hot`)
+1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync` daily; paid `/api/creator/ethos/refresh` on demand)
 2. `GET /api/zora/explore` merges projection + live resolver (`resolveCreatorEthosByAddress`) per page
 3. `GET /api/zora/metrics?scope=creators` → `ethosScoredCreators` counts projection rows with `ethos_score IS NOT NULL`
 

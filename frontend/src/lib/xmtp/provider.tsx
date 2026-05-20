@@ -52,6 +52,11 @@ import {
   LogLevel,
   Opfs,
   toSafeSigner,
+  encodeText,
+  isActions,
+  isReaction,
+  isTextReply,
+  isWalletSendCalls,
   type Signer,
   type Conversation,
   type Dm,
@@ -84,6 +89,24 @@ export type ChatConversation = {
   unreadCount: number
 }
 
+export type ChatMessageActionButton = {
+  id: string
+  label: string
+  style?: 'primary' | 'secondary' | 'danger'
+}
+
+export type ChatMessageActions = {
+  promptId: string
+  description: string
+  buttons: ChatMessageActionButton[]
+}
+
+export type ChatMessageWalletSendCalls = {
+  from: string
+  chainId: string
+  calls: Array<{ to: string; data: string; metadata?: { description?: string } }>
+}
+
 export type ChatMessage = {
   id: string
   conversationId: string
@@ -92,6 +115,9 @@ export type ChatMessage = {
   contentType: ChatMessageContentType
   richPreview?: string
   replyToId?: string | null
+  actions?: ChatMessageActions | null
+  walletSendCalls?: ChatMessageWalletSendCalls | null
+  reactionEmoji?: string | null
   status: ChatMessageStatus
   error: string | null
   sentAt: Date
@@ -100,6 +126,7 @@ export type ChatMessage = {
 
 export type SendChatMessageOptions = {
   replyToId?: string | null
+  replyToSenderInboxId?: string | null
 }
 
 export type StartDmOptions = {
@@ -148,6 +175,10 @@ type XmtpContextValue = {
     text: string,
     options?: SendChatMessageOptions,
   ) => Promise<ChatMessage>
+  sendIntent: (
+    conversationId: string,
+    params: { promptId: string; actionId: string },
+  ) => Promise<void>
   startDm: (peerAddress: `0x${string}`, options?: StartDmOptions) => Promise<StartDmResult>
   startDmByInbox: (peerInboxId: string, options?: StartDmOptions) => Promise<string | null>
   subscribeToMessages: (conversationId: string, cb: (msg: ChatMessage) => void) => () => void
@@ -288,6 +319,7 @@ const XmtpContext = createContext<XmtpContextValue>({
     sentAt: new Date(),
     isSelf: true,
   }),
+  sendIntent: async () => {},
   startDm: async () => ({
     ok: false,
     reason: 'not_connected',
@@ -1396,9 +1428,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               const idx = prev.findIndex((c) => c.id === convoId)
               if (idx === -1) return prev
               const updated: ChatConversation = { ...prev[idx]! }
-              if (typeof msg.content === 'string') {
-                updated.lastMessageText = parseWireContent(msg.content).content
-              }
+              updated.lastMessageText = chatMsg.content
               updated.lastMessageAt = msg.sentAt
               if (!chatMsg.isSelf) updated.unreadCount = (updated.unreadCount ?? 0) + 1
               const next = [...prev]
@@ -2070,6 +2100,102 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
   // ------- decode message helper -------
   function decodedToChat(msg: DecodedMessage, selfInboxId: string): ChatMessage {
+    if (isActions(msg)) {
+      const payload = msg.content
+      const buttons = Array.isArray(payload?.actions)
+        ? payload.actions
+            .map((entry) => ({
+              id: String(entry?.id ?? '').trim(),
+              label: String(entry?.label ?? '').trim(),
+              style: entry?.style as ChatMessageActionButton['style'] | undefined,
+            }))
+            .filter((entry) => entry.id && entry.label)
+        : []
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: String(payload?.description ?? 'Choose an action'),
+        contentType: 'text',
+        actions: {
+          promptId: String(payload?.id ?? msg.id),
+          description: String(payload?.description ?? 'Choose an action'),
+          buttons,
+        },
+        replyToId: null,
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
+    if (isWalletSendCalls(msg)) {
+      const payload = msg.content
+      const calls = Array.isArray(payload?.calls)
+        ? payload.calls.map((call) => ({
+            to: String(call?.to ?? ''),
+            data: String(call?.data ?? ''),
+            metadata: call?.metadata,
+          }))
+        : []
+      const description =
+        calls[0]?.metadata?.description ?? 'Confirm this transaction in Base App.'
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: description,
+        contentType: 'text',
+        walletSendCalls: {
+          from: String(payload?.from ?? ''),
+          chainId: String(payload?.chainId ?? ''),
+          calls,
+        },
+        replyToId: null,
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
+    if (isTextReply(msg)) {
+      const replyPayload = msg.content
+      const replyText = typeof replyPayload?.content === 'string' ? replyPayload.content : ''
+      const parsed = parseWireContent(replyText)
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: parsed.content,
+        contentType: parsed.contentType,
+        richPreview: parsed.richPreview,
+        replyToId: String(replyPayload?.referenceId ?? '').trim() || parsed.replyToId,
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
+    if (isReaction(msg)) {
+      const reaction = msg.content
+      return {
+        id: msg.id,
+        conversationId: msg.conversationId,
+        senderInboxId: msg.senderInboxId,
+        content: String(reaction?.content ?? '👍'),
+        contentType: 'text',
+        replyToId: String(reaction?.reference ?? '').trim() || null,
+        reactionEmoji: String(reaction?.content ?? '👍'),
+        status: 'sent',
+        error: null,
+        sentAt: msg.sentAt,
+        isSelf: msg.senderInboxId === selfInboxId,
+      }
+    }
+
     const parsed = parseWireContent(
       typeof msg.content === 'string' ? msg.content : (msg.fallback ?? '[unsupported]'),
     )
@@ -2081,6 +2207,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       contentType: parsed.contentType,
       richPreview: parsed.richPreview,
       replyToId: parsed.replyToId,
+      actions: parsed.actions ?? null,
+      walletSendCalls: parsed.walletSendCalls ?? null,
+      reactionEmoji: parsed.reactionEmoji ?? null,
       status: 'sent',
       error: null,
       sentAt: msg.sentAt,
@@ -2097,9 +2226,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       if (!convo) return []
       await convo.sync()
       const msgs = await convo.messages()
-      return msgs
-        .filter((m) => typeof m.content === 'string' || m.fallback)
-        .map((m) => decodedToChat(m, client.inboxId!))
+      return msgs.map((m) => decodedToChat(m, client.inboxId!))
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (isLocalXmtpStateInvalidError(msg)) {
@@ -2122,12 +2249,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!client || !trimmed) {
       throw new Error('not_connected')
     }
+    const replyToId = options?.replyToId?.trim() || null
+    const replyToSenderInboxId = options?.replyToSenderInboxId?.trim() || null
     const wireContent = encodeWireContent(trimmed, options)
     const optimisticParsed = parseWireContent(wireContent)
     try {
       const convo = await client.conversations.getConversationById(conversationId)
       if (!convo) throw new Error('conversation_not_found')
-      const sent = (await convo.sendText(wireContent)) as unknown
+      let sent: unknown
+      if (replyToId && replyToSenderInboxId) {
+        sent = await convo.sendReply({
+          reference: replyToId,
+          referenceInboxId: replyToSenderInboxId,
+          content: await encodeText(trimmed),
+        })
+      } else {
+        sent = await convo.sendText(wireContent)
+      }
       const sentRecord =
         sent && typeof sent === 'object'
           ? (sent as { sentAt?: unknown; id?: unknown })
@@ -2147,7 +2285,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         content: optimisticParsed.content,
         contentType: optimisticParsed.contentType,
         richPreview: optimisticParsed.richPreview,
-        replyToId: optimisticParsed.replyToId,
+        replyToId: replyToId ?? optimisticParsed.replyToId,
+        actions: null,
+        walletSendCalls: null,
+        reactionEmoji: null,
         status: 'sent',
         error: null,
         sentAt,
@@ -2165,6 +2306,20 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       throw e
     }
   }, [markLocalStateInvalid])
+
+  const sendIntent = useCallback(async (
+    conversationId: string,
+    params: { promptId: string; actionId: string },
+  ): Promise<void> => {
+    const client = clientRef.current
+    if (!client) throw new Error('not_connected')
+    const promptId = String(params.promptId ?? '').trim()
+    const actionId = String(params.actionId ?? '').trim()
+    if (!promptId || !actionId) throw new Error('invalid_intent')
+    const convo = await client.conversations.getConversationById(conversationId)
+    if (!convo) throw new Error('conversation_not_found')
+    await convo.sendIntent({ id: promptId, actionId })
+  }, [])
 
   // ------- start DM -------
   const startDm = useCallback(async (
@@ -2360,6 +2515,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         conversations,
         loadMessages,
         sendMessage,
+        sendIntent,
         startDm,
         startDmByInbox,
         subscribeToMessages,

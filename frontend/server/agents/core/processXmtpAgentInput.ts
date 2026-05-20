@@ -1,6 +1,11 @@
 import type { SharedConversationalRuntimeContext } from '../../ai/chat.js'
-import { formatNumberedCommandFallback } from '../../_lib/messaging/chatCommandFallback.js'
+import {
+  formatAiPromptGuidance,
+  formatNumberedCommandFallback,
+  resolveInboundMenuText,
+} from '../../_lib/messaging/chatCommandFallback.js'
 import { executeConversationalFallback } from './executeConversationalFallback.js'
+import { executeDeterministicCommand } from './executeDeterministicCommand.js'
 import {
   EMPTY_CONVERSATIONAL_PROMPT_RESPONSE,
   isConversationalAgentInput,
@@ -21,7 +26,30 @@ export type XmtpAgentInputResult = {
 export async function processXmtpAgentInput(
   params: ProcessXmtpAgentInputParams,
 ): Promise<XmtpAgentInputResult> {
-  if (!isConversationalAgentInput(params.text)) {
+  const menuRoute = resolveInboundMenuText(params.text)
+  if (menuRoute.kind === 'invalid') {
+    return {
+      responseText: formatNumberedCommandFallback({
+        intro: `No option ${menuRoute.selection}.`,
+        includeHint: 'Reply with 1–5 or type a command like /help.',
+      }),
+    }
+  }
+  if (menuRoute.kind === 'ai_prompt') {
+    return { responseText: formatAiPromptGuidance() }
+  }
+
+  const routedText = menuRoute.kind === 'command' ? menuRoute.resolvedText : params.text
+
+  if (!isConversationalAgentInput(routedText)) {
+    if (menuRoute.kind === 'command' && routedText.startsWith('/')) {
+      const deterministic = await executeDeterministicCommand({
+        groupId: params.groupId,
+        senderWallet: params.senderWallet as `0x${string}`,
+        text: routedText,
+      })
+      return { responseText: deterministic.responseText }
+    }
     return {
       responseText: formatNumberedCommandFallback({
         intro: 'I did not recognize that slash command.',
@@ -29,7 +57,7 @@ export async function processXmtpAgentInput(
     }
   }
 
-  const resolvedPrompt = resolveConversationalPrompt(params.text)
+  const resolvedPrompt = resolveConversationalPrompt(routedText)
   if (resolvedPrompt.kind === 'empty') {
     return { responseText: EMPTY_CONVERSATIONAL_PROMPT_RESPONSE }
   }
