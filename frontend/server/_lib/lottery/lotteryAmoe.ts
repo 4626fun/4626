@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { resolveAmoePointsProfileId } from './amoeProfileResolve.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
 import {
   AmoeBadRequestError,
@@ -32,10 +33,8 @@ declare const process: { env: Record<string, string | undefined> }
 const AMOE_NONCE_TTL_SECONDS = 10 * 60 // 10m
 const AMOE_MESSAGE_TITLE = '4626 Lottery AMOE Entry' as const
 export const AMOE_CREDITS_PER_ENTRY = 100
-// Temporary promo boost: increase the daily X check-in award.
-export const AMOE_DAILY_TWITTER_CREDIT = 100
-// Temporary promo boost: XMTP outreach check-in award.
-export const AMOE_DAILY_XMTP_CREDIT = 100
+export const AMOE_DAILY_TWITTER_CREDIT = 1
+export const AMOE_DAILY_XMTP_CREDIT = 1
 
 // PR 2 — AMOE Linear Parity (variable points amount).
 //
@@ -444,116 +443,6 @@ function normalizeRefId(value: string | null | undefined): string | null {
   return raw.length > 0 ? raw.slice(0, 190) : null
 }
 
-async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): Promise<number> {
-  const normalizedWallet = wallet.toLowerCase()
-  // Tombstone-aware: if the wallet matches a merged-away profile, follow
-  // `merged_into_profile_id` to the canonical survivor. Prefer profiles
-  // with a real (non-synthetic) email so AMOE claims always attach to
-  // the canonical account when one exists — satisfies the AGENTS.md
-  // identity invariant that verified email wins.
-  const existing = await db.sql`
-    WITH matched AS (
-      SELECT p.id, p.merged_into_profile_id, p.email, p.updated_at, p.created_at
-      FROM profiles p
-      WHERE LOWER(p.primary_wallet) = ${normalizedWallet}
-         OR LOWER(p.embedded_wallet) = ${normalizedWallet}
-         OR LOWER(p.primary_embedded_eoa) = ${normalizedWallet}
-         OR LOWER(p.csw_address) = ${normalizedWallet}
-         OR LOWER(p.primary_smart_wallet) = ${normalizedWallet}
-         OR LOWER(p.base_sub_account) = ${normalizedWallet}
-         OR EXISTS (
-           SELECT 1
-           FROM profile_wallets pw
-           WHERE pw.profile_id = p.id
-             AND LOWER(pw.address) = ${normalizedWallet}
-         )
-    ),
-    resolved AS (
-      SELECT p2.id, p2.email,
-             -- Score: canonical (real email) first, then most-recently-updated.
-             CASE
-               WHEN p2.email IS NOT NULL AND p2.email <> ''
-                 AND LOWER(p2.email) NOT LIKE '%@wallet.4626.fun'
-                 AND LOWER(p2.email) NOT LIKE '%@noemail.4626.fun'
-               THEN 0
-               ELSE 1
-             END AS bucket,
-             COALESCE(p2.updated_at, p2.created_at) AS ranked_at
-      FROM matched m
-      JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
-      WHERE p2.merged_into_profile_id IS NULL
-    )
-    SELECT id
-    FROM (
-      SELECT DISTINCT id, bucket, ranked_at
-      FROM resolved
-    ) deduped
-    ORDER BY bucket ASC, ranked_at DESC NULLS LAST
-    LIMIT 1;
-  `
-  const existingIdRaw = existing.rows?.[0]?.id
-  const existingId = typeof existingIdRaw === 'number' ? existingIdRaw : Number(existingIdRaw)
-  if (Number.isFinite(existingId) && existingId > 0) return Math.floor(existingId)
-
-  const syntheticEmail = `amoe-${sha256Hex(normalizedWallet).slice(0, 24)}@wallet.4626.fun`
-  await db.sql`
-    INSERT INTO profiles (email, primary_wallet, created_at, updated_at)
-    VALUES (${syntheticEmail}, ${normalizedWallet}, NOW(), NOW())
-    ON CONFLICT (email) DO UPDATE
-      SET primary_wallet = COALESCE(profiles.primary_wallet, EXCLUDED.primary_wallet),
-          updated_at = NOW();
-  `
-  const created = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE email = ${syntheticEmail}
-    LIMIT 1;
-  `
-  const createdIdRaw = created.rows?.[0]?.id
-  const createdId = typeof createdIdRaw === 'number' ? createdIdRaw : Number(createdIdRaw)
-  if (!Number.isFinite(createdId) || createdId <= 0) {
-    throw new Error('amoe_profile_resolve_failed')
-  }
-  return Math.floor(createdId)
-}
-
-/**
- * Resolve a profile for AMOE daily awards only when it is tied to a Privy
- * account with a verified, non-synthetic email.
- *
- * This is the strict eligibility gate for earning AMOE points:
- * - must map from wallet -> profile via `profile_wallets`
- * - profile must be Privy-backed (`profiles.privy_user_id IS NOT NULL`)
- * - account email must be verified (`accounts.email_verified = true`)
- * - synthetic placeholder emails are excluded
- */
-async function resolveVerifiedPrivyProfileForAmoeAward(
-  db: Db,
-  wallet: `0x${string}`,
-): Promise<number | null> {
-  const normalizedWallet = wallet.toLowerCase()
-  const result = await db.sql`
-    SELECT pw.profile_id
-    FROM profile_wallets pw
-    JOIN profiles p ON p.id = pw.profile_id
-    JOIN accounts a ON a.privy_user_id = p.privy_user_id
-    WHERE LOWER(pw.address) = ${normalizedWallet}
-      AND p.privy_user_id IS NOT NULL
-      AND a.email_verified = TRUE
-      AND LOWER(COALESCE(a.email, '')) NOT LIKE '%@wallet.4626.fun'
-      AND LOWER(COALESCE(a.email, '')) NOT LIKE '%@noemail.4626.fun'
-    ORDER BY
-      pw.is_canonical_smart_wallet DESC NULLS LAST,
-      pw.is_primary DESC NULLS LAST,
-      pw.profile_id ASC
-    LIMIT 1;
-  `
-  const row = result.rows?.[0] ?? null
-  const raw = row?.profile_id
-  const id = typeof raw === 'number' ? raw : Number(raw)
-  return Number.isFinite(id) && id > 0 ? Math.floor(id) : null
-}
-
 /**
  * Total weighted points for a signup — used for leaderboard, tier
  * progression, and "Your points" UI surfaces.
@@ -662,7 +551,7 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
   }
 
   await ensureAmoeSchema(db)
-  const signupId = await resolveVerifiedPrivyProfileForAmoeAward(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'verified_privy_only')
   if (signupId === null) {
     throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
   }
@@ -747,7 +636,7 @@ export async function claimDailyTwitterCheckin(params: {
     throw error
   }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
-  const signupId = await resolveVerifiedPrivyProfileForAmoeAward(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'verified_privy_only')
   if (signupId === null) {
     throw new AmoeBadRequestError('amoe_requires_verified_privy_account')
   }
@@ -852,7 +741,10 @@ export async function claimDailyXmtpCheckin(params: {
     throw error
   }
   const awarded = Boolean(inserted.rows?.[0]?.wallet_address)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'lottery_ledger')
+  if (signupId === null) {
+    throw new AmoeServerError('amoe_profile_resolve_failed')
+  }
 
   if (awarded) {
     await db.sql`
@@ -958,7 +850,10 @@ export async function consumeAmoeCreditsForEntry(params: {
   }
 
   await ensureAmoeSchema(db)
-  const signupId = await resolveOrCreateProfileForWallet(db, wallet)
+  const signupId = await resolveAmoePointsProfileId(db, wallet, 'lottery_ledger')
+  if (signupId === null) {
+    throw new AmoeServerError('amoe_profile_resolve_failed')
+  }
   const spendRefId =
     normalizeRefId(params.refId) ??
     `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
