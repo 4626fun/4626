@@ -9,6 +9,7 @@ import {
   resolveCreatorEthosByAddress,
   resolveEthosScoreSource,
 } from '../../../server/_lib/zora/resolveCreatorEthosByAddress.js'
+import { fetchFreshEthosScoresByUserkeys } from '../../../server/_lib/chat/ethosClient.js'
 
 type ExploreList =
   | 'TOP_GAINERS'
