@@ -1,5 +1,6 @@
 import { formatEther, type PublicClient } from 'viem'
 
+import { apiFetch } from '@/lib/api/apiBase'
 import {
   CSW_OWNER_READ_ABI,
   RELAY_DEPOSITORY_BASE,
@@ -424,6 +425,31 @@ export function formatCompactEth(value: bigint): string {
   const [whole = '0', fraction = ''] = raw.split('.')
   const trimmedFraction = fraction.replace(/0+$/, '').slice(0, 6)
   return trimmedFraction ? `${whole}.${trimmedFraction}` : whole
+}
+
+export async function fetchRemoveOwnerPreview(params: {
+  cswAddress: string
+  connectedAddress: string
+  ownerIndex: number
+}): Promise<RemoveOwnerPreview> {
+  const res = await apiFetch('/api/onboarding/preview-remove-owner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      cswAddress: params.cswAddress,
+      connectedAddress: params.connectedAddress,
+      ownerIndex: params.ownerIndex,
+    }),
+  })
+  const json = (await res.json().catch(() => null)) as {
+    success?: boolean
+    error?: string
+    data?: RemoveOwnerPreview
+  } | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error ?? `preview-remove-owner failed (${res.status})`)
+  }
+  return json.data
 }
 
 export function mapRemoveOwnerSubmissionError(params: {

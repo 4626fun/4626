@@ -25,6 +25,7 @@ import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
+import { CSW_OWNER_MUTATION_ABI } from '@/lib/wallet/cswOwnerAbi'
 
 const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
   email: Mail,
@@ -63,16 +64,6 @@ function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
-const CSW_OWNER_MGMT_ABI = [
-  {
-    type: 'function',
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'owner', type: 'address' }],
-    outputs: [],
-  },
-] as const
-
 function shortAddr(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
@@ -1167,7 +1158,7 @@ function WaitlistAdvancedSection({
     if (!normalizedRabbyAddress) return null
     try {
       return encodeFunctionData({
-        abi: CSW_OWNER_MGMT_ABI,
+        abi: CSW_OWNER_MUTATION_ABI,
         functionName: 'addOwnerAddress',
         args: [getAddress(normalizedRabbyAddress) as `0x${string}`],
       })

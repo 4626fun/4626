@@ -27,7 +27,7 @@ export const CSW_OWNER_READ_ABI = [
     type: 'function',
     name: 'isOwnerAddress',
     stateMutability: 'view',
-    inputs: [{ name: 'owner', type: 'address' }],
+    inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ type: 'bool' }],
   },
 ] as const
@@ -60,6 +60,12 @@ export const CSW_OWNER_MUTATION_ABI = [
     ],
     outputs: [],
   },
+] as const
+
+/** addOwnerAddress + isOwnerAddress — admin install / ownership checks. */
+export const CSW_OWNER_INSTALL_ABI = [
+  CSW_OWNER_MUTATION_ABI[0],
+  CSW_OWNER_READ_ABI[3]!,
 ] as const
 
 /** Full Coinbase Smart Wallet owner surface used by add/remove-owner flows. */

@@ -18,6 +18,7 @@ import { resolveBaseAppInviteUrl } from '@/lib/base/baseAppInvite'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { CSW_OWNER_INSTALL_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import { LoadingText } from '@/components/ui/LoadingState'
@@ -270,23 +271,6 @@ function CopyButton({ text }: { text: string }) {
 // Component
 // ---------------------------------------------------------------------------
 
-// Coinbase Smart Wallet ABI for addOwnerAddress + isOwnerAddress
-const CSW_ABI = [
-  {
-    type: 'function' as const,
-    name: 'addOwnerAddress',
-    stateMutability: 'nonpayable' as const,
-    inputs: [{ name: 'owner', type: 'address' as const }],
-    outputs: [],
-  },
-  {
-    type: 'function' as const,
-    name: 'isOwnerAddress',
-    stateMutability: 'view' as const,
-    inputs: [{ name: 'account', type: 'address' as const }],
-    outputs: [{ name: '', type: 'bool' as const }],
-  },
-] as const
 export function AdminAgentSetup() {
   const manualQueryParams = useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams('')
@@ -400,7 +384,7 @@ export function AdminAgentSetup() {
       try {
         const result = await publicClient.readContract({
           address: getAddress(canonicalCswAddress) as `0x${string}`,
-          abi: CSW_ABI,
+          abi: CSW_OWNER_INSTALL_ABI,
           functionName: 'isOwnerAddress',
           args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
         })
@@ -475,7 +459,7 @@ export function AdminAgentSetup() {
     if (!canonicalCswAddress || !serverWalletAddress) return null
     try {
       return encodeFunctionData({
-        abi: CSW_ABI,
+        abi: CSW_OWNER_INSTALL_ABI,
         functionName: 'addOwnerAddress',
         args: [getAddress(serverWalletAddress) as `0x${string}`],
       })
@@ -501,7 +485,7 @@ export function AdminAgentSetup() {
     if (!manualOwnerToAdd) return null
     try {
       return encodeFunctionData({
-        abi: CSW_ABI,
+        abi: CSW_OWNER_INSTALL_ABI,
         functionName: 'addOwnerAddress',
         args: [getAddress(manualOwnerToAdd) as `0x${string}`],
       })
@@ -760,7 +744,7 @@ export function AdminAgentSetup() {
       if (!ownerReady) {
         if (!walletClient) throw new Error('Connect an owner wallet to approve one onchain transaction')
         const data = encodeFunctionData({
-          abi: CSW_ABI,
+          abi: CSW_OWNER_INSTALL_ABI,
           functionName: 'addOwnerAddress',
           args: [getAddress(wallet.address) as `0x${string}`],
         })
@@ -775,7 +759,7 @@ export function AdminAgentSetup() {
           try {
             const result = await publicClient.readContract({
               address: getAddress(canonicalCswAddress) as `0x${string}`,
-              abi: CSW_ABI,
+              abi: CSW_OWNER_INSTALL_ABI,
               functionName: 'isOwnerAddress',
               args: [getAddress(wallet.address) as `0x${string}`],
             })
