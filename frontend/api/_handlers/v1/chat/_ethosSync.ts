@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDbForCron, isDbConfigured } from '../../../../packages/server-core/src/index.js'
+import { getDbForCron, isDbConfigured, isPostgresPoolSaturatedError } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import {
   materializeCanonicalEthosScores,
@@ -282,8 +282,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error'
-    console.warn('[ethos-canonical-sync] failed', { error: message })
-    res.status(200).json({
+    const poolSaturated = isPostgresPoolSaturatedError(error)
+    console.warn('[ethos-canonical-sync] failed', { error: message, poolSaturated })
+    res.status(poolSaturated ? 503 : 200).json({
       ok: false,
       error: message.slice(0, 500),
     })

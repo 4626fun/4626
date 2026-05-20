@@ -41,6 +41,7 @@ export {
   getDbForCron,
   getDbInitError,
   isDbConfigured,
+  isPostgresPoolSaturatedError,
   runInTransaction,
 } from './db.js'
 export type { DbPool } from './db.js'

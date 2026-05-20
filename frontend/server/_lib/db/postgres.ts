@@ -220,6 +220,13 @@ function isPoolAcquireTimeoutError(err: unknown): boolean {
   return lc.includes('timeout exceeded when trying to connect') || lc.includes('timeout acquiring a client')
 }
 
+/** True when Supabase session pool or a torn-down pg pool rejected the connection. */
+export function isPostgresPoolSaturatedError(err: unknown): boolean {
+  if (isSessionModeMaxClientsError(err) || isPoolAcquireTimeoutError(err)) return true
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  return /pool after calling end/i.test(msg)
+}
+
 function getInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }

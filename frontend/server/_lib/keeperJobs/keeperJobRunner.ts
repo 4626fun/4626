@@ -19,6 +19,8 @@ import {
 } from '../controlPlane/operations.js'
 import { emitControlPlaneMetric } from '../controlPlane/metrics.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
 const ALLOWED_INTERNAL_API_PREFIXES = [
   '/api/keeper/',
   '/api/keepr/actions/',
@@ -161,28 +163,47 @@ function readInternalApiPayload(job: KeeperJob): {
   return { path, method, body }
 }
 
+function readInternalApiTimeoutMs(): number {
+  const parsed = Number(process.env.KEEPER_INTERNAL_API_TIMEOUT_MS ?? 52_000)
+  if (!Number.isFinite(parsed)) return 52_000
+  return Math.min(55_000, Math.max(5_000, Math.floor(parsed)))
+}
+
 async function callInternalApi(params: {
   baseUrl: string
   apiKey: string
   job: KeeperJob
 }): Promise<Record<string, unknown>> {
   const apiJob = readInternalApiPayload(params.job)
-  const response = await fetch(joinUrl(params.baseUrl, apiJob.path), {
-    method: apiJob.method,
-    headers: {
-      Authorization: `Bearer ${params.apiKey}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(apiJob.body),
-  })
-  const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown; error?: string } | null
-  if (!response.ok || json?.success !== true) {
-    throw new Error(json?.error || `request_failed:${apiJob.path}:${response.status}`)
+  const timeoutMs = readInternalApiTimeoutMs()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(joinUrl(params.baseUrl, apiJob.path), {
+      method: apiJob.method,
+      headers: {
+        Authorization: `Bearer ${params.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(apiJob.body),
+      signal: controller.signal,
+    })
+    const json = (await response.json().catch(() => null)) as { success?: boolean; data?: unknown; error?: string } | null
+    if (!response.ok || json?.success !== true) {
+      throw new Error(json?.error || `request_failed:${apiJob.path}:${response.status}`)
+    }
+    return json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
+      ? (json.data as Record<string, unknown>)
+      : { response: json?.data ?? null }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`internal_api_timeout:${apiJob.path}:${timeoutMs}ms`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
   }
-  return json?.data && typeof json.data === 'object' && !Array.isArray(json.data)
-    ? (json.data as Record<string, unknown>)
-    : { response: json?.data ?? null }
 }
 
 function readSweepFollowUpMarkSettled(job: KeeperJob, result: Record<string, unknown>): Record<string, unknown> | null {

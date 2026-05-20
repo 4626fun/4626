@@ -18,6 +18,7 @@ import {
   setNoStore,
   getDbForCron,
   isDbConfigured,
+  isPostgresPoolSaturatedError,
 } from '../../../packages/server-core/src/index.js'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
 import {
@@ -97,6 +98,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const updatePageLimit = readInt(process.env.ETHOS_SCORE_UPDATES_PAGE_LIMIT_HOT, 200, 1, 1000)
   const updateMaxPages = readInt(process.env.ETHOS_SCORE_UPDATES_MAX_PAGES_HOT, 2, 1, 20)
   const creatorProjectionHotLimit = readInt(process.env.ETHOS_CREATOR_PROJECTION_HOT_LIMIT, 2000, 100, 250000)
+  const syncBudgetMs = readInt(process.env.ETHOS_HOT_SYNC_BUDGET_MS, 52_000, 5_000, 55_000)
+  const startedAtMs = Date.now()
+  const remainingMs = () => Math.max(0, syncBudgetMs - (Date.now() - startedAtMs))
 
   try {
     const updates = await syncEthosScoreUpdates({
@@ -104,13 +108,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pageLimit: updatePageLimit,
       maxPages: updateMaxPages,
     })
-    const creatorProjection = projectionHotEnabled()
-      ? await refreshCreatorEthosProjection({
-          db,
-          limit: creatorProjectionHotLimit,
-          mode: pickCreatorEthosProjectionRefreshMode('hot'),
-        })
-      : null
+    const creatorProjection =
+      projectionHotEnabled() && remainingMs() > 8_000
+        ? await refreshCreatorEthosProjection({
+            db,
+            limit: creatorProjectionHotLimit,
+            mode: pickCreatorEthosProjectionRefreshMode('hot'),
+          })
+        : null
     return res.status(200).json({
       success: true,
       data: {
@@ -125,7 +130,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<KeeperEthosSyncResponse>)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'ethos_sync_failed'
-    return res.status(500).json({
+    const poolSaturated = isPostgresPoolSaturatedError(error)
+    return res.status(poolSaturated ? 503 : 500).json({
       success: false,
       error: message,
     } satisfies ApiEnvelope<never>)

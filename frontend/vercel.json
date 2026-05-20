@@ -95,11 +95,11 @@
     },
     {
       "path": "/api/v1/chat/ethos-sync",
-      "schedule": "4,19,34,49 * * * *"
+      "schedule": "9,24,39,54 * * * *"
     },
     {
       "path": "/api/v1/chat/ethos-sync-hot",
-      "schedule": "*/2 * * * *"
+      "schedule": "1-59/2 * * * *"
     },
     {
       "path": "/api/keeper/jobs/run",
@@ -127,7 +127,7 @@
     },
     {
       "path": "/api/keeper/jobs/enqueue-ethos-sync",
-      "schedule": "5,10,15,20,25,30,35,40,45,50,55 * * * *"
+      "schedule": "7,17,27,37,47,57 * * * *"
     },
     {
       "path": "/api/keeper/jobs/enqueue-strategy-canary",

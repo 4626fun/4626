@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getDbForCron, isDbConfigured } from '../../../../packages/server-core/src/index.js'
+import { getDbForCron, isDbConfigured, isPostgresPoolSaturatedError } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { syncEthosScoreUpdates, syncEthosUserkeyScores } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
 import {
@@ -376,9 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'unknown_error'
-    const poolSaturated = /timeout exceeded when trying to connect|maxclientsinsessionmode|pool after calling end/i.test(
-      message,
-    )
+    const poolSaturated = isPostgresPoolSaturatedError(error)
     console.warn('[ethos-canonical-sync-hot] failed', { error: message, poolSaturated })
     res.status(poolSaturated ? 503 : 200).json({
       ok: false,

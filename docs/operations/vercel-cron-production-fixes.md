@@ -8,7 +8,9 @@ Runbook for the May 2026 production log cluster: `ethos-sync-hot` 504s, `timeout
 | ---- | ------ |
 | Postgres | `getDbForCron()` 8s deadline; pool generation/rebind after reset |
 | Ethos hot | `*/2` cron, fast projection, 52s budget, 503 on pool errors |
-| Ethos full | 52s budget, fast projection, 10k projection cap |
+| Ethos full | 52s budget, fast projection, 10k projection cap, 503 on pool errors |
+| Keeper ethos | Same 52s budget as hot lane; 503 on pool saturation |
+| Keeper jobs | `KEEPER_INTERNAL_API_TIMEOUT_MS` aborts child internal_api fetches |
 | Keeper jobs | All `keeper_jobs` DB access via `getDbForCron` |
 | Control plane | `persisted` only when parent row exists; no stage FK without parent |
 | AlfaClub | Privy refresh once per tick when JWT known-bad; token refresh every 10m |
@@ -25,9 +27,12 @@ ETHOS_CREATOR_PROJECTION_LIMIT=10000
 POSTGRES_POOL_MAX=1
 POSTGRES_POOL_IDLE_TIMEOUT_MS=1000
 POSTGRES_POOL_CONNECT_TIMEOUT_MS=10000
+KEEPER_INTERNAL_API_TIMEOUT_MS=52000
 ```
 
 Keep `DATABASE_URL` on Supabase **transaction** pooler (port 6543) for serverless, not session mode, unless you have raised `pool_size`.
+
+If hot cron (`ethos-sync-hot` every 2m on odd minutes) is healthy, set `KEEPER_ETHOS_SYNC_ENQUEUE_ENABLED=0` to drop the redundant keeper duplicate lane.
 
 ## AlfaClub JWT
 

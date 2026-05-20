@@ -161,6 +161,7 @@ export function mergeCreatorEthosScores(
 export async function refreshCreatorEthosProjection(params: {
   db: Db
   limit?: number
+  /** @deprecated Ignored; all refreshes use the full projection/scoring path. */
   mode?: 'full' | 'fast'
 }): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
   const available = await ensureCreatorEthosProjectionSchema(params.db)
@@ -172,7 +173,7 @@ export async function refreshCreatorEthosProjection(params: {
       250_000,
       Math.floor(
         params.limit ??
-          readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 50_000, 100, 250_000),
+          readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 10_000, 100, 250_000),
       ),
     ),
   )
@@ -239,8 +240,8 @@ export async function refreshCreatorEthosProjection(params: {
         tcc.created_at,
         tcc.market_cap_usd,
         tcc.volume_24h_usd,
-        pb.twitter_username,
-        pb.zora_handle,
+        COALESCE(pb.twitter_username, existing.twitter_username) AS twitter_username,
+        COALESCE(pb.zora_handle, existing.zora_handle) AS zora_handle,
         cs.score AS canonical_social_score,
         cs.level AS canonical_social_level,
         cs.updated_at AS canonical_social_updated_at,
@@ -262,9 +263,13 @@ export async function refreshCreatorEthosProjection(params: {
       FROM top_creator_coin tcc
       LEFT JOIN profile_best pb
         ON pb.creator_address = tcc.creator_address
+      LEFT JOIN public.creator_ethos_projection existing
+        ON existing.creator_address = tcc.creator_address
       LEFT JOIN user_ethos_identity_keys uiek_social
-        ON pb.twitter_username IS NOT NULL
-        AND uiek_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+        ON COALESCE(pb.twitter_username, existing.twitter_username) IS NOT NULL
+        AND uiek_social.ethos_userkey = (
+          'service:x.com:username:' || COALESCE(pb.twitter_username, existing.twitter_username)
+        )
       LEFT JOIN canonical_ethos_scores cs
         ON cs.canonical_user_id = uiek_social.canonical_user_id
       LEFT JOIN user_ethos_identity_keys uiek_wallet
@@ -284,8 +289,10 @@ export async function refreshCreatorEthosProjection(params: {
       LEFT JOIN zora_csw_owner_class zoc
         ON lower(zoc.eoa) = tcc.creator_address
       LEFT JOIN ethos_userkey_scores es_social
-        ON pb.twitter_username IS NOT NULL
-        AND es_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
+        ON COALESCE(pb.twitter_username, existing.twitter_username) IS NOT NULL
+        AND es_social.ethos_userkey = (
+          'service:x.com:username:' || COALESCE(pb.twitter_username, existing.twitter_username)
+        )
         AND es_social.status = 'matched'
       LEFT JOIN ethos_userkey_scores es_wallet
         ON es_wallet.ethos_userkey = ('address:' || tcc.creator_address)
@@ -471,8 +478,8 @@ export async function refreshCreatorEthosProjection(params: {
       created_at = EXCLUDED.created_at,
       market_cap_usd = EXCLUDED.market_cap_usd,
       volume_24h_usd = EXCLUDED.volume_24h_usd,
-      twitter_username = EXCLUDED.twitter_username,
-      zora_handle = EXCLUDED.zora_handle,
+      twitter_username = COALESCE(EXCLUDED.twitter_username, creator_ethos_projection.twitter_username),
+      zora_handle = COALESCE(EXCLUDED.zora_handle, creator_ethos_projection.zora_handle),
       ethos_score = EXCLUDED.ethos_score,
       ethos_level = EXCLUDED.ethos_level,
       ethos_score_source = EXCLUDED.ethos_score_source,
