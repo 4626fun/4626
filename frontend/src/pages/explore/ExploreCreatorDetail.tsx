@@ -10,6 +10,10 @@ import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
+import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
+import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
+import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
+import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -18,6 +22,7 @@ import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
+import { cn } from '@/lib/shared/utils'
 import {
   formatDateLabel,
   formatShortAddress,
@@ -389,16 +394,16 @@ function SocialLinks({ profile, compact = false }: { profile: ZoraProfile | null
 
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {links.map((link) => (
           <a
             key={link.name}
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-xs text-zinc-300"
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
           >
-            <span className="text-zinc-400">{link.icon}</span>
+            <span className="text-zinc-500">{link.icon}</span>
             <span>{link.handle}</span>
             <ExternalLink className="w-3 h-3 text-zinc-500" />
           </a>
@@ -458,16 +463,16 @@ function ResourceLinks({ tokenAddress, compact = false }: { tokenAddress: string
 
   if (compact) {
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         {links.map((link) => (
           <a
             key={link.name}
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] transition-colors text-xs text-zinc-300"
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
           >
-            <span className="w-4 h-4 overflow-hidden shrink-0">
+            <span className="w-3.5 h-3.5 overflow-hidden shrink-0">
               <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
             </span>
             <span>{link.name}</span>
@@ -808,6 +813,23 @@ export function ExploreCreatorDetail() {
   const totalCoinsCreated = createdCoins.length
   const creatorChatPeer = profile?.publicWallet?.walletAddress || creatorAddress || coin?.payoutRecipientAddress || ''
   const creatorChatAddress = creatorChatPeer && isAddress(creatorChatPeer) ? getAddress(creatorChatPeer) : null
+
+  const { ethosUserkey, ethosScore, theme: ethosTheme, hasPositiveScore: ethosHasPositiveScore } = useCreatorEthosPageTheme({
+    profile: profile ?? creatorProfile ?? null,
+    creatorAddress: creatorAddress ?? null,
+    serverEthosScore: coin?.ethosScore,
+    serverEthosLevel: coin?.ethosLevel,
+  })
+  const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
+  const ethosStatDisplay =
+    ethosHasPositiveScore && ethosScoreValue != null
+      ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false })
+      : '—'
+  const heroCoin = coin ?? ({
+    address: tokenAddress ?? '',
+    creatorAddress: creatorAddress ?? undefined,
+    creatorProfile: coin?.creatorProfile ?? (profile?.handle ? { handle: profile.handle } : undefined),
+  } as ZoraCoin)
   const copyButtonProps = {
     title: 'Copy address',
     resetMs: 2000,
@@ -926,9 +948,7 @@ export function ExploreCreatorDetail() {
         description={`Explore ${displayName}'s creator coin ${symbol} — view vault, trades, and activity on 4626.`}
         canonicalPath={`/explore/${chain}/${tokenAddressRaw}`}
       />
-      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_12%,rgba(59,130,246,0.12),transparent_50%),radial-gradient(circle_at_82%_78%,rgba(56,189,248,0.1),transparent_52%)]" />
-      </div>
+      <EthosPageAmbience theme={ethosTheme} />
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
         {/* Back navigation */}
         <motion.div
@@ -946,12 +966,13 @@ export function ExploreCreatorDetail() {
         </motion.div>
 
         {/* Recreated hero scene */}
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-20 sm:mb-24 overflow-hidden bg-black min-h-[92vh] sm:min-h-screen">
+        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-20 sm:mb-24 overflow-hidden bg-black min-h-[112vh] sm:min-h-[124vh]">
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
               <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-65" />
               <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/45 to-black/25" />
               <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/58" />
+              <EthosHeroScoreWash theme={ethosTheme} />
             </div>
           ) : null}
           <div className="absolute inset-0 opacity-15 pointer-events-none">
@@ -963,37 +984,63 @@ export function ExploreCreatorDetail() {
             ))}
           </div>
 
+          <div className="absolute top-5 left-4 sm:top-7 sm:left-6 lg:left-8 z-20 flex flex-col items-start gap-1.5 pointer-events-auto max-w-[min(90vw,760px)]">
+            {website ? (
+              <a
+                href={website.startsWith('http') ? website : `https://${website}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-zinc-400 hover:text-white transition-colors"
+              >
+                {website.replace(/^https?:\/\//, '')}
+              </a>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <SocialLinks profile={profile} compact />
+              <ResourceLinks tokenAddress={tokenAddress} compact />
+            </div>
+          </div>
+
           <motion.div
             ref={heroRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[88vh] sm:min-h-screen p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
+            className="relative min-h-[108vh] sm:min-h-[120vh] p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
           >
             <div className="max-w-4xl">
-              <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-400 mb-8">
-                <span className="w-10 sm:w-12 h-px bg-white/30" />
+              <span
+                className={cn(
+                  'inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] mb-8',
+                  ethosTheme.isActive ? ethosTheme.accentTextClass : 'text-zinc-400',
+                )}
+              >
+                <span className="w-10 sm:w-12 h-px" style={ethosTheme.dividerStyle} />
                 {handle ? `@${handle}` : 'Creator'}
+                {ethosTheme.isActive ? (
+                  <span className={cn('normal-case tracking-normal text-[10px]', ethosTheme.accentStrongTextClass)}>
+                    · {ethosTheme.levelLabel}
+                  </span>
+                ) : null}
               </span>
 
               <div className="flex items-start gap-4 sm:gap-6">
-                <div className="mt-1 w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden border border-white/20 bg-black/40 shrink-0">
-                  {heroIconImage ? (
-                    <img
-                      src={heroIconImage}
-                      alt={`${symbol} creator coin icon`}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-300 text-sm font-mono uppercase">
-                      {symbol.slice(0, 1)}
-                    </div>
-                  )}
+                <div className="mt-1 shrink-0">
+                  <CreatorEthosAvatar
+                    coin={heroCoin}
+                    imageUrl={heroIconImage}
+                    fallbackLabel={symbol}
+                    ethosUserkey={ethosUserkey}
+                    ethosScore={ethosScore}
+                    size="lg"
+                  />
                 </div>
                 <h1 className="text-[clamp(2.2rem,8vw,7rem)] leading-[0.9] tracking-tight font-semibold text-white">
                   {displayName}
                   <br />
-                  <span className="text-white/35">creator economy.</span>
+                  <span className={ethosTheme.isActive ? `${ethosTheme.accentTextClass} opacity-80` : 'text-white/35'}>
+                    creator economy.
+                  </span>
                 </h1>
               </div>
 
@@ -1023,7 +1070,10 @@ export function ExploreCreatorDetail() {
                           imageUrl: avatarUrl || undefined,
                         })
                       }
-                      className="px-7 py-3 rounded-full border border-white/20 text-white font-medium text-sm sm:text-base inline-flex items-center gap-2 hover:bg-white/10 transition-colors"
+                      className={cn(
+                        'px-7 py-3 rounded-full border font-medium text-sm sm:text-base inline-flex items-center gap-2 transition-colors',
+                        ethosTheme.outlineCtaClass,
+                      )}
                     >
                       <MessageSquare className="w-4 h-4" />
                       Message Creator
@@ -1034,38 +1084,31 @@ export function ExploreCreatorDetail() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 sm:gap-8 mt-10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 sm:gap-8 mt-10 lg:mt-16 lg:max-w-[1100px] lg:ml-auto">
               {[
-                { value: volumeWindow === '24h' ? volume24h : totalVolume, label: volumeWindow === '24h' ? '24H volume' : 'All-time volume' },
-                { value: marketCap, label: 'Market cap' },
-                { value: holders, label: 'Holders' },
-                { value: totalCoinsCreated, label: 'Coins created' },
-                { value: createdAt, label: 'Created' },
+                { value: volumeWindow === '24h' ? volume24h : totalVolume, label: volumeWindow === '24h' ? '24H volume' : 'All-time volume', toneClass: 'text-white' },
+                { value: marketCap, label: 'Market cap', toneClass: 'text-white' },
+                { value: holders, label: 'Holders', toneClass: 'text-white' },
+                {
+                  value: ethosStatDisplay,
+                  label: 'Ethos score',
+                  toneClass: ethosHasPositiveScore ? ethosTheme.accentTextClass : 'text-zinc-500',
+                  footer:
+                    typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
+                      <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
+                    ) : null,
+                },
+                { value: totalCoinsCreated, label: 'Coins created', toneClass: 'text-white' },
+                { value: createdAt, label: 'Created', toneClass: 'text-white' },
               ].map((stat) => (
-                <div key={stat.label} className="flex flex-col gap-2">
-                  <span className="text-3xl sm:text-4xl font-semibold text-white">{stat.value}</span>
+                <div key={stat.label} className="flex flex-col gap-2 lg:items-end lg:text-right">
+                  <span className={cn('text-3xl sm:text-4xl font-semibold tabular-nums', stat.toneClass)}>{stat.value}</span>
                   <span className="text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
+                  {'footer' in stat && stat.footer ? <div className="lg:flex lg:justify-end">{stat.footer}</div> : null}
                 </div>
               ))}
             </div>
           </motion.div>
-
-          <div className="absolute bottom-0 inset-x-0 z-20 px-6 sm:px-8 py-3 flex flex-wrap items-center gap-3 pointer-events-auto text-zinc-300">
-            {website ? (
-              <a
-                href={website.startsWith('http') ? website : `https://${website}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-mono uppercase tracking-[2px] text-cyan-400 hover:text-white transition-colors px-2"
-              >
-                {website.replace(/^https?:\/\//, '')}
-              </a>
-            ) : null}
-            <div className="ml-auto flex flex-wrap items-center gap-2 sm:gap-3">
-              <SocialLinks profile={profile} compact />
-              <ResourceLinks tokenAddress={tokenAddress} compact />
-            </div>
-          </div>
         </section>
 
         <section
@@ -1075,8 +1118,7 @@ export function ExploreCreatorDetail() {
         >
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
-          <div className="pointer-events-none absolute -top-20 left-1/4 w-72 h-72 bg-blue-500/14 blur-[120px]" />
-          <div className="pointer-events-none absolute -bottom-16 right-1/4 w-80 h-80 bg-sky-500/12 blur-[130px]" />
+          <EthosBlurOrbs theme={ethosTheme} />
 
           {imageBasedSceneCoins.length > 0 ? (
             <div

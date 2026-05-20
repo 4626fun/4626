@@ -146,6 +146,20 @@ const ETHOS_LEVEL_PALETTES: Record<string, EthosScorePalette> = {
   },
 }
 
+/** Accent hex for score-hued avatar glow (aligned with Ethos brand score bands). */
+const ETHOS_LEVEL_ACCENT_HEX: Record<string, string> = {
+  untrusted: '#dc3545',
+  questionable: '#d6a411',
+  neutral: '#c9c6bd',
+  known: '#879bb8',
+  established: '#4e94ca',
+  reputable: '#2d8fde',
+  exemplary: '#49a268',
+  distinguished: '#16a34a',
+  revered: '#8064b1',
+  renowned: '#7452ae',
+}
+
 function isAddress(value: string | null | undefined): value is `0x${string}` {
   return typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value)
 }
@@ -224,6 +238,11 @@ function inferEthosLevelFromScore(score: number | null | undefined): string {
 export function getEthosScorePalette(score: number | null | undefined, level?: string | null): EthosScorePalette {
   const key = score === 0 ? 'neutral' : normalizeEthosLevel(level) ?? inferEthosLevelFromScore(score)
   return ETHOS_LEVEL_PALETTES[key] ?? ETHOS_LEVEL_PALETTES.neutral!
+}
+
+export function getEthosScoreAccentHex(score: number | null | undefined, level?: string | null): string {
+  const key = score === 0 ? 'neutral' : normalizeEthosLevel(level) ?? inferEthosLevelFromScore(score)
+  return ETHOS_LEVEL_ACCENT_HEX[key] ?? ETHOS_LEVEL_ACCENT_HEX.neutral!
 }
 
 function scoreTone(score: number | null | undefined, level?: string | null): string {

@@ -14,6 +14,37 @@ vi.mock('@/components/seo/PageMeta', () => ({
   PageMeta: () => null,
 }))
 
+vi.mock('@/components/explore/CreatorEthosAvatar', () => ({
+  CreatorEthosAvatar: () => React.createElement('div', { 'data-testid': 'creator-ethos-avatar' }),
+}))
+
+vi.mock('@/components/explore/ethosPageTheme', () => ({
+  useCreatorEthosPageTheme: () => ({
+    ethosUserkey: null,
+    ethosScore: null,
+    theme: {
+      isActive: false,
+      accentTextClass: 'text-zinc-400',
+      accentStrongTextClass: 'text-white',
+      levelLabel: 'Neutral',
+      dividerStyle: {},
+      outlineCtaClass: 'border-white/20 text-white hover:bg-white/10',
+    },
+    hasPositiveScore: false,
+    isLoading: false,
+  }),
+}))
+
+vi.mock('@/components/explore/EthosPageAmbience', () => ({
+  EthosPageAmbience: () => null,
+  EthosHeroScoreWash: () => null,
+  EthosBlurOrbs: () => null,
+}))
+
+vi.mock('@/components/explore/ExploreEthosRefreshButton', () => ({
+  ExploreEthosRefreshButton: () => null,
+}))
+
 vi.mock('@/lib/zora/client', () => ({
   fetchZoraCoin: vi.fn(async () => ({
     address: '0x1111111111111111111111111111111111111111',

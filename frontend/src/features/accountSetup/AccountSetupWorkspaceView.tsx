@@ -19,6 +19,7 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
+import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
@@ -128,8 +129,9 @@ export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
   summaryActions?: ReactNode
+  waitlistFooter?: ReactNode
 }) {
-  const { context, controller, summaryActions } = props
+  const { context, controller, summaryActions, waitlistFooter } = props
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
   const {
@@ -206,6 +208,22 @@ export function AccountSetupWorkspaceView(props: {
     subAccountFlowEnabled &&
     Boolean(canonicalCswAddress) &&
     executionTrack === 'none-yet'
+  const persistedSubAccountAddress =
+    me.accountSignals.baseSubAccount?.address?.trim() ||
+    me.baseSubAccount?.trim() ||
+    null
+  const subAccountOwnerInstallPanel =
+    context !== 'waitlist' &&
+    subAccountFlowEnabled &&
+    canonicalCswAddress &&
+    persistedSubAccountAddress ? (
+      <SubAccountOwnerInstallPanel
+        variant="recovery"
+        showHeader={false}
+        parentAddress={canonicalCswAddress}
+        subAccountAddress={persistedSubAccountAddress}
+      />
+    ) : null
   const signingStepComplete =
     executionTrack === 'sub-account' ||
     executionTrack === 'migration-pending' ||
@@ -289,8 +307,8 @@ export function AccountSetupWorkspaceView(props: {
           <div className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/25 bg-emerald-500/[0.1] px-2.5 py-1 text-[11px] font-medium text-emerald-300">
-                  <CheckCircle2 className="h-3 w-3" />
+                <div className="inline-flex items-center gap-2 text-[11px] text-zinc-400">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500" />
                   Zora linked · Signing enabled
                 </div>
                 {(normalizedZoraHandle || canonicalCswAddress) ? (
@@ -323,7 +341,7 @@ export function AccountSetupWorkspaceView(props: {
                 type="button"
                 disabled={busyProvider === 'email'}
                 onClick={() => void onSwitchAccount()}
-                className="shrink-0 text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
+                className="shrink-0 text-xs font-medium text-zinc-500 transition-colors hover:text-zinc-300 disabled:opacity-50"
               >
                 {busyProvider === 'email' ? 'Resetting…' : 'Reset'}
               </button>
@@ -331,13 +349,16 @@ export function AccountSetupWorkspaceView(props: {
           </div>
 
           {summaryActions ? (
-            <section className="rounded-[13px] border border-brand-primary/20 bg-brand-primary/[0.07] px-4 py-4">
-              <div className="mb-2 text-[11px] uppercase tracking-[0.14em] text-brand-200">Earn points faster</div>
+            <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
               {summaryActions}
             </section>
           ) : null}
 
+          {subAccountOwnerInstallPanel}
+
           <WaitlistAdvancedSection controller={controller} label="Account settings" />
+
+          {waitlistFooter ? <div className="flex justify-center pt-1">{waitlistFooter}</div> : null}
         </div>
       )
     }
@@ -574,18 +595,22 @@ export function AccountSetupWorkspaceView(props: {
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
                     {preferBaseAppSubAccountSetup ? (
-                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
-                        <span className="font-semibold">Base App wallet detected.</span>{' '}
-                        Use the waitlist sub-account flow instead of adding an owner on the parent
-                        smart wallet from this site.
-                        <a
-                          href={buildWaitlistSetupUrl('base-app')}
-                          className="mt-2 inline-flex text-brand-200 underline decoration-dotted underline-offset-2"
-                        >
-                          Connect Base App sub-account
-                        </a>
+                      <div className="space-y-4">
+                        <p className="text-xs leading-relaxed text-zinc-500">
+                          <span className="text-zinc-400">Base App path.</span> Finish signing on your app wallet in
+                          Base App — not on the parent wallet from this site.{' '}
+                          <a
+                            href={buildWaitlistSetupUrl('base-app')}
+                            className="text-brand-200/90 underline decoration-dotted underline-offset-2 hover:text-brand-100"
+                          >
+                            Open setup
+                          </a>
+                        </p>
+                        {subAccountOwnerInstallPanel}
                       </div>
-                    ) : null}
+                    ) : (
+                      subAccountOwnerInstallPanel
+                    )}
                     {shouldHintBaseAccountForZora ? (
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
@@ -603,29 +628,31 @@ export function AccountSetupWorkspaceView(props: {
                         in Safari or Chrome, or use the sub-account flow when available.
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
-                        onClick={() =>
-                          needsBaseAccountReconnect
-                            ? connectOwnerWallet()
-                            : canSubmitSigningApproval
-                              ? void onEnable4626Signing()
-                              : connectOwnerWallet()
-                        }
-                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
-                      >
-                        {primarySigningActionLabel}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void onResetOwnerApproval()}
-                        className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
-                      >
-                        Reset
-                      </button>
-                    </div>
+                    {!preferBaseAppSubAccountSetup ? (
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
+                          onClick={() =>
+                            needsBaseAccountReconnect
+                              ? connectOwnerWallet()
+                              : canSubmitSigningApproval
+                                ? void onEnable4626Signing()
+                                : connectOwnerWallet()
+                          }
+                          className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
+                        >
+                          {primarySigningActionLabel}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onResetOwnerApproval()}
+                          className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
+                        >
+                          Reset
+                        </button>
+                      </div>
+                    ) : null}
 
                     {/* Contextual status — only rendered when relevant */}
                     {!connectedOwnerReady && (!connectedSignerLabel || /no wallet connected/i.test(connectedSignerLabel)) ? (
@@ -671,6 +698,8 @@ export function AccountSetupWorkspaceView(props: {
         {allDone && summaryActions ? (
           <div className="pt-1">{summaryActions}</div>
         ) : null}
+
+        {waitlistFooter ? <div className="flex justify-center pt-2">{waitlistFooter}</div> : null}
       </div>
     )
   }
@@ -1109,6 +1138,7 @@ export function AccountSetupWorkspaceView(props: {
               </div>
               {summaryActions ? <div className="flex flex-wrap items-center gap-2">{summaryActions}</div> : null}
             </section>
+            <WaitlistAdvancedSection controller={controller} label="Account settings" />
           </div>
         </div>
       </section>

@@ -916,7 +916,8 @@ export function ExploreCreators() {
               )}
               {ethosTopPreview ? (
                 <span className="block mt-1 text-zinc-500">
-                  Top loaded scores: {ethosTopPreview}
+                  Top scores on this page: {ethosTopPreview}
+                  {currentSort === 'ethosScore' ? ' (server Ethos sort; run projection refresh if peak looks low)' : ''}
                 </span>
               ) : null}
             </div>

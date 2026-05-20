@@ -79,11 +79,7 @@ import { createPrivyScwSigner } from '../../_lib/wallet/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agent/agentRegistrationPublisher.js'
 import { formatWelcomeNumberedOptions } from '../../_lib/messaging/chatCommandFallback.js'
-import {
-  extractWalletSendCallsFromUniswapActionReply,
-  isUniswapQuoteReply,
-  type XmtpAgentReply,
-} from '../../_lib/messaging/xmtpInteractive.js'
+import type { XmtpAgentReply } from '../../_lib/messaging/xmtpInteractive.js'
 import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
 import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
 import { claimDailyXmtpCheckin } from '../../_lib/lottery/lotteryAmoe.js'
@@ -587,38 +583,6 @@ const welcomedConversations = new WelcomeConversationTracker({
 })
 
 const WELCOME_MESSAGE = formatWelcomeNumberedOptions()
-
-function buildActionReplyEnvelope(params: {
-  actionName: string
-  actionReply: string
-  senderAddress: string | null
-  isKeeprStatusCommand: boolean
-}): XmtpAgentReply | string {
-  const { actionName, actionReply, senderAddress, isKeeprStatusCommand } = params
-  if (isKeeprStatusCommand) {
-    return {
-      text: actionReply,
-      followUp: 'keepr-status-followup',
-      reactToInbound: true,
-    }
-  }
-  if (actionName === 'UNISWAP_SKILL') {
-    const walletSendCalls = extractWalletSendCallsFromUniswapActionReply({
-      actionReply,
-      fallbackFrom: senderAddress,
-    })
-    if (walletSendCalls) {
-      return {
-        text: `${actionReply}\n\nConfirm this swap in Base App using the transaction card below.`,
-        walletSendCalls,
-      }
-    }
-    if (isUniswapQuoteReply(actionReply)) {
-      return { text: actionReply, followUp: 'swap-quote-actions' }
-    }
-  }
-  return actionReply
-}
 
 type EnvValidationResult = {
   errors: string[]
@@ -1430,12 +1394,14 @@ async function handleMessage(
           action: actionName,
           score: candidate.score,
         })
-        return buildActionReplyEnvelope({
-          actionName,
-          actionReply,
-          senderAddress: msg.senderAddress,
-          isKeeprStatusCommand,
-        })
+        if (isKeeprStatusCommand) {
+          return {
+            text: actionReply,
+            followUp: 'keepr-status-followup',
+            reactToInbound: true,
+          }
+        }
+        return actionReply
       }
     } catch (error) {
       const agentError = toAgentError(error, 'ACTION_FAILED', 'Action execution failed')

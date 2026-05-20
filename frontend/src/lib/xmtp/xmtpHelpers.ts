@@ -47,11 +47,6 @@ export type ParsedWireContent = {
     description: string
     buttons: Array<{ id: string; label: string; style?: 'primary' | 'secondary' | 'danger' }>
   } | null
-  walletSendCalls?: {
-    from: string
-    chainId: string
-    calls: Array<{ to: string; data: string; metadata?: { description?: string } }>
-  } | null
   reactionEmoji?: string | null
 }
 
@@ -112,13 +107,13 @@ export function parseWireContent(raw: string): ParsedWireContent {
     contentType: 'text',
     replyToId,
     actions: null,
-    walletSendCalls: null,
     reactionEmoji: null,
   }
 }
 
 export type SendChatMessageOptions = {
   replyToId?: string | null
+  /** Inbox id of the message being replied to (required for native XMTP replies). */
   replyToSenderInboxId?: string | null
 }
 
@@ -129,10 +124,6 @@ export function encodeWireContent(text: string, options?: SendChatMessageOptions
   if (!replyToId) return body
   return `[reply:${replyToId}] ${body}`
 }
-
-// ---------------------------------------------------------------------------
-// XMTP environment + error classifiers
-// ---------------------------------------------------------------------------
 
 export type XmtpEnvLabel = 'production' | 'dev' | 'local'
 

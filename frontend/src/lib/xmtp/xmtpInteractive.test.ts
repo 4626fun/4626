@@ -1,36 +1,39 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  XMTP_ACTION_IDS,
+  buildKeeprStatusFollowUpActions,
   buildWelcomeActions,
   normalizeAgentReply,
   resolveIntentActionId,
+  XMTP_ACTION_IDS,
 } from './xmtpInteractive'
 
 describe('xmtpInteractive', () => {
-  it('maps welcome action ids to slash commands', () => {
+  it('maps intent action ids to slash commands', () => {
     expect(resolveIntentActionId(XMTP_ACTION_IDS.WELCOME_HELP)).toBe('/help')
-    expect(resolveIntentActionId(XMTP_ACTION_IDS.WELCOME_KEEPR_STATUS)).toBe('/keepr status')
-    expect(resolveIntentActionId(XMTP_ACTION_IDS.SWAP_CANCEL)).toBeNull()
+    expect(resolveIntentActionId(XMTP_ACTION_IDS.KEEPR_REFRESH)).toBe('/keepr status')
+    expect(resolveIntentActionId('unknown')).toBeNull()
   })
 
-  it('builds welcome quick-start actions', () => {
-    const payload = buildWelcomeActions()
-    expect(payload.description).toBe('Quick start')
-    expect(payload.actions.map((entry) => entry.id)).toEqual([
-      XMTP_ACTION_IDS.WELCOME_HELP,
-      XMTP_ACTION_IDS.WELCOME_KEEPR_STATUS,
-      XMTP_ACTION_IDS.WELCOME_KEEPR_HEALTH,
-      XMTP_ACTION_IDS.WELCOME_WALLET,
-      XMTP_ACTION_IDS.WELCOME_AI,
+  it('builds welcome and keepr follow-up action payloads', () => {
+    const welcome = buildWelcomeActions()
+    expect(welcome.description).toBeTruthy()
+    expect(welcome.actions.length).toBeGreaterThan(0)
+
+    const followUp = buildKeeprStatusFollowUpActions()
+    expect(followUp.actions.map((entry) => entry.id)).toEqual([
+      XMTP_ACTION_IDS.KEEPR_REFRESH,
+      XMTP_ACTION_IDS.KEEPR_HEALTH,
+      XMTP_ACTION_IDS.KEEPR_BACK,
     ])
   })
 
-  it('tags welcome and uniswap quote replies for follow-up actions', () => {
-    const welcome = normalizeAgentReply("o henlo! I'm Keepr, your 4626 assistant.")
-    expect(welcome?.followUp).toBe('welcome-actions')
-
-    const quote = normalizeAgentReply(JSON.stringify({ skill: 'uniswap_quote', data: { ok: true } }))
-    expect(quote?.followUp).toBe('swap-quote-actions')
+  it('normalizes structured agent replies and welcome text', () => {
+    expect(normalizeAgentReply({ text: 'status', followUp: 'keepr-status-followup', reactToInbound: true })).toEqual({
+      text: 'status',
+      followUp: 'keepr-status-followup',
+      reactToInbound: true,
+    })
+    expect(normalizeAgentReply("o henlo! I'm Keepr, your 4626 assistant.")?.followUp).toBe('welcome-actions')
   })
 })

@@ -17,7 +17,8 @@
   "pnpm": {
     "overrides": {
       "undici": "6.24.0",
-      "esbuild": "0.25.0"
+      "esbuild": "0.25.0",
+      "ws": "8.20.1"
     }
   }
 }

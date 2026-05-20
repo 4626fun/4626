@@ -6,9 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
-import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import {
-  clearStoredWaitlistReferralCode,
   getMarketingWaitlistEntryUrl,
   readStoredWaitlistReferralCode,
   storeWaitlistReferralCode,
@@ -16,21 +14,17 @@ import {
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
-import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'
+import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
 
 import {
   applyWaitlistSubAccountConnectOverlay,
-  mergeCanonicalWaitlistAccount,
   type WaitlistStep,
   type WaitlistSubAccountConnectOverlay,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
-  isWaitlistSigningReady,
 } from './waitlistFlowState'
 import {
-  clearPersistedSubAccountConnectOverlay,
-  readPersistedSubAccountConnectOverlay,
   writePersistedSubAccountConnectOverlay,
 } from './waitlistSubAccountConnectCache'
 import {
@@ -43,44 +37,32 @@ import {
 import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
-import { WaitlistSetupTray } from './WaitlistSetupTray'
+import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import type { AccountSetupMe } from '@/features/accountSetup/types'
+import { getSubAccountCompletionAccountKey, type WaitlistAccountsSummary } from './waitlistAccountTypes'
+import {
+  FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS,
+  FINALIZING_BACKGROUND_RETRY_MS,
+  FLOW_TIMEOUT_MS,
+  PRIVY_LOGOUT_SETTLE_ATTEMPTS,
+  PRIVY_LOGOUT_SETTLE_DELAY_MS,
+  RECOVERY_REQUIRED_MESSAGE,
+  SESSION_FINALIZING_RETRY_MESSAGE,
+  SESSION_MISMATCH_MESSAGE,
+  STALE_PRIVY_SESSION_MESSAGE,
+  getWalletProviderCollisionMessage,
+  isWalletProviderCollisionError,
+  withTimeout,
+} from './waitlistBootstrapUtils'
+import {
+  isSessionFinalizingError,
+  useWaitlistBootstrap,
+} from './useWaitlistBootstrap'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import { WaitlistConnectBaseApp, type WaitlistConnectBaseAppResult } from './WaitlistConnectBaseApp'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
-type AccountsSummary = {
-  privyUserId: string
-  email: string | null
-  emailVerified: boolean
-  appAccessStatus: string | null
-  baseSubAccount: string | null
-  linkedMethods: Record<string, string[]>
-  accountSignals: {
-    linked: boolean
-    canonicalCswAddress: string | null
-    baseSubAccount: {
-      address: string | null
-      registered: boolean
-      isDistinctFromCsw: boolean
-    }
-    executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
-    privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
-    creatorCoin: { address: string } | null
-    zoraHandle: string | null
-    lastResolvedAt: string | null
-  }
-  score: { points: number; tier: number }
-}
-
-type WaitlistBootstrapResponse =
-  | {
-      requiresPrivyAuth: true
-      email: string | null
-      waitlistEntryId: number | null
-    }
-  | ({
-      requiresPrivyAuth: false
-    } & AccountsSummary)
+type AccountsSummary = WaitlistAccountsSummary
 
 type WaitlistStatsData = {
   signedUpCount: number
@@ -88,41 +70,16 @@ type WaitlistStatsData = {
   spotsRemaining: number
 }
 
-function getSubAccountCompletionAccountKey(account: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): string | null {
-  const privyUserId = account?.privyUserId?.trim()
-  if (privyUserId) return `privy:${privyUserId}`
-  const email = account?.email?.trim().toLowerCase()
-  if (email) return `email:${email}`
-  return null
-}
-
 const HANDOFF_QUERY_KEY = 'cv_handoff'
-const FLOW_TIMEOUT_MS = 20_000
 const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => reject(new Error(`${label} timed out`)), ms)
-    promise
-      .then(resolve)
-      .catch(reject)
-      .finally(() => clearTimeout(t))
-  })
-}
+const WAITLIST_SPINNER_TIMEOUT_MESSAGE = 'Sign-in is taking longer than expected. Tap Continue to retry.'
+const WAITLIST_BUSY_WATCHDOG_MS = 25_000
 
 async function runPrivyLoginWithTimeout(
   login: (options?: unknown) => Promise<unknown>,
   options: unknown,
 ): Promise<void> {
   await withTimeout(Promise.resolve().then(() => login(options)), FLOW_TIMEOUT_MS, 'Sign-in')
-}
-
-function readApiErrorMessage(payload: unknown, fallback: string): string {
-  if (payload && typeof payload === 'object') {
-    const maybeError = (payload as { error?: unknown }).error
-    if (typeof maybeError === 'string' && maybeError.trim()) return maybeError
-  }
-  return fallback
 }
 
 function isSessionEmailMismatchError(message: unknown): boolean {
@@ -146,31 +103,6 @@ function getSignInNetworkUnstableMessage(): string {
   return 'Sign-in network is unstable right now. Stay on this page and retrying will continue automatically.'
 }
 
-function isWalletProviderCollisionError(error: unknown): boolean {
-  const text = typeof error === 'string' ? error : typeof (error as any)?.message === 'string' ? (error as any).message : ''
-  const normalized = text.trim().toLowerCase()
-  if (!normalized) return false
-  return (
-    normalized.includes('cannot set property ethereum of #<window> which has only a getter') ||
-    normalized.includes('cannot redefine property: ethereum') ||
-    normalized.includes('wallet proxy not initialized')
-  )
-}
-
-function getWalletProviderCollisionMessage(): string {
-  return 'A browser wallet extension is interfering with sign-in. Disable conflicting wallet extensions, then reload and try again.'
-}
-
-function isSessionFinalizingError(error: unknown): boolean {
-  const text =
-    error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
-      ? String((error as { message: string }).message)
-      : typeof error === 'string'
-        ? error
-        : ''
-  return text.toLowerCase().includes('session is still finalizing')
-}
-
 async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
   if (!target) return false
   for (const methodName of methodNames) {
@@ -181,19 +113,6 @@ async function maybeCallMethod(target: any, methodNames: string[], args: unknown
   }
   return false
 }
-
-const RECOVERY_REQUIRED_MESSAGE = 'This email already has a 4626 account. Use existing account sign-in to continue.'
-const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Click Continue with email to try again.'
-const SESSION_FINALIZING_RETRY_MESSAGE = 'Sign-in session is still finalizing. We will keep retrying automatically.'
-const STALE_PRIVY_SESSION_MESSAGE = 'Sign-in got stuck in an old session. Tap Continue to retry with a fresh email sign-in.'
-const WAITLIST_SPINNER_TIMEOUT_MESSAGE = 'Sign-in is taking longer than expected. Tap Continue to retry.'
-const WAITLIST_BUSY_WATCHDOG_MS = 25_000
-const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
-const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
-const FINALIZING_BACKGROUND_RETRY_MS = 1_500
-const FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS = 5
-const PRIVY_LOGOUT_SETTLE_ATTEMPTS = 10
-const PRIVY_LOGOUT_SETTLE_DELAY_MS = 150
 
 function isTelegramMiniAppRuntime(): boolean {
   if (typeof window === 'undefined') return false
@@ -309,13 +228,10 @@ function WaitlistAuthStep(props: {
   // NOT render `0 / 0` or the "Current round full" banner — that would lie
   // to the user. Hide both lines until we have real data.
   const hasWaitlistStats = waitlistStats != null && capacity > 0
-  const progressLabel = hasWaitlistStats
-    ? `Waitlist progress ${signedUpCount.toLocaleString()} / ${capacity.toLocaleString()}`
-    : null
-  const urgencyLabel = hasWaitlistStats
+  const waitlistProgressLine = hasWaitlistStats
     ? spotsRemaining <= 0
-      ? 'Current round full. Next approvals unlock the next batch.'
-      : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
+      ? `${signedUpCount.toLocaleString()} of ${capacity.toLocaleString()} joined · current round full`
+      : `${signedUpCount.toLocaleString()} of ${capacity.toLocaleString()} joined · ${spotsRemaining.toLocaleString()} spots left`
     : null
 
   const stagger = (i: number) => (
@@ -339,75 +255,22 @@ function WaitlistAuthStep(props: {
       animate={motionEnabled ? { opacity: 1 } : false}
       exit={motionEnabled ? { opacity: 0, y: -6 } : undefined}
       transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
-      className="relative flex min-h-[460px] items-center justify-center py-12 sm:py-20"
+      className="relative flex min-h-[420px] items-center justify-center py-12 sm:py-16"
     >
-      {/* dot grid texture — Base brand pattern */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)',
-          backgroundSize: '24px 24px',
-        }}
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--brand-primary)/0.08),transparent_65%)]"
       />
-
-      {/* film grain overlay */}
-      {motionEnabled ? (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-            backgroundSize: '128px 128px',
-          }}
-        />
-      ) : (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--brand-primary)/0.14),transparent_60%)]"
-        />
-      )}
-
-      {/* dual ambient glow — app brand blue core + halo */}
-      {motionEnabled ? (
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <motion.div
-            animate={{ opacity: [0.18, 0.28, 0.18], scale: [1, 1.04, 1] }}
-            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute h-64 w-64 rounded-full bg-[rgb(var(--brand-primary)/0.2)] blur-[80px]"
-          />
-          <motion.div
-            animate={{ opacity: [0.08, 0.15, 0.08], scale: [1, 1.08, 1] }}
-            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-            className="absolute h-96 w-96 rounded-full bg-[rgb(var(--brand-hover)/0.1)] blur-[120px]"
-          />
-        </div>
-      ) : null}
 
       <div className="relative z-10 w-full max-w-md text-center">
         <motion.div
           {...stagger(0)}
-          className="rounded-2xl border border-white/10 bg-black/35 px-4 py-4 shadow-2xl shadow-black/35 backdrop-blur sm:px-6 sm:py-5"
+          className="rounded-2xl border border-white/[0.08] bg-zinc-950/80 px-5 py-6 sm:px-7 sm:py-7"
         >
-          {/* headline */}
-          <div className="space-y-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
-              Secure onboarding
-            </p>
-            <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white sm:text-[2.2rem]">{authUi.title}</h2>
-          </div>
-
-          {/* status chips */}
-          <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2 text-[9px] font-semibold uppercase tracking-[0.11em]">
-            {progressLabel ? (
-              <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-zinc-300">
-                {progressLabel}
-              </span>
-            ) : null}
-            {urgencyLabel ? (
-              <span className="inline-flex items-center rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-sky-300">
-                {urgencyLabel}
-              </span>
+          <div className="space-y-2">
+            <h2 className="text-[1.75rem] font-semibold leading-tight tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
+            {waitlistProgressLine ? (
+              <p className="text-xs text-zinc-500">{waitlistProgressLine}</p>
             ) : null}
           </div>
 
@@ -441,9 +304,9 @@ function WaitlistAuthStep(props: {
             </button>
             <button
               type="button"
-              disabled={busy || signOutBusy}
+              disabled={signOutBusy}
               onClick={() => void onSignOut()}
-              className="inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-xs font-medium text-rose-400 transition hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-50"
+              className="text-xs text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {signOutBusy ? 'Signing out…' : 'Sign out'}
             </button>
@@ -561,10 +424,6 @@ export function WaitlistFlow(props: {
   const authBootstrapAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
-  const tokenlessFinalizingBootstrapCooldownUntilRef = useRef(0)
-  const recoveryRequiredBootstrapCooldownUntilRef = useRef(0)
-  const bootstrapRequestSeqRef = useRef(0)
-  const bootstrapInFlightPromiseRef = useRef<Promise<AccountsSummary | null> | null>(null)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
@@ -628,239 +487,30 @@ export function WaitlistFlow(props: {
     }
   }, [])
 
-  const runBootstrap = useCallback(
-    async (opts?: {
-      waitForTokenHydration?: boolean
-      bypassRecoveryCooldown?: boolean
-    }): Promise<AccountsSummary | null> => {
-      let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
-      let embeddedEoaAddressForStep = embeddedEoaAddress
-      const waitForTokenHydration = opts?.waitForTokenHydration === true
-      const bypassRecoveryCooldown = opts?.bypassRecoveryCooldown === true
-      const recoveryCooldownActive = recoveryRequiredBootstrapCooldownUntilRef.current > Date.now()
-      if (!bypassRecoveryCooldown && recoveryCooldownActive) {
-        setStep('auth')
-        setRecoveryRequired(true)
-        const err = new Error(RECOVERY_REQUIRED_MESSAGE) as Error & { recoveryRequired?: boolean; code?: string }
-        err.recoveryRequired = true
-        err.code = 'RECOVERY_REQUIRED_EMAIL_BOUND'
-        throw err
-      }
-
-      const readPrivyToken = async (): Promise<string | null> => {
-        try {
-          return await withTimeout(getAccessToken(), FLOW_TIMEOUT_MS, 'Sign-in token')
-        } catch (tokenError: unknown) {
-          if (isWalletProviderCollisionError(tokenError)) {
-            throw new Error(getWalletProviderCollisionMessage())
-          }
-          return null
-        }
-      }
-
-      let token = await readPrivyToken()
-      if (!token && waitForTokenHydration) {
-        const tokenRetryDelaysMs = [250, 500, 900]
-        for (const delayMs of tokenRetryDelaysMs) {
-          if (token) break
-          await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-          token = await readPrivyToken()
-        }
-      }
-
-      if (!token) {
-        setStep('auth')
-        throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
-      }
-
-      if (tokenlessFinalizingBootstrapCooldownUntilRef.current > Date.now()) {
-        setStep('auth')
-        throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
-      }
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) {
-        headers['X-Privy-Token'] = token
-        try {
-          let canonicalization = await withTimeout(
-            runCanonicalizationPipeline({
-              privyToken: token,
-            }),
-            FLOW_TIMEOUT_MS,
-            'Account sync',
-          )
-          if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-            const embeddedWallet = await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
-            embeddedEoaAddressForStep = embeddedWallet.address
-            canonicalization = await withTimeout(
-              runCanonicalizationPipeline({
-                privyToken: token,
-              }),
-              FLOW_TIMEOUT_MS,
-              'Account sync',
-            )
-          }
-          if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
-            bootstrappedCanonicalWallet = canonicalization.onboarding
-          }
-        } catch (canonicalizationError: unknown) {
-          if (isRecoveryRequiredAuthError(canonicalizationError)) throw canonicalizationError
-        }
-      }
-
-      const response = await withTimeout(
-        apiFetch('/api/waitlist/bootstrap', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
-        }),
-        FLOW_TIMEOUT_MS,
-        'Waitlist bootstrap',
-      )
-      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
-      if (!response.ok || !payload?.success || !payload.data) {
-        const err = new Error(readApiErrorMessage(payload, 'Failed to bootstrap waitlist state.')) as Error & {
-          status?: number
-          code?: string
-          recoveryRequired?: boolean
-        }
-        err.status = response.status
-        const code = typeof (payload as any)?.code === 'string' ? String((payload as any).code).trim() : ''
-        if (code) err.code = code
-        const nextRecoveryRequired =
-          response.status === 409 || Boolean((payload as any)?.recoveryRequired) || code.toUpperCase().includes('RECOVERY_REQUIRED')
-        if (nextRecoveryRequired) err.recoveryRequired = true
-        if (nextRecoveryRequired) {
-          recoveryRequiredBootstrapCooldownUntilRef.current = Date.now() + RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS
-        }
-        throw err
-      }
-
-      if (payload.data.requiresPrivyAuth) {
-        tokenlessFinalizingBootstrapCooldownUntilRef.current = Date.now() + TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS
-        setStep('auth')
-        if (privyAuthed) {
-          throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
-        }
-        return null
-      }
-
-      const bootstrappedAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
-      const accountCompletionKey = getSubAccountCompletionAccountKey(bootstrappedAccount)
-      if (!subAccountConnectOverlayRef.current && accountCompletionKey) {
-        const persistedOverlay = readPersistedSubAccountConnectOverlay(accountCompletionKey)
-        if (persistedOverlay) {
-          subAccountConnectOverlayRef.current = persistedOverlay
-          subAccountStepCompletedAccountKeyRef.current = accountCompletionKey
-          setSubAccountStepCompletedAccountKey(accountCompletionKey)
-        }
-      }
-      const subAccountStepCompleted = Boolean(
-        accountCompletionKey &&
-          (subAccountStepCompletedAccountKey === accountCompletionKey ||
-            subAccountStepCompletedAccountKeyRef.current === accountCompletionKey),
-      )
-
-      const nextAccount = applyWaitlistSubAccountConnectOverlay(
-        bootstrappedAccount,
-        subAccountConnectOverlayRef.current,
-        subAccountStepCompleted,
-      )
-      if (isWaitlistSigningReady(nextAccount)) {
-        subAccountConnectOverlayRef.current = null
-        clearPersistedSubAccountConnectOverlay(getSubAccountCompletionAccountKey(nextAccount))
-      }
-      setAccount(nextAccount)
-      finalizingAutoRetryCountRef.current = 0
-      finalizingBackgroundRetryCountRef.current = 0
-      tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
-      recoveryRequiredBootstrapCooldownUntilRef.current = 0
-      setRecoveryRequired(false)
-      if (activeReferralCode) clearStoredWaitlistReferralCode()
-      if (!nextAccount.emailVerified) {
-        setStep('auth')
-        setError('Verify your email with 4626 to finish creating this account.')
-        return nextAccount
-      }
-      // Track C2 requires the actual Privy embedded EOA signer. Linked
-      // external wallets can also hydrate on `privy.user.wallet`, so only
-      // trust the embedded-wallet helper used by the signer setup path.
-      const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
-      setStep(
-        resolveWaitlistStep({
-          account: nextAccount,
-          subAccountFlowEnabled,
-          embeddedEoaAvailable,
-          subAccountStepCompleted,
-        }),
-      )
-      return nextAccount
-    },
-    [
-      activeReferralCode,
-      embeddedEoaAddress,
-      ensureEmbeddedWallet,
-      getAccessToken,
-      privyAuthed,
-      setError,
-      setRecoveryRequired,
-      subAccountFlowEnabled,
-      subAccountStepCompletedAccountKey,
-    ],
-  )
-
-  const requestBootstrap = useCallback(
-    (opts?: {
-      waitForTokenHydration?: boolean
-      forceNew?: boolean
-      bypassRecoveryCooldown?: boolean
-    }): Promise<AccountsSummary | null> => {
-      if (!opts?.forceNew && bootstrapInFlightPromiseRef.current) {
-        return bootstrapInFlightPromiseRef.current
-      }
-      const requestSeq = ++bootstrapRequestSeqRef.current
-      const managedPromise = runBootstrap({
-        waitForTokenHydration: opts?.waitForTokenHydration === true,
-        bypassRecoveryCooldown: opts?.bypassRecoveryCooldown === true,
-      }).finally(() => {
-        if (bootstrapRequestSeqRef.current === requestSeq) {
-          bootstrapInFlightPromiseRef.current = null
-        }
-      })
-      bootstrapInFlightPromiseRef.current = managedPromise
-      return managedPromise
-    },
-    [runBootstrap],
-  )
-
-  const settleBootstrapAfterRecoverableLoginError = useCallback(
-    async (opts?: { bypassRecoveryCooldown?: boolean }): Promise<AccountsSummary> => {
-      const retryDelaysMs = [300, 600, 900, 1_200]
-      finalizingAutoRetryCountRef.current = 0
-      for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
-        finalizingAutoRetryCountRef.current = attempt + 1
-        try {
-          const next = await requestBootstrap({
-            waitForTokenHydration: true,
-            bypassRecoveryCooldown: opts?.bypassRecoveryCooldown === true,
-          })
-          if (next) {
-            finalizingAutoRetryCountRef.current = 0
-            return next
-          }
-        } catch (bootstrapError: unknown) {
-          if (!isSessionFinalizingError(bootstrapError)) throw bootstrapError
-        }
-        const delayMs = retryDelaysMs[attempt]
-        if (typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0) {
-          await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-        }
-      }
-
-      throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
-    },
-    [requestBootstrap],
-  )
+  const {
+    requestBootstrap,
+    settleBootstrapAfterRecoverableLoginError,
+    resetBootstrapCooldowns,
+    tokenlessFinalizingBootstrapCooldownUntilRef,
+    recoveryRequiredBootstrapCooldownUntilRef,
+  } = useWaitlistBootstrap({
+    activeReferralCode,
+    embeddedEoaAddress,
+    ensureEmbeddedWallet,
+    getAccessToken,
+    privyAuthed,
+    subAccountFlowEnabled,
+    subAccountStepCompletedAccountKey,
+    setSubAccountStepCompletedAccountKey,
+    subAccountStepCompletedAccountKeyRef,
+    subAccountConnectOverlayRef,
+    setAccount,
+    setStep,
+    setError,
+    setRecoveryRequired,
+    finalizingAutoRetryCountRef,
+    finalizingBackgroundRetryCountRef,
+  })
 
   const tryResumeExistingPrivySession = useCallback(async (): Promise<boolean> => {
     const existingToken = await getAccessToken().catch(() => null)
@@ -1020,11 +670,13 @@ export function WaitlistFlow(props: {
     privy,
     privyAuthed,
     privyClientStatus,
+    recoveryRequiredBootstrapCooldownUntilRef,
     resetStalePrivySessionAndRetryEmailLogin,
     redirectToCanonicalWaitlist,
     settleBootstrapAfterRecoverableLoginError,
     setError,
     setRecoveryRequired,
+    tokenlessFinalizingBootstrapCooldownUntilRef,
     tryResumeExistingPrivySession,
   ])
 
@@ -1055,6 +707,7 @@ export function WaitlistFlow(props: {
     endAuthAttempt,
     handoffIntoExistingAccount,
     privyClientStatus,
+    recoveryRequiredBootstrapCooldownUntilRef,
     redirectToCanonicalWaitlist,
     setError,
     setRecoveryRequired,
@@ -1064,16 +717,19 @@ export function WaitlistFlow(props: {
     if (signOutBusy) return
     setSignOutBusy(true)
     try {
-      await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+      await runWaitlistPrivyLogout({
+        logout: async () => {
+          await privy.logout().catch(() => null)
+        },
+        shouldLogout: true,
+      })
       await waitForPrivyLogoutSettlement().catch(() => undefined)
       resetResolvedAccountState()
-      authBootstrapAutoAttemptedRef.current = false
+      // Block auto-bootstrap until the user explicitly clicks Continue again.
+      authBootstrapAutoAttemptedRef.current = true
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
-      tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
-      recoveryRequiredBootstrapCooldownUntilRef.current = 0
-      bootstrapRequestSeqRef.current += 1
-      bootstrapInFlightPromiseRef.current = null
+      resetBootstrapCooldowns()
       setStep('auth')
       setBusy(false)
       setRecoveryRequired(false)
@@ -1083,7 +739,16 @@ export function WaitlistFlow(props: {
     } finally {
       setSignOutBusy(false)
     }
-  }, [resetResolvedAccountState, setBusy, setError, setRecoveryRequired, shouldDestroyPrivySession, signOutBusy, waitForPrivyLogoutSettlement])
+  }, [
+    privy,
+    resetBootstrapCooldowns,
+    resetResolvedAccountState,
+    setBusy,
+    setError,
+    setRecoveryRequired,
+    signOutBusy,
+    waitForPrivyLogoutSettlement,
+  ])
 
   const navigateWithSessionHandoff = useCallback(
     async (initialTarget: string) => {
@@ -1286,7 +951,13 @@ export function WaitlistFlow(props: {
       setBusy(false)
       setRecoveryRequired(false)
     }
-  }, [setBusy, setRecoveryRequired, step])
+  }, [
+    recoveryRequiredBootstrapCooldownUntilRef,
+    setBusy,
+    setRecoveryRequired,
+    step,
+    tokenlessFinalizingBootstrapCooldownUntilRef,
+  ])
 
   const authUi = deriveWaitlistAuthUi()
   const authVisibleError = error === SESSION_FINALIZING_RETRY_MESSAGE ? null : error
@@ -1390,15 +1061,24 @@ export function WaitlistFlow(props: {
           />
         ) : step === 'connect-base-app' ? (
           <div key="connect-base-app-static" className="flex min-h-[460px] items-center justify-center py-12 sm:py-20">
-            <WaitlistConnectBaseApp onSkip={handleSubAccountSkip} onComplete={handleSubAccountComplete} />
+            <WaitlistConnectBaseApp
+              onSkip={handleSubAccountSkip}
+              onComplete={handleSubAccountComplete}
+              parentAddress={account?.accountSignals?.canonicalCswAddress ?? null}
+              subAccountAddress={
+                account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
+              }
+              embeddedEoaAddress={embeddedEoaAddress ?? null}
+            />
           </div>
         ) : step === 'done' && account ? (
           <div key="done-static">
-            <WaitlistSetupTray
-              account={account}
+            <WaitlistSetupWorkspace
+              initialAccount={account as AccountSetupMe}
               canEnterApp={canEnterApp}
               completionBusy={completionBusy}
               onEnterApp={onEnterApp}
+              onOpenAccounts={() => undefined}
               onSignOut={onSignOut}
               signOutBusy={signOutBusy}
             />
@@ -1430,7 +1110,15 @@ export function WaitlistFlow(props: {
               transition={{ duration: 0.22, ease: WAITLIST_EASE }}
               className="flex min-h-[460px] items-center justify-center py-12 sm:py-20"
             >
-              <WaitlistConnectBaseApp onSkip={handleSubAccountSkip} onComplete={handleSubAccountComplete} />
+              <WaitlistConnectBaseApp
+              onSkip={handleSubAccountSkip}
+              onComplete={handleSubAccountComplete}
+              parentAddress={account?.accountSignals?.canonicalCswAddress ?? null}
+              subAccountAddress={
+                account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
+              }
+              embeddedEoaAddress={embeddedEoaAddress ?? null}
+            />
             </motion.div>
           ) : step === 'done' && account ? (
             <motion.div
@@ -1440,11 +1128,12 @@ export function WaitlistFlow(props: {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22, ease: WAITLIST_EASE }}
             >
-              <WaitlistSetupTray
-                account={account}
+              <WaitlistSetupWorkspace
+                initialAccount={account as AccountSetupMe}
                 canEnterApp={canEnterApp}
                 completionBusy={completionBusy}
                 onEnterApp={onEnterApp}
+                onOpenAccounts={() => undefined}
                 onSignOut={onSignOut}
                 signOutBusy={signOutBusy}
               />

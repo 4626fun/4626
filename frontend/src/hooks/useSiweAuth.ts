@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { useConnectWallet, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useConnectWallet, useLogin, usePrivy, useActiveWallet } from '@privy-io/react-auth'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { BASE_ACCOUNT_WALLET_LOGIN_LIST } from '@/lib/privy/clientAppearance'
@@ -422,6 +422,14 @@ async function readPrivyAccessTokenWithRetry(
   return null
 }
 
+function useSafeActiveWalletHook() {
+  try {
+    return useActiveWallet() as { setActiveWallet?: (wallet: unknown) => Promise<unknown> }
+  } catch {
+    return { setActiveWallet: undefined }
+  }
+}
+
 function useSafeConnectWalletHook() {
   try {
     return useConnectWallet() as { connectWallet?: (options: Record<string, unknown>) => Promise<unknown> }
@@ -462,6 +470,7 @@ export function useSiweAuth() {
   const privyAny = useSafePrivyHook()
   const { login } = useSafeLoginHook()
   const { connectWallet } = useSafeConnectWalletHook()
+  const { setActiveWallet } = useSafeActiveWalletHook()
   const privyReady = Boolean(privyAny?.ready)
   const privyAuthenticated = Boolean(privyAny?.authenticated)
   const getPrivyAccessToken: (() => Promise<string | null>) | null =
@@ -777,11 +786,21 @@ export function useSiweAuth() {
         if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) return null
         throw connectError
       })
-      return Boolean(result)
+
+      const selectedWallet =
+        result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
+          ? ((result as { wallet?: unknown }).wallet ?? null)
+          : (result ?? null)
+
+      if (selectedWallet && typeof setActiveWallet === 'function') {
+        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+      }
+
+      return Boolean(selectedWallet ?? result)
     } catch {
       return false
     }
-  }, [connectWallet])
+  }, [connectWallet, setActiveWallet])
 
   const signIn = useCallback(async (opts?: {
     method?: SignInMethod
@@ -814,11 +833,20 @@ export function useSiweAuth() {
           } catch { /* no existing session */ }
         }
 
-        if (privyReady && !alreadyHasPrivySession && typeof login === 'function' && !preferBaseAccountWallet) {
+        if (privyReady && !alreadyHasPrivySession && typeof login === 'function') {
+          const loginMethods = preferBaseAccountWallet
+            ? (['wallet'] as const)
+            : ([...PRIVY_INTERACTIVE_LOGIN_METHODS] as const)
           try {
-            await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
+            await login({ loginMethods })
           } catch {
             // If Privy auth fails/cancels, fall back to SIWE below (only for method=auto).
+          }
+          if (getPrivyAccessToken) {
+            try {
+              const tokenAfterLogin = await getPrivyAccessToken()
+              if (tokenAfterLogin) alreadyHasPrivySession = true
+            } catch { /* ignore */ }
           }
         }
 

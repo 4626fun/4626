@@ -227,7 +227,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
           const refetchResult = await refetchRelayHookQuote()
           return { data: refetchResult.data, status: refetchResult.status }
         },
-        executeQuote,
+        executeQuote: (onProgress) => Promise.resolve(executeQuote(onProgress)),
         appendEvent,
         onTxHash: setTxHash,
       })

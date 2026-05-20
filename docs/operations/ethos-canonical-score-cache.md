@@ -60,7 +60,7 @@ Cron route:
 
 The route is scheduled in `frontend/vercel.json`:
 
-- `15 4 * * *` (once daily, 04:15 UTC)
+- `*/15 * * * *`
 
 Manual trigger (ops):
 
@@ -131,9 +131,10 @@ This returns reads to legacy request-time Ethos behavior without schema rollback
 
 Explore (`/explore/creators`) lists **creator coins**, not raw `zora_csw_owner_class` rows. Scores reach the UI through:
 
-1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync` daily; paid `/api/creator/ethos/refresh` on demand)
+1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync`, `/api/v1/chat/ethos-sync-hot`, keeper `/api/keeper/ethos-sync`)
 2. `GET /api/zora/explore` merges projection + live resolver (`resolveCreatorEthosByAddress`) per page
-3. `GET /api/zora/metrics?scope=creators` → `ethosScoredCreators` counts projection rows with `ethos_score IS NOT NULL`
+3. `GET /api/zora/coin` attaches the same merged Ethos fields on creator/content detail pages
+4. `GET /api/zora/metrics?scope=creators` → `ethosScoredCreators` counts projection rows with `ethos_score IS NOT NULL`
 
 **Ops checks**
 
@@ -148,10 +149,23 @@ Compare to `ethosScoredCreators` on `/api/zora/metrics?scope=creators`.
 
 - `ETHOS_CREATOR_PROJECTION_LIMIT` — full reconcile refresh size (recommend `50000`)
 - `ETHOS_CREATOR_PROJECTION_LIMIT_HOT` — hot lane refresh size (default `2000`)
+- `ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_LIMIT` — extra creators pulled into refresh by high `zora_csw_owner_class` signal (default `5000`)
+- `ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_MIN_SCORE` — minimum owner-class score for that priority lane (default `1200`)
 - `ETHOS_CREATOR_PROJECTION_FULL_EVERY_N` — how often main sync uses `mode: full` (default `4` slots ≈ hourly)
 - `ETHOS_CREATOR_PROJECTION_MODE` — optional force `full` or `fast` on all lanes
 
 Volume/mcap sorts attach `ethosScore` from projection when the creator is in `creator_coins` and has been refreshed; Ethos sort reads projection directly.
+
+**Single-address trace (ops)**
+
+```bash
+pnpm -C frontend exec tsx scripts/trace-creator-ethos-explore.ts \
+  --creator 0x<creatorAddress> \
+  --coin 0x<coinAddress> \
+  --base-url https://app.4626.fun
+```
+
+Checks projection row, merged resolver output, explore list match, and coin API payload.
 
 ### Paid on-demand refresh ($0.10 USDC)
 

@@ -3,21 +3,23 @@
  *
  * Base App connect flow:
  *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
- *   2. Wire the Privy embedded EOA as the sub-account signer (silent SDK step).
- *   3. POST /api/arch-b/sub-account/baseapp/register
+ *   2. Install the Privy embedded EOA as an on-chain owner on the sub-account (addOwnerAddress).
+ *   3. Wire the Privy embedded EOA as the sub-account SDK signer (silent).
+ *   4. POST /api/arch-b/sub-account/baseapp/register
  *
- * Per docs/ACCOUNT_MODEL.md §5.3, this track does not call addOwnerAddress on the
- * parent CSW or the sub-account — wallet_addSubAccount keys + setToOwnerAccount
- * are the signing surface.
+ * Parent CSW addOwnerAddress from third-party dapps remains blocked; owner install
+ * targets the per-app sub-account only.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { CheckCircle2 } from 'lucide-react'
 import type { Address } from 'viem'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
+import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 
 export type WaitlistConnectBaseAppResult = {
   parentAddress: Address
@@ -27,6 +29,10 @@ export type WaitlistConnectBaseAppResult = {
 type Props = {
   onSkip: () => void
   onComplete: (result: WaitlistConnectBaseAppResult) => void
+  /** When set, show a recovery panel to addOwner on an existing sub-account. */
+  parentAddress?: string | null
+  subAccountAddress?: string | null
+  embeddedEoaAddress?: string | null
 }
 
 type PendingProvision = {
@@ -44,6 +50,7 @@ type ViewState =
 const STAGE_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
   check_existing: 'Checking for your 4626 app wallet…',
   create_sub_account: 'Creating your app wallet (one passkey)…',
+  install_embedded_owner: 'Enabling 4626 signing on your app wallet…',
   configure_signer: 'Linking your 4626 signer…',
 }
 
@@ -167,9 +174,10 @@ async function registerBaseAppLink(body: Record<string, string>): Promise<{ ok: 
 }
 
 export function WaitlistConnectBaseApp(props: Props) {
-  const { onSkip, onComplete } = props
+  const { onSkip, onComplete, parentAddress, subAccountAddress, embeddedEoaAddress } = props
   const {
     provisionSubAccount,
+    confirmSubAccountEmbeddedOwner,
     finalizeSubAccountSigner,
     connectBaseAccountWallet,
     getLastSetupError,
@@ -267,6 +275,25 @@ export function WaitlistConnectBaseApp(props: Props) {
       created: provisioned.created,
     }
 
+    const ownerInstalled = await confirmSubAccountEmbeddedOwner({
+      parentAddress: pending.parentAddress,
+      subAccountAddress: pending.subAccountAddress,
+      provider: provisioned.provider,
+    })
+    if (cancelledRef.current) return
+    if (!ownerInstalled) {
+      setView({
+        kind: 'error',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback: 'Could not enable 4626 signing on your app wallet. Try again.',
+        }),
+        canRetry: true,
+      })
+      return
+    }
+
     const finalized = await finalizeSubAccountSigner({
       parentAddress: pending.parentAddress,
       subAccountAddress: pending.subAccountAddress,
@@ -287,6 +314,7 @@ export function WaitlistConnectBaseApp(props: Props) {
 
     await persistAndComplete(pending)
   }, [
+    confirmSubAccountEmbeddedOwner,
     connectBaseAccountWallet,
     finalizeSubAccountSigner,
     getLastSetupError,
@@ -310,74 +338,110 @@ export function WaitlistConnectBaseApp(props: Props) {
     return () => window.clearTimeout(timer)
   }, [view, onComplete])
 
+  const showRecoveryPanel = Boolean(
+    parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim(),
+  )
+
   return (
     <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-connect-base-app">
       <div className="space-y-2">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[rgb(var(--brand-primary)/0.8)]">
-          Optional · Base App
+          {showRecoveryPanel ? 'Finish setup' : 'Optional · Base App'}
         </p>
-        <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">Connect Base App</h2>
+        <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">
+          {showRecoveryPanel ? 'Enable 4626 signing' : 'Connect Base App'}
+        </h2>
         <p className="text-sm leading-relaxed text-zinc-400">
-          Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded
-          4626 key — your main Base App wallet stays unchanged. Base App only asks for a passkey when creating a new app
-          wallet; linking your signer afterward is silent.
+          {showRecoveryPanel
+            ? 'Your app wallet is linked. One Base App approval lets your embedded 4626 key sign for sponsored swaps.'
+            : 'Link your Base App wallet for sponsored swaps. We create a dedicated 4626 app wallet signed by your embedded key — your main Base App wallet stays unchanged.'}
         </p>
       </div>
 
       {view.kind === 'idle' ? (
-        <div className="space-y-3">
-          <button
-            type="button"
-            className="btn-accent btn-no-icon w-full"
-            onClick={() => void handleConnect()}
-            data-testid="connect-base-app-button"
-          >
-            Connect Base App
-          </button>
-          <button
-            type="button"
-            className="text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
-            onClick={onSkip}
-            data-testid="skip-base-app-button"
-          >
-            Skip for now
-          </button>
+        <div className="space-y-4 text-left">
+          {showRecoveryPanel ? (
+            <SubAccountOwnerInstallPanel
+              variant="recovery"
+              showHeader={false}
+              parentAddress={parentAddress}
+              subAccountAddress={subAccountAddress}
+              embeddedEoaAddress={embeddedEoaAddress}
+            />
+          ) : null}
+
+          {showRecoveryPanel ? (
+            <p className="text-center text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-600">
+              Or start fresh
+            </p>
+          ) : null}
+
+          <div className="space-y-3 text-center">
+            <button
+              type="button"
+              className="btn-accent btn-no-icon w-full"
+              onClick={() => void handleConnect()}
+              data-testid="connect-base-app-button"
+            >
+              {showRecoveryPanel ? 'Run full Base App setup' : 'Connect Base App'}
+            </button>
+            {!showRecoveryPanel ? (
+              <SubAccountOwnerInstallPanel
+                variant="inline"
+                parentAddress={parentAddress}
+                subAccountAddress={subAccountAddress}
+                embeddedEoaAddress={embeddedEoaAddress}
+              />
+            ) : null}
+            <button
+              type="button"
+              className="text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+              onClick={onSkip}
+              data-testid="skip-base-app-button"
+            >
+              Skip for now
+            </button>
+          </div>
         </div>
       ) : null}
 
       {view.kind === 'connecting' ? (
-        <div className="space-y-3" role="status" aria-live="polite" data-testid="waitlist-connect-base-app-connecting">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-200">
-            <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.92)" />
-            <span data-testid="connect-stage-label">{progressLabel}</span>
-          </div>
+        <div
+          className="flex items-center justify-center gap-2 text-sm text-zinc-400"
+          role="status"
+          aria-live="polite"
+          data-testid="waitlist-connect-base-app-connecting"
+        >
+          <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.72)" />
+          <span data-testid="connect-stage-label">{progressLabel}</span>
         </div>
       ) : null}
 
       {view.kind === 'complete' ? (
-        <div className="space-y-3" data-testid="waitlist-connect-base-app-complete">
-          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-left text-sm text-emerald-200">
-            <div className="font-medium text-emerald-100">Base App connected</div>
-            <div className="mt-1 break-all font-mono text-xs text-emerald-200/80">{view.subAccountAddress}</div>
-            <div className="mt-1 font-mono text-xs text-emerald-200/60">{shortAddress(view.subAccountAddress)}</div>
-            <a
-              href={basescanAddressUrl(view.subAccountAddress)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-2 inline-flex text-xs font-medium text-emerald-300 underline-offset-2 hover:underline"
-              data-testid="basescan-link"
-            >
-              View on Basescan ↗
-            </a>
-          </div>
+        <div
+          className="space-y-2 text-center text-sm text-zinc-300"
+          data-testid="waitlist-connect-base-app-complete"
+        >
+          <p className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400/90" aria-hidden />
+            <span>Base App connected</span>
+            <span className="font-mono text-xs text-zinc-500">{shortAddress(view.subAccountAddress)}</span>
+          </p>
+          <a
+            href={basescanAddressUrl(view.subAccountAddress)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+            data-testid="basescan-link"
+          >
+            View on Basescan ↗
+          </a>
         </div>
       ) : null}
 
       {view.kind === 'error' ? (
-        <div className="space-y-3" role="alert" aria-live="polite" data-testid="waitlist-connect-base-app-error">
-          <div className="rounded-lg border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-200">
-            {view.message}
-          </div>
+        <div className="space-y-4" role="alert" aria-live="polite" data-testid="waitlist-connect-base-app-error">
+          <p className="text-sm leading-relaxed text-rose-300/90">{view.message}</p>
           <div className="flex items-center justify-center gap-3">
             {view.canRetry ? (
               <button

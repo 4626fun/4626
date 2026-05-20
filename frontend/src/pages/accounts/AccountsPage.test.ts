@@ -2,6 +2,7 @@ import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { AccountsPage, readOptionalZoraStatus, shouldRefreshAccountsOnForeground } from './AccountsPage'
 import type { AccountSignals } from '@/features/accountSetup/types'
@@ -81,9 +82,16 @@ function accountSignals(overrides: Partial<AccountSignals> = {}): AccountSignals
   }
 }
 
+function renderAccountsPage(element: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return renderToStaticMarkup(
+    React.createElement(QueryClientProvider, { client: queryClient }, element),
+  )
+}
+
 describe('AccountsPage', () => {
   it('renders sections with mocked account API data', () => {
-    const html = renderToStaticMarkup(
+    const html = renderAccountsPage(
       React.createElement(
         MemoryRouter,
         undefined,
@@ -120,7 +128,7 @@ describe('AccountsPage', () => {
     expect(html).toContain('Your identity')
     expect(html).toContain('Workspace')
     expect(html).toContain('Open leaderboard')
-    expect(html).toContain('Linked identities')
+    expect(html).toContain('Account settings')
     expect(html).toContain('Open Zora')
     expect(html).toContain('Refresh Zora signals')
     expect(html).toContain('Owner authority')
@@ -133,47 +141,10 @@ describe('AccountsPage', () => {
     expect(html).toContain('MetaMask, Coinbase Wallet, and detected browser wallets like Rabby')
     expect(html).toContain('Connected signer')
     expect(html).toContain('0x111111...111111')
-    expect(html).toContain('Advanced recovery')
   })
 
   it('surfaces the Telegram owner-install resume banner when requested from query params', () => {
-    const html = renderToStaticMarkup(
-      React.createElement(
-        MemoryRouter,
-        { initialEntries: ['/accounts?setup=owner-install&source=telegram'] },
-        React.createElement(AccountsPage, {
-          initialData: {
-            me: {
-              privyUserId: 'did:privy:test-user',
-              email: 'user@example.com',
-              emailVerified: true,
-              appAccessStatus: 'approved',
-              baseSubAccount: null,
-              linkedMethods: {
-                email: ['user@example.com'],
-              },
-              accountSignals: accountSignals(),
-              score: {
-                points: 130,
-                tier: 2,
-              },
-            },
-            zoraStatus: {
-              zoraLinked: true,
-              zoraCrossAppAccounts: [],
-            },
-          },
-        }),
-      ),
-    )
-
-    expect(html).toContain('Continue from Telegram')
-    expect(html).toContain('Your Telegram account is linked. Finish wallet setup here.')
-    expect(html).toContain('This step was resumed from another surface.')
-  })
-
-  it('surfaces the Telegram owner-install resume banner when requested from query params', () => {
-    const html = renderToStaticMarkup(
+    const html = renderAccountsPage(
       React.createElement(
         MemoryRouter,
         { initialEntries: ['/accounts?setup=owner-install&source=telegram'] },

@@ -64,19 +64,19 @@ export function ReferralShareBlock({
     <div className={`space-y-3 ${className}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <div className="bv-kicker text-brand-300 flex items-center gap-1.5">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 flex items-center gap-1.5">
             <UserPlus className="w-3 h-3" /> Invite friends
           </div>
-          <div className="mt-1 text-[11px] text-zinc-500">
+          <div className="mt-1 text-[11px] text-zinc-600">
             Earn +6 per qualified referral (+2 while pending).
           </div>
         </div>
-        <div className="text-[11px] tabular-nums text-zinc-400 flex items-center gap-3">
+        <div className="text-[11px] tabular-nums text-zinc-500 flex items-center gap-3">
           <span>
-            <span className="text-emerald-300">{qualifiedCount}</span> qualified
+            <span className="text-zinc-300">{qualifiedCount}</span> qualified
           </span>
           <span>
-            <span className="text-zinc-300">{pendingCount}</span> pending
+            <span className="text-zinc-400">{pendingCount}</span> pending
           </span>
         </div>
       </div>
@@ -91,7 +91,7 @@ export function ReferralShareBlock({
         <button
           type="button"
           onClick={() => void handleCopy()}
-          className="inline-flex items-center gap-1.5 rounded-md bg-brand-primary px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-hover transition-colors"
+          className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium text-zinc-200 transition-colors hover:bg-white/[0.08]"
           title="Copy referral link"
         >
           {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}

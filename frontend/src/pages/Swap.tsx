@@ -241,16 +241,6 @@ function isBaseAccountWallet(wallet: unknown): boolean {
   return type === 'base_account' || type === 'coinbase_wallet'
 }
 
-async function getWalletProvider(wallet: any): Promise<any | null> {
-  if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
-  if (typeof wallet?.getEthereumProvider === 'function') {
-    const provider = await wallet.getEthereumProvider().catch(() => null)
-    if (provider && typeof provider.request === 'function') return provider
-  }
-  if (typeof wallet?.request === 'function') return { request: wallet.request.bind(wallet) }
-  return null
-}
-
 function useSwapSubAccountRuntime(params: {
   enabled: boolean
   canonicalAddress: Address | null
@@ -1326,7 +1316,8 @@ export function Swap() {
     setShowSwapWalletOptions(false)
     void signIn({
       method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto',
-      preferBaseAccountWallet: executionMode === 'canonical',
+      preferBaseAccountWallet:
+        executionMode === 'canonical' && connectGate.state === 'wallet-required',
     })
   }, [
     authBusy,
@@ -1358,6 +1349,18 @@ export function Swap() {
       return null
     }
   }, [executionMode, getAccessToken, signInWithPrivyToken])
+  const handlePrivyCanonicalSignIn = useCallback(async () => {
+    if (authBusy || privyClientStatus !== 'ready') return
+    setSwapConnectError(null)
+    const bridged = await ensureCanonicalSession()
+    if (bridged) return
+    await signIn({ method: 'privy' })
+  }, [authBusy, ensureCanonicalSession, privyClientStatus, signIn])
+  useEffect(() => {
+    if (executionMode !== 'canonical' || !needsPrivyCanonicalAuth || authBusy) return
+    if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
+    void ensureCanonicalSession()
+  }, [authBusy, ensureCanonicalSession, executionMode, getAccessToken, needsPrivyCanonicalAuth, signInWithPrivyToken])
   const identityReady = Boolean(
     canonicalAddress &&
       executionWalletClient &&
@@ -2098,15 +2101,15 @@ export function Swap() {
             variant="warning"
             title="Privy sign-in required for canonical swaps"
             action={{
-              label: authBusy ? 'Signing in...' : 'Sign in with Privy',
+              label: authBusy ? 'Signing in...' : 'Sign in with email',
               onClick: () => {
                 if (authBusy || privyClientStatus !== 'ready') return
-                void signIn({ method: canonicalSignInMethod, preferBaseAccountWallet: true })
+                void handlePrivyCanonicalSignIn()
               },
             }}
           >
-            Canonical mode uses your verified 4626 account to load the signer for your active execution track.
-            Sign in with Privy, then retry the swap.
+            Your 4626 session is active, but Privy needs to restore your embedded signer. Use the same email
+            you verified on the waitlist — do not create a new wallet-only account.
             {authError ? <div className="mt-2 text-rose-300">{authError}</div> : null}
           </Alert>
         </div>

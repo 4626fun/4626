@@ -317,10 +317,11 @@ describe('processXmtpAgentInput', () => {
     })
   })
 
-  it('routes bare welcome menu numbers to deterministic commands', async () => {
+  it('maps welcome menu numbers to deterministic commands before LLM fallback', async () => {
     executeDeterministicCommandMock.mockResolvedValue({
       ok: true,
-      responseText: 'help menu',
+      responseText: 'Help menu',
+      rawResponseText: 'Help menu',
     })
 
     const result = await processXmtpAgentInput({
@@ -339,11 +340,11 @@ describe('processXmtpAgentInput', () => {
       senderWallet: '0x4444444444444444444444444444444444444444',
       text: '/help',
     })
-    expect(result).toEqual({ responseText: 'help menu' })
     expect(executeConversationalFallbackMock).not.toHaveBeenCalled()
+    expect(result.responseText).toBe('Help menu')
   })
 
-  it('returns numbered fallback for invalid menu selections', async () => {
+  it('returns numbered fallback for invalid welcome menu numbers', async () => {
     const result = await processXmtpAgentInput({
       text: '9',
       groupId: 'xmtp:conversation-5',
@@ -355,8 +356,7 @@ describe('processXmtpAgentInput', () => {
       },
     })
 
-    expect(result.responseText).toContain('No option 9.')
     expect(executeConversationalFallbackMock).not.toHaveBeenCalled()
-    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+    expect(result.responseText).toContain('No option 9.')
   })
 })

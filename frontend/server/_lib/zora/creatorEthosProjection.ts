@@ -158,6 +158,50 @@ export function mergeCreatorEthosScores(
   }
 }
 
+function normalizeCreatorAddresses(creatorAddresses: string[]): string[] {
+  return Array.from(
+    new Set(
+      creatorAddresses
+        .map((address) => String(address || '').trim().toLowerCase())
+        .filter((address) => /^0x[a-f0-9]{40}$/.test(address)),
+    ),
+  )
+}
+
+/** Projection-first Ethos merge used by explore and coin handlers. */
+export async function loadMergedCreatorEthosByAddresses(
+  creatorAddresses: string[],
+): Promise<Map<string, CreatorEthosMerged & { creatorAddress: string }>> {
+  const normalized = normalizeCreatorAddresses(creatorAddresses)
+  const out = new Map<string, CreatorEthosMerged & { creatorAddress: string }>()
+  if (normalized.length === 0) return out
+
+  const { getDb } = await import('../../../packages/server-core/src/index.js')
+  const { resolveCreatorEthosByAddress } = await import('./resolveCreatorEthosByAddress.js')
+  const db = await getDb()
+  if (!db) return out
+
+  const projectionMap = await loadCreatorEthosProjectionByAddresses(db, normalized)
+  let liveMap = new Map<string, { score: number | null; level: string | null; source: string | null }>()
+  try {
+    liveMap = await resolveCreatorEthosByAddress(normalized)
+  } catch {
+    liveMap = new Map()
+  }
+
+  for (const creatorAddress of normalized) {
+    const live = liveMap.get(creatorAddress)
+    const merged = mergeCreatorEthosScores(
+      projectionMap.get(creatorAddress),
+      live,
+      live?.source ?? null,
+    )
+    if (merged.score == null) continue
+    out.set(creatorAddress, { creatorAddress, ...merged })
+  }
+  return out
+}
+
 export async function refreshCreatorEthosProjection(params: {
   db: Db
   limit?: number
@@ -177,6 +221,20 @@ export async function refreshCreatorEthosProjection(params: {
       ),
     ),
   )
+  const ethosPriorityLimit = Math.max(
+    500,
+    Math.min(
+      50_000,
+      readInt(process.env.ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_LIMIT, 5_000, 500, 50_000),
+    ),
+  )
+  const ethosPriorityMinScore = readInt(
+    process.env.ETHOS_CREATOR_PROJECTION_ETHOS_PRIORITY_MIN_SCORE,
+    1200,
+    800,
+    2500,
+  )
+  const volumeLimit = Math.max(500, appliedLimit - ethosPriorityLimit)
 
   // `fast` uses the same multi-source scorer as `full` (CSW owners + social + caches).
   // Callers choose refresh frequency via pickCreatorEthosProjectionRefreshMode().
@@ -201,12 +259,55 @@ export async function refreshCreatorEthosProjection(params: {
       FROM creator_coins cc
       WHERE cc.chain_id = 8453
     ),
-    top_creator_coin AS (
+    top_by_volume AS (
       SELECT *
       FROM ranked_creator_coins
       WHERE creator_coin_rank = 1
       ORDER BY volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, creator_address ASC
-      LIMIT ${appliedLimit}
+      LIMIT ${volumeLimit}
+    ),
+    top_by_ethos_signal AS (
+      SELECT rcc.*
+      FROM ranked_creator_coins rcc
+      WHERE rcc.creator_coin_rank = 1
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM zora_csw_owner_class zoc
+            WHERE lower(zoc.eoa) = rcc.creator_address
+              AND zoc.ethos_score IS NOT NULL
+              AND zoc.ethos_score >= ${ethosPriorityMinScore}
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM zora_csw_owners zco
+            CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
+            JOIN zora_csw_owner_class zoc
+              ON lower(zoc.eoa) = lower(owner_eoa)
+            WHERE lower(zco.csw_address) = rcc.creator_address
+              AND zoc.ethos_score IS NOT NULL
+              AND zoc.ethos_score >= ${ethosPriorityMinScore}
+          )
+        )
+      ORDER BY (
+        SELECT MAX(zoc.ethos_score)
+        FROM zora_csw_owner_class zoc
+        WHERE lower(zoc.eoa) = rcc.creator_address
+      ) DESC NULLS LAST,
+      rcc.volume_24h_usd DESC NULLS LAST,
+      rcc.creator_address ASC
+      LIMIT ${ethosPriorityLimit}
+    ),
+    selected_creators AS (
+      SELECT creator_address FROM top_by_volume
+      UNION
+      SELECT creator_address FROM top_by_ethos_signal
+    ),
+    top_creator_coin AS (
+      SELECT rcc.*
+      FROM ranked_creator_coins rcc
+      INNER JOIN selected_creators sc ON sc.creator_address = rcc.creator_address
+      WHERE rcc.creator_coin_rank = 1
     ),
     profile_identity AS (
       SELECT

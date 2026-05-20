@@ -88,7 +88,7 @@ export function WaitlistUnlocksPanel({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-1.5 text-[11px] text-emerald-300">
+        <div className="flex items-center gap-1.5 text-[11px] text-zinc-400">
           <Check className="w-3 h-3" /> Top tier reached.
         </div>
       )}

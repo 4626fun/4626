@@ -250,7 +250,8 @@ type SubAccountWalletBundle = {
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
 }
 
-async function resolveSubAccountContext(params: SubAccountWalletBundle): Promise<{
+/** Wallet + SDK bundle ready for sub-account RPCs (no create/provision side effects). */
+export async function resolveSubAccountSetupContext(params: SubAccountWalletBundle): Promise<{
   parentAddress: Address
   embeddedAddress: Address
   provider: any
@@ -284,7 +285,7 @@ export async function provisionSubAccount(
   params: SubAccountWalletBundle,
 ): Promise<SubAccountSetupResult & { provider: any }> {
   const { onStageEvent } = params
-  const { parentAddress, embeddedAddress, provider } = await resolveSubAccountContext(params)
+  const { parentAddress, embeddedAddress, provider } = await resolveSubAccountSetupContext(params)
 
   onStageEvent?.({ stage: 'check_existing', status: 'start', parentAddress })
   let subAccount: SubAccount | null = null
@@ -447,10 +448,11 @@ export async function finalizeSubAccountSigner(params: SubAccountWalletBundle & 
 /**
  * Full sub-account setup flow (all phases in one call):
  *   1. Discover or create sub-account (passkey only when creating)
- *   2. Configure Privy embedded wallet as SDK signer (silent)
+ *   2. Install Privy embedded EOA as on-chain owner via addOwnerAddress on the sub-account
+ *   3. Configure Privy embedded wallet as SDK signer (silent)
  *
- * On-chain addOwnerAddress is not part of the waitlist Base App track — see
- * docs/ACCOUNT_MODEL.md §5.3 and docs/sub-accounts-baseapp-design.md.
+ * Parent CSW owner mutation from third-party dapps remains blocked; owner install
+ * targets the per-app sub-account only.
  */
 export async function setupSubAccount(params: {
   /** The Privy ConnectedWallet for the Base Account (CSW). */
@@ -483,6 +485,13 @@ export async function setupSubAccount(params: {
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
 }): Promise<SubAccountSetupResult> {
   const provisioned = await provisionSubAccount(params)
+  await confirmSubAccountEmbeddedOwner({
+    provider: provisioned.provider,
+    parentAddress: provisioned.parentAddress,
+    subAccountAddress: provisioned.subAccountAddress,
+    embeddedEoaAddress: params.embeddedWallet.address as Address,
+    onStageEvent: params.onStageEvent,
+  })
   await finalizeSubAccountSigner({
     ...params,
     parentAddress: provisioned.parentAddress,

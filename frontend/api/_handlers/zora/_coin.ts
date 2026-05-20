@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 
+import { loadMergedCreatorEthosByAddresses } from '../../../server/_lib/zora/creatorEthosProjection.js'
 import {
   DEFAULT_CHAIN_ID,
   getNumberQuery,
@@ -11,6 +12,37 @@ import {
   setCache,
   setCors,
 } from '../../../server/zora/_shared.js'
+
+function readCreatorAddressFromCoin(coin: Record<string, unknown>): string | null {
+  const creatorAddress =
+    typeof coin.creatorAddress === 'string'
+      ? coin.creatorAddress
+      : typeof coin.payoutRecipientAddress === 'string'
+        ? coin.payoutRecipientAddress
+        : null
+  if (!creatorAddress || !isAddressLike(creatorAddress)) return null
+  return creatorAddress.toLowerCase()
+}
+
+async function attachCreatorEthosFields(coin: Record<string, unknown> | null): Promise<Record<string, unknown> | null> {
+  if (!coin || typeof coin !== 'object') return coin
+  const creatorAddress = readCreatorAddressFromCoin(coin)
+  if (!creatorAddress) return coin
+
+  try {
+    const mergedMap = await loadMergedCreatorEthosByAddresses([creatorAddress])
+    const merged = mergedMap.get(creatorAddress)
+    if (!merged || merged.score == null) return coin
+    return {
+      ...coin,
+      ethosScore: merged.score,
+      ethosLevel: merged.level,
+      ethosScoreSource: merged.source,
+    }
+  } catch {
+    return coin
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -41,9 +73,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       chain,
     })
 
+    const rawCoin = response.data?.zora20Token ?? null
+    const data =
+      rawCoin && typeof rawCoin === 'object'
+        ? await attachCreatorEthosFields(rawCoin as Record<string, unknown>)
+        : rawCoin
+
     // Coin stats can move quickly; keep this short so UI matches zora.co more closely.
     setCache(res, 60)
-    return res.status(200).json({ success: true, data: response.data?.zora20Token ?? null })
+    return res.status(200).json({ success: true, data })
   } catch (e: any) {
     const status = typeof e?.status === 'number' ? e.status : 500
     return res.status(status).json({
@@ -52,4 +90,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 }
-

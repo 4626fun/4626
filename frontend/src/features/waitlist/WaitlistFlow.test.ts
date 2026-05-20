@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyWaitlistSubAccountConnectOverlay,
   isWaitlistSigningReady,
+  isWaitlistSigningReadyForUi,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
@@ -22,7 +23,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('auth')
   })
 
-  it('keeps verified-email accounts on auth until signing is ready when sub-account flow is off', () => {
+  it('keeps verified-email accounts on the setup workspace until signing is ready when sub-account flow is off', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -31,7 +32,7 @@ describe('resolveWaitlistStep', () => {
         },
         subAccountFlowEnabled: false,
       }),
-    ).toBe('auth')
+    ).toBe('done')
   })
 
   it('routes verified Base App users to connect-base-app before legacy owner install when flag is on', () => {
@@ -53,7 +54,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('connect-base-app')
   })
 
-  it('keeps verified-but-unapproved accounts on auth when signer install is incomplete and sub-account flow is off', () => {
+  it('keeps verified-but-unapproved accounts on the setup workspace when signer install is incomplete and sub-account flow is off', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -62,7 +63,7 @@ describe('resolveWaitlistStep', () => {
         },
         subAccountFlowEnabled: false,
       }),
-    ).toBe('auth')
+    ).toBe('done')
   })
 
   it('routes approved accounts into done once embedded owner install is complete', () => {
@@ -80,7 +81,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('keeps approved accounts on auth when signer install is not complete', () => {
+  it('keeps approved accounts on the setup workspace when signer install is not complete', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -88,7 +89,7 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: 'approved',
         },
       }),
-    ).toBe('auth')
+    ).toBe('done')
 
     expect(
       resolveWaitlistStep({
@@ -101,7 +102,7 @@ describe('resolveWaitlistStep', () => {
           },
         },
       }),
-    ).toBe('auth')
+    ).toBe('done')
   })
 
   it('routes verified accounts into done when owner install is true even without executionTrack', () => {
@@ -116,6 +117,31 @@ describe('resolveWaitlistStep', () => {
         },
       }),
     ).toBe('done')
+  })
+
+  it('Track C2 — routes to connect-base-app when a sub-account address exists but signing is incomplete', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          baseSubAccount: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          accountSignals: {
+            canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+            executionTrack: 'none-yet',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+            baseSubAccount: {
+              address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              registered: false,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        subAccountStepCompleted: false,
+      }),
+    ).toBe('connect-base-app')
   })
 
   it('Track C2 — routes to done when sub-account execution track is already registered', () => {
@@ -254,6 +280,20 @@ describe('resolveWaitlistStep', () => {
           baseSubAccount: { address: '0xabc', registered: true, isDistinctFromCsw: true },
         },
       }),
+    ).toBe(true)
+  })
+
+  it('isWaitlistSigningReadyForUi accepts optimistic notice before me refresh', () => {
+    expect(
+      isWaitlistSigningReadyForUi(
+        {
+          accountSignals: {
+            executionTrack: 'none-yet',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        '4626 signing is enabled on your Zora CSW.',
+      ),
     ).toBe(true)
   })
 

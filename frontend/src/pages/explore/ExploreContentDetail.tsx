@@ -18,6 +18,10 @@ import { BarChart, LineChart } from '@coinbase/cds-web-visualization/chart'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
+import { EthosBlurOrbs, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
+import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
+import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
+import { cn } from '@/lib/shared/utils'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { LoadingBlock, LoadingText } from '@/components/ui/LoadingState'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -683,8 +687,15 @@ export function ExploreContentDetail() {
   }, [swaps, contentCoinAddress])
 
   const creatorHandle = coin?.creatorProfile?.handle
-  const creatorProfileIdentifier = creatorHandle || coin?.creatorAddress || coin?.payoutRecipientAddress
+  const creatorAddress = coin?.creatorAddress || coin?.payoutRecipientAddress
+  const creatorProfileIdentifier = creatorHandle || creatorAddress
   const { data: creatorProfile } = useZoraProfile(creatorProfileIdentifier)
+  const { theme: ethosTheme } = useCreatorEthosPageTheme({
+    profile: creatorProfile ?? null,
+    creatorAddress: creatorAddress ?? null,
+    serverEthosScore: coin?.ethosScore,
+    serverEthosLevel: coin?.ethosLevel,
+  })
 
   if (!chain || !isSupportedExploreChain(chain)) {
     return <Navigate replace to="/explore/content" />
@@ -734,14 +745,15 @@ export function ExploreContentDetail() {
   const loading = coinLoading || poolsLoading
 
   return (
-    <div className="relative min-h-screen bg-black">
+    <div className="relative min-h-screen bg-black overflow-hidden">
+      <EthosPageAmbience theme={ethosTheme} />
       <PageMeta
         title={`${name} (${symbol})`}
         description={description}
         canonicalPath={canonicalPath}
         ogImage={mediaUrl}
       />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mb-4">
           <nav aria-label="Breadcrumb" className="inline-flex items-center gap-2 text-sm">
             <Link to="/explore" className="text-zinc-400 hover:text-white transition-colors">
@@ -749,7 +761,13 @@ export function ExploreContentDetail() {
             </Link>
             <span className="text-zinc-600">→</span>
             {creatorDetailPath ? (
-              <Link to={creatorDetailPath} className="text-zinc-400 hover:text-white transition-colors">
+              <Link
+                to={creatorDetailPath}
+                className={cn(
+                  'transition-colors',
+                  ethosTheme.isActive ? ethosTheme.accentTextClass : 'text-zinc-400 hover:text-white',
+                )}
+              >
                 {creatorBreadcrumbLabel}
               </Link>
             ) : (
@@ -766,7 +784,11 @@ export function ExploreContentDetail() {
           <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
             <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_260px] lg:grid-cols-[minmax(0,1fr)_280px] gap-4 items-stretch">
             <div
-              className="rounded-3xl border border-white/8 bg-white/4 overflow-hidden cursor-zoom-in"
+              className={cn(
+                'rounded-3xl border overflow-hidden cursor-zoom-in',
+                ethosTheme.cardBorderClass,
+                ethosTheme.cardSurfaceClass,
+              )}
               role={mediaUrl ? 'button' : undefined}
               tabIndex={mediaUrl ? 0 : -1}
               onClick={() => {
@@ -790,10 +812,17 @@ export function ExploreContentDetail() {
                       className="absolute inset-0 w-full h-full object-cover opacity-18 pointer-events-none"
                     />
                     <div className="absolute inset-0 bg-gradient-to-br from-black/85 via-black/70 to-zinc-900/90 pointer-events-none" />
+                    {ethosTheme.isActive ? (
+                      <div
+                        className="absolute inset-0 pointer-events-none"
+                        style={{
+                          background: `linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.72) 50%, ${ethosTheme.accentHex}30 100%)`,
+                        }}
+                      />
+                    ) : null}
                   </>
                 ) : null}
-                <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-fuchsia-500/15 blur-3xl pointer-events-none" />
-                <div className="absolute -bottom-24 -left-16 w-64 h-64 rounded-full bg-sky-500/10 blur-3xl pointer-events-none" />
+                <EthosBlurOrbs theme={ethosTheme} className="blur-3xl" />
 
                 <div className="relative">
                   <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
@@ -842,9 +871,20 @@ export function ExploreContentDetail() {
                       <div className="mt-1 flex items-center gap-2 text-sm text-zinc-300">
                         <span className="text-zinc-200">{symbol}</span>
                         <span className="text-zinc-600">•</span>
-                        <span className="inline-flex items-center rounded-full bg-white/8 px-2 py-0.5 text-xs text-zinc-300 border border-zinc-700/80">
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-xs border',
+                            ethosTheme.isActive
+                              ? cn(ethosTheme.cardSurfaceClass, ethosTheme.cardBorderClass, ethosTheme.accentTextClass)
+                              : 'bg-white/8 text-zinc-300 border-zinc-700/80',
+                          )}
+                        >
                           {creatorHandle ? `@${creatorHandle}` : 'Unknown creator'}
+                          {ethosTheme.isActive ? ` · ${ethosTheme.levelLabel}` : ''}
                         </span>
+                        {typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
+                          <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -873,7 +913,11 @@ export function ExploreContentDetail() {
                   <div className="mt-4 flex flex-wrap items-center gap-2.5 text-xs">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-full bg-fuchsia-600 px-3 py-1.5 text-white hover:bg-fuchsia-500 transition-colors"
+                      className={cn(
+                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-white transition-colors',
+                        ethosTheme.isActive ? ethosTheme.primaryCtaHoverClass : 'bg-fuchsia-600 hover:bg-fuchsia-500',
+                      )}
+                      style={ethosTheme.isActive ? ethosTheme.primaryCtaStyle : undefined}
                       onClick={(event) => {
                         event.stopPropagation()
                         setIsSwapTrayOpen(true)
@@ -897,7 +941,12 @@ export function ExploreContentDetail() {
               </div>
             </div>
 
-            <div className="h-full rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
+            <div
+              className={cn(
+                'h-full rounded-2xl border p-4 sm:p-5',
+                ethosTheme.isActive ? cn(ethosTheme.cardBorderClass, ethosTheme.cardSurfaceClass) : 'border-white/8 bg-white/3',
+              )}
+            >
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-medium text-zinc-500">Pool Snapshot</div>
                 <div className="flex items-center gap-2">
@@ -954,7 +1003,12 @@ export function ExploreContentDetail() {
             </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/8 bg-white/3 p-4 sm:p-5">
+            <div
+              className={cn(
+                'mt-6 rounded-2xl border p-4 sm:p-5',
+                ethosTheme.isActive ? cn(ethosTheme.cardBorderClass, ethosTheme.cardSurfaceClass) : 'border-white/8 bg-white/3',
+              )}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1">
                   {PERIODS.map((period) => (
@@ -1027,7 +1081,12 @@ export function ExploreContentDetail() {
               </div>
             </div>
 
-            <div className="mt-6 rounded-2xl border border-white/8 bg-white/3 overflow-hidden">
+            <div
+              className={cn(
+                'mt-6 rounded-2xl border overflow-hidden',
+                ethosTheme.isActive ? cn(ethosTheme.cardBorderClass, ethosTheme.cardSurfaceClass) : 'border-white/8 bg-white/3',
+              )}
+            >
               <div className="px-4 py-3 border-b border-white/8 flex items-center justify-between">
                 <div>
                   <div className="text-sm text-white font-medium">Recent Activity</div>

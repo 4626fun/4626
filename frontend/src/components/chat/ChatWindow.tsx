@@ -24,7 +24,7 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
-import { useXmtp, type ChatMessage, type ChatMessageActions } from '@/lib/xmtp/provider'
+import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
@@ -564,9 +564,6 @@ export function ChatWindow({
         content: text.trim(),
         contentType: inferLocalContentType(text),
         replyToId: replyToId ?? null,
-        actions: null,
-        walletSendCalls: null,
-        reactionEmoji: null,
         status: 'sending',
         error: null,
         sentAt: new Date(),
@@ -593,13 +590,12 @@ export function ChatWindow({
       const commandRisk = commandMatch?.risk ?? null
       let messageId = params.retryMessageId ?? null
       const replyToId = params.replyToId ?? null
-      const replyToSenderInboxId = params.replyToSenderInboxId?.trim() || null
-      const sendOptions =
-        replyToId && replyToSenderInboxId
-          ? { replyToId, replyToSenderInboxId }
-          : replyToId
-            ? { replyToId }
-            : undefined
+      const replyOptions = replyToId
+        ? {
+            replyToId,
+            replyToSenderInboxId: params.replyToSenderInboxId ?? undefined,
+          }
+        : undefined
 
       if (messageId) {
         setMessages((prev) =>
@@ -628,7 +624,7 @@ export function ChatWindow({
 
       setSending(true)
       try {
-        await sendMessage(conversationId, text, sendOptions)
+        await sendMessage(conversationId, text, replyOptions)
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId
@@ -667,7 +663,7 @@ export function ChatWindow({
               if (recoveredConversationId !== conversationId) {
                 onConversationRekey?.(conversationId, recoveredConversationId)
               }
-              await sendMessage(recoveredConversationId, text, sendOptions)
+              await sendMessage(recoveredConversationId, text, replyOptions)
               setMessages((prev) =>
                 prev.map((msg) =>
                   msg.id === messageId
@@ -724,7 +720,7 @@ export function ChatWindow({
     const text = input.trim()
     setInput('')
     const replyTarget = replyToMessageId
-      ? messages.find((msg) => msg.id === replyToMessageId) ?? null
+      ? messages.find((entry) => entry.id === replyToMessageId) ?? null
       : null
     await performSend({
       text,
@@ -735,6 +731,18 @@ export function ChatWindow({
       replyToSenderInboxId: replyTarget?.senderInboxId ?? null,
     })
   }, [input, messages, performSend, replyToMessageId, sending])
+
+  const handleActionTap = useCallback(async (promptId: string, actionId: string) => {
+    if (sending) return
+    setSending(true)
+    try {
+      await sendIntent(conversationId, { promptId, actionId })
+    } catch (error) {
+      console.error('[chat] intent send error:', error)
+    } finally {
+      setSending(false)
+    }
+  }, [conversationId, sendIntent, sending])
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1037,34 +1045,14 @@ export function ChatWindow({
   const handleRetryMessage = useCallback(async (messageId: string) => {
     const target = messages.find((msg) => msg.id === messageId)
     if (!target || target.status !== 'failed') return
-    const replyTarget = target.replyToId
-      ? messages.find((msg) => msg.id === target.replyToId) ?? null
-      : null
     await performSend({
       text: target.content,
       source: 'retry',
       retryMessageId: target.id,
       commandId: getChatCommandByCommandText(target.content)?.id ?? null,
       replyToId: target.replyToId ?? null,
-      replyToSenderInboxId: replyTarget?.senderInboxId ?? null,
     })
   }, [messages, performSend])
-
-  const handleActionIntent = useCallback(async (actions: ChatMessageActions, actionId: string) => {
-    if (sending) return
-    setSending(true)
-    try {
-      await sendIntent(conversationId, { promptId: actions.promptId, actionId })
-      emitTelemetry('chat_action_intent_sent', {
-        actionId,
-        promptId: actions.promptId,
-      })
-    } catch (error) {
-      console.error('[chat] sendIntent error:', error)
-    } finally {
-      setSending(false)
-    }
-  }, [conversationId, emitTelemetry, sendIntent, sending])
 
   const handleSelectAutocomplete = useCallback(async (command: ChatCommandDefinition) => {
     emitTelemetry('chat_autocomplete_selected', {
@@ -1397,46 +1385,32 @@ export function ChatWindow({
                     ) : (
                       msg.content
                     )}
-                    {msg.walletSendCalls ? (
-                      <div className="mt-2 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-2.5 py-2 text-[11px] text-cyan-100">
-                        <div className="font-medium">Confirm in Base App</div>
-                        <div className="mt-1 text-cyan-200/80">
-                          {msg.walletSendCalls.calls[0]?.metadata?.description ?? 'Review and sign this transaction.'}
-                        </div>
-                      </div>
-                    ) : null}
-                    {msg.actions && msg.actions.buttons.length > 0 ? (
+                    {msg.actions && msg.actions.buttons.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {msg.actions.buttons.map((button) => {
-                          const isPrimary = button.style === 'primary'
-                          const isDanger = button.style === 'danger'
-                          return (
-                            <button
-                              key={`${msg.actions!.promptId}-${button.id}`}
-                              type="button"
-                              disabled={sending || msg.isSelf}
-                              onClick={() => void handleActionIntent(msg.actions!, button.id)}
-                              className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
-                                isDanger
-                                  ? 'border-red-400/30 bg-red-500/10 text-red-100 hover:bg-red-500/20'
-                                  : isPrimary
-                                    ? 'border-cyan-400/30 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25'
-                                    : 'border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10'
-                              }`}
-                            >
-                              {button.label}
-                            </button>
-                          )
-                        })}
+                        {msg.actions.buttons.map((button) => (
+                          <button
+                            key={button.id}
+                            type="button"
+                            disabled={sending}
+                            onClick={() => void handleActionTap(msg.actions!.promptId, button.id)}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                              button.style === 'primary'
+                                ? 'bg-[#2374e1] text-white'
+                                : 'border border-white/15 bg-black/20 text-zinc-100 hover:bg-white/10'
+                            }`}
+                          >
+                            {button.label}
+                          </button>
+                        ))}
                       </div>
-                    ) : null}
+                    )}
+                    {msg.reactionEmoji && (
+                      <div className="mt-1 text-[11px] text-zinc-400">
+                        Reacted {msg.reactionEmoji}
+                      </div>
+                    )}
                   </div>
                   <div className="mt-1 flex items-center gap-2 px-1">
-                    {msg.reactionEmoji ? (
-                      <span className="text-sm leading-none" aria-label="Reaction">
-                        {msg.reactionEmoji}
-                      </span>
-                    ) : null}
                     <span className="text-[10px] text-zinc-500">
                       {formatTimestamp(msg.sentAt)}
                     </span>

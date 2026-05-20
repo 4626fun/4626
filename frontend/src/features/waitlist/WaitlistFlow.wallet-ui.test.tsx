@@ -243,6 +243,15 @@ describe('WaitlistFlow simplified completion UI', () => {
       if (input.startsWith('/api/auth/privy')) {
         return jsonResponse({ success: true }) as any
       }
+      if (input.startsWith('/api/auth/logout')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
       if (input.startsWith('/api/auth/handoff/create')) {
         return jsonResponse({
           success: true,
@@ -289,6 +298,12 @@ describe('WaitlistFlow simplified completion UI', () => {
           },
         }) as any
       }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 52, capacity: 100, spotsRemaining: 48 },
+        }) as any
+      }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
 
@@ -302,6 +317,29 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(
       screen.queryByText(/one secure email sign-in saves your spot\. then we guide you through setup in a few clear steps\./i),
     ).toBeNull()
+  })
+
+  it('calls sign out from the setup workspace footer', async () => {
+    const onSignOut = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <WaitlistSetupWorkspace
+          initialAccount={WAITLIST_ACCOUNT as any}
+          canEnterApp={false}
+          completionBusy={false}
+          onEnterApp={vi.fn()}
+          onOpenAccounts={vi.fn()}
+          onSignOut={onSignOut}
+        />
+      </MemoryRouter>,
+    )
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole('button', { name: /^sign out$/i }))
+    })
+
+    expect(onSignOut).toHaveBeenCalledTimes(1)
   })
 
   it('renders a setup-first workspace for verified users instead of a CTA-only completion state', async () => {
@@ -337,6 +375,7 @@ describe('WaitlistFlow simplified completion UI', () => {
           completionBusy={false}
           onEnterApp={vi.fn()}
           onOpenAccounts={openAccounts}
+          onSignOut={vi.fn()}
         />
       </MemoryRouter>,
     )
@@ -355,6 +394,7 @@ describe('WaitlistFlow simplified completion UI', () => {
           completionBusy={false}
           onEnterApp={vi.fn()}
           onOpenAccounts={vi.fn()}
+          onSignOut={vi.fn()}
         />
       </MemoryRouter>,
     )
@@ -394,7 +434,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(
       await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: /try existing account sign-in/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /use existing account/i })).toBeTruthy()
     expect(mockLogin).toHaveBeenCalledTimes(0)
     expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -443,7 +483,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
-    const recoverButton = await screen.findByRole('button', { name: /try existing account sign-in/i }, { timeout: 5_000 })
+    const recoverButton = await screen.findByRole('button', { name: /use existing account/i }, { timeout: 5_000 })
     fireEvent.click(recoverButton)
 
     await waitFor(() => {

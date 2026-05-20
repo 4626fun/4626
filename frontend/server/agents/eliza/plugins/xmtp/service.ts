@@ -11,16 +11,14 @@ import type { Intent } from '@xmtp/agent-sdk'
 import type { Plugin } from '@elizaos/core'
 import { createHash } from 'node:crypto'
 import { AgentError } from '../../_errors.js'
-import { formatAiPromptGuidance, resolveInboundMenuText } from '../../../../_lib/messaging/chatCommandFallback.js'
 import {
   buildKeeprStatusFollowUpActions,
-  buildSwapQuoteFollowUpActions,
   buildWelcomeActions,
   normalizeAgentReply,
   resolveIntentActionId,
-  XMTP_ACTION_IDS,
   type XmtpAgentReply,
 } from '../../../../_lib/messaging/xmtpInteractive.js'
+import { formatAiPromptGuidance, resolveInboundMenuText } from '../../../../_lib/messaging/chatCommandFallback.js'
 
 const ETHEREUM_IDENTIFIER_KIND = 0
 
@@ -320,7 +318,6 @@ export class XmtpService {
   private signerForArchive: any = null
   private conversationArchiveKeyCache = new Map<string, string>()
   private readonly seenInboundMessages = new Map<string, number>()
-  private readonly lastUniswapQuoteByConversation = new Map<string, string>()
   private readonly inboundDedupeTtlMs = INBOUND_DEDUPE_TTL_MS
   private readonly inboundDedupeMaxKeys = INBOUND_DEDUPE_MAX_KEYS
   private lifecycleState: XmtpLifecycleState = 'idle'
@@ -601,42 +598,12 @@ export class XmtpService {
     return false
   }
 
-  private cacheUniswapQuote(conversationId: string, reply: XmtpAgentReply): void {
-    const trimmed = reply.text.trim()
-    if (!trimmed.startsWith('{')) return
-    try {
-      const parsed = JSON.parse(trimmed) as { skill?: string }
-      if (parsed.skill === 'uniswap_quote') {
-        this.lastUniswapQuoteByConversation.set(conversationId, trimmed)
-      }
-    } catch {
-      // ignore invalid cache payloads
-    }
-  }
-
-  private resolveSwapBuildCommand(conversationId: string, senderAddress: string | null): string | null {
-    const cached = this.lastUniswapQuoteByConversation.get(conversationId)
-    if (!cached) return null
-    try {
-      const parsed = JSON.parse(cached) as { skill?: string; data?: Record<string, unknown> }
-      if (parsed.skill !== 'uniswap_quote' || !parsed.data) return null
-      const payload = {
-        ...parsed.data,
-        quote: (parsed.data as { quote?: unknown }).quote ?? parsed.data,
-        swapper: senderAddress ?? (parsed.data as { swapper?: string }).swapper,
-        confirm: true,
-      }
-      return `/uniswap uniswap_build_swap ${JSON.stringify(payload)}`
-    } catch {
-      return null
-    }
-  }
-
-  private async dispatchOutbound(ctx: MessageContext<string>, reply: XmtpAgentReply | string): Promise<void> {
+  private async dispatchOutbound(
+    ctx: MessageContext<string>,
+    reply: XmtpAgentReply | string,
+  ): Promise<void> {
     const normalized = normalizeAgentReply(reply)
     if (!normalized) return
-
-    this.cacheUniswapQuote(ctx.conversation.id, normalized)
 
     await ctx.conversation.sendText(normalized.text)
 
@@ -648,20 +615,10 @@ export class XmtpService {
       }
     }
 
-    if (normalized.walletSendCalls) {
-      try {
-        await ctx.conversation.sendWalletSendCalls(normalized.walletSendCalls as any)
-      } catch (error) {
-        console.warn('[xmtp-service] Failed to send wallet send calls:', error)
-      }
-    }
-
     if (normalized.followUp === 'welcome-actions') {
       await ctx.conversation.sendActions(buildWelcomeActions())
     } else if (normalized.followUp === 'keepr-status-followup') {
       await ctx.conversation.sendActions(buildKeeprStatusFollowUpActions())
-    } else if (normalized.followUp === 'swap-quote-actions') {
-      await ctx.conversation.sendActions(buildSwapQuoteFollowUpActions())
     }
   }
 
@@ -688,22 +645,6 @@ export class XmtpService {
 
   private async handleIntentIncoming(ctx: MessageContext<Intent>): Promise<void> {
     const actionId = String(ctx.message.content?.actionId ?? '').trim()
-    if (actionId === XMTP_ACTION_IDS.SWAP_CANCEL) {
-      await ctx.conversation.sendText('Swap cancelled.')
-      return
-    }
-    if (actionId === XMTP_ACTION_IDS.SWAP_BUILD) {
-      const senderAddress = await ctx.getSenderAddress().catch(() => undefined)
-      const buildCommand = this.resolveSwapBuildCommand(ctx.conversation.id, senderAddress ?? null)
-      if (!buildCommand) {
-        await ctx.conversation.sendText(
-          'No recent swap quote found. Run `/uniswap uniswap_quote {...}` first, then tap Build tx card.',
-        )
-        return
-      }
-      await this.handleInboundContent(ctx as MessageContext<string>, buildCommand, 'intent')
-      return
-    }
     const command = resolveIntentActionId(actionId)
     if (!command) {
       await ctx.conversation.sendText('That button is no longer available. Try /help.')
@@ -811,10 +752,7 @@ export class XmtpService {
         contentType: ingressKind === 'intent' ? 'intent' : contentType,
         codec,
         clientHint,
-        parseStatus:
-          ingressKind === 'text'
-            ? normalizeInboundText((ctx.message as any).content).parseStatus
-            : 'ok',
+        parseStatus: ingressKind === 'text' ? normalizeInboundText((ctx.message as any).content).parseStatus : 'ok',
       }
 
       if (this.onMessage) {

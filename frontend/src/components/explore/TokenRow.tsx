@@ -19,9 +19,8 @@ import {
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { EthosAvatarScoreBadge, EthosAvatarScoreForUserkey, getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
-import { useZoraProfile } from '@/lib/zora/hooks'
-import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
+import { getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 
 type TokenRowProps = {
@@ -61,56 +60,6 @@ function IdentityAddressChip({ address }: { address: string }) {
     </span>
   )
 }
-
-function walletEthosUserkeyForCoin(coin: ZoraCoin): string | null {
-  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
-  if (/^0x[a-f0-9]{40}$/.test(creator)) return `address:${creator}`
-  return null
-}
-
-function CreatorSocialEthosBadge({
-  coin,
-  ethosUserkey,
-  ethosScore,
-}: {
-  coin: ZoraCoin
-  ethosUserkey?: string | null
-  ethosScore?: EthosScoreValue | null
-}) {
-  const profileIdentifier = getZoraCreatorProfileIdentifier(coin)
-  const hasServerScore = Boolean(ethosScore)
-  const shouldResolveProfile = ethosUserkey === undefined && !hasServerScore
-  const profileQuery = useZoraProfile(shouldResolveProfile ? profileIdentifier ?? undefined : undefined)
-  const resolvedEthosUserkey = useMemo(() => {
-    if (ethosUserkey) return ethosUserkey
-    const social = buildEthosSocialUserkeyFromZoraProfile(profileQuery.data)
-    if (social) return social
-    if (hasServerScore) return walletEthosUserkeyForCoin(coin)
-    return null
-  }, [coin, ethosUserkey, hasServerScore, profileQuery.data])
-
-  if (!resolvedEthosUserkey) return null
-
-  if (ethosScore) {
-    return (
-      <EthosAvatarScoreBadge
-        score={ethosScore.score}
-        level={ethosScore.level}
-        profileQuery={resolvedEthosUserkey}
-        profileQueryKind="userkey"
-        className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2"
-      />
-    )
-  }
-
-  return (
-    <EthosAvatarScoreForUserkey
-      userkey={resolvedEthosUserkey}
-      className="absolute bottom-1 left-1/2 z-10 -translate-x-1/2"
-    />
-  )
-}
-
 
 export function TokenRow({
   rank,
@@ -170,9 +119,6 @@ export function TokenRow({
   const ethosPalette = getEthosScorePalette(ethosScore?.score ?? null, ethosScore?.level ?? null)
   const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
   const ethosHasPositiveScore = ethosScoreValue != null && ethosScoreValue > 0
-  const ethosAvatarRingClass = ethosHasPositiveScore
-    ? `${ethosPalette.borderClass} shadow-[0_0_0_1px_rgba(0,0,0,0.9)]`
-    : 'border-white/10'
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
@@ -273,16 +219,14 @@ export function TokenRow({
             aria-hidden="true"
           />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
-            <div className="relative h-10 w-10 shrink-0 sm:h-11 sm:w-11">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={name} className={`mx-auto h-7 w-7 rounded-full border-2 object-cover sm:h-8 sm:w-8 ${ethosAvatarRingClass}`} />
-              ) : (
-                <div className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border-2 bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-8 sm:w-8 ${ethosAvatarRingClass}`}>
-                  <span className="text-[11px] font-medium text-zinc-400">{name.slice(0, 2).toUpperCase()}</span>
-                </div>
-              )}
-              <CreatorSocialEthosBadge coin={coin} ethosUserkey={ethosUserkey} ethosScore={ethosScore} />
-            </div>
+            <CreatorEthosAvatar
+              coin={coin}
+              imageUrl={avatarUrl}
+              fallbackLabel={name}
+              ethosUserkey={ethosUserkey}
+              ethosScore={ethosScore}
+              size="sm"
+            />
             <div className="min-w-0 explore-token-name">
               {isSameNameSymbol ? (
                 // Single display for matching name/symbol (common for creator coins)

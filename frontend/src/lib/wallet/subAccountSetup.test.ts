@@ -223,6 +223,7 @@ describe('setupSubAccount', () => {
     expect(result.created).toBe(true)
     expect(params.baseAccountSdk.subAccount.setToOwnerAccount).toHaveBeenCalledTimes(1)
     expect(stages.some((s) => s.stage === 'create_sub_account' && s.status === 'success')).toBe(true)
+    expect(stages.some((s) => s.stage === 'install_embedded_owner' && s.status === 'success')).toBe(true)
     expect(stages.some((s) => s.stage === 'configure_signer' && s.status === 'success')).toBe(true)
     expect(stages.some((s) => s.stage === 'done' && s.status === 'success')).toBe(true)
   })
@@ -238,12 +239,17 @@ describe('setupSubAccount', () => {
       wallet_addSubAccount: mockSubAccount(),
     })
 
-    const params = createSetupParams({ provider: walletProvider })
+    const params = createSetupParams({ provider: walletProvider }) as ReturnType<typeof createSetupParams> & {
+      baseAccountSdk: {
+        getProvider: () => typeof sdkProvider
+        subAccount: { create: ReturnType<typeof vi.fn>; setToOwnerAccount: ReturnType<typeof vi.fn> }
+      }
+    }
     params.baseAccountSdk = {
       getProvider: () => sdkProvider,
       subAccount: {
         create: vi.fn().mockResolvedValue(mockSubAccount()),
-        setToOwnerAccount: params.baseAccountSdk.subAccount.setToOwnerAccount,
+        setToOwnerAccount: vi.fn(),
       },
     }
 
@@ -299,7 +305,10 @@ describe('setupSubAccount', () => {
         throw new Error('User rejected')
       },
     })
-    const params = createSetupParams({ provider })
+    const params = createSetupParams({ provider }) as ReturnType<typeof createSetupParams> & {
+      baseAccountSdk: { subAccount: { create: ReturnType<typeof vi.fn>; setToOwnerAccount: ReturnType<typeof vi.fn> } }
+    }
+    params.baseAccountSdk.subAccount.create = vi.fn().mockRejectedValue(new Error('User rejected'))
     const stages: SubAccountSetupStageEvent[] = []
 
     await expect(

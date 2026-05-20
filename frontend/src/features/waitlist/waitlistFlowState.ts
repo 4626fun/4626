@@ -28,12 +28,51 @@ function hasLegacyOwnerInstallSigning(
   )
 }
 
+export function isSubAccountExecutionReady(
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals'],
+): boolean {
+  if (accountSignals?.baseSubAccount?.registered === true) return true
+  return hasRegisteredSubAccountExecution(accountSignals?.executionTrack)
+}
+
+export function resolveSubAccountAddress(params: {
+  baseSubAccount?: string | null
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+}): string | null {
+  const fromSignals = params.accountSignals?.baseSubAccount?.address?.trim()
+  if (fromSignals) return fromSignals
+  const fromProfile = params.baseSubAccount?.trim()
+  return fromProfile || null
+}
+
+export function shouldPromptBaseAccountReconnect(params: {
+  subAccountFlowEnabled: boolean
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+}): boolean {
+  if (!params.subAccountFlowEnabled) return false
+  const signals = params.accountSignals
+  if (!signals?.canonicalCswAddress?.trim()) return false
+  if (isSubAccountExecutionReady(signals)) return false
+  if (signals.executionTrack === 'legacy-owner-install') return false
+  if (signals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
+  return signals.executionTrack === 'none-yet'
+}
+
 export function isWaitlistSigningReady(account: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
-  if (account.accountSignals?.baseSubAccount?.registered === true) return true
-  const track = account.accountSignals?.executionTrack
-  return hasLegacyOwnerInstallSigning(account.accountSignals) || hasRegisteredSubAccountExecution(track)
+  if (isSubAccountExecutionReady(account.accountSignals)) return true
+  return hasLegacyOwnerInstallSigning(account.accountSignals)
+}
+
+const SIGNING_ENABLED_NOTICE_RE = /4626 signing is enabled|already enabled/i
+
+/** Server signals plus optimistic UI when a success notice landed before `me` refreshes. */
+export function isWaitlistSigningReadyForUi(
+  account: Parameters<typeof isWaitlistSigningReady>[0],
+  notice?: string | null,
+): boolean {
+  return isWaitlistSigningReady(account) || SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
 }
 
 export type WaitlistSubAccountConnectOverlay = {
@@ -112,6 +151,7 @@ export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean
     appAccessStatus: string | null
+    baseSubAccount?: string | null
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
   subAccountFlowEnabled?: boolean
@@ -134,19 +174,31 @@ export function resolveWaitlistStep(params: {
     return 'done'
   }
 
+  const subAccountAddress = resolveSubAccountAddress({
+    baseSubAccount: account.baseSubAccount ?? null,
+    accountSignals: account.accountSignals,
+  })
+
   const shouldOfferSubAccountStep =
     subAccountFlowEnabled === true &&
     embeddedEoaAvailable === true &&
-    subAccountStepCompleted !== true &&
     !hasSubAccount &&
     hasCanonicalCsw
 
-  // Base App path: sub-account setup does not require legacy owner install first.
-  if (shouldOfferSubAccountStep) {
+  const shouldRecoverSubAccountOwner =
+    subAccountFlowEnabled === true &&
+    embeddedEoaAvailable === true &&
+    hasCanonicalCsw &&
+    Boolean(subAccountAddress) &&
+    !signingReady
+
+  // Base App path: provision a new sub-account or finish owner install on an existing one.
+  if (shouldOfferSubAccountStep || shouldRecoverSubAccountOwner) {
     return 'connect-base-app'
   }
 
-  if (!signingReady) return 'auth'
+  // Verified email — wallet setup lives on the done workspace, not the auth gate.
+  if (!signingReady) return 'done'
 
   return 'done'
 }

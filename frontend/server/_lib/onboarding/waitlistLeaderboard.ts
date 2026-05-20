@@ -155,7 +155,6 @@ export async function getWaitlistLeaderboardData(params: {
           END,
           NULLIF(TRIM(canonical_pw.address), ''),
           NULLIF(TRIM(azs.canonical_csw_address), ''),
-          NULLIF(TRIM(zora_owned_csw.csw_address), ''),
           NULLIF(TRIM(zp_row.smart_wallet_address), '')
         ) AS canonical_csw,
         COALESCE(
@@ -173,7 +172,6 @@ export async function getWaitlistLeaderboardData(params: {
         (
           COALESCE(azs.zora_linked, false)
           OR zp_row.handle IS NOT NULL
-          OR zora_owned_csw.csw_address IS NOT NULL
           OR NULLIF(TRIM(p.preprov_zora_handle), '') IS NOT NULL
           OR COALESCE(zp_row.is_in_csw_index, false)
         ) AS show_zora_badge,
@@ -187,21 +185,6 @@ export async function getWaitlistLeaderboardData(params: {
           AND pw.is_canonical_smart_wallet = true
         LIMIT 1
       ) canonical_pw ON true
-      LEFT JOIN LATERAL (
-        SELECT w.csw_address
-        FROM zora_csw_owners w
-        WHERE w.current_owners IS NOT NULL
-          AND EXISTS (
-            SELECT 1
-            FROM jsonb_array_elements_text(w.current_owners::jsonb) AS owner(addr)
-            WHERE lower(owner.addr) IN (
-              lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
-              lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
-              lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
-            )
-          )
-        LIMIT 1
-      ) zora_owned_csw ON true
       LEFT JOIN LATERAL (
         SELECT
           zp.smart_wallet_address,
@@ -379,7 +362,6 @@ export async function getWaitlistLeaderboardData(params: {
             END,
             NULLIF(TRIM(canonical_pw.address), ''),
             NULLIF(TRIM(azs.canonical_csw_address), ''),
-            NULLIF(TRIM(zora_owned_csw.csw_address), ''),
             NULLIF(TRIM(zp_row.smart_wallet_address), '')
           ) AS canonical_csw,
           COALESCE(
@@ -397,7 +379,6 @@ export async function getWaitlistLeaderboardData(params: {
           (
             COALESCE(azs.zora_linked, false)
             OR zp_row.handle IS NOT NULL
-            OR zora_owned_csw.csw_address IS NOT NULL
             OR NULLIF(TRIM(p.preprov_zora_handle), '') IS NOT NULL
             OR COALESCE(zp_row.is_in_csw_index, false)
           ) AS show_zora_badge,
@@ -411,21 +392,6 @@ export async function getWaitlistLeaderboardData(params: {
             AND pw.is_canonical_smart_wallet = true
           LIMIT 1
         ) canonical_pw ON true
-        LEFT JOIN LATERAL (
-          SELECT w.csw_address
-          FROM zora_csw_owners w
-          WHERE w.current_owners IS NOT NULL
-            AND EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements_text(w.current_owners::jsonb) AS owner(addr)
-              WHERE lower(owner.addr) IN (
-                lower(COALESCE(NULLIF(TRIM(p.primary_embedded_eoa), ''), '0x0000000000000000000000000000000000000000')),
-                lower(COALESCE(NULLIF(TRIM(p.primary_wallet), ''), '0x0000000000000000000000000000000000000000')),
-                lower(COALESCE(NULLIF(TRIM(p.embedded_wallet), ''), '0x0000000000000000000000000000000000000000'))
-              )
-            )
-          LIMIT 1
-        ) zora_owned_csw ON true
         LEFT JOIN LATERAL (
           SELECT
             zp.smart_wallet_address,

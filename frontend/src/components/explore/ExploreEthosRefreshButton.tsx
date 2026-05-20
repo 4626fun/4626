@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api/apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 
 type RefreshConfig = {
@@ -25,7 +26,7 @@ export function ExploreEthosRefreshButton({
   creatorAddress: string
   onRefreshed?: () => void
 }) {
-  const { isAuthenticated } = useSiweAuth()
+  const { isSignedIn } = useSiweAuth()
   const queryClient = useQueryClient()
   const [txHash, setTxHash] = useState('')
   const [status, setStatus] = useState<string | null>(null)
@@ -34,16 +35,19 @@ export function ExploreEthosRefreshButton({
   const configQuery = useQuery({
     queryKey: ['explore', 'ethos-refresh-config', creatorAddress.toLowerCase()],
     queryFn: async () => {
-      const res = await apiFetch<{ success: boolean; data?: RefreshConfig; error?: string }>(
+      const res = await apiFetch(
         `/api/creator/ethos/refresh-config?creatorAddress=${encodeURIComponent(creatorAddress)}`,
       )
-      if (!res.success || !res.data) throw new Error(res.error ?? 'Failed to load refresh config')
-      return res.data
+      const body = await parseApiEnvelope<RefreshConfig>(res)
+      if (!body?.success || !body.data) {
+        throw new Error(resolveApiErrorMessage(body, 'Failed to load refresh config'))
+      }
+      return body.data
     },
     staleTime: 60_000,
   })
 
-  if (!isAuthenticated) return null
+  if (!isSignedIn) return null
 
   const config = configQuery.data
   const inCooldown = config?.cooldown.inCooldown ?? false
@@ -56,24 +60,22 @@ export function ExploreEthosRefreshButton({
     setBusy(true)
     setStatus(null)
     try {
-      const res = await apiFetch<{ success: boolean; data?: RefreshResult; error?: string }>(
-        '/api/creator/ethos/refresh',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            creatorAddress,
-            paymentTxHash: txHash.trim(),
-          }),
-        },
-      )
-      if (!res.success || !res.data) {
-        setStatus(res.error ?? 'Refresh failed')
+      const res = await apiFetch('/api/creator/ethos/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorAddress,
+          paymentTxHash: txHash.trim(),
+        }),
+      })
+      const body = await parseApiEnvelope<RefreshResult>(res)
+      if (!body?.success || !body.data) {
+        setStatus(resolveApiErrorMessage(body, 'Refresh failed'))
         return
       }
       setStatus(
-        res.data.ethosScore != null
-          ? `Updated — Ethos ${res.data.ethosScore}`
+        body.data.ethosScore != null
+          ? `Updated — Ethos ${body.data.ethosScore}`
           : 'Refresh completed (no score returned)',
       )
       setTxHash('')

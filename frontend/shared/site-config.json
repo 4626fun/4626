@@ -10,6 +10,7 @@
   "backgroundColor": "#020204",
   "brandBlue": "#0000FF",
   "brandBlueSoft": "#1E59FF",
+  "brandAssetVersion": 3,
   "assets": {
     "logo": "/assets/logo-mark.svg",
     "logoBlue": "/assets/logo-mark-blue.svg",
@@ -29,7 +30,8 @@
     "safariPinnedTab": "/assets/safari-pinned-tab.svg",
     "ogImage": "/assets/og-image.png",
     "twitterImage": "/assets/twitter-card.png",
-    "miniappSplash": "/assets/logo-mark-1024.png",
+    "miniappIcon": "/assets/logo-mark-opaque-1024.png",
+    "miniappSplash": "/assets/logo-mark-opaque-1024.png",
     "productHero": "/assets/product/hero-rimlight.png",
     "productDocsHeader": "/assets/product/docs-header.png"
   },

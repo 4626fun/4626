@@ -11,6 +11,7 @@ const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const hookState = {
   provision: vi.fn(),
+  confirmOwner: vi.fn(),
   finalize: vi.fn(),
   connectWallet: vi.fn(),
   getLastSetupError: vi.fn(),
@@ -22,6 +23,7 @@ const hookState = {
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
     provisionSubAccount: hookState.provision,
+    confirmSubAccountEmbeddedOwner: hookState.confirmOwner,
     finalizeSubAccountSigner: hookState.finalize,
     connectBaseAccountWallet: hookState.connectWallet,
     getLastSetupError: hookState.getLastSetupError,
@@ -40,6 +42,10 @@ vi.mock('@/hooks/useSubAccountSetup', () => ({
 
 vi.mock('@/components/ui/PixelWaveLoader', () => ({
   PixelWaveLoader: () => <span data-testid="pixel-loader" />,
+}))
+
+vi.mock('./SubAccountOwnerInstallPanel', () => ({
+  SubAccountOwnerInstallPanel: () => null,
 }))
 
 const fetchMock = vi.fn()
@@ -67,6 +73,7 @@ function mockProvision(created = true) {
 describe('WaitlistConnectBaseApp', () => {
   beforeEach(() => {
     hookState.provision.mockReset()
+    hookState.confirmOwner.mockReset()
     hookState.finalize.mockReset()
     hookState.connectWallet.mockReset()
     hookState.getLastSetupError.mockReset()
@@ -76,6 +83,7 @@ describe('WaitlistConnectBaseApp', () => {
     fetchMock.mockReset()
     hookState.connectWallet.mockResolvedValue(true)
     hookState.getLastSetupError.mockReturnValue(null)
+    hookState.confirmOwner.mockResolvedValue({ alreadyOwner: false, transactionHash: null })
     hookState.finalize.mockResolvedValue(true)
   })
   afterEach(() => {
@@ -88,7 +96,7 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('single-step flow: connect wallet, provision, finalize signer, then register', async () => {
+  it('single-step flow: connect wallet, provision, install owner, finalize signer, then register', async () => {
     mockProvision(true)
     fetchMock.mockResolvedValueOnce(
       jsonResponse(200, {
@@ -105,14 +113,19 @@ describe('WaitlistConnectBaseApp', () => {
     })
 
     expect(hookState.connectWallet).toHaveBeenCalled()
-    await waitFor(() => expect(hookState.finalize).toHaveBeenCalledWith({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-    }))
-    expect(hookState.finalize).toHaveBeenCalledWith({
-      parentAddress: PARENT,
-      subAccountAddress: SUB,
-    })
+    await waitFor(() =>
+      expect(hookState.confirmOwner).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+        provider: expect.objectContaining({ request: expect.any(Function) }),
+      }),
+    )
+    await waitFor(() =>
+      expect(hookState.finalize).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+      }),
+    )
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
     await waitFor(
       () =>
@@ -122,6 +135,21 @@ describe('WaitlistConnectBaseApp', () => {
         }),
       { timeout: 3000 },
     )
+  })
+
+  it('surfaces owner-install failure before finalize', async () => {
+    mockProvision(true)
+    hookState.confirmOwner.mockResolvedValueOnce(null)
+    hookState.getLastSetupError.mockReturnValue(new Error('User rejected the request'))
+
+    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('connect-base-app-button'))
+    })
+
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
+    expect(hookState.finalize).not.toHaveBeenCalled()
+    expect(screen.getByText(/you declined the base app request/i)).toBeTruthy()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {
