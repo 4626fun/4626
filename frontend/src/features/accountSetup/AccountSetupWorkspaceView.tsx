@@ -21,6 +21,7 @@ import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
@@ -132,6 +133,8 @@ export function AccountSetupWorkspaceView(props: {
   waitlistFooter?: ReactNode
 }) {
   const { context, controller, summaryActions, waitlistFooter } = props
+  const privyClientStatus = usePrivyClientStatus()
+  const hasPrivyProviderContext = privyClientStatus !== 'disabled'
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
   const {
@@ -214,6 +217,7 @@ export function AccountSetupWorkspaceView(props: {
     null
   const subAccountOwnerInstallPanel =
     subAccountFlowEnabled &&
+    hasPrivyProviderContext &&
     canonicalCswAddress &&
     persistedSubAccountAddress ? (
       <SubAccountOwnerInstallPanel
