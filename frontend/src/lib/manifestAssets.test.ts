@@ -18,12 +18,18 @@ const trustPagePaths = [
   path.join(publicRoot, 'terms/index.html'),
 ]
 const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
-const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as { brandAssetVersion?: number }
+const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {
+  brandAssetVersion?: number
+  assets?: {
+    faviconIco?: string
+    faviconSvg?: string
+    appleTouchIcon?: string
+  }
+}
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
-const FAVICON_32 = `/assets/favicon-32x32.png?v=${BRAND_ASSET_VERSION}`
-const FAVICON_16 = `/assets/favicon-16x16.png?v=${BRAND_ASSET_VERSION}`
-const FAVICON_SVG = `/assets/favicon.svg?v=${BRAND_ASSET_VERSION}`
-const APPLE_TOUCH = `/assets/apple-touch-icon.png?v=${BRAND_ASSET_VERSION}`
+const FAVICON_ANY = `${siteConfig.assets?.faviconIco ?? '/assets/favicon.ico'}?v=${BRAND_ASSET_VERSION}`
+const FAVICON_SVG = `${siteConfig.assets?.faviconSvg ?? '/assets/favicon.svg'}?v=${BRAND_ASSET_VERSION}`
+const APPLE_TOUCH = `${siteConfig.assets?.appleTouchIcon ?? '/assets/apple-touch-icon.png'}?v=${BRAND_ASSET_VERSION}`
 const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}`
 const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
 const MASKABLE_192 = `/assets/maskable-icon-192x192.png?v=${BRAND_ASSET_VERSION}`
@@ -77,8 +83,7 @@ describe('public manifest assets', () => {
     for (const htmlPath of htmlEntryPaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${FAVICON_32}" />`)
-      expect(html).toContain(`<link rel="icon" type="image/png" sizes="16x16" href="${FAVICON_16}" />`)
+      expect(html).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any" />`)
       expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}" />`)
       expect(html).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}" />`)
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
