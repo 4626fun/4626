@@ -14,8 +14,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
-import { BarChart, LineChart } from '@coinbase/cds-web-visualization/chart'
-
+import { MetricChartPlot } from '@/components/explore/MetricChartPlot'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { EthosBlurOrbs, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
@@ -298,11 +297,8 @@ function MetricChart({
     typeof token1Share === 'number' &&
     token0Share + token1Share > 0
 
-  // Zero chart insets: we draw our own axes *outside* the card, so CDS's
-  // internal axis margins would just waste pixels. Bars and lines fill the
-  // full card. A small right inset is kept so the last bar's rounded corner
-  // doesn't clip the card edge.
-  const chartInset = { top: 4, left: 2, right: 4, bottom: 2 }
+  const plotMode =
+    metric === 'price' ? 'line' : metric === 'liquidity' && hasStackedLiquidity ? 'stacked-bar' : 'bar'
 
   // Bespoke Y-axis ticks and the domain they span. For stacked liquidity
   // we compute ticks off the *total* tvlUSD (not each stack individually)
@@ -369,107 +365,16 @@ function MetricChart({
           ) : null}
 
           <div className="mt-3 min-h-0 w-full flex-1">
-              {metric === 'price' ? (
-              <LineChart
-                height="100%"
-                width="100%"
-                animate
-                curve="monotone"
-                strokeWidth={2}
-                inset={chartInset}
-                enableScrubbing
-                onScrubberPositionChange={handleScrub}
-                series={[
-                  {
-                    id: 'price',
-                    label,
-                    data: values,
-                    color: palette.primary,
-                    stroke: palette.primary,
-                    strokeWidth: 2,
-                    strokeOpacity: 1,
-                    opacity: 1,
-                  },
-                ]}
-                showXAxis={false}
-                showYAxis={false}
-                yAxis={{ domain: yTickDomain }}
-                legend={false}
-              />
-            ) : metric === 'liquidity' && hasStackedLiquidity ? (
-              <BarChart
-                height="100%"
-                width="100%"
-                animate
-                stacked
-                barPadding={0.15}
-                borderRadius={3}
-                inset={chartInset}
-                enableScrubbing
-                onScrubberPositionChange={handleScrub}
-                series={[
-                  {
-                    id: 'tvl0',
-                    label: composition?.token0Symbol ?? 'Token 0',
-                    data: values.map((v) => v * (token0Share ?? 0)),
-                    color: palette.primary,
-                    stackId: 'tvl',
-                  },
-                  {
-                    id: 'tvl1',
-                    label: composition?.token1Symbol ?? 'Token 1',
-                    data: values.map((v) => v * (token1Share ?? 0)),
-                    color: palette.secondary,
-                    stackId: 'tvl',
-                  },
-                ]}
-                showXAxis={false}
-                showYAxis={false}
-                yAxis={{ domain: yTickDomain }}
-                legend={false}
-              />
-            ) : (
-              <BarChart
-                height="100%"
-                width="100%"
-                animate
-                barPadding={0.15}
-                borderRadius={3}
-                inset={chartInset}
-                enableScrubbing
-                onScrubberPositionChange={handleScrub}
-                series={[
-                  {
-                    id: metric,
-                    label,
-                    data: values,
-                    color: palette.primary,
-                    // Gradient stops must be in STRICTLY ascending offset
-                    // order per CDS. Reversing, or letting a degenerate
-                    // domain (min === max — e.g. all-zero volume/fees
-                    // series) through, spams "Gradient: stop offsets must
-                    // be in ascending order" on every render, which backs
-                    // up the browser. The nudge on `max` keeps the stops
-                    // strictly ordered even when the series is flat.
-                    gradient: {
-                      axis: 'y',
-                      stops: (domain) => {
-                        const min = domain.min
-                        const max = domain.max > domain.min ? domain.max : domain.min + 1
-                        return [
-                          { offset: min, color: palette.secondary, opacity: 0.45 },
-                          { offset: max, color: palette.primary, opacity: 0.95 },
-                        ]
-                      },
-                    },
-                  },
-                ]}
-                showXAxis={false}
-                showYAxis={false}
-                yAxis={{ domain: yTickDomain }}
-                legend={false}
-              />
-            )}
+            <MetricChartPlot
+              mode={plotMode}
+              values={values}
+              yDomain={yTickDomain}
+              primaryColor={palette.primary}
+              secondaryColor={palette.secondary}
+              token0Share={token0Share}
+              token1Share={token1Share}
+              onScrub={handleScrub}
+            />
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { AccountTray } from '@/components/ui/AccountTray'
+import { Button } from '@/components/ui/Button'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -726,19 +727,28 @@ export function ConnectButton({
   }, [])
 
   if (buttonState === 'hydrating') {
+    if (variant === 'nav') {
+      return (
+        <button
+          type="button"
+          disabled
+          className="inline-flex h-9 w-[164px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-200 transition disabled:opacity-50"
+        >
+          <Wallet className="w-4 h-4" />
+          <span className="tracking-[0.01em]">Checking session…</span>
+        </button>
+      )
+    }
     return (
-      <button
+      <Button
         type="button"
+        variant="primary"
         disabled
-        className={
-          variant === 'nav'
-            ? 'inline-flex h-9 w-[164px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-200 transition disabled:opacity-50'
-            : 'btn-accent btn-no-icon disabled:opacity-50 flex min-w-[152px] items-center justify-center gap-2'
-        }
+        className="flex min-w-[152px] items-center justify-center gap-2"
       >
         <Wallet className="w-4 h-4" />
-        <span className={variant === 'nav' ? 'tracking-[0.01em]' : 'label'}>Checking session…</span>
-      </button>
+        <span className="label">Checking session…</span>
+      </Button>
     )
   }
 
@@ -1034,35 +1044,45 @@ export function ConnectButton({
   }
 
   // Disconnected - Privy-first sign in
+  const signInOnClick = () => {
+    if (prefersPrivyWalletLogin) {
+      void (async () => {
+        const signed = await auth.signIn({ method: 'privy' })
+        if (!signed) {
+          setShowMenu(false)
+          setShowOptions(true)
+        }
+      })()
+    } else {
+      toggleOptions()
+    }
+  }
+  const signInLabel = auth.busy ? 'Signing in…' : 'Sign in'
+
   return (
     <div className="relative">
+      {variant === 'nav' ? (
         <button
           type="button"
-        disabled={auth.busy}
-        onClick={() => {
-          if (prefersPrivyWalletLogin) {
-            void (async () => {
-              const signed = await auth.signIn({ method: 'privy' })
-              if (!signed) {
-                setShowMenu(false)
-                setShowOptions(true)
-              }
-            })()
-          } else {
-            toggleOptions()
-          }
-        }}
-        className={
-          variant === 'nav'
-            ? 'inline-flex h-9 w-[164px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-100 transition-all duration-200 hover:bg-white/12 disabled:opacity-50'
-            : 'btn-accent btn-no-icon disabled:opacity-50 flex min-w-[136px] items-center justify-center gap-2'
-        }
+          disabled={auth.busy}
+          onClick={signInOnClick}
+          className="inline-flex h-9 w-[164px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-100 transition-all duration-200 hover:bg-white/12 disabled:opacity-50"
         >
-        <Wallet className="w-4 h-4" />
-        <span className={variant === 'nav' ? 'tracking-[0.01em]' : 'label'}>
-          {auth.busy ? 'Signing in…' : 'Sign in'}
-        </span>
-      </button>
+          <Wallet className="w-4 h-4" />
+          <span className="tracking-[0.01em]">{signInLabel}</span>
+        </button>
+      ) : (
+        <Button
+          type="button"
+          variant="primary"
+          disabled={auth.busy}
+          onClick={signInOnClick}
+          className="flex min-w-[136px] items-center justify-center gap-2"
+        >
+          <Wallet className="w-4 h-4" />
+          <span className="label">{signInLabel}</span>
+        </Button>
+      )}
       {auth.error ? <div className="mt-2 max-w-[280px] text-[11px] text-red-400/90">{auth.error}</div> : null}
 
       {showOptions && (

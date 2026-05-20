@@ -1,5 +1,6 @@
 import { Wallet } from 'lucide-react'
 
+import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import type { SwapConnectGateResult } from '@/lib/swap/connectGate'
 
@@ -45,14 +46,15 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
           <Spinner className="text-white/80" size="lg" />
         </div>
       ) : (
-        <button
+        <Button
           type="button"
-          className="btn-accent btn-no-icon mt-1 w-full max-w-[260px] disabled:opacity-50 disabled:grayscale"
+          variant="primary"
+          className="mt-1 w-full max-w-[260px] disabled:grayscale"
           disabled={props.busy || !gate.actionLabel}
           onClick={props.onPrimaryAction}
         >
           {props.busy ? 'Connecting…' : gate.actionLabel}
-        </button>
+        </Button>
       )}
 
       {props.errorMessage ? (

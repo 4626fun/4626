@@ -1,4 +1,4 @@
-# Product UI design system (Phase 1)
+# Product UI design system
 
 **Mental model:** Product UI = `@/components/ui/*` (shadcn/Radix primitives + 4626 Tailwind tokens).
 
@@ -12,11 +12,12 @@
 | Layer | Use |
 | ----- | --- |
 | `Button`, `Badge`, `Modal`, `Input`, `Alert`, `SegmentedTabs` | Default for new product UI |
-| `btn-accent` (legacy) | Avoid on new/edited marketing surfaces; prefer `<Button variant="primary">` |
-| `@coinbase/cds-web` | **Charts only** (`ExploreContentDetail` via `cds-web-visualization`); needs slim `CdsThemeProvider` in `main.tsx` |
-| `AccountTray` | Replaces CDS `Tray` in account chrome (`ConnectButton`) |
+| `btn-accent` / `btn-primary` (CSS) | Implementation detail for `Button variant="primary"`; do not use raw classes on new surfaces |
+| `MetricChartPlot` + Recharts | Explore content-detail charts (`ExploreContentDetail`) |
+| `AccountTray` | Account chrome tray (`ConnectButton`) |
 | `sonner` | Toasts via `AppToaster` + `toast.*` helpers |
 
 ## Boundaries
 
 - `src/components/ui` must not import from `src/features/*` (`pnpm guard:frontend-boundaries`).
+- No runtime `@coinbase/cds-*` in app code; charts use Recharts only.

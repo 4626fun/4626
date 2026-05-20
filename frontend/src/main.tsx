@@ -6,10 +6,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { RootRouter } from './RootRouter'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { ThemeProvider } from '@/lib/ui/theme'
-import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
 import { AppToaster } from '@/components/ui/Toast'
 import { TooltipProvider } from '@/components/ui/Tooltip'
-import { theme4626 } from '@/theme/cds-theme'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import { resolveDisallowedLoopbackRedirectUrl } from '@/lib/env/host'
 import {
@@ -19,8 +17,6 @@ import {
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
 } from '@/lib/privy/passwordlessFetchGuard'
-/** CDS global styles kept for explore chart surfaces until those migrate off cds-web-visualization. */
-import '@coinbase/cds-web/globalStyles'
 import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
@@ -383,14 +379,10 @@ if (!redirectWwwToCanonicalApex() && !redirectDisallowedLoopbackPort()) {
       <RootErrorBoundary>
         <ThemeProvider>
           <TooltipProvider>
-            <CdsMediaQueryProvider>
-              <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
-                <AppToaster />
-                <BrowserRouter>
-                  <RootRouter />
-                </BrowserRouter>
-              </CdsThemeProvider>
-            </CdsMediaQueryProvider>
+            <AppToaster />
+            <BrowserRouter>
+              <RootRouter />
+            </BrowserRouter>
           </TooltipProvider>
         </ThemeProvider>
       </RootErrorBoundary>

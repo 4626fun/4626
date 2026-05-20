@@ -555,9 +555,9 @@ export function Vault() {
               <h1 className="headline text-3xl sm:text-5xl mt-4">Invalid vault address</h1>
               <p className="text-zinc-600 text-sm font-light mt-4">Check the URL and try again.</p>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
-                  Back to Explore
-                </Link>
+                <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                  <Link to="/explore/creators">Back to Explore</Link>
+                </Button>
               </div>
             </div>
           </div>
@@ -583,9 +583,9 @@ export function Vault() {
               </p>
               <div className="app-meta-value mt-3 text-zinc-600 break-all">{addressParam}</div>
               <div className="mt-8 flex flex-col sm:flex-row gap-3">
-                <Link to="/explore/creators" className="btn-accent btn-compact inline-flex items-center justify-center rounded-full text-xs">
-                  Back to Explore
-                </Link>
+                <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                  <Link to="/explore/creators">Back to Explore</Link>
+                </Button>
                 <a
                   href={`https://basescan.org/address/${addressParam}`}
                   target="_blank"
@@ -753,19 +753,13 @@ export function Vault() {
                     </Link>
                   ) : null}
                   {canManageVault ? (
-                    <a
-                      href="#manage"
-                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent btn-compact text-xs text-center"
-                    >
-                      Manage position
-                    </a>
+                    <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                      <a href="#manage">Manage position</a>
+                    </Button>
                   ) : (
-                    <a
-                      href="#auction"
-                      className="inline-flex items-center justify-center gap-2 rounded-full btn-accent btn-compact text-xs text-center"
-                    >
-                      Auction panel
-                    </a>
+                    <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                      <a href="#auction">Auction panel</a>
+                    </Button>
                   )}
                 </div>
               </div>
@@ -788,9 +782,11 @@ export function Vault() {
                   <p className="text-zinc-500 text-sm font-light">Get {shareSymbol} before anyone else</p>
                 </div>
               </div>
-              <Link to={`/auction/bid/${ccaStrategy}`} className="btn-accent w-full sm:w-auto text-center">
-                Join Auction <ArrowDownToLine className="w-4 h-4 inline ml-2" />
-              </Link>
+              <Button variant="primary" className="w-full sm:w-auto" asChild>
+                <Link to={`/auction/bid/${ccaStrategy}`}>
+                  Join Auction <ArrowDownToLine className="w-4 h-4 inline ml-2" />
+                </Link>
+              </Button>
             </div>
           </div>
         </section>

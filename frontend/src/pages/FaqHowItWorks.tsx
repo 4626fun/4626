@@ -7,6 +7,7 @@ import { AKITA } from '@/config/contracts'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 
@@ -336,12 +337,11 @@ export function FaqHowItWorks() {
                 hold <span className="mono text-brand-accent">{SHARE_TOKEN}</span> to earn, or burn to exit.
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-3">
-                <Link
-                  to={getCanonicalMarketingWaitlistPath()}
-                  className="btn-accent inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm whitespace-nowrap"
-                >
-                  Join the waitlist <ArrowRight className="w-4 h-4" />
-                </Link>
+                <Button variant="primary" size="lg" className="whitespace-nowrap" asChild>
+                  <Link to={getCanonicalMarketingWaitlistPath()}>
+                    Join the waitlist <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </Button>
                 <Link
                   to="/faq"
                   className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.02] px-5 py-3 text-sm text-zinc-400 hover:text-white hover:border-white/12 transition-colors whitespace-nowrap"
