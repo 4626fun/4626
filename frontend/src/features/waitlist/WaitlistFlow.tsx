@@ -25,6 +25,7 @@ import {
   type WaitlistSubAccountConnectOverlay,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  shouldForceBaseAppConnectStep,
   isWaitlistSigningReady,
 } from './waitlistFlowState'
 import {
@@ -526,9 +527,18 @@ export function WaitlistFlow(props: {
   )
 
   useEffect(() => {
-    const setup = (searchParams.get('setup') ?? '').trim().toLowerCase()
-    if (setup !== 'base-app' || !subAccountFlowEnabled) return
-    if (!account?.emailVerified) return
+    const setup = searchParams.get('setup')
+    if (!subAccountFlowEnabled || !account?.emailVerified) return
+    if (
+      shouldForceBaseAppConnectStep({
+        setupIntent: setup,
+        subAccountFlowEnabled,
+        account,
+      })
+    ) {
+      setStep('connect-base-app')
+      return
+    }
     const nextStep = resolveWaitlistStep({
       account,
       subAccountFlowEnabled,

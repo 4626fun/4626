@@ -1,4 +1,4 @@
-import { getMarketingBaseUrl, getSubAccountAppDomain, getWaitlistReferralBaseUrl } from '@/lib/env/host'
+import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/env/host'
 
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
@@ -82,9 +82,9 @@ export function getMarketingWaitlistEntryUrl(): string {
 
 export type WaitlistSetupIntent = 'base-app' | 'owner-install'
 
-/** Canonical marketing-host URL for waitlist setup deep links. */
+/** Canonical marketing-host URL for waitlist setup deep links (`4626.fun`, not `app.4626.fun`). */
 export function buildWaitlistSetupUrl(setup: WaitlistSetupIntent): string {
-  const url = new URL(buildWaitlistEntryUrl(getSubAccountAppDomain()))
+  const url = new URL(getMarketingWaitlistEntryUrl())
   url.searchParams.set('setup', setup)
   return url.toString()
 }

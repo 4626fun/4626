@@ -498,6 +498,19 @@
       "handle": "filesystem"
     },
     {
+      "src": "/waitlist(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "app.4626.fun"
+        }
+      ],
+      "status": 308,
+      "headers": {
+        "location": "https://4626.fun/waitlist"
+      }
+    },
+    {
       "src": "/((?!assets/).*)",
       "has": [
         {

@@ -60,9 +60,7 @@ function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean })
   const signupId = safeInt(raw?.signup_id)
   const referralCodeRaw = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
   const cswRaw = resolveCanonicalCswAddress(raw)
-  const personaRaw = typeof raw?.persona === 'string' ? String(raw.persona).trim() : ''
-  const display =
-    shortAddr(cswRaw) ?? (personaRaw.length > 0 ? personaRaw : `user#${signupId}`)
+  const display = shortAddr(cswRaw) ?? `user#${signupId}`
   const referralCode = options?.includeReferralCode ? referralCodeRaw : null
   return {
     rank: safeInt(raw?.rank),
@@ -128,11 +126,21 @@ export async function getWaitlistLeaderboardData(params: {
     eligible AS (
       SELECT
         p.id,
-        COALESCE(NULLIF(p.csw_address, ''), NULLIF(p.primary_smart_wallet, '')) AS canonical_csw,
+        COALESCE(
+          NULLIF(p.csw_address, ''),
+          NULLIF(p.primary_smart_wallet, ''),
+          canonical_pw.address
+        ) AS canonical_csw,
         p.referral_code,
-        p.border_tier,
-        p.persona
+        p.border_tier
       FROM profiles p
+      LEFT JOIN LATERAL (
+        SELECT pw.address
+        FROM profile_wallets pw
+        WHERE pw.profile_id = p.id
+          AND pw.is_canonical_smart_wallet = true
+        LIMIT 1
+      ) canonical_pw ON true
       WHERE p.email IS NOT NULL
         AND p.merged_into_profile_id IS NULL
       ORDER BY p.id ASC
@@ -144,7 +152,6 @@ export async function getWaitlistLeaderboardData(params: {
         e.canonical_csw,
         e.referral_code,
         e.border_tier,
-        e.persona,
         COALESCE(pt.points_total, 0)::int AS total_points,
         COALESCE(
           ROUND(SUM(
@@ -168,7 +175,7 @@ export async function getWaitlistLeaderboardData(params: {
       FROM eligible e
       LEFT JOIN point_totals pt ON pt.signup_id = e.id
       LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, e.persona, pt.points_total
+      GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, pt.points_total
     ),
     ranked AS (
       SELECT
@@ -176,7 +183,6 @@ export async function getWaitlistLeaderboardData(params: {
         canonical_csw,
         referral_code,
         border_tier,
-        persona,
         total_points,
         invite_points,
         agent_points,
@@ -201,7 +207,7 @@ export async function getWaitlistLeaderboardData(params: {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, canonical_csw, referral_code, border_tier, persona, total_points, invite_points, agent_points
+    SELECT rank, signup_id, canonical_csw, referral_code, border_tier, total_points, invite_points, agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
@@ -244,11 +250,21 @@ export async function getWaitlistLeaderboardData(params: {
       eligible AS (
         SELECT
           p.id,
-          COALESCE(NULLIF(p.csw_address, ''), NULLIF(p.primary_smart_wallet, '')) AS canonical_csw,
+          COALESCE(
+            NULLIF(p.csw_address, ''),
+            NULLIF(p.primary_smart_wallet, ''),
+            canonical_pw.address
+          ) AS canonical_csw,
           p.referral_code,
-          p.border_tier,
-          p.persona
+          p.border_tier
         FROM profiles p
+        LEFT JOIN LATERAL (
+          SELECT pw.address
+          FROM profile_wallets pw
+          WHERE pw.profile_id = p.id
+            AND pw.is_canonical_smart_wallet = true
+          LIMIT 1
+        ) canonical_pw ON true
         WHERE p.email IS NOT NULL
           AND p.merged_into_profile_id IS NULL
         ORDER BY p.id ASC
@@ -260,7 +276,6 @@ export async function getWaitlistLeaderboardData(params: {
           e.canonical_csw,
           e.referral_code,
           e.border_tier,
-          e.persona,
           COALESCE(pt.points_total, 0)::int AS total_points,
           COALESCE(
             ROUND(SUM(
@@ -284,7 +299,7 @@ export async function getWaitlistLeaderboardData(params: {
         FROM eligible e
         LEFT JOIN point_totals pt ON pt.signup_id = e.id
         LEFT JOIN points l ON l.signup_id = e.id
-        GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, e.persona, pt.points_total
+        GROUP BY e.id, e.canonical_csw, e.referral_code, e.border_tier, pt.points_total
       ),
       ranked AS (
         SELECT
@@ -292,7 +307,6 @@ export async function getWaitlistLeaderboardData(params: {
           canonical_csw,
           referral_code,
           border_tier,
-          persona,
           total_points,
           invite_points,
           agent_points,
@@ -317,7 +331,7 @@ export async function getWaitlistLeaderboardData(params: {
           )::int AS rank
         FROM scored
       )
-      SELECT rank, signup_id, canonical_csw, referral_code, border_tier, persona, total_points, invite_points, agent_points
+      SELECT rank, signup_id, canonical_csw, referral_code, border_tier, total_points, invite_points, agent_points
       FROM ranked
       WHERE signup_id = ${authorizedProfileId}
       LIMIT 1;

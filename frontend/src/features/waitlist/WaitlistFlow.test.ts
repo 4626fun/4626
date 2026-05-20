@@ -6,6 +6,7 @@ import {
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  shouldForceBaseAppConnectStep,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
@@ -207,6 +208,42 @@ describe('resolveWaitlistStep', () => {
         subAccountStepCompleted: true,
       }),
     ).toBe('done')
+  })
+
+  it('forces connect-base-app when setup=base-app deep link is present and signing is incomplete', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+            executionTrack: 'none-yet',
+          },
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('does not force connect-base-app when setup=base-app but signing is already ready', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            baseSubAccount: {
+              address: '0xabc0000000000000000000000000000000000001',
+              registered: true,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+      }),
+    ).toBe(false)
   })
 
   it('treats registered baseSubAccount as signing-ready even when executionTrack lags', () => {

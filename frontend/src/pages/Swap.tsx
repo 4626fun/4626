@@ -1195,9 +1195,25 @@ export function Swap() {
   }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
-  const canonicalExecutionSetupRequired =
-    executionMode === 'canonical' && canonicalSignerGate.code === 'execution-setup-required'
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const canonicalSetupGateCodes = useMemo(
+    () =>
+      new Set([
+        'execution-setup-required',
+        'base-sub-account-missing',
+        'base-sub-account-invalid',
+        'base-sub-account-provider-missing',
+      ]),
+    [],
+  )
+  const needsCanonicalSetupAction =
+    executionMode === 'canonical' &&
+    subAccountFlowEnabled &&
+    canonicalSetupGateCodes.has(canonicalSignerGate.code)
+  const canonicalSetupActionLabel =
+    canonicalSignerGate.code === 'base-sub-account-provider-missing'
+      ? 'Reconnect Base App'
+      : 'Enable 4626 signing'
   const handleEnableCanonicalSigning = useCallback(() => {
     const needsSubAccountSetup =
       subAccountFlowEnabled &&
@@ -1965,7 +1981,7 @@ export function Swap() {
                         error={
                           tokenInBalanceError ??
                           error ??
-                          (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
+                          (needsCanonicalSetupAction ? null : canonicalSignerGuardError)
                         }
                         quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
                         approvalRequired={approvalRequired}
@@ -2003,20 +2019,15 @@ export function Swap() {
                         swapProviderLabel={swapProviderLabel}
                         needsUnverifiedConfirmation={unverifiedSelectionMode}
                         unverifiedTokenLabel={unverifiedTokenLabel}
-                        primaryActionLabel={
-                          canonicalExecutionSetupRequired
-                            ? 'Enable 4626 signing'
-                            : undefined
-                        }
+                        primaryActionLabel={needsCanonicalSetupAction ? canonicalSetupActionLabel : undefined}
                         onPrimaryAction={
-                          canonicalExecutionSetupRequired
-                            ? handleEnableCanonicalSigning
-                            : undefined
+                          needsCanonicalSetupAction ? handleEnableCanonicalSigning : undefined
                         }
-                        forcePrimaryActionEnabled={canonicalExecutionSetupRequired}
+                        forcePrimaryActionEnabled={needsCanonicalSetupAction}
                         primaryActionHint={
-                          canonicalExecutionSetupRequired
-                            ? 'Finish one-time account setup before canonical swaps can execute.'
+                          needsCanonicalSetupAction
+                            ? canonicalSignerGate.reason ??
+                              'Finish one-time account setup before canonical swaps can execute.'
                             : null
                         }
                       />

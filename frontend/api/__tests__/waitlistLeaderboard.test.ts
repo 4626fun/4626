@@ -90,8 +90,9 @@ describe('waitlist/leaderboard', () => {
     // the rolled-up primary_wallet (last 4: 00aa).
     expect(res.body?.data?.leaderboard?.[0]?.display).toContain('00cc')
     expect(res.body?.data?.leaderboard?.[0]?.display).not.toContain('00aa')
-    // Row 2 has no CSW → never expose embedded/EOA primary_wallet; use user# id.
+    // Row 2 has no CSW → never expose persona labels like "creator".
     expect(res.body?.data?.leaderboard?.[1]?.cswAddress).toBeNull()
     expect(res.body?.data?.leaderboard?.[1]?.display).toBe('user#43')
+    expect(res.body?.data?.leaderboard?.[1]?.display).not.toMatch(/creator/i)
   })
 })

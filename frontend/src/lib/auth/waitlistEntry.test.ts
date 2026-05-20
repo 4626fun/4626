@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import * as host from '@/lib/env/host'
 import {
   buildCanonicalMarketingWaitlistUrl,
   buildWaitlistEntryPath,
@@ -40,6 +41,14 @@ describe('waitlistEntry', () => {
   it('builds setup deep links on the marketing waitlist host', () => {
     expect(buildWaitlistSetupUrl('base-app')).toBe('http://localhost:3000/waitlist?setup=base-app')
     expect(buildWaitlistSetupUrl('owner-install')).toBe('http://localhost:3000/waitlist?setup=owner-install')
+  })
+
+  it('builds setup deep links on 4626.fun even when the caller is on app.4626.fun', () => {
+    const marketingBaseUrl = vi.spyOn(host, 'getMarketingBaseUrl').mockReturnValue('https://4626.fun')
+
+    expect(buildWaitlistSetupUrl('base-app')).toBe('https://4626.fun/waitlist?setup=base-app')
+
+    marketingBaseUrl.mockRestore()
   })
 
   it('normalizes referral codes into short url-safe values', () => {

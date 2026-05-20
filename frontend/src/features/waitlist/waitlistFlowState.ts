@@ -86,6 +86,28 @@ type CanonicalBootstrapResult = {
  * `addOwnerAddress` on the parent CSW. With the flag off, behaviour
  * matches the prior `auth → done` shape for legacy owner-install only.
  */
+/**
+ * When `/waitlist?setup=base-app` is present and signing is still incomplete,
+ * reopen the connect step even if the user previously tapped "Skip for now".
+ * Swap and account-setup surfaces deep-link here so users can finish later.
+ */
+export function shouldForceBaseAppConnectStep(params: {
+  setupIntent: string | null | undefined
+  subAccountFlowEnabled?: boolean
+  account: {
+    emailVerified: boolean
+    accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  }
+}): boolean {
+  const setup = String(params.setupIntent ?? '')
+    .trim()
+    .toLowerCase()
+  if (setup !== 'base-app') return false
+  if (params.subAccountFlowEnabled !== true) return false
+  if (!params.account.emailVerified) return false
+  return !isWaitlistSigningReady(params.account)
+}
+
 export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean

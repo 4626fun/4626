@@ -140,7 +140,7 @@ export function Leaderboard() {
     if (!data) return null
     const ranked = data.totalCount.toLocaleString()
     const shown = data.leaderboard.length.toLocaleString()
-    return `Showing ${shown} of ${ranked} ranked creators`
+    return `Showing ${shown} of ${ranked} on the waitlist`
   }, [data])
 
   const meInTop = useMemo(() => {
@@ -268,7 +268,7 @@ export function Leaderboard() {
               ) : (
                 <TableRow disableHoverIndicator>
                   <TableCell colSpan={3}>
-                    <span className="text-sm text-zinc-600">No ranked creators yet.</span>
+                    <span className="text-sm text-zinc-600">No ranked waitlist members yet.</span>
                   </TableCell>
                 </TableRow>
               )}
