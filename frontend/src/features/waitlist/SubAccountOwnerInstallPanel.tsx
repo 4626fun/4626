@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ChevronDown } from 'lucide-react'
 import { getAddress, isAddress, type Address } from 'viem'
 
+import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
@@ -26,6 +27,17 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   const trimmed = value.trim()
   if (!isAddress(trimmed)) return null
   return getAddress(trimmed)
+}
+
+function mapOwnerInstallError(message: string): string {
+  const lower = message.toLowerCase()
+  if (lower.includes('base account wallet')) {
+    return 'Connect Base App first (open this page in Base App), then tap Enable 4626 signing again.'
+  }
+  if (lower.includes('connect base app first')) {
+    return message
+  }
+  return message
 }
 
 function shortAddr(address: Address): string {
@@ -148,7 +160,8 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       subAccountAddress: subAccount,
     })
     if (!result) {
-      const message = getLastSetupError()?.message ?? 'Could not enable signing on your app wallet.'
+      const message =
+        mapOwnerInstallError(getLastSetupError()?.message ?? 'Could not enable signing on your app wallet.')
       setActionError(message)
       return
     }
@@ -204,14 +217,15 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
             <span>{progressLabel}</span>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
-            className="btn-accent btn-no-icon w-full"
+            variant="primary"
+            className="w-full"
             onClick={() => void handleInstall()}
             data-testid="sub-account-owner-install-button"
           >
             {primaryLabel}
-          </button>
+          </Button>
         )}
         {actionError ? (
           <p className="text-xs text-rose-300/90" role="alert">
@@ -263,14 +277,15 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
           <span>{progressLabel}</span>
         </div>
       ) : (
-        <button
+        <Button
           type="button"
-          className="btn-accent btn-no-icon w-full"
+          variant="primary"
+          className="w-full"
           onClick={() => void handleInstall()}
           data-testid="sub-account-owner-install-button"
         >
           {primaryLabel}
-        </button>
+        </Button>
       )}
 
       {actionError ? (

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
 import type { Address } from 'viem'
 
+import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
@@ -377,14 +378,15 @@ export function WaitlistConnectBaseApp(props: Props) {
           ) : null}
 
           <div className="space-y-3 text-center">
-            <button
+            <Button
               type="button"
-              className="btn-accent btn-no-icon w-full"
+              variant="primary"
+              className="w-full"
               onClick={() => void handleConnect()}
               data-testid="connect-base-app-button"
             >
               {showRecoveryPanel ? 'Run full Base App setup' : 'Connect Base App'}
-            </button>
+            </Button>
             {!showRecoveryPanel ? (
               <SubAccountOwnerInstallPanel
                 variant="inline"
@@ -444,14 +446,14 @@ export function WaitlistConnectBaseApp(props: Props) {
           <p className="text-sm leading-relaxed text-rose-300/90">{view.message}</p>
           <div className="flex items-center justify-center gap-3">
             {view.canRetry ? (
-              <button
+              <Button
                 type="button"
-                className="btn-accent btn-no-icon"
+                variant="primary"
                 onClick={() => void handleRetry()}
                 data-testid="retry-base-app-button"
               >
                 Try again
-              </button>
+              </Button>
             ) : null}
             <button
               type="button"

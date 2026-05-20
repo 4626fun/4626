@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { ShareVaultButton } from '@/components/share/ShareVaultButton'
@@ -207,23 +208,17 @@ export function Leaderboard() {
                     showLabel
                   />
                 ) : null}
-                <Link
-                  to={getCanonicalMarketingWaitlistPath()}
-                  className="btn-accent btn-compact inline-flex items-center whitespace-nowrap text-xs sm:text-sm"
-                >
-                  Invite friends
-                </Link>
+                <Button variant="primary" size="sm" className="btn-compact whitespace-nowrap text-xs sm:text-sm" asChild>
+                  <Link to={getCanonicalMarketingWaitlistPath()}>Invite friends</Link>
+                </Button>
               </div>
             </div>
           </section>
         ) : (
           <div className="mb-6 flex flex-wrap gap-2">
-            <Link
-              to={getCanonicalMarketingWaitlistPath()}
-              className="btn-accent btn-compact inline-flex items-center whitespace-nowrap text-xs sm:text-sm"
-            >
-              Join waitlist
-            </Link>
+            <Button variant="primary" size="sm" className="btn-compact whitespace-nowrap text-xs sm:text-sm" asChild>
+              <Link to={getCanonicalMarketingWaitlistPath()}>Join waitlist</Link>
+            </Button>
           </div>
         )}
 
@@ -234,7 +229,7 @@ export function Leaderboard() {
         ) : null}
 
         {busy && !data ? (
-          <div className="rounded-2xl border border-white/10 bg-vault-card/45 overflow-hidden">
+          <div className="glass-card overflow-hidden">
             <LeaderboardListHeader />
             <LeaderboardSkeleton />
           </div>
@@ -246,7 +241,7 @@ export function Leaderboard() {
               <LeaderboardPodium entries={data.leaderboard} meSignupId={meSignupId} />
             ) : null}
 
-            <div className="rounded-2xl border border-white/10 bg-vault-card/45 overflow-hidden">
+            <div className="glass-card overflow-hidden">
               <LeaderboardListHeader />
               {data?.leaderboard.length ? (
                 <div>

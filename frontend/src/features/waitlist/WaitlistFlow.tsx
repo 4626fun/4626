@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
+import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -283,15 +284,16 @@ function WaitlistAuthStep(props: {
 
           {/* CTA */}
           <motion.div {...stagger(1)} className="mt-4 space-y-2.5">
-            <button
+            <Button
               type="button"
+              variant="primary"
               disabled={busy}
               aria-disabled={buttonsDisabled}
               onClick={() => {
                 if (buttonsDisabled) return
                 void onContinueAuth()
               }}
-              className="btn-accent btn-no-icon w-full"
+              className="w-full"
             >
               {busy || !privyReady ? (
                 <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
@@ -301,7 +303,7 @@ function WaitlistAuthStep(props: {
               ) : (
                 authUi.ctaLabel
               )}
-            </button>
+            </Button>
             <button
               type="button"
               disabled={signOutBusy}

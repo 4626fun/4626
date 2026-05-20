@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/Button'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
@@ -67,14 +68,16 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           ) : null}
 
           {canEnterNow ? (
-            <button
+            <Button
               type="button"
+              variant="primary"
               onClick={() => void onEnterApp()}
               disabled={completionBusy}
-              className="btn-accent btn-no-icon w-full disabled:opacity-50 disabled:grayscale"
+              loading={completionBusy}
+              className="w-full disabled:grayscale"
             >
-              {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
-            </button>
+              {`${SHARE_SYMBOL_PREFIX} Enter App`}
+            </Button>
           ) : setupComplete && !canEnterApp ? (
             <div role="status" aria-live="polite" className="space-y-2">
               <p className="text-sm text-zinc-300">Setup complete. Waiting for admin approval.</p>

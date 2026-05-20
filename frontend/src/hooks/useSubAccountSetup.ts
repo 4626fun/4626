@@ -8,7 +8,7 @@
  *   - Configures the embedded wallet as the sub-account signer
  */
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWallets, useBaseAccountSdk, useConnectWallet, useActiveWallet, toViemAccount } from '@privy-io/react-auth'
 import type { Address } from 'viem'
 import {
@@ -30,10 +30,47 @@ type SubAccountSetupState = {
   created: boolean
 }
 
+type ConnectedWalletLike = {
+  address?: string
+  walletClientType?: string
+  wallet_client_type?: string
+  getEthereumProvider?: () => Promise<unknown>
+  provider?: unknown
+}
+
+type ResolvedSetupBundle = {
+  baseAccountWallet: ConnectedWalletLike
+  embeddedWallet: ConnectedWalletLike
+  baseAccountSdk: NonNullable<ReturnType<typeof useBaseAccountSdk>['baseAccountSdk']>
+}
+
+type SetupRequirementSnapshot = {
+  baseAccountWallet?: ConnectedWalletLike | null
+  embeddedWallet?: ConnectedWalletLike | null
+  baseAccountSdk?: ResolvedSetupBundle['baseAccountSdk'] | null
+}
+
+function isBaseAccountWallet(wallet: ConnectedWalletLike): boolean {
+  const type = wallet.walletClientType ?? wallet.wallet_client_type ?? ''
+  return type === 'base_account' || type === 'coinbase_wallet'
+}
+
+function findBaseAccountWallet(wallets: ConnectedWalletLike[]): ConnectedWalletLike | null {
+  return wallets.find(isBaseAccountWallet) ?? null
+}
+
+function findEmbeddedWallet(wallets: ConnectedWalletLike[]): ConnectedWalletLike | null {
+  return (
+    wallets.find(
+      (w) => w.walletClientType === 'privy' || w.wallet_client_type === 'privy',
+    ) ?? null
+  )
+}
+
 function buildWalletBundle(params: {
-  baseAccountWallet: any
-  embeddedWallet: any
-  baseAccountSdk: any
+  baseAccountWallet: ConnectedWalletLike
+  embeddedWallet: ConnectedWalletLike
+  baseAccountSdk: ResolvedSetupBundle['baseAccountSdk']
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
 }) {
   return {
@@ -62,155 +99,48 @@ export function useSubAccountSetup() {
 
   const setupInProgressRef = useRef(false)
   const lastSetupErrorRef = useRef<Error | null>(null)
+  const connectedBaseAccountWalletRef = useRef<ConnectedWalletLike | null>(null)
 
-  const baseAccountWallet = useMemo(
-    () =>
-      wallets.find(
-        (w) =>
-          (w as any).walletClientType === 'base_account' ||
-          (w as any).walletClientType === 'coinbase_wallet' ||
-          (w as any).wallet_client_type === 'coinbase_wallet',
-      ) ?? null,
-    [wallets],
-  )
+  const baseAccountWallet = useMemo(() => findBaseAccountWallet(wallets), [wallets])
 
-  const embeddedWallet = useMemo(
-    () =>
-      wallets.find(
-        (w) =>
-          (w as any).walletClientType === 'privy' ||
-          (w as any).wallet_client_type === 'privy',
-      ) ?? null,
-    [wallets],
-  )
+  const embeddedWallet = useMemo(() => findEmbeddedWallet(wallets), [wallets])
+
+  useEffect(() => {
+    if (baseAccountWallet) {
+      connectedBaseAccountWalletRef.current = baseAccountWallet
+    }
+  }, [baseAccountWallet])
 
   const canSetup = Boolean(baseAccountWallet && embeddedWallet && baseAccountSdk)
 
-  const runWithGuard = useCallback(
-    async <T,>(fn: () => Promise<T>): Promise<T | null> => {
-      if (setupInProgressRef.current) return null
-      if (!baseAccountWallet || !embeddedWallet || !baseAccountSdk) {
-        const missing = []
-        if (!baseAccountWallet) missing.push('Base Account wallet')
-        if (!embeddedWallet) missing.push('Privy embedded wallet')
-        if (!baseAccountSdk) missing.push('Base Account SDK')
-        const err = new Error(`Sub-account setup requires: ${missing.join(', ')}`)
-        lastSetupErrorRef.current = err
-        setState((prev) => ({ ...prev, error: err }))
-        return null
-      }
-
-      setupInProgressRef.current = true
-      lastSetupErrorRef.current = null
-      setState((prev) => ({
-        ...prev,
-        isSettingUp: true,
-        error: null,
-        lastStage: null,
-      }))
-
-      try {
-        return await fn()
-      } catch (err) {
-        const error = err instanceof Error ? err : new Error(String(err))
-        lastSetupErrorRef.current = error
-        setState((prev) => ({ ...prev, isSettingUp: false, error }))
-        return null
-      } finally {
-        setupInProgressRef.current = false
-      }
-    },
-    [baseAccountSdk, baseAccountWallet, embeddedWallet],
-  )
-
-  const onStageEvent = useCallback((event: SubAccountSetupStageEvent) => {
-    setState((prev) => ({ ...prev, lastStage: event }))
+  const recordMissingSetupRequirements = useCallback((bundle: SetupRequirementSnapshot) => {
+    const missing: string[] = []
+    if (!bundle.baseAccountWallet) missing.push('Base Account wallet')
+    if (!bundle.embeddedWallet) missing.push('Privy embedded wallet')
+    if (!bundle.baseAccountSdk) missing.push('Base Account SDK')
+    const err = new Error(`Sub-account setup requires: ${missing.join(', ')}`)
+    lastSetupErrorRef.current = err
+    setState((prev) => ({ ...prev, error: err }))
+    return err
   }, [])
 
-  const provision = useCallback(async () => {
-    return runWithGuard(async () => {
-      const bundle = buildWalletBundle({
-        baseAccountWallet,
-        embeddedWallet,
-        baseAccountSdk,
-        onStageEvent,
-      })
-      const result = await provisionSubAccount(bundle)
-      setState((prev) => ({
-        ...prev,
-        subAccountAddress: result.subAccountAddress,
-        parentAddress: result.parentAddress,
-        created: result.created,
-        isSettingUp: false,
-      }))
-      return result
-    })
-  }, [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard])
-
-  const confirmEmbeddedOwner = useCallback(
-    async (addresses: {
-      parentAddress: Address
-      subAccountAddress: Address
-      provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
-    }) => {
-      return runWithGuard(async () => {
-        const ownerResult = await confirmSubAccountEmbeddedOwner({
-          provider: addresses.provider,
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-          embeddedEoaAddress: embeddedWallet!.address as Address,
-          onStageEvent,
-        })
-        setState((prev) => ({ ...prev, isSettingUp: false }))
-        return ownerResult
-      })
-    },
-    [embeddedWallet, onStageEvent, runWithGuard],
-  )
-
-  const finalizeSigner = useCallback(
-    async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
-      return runWithGuard(async () => {
-        const embedded = embeddedWallet as {
-          address: string
-          getEthereumProvider?: () => Promise<unknown>
-        } | null
-        if (embedded && typeof setActiveWallet === 'function') {
-          try {
-            await Promise.resolve(setActiveWallet(embedded as never))
-          } catch {
-            /* best-effort — configureSubAccountSigner only needs toViemAccount */
-          }
-        }
-        if (embedded && typeof embedded.getEthereumProvider === 'function') {
-          try {
-            await embedded.getEthereumProvider()
-          } catch {
-            /* provider may attach lazily on first sign; proceed to SDK wiring */
-          }
-        }
-
-        const bundle = buildWalletBundle({
-          baseAccountWallet,
-          embeddedWallet,
-          baseAccountSdk,
-          onStageEvent,
-        })
-        await finalizeSubAccountSigner({
-          ...bundle,
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-        })
-        setState((prev) => ({ ...prev, isSettingUp: false }))
-        return true
-      })
-    },
-    [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard, setActiveWallet],
-  )
-
   const connectBaseAccountWallet = useCallback(async (): Promise<boolean> => {
-    if (canSetup) return true
-    if (!embeddedWallet || !baseAccountSdk) return false
+    const existing =
+      baseAccountWallet ??
+      connectedBaseAccountWalletRef.current ??
+      findBaseAccountWallet(wallets)
+    if (existing) {
+      connectedBaseAccountWalletRef.current = existing
+      return true
+    }
+    if (!embeddedWallet || !baseAccountSdk) {
+      recordMissingSetupRequirements({
+        baseAccountWallet: null,
+        embeddedWallet: embeddedWallet ?? null,
+        baseAccountSdk: baseAccountSdk ?? null,
+      })
+      return false
+    }
 
     try {
       const result = await Promise.resolve(
@@ -229,8 +159,12 @@ export function useSubAccountSetup() {
 
       const selectedWallet =
         result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
-          ? ((result as { wallet?: unknown }).wallet ?? null)
-          : (result ?? null)
+          ? ((result as { wallet?: ConnectedWalletLike }).wallet ?? null)
+          : ((result as ConnectedWalletLike | null) ?? null)
+
+      if (selectedWallet && isBaseAccountWallet(selectedWallet)) {
+        connectedBaseAccountWalletRef.current = selectedWallet
+      }
 
       if (selectedWallet && typeof setActiveWallet === 'function') {
         await Promise.resolve(setActiveWallet(selectedWallet as Parameters<typeof setActiveWallet>[0])).catch(
@@ -238,32 +172,183 @@ export function useSubAccountSetup() {
         )
       }
 
-      return Boolean(selectedWallet)
+      if (selectedWallet) {
+        return true
+      }
+
+      const err = new Error('Connect Base App first, then try again.')
+      lastSetupErrorRef.current = err
+      setState((prev) => ({ ...prev, error: err }))
+      return false
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err))
       lastSetupErrorRef.current = error
       setState((prev) => ({ ...prev, error }))
       return false
     }
-  }, [baseAccountSdk, canSetup, connectWallet, embeddedWallet, setActiveWallet])
+  }, [
+    baseAccountSdk,
+    baseAccountWallet,
+    connectWallet,
+    embeddedWallet,
+    recordMissingSetupRequirements,
+    setActiveWallet,
+    wallets,
+  ])
+
+  const resolveSetupBundle = useCallback(async (): Promise<ResolvedSetupBundle | null> => {
+    let resolvedBase =
+      baseAccountWallet ??
+      connectedBaseAccountWalletRef.current ??
+      findBaseAccountWallet(wallets)
+
+    if (!resolvedBase) {
+      const connected = await connectBaseAccountWallet()
+      if (!connected) return null
+      resolvedBase =
+        connectedBaseAccountWalletRef.current ??
+        baseAccountWallet ??
+        findBaseAccountWallet(wallets)
+    }
+
+    const resolvedEmbedded = embeddedWallet ?? findEmbeddedWallet(wallets)
+    const resolvedSdk = baseAccountSdk
+
+    if (!resolvedBase || !resolvedEmbedded || !resolvedSdk) {
+      recordMissingSetupRequirements({
+        baseAccountWallet: resolvedBase,
+        embeddedWallet: resolvedEmbedded,
+        baseAccountSdk: resolvedSdk,
+      })
+      return null
+    }
+
+    return {
+      baseAccountWallet: resolvedBase,
+      embeddedWallet: resolvedEmbedded,
+      baseAccountSdk: resolvedSdk,
+    }
+  }, [
+    baseAccountSdk,
+    baseAccountWallet,
+    connectBaseAccountWallet,
+    embeddedWallet,
+    recordMissingSetupRequirements,
+    wallets,
+  ])
+
+  const runWithGuard = useCallback(
+    async <T,>(fn: (bundle: ResolvedSetupBundle) => Promise<T>): Promise<T | null> => {
+      if (setupInProgressRef.current) return null
+
+      const bundle = await resolveSetupBundle()
+      if (!bundle) return null
+
+      setupInProgressRef.current = true
+      lastSetupErrorRef.current = null
+      setState((prev) => ({
+        ...prev,
+        isSettingUp: true,
+        error: null,
+        lastStage: null,
+      }))
+
+      try {
+        return await fn(bundle)
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error(String(err))
+        lastSetupErrorRef.current = error
+        setState((prev) => ({ ...prev, isSettingUp: false, error }))
+        return null
+      } finally {
+        setupInProgressRef.current = false
+      }
+    },
+    [resolveSetupBundle],
+  )
+
+  const onStageEvent = useCallback((event: SubAccountSetupStageEvent) => {
+    setState((prev) => ({ ...prev, lastStage: event }))
+  }, [])
+
+  const provision = useCallback(async () => {
+    return runWithGuard(async (bundle) => {
+      const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
+      const result = await provisionSubAccount(walletBundle)
+      setState((prev) => ({
+        ...prev,
+        subAccountAddress: result.subAccountAddress,
+        parentAddress: result.parentAddress,
+        created: result.created,
+        isSettingUp: false,
+      }))
+      return result
+    })
+  }, [onStageEvent, runWithGuard])
+
+  const confirmEmbeddedOwner = useCallback(
+    async (addresses: {
+      parentAddress: Address
+      subAccountAddress: Address
+      provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+    }) => {
+      return runWithGuard(async (bundle) => {
+        const ownerResult = await confirmSubAccountEmbeddedOwner({
+          provider: addresses.provider,
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+          embeddedEoaAddress: bundle.embeddedWallet.address as Address,
+          onStageEvent,
+        })
+        setState((prev) => ({ ...prev, isSettingUp: false }))
+        return ownerResult
+      })
+    },
+    [onStageEvent, runWithGuard],
+  )
+
+  const finalizeSigner = useCallback(
+    async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
+      return runWithGuard(async (bundle) => {
+        const embedded = bundle.embeddedWallet as {
+          address: string
+          getEthereumProvider?: () => Promise<unknown>
+        }
+        if (typeof setActiveWallet === 'function') {
+          try {
+            await Promise.resolve(setActiveWallet(embedded as never))
+          } catch {
+            /* best-effort — configureSubAccountSigner only needs toViemAccount */
+          }
+        }
+        if (typeof embedded.getEthereumProvider === 'function') {
+          try {
+            await embedded.getEthereumProvider()
+          } catch {
+            /* provider may attach lazily on first sign; proceed to SDK wiring */
+          }
+        }
+
+        const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
+        await finalizeSubAccountSigner({
+          ...walletBundle,
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+        })
+        setState((prev) => ({ ...prev, isSettingUp: false }))
+        return true
+      })
+    },
+    [onStageEvent, runWithGuard, setActiveWallet],
+  )
 
   const getLastSetupError = useCallback(() => lastSetupErrorRef.current ?? state.error, [state.error])
 
   const installSubAccountOwnerOnly = useCallback(
     async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
-      return runWithGuard(async () => {
-        const connected = await connectBaseAccountWallet()
-        if (!connected) {
-          throw new Error('Connect Base App first, then try again.')
-        }
-
-        const bundle = buildWalletBundle({
-          baseAccountWallet,
-          embeddedWallet,
-          baseAccountSdk,
-          onStageEvent,
-        })
-        const ctx = await resolveSubAccountSetupContext(bundle)
+      return runWithGuard(async (bundle) => {
+        const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
+        const ctx = await resolveSubAccountSetupContext(walletBundle)
         const ownerResult = await confirmSubAccountEmbeddedOwner({
           provider: ctx.provider,
           parentAddress: addresses.parentAddress,
@@ -272,7 +357,7 @@ export function useSubAccountSetup() {
           onStageEvent,
         })
         await finalizeSubAccountSigner({
-          ...bundle,
+          ...walletBundle,
           parentAddress: addresses.parentAddress,
           subAccountAddress: addresses.subAccountAddress,
         })
@@ -285,26 +370,12 @@ export function useSubAccountSetup() {
         return ownerResult
       })
     },
-    [
-      baseAccountSdk,
-      baseAccountWallet,
-      connectBaseAccountWallet,
-      embeddedWallet,
-      onStageEvent,
-      runWithGuard,
-    ],
+    [onStageEvent, runWithGuard],
   )
 
   const setup = useCallback(async (): Promise<SubAccountSetupResult | null> => {
-    return runWithGuard(async () => {
-      const result = await runSubAccountSetup(
-        buildWalletBundle({
-          baseAccountWallet,
-          embeddedWallet,
-          baseAccountSdk,
-          onStageEvent,
-        }),
-      )
+    return runWithGuard(async (bundle) => {
+      const result = await runSubAccountSetup(buildWalletBundle({ ...bundle, onStageEvent }))
       setState((prev) => ({
         ...prev,
         subAccountAddress: result.subAccountAddress,
@@ -314,7 +385,7 @@ export function useSubAccountSetup() {
       }))
       return result
     })
-  }, [baseAccountSdk, baseAccountWallet, embeddedWallet, onStageEvent, runWithGuard])
+  }, [onStageEvent, runWithGuard])
 
   return {
     setupSubAccount: setup,

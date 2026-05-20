@@ -1,16 +1,8 @@
 /**
- * CDS SegmentedTabs wrapper.
- *
- * Provides a simplified API that maps an array of `{ id, label }` objects plus
- * an `activeTab` string id to the CDS SegmentedTabs component, which uses
- * `TabValue` objects internally.
- *
- * This lets callers keep their existing `string`-based tab state while
- * delegating rendering to CDS.
+ * Segmented tabs — Tailwind + vault tokens (replaces CDS SegmentedTabs).
  */
 
-import { useMemo } from 'react'
-import { SegmentedTabs as CdsSegmentedTabs } from '@coinbase/cds-web/tabs'
+import { cn } from '@/lib/shared/utils'
 
 export interface TabItem {
   id: string
@@ -27,28 +19,39 @@ export interface SegmentedTabsProps {
 }
 
 export function SegmentedTabs({ tabs, activeTab, onChange, disabled, className }: SegmentedTabsProps) {
-  const cdsTabs = useMemo(
-    () => tabs.map((t) => ({ id: t.id, label: t.label, disabled: t.disabled })),
-    [tabs],
-  )
-
-  const activeCdsTab = useMemo(
-    () => cdsTabs.find((t) => t.id === activeTab) ?? null,
-    [cdsTabs, activeTab],
-  )
-
   return (
-    <div className={className}>
-      <CdsSegmentedTabs
-        tabs={cdsTabs}
-        activeTab={activeCdsTab}
-        onChange={(tab) => {
-          if (tab) onChange(tab.id)
-        }}
-        disabled={disabled}
-        borderRadius={1000}
-        gap={0.5}
-      />
+    <div
+      className={cn(
+        'inline-flex w-full max-w-full items-center gap-0.5 rounded-full border border-white/8 bg-vault-card/50 p-0.5',
+        className,
+      )}
+      role="tablist"
+    >
+      {tabs.map((tab) => {
+        const isActive = tab.id === activeTab
+        const isDisabled = disabled || tab.disabled
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            disabled={isDisabled}
+            onClick={() => {
+              if (!isDisabled) onChange(tab.id)
+            }}
+            className={cn(
+              'flex-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors sm:text-sm',
+              isActive
+                ? 'bg-brand-500 text-white shadow-sm'
+                : 'text-vault-subtext hover:text-vault-text',
+              isDisabled && 'cursor-not-allowed opacity-50',
+            )}
+          >
+            {tab.label}
+          </button>
+        )
+      })}
     </div>
   )
 }
