@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 
+import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
@@ -854,23 +855,25 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {zoraLinked ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       disabled={busyProvider === 'zora_cross_app'}
                       onClick={() => void onRefreshZora()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       {busyProvider === 'zora_cross_app' ? 'Refreshing...' : 'Refresh Zora signals'}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       disabled={busyProvider === 'zora_cross_app'}
                       onClick={() => void onLinkZora()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       {busyProvider === 'zora_cross_app' ? 'Linking...' : 'Link Zora'}
-                    </button>
+                    </Button>
                   )}
                   <a
                     href={zoraHandoffUrl}
@@ -1060,30 +1063,33 @@ export function AccountSetupWorkspaceView(props: {
                 ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-3">
                   {needsBaseAccountReconnect ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       onClick={() => connectOwnerWallet()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       {ownerPrimaryCtaLabel}
-                    </button>
+                    </Button>
                   ) : connectedOwnerReady ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
                       onClick={() => void onEnable4626Signing()}
-                      className="btn-primary btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       {advancedBusy ? 'Preparing...' : ownerPrimaryCtaLabel}
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       onClick={() => connectOwnerWallet()}
-                      className="btn-accent btn-no-icon inline-flex"
+                      className="inline-flex"
                     >
                       Connect owner wallet
-                    </button>
+                    </Button>
                   )}
                   {connectedOwnerReady ? (
                     <button

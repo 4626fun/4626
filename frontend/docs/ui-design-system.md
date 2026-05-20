@@ -13,7 +13,9 @@
 | ----- | --- |
 | `Button`, `Badge`, `Modal`, `Input`, `Alert`, `SegmentedTabs` | Default for new product UI |
 | `btn-accent` (legacy) | Avoid on new/edited marketing surfaces; prefer `<Button variant="primary">` |
-| `@coinbase/cds-web` | Phase 2 only: charts (`ExploreContentDetail`), `Tray` (`ConnectButton`), `VaultCard`, Toast bridge |
+| `@coinbase/cds-web` | **Charts only** (`ExploreContentDetail` via `cds-web-visualization`); needs slim `CdsThemeProvider` in `main.tsx` |
+| `AccountTray` | Replaces CDS `Tray` in account chrome (`ConnectButton`) |
+| `sonner` | Toasts via `AppToaster` + `toast.*` helpers |
 
 ## Boundaries
 

@@ -2,7 +2,7 @@ import { useAccount, useConnect, useDisconnect } from 'wagmi'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Tray } from '@coinbase/cds-web/overlays/tray/Tray'
+import { AccountTray } from '@/components/ui/AccountTray'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -779,12 +779,12 @@ export function ConnectButton({
         )}
 
         {showMenu && (
-          <Tray
+          <AccountTray
             pin={trayPin}
             showHandleBar={isPhoneViewport}
-            title=""
             accessibilityLabel="Account menu"
             onCloseComplete={closeMenuAfterTrayClose}
+            onRequestClose={() => setShowMenu(false)}
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >
@@ -885,7 +885,7 @@ export function ConnectButton({
                 </div>
               ) : null}
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-          </Tray>
+          </AccountTray>
         )}
       </div>
     )
@@ -925,12 +925,12 @@ export function ConnectButton({
         )}
 
         {showMenu && (
-          <Tray
+          <AccountTray
             pin={trayPin}
             showHandleBar={isPhoneViewport}
-            title=""
             accessibilityLabel="Account menu"
             onCloseComplete={closeMenuAfterTrayClose}
+            onRequestClose={() => setShowMenu(false)}
             styles={trayStyles}
             closeAccessibilityLabel="Close account menu"
           >
@@ -1015,7 +1015,7 @@ export function ConnectButton({
                   <span className="label block text-zinc-300">Settings</span>
                 </Link>
               </div>
-          </Tray>
+          </AccountTray>
         )}
 
         {showOptions && (

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight, Search, ShieldCheck, X } from 'lucide-react'
 import { FaqAccordion } from '@/components/ui/Accordion'
+import { Button } from '@/components/ui/Button'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
@@ -943,9 +944,11 @@ export function Faq() {
             <h2 className="headline text-4xl sm:text-5xl lg:text-6xl mb-8">
               Ready to start earning?
             </h2>
-            <Link to={getCanonicalMarketingWaitlistPath()} className="btn-accent inline-flex items-center">
-              Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
-            </Link>
+            <Button variant="primary" asChild>
+              <Link to={getCanonicalMarketingWaitlistPath()} className="inline-flex items-center">
+                Join waitlist <ArrowRight className="w-4 h-4 ml-2" />
+              </Link>
+            </Button>
           </motion.div>
         </div>
       </section>

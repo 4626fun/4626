@@ -7,8 +7,8 @@ import { RootRouter } from './RootRouter'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { ThemeProvider } from '@/lib/ui/theme'
 import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
-import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
-import { CdsToastBridge } from '@/components/ui/Toast'
+import { AppToaster } from '@/components/ui/Toast'
+import { TooltipProvider } from '@/components/ui/Tooltip'
 import { theme4626 } from '@/theme/cds-theme'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import { resolveDisallowedLoopbackRedirectUrl } from '@/lib/env/host'
@@ -19,7 +19,7 @@ import {
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
 } from '@/lib/privy/passwordlessFetchGuard'
-import '@coinbase/cds-icons/fonts/web/icon-font.css'
+/** CDS global styles kept for explore chart surfaces until those migrate off cds-web-visualization. */
 import '@coinbase/cds-web/globalStyles'
 import '@4626/brand-kit/styles'
 import './index.css'
@@ -382,16 +382,16 @@ if (!redirectWwwToCanonicalApex() && !redirectDisallowedLoopbackPort()) {
           of a blank white page. */}
       <RootErrorBoundary>
         <ThemeProvider>
-          <CdsMediaQueryProvider>
-            <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
-              <CdsPortalProvider>
-                <CdsToastBridge />
+          <TooltipProvider>
+            <CdsMediaQueryProvider>
+              <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
+                <AppToaster />
                 <BrowserRouter>
                   <RootRouter />
                 </BrowserRouter>
-              </CdsPortalProvider>
-            </CdsThemeProvider>
-          </CdsMediaQueryProvider>
+              </CdsThemeProvider>
+            </CdsMediaQueryProvider>
+          </TooltipProvider>
         </ThemeProvider>
       </RootErrorBoundary>
     </React.StrictMode>,
