@@ -1,99 +1,48 @@
 /**
- * CDS Toast wrapper.
- *
- * Provides a drop-in `toast` object that mirrors the old `sonner` API surface
- * used throughout the app (`toast.success(msg)`, `toast.error(msg)`, etc.)
- * while delegating to CDS `useToast` under the hood.
- *
- * Callers keep using `import { toast } from '@/components/ui/Toast'` exactly
- * like they used `import { toast } from 'sonner'` — no consumer changes needed.
+ * Sonner-backed toast API (drop-in for legacy `toast.success` / `toast.error` call sites).
  */
 
-import { useEffect, useRef } from 'react'
-import { useToast as useCdsToast } from '@coinbase/cds-web/overlays/useToast'
+import { Toaster as SonnerToaster, toast as sonnerToast } from 'sonner'
 
-// ---------- Imperative singleton bridge ----------
-// CDS useToast is a hook (requires React context).  We expose a module-level
-// `toast` singleton so call-sites can keep doing `toast.success('…')` without
-// having to be inside a component that calls the hook.
-//
-// We use a mutable ref object to avoid the react-hooks/globals lint rule which
-// prohibits reassigning module-scope variables inside components/hooks.
-
-type ShowFn = (text: string, options?: { duration?: number }) => void
-
-const _bridge: {
-  show: ShowFn
-  hide: () => void
-  clearQueue: () => void
-} = {
-  show: () => {},
-  hide: () => {},
-  clearQueue: () => {},
+export function AppToaster() {
+  return (
+    <SonnerToaster
+      theme="dark"
+      position="bottom-right"
+      closeButton
+      toastOptions={{
+        classNames: {
+          toast:
+            'border border-white/10 bg-vault-card text-vault-text shadow-lg rounded-xl font-sans',
+          title: 'text-sm text-vault-text',
+          description: 'text-vault-subtext',
+          closeButton: 'border-white/10 bg-white/5 text-vault-subtext hover:text-vault-text',
+        },
+      }}
+    />
+  )
 }
 
-/**
- * Render this once near the app root (inside CDS PortalProvider) to connect
- * the imperative `toast` singleton to the CDS toast context.
- */
-export function CdsToastBridge() {
-  const cds = useCdsToast()
-  const ref = useRef(cds)
+/** @deprecated Use AppToaster at app root; kept for one release of import stability. */
+export const CdsToastBridge = AppToaster
 
-  useEffect(() => {
-    ref.current = cds
-    _bridge.show = (text, options) => ref.current.show(text, options as any)
-    _bridge.hide = () => ref.current.hide()
-    _bridge.clearQueue = () => ref.current.clearQueue()
-
-    return () => {
-      _bridge.show = () => {}
-      _bridge.hide = () => {}
-      _bridge.clearQueue = () => {}
-    }
-  }, [cds])
-
-  return null
-}
-
-// ---------- Variant helpers ----------
-// CDS Toast doesn't have named variant methods — it uses a `variant` prop.
-// We map the old sonner-style calls to CDS variant strings.
-
-const CDS_TOAST_VARIANT_MAP = {
-  success: 'bgPositive',
-  error: 'bgNegative',
-  warning: 'bgWarning',
-  info: undefined, // default / primary
-} as const
-
-type ToastVariant = keyof typeof CDS_TOAST_VARIANT_MAP
-
-function showVariant(variant: ToastVariant, text: string, options?: { duration?: number }) {
-  const cdsVariant = CDS_TOAST_VARIANT_MAP[variant]
-  _bridge.show(text, { ...options, ...(cdsVariant ? { variant: cdsVariant } : {}) } as any)
-}
-
-/**
- * Drop-in replacement for `import { toast } from 'sonner'`.
- *
- * Usage:
- * ```ts
- * toast.success('Deposit confirmed')
- * toast.error('Something went wrong')
- * toast('Plain message')
- * ```
- */
 export const toast = Object.assign(
-  (text: string, options?: { duration?: number }) => _bridge.show(text, options),
+  (text: string, options?: { duration?: number }) => sonnerToast(text, { duration: options?.duration }),
   {
-    success: (text: string, options?: { duration?: number }) => showVariant('success', text, options),
-    error: (text: string, options?: { duration?: number }) => showVariant('error', text, options),
-    warning: (text: string, options?: { duration?: number }) => showVariant('warning', text, options),
-    info: (text: string, options?: { duration?: number }) => showVariant('info', text, options),
-    message: (text: string, options?: { duration?: number }) => _bridge.show(text, options),
-    dismiss: () => _bridge.hide(),
-    hide: () => _bridge.hide(),
-    clearQueue: () => _bridge.clearQueue(),
+    success: (text: string, options?: { duration?: number }) =>
+      sonnerToast.success(text, { duration: options?.duration }),
+    error: (text: string, options?: { duration?: number }) =>
+      sonnerToast.error(text, { duration: options?.duration }),
+    warning: (text: string, options?: { duration?: number }) =>
+      sonnerToast.warning(text, { duration: options?.duration }),
+    info: (text: string, options?: { duration?: number }) =>
+      sonnerToast.info(text, { duration: options?.duration }),
+    message: (text: string, options?: { duration?: number }) =>
+      sonnerToast.message(text, { duration: options?.duration }),
+    dismiss: (id?: string | number) => sonnerToast.dismiss(id),
+    hide: (id?: string | number) => sonnerToast.dismiss(id),
+    clearQueue: () => {
+      sonnerToast.dismiss()
+    },
   },
 )
