@@ -22,6 +22,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { EthosAvatarScoreBadge, EthosAvatarScoreForUserkey, getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { useZoraProfile } from '@/lib/zora/hooks'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
+import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 
 type TokenRowProps = {
   rank: number
@@ -61,6 +62,12 @@ function IdentityAddressChip({ address }: { address: string }) {
   )
 }
 
+function walletEthosUserkeyForCoin(coin: ZoraCoin): string | null {
+  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(creator)) return `address:${creator}`
+  return null
+}
+
 function CreatorSocialEthosBadge({
   coin,
   ethosUserkey,
@@ -71,12 +78,16 @@ function CreatorSocialEthosBadge({
   ethosScore?: EthosScoreValue | null
 }) {
   const profileIdentifier = getZoraCreatorProfileIdentifier(coin)
-  const shouldResolveProfile = ethosUserkey === undefined
+  const hasServerScore = Boolean(ethosScore)
+  const shouldResolveProfile = ethosUserkey === undefined && !hasServerScore
   const profileQuery = useZoraProfile(shouldResolveProfile ? profileIdentifier ?? undefined : undefined)
-  const resolvedEthosUserkey = useMemo(
-    () => ethosUserkey ?? buildEthosSocialUserkeyFromZoraProfile(profileQuery.data),
-    [ethosUserkey, profileQuery.data],
-  )
+  const resolvedEthosUserkey = useMemo(() => {
+    if (ethosUserkey) return ethosUserkey
+    const social = buildEthosSocialUserkeyFromZoraProfile(profileQuery.data)
+    if (social) return social
+    if (hasServerScore) return walletEthosUserkeyForCoin(coin)
+    return null
+  }, [coin, ethosUserkey, hasServerScore, profileQuery.data])
 
   if (!resolvedEthosUserkey) return null
 
@@ -291,9 +302,22 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
         {/* Ethos */}
-        <span className={`px-3 py-2 text-center tabular-nums ${ethosHasPositiveScore ? ethosPalette.textClass : 'text-zinc-700'}`}>
-          {ethosHasPositiveScore ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false }) : '—'}
-        </span>
+        <div
+          className="flex flex-col items-center px-3 py-2"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation"
+        >
+          <span className={`tabular-nums ${ethosHasPositiveScore ? ethosPalette.textClass : 'text-zinc-700'}`}>
+            {ethosHasPositiveScore ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false }) : '—'}
+          </span>
+          {typeof coin.creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(coin.creatorAddress) ? (
+            <ExploreEthosRefreshButton creatorAddress={coin.creatorAddress} />
+          ) : null}
+        </div>
 
         {/* Market cap */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>

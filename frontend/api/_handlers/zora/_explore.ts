@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getNumberQuery, getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '../../../packages/server-core/src/index.js'
 import { fetchFreshEthosScoresByUserkeys } from '../../../server/_lib/chat/ethosClient.js'
+import {
+  loadCreatorEthosProjectionByAddresses,
+  mergeCreatorEthosScores,
+} from '../../../server/_lib/zora/creatorEthosProjection.js'
 
 type ExploreList =
   | 'TOP_GAINERS'
@@ -158,6 +162,7 @@ type CreatorEthosResolved = {
   creatorAddress: string
   score: number | null
   level: string | null
+  source: string | null
 }
 
 function resolveEthosScoreSource(candidates: {
@@ -365,10 +370,22 @@ async function resolveCreatorEthosByAddress(creatorAddresses: string[]): Promise
         ?? row.social_level
         ?? row.wallet_level
         ?? null
+    const source =
+      typeof socialFresh?.score === 'number' && score === socialFresh.score
+        ? 'social_fresh'
+        : resolveEthosScoreSource({
+            canonicalSocial: canonicalSocialScore,
+            canonicalWallet: canonicalWalletScore,
+            ownerClassFromCsw: ownerClassCswScore,
+            ownerClassEoa: ownerClassScore,
+            socialCached: dbSocialScore,
+            walletCached: dbWalletScore,
+          })
     out.set(creatorAddress, {
       creatorAddress,
       score,
       level,
+      source,
     })
   }
 
@@ -853,15 +870,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .map((edge: any) => edge?.node?.creatorAddress)
         .filter((value: unknown): value is string => typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value))
         .map((address: string) => address.toLowerCase())
+      const db = await getDb()
+      const projectionMap =
+        db && creatorAddresses.length > 0
+          ? await loadCreatorEthosProjectionByAddresses(db, creatorAddresses)
+          : new Map()
       const creatorEthosMap = await resolveCreatorEthosByAddress(creatorAddresses)
 
       for (const edge of edges) {
         if (!edge?.node || typeof edge.node !== 'object') continue
         const creatorAddress = typeof edge.node.creatorAddress === 'string' ? edge.node.creatorAddress.toLowerCase() : ''
-        const resolvedEthos = creatorEthosMap.get(creatorAddress)
-        if (!resolvedEthos) continue
-        edge.node.ethosScore = resolvedEthos.score
-        edge.node.ethosLevel = resolvedEthos.level
+        if (!creatorAddress) continue
+        const merged = mergeCreatorEthosScores(
+          projectionMap.get(creatorAddress),
+          creatorEthosMap.get(creatorAddress),
+          creatorEthosMap.get(creatorAddress)?.source ?? null,
+        )
+        if (merged.score == null) continue
+        edge.node.ethosScore = merged.score
+        edge.node.ethosLevel = merged.level
+        edge.node.ethosScoreSource = merged.source
       }
 
       if (typeof ethosMin === 'number' && Number.isFinite(ethosMin)) {

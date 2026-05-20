@@ -6,6 +6,8 @@ import { createMockReq, createMockRes } from './helpers'
 const {
   requireServerKeyMock,
   sdkSetApiKeyMock,
+  getDbMock,
+  loadCreatorEthosProjectionByAddressesMock,
   getCoinsTopGainersMock,
   getExploreTopVolumeCreators24hMock,
   getExploreTopVolumeAll24hMock,
@@ -22,6 +24,8 @@ const {
 } = vi.hoisted(() => ({
   requireServerKeyMock: vi.fn(),
   sdkSetApiKeyMock: vi.fn(),
+  getDbMock: vi.fn(),
+  loadCreatorEthosProjectionByAddressesMock: vi.fn(),
   getCoinsTopGainersMock: vi.fn(),
   getExploreTopVolumeCreators24hMock: vi.fn(),
   getExploreTopVolumeAll24hMock: vi.fn(),
@@ -35,6 +39,22 @@ const {
   getMostValuableTrendsMock: vi.fn(),
   getNewTrendsMock: vi.fn(),
   getTopVolumeTrends24hMock: vi.fn(),
+}))
+
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  getDb: getDbMock,
+}))
+
+vi.mock('../../server/_lib/zora/creatorEthosProjection.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/_lib/zora/creatorEthosProjection.js')>()
+  return {
+    ...actual,
+    loadCreatorEthosProjectionByAddresses: loadCreatorEthosProjectionByAddressesMock,
+  }
+})
+
+vi.mock('../../server/_lib/chat/ethosClient.js', () => ({
+  fetchFreshEthosScoresByUserkeys: vi.fn(async () => new Map()),
 }))
 
 vi.mock('../../server/zora/_shared.js', () => ({
@@ -75,6 +95,10 @@ describe('GET /api/zora/explore', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     requireServerKeyMock.mockReturnValue('test-key')
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async () => ({ rows: [] })),
+    })
+    loadCreatorEthosProjectionByAddressesMock.mockResolvedValue(new Map())
   })
 
   it('returns creator lists when the SDK response is already a connection shape at data level', async () => {
@@ -83,11 +107,33 @@ describe('GET /api/zora/explore', () => {
         edges: [
           {
             cursor: 'cursor-1',
-            node: { address: '0x123', symbol: 'AKITA' },
+            node: {
+              address: '0x0000000000000000000000000000000000000123',
+              creatorAddress: '0x0000000000000000000000000000000000000abc',
+              symbol: 'AKITA',
+            },
           },
         ],
         pageInfo: { hasNextPage: false, endCursor: null },
       },
+    })
+
+    loadCreatorEthosProjectionByAddressesMock.mockResolvedValue(
+      new Map([
+        [
+          '0x0000000000000000000000000000000000000abc',
+          {
+            creatorAddress: '0x0000000000000000000000000000000000000abc',
+            score: 1650,
+            level: 'reputable',
+            source: 'owner_class_csw',
+          },
+        ],
+      ]),
+    )
+
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async () => ({ rows: [] })),
     })
 
     const req = createMockReq({
@@ -102,6 +148,9 @@ describe('GET /api/zora/explore', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.edges).toHaveLength(1)
     expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('AKITA')
+    expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1650)
+    expect(res.body?.data?.edges?.[0]?.node?.ethosScoreSource).toBe('owner_class_csw')
+    expect(loadCreatorEthosProjectionByAddressesMock).toHaveBeenCalled()
   })
 
   it.each([

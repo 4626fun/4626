@@ -613,15 +613,35 @@ export function ExploreCreators() {
     return out
   }, [profileIdentifiers, profileQueries])
 
+  const coinsNeedingClientEthosLookup = useMemo(
+    () =>
+      baseDisplayCoins.filter(
+        (coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)),
+      ),
+    [baseDisplayCoins],
+  )
+
   const ethosScoreQueries = useQueries({
-    queries: Array.from(coinEthosUserkeys.entries()).map(([coinKey, userkey]) => ({
-      queryKey: ['explore', 'creators', 'ethos-score', coinKey, userkey],
-      queryFn: () => fetchEthosScoreForUserkey(userkey),
-      enabled: Boolean(userkey),
-      staleTime: 6 * 60 * 60 * 1000,
-      retry: 1,
-    })),
+    queries: coinsNeedingClientEthosLookup.map((coin) => {
+      const coinKey = getCoinKey(coin)
+      const userkey = coinEthosUserkeys.get(coinKey) ?? deriveImmediateEthosUserkey(coin)
+      return {
+        queryKey: ['explore', 'creators', 'ethos-score', coinKey, userkey],
+        queryFn: () => fetchEthosScoreForUserkey(userkey!),
+        enabled: Boolean(userkey),
+        staleTime: 6 * 60 * 60 * 1000,
+        retry: 1,
+      }
+    }),
   })
+
+  const clientEthosScoreByCoinKey = useMemo(() => {
+    const map = new Map<string, Awaited<ReturnType<typeof fetchEthosScoreForUserkey>> | null>()
+    coinsNeedingClientEthosLookup.forEach((coin, index) => {
+      map.set(getCoinKey(coin), ethosScoreQueries[index]?.data ?? null)
+    })
+    return map
+  }, [coinsNeedingClientEthosLookup, ethosScoreQueries])
 
   const ethosByCoinKey = useMemo(() => {
     const out = new Map<string, CreatorEthosRecord>()
@@ -639,9 +659,11 @@ export function ExploreCreators() {
         source: typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : null,
       })
     }
-    const entries = Array.from(coinEthosUserkeys.entries())
-    entries.forEach(([coinKey, userkey], index) => {
-      const queryScore = ethosScoreQueries[index]?.data ?? null
+    for (const coin of coinsNeedingClientEthosLookup) {
+      const coinKey = getCoinKey(coin)
+      const userkey = coinEthosUserkeys.get(coinKey) ?? deriveImmediateEthosUserkey(coin)
+      if (!userkey) continue
+      const queryScore = clientEthosScoreByCoinKey.get(coinKey) ?? null
       const existing = out.get(coinKey)
       if (!existing) {
         out.set(coinKey, {
@@ -650,7 +672,7 @@ export function ExploreCreators() {
           score: queryScore,
           source: queryScore ? 'chat_bulk_userkey' : null,
         })
-        return
+        continue
       }
       out.set(coinKey, {
         coinKey,
@@ -658,9 +680,9 @@ export function ExploreCreators() {
         score: resolveBestEthosValue(existing.score, queryScore),
         source: resolveBestEthosSource(existing.score, existing.source, queryScore, 'chat_bulk_userkey'),
       })
-    })
+    }
     return out
-  }, [baseDisplayCoins, coinEthosUserkeys, ethosScoreQueries])
+  }, [baseDisplayCoins, clientEthosScoreByCoinKey, coinEthosUserkeys, coinsNeedingClientEthosLookup])
 
   const ethosSortStats = useMemo(() => {
     let scored = 0

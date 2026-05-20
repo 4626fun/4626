@@ -1,187 +1,155 @@
+import type { Address, Hex } from 'viem'
+import { getAddress } from 'viem'
+
+import {
+  materializeCanonicalEthosScores,
+  seedEthosIdentityKeys,
+  syncEthosUserkeyScores,
+} from '../identity/ethosCanonicalScores.js'
+import {
+  ensureCreatorEthosProjectionSchema,
+  loadCreatorEthosProjectionByAddresses,
+} from '../zora/creatorEthosProjection.js'
+
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows?: any[]; rowCount?: number }>
 }
 
 declare const process: { env: Record<string, string | undefined> }
 
-let schemaChecked = false
-let schemaCheckPromise: Promise<boolean> | null = null
+/** $0.10 USDC at 6 decimals. */
+export const ETHOS_PAID_REFRESH_PRICE_USDC: bigint = 100_000n
 
-async function hasProjectionTable(db: Db): Promise<boolean> {
-  const result = await db.sql`
-    SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
-  `
-  return Boolean(result.rows?.[0]?.has_projection)
-}
+export const ETHOS_PAID_REFRESH_PRICE_DISPLAY = '$0.10'
 
-export async function ensureCreatorEthosProjectionSchema(db: Db): Promise<boolean> {
-  if (schemaChecked) return true
-  if (schemaCheckPromise) return schemaCheckPromise
-  schemaCheckPromise = hasProjectionTable(db)
-    .then((ok) => {
-      schemaChecked = ok
-      return ok
-    })
-    .finally(() => {
-      schemaCheckPromise = null
-    })
-  return schemaCheckPromise
-}
-
-function readInt(value: string | undefined, fallback: number, min = 100, max = 250_000): number {
+function readInt(value: string | undefined, fallback: number, min: number, max: number): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) return fallback
   return Math.max(min, Math.min(max, Math.floor(parsed)))
 }
 
-export type CreatorEthosProjectionByAddress = {
+export function ethosPaidRefreshCooldownMinutes(): number {
+  return readInt(process.env.ETHOS_PAID_REFRESH_COOLDOWN_MINUTES, 5, 1, 24 * 60)
+}
+
+export async function hasCreatorEthosRefreshOrdersTable(db: Db): Promise<boolean> {
+  const result = await db.sql`
+    SELECT to_regclass('public.creator_ethos_refresh_orders') IS NOT NULL AS has_table;
+  `
+  return Boolean(result.rows?.[0]?.has_table)
+}
+
+export async function getEthosPaidRefreshCooldown(params: {
+  db: Db
   creatorAddress: string
-  score: number | null
-  level: string | null
-  source: string | null
-}
-
-/** 15-minute cron slots for ethos-sync; used to alternate full projection refreshes. */
-export function pickCreatorEthosProjectionRefreshMode(lane: 'main' | 'hot'): 'full' | 'fast' {
-  const forced = String(process.env.ETHOS_CREATOR_PROJECTION_MODE ?? '').trim().toLowerCase()
-  if (forced === 'full' || forced === 'fast') return forced
-  if (lane === 'hot') {
-    const hotFull = String(process.env.ETHOS_CREATOR_PROJECTION_HOT_USE_FULL ?? '').trim().toLowerCase()
-    if (hotFull === '1' || hotFull === 'true' || hotFull === 'yes' || hotFull === 'on') return 'full'
-    return 'fast'
+}): Promise<{ inCooldown: boolean; retryAfterSeconds: number | null; lastOrderAt: string | null }> {
+  const creatorAddress = params.creatorAddress.toLowerCase()
+  const hasTable = await hasCreatorEthosRefreshOrdersTable(params.db)
+  if (!hasTable) {
+    return { inCooldown: false, retryAfterSeconds: null, lastOrderAt: null }
   }
-  const everyN = readInt(process.env.ETHOS_CREATOR_PROJECTION_FULL_EVERY_N, 4, 1, 48)
-  const slot = Math.floor(Date.now() / (15 * 60 * 1000))
-  return slot % everyN === 0 ? 'full' : 'fast'
+
+  const cooldownMinutes = ethosPaidRefreshCooldownMinutes()
+  const rows = await params.db.sql`
+    SELECT created_at
+    FROM public.creator_ethos_refresh_orders
+    WHERE lower(creator_address) = ${creatorAddress}
+      AND completed_at IS NOT NULL
+      AND created_at > NOW() - (${cooldownMinutes}::int * INTERVAL '1 minute')
+    ORDER BY created_at DESC
+    LIMIT 1;
+  `
+  const lastOrderAt = rows.rows?.[0]?.created_at ? String(rows.rows[0].created_at) : null
+  if (!lastOrderAt) {
+    return { inCooldown: false, retryAfterSeconds: null, lastOrderAt: null }
+  }
+
+  const elapsedMs = Date.now() - Date.parse(lastOrderAt)
+  const windowMs = cooldownMinutes * 60_000
+  const remainingMs = Math.max(0, windowMs - elapsedMs)
+  return {
+    inCooldown: remainingMs > 0,
+    retryAfterSeconds: remainingMs > 0 ? Math.ceil(remainingMs / 1000) : null,
+    lastOrderAt,
+  }
 }
 
-export async function loadCreatorEthosProjectionByAddresses(
+export async function collectEthosUserkeysForCreator(
   db: Db,
-  creatorAddresses: string[],
-): Promise<Map<string, CreatorEthosProjectionByAddress>> {
-  const normalized = Array.from(
-    new Set(
-      creatorAddresses
-        .map((address) => String(address || '').trim().toLowerCase())
-        .filter((address) => /^0x[a-f0-9]{40}$/.test(address)),
-    ),
-  )
-  const out = new Map<string, CreatorEthosProjectionByAddress>()
-  if (normalized.length === 0) return out
-
-  const available = await ensureCreatorEthosProjectionSchema(db)
-  if (!available) return out
-
+  creatorAddress: string,
+): Promise<{ userkeys: string[]; coinAddress: string | null }> {
+  const normalized = creatorAddress.toLowerCase()
   const rows = await db.sql`
+    WITH coin_row AS (
+      SELECT
+        lower(cc.creator_address) AS creator_address,
+        cc.coin_address,
+        ROW_NUMBER() OVER (
+          ORDER BY cc.volume_24h_usd DESC NULLS LAST, cc.market_cap_usd DESC NULLS LAST, cc.coin_address ASC
+        ) AS rn
+      FROM creator_coins cc
+      WHERE cc.chain_id = 8453
+        AND lower(cc.creator_address) = ${normalized}
+    ),
+    profile_identity AS (
+      SELECT
+        cr.creator_address,
+        NULLIF(lower(trim(p.twitter_username)), '') AS twitter_username,
+        NULLIF(lower(trim(p.handle)), '') AS zora_handle,
+        ROW_NUMBER() OVER (
+          ORDER BY
+            CASE WHEN NULLIF(lower(trim(p.twitter_username)), '') IS NOT NULL THEN 0 ELSE 1 END,
+            p.last_refreshed_at DESC NULLS LAST
+        ) AS rn
+      FROM coin_row cr
+      JOIN zora_profiles p
+        ON lower(NULLIF(p.signing_eoa, '')) = cr.creator_address
+        OR lower(NULLIF(p.primary_wallet, '')) = cr.creator_address
+        OR lower(NULLIF(p.payout_recipient, '')) = cr.creator_address
+        OR lower(NULLIF(p.smart_wallet_address, '')) = cr.creator_address
+        OR lower(NULLIF(p.privy_wallet_address, '')) = cr.creator_address
+      WHERE cr.rn = 1
+    ),
+    owner_eoas AS (
+      SELECT DISTINCT lower(owner_eoa) AS eoa
+      FROM coin_row cr
+      JOIN zora_csw_owners zco ON lower(zco.csw_address) = cr.creator_address
+      CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
+      WHERE cr.rn = 1
+    )
     SELECT
-      lower(creator_address) AS creator_address,
-      ethos_score,
-      ethos_level,
-      ethos_score_source
-    FROM public.creator_ethos_projection
-    WHERE lower(creator_address) = ANY(${normalized}::text[]);
+      (SELECT coin_address FROM coin_row WHERE rn = 1 LIMIT 1) AS coin_address,
+      (SELECT twitter_username FROM profile_identity WHERE rn = 1 LIMIT 1) AS twitter_username,
+      (SELECT zora_handle FROM profile_identity WHERE rn = 1 LIMIT 1) AS zora_handle,
+      (SELECT array_agg(DISTINCT eoa) FROM owner_eoas) AS owner_eoas;
   `
 
-  for (const row of rows.rows ?? []) {
-    const creatorAddress = String(row.creator_address ?? '').toLowerCase()
-    if (!/^0x[a-f0-9]{40}$/.test(creatorAddress)) continue
-    const scoreRaw = row.ethos_score
-    const score =
-      typeof scoreRaw === 'number'
-        ? Number.isFinite(scoreRaw)
-          ? scoreRaw
-          : null
-        : typeof scoreRaw === 'string'
-          ? (() => {
-              const n = Number(scoreRaw)
-              return Number.isFinite(n) ? n : null
-            })()
-          : null
-    out.set(creatorAddress, {
-      creatorAddress,
-      score,
-      level: typeof row.ethos_level === 'string' ? row.ethos_level : null,
-      source: typeof row.ethos_score_source === 'string' ? row.ethos_score_source : null,
-    })
+  const row = rows.rows?.[0]
+  const coinAddress = typeof row?.coin_address === 'string' ? row.coin_address.toLowerCase() : null
+  const userkeys = new Set<string>([`address:${normalized}`])
+  const twitter = typeof row?.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
+  const handle = typeof row?.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase() : ''
+  const social = twitter || handle
+  if (social) userkeys.add(`service:x.com:username:${social}`)
+  const ownerEoas = Array.isArray(row?.owner_eoas) ? row.owner_eoas : []
+  for (const eoa of ownerEoas) {
+    if (typeof eoa === 'string' && /^0x[a-f0-9]{40}$/.test(eoa)) {
+      userkeys.add(`address:${eoa}`)
+    }
   }
-  return out
+
+  return { userkeys: Array.from(userkeys), coinAddress }
 }
 
-export type CreatorEthosMerged = {
-  score: number | null
-  level: string | null
-  source: string | null
-}
+export async function refreshCreatorEthosProjectionForCreator(
+  db: Db,
+  creatorAddress: string,
+): Promise<{ refreshed: boolean; coinAddress: string | null }> {
+  const available = await ensureCreatorEthosProjectionSchema(db)
+  if (!available) return { refreshed: false, coinAddress: null }
 
-export function mergeCreatorEthosScores(
-  projection: CreatorEthosProjectionByAddress | null | undefined,
-  live: { score: number | null; level: string | null } | null | undefined,
-  liveSource?: string | null,
-): CreatorEthosMerged {
-  const projectionScore = projection?.score ?? null
-  const liveScore = live?.score ?? null
-  if (projectionScore == null && liveScore == null) {
-    return { score: null, level: null, source: null }
-  }
-  if (projectionScore == null) {
-    return {
-      score: liveScore,
-      level: live?.level ?? null,
-      source: liveSource ?? null,
-    }
-  }
-  if (liveScore == null) {
-    return {
-      score: projectionScore,
-      level: projection?.level ?? null,
-      source: projection?.source ?? null,
-    }
-  }
-  if (liveScore > projectionScore) {
-    return {
-      score: liveScore,
-      level: live?.level ?? projection?.level ?? null,
-      source: liveSource ?? null,
-    }
-  }
-  if (liveScore < projectionScore) {
-    return {
-      score: projectionScore,
-      level: projection?.level ?? live?.level ?? null,
-      source: projection?.source ?? null,
-    }
-  }
-  return {
-    score: projectionScore,
-    level: projection?.level ?? live?.level ?? null,
-    source: projection?.source ?? liveSource ?? null,
-  }
-}
-
-export async function refreshCreatorEthosProjection(params: {
-  db: Db
-  limit?: number
-  mode?: 'full' | 'fast'
-}): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
-  const available = await ensureCreatorEthosProjectionSchema(params.db)
-  if (!available) return { refreshedRows: 0, appliedLimit: 0, available: false }
-
-  const appliedLimit = Math.max(
-    100,
-    Math.min(
-      250_000,
-      Math.floor(
-        params.limit ??
-          readInt(process.env.ETHOS_CREATOR_PROJECTION_LIMIT, 50_000, 100, 250_000),
-      ),
-    ),
-  )
-
-  // `fast` uses the same multi-source scorer as `full` (CSW owners + social + caches).
-  // Callers choose refresh frequency via pickCreatorEthosProjectionRefreshMode().
-  const _projectionMode = params.mode ?? 'full'
-
-  const result = await params.db.sql`
+  const normalized = creatorAddress.toLowerCase()
+  const result = await db.sql`
     WITH ranked_creator_coins AS (
       SELECT
         cc.coin_address,
@@ -199,13 +167,13 @@ export async function refreshCreatorEthosProjection(params: {
         ) AS creator_coin_rank
       FROM creator_coins cc
       WHERE cc.chain_id = 8453
+        AND lower(cc.creator_address) = ${normalized}
     ),
     top_creator_coin AS (
       SELECT *
       FROM ranked_creator_coins
       WHERE creator_coin_rank = 1
-      ORDER BY volume_24h_usd DESC NULLS LAST, market_cap_usd DESC NULLS LAST, creator_address ASC
-      LIMIT ${appliedLimit}
+      LIMIT 1
     ),
     profile_identity AS (
       SELECT
@@ -260,29 +228,24 @@ export async function refreshCreatorEthosProjection(params: {
         es_wallet.level AS wallet_cached_level,
         es_wallet.fetched_at AS wallet_cached_fetched_at
       FROM top_creator_coin tcc
-      LEFT JOIN profile_best pb
-        ON pb.creator_address = tcc.creator_address
+      LEFT JOIN profile_best pb ON pb.creator_address = tcc.creator_address
       LEFT JOIN user_ethos_identity_keys uiek_social
         ON pb.twitter_username IS NOT NULL
         AND uiek_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
-      LEFT JOIN canonical_ethos_scores cs
-        ON cs.canonical_user_id = uiek_social.canonical_user_id
+      LEFT JOIN canonical_ethos_scores cs ON cs.canonical_user_id = uiek_social.canonical_user_id
       LEFT JOIN user_ethos_identity_keys uiek_wallet
         ON uiek_wallet.ethos_userkey = ('address:' || tcc.creator_address)
-      LEFT JOIN canonical_ethos_scores cw
-        ON cw.canonical_user_id = uiek_wallet.canonical_user_id
+      LEFT JOIN canonical_ethos_scores cw ON cw.canonical_user_id = uiek_wallet.canonical_user_id
       LEFT JOIN LATERAL (
         SELECT zoc1.ethos_score AS score, zoc1.ethos_level AS level, zoc1.last_updated_at
         FROM zora_csw_owners zco
         CROSS JOIN LATERAL unnest(COALESCE(zco.current_owners, ARRAY[]::text[])) AS owner_eoa
-        JOIN zora_csw_owner_class zoc1
-          ON lower(zoc1.eoa) = lower(owner_eoa)
+        JOIN zora_csw_owner_class zoc1 ON lower(zoc1.eoa) = lower(owner_eoa)
         WHERE lower(zco.csw_address) = tcc.creator_address
         ORDER BY zoc1.ethos_score DESC NULLS LAST, zoc1.last_updated_at DESC NULLS LAST
         LIMIT 1
       ) oc ON true
-      LEFT JOIN zora_csw_owner_class zoc
-        ON lower(zoc.eoa) = tcc.creator_address
+      LEFT JOIN zora_csw_owner_class zoc ON lower(zoc.eoa) = tcc.creator_address
       LEFT JOIN ethos_userkey_scores es_social
         ON pb.twitter_username IS NOT NULL
         AND es_social.ethos_userkey = ('service:x.com:username:' || pb.twitter_username)
@@ -310,7 +273,7 @@ export async function refreshCreatorEthosProjection(params: {
             COALESCE(wallet_cached_score, -1)
           ),
           -1
-        ) AS ethos_score,
+        )::int AS ethos_score,
         CASE
           WHEN canonical_social_score IS NOT NULL
             AND canonical_social_score = GREATEST(
@@ -477,12 +440,98 @@ export async function refreshCreatorEthosProjection(params: {
       ethos_level = EXCLUDED.ethos_level,
       ethos_score_source = EXCLUDED.ethos_score_source,
       score_updated_at = EXCLUDED.score_updated_at,
-      refreshed_at = NOW();
+      refreshed_at = NOW()
+    RETURNING coin_address;
   `
 
+  const coinAddress =
+    typeof result.rows?.[0]?.coin_address === 'string' ? String(result.rows[0].coin_address).toLowerCase() : null
+  return { refreshed: (result.rowCount ?? 0) > 0, coinAddress }
+}
+
+export async function runPaidCreatorEthosRefresh(
+  db: Db,
+  creatorAddress: string,
+): Promise<
+  | { ok: true; coinAddress: string | null; ethosScore: number | null; ethosLevel: string | null; ethosScoreSource: string | null }
+  | { ok: false; reason: 'creator_not_indexed' | 'projection_unavailable' | 'ethos_sync_failed'; message: string }
+> {
+  const { userkeys, coinAddress } = await collectEthosUserkeysForCreator(db, creatorAddress)
+  if (!coinAddress) {
+    return { ok: false, reason: 'creator_not_indexed', message: 'Creator is not in creator_coins yet.' }
+  }
+
+  try {
+    await seedEthosIdentityKeys({ db, limit: Math.max(userkeys.length, 8) })
+    await syncEthosUserkeyScores({ db, forceUserkeys: userkeys, chunkSize: 50 })
+    await materializeCanonicalEthosScores({ db, userkeys, limit: userkeys.length })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'ethos_sync_failed'
+    return { ok: false, reason: 'ethos_sync_failed', message }
+  }
+
+  const projection = await refreshCreatorEthosProjectionForCreator(db, creatorAddress)
+  if (!projection.refreshed) {
+    return { ok: false, reason: 'projection_unavailable', message: 'Could not update creator_ethos_projection.' }
+  }
+
+  const row = (await loadCreatorEthosProjectionByAddresses(db, [creatorAddress])).get(creatorAddress.toLowerCase())
   return {
-    refreshedRows: Math.max(0, Number(result.rowCount ?? 0)),
-    appliedLimit,
-    available: true,
+    ok: true,
+    coinAddress: projection.coinAddress ?? coinAddress,
+    ethosScore: row?.score ?? null,
+    ethosLevel: row?.level ?? null,
+    ethosScoreSource: row?.source ?? null,
+  }
+}
+
+export async function insertCreatorEthosRefreshOrder(params: {
+  db: Db
+  creatorAddress: string
+  coinAddress: string | null
+  payerAddress: Address
+  priceUsdcPaid: bigint
+  paymentTxHash: Hex
+  paymentTo: Address
+  ethosScoreBefore: number | null
+  ethosScoreAfter: number | null
+}): Promise<{ ok: true } | { ok: false; reason: 'payment_already_used' | 'db_error'; message: string }> {
+  const hasTable = await hasCreatorEthosRefreshOrdersTable(params.db)
+  if (!hasTable) {
+    return { ok: false, reason: 'db_error', message: 'creator_ethos_refresh_orders table missing' }
+  }
+
+  try {
+    await params.db.sql`
+      INSERT INTO public.creator_ethos_refresh_orders (
+        creator_address,
+        coin_address,
+        payer_address,
+        price_usdc_paid,
+        payment_tx_hash,
+        payment_to,
+        ethos_score_before,
+        ethos_score_after,
+        completed_at
+      ) VALUES (
+        ${params.creatorAddress.toLowerCase()},
+        ${params.coinAddress},
+        ${getAddress(params.payerAddress).toLowerCase()},
+        ${params.priceUsdcPaid.toString()},
+        ${params.paymentTxHash.toLowerCase()},
+        ${getAddress(params.paymentTo).toLowerCase()},
+        ${params.ethosScoreBefore},
+        ${params.ethosScoreAfter},
+        NOW()
+      );
+    `
+    return { ok: true }
+  } catch (error: any) {
+    const code = typeof error?.code === 'string' ? error.code : ''
+    if (code === '23505') {
+      return { ok: false, reason: 'payment_already_used', message: 'Payment tx hash already used.' }
+    }
+    const message = error instanceof Error ? error.message : 'db_error'
+    return { ok: false, reason: 'db_error', message }
   }
 }

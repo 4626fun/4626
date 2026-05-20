@@ -8,7 +8,10 @@ import {
   syncEthosScoreUpdates,
   syncEthosUserkeyScores,
 } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
-import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
+import {
+  pickCreatorEthosProjectionRefreshMode,
+  refreshCreatorEthosProjection,
+} from '../../../../server/_lib/zora/creatorEthosProjection.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -237,12 +240,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             limit: sweepLimit,
           })
         : { processed: 0, updated: 0 }
+    const projectionMode = pickCreatorEthosProjectionRefreshMode('main')
     const creatorProjection =
       remainingMs() > 10_000
         ? await refreshCreatorEthosProjection({
             db,
             limit: creatorProjectionLimit,
-            mode: 'fast',
+            mode: projectionMode,
           })
         : { refreshedRows: 0, appliedLimit: 0, available: false }
     const health = remainingMs() > 3_000 ? await readProjectionHealth(db) : null
@@ -254,6 +258,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
       synced,
       rollupAfterSync,
       creatorProjection,
+      projectionMode,
       health,
       remainingMs: remainingMs(),
     })

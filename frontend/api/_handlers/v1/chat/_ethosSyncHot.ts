@@ -3,7 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getDbForCron, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { isAuthorizedCron } from '../../../../server/_lib/lottery/cronAuth.js'
 import { syncEthosScoreUpdates, syncEthosUserkeyScores } from '../../../../server/_lib/identity/ethosCanonicalScores.js'
-import { refreshCreatorEthosProjection } from '../../../../server/_lib/zora/creatorEthosProjection.js'
+import {
+  pickCreatorEthosProjectionRefreshMode,
+  refreshCreatorEthosProjection,
+} from '../../../../server/_lib/zora/creatorEthosProjection.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -328,12 +331,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
             chunkSize: 100,
           })
         : { attempted: 0, updated: 0, failed: 0, processedUserkeys: [] as string[] }
+    const projectionMode = pickCreatorEthosProjectionRefreshMode('hot')
     const creatorProjection =
       remainingMs() > 10_000
         ? await refreshCreatorEthosProjection({
             db,
             limit: projectionRefreshLimit,
-            mode: 'fast',
+            mode: projectionMode,
           })
         : { refreshedRows: 0, appliedLimit: 0, available: false }
     const health = remainingMs() > 3_000 ? await readProjectionHealth(db) : null
@@ -349,6 +353,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         failed: socialSeedSync.failed,
       },
       creatorProjection,
+      projectionMode,
       health,
       remainingMs: remainingMs(),
     })

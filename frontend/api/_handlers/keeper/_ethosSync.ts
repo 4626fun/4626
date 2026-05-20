@@ -20,7 +20,10 @@ import {
   isDbConfigured,
 } from '../../../packages/server-core/src/index.js'
 import { syncEthosScoreUpdates } from '../../../server/_lib/identity/ethosCanonicalScores.js'
-import { refreshCreatorEthosProjection } from '../../../server/_lib/zora/creatorEthosProjection.js'
+import {
+  pickCreatorEthosProjectionRefreshMode,
+  refreshCreatorEthosProjection,
+} from '../../../server/_lib/zora/creatorEthosProjection.js'
 
 function readInt(value: string | undefined, fallback: number, min = 1, max = 10_000): number {
   const parsed = Number(value)
@@ -105,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? await refreshCreatorEthosProjection({
           db,
           limit: creatorProjectionHotLimit,
-          mode: 'fast',
+          mode: pickCreatorEthosProjectionRefreshMode('hot'),
         })
       : null
     return res.status(200).json({

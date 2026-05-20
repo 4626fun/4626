@@ -127,7 +127,42 @@ If projection results drift or sync fails:
 
 This returns reads to legacy request-time Ethos behavior without schema rollback.
 
-## 7) Zora owner projection automation
+## 7) Explore creators Ethos coverage
+
+Explore (`/explore/creators`) lists **creator coins**, not raw `zora_csw_owner_class` rows. Scores reach the UI through:
+
+1. `refreshCreatorEthosProjection` → `public.creator_ethos_projection` (cron: `/api/v1/chat/ethos-sync`, `/api/v1/chat/ethos-sync-hot`)
+2. `GET /api/zora/explore` merges projection + live resolver (`resolveCreatorEthosByAddress`) per page
+3. `GET /api/zora/metrics?scope=creators` → `ethosScoredCreators` counts projection rows with `ethos_score IS NOT NULL`
+
+**Ops checks**
+
+```sql
+SELECT COUNT(*) FILTER (WHERE ethos_score IS NOT NULL) AS scored
+FROM public.creator_ethos_projection;
+```
+
+Compare to `ethosScoredCreators` on `/api/zora/metrics?scope=creators`.
+
+**Env (production `akita-llc/4626`)**
+
+- `ETHOS_CREATOR_PROJECTION_LIMIT` — full reconcile refresh size (recommend `50000`)
+- `ETHOS_CREATOR_PROJECTION_LIMIT_HOT` — hot lane refresh size (default `2000`)
+- `ETHOS_CREATOR_PROJECTION_FULL_EVERY_N` — how often main sync uses `mode: full` (default `4` slots ≈ hourly)
+- `ETHOS_CREATOR_PROJECTION_MODE` — optional force `full` or `fast` on all lanes
+
+Volume/mcap sorts attach `ethosScore` from projection when the creator is in `creator_coins` and has been refreshed; Ethos sort reads projection directly.
+
+### Paid on-demand refresh ($0.10 USDC)
+
+Authenticated users can pay **$0.10 USDC** on Base to re-fetch Ethos for one creator and upsert `creator_ethos_projection`:
+
+- `GET /api/creator/ethos/refresh-config?creatorAddress=0x…` — price, treasury, cooldown
+- `POST /api/creator/ethos/refresh` — body `{ creatorAddress, paymentTxHash }`
+
+Orders are stored in `creator_ethos_refresh_orders` (migration `048` / `20260520130000`). Default cooldown: `ETHOS_PAID_REFRESH_COOLDOWN_MINUTES=5`.
+
+## 8) Zora owner projection automation
 
 `044_schedule_zora_owner_ethos_projection.sql` adds:
 
