@@ -16,7 +16,7 @@ function WaitlistFlowGate() {
   if (privyClientStatus === 'disabled') {
     return (
       <section className="rounded-3xl border border-white/10 bg-black/40 p-6 text-center text-white shadow-2xl shadow-black/30">
-        <p className="text-sm font-semibold uppercase tracking-[0.28em] text-brand-primary">Waitlist unavailable</p>
+        <p className="label text-zinc-400">Waitlist unavailable</p>
         <h1 className="mt-3 text-2xl font-semibold sm:text-3xl">Email sign-in is not configured.</h1>
         <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-300">
           The waitlist requires the 4626 Privy client configuration before the account flow can load. Check the

@@ -271,7 +271,7 @@ function WaitlistAuthStep(props: {
           <div className="space-y-2">
             <h2 className="text-[1.75rem] font-semibold leading-tight tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
             {waitlistProgressLine ? (
-              <p className="text-xs text-zinc-500">{waitlistProgressLine}</p>
+              <p className="text-xs text-zinc-400">{waitlistProgressLine}</p>
             ) : null}
           </div>
 

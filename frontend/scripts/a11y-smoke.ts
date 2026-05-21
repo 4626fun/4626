@@ -19,7 +19,10 @@ import { chromium, type Browser, type Page } from 'playwright'
 
 const HOST = process.env.A11Y_HOST ?? '127.0.0.1'
 const PORT = Number(process.env.A11Y_PORT ?? process.env.PORT ?? 4175)
-const DEFAULT_PATHS = ['/faq', '/faq/how-it-works', '/swap']
+const DEFAULT_PATHS = ['/faq', '/faq/how-it-works', '/waitlist', '/swap']
+
+const MARKETING_PATH_PREFIXES = ['/faq', '/waitlist', '/status', '/cca', '/r/'] as const
+const APP_PATH_PREFIXES = ['/swap', '/deploy', '/explore', '/accounts', '/vault', '/portfolio'] as const
 const SERVE_TIMEOUT_MS = Number(process.env.A11Y_SERVE_TIMEOUT_MS ?? 120_000)
 const PAGE_TIMEOUT_MS = Number(process.env.A11Y_PAGE_TIMEOUT_MS ?? 45_000)
 
@@ -49,6 +52,7 @@ Options:
 
 Environment:
   A11Y_BASE_URL        Same as --base-url
+  A11Y_HOST_MODE       Force Vite host shell: app | marketing (CI uses per-path groups)
   A11Y_HOST / A11Y_PORT
   A11Y_SERVE_TIMEOUT_MS  Wait for dev server (default 120000)
   A11Y_PAGE_TIMEOUT_MS   Per-page navigation timeout (default 45000)
@@ -85,6 +89,40 @@ function isBlockingImpact(impact: AxeImpact): boolean {
   return impact === 'serious' || impact === 'critical'
 }
 
+export type A11yHostMode = 'app' | 'marketing'
+
+function pathHostMode(path: string): A11yHostMode {
+  const normalized = path.startsWith('/') ? path : `/${path}`
+  if (MARKETING_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
+    return 'marketing'
+  }
+  if (APP_PATH_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
+    return 'app'
+  }
+  return 'marketing'
+}
+
+function groupPathsByHostMode(paths: string[]): Array<{ mode: A11yHostMode; paths: string[] }> {
+  const marketing: string[] = []
+  const app: string[] = []
+  for (const path of paths) {
+    if (pathHostMode(path) === 'app') app.push(path)
+    else marketing.push(path)
+  }
+  const groups: Array<{ mode: A11yHostMode; paths: string[] }> = []
+  if (marketing.length > 0) groups.push({ mode: 'marketing', paths: marketing })
+  if (app.length > 0) groups.push({ mode: 'app', paths: app })
+  return groups
+}
+
+function resolveServeHostMode(paths: string[]): A11yHostMode {
+  const override = process.env.A11Y_HOST_MODE?.trim()
+  if (override === 'app' || override === 'marketing') return override
+  const groups = groupPathsByHostMode(paths)
+  if (groups.length === 1) return groups[0]!.mode
+  return 'app'
+}
+
 async function waitForServerReady(origin: string, timeoutMs: number): Promise<void> {
   const startedAt = Date.now()
   while (Date.now() - startedAt < timeoutMs) {
@@ -99,15 +137,16 @@ async function waitForServerReady(origin: string, timeoutMs: number): Promise<vo
   throw new Error(`Timed out waiting for server at ${origin}`)
 }
 
-function startViteServer(): ChildProcess {
+function startViteServer(mode: A11yHostMode): ChildProcess {
+  const origin = `http://${HOST}:${PORT}`
   const child = spawn('pnpm', ['vite', '--host', HOST, '--port', String(PORT)], {
     cwd: process.cwd(),
     env: {
       ...process.env,
       CI: '1',
-      VITE_HOST_MODE_OVERRIDE: 'app',
-      VITE_APP_ORIGIN: `http://${HOST}:${PORT}`,
-      VITE_MARKETING_ORIGIN: `http://${HOST}:${PORT}`,
+      VITE_HOST_MODE_OVERRIDE: mode,
+      VITE_APP_ORIGIN: origin,
+      VITE_MARKETING_ORIGIN: origin,
       VITE_PRIVY_ENABLED: '0',
       VITE_BASE_BUILDER_CODES: process.env.VITE_BASE_BUILDER_CODES ?? 'bc_b7k3p9da',
     },
@@ -171,7 +210,7 @@ async function main(): Promise<void> {
 
   const shouldServe = hasFlag('--serve')
   const paths = parsePaths(getArg('--paths', DEFAULT_PATHS.join(',')))
-  const origin =
+  const externalOrigin =
     getArg('--base-url', process.env.A11Y_BASE_URL ?? '') ||
     `http://${HOST}:${PORT}`
 
@@ -179,12 +218,6 @@ async function main(): Promise<void> {
   let browser: Browser | null = null
 
   try {
-    if (shouldServe) {
-      process.stdout.write(`Starting Vite at ${origin} …\n`)
-      vite = startViteServer()
-      await waitForServerReady(origin, SERVE_TIMEOUT_MS)
-    }
-
     browser = await chromium.launch({ headless: true })
     const context = await browser.newContext({
       viewport: { width: 1280, height: 720 },
@@ -193,9 +226,24 @@ async function main(): Promise<void> {
     const page = await context.newPage()
 
     const results: RouteResult[] = []
-    for (const path of paths) {
-      process.stdout.write(`Scanning ${path} …\n`)
-      results.push(await scanRoute(page, origin, path))
+    const scanGroups = shouldServe
+      ? groupPathsByHostMode(paths)
+      : [{ mode: resolveServeHostMode(paths), paths }]
+
+    for (const group of scanGroups) {
+      const origin = shouldServe ? `http://${HOST}:${PORT}` : externalOrigin
+
+      if (shouldServe) {
+        await stopChild(vite)
+        process.stdout.write(`Starting Vite (${group.mode}) at ${origin} …\n`)
+        vite = startViteServer(group.mode)
+        await waitForServerReady(origin, SERVE_TIMEOUT_MS)
+      }
+
+      for (const path of group.paths) {
+        process.stdout.write(`Scanning ${path} …\n`)
+        results.push(await scanRoute(page, origin, path))
+      }
     }
 
     printReport(results)

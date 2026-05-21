@@ -11,13 +11,15 @@
 - [ ] **Focus** — `:focus-visible` is visible (do not remove outline without a replacement). Modals trap focus and return focus on close (`@/components/ui/Modal` / Radix dialog patterns).
 - [ ] **Motion** — Respect `prefers-reduced-motion` for large animations (see `index.css` and vault-flow helpers).
 - [ ] **Keyboard** — Tab through the flow once: no traps, no unreachable controls, logical order.
+- [ ] **Marketing contrast** — On dark `glass-card` / charcoal backgrounds (`4626.fun`), prefer `text-zinc-400` for `text-sm` and smaller secondary copy; `text-zinc-500` / `text-zinc-600` often fail axe `color-contrast`.
+- [ ] **Marketing host + wagmi** — `4626.fun` routes in `MARKETING_ONLY_ROUTES` have **no** `WagmiProvider`. Do not mount `TokenImage` / `useReadContract` on those pages; use static assets or server-fetched metadata instead.
 
 ## Automation in this repo
 
 | Command | Purpose |
 | -------- | -------- |
 | `pnpm -C frontend lint:a11y` | ESLint with `eslint-plugin-jsx-a11y` (**warn** today; promote to error in main `lint` when noise is low) |
-| `pnpm -C frontend smoke:a11y -- --serve` | Playwright + axe on `/faq`, `/faq/how-it-works`, `/swap` (fails on **serious/critical** only) |
+| `pnpm -C frontend smoke:a11y -- --serve` | Playwright + axe on `/faq`, `/faq/how-it-works`, `/waitlist`, `/swap` (fails on **serious/critical** only). With `--serve`, restarts Vite per host shell (`marketing` vs `app`). |
 
 CI runs both in [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml) as **non-blocking** until the team flips `A11Y_CI_BLOCKING=true` on the workflow (or removes `continue-on-error`).
 
@@ -26,10 +28,19 @@ CI runs both in [`.github/workflows/accessibility.yml`](../../.github/workflows/
 ### Running smoke against production
 
 ```bash
-A11Y_BASE_URL=https://4626.fun pnpm -C frontend smoke:a11y -- --paths /faq,/faq/how-it-works
+A11Y_BASE_URL=https://4626.fun pnpm -C frontend smoke:a11y -- --paths /faq,/faq/how-it-works,/waitlist
+A11Y_BASE_URL=https://app.4626.fun pnpm -C frontend smoke:a11y -- --paths /swap
 ```
 
 Use preview/staging when validating a PR; production is useful for periodic audits only.
+
+### Local serve (matches CI)
+
+```bash
+pnpm -C frontend smoke:a11y -- --serve
+```
+
+Paths are grouped automatically: FAQ/waitlist run under `VITE_HOST_MODE_OVERRIDE=marketing`; `/swap` runs under `app`.
 
 ## High-risk surfaces
 
@@ -46,7 +57,7 @@ Prioritize manual keyboard + screen reader passes on:
 1. Drive `pnpm -C frontend lint:a11y` toward zero warnings (fix or narrowly disable with a comment).
 2. Move rules from `eslint.a11y.config.js` into `eslint.config.js` as `'error'`.
 3. Remove the separate `lint:a11y` script or keep it as an alias.
-4. Set `A11Y_CI_BLOCKING=true` in the accessibility workflow.
+4. Set repository variable **`A11Y_CI_BLOCKING=true`** in GitHub (Settings → Secrets and variables → Actions → Variables) so [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml) fails PRs on regressions.
 
 ## References
 
@@ -54,3 +65,4 @@ Prioritize manual keyboard + screen reader passes on:
 - [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/)
 - Layout skip link: `frontend/src/components/layout/Layout.tsx`
 - Shared modal wrapper: `frontend/src/components/ui/Modal.tsx`
+- Explore charts: `frontend/src/components/explore/MetricChartPlot.tsx` (unit smoke in `MetricChartPlot.test.tsx`)

@@ -50,7 +50,7 @@ jobs:
             echo "### Accessibility"
             echo ""
             echo "- \`lint:a11y\` — jsx-a11y rules at **warn** (see \`frontend/eslint.a11y.config.js\`)"
-            echo "- \`smoke:a11y\` — axe serious/critical on \`/faq\`, \`/faq/how-it-works\`, \`/swap\`"
+            echo "- \`smoke:a11y\` — axe serious/critical on \`/faq\`, \`/faq/how-it-works\`, \`/waitlist\`, \`/swap\` (marketing + app Vite shells)"
             echo ""
             if [ "${{ env.A11Y_CI_BLOCKING }}" = "true" ]; then
               echo "This job is **blocking** (\`A11Y_CI_BLOCKING=true\`)."

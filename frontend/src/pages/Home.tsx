@@ -103,7 +103,7 @@ export function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.7, delay: 0.55 }}
-            className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-500 sm:text-lg"
+            className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-400 sm:text-lg"
           >
             Turn creator coins into redeemable vault shares. Experimental software. Vaults are not live yet.
           </motion.p>
@@ -185,12 +185,12 @@ export function Home() {
                 transition={{ duration: 0.5, delay: i * 0.10 }}
                 className="flex flex-col gap-2.5"
               >
-                <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-700">
+                <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-500">
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <h3 className="text-sm font-medium text-white">{step.label}</h3>
                 <div className="h-px w-6 bg-white/10" />
-                <p className="text-[11px] leading-relaxed text-zinc-600 font-light">{step.sub}</p>
+                <p className="text-[11px] leading-relaxed text-zinc-400 font-light">{step.sub}</p>
               </motion.div>
             ))}
           </div>
