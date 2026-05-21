@@ -400,19 +400,20 @@ export function CoinManage() {
                         className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors"
                       />
                       <div className="sm:col-span-1 flex gap-2">
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="flex-1"
                           onClick={() => {
                             try {
                               navigator.clipboard.writeText(JSON.stringify(metadataJson, null, 2))
                             } catch {}
                           }}
                           disabled={!canBuildMetadataJson}
-                          className="btn-primary flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                           title="Copies JSON (does not upload)"
                         >
                           Copy JSON
-                        </button>
+                        </Button>
                         <Button
                           type="button"
                           variant="primary"
@@ -426,10 +427,12 @@ export function CoinManage() {
                       </div>
                     </div>
 
-                    <button
+                    <Button
+                      type="button"
+                      variant="primary"
+                      className="w-full"
                       onClick={copyMetadataJson}
                       disabled={busy !== null || !canBuildMetadataJson}
-                      className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {busy === 'upload' ? (
                         <>
@@ -439,7 +442,7 @@ export function CoinManage() {
                       ) : (
                         'Validate + copy JSON'
                       )}
-                    </button>
+                    </Button>
                     {lensEnabled ? (
                       <div className="rounded-lg border border-zinc-900/60 p-3 space-y-3">
                         <div className="text-xs text-zinc-500">Lens Grove uploads (optional)</div>
@@ -450,14 +453,15 @@ export function CoinManage() {
                             onChange={(e) => setMetaImageFile(e.target.files?.[0] ?? null)}
                             className="text-[11px] text-zinc-400"
                           />
-                          <button
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="w-full"
                             onClick={() => void uploadMetaImageToGrove()}
                             disabled={busy !== null || !metaImageFile}
-                            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                            type="button"
                           >
                             {busy === 'grove-image' ? 'Uploading image…' : 'Upload image to Lens Grove'}
-                          </button>
+                          </Button>
                         </div>
                         <Button
                           type="button"
@@ -494,14 +498,15 @@ export function CoinManage() {
                             Open metadata via gateway: {metadataGatewayUrl}
                           </a>
                         ) : null}
-                        <button
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="w-full"
                           onClick={() => void previewLensMetadata()}
                           disabled={busy !== null || !metadataLensUri.trim()}
-                          className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                          type="button"
                         >
                           {busy === 'grove-preview' ? 'Fetching metadata…' : 'Preview Lens metadata'}
-                        </button>
+                        </Button>
                         {lensMetadataPreview ? (
                           <pre className="max-h-44 overflow-auto rounded-md border border-zinc-800 bg-black/60 p-2 text-[10px] text-zinc-300">
                             {JSON.stringify(lensMetadataPreview, null, 2)}

@@ -11,9 +11,9 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: 'btn-accent btn-no-icon text-white',
-        secondary:
-          'border border-white/10 bg-vault-card-raised/80 text-vault-text hover:bg-vault-card-raised hover:border-white/15',
-        ghost: 'text-vault-subtext hover:bg-white/5 hover:text-vault-text',
+        secondary: 'btn-secondary btn-no-icon',
+        ghost:
+          'inline-flex items-center justify-center gap-2 rounded-xl border border-transparent bg-transparent px-4 py-2 text-[13px] font-medium text-zinc-400 transition-all duration-200 hover:bg-white/5 hover:text-white min-h-[40px]',
         destructive:
           'bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-sm',
       },

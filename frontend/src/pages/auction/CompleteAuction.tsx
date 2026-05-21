@@ -22,6 +22,7 @@ import {
   Target,
   Flame,
 } from 'lucide-react'
+import { Button } from '@/components/ui/Button'
 import { CONTRACTS, AKITA } from '@/config/contracts'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { Spinner } from '@/components/ui/Spinner'
@@ -513,10 +514,11 @@ export function CompleteAuction() {
                       Sweep unsold creator tokens from the auction contract back to the configured vault recipient.
                     </p>
                     {!isUnsoldSuccess && (
-                      <button
+                      <Button
                         onClick={handleSweepUnsoldTokens}
                         disabled={isUnsoldSweeping || isUnsoldConfirming}
-                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                        variant="primary"
+                        className="mt-4 flex items-center gap-2"
                       >
                         {isUnsoldSweeping || isUnsoldConfirming ? (
                           <>
@@ -529,7 +531,7 @@ export function CompleteAuction() {
                             <ArrowRight className="w-4 h-4" />
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
                     {unsoldTxHash && (
                       <a
@@ -572,10 +574,11 @@ export function CompleteAuction() {
                       Emergency-withdraw creator tokens from all active vault strategies back into the vault balance.
                     </p>
                     {!isStrategySweepSuccess && (
-                      <button
+                      <Button
                         onClick={handleSweepStrategyFunds}
                         disabled={!vaultAddress || isStrategySweeping || isStrategySweepConfirming}
-                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                        variant="primary"
+                        className="mt-4 flex items-center gap-2"
                       >
                         {isStrategySweeping || isStrategySweepConfirming ? (
                           <>
@@ -588,7 +591,7 @@ export function CompleteAuction() {
                             <ArrowRight className="w-4 h-4" />
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
                     {!vaultAddress ? (
                       <p className="mt-2 text-xs text-amber-300/80">Waiting for vault address...</p>
@@ -637,10 +640,11 @@ export function CompleteAuction() {
                       Sweep raised currency to the strategy before LP migration.
                     </p>
                     {!isSweepSuccess && currentStep !== 'migrate' && currentStep !== 'configure' && currentStep !== 'complete' && (
-                      <button
+                      <Button
                         onClick={handleSweepCurrency}
                         disabled={isSweeping || isSweepConfirming}
-                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                        variant="primary"
+                        className="mt-4 flex items-center gap-2"
                       >
                         {isSweeping || isSweepConfirming ? (
                           <>
@@ -653,7 +657,7 @@ export function CompleteAuction() {
                             <ArrowRight className="w-4 h-4" />
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
                     {sweepTxHash && (
                       <a
@@ -699,10 +703,11 @@ export function CompleteAuction() {
                       Initialize the pool and mint the strategy LP position.
                     </p>
                     {currentStep === 'migrate' && !isMigrateSuccess && (
-                      <button
+                      <Button
                         onClick={handleMigrate}
                         disabled={isMigrating || isMigrateConfirming}
-                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                        variant="primary"
+                        className="mt-4 flex items-center gap-2"
                       >
                         {isMigrating || isMigrateConfirming ? (
                           <>
@@ -715,7 +720,7 @@ export function CompleteAuction() {
                             <ArrowRight className="w-4 h-4" />
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
                     {migrateTxHash && (
                       <a
@@ -775,10 +780,11 @@ export function CompleteAuction() {
                     </div>
 
                     {currentStep === 'configure' && !isConfigSuccess && (
-                      <button
+                      <Button
                         onClick={handleConfigureTaxHook}
                         disabled={isConfiguring || isConfigConfirming}
-                        className="btn-primary btn-no-icon mt-4 flex items-center gap-2"
+                        variant="primary"
+                        className="mt-4 flex items-center gap-2"
                       >
                         {isConfiguring || isConfigConfirming ? (
                           <>
@@ -791,7 +797,7 @@ export function CompleteAuction() {
                             <Zap className="w-4 h-4" />
                           </>
                         )}
-                      </button>
+                      </Button>
                     )}
                     {configTxHash && (
                       <a
@@ -855,19 +861,21 @@ export function CompleteAuction() {
                 : 'Your vault is now live on Uniswap V4. Native and hook fee behavior is deployment-conditional; confirm active fee planes and recipient alignment before publishing buy+sell fee claims. Qualifying buys can trigger lottery entries, and a no-purchase AMOE entry path is also available.'}
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <button
+              <Button
                 onClick={() => navigate(`/vault/${vaultAddress ?? AKITA.vault}`)}
-                className="btn-primary btn-no-icon flex items-center justify-center gap-2"
+                variant="primary"
+                className="flex items-center justify-center gap-2"
               >
                 View Vault
                 <ArrowRight className="w-4 h-4" />
-              </button>
+              </Button>
               {!isFailed ? (
                 <>
-                  <button
+                  <Button
                     onClick={handleActivateYield}
                     disabled={!canActivateYield || isActivating || isActivateConfirming || isActivateSuccess}
-                    className="btn-secondary flex items-center justify-center gap-2"
+                    variant="secondary"
+                    className="flex items-center justify-center gap-2"
                   >
                     {isActivating || isActivateConfirming ? (
                       <>
@@ -885,15 +893,16 @@ export function CompleteAuction() {
                         <Zap className="w-4 h-4" />
                       </>
                     )}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={() => tradeTokenAddress && navigate(`/swap?token=${tradeTokenAddress}`)}
                     disabled={!tradeTokenAddress}
-                    className="btn-secondary flex items-center justify-center gap-2"
+                    variant="secondary"
+                    className="flex items-center justify-center gap-2"
                   >
                     Trade on 4626 Swap
                     <ArrowRight className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </>
               ) : null}
             </div>

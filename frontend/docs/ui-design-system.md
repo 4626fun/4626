@@ -12,7 +12,7 @@
 | Layer | Use |
 | ----- | --- |
 | `Button`, `Badge`, `Modal`, `Input`, `Alert`, `SegmentedTabs` | Default for new product UI |
-| `btn-accent` / `btn-primary` (CSS) | Implementation detail for `Button variant="primary"`; do not use raw classes on new surfaces |
+| `btn-accent` / `btn-primary` / `btn-secondary` (CSS) | Implementation detail for `Button` variants; do not use raw classes on new surfaces |
 | `MetricChartPlot` + Recharts | Explore content-detail charts (`ExploreContentDetail`) |
 | `AccountTray` | Account chrome tray (`ConnectButton`) |
 | `sonner` | Toasts via `AppToaster` + `toast.*` helpers |

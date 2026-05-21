@@ -79,9 +79,9 @@ export function AccountsPage(props: {
                 controller={controller}
                 summaryActions={
                   <>
-                    <Link to="/leaderboard" className="btn-secondary btn-no-icon inline-flex">
-                      Open leaderboard
-                    </Link>
+                    <Button variant="secondary" asChild>
+                      <Link to="/leaderboard">Open leaderboard</Link>
+                    </Button>
                     <button
                       type="button"
                       disabled={busyProvider === 'email'}

@@ -6,6 +6,7 @@ import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { CONTRACTS } from '@/config/contracts'
 import { logger } from '@/lib/observability/logger'
 import { Alert } from '@/components/ui/Alert'
+import { Button } from '@/components/ui/Button'
 
 interface DeployStrategiesProps {
   vaultAddress: `0x${string}`
@@ -365,13 +366,15 @@ export function DeployStrategies({ vaultAddress, tokenAddress }: DeployStrategie
 
       {error && <Alert variant="error">{error}</Alert>}
 
-      <button
+      <Button
+        type="button"
+        variant="primary"
+        className="w-full py-3"
         onClick={deployAndConfigure}
         disabled={!canSubmit || isSubmitting}
-        className="btn-primary w-full py-3 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSubmitting ? 'Submitting…' : 'Deploy + Configure Legacy Strategies'}
-      </button>
+      </Button>
 
       {bundleId && (
         <div className="text-[11px] text-zinc-500">

@@ -288,14 +288,16 @@ function DetailPanel({
             >
               Approve
             </Button>
-            <button
+            <Button
               type="button"
-              className="btn-secondary btn-compact text-xs px-3 py-1.5 sm:px-4 sm:py-2"
+              variant="secondary"
+              size="sm"
+              className="btn-compact text-xs px-3 py-1.5 sm:px-4 sm:py-2"
               disabled={decisionBusy}
               onClick={onDeny}
             >
               Deny
-            </button>
+            </Button>
             <button
               type="button"
               className="text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"

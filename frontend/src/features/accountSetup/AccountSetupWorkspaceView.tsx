@@ -875,14 +875,11 @@ export function AccountSetupWorkspaceView(props: {
                       {busyProvider === 'zora_cross_app' ? 'Linking...' : 'Link Zora'}
                     </Button>
                   )}
-                  <a
-                    href={zoraHandoffUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-secondary btn-no-icon inline-flex"
-                  >
-                    Open Zora
-                  </a>
+                  <Button variant="secondary" asChild>
+                    <a href={zoraHandoffUrl} target="_blank" rel="noreferrer">
+                      Open Zora
+                    </a>
+                  </Button>
                   {!zoraLinked ? (
                     <button
                       type="button"
@@ -917,14 +914,11 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {needsBaseAppSetup && baseAppUrl ? (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <a
-                      href={baseAppUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="btn-secondary btn-no-icon inline-flex"
-                    >
-                      Open Base app
-                    </a>
+                    <Button variant="secondary" asChild>
+                      <a href={baseAppUrl} target="_blank" rel="noreferrer">
+                        Open Base app
+                      </a>
+                    </Button>
                     <span className="text-xs text-zinc-500">
                       Create or connect your CSW there, then return here.
                     </span>
@@ -1092,14 +1086,14 @@ export function AccountSetupWorkspaceView(props: {
                     </Button>
                   )}
                   {connectedOwnerReady ? (
-                    <button
+                    <Button
                       type="button"
+                      variant="secondary"
                       disabled={advancedBusy}
                       onClick={() => connectOwnerWallet()}
-                      className="btn-secondary btn-no-icon inline-flex"
                     >
                       Switch owner wallet
-                    </button>
+                    </Button>
                   ) : (
                     <button
                       type="button"

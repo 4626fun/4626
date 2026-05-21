@@ -7,6 +7,7 @@ import { getAddress, isAddress } from 'viem'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
+import { Button } from '@/components/ui/Button'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { getPoolsByToken, getPoolSwaps } from '@/lib/uniswap/client'
 import type { UniswapPool } from '@/lib/uniswap/types'
@@ -378,12 +379,9 @@ export function ExploreContentTransactions() {
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <Link
-                to={`/explore/content/base/${contentCoinAddress}`}
-                className="btn-primary btn-compact inline-flex items-center justify-center rounded-full text-xs"
-              >
-                Back to market
-              </Link>
+              <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                <Link to={`/explore/content/base/${contentCoinAddress}`}>Back to market</Link>
+              </Button>
             </div>
           </div>
         </div>

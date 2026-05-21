@@ -7464,23 +7464,23 @@ function DeployVaultBatcher({
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <button
+              <Button
                 type="button"
-                className="btn-secondary"
+                variant="secondary"
                 disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
                 onClick={() => void exportPlan()}
               >
                 {exportBusy ? 'Preparing plan…' : 'Export Plan JSON'}
-              </button>
+              </Button>
               {dryRunLocalForkRpc ? (
-                <button
+                <Button
                   type="button"
-                  className="btn-secondary"
+                  variant="secondary"
                   disabled={busy || exportBusy || dryRunBusy || expectedQuery.isLoading || !expected}
                   onClick={() => void runDryRun()}
                 >
                   {dryRunBusy ? 'Running dry-run…' : 'Run dry-run'}
-                </button>
+                </Button>
               ) : (
                 <div className="text-[11px] text-zinc-500">
                   Dry-run is local-fork-only. Start local mode with{' '}
@@ -7699,9 +7699,15 @@ function DeployVaultBatcher({
                         : 'via app smart wallet owner'
                 }`}
           </div>
-          <button type="button" onClick={() => void submit()} disabled={disabled || exportBusy} className="btn-primary w-full rounded-lg">
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full rounded-lg"
+            onClick={() => void submit()}
+            disabled={disabled || exportBusy}
+          >
             {busy ? 'Deploying…' : '1‑Click Deploy (Gas-Free)'}
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-4 space-y-3 backdrop-blur-sm">
@@ -7752,9 +7758,9 @@ function DeployVaultBatcher({
           </div>
           {/* Only show auth-switch CTA for auth/session issues (not for signing-method incompatibility). */}
           {switchAuthCta && /no_session|not authenticated|gas sponsorship requires a session|base account|email|privy|smart wallet/i.test(error) ? (
-            <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
+            <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
-            </button>
+            </Button>
           ) : null}
           {isVanityPaidFeatureError(error) ? (
             <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
@@ -9594,26 +9600,26 @@ function DeployVaultMain() {
                       {externalSignerConnectors.slice(0, 3).map((externalConnector) => {
                         const label = String(externalConnector.name || externalConnector.id || 'Wallet')
                         return (
-                          <button
+                          <Button
                             key={`${externalConnector.id}:${externalConnector.name}`}
                             type="button"
-                            className="btn-secondary"
+                            variant="secondary"
                             disabled={externalWalletConnectBusy}
                             onClick={() => connectExternalSignerWallet(externalConnector)}
                           >
                             {externalWalletConnectBusy ? 'Connecting…' : `Connect ${label}`}
-                          </button>
+                          </Button>
                         )
                       })}
                       {externalSignerConnectors.length === 0 ? (
-                        <button
+                        <Button
                           type="button"
-                          className="btn-secondary"
+                          variant="secondary"
                           disabled={externalWalletConnectBusy}
                           onClick={() => connectExternalSignerWallet()}
                         >
                           {externalWalletConnectBusy ? 'Connecting…' : 'Connect external wallet'}
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                     {externalWalletConnectError ? (
@@ -9689,13 +9695,14 @@ function DeployVaultMain() {
                     <div className="text-[11px] text-amber-200/85">
                       Connect your canonical Base Account wallet to submit this one-time approval.
                     </div>
-                    <button
+                    <Button
                       type="button"
-                      className="btn-secondary w-full sm:w-auto"
+                      variant="secondary"
+                      className="w-full sm:w-auto"
                       onClick={() => void login({ loginMethods: ['wallet'] })}
                     >
                       Connect Base Account Wallet
-                    </button>
+                    </Button>
                   </div>
                 ) : null}
                 {connectedWalletAddress && !connectedWalletMatchesCanonical ? (
@@ -9719,14 +9726,15 @@ function DeployVaultMain() {
                 {addPrivySmartWalletOwnerError ? (
                   <div className="text-[11px] text-red-400">{addPrivySmartWalletOwnerError}</div>
                 ) : null}
-                <button
+                <Button
                   type="button"
+                  variant="primary"
+                  className="w-full sm:w-auto"
                   onClick={() => void handleAddPrivyAppSmartWalletOwner()}
                   disabled={addPrivySmartWalletOwnerBusy || !connectedWalletAddress || !connectedWalletMatchesCanonical}
-                  className="btn-primary w-full sm:w-auto"
                 >
                   {addPrivySmartWalletOwnerBusy ? 'Waiting for wallet confirmation…' : 'Approve Once'}
-                </button>
+                </Button>
               </div>
             ) : null}
 
@@ -9758,16 +9766,17 @@ function DeployVaultMain() {
                 Found an older local deployment record for this version, but final on-chain completion is missing. You can resume
                 deployment now.
               </div>
-              <button
+              <Button
                 type="button"
-                className="btn-secondary text-[12px]"
+                variant="secondary"
+                className="text-[12px]"
                 onClick={() => {
                   deploymentTracker.clearCurrentDeployment()
                   setJustCompletedDeployment(null)
                 }}
               >
                 Clear stale local record
-              </button>
+              </Button>
             </div>
           ) : null}
 
@@ -9930,13 +9939,14 @@ function DeployVaultMain() {
               ) : !hasWallet ? (
                 <div className="space-y-2">
                   <div className="text-sm text-amber-300/80">Connect your wallet to continue</div>
-                  <button
+                  <Button
                     type="button"
-                    className="btn-primary w-full"
+                    variant="primary"
+                    className="w-full"
                     onClick={() => void login({ loginMethods: ['wallet'] })}
                   >
                     Connect Wallet
-                  </button>
+                  </Button>
                 </div>
               ) : !tokenIsValid && creatorAllowlistQuery.isLoading ? (
                 <button
@@ -10063,9 +10073,9 @@ function DeployVaultMain() {
                 <div className="space-y-2">
                   <div className="text-xs text-amber-300/80">{deployBlocker}</div>
                   {!hasPrimaryDeployAuthAction && !privySmartWalletReady && switchAuthCta ? (
-                    <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
+                    <Button type="button" variant="primary" className="w-full" onClick={switchAuthCta.onClick}>
                       {switchAuthCta.label}
-                    </button>
+                    </Button>
                   ) : null}
                   {!creatorCoinReady ? (
                     <div className="space-y-3 rounded-lg border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 p-3 backdrop-blur-sm">

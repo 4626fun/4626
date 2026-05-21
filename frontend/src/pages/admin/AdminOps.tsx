@@ -975,14 +975,15 @@ function AgentRegistration() {
                   Current URI uses an allowlisted HTTPS gateway (mutable). Strict content-addressed URIs are safer for long-term integrity.
                 </div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void publishAgentRegistrationToLens()}
                 disabled={lensPublishState.status === 'loading'}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {lensPublishState.status === 'loading' ? 'Publishing…' : 'Publish to Lens Grove'}
-              </button>
+              </Button>
               {lensPublishState.status === 'error' ? (
                 <div className="text-xs text-red-400">{lensPublishState.error}</div>
               ) : lensPublishState.status === 'success' ? (
@@ -1025,27 +1026,29 @@ function AgentRegistration() {
                 placeholder="e.g. 1"
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => void resolveAgentIdFromChain()}
                 disabled={resolveState.status === 'loading' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve agent ID from chain'}
-              </button>
+              </Button>
               {resolveState.status === 'error' ? (
                 <div className="text-xs text-red-400">{resolveState.error}</div>
               ) : resolveState.status === 'success' ? (
                 <div className="text-xs text-emerald-300/90">Agent ID resolved.</div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void updateAgentUri()}
                 disabled={updateTxState.status === 'pending' || !isConnected || (!isCanonical && !canSubmitViaOwner)}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {updateTxState.status === 'pending' ? 'Updating…' : 'Update agent URI'}
-              </button>
+              </Button>
               <TxMeta state={updateTxState} />
               <Button
                 type="button"
@@ -1082,7 +1085,7 @@ function AgentRegistration() {
               {agentWalletAlreadyCanonical ? (
                 <div className="text-xs text-emerald-400/90">Already bound on-chain. No additional signature required.</div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void bindAgentWallet()}
                 disabled={
@@ -1092,14 +1095,15 @@ function AgentRegistration() {
                   (!isCanonical && !canSubmitViaOwner) ||
                   !/^\d+$/.test(agentIdInput.trim())
                 }
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {walletBindTxState.status === 'pending'
                   ? 'Binding wallet…'
                   : agentWalletAlreadyCanonical
                     ? 'Already bound'
                     : 'Bind CSW as agentWallet'}
-              </button>
+              </Button>
               <TxMeta state={walletBindTxState} />
             </div>
 
@@ -1133,7 +1137,7 @@ function AgentRegistration() {
                   ) : null}
                 </div>
               ) : null}
-              <button
+              <Button
                 type="button"
                 onClick={() => void syncAgentWalletMetadataCaip()}
                 disabled={
@@ -1142,12 +1146,13 @@ function AgentRegistration() {
                   (!isCanonical && !canSubmitViaOwner) ||
                   !/^\d+$/.test(agentIdInput.trim())
                 }
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {walletMetadataTxState.status === 'pending'
                   ? 'Syncing metadata…'
                   : 'Sync agentWallet metadata to CAIP-10'}
-              </button>
+              </Button>
               <TxMeta state={walletMetadataTxState} />
             </div>
           </div>
@@ -1549,14 +1554,15 @@ function AgentFeedback() {
                   >
                     {submitState.status === 'loading' ? 'Submitting…' : 'Submit (direct)'}
                   </Button>
-                  <button
+                  <Button
                     type="button"
                     onClick={() => void submitFeedbackViaPaymaster()}
                     disabled={submitState.status === 'loading'}
-                    className="btn-ghost flex-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                    variant="ghost"
+                    className="flex-1"
                   >
                     {submitState.status === 'loading' ? 'Submitting…' : 'Submit (sponsored)'}
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -1887,14 +1893,15 @@ function ShareTokenMetadata() {
                 placeholder="0x..."
                 className="w-full bg-transparent border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-white/20 font-mono"
               />
-              <button
+              <Button
                 type="button"
                 onClick={() => void resolveShareOft()}
                 disabled={resolveState.status === 'loading' || !vaultAddress}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {resolveState.status === 'loading' ? 'Resolving…' : 'Resolve ShareOFT from vault'}
-              </button>
+              </Button>
               {resolveState.status === 'error' ? <div className="text-xs text-red-400">{resolveState.error}</div> : null}
 
               <div className="text-sm text-zinc-300">ShareOFT address</div>
@@ -1909,14 +1916,15 @@ function ShareTokenMetadata() {
                 <span className="font-mono text-zinc-400">{currentContractUri ? shortAddress(currentContractUri) : '—'}</span>
               </div>
 
-              <button
+              <Button
                 type="button"
                 onClick={() => void generateGroveMetadata()}
                 disabled={metadataState.status === 'loading' || !shareOftAddress}
-                className="btn-ghost w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="ghost"
+                className="w-full"
               >
                 {metadataState.status === 'loading' ? 'Generating…' : 'Generate Grove metadata'}
-              </button>
+              </Button>
               {metadataState.status === 'error' ? <div className="text-xs text-red-400">{metadataState.error}</div> : null}
 
               {metadataPreview?.lensUri ? (

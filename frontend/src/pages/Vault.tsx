@@ -586,14 +586,15 @@ export function Vault() {
                 <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
                   <Link to="/explore/creators">Back to Explore</Link>
                 </Button>
-                <a
-                  href={`https://basescan.org/address/${addressParam}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn-primary btn-compact inline-flex items-center justify-center gap-2 rounded-full text-xs"
-                >
-                  View on Basescan <ExternalLink className="w-3 h-3" />
-                </a>
+                <Button variant="primary" size="sm" className="btn-compact rounded-full text-xs" asChild>
+                  <a
+                    href={`https://basescan.org/address/${addressParam}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View on Basescan <ExternalLink className="w-3 h-3" />
+                  </a>
+                </Button>
               </div>
             </div>
           </div>

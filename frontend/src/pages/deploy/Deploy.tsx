@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 
@@ -38,9 +39,9 @@ export function Deploy() {
                   </p>
                 </div>
                 <div className="mt-5">
-                  <Link to="/deploy/coin" className="btn-primary inline-flex">
-                    Go To Coin
-                  </Link>
+                  <Button variant="primary" asChild>
+                    <Link to="/deploy/coin">Go To Coin</Link>
+                  </Button>
                 </div>
               </article>
 
@@ -53,9 +54,9 @@ export function Deploy() {
                   </p>
                 </div>
                 <div className="mt-5">
-                  <Link to="/deploy/vault" className="btn-primary inline-flex">
-                    Go To Vault
-                  </Link>
+                  <Button variant="primary" asChild>
+                    <Link to="/deploy/vault">Go To Vault</Link>
+                  </Button>
                 </div>
               </article>
             </div>

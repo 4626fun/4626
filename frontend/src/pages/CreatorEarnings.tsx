@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { formatEther, formatUnits, isAddress } from 'viem'
 import type { Address } from 'viem'
 
+import { Button } from '@/components/ui/Button'
 import { useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraEarnings, ZoraProfile } from '@/lib/zora/types'
 import {
@@ -386,13 +387,15 @@ export function CreatorEarnings() {
                   placeholder={address ? String(address) : 'handle-or-0x...'}
                   className="flex-1 bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
                 />
-                <button
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="btn-compact px-6"
                   onClick={load}
-                  className="btn-primary btn-compact btn-no-icon px-6"
                   disabled={!input.trim()}
                 >
                   Load
-                </button>
+                </Button>
               </div>
             </div>
 

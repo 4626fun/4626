@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 
+import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
@@ -204,10 +205,12 @@ export function DistributeCcaLaunch() {
                 Deposit mechanics, minting, distribution, and strategy allocation in one walkthrough.
               </p>
             </div>
-            <Link to="/faq/how-it-works" className="btn-primary btn-no-icon inline-flex items-center gap-2">
-              How it works
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Button variant="primary" className="inline-flex items-center gap-2" asChild>
+              <Link to="/faq/how-it-works">
+                How it works
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
           </motion.div>
         </div>
       </section>

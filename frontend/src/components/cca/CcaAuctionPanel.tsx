@@ -4,6 +4,7 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteCont
 import type { Address } from 'viem'
 import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui/Button'
 import { apiFetch } from '@/lib/api/apiBase'
 
 import {
@@ -456,12 +457,14 @@ export function CcaAuctionPanel({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link 
-              to="/auction-demo"
-              className="btn-primary btn-compact btn-no-icon text-sm whitespace-nowrap hover:scale-105 transition-transform"
+            <Button
+              variant="primary"
+              size="sm"
+              className="btn-compact text-sm whitespace-nowrap hover:scale-105 transition-transform"
+              asChild
             >
-              View Demo
-            </Link>
+              <Link to="/auction-demo">View Demo</Link>
+            </Button>
             {isGraduated && (
               <Link 
                 to={`/complete-auction/${ccaStrategy}`} 
