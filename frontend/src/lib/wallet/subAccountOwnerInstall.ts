@@ -49,6 +49,15 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
+function isUnauthorizedMethodOrAccount(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('not been authorized by the user') ||
+    lower.includes('requested method and/or account has not been authorized')
+  )
+}
+
 export function createBaseSubAccountReadClient() {
   const rpcUrl =
     (typeof import.meta !== 'undefined' &&
@@ -136,6 +145,21 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
     }
   }
 
+  async function submitViaSendCalls() {
+    const submitted = await addOwnerViaBaseAppSendCalls({
+      walletRequest,
+      csw: params.subAccountAddress,
+      ownerToAdd: params.embeddedEoaAddress,
+      chainId,
+    })
+    return {
+      installed: true,
+      alreadyOwner: false,
+      transactionHash: submitted.transactionHash,
+      callBundleId: submitted.callBundleId,
+    } satisfies InstallEmbeddedOwnerResult
+  }
+
   try {
     const direct = await addOwnerViaEthSendTransaction({
       walletRequest,
@@ -153,18 +177,14 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       throw directError
     }
 
-    const submitted = await addOwnerViaBaseAppSendCalls({
-      walletRequest,
-      csw: params.subAccountAddress,
-      ownerToAdd: params.embeddedEoaAddress,
-      chainId,
-    })
-
-    return {
-      installed: true,
-      alreadyOwner: false,
-      transactionHash: submitted.transactionHash,
-      callBundleId: submitted.callBundleId,
+    try {
+      return await submitViaSendCalls()
+    } catch (sendCallsError) {
+      if (!isUnauthorizedMethodOrAccount(sendCallsError)) {
+        throw sendCallsError
+      }
+      await walletRequest({ method: 'eth_requestAccounts' })
+      return await submitViaSendCalls()
     }
   }
 }
