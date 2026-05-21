@@ -748,7 +748,7 @@ export function Faq() {
             <div>
             <span className="label">FAQ</span>
               <h1 className="headline text-3xl sm:text-5xl mt-4">Frequently asked questions</h1>
-              <p className="text-sm text-zinc-500 font-light max-w-prose mt-4">
+              <p className="text-sm text-zinc-400 font-light max-w-prose mt-4">
                 Short answers, no fluff. Built for creators launching and users depositing, trading, and holding.
               </p>
             </div>
@@ -897,7 +897,7 @@ export function Faq() {
                           <div className="text-xs text-zinc-600 font-mono">{section.items.length} questions</div>
                         </div>
                         {section.description ? (
-                          <p className="text-zinc-600 text-sm font-light mt-2">{section.description}</p>
+                          <p className="text-zinc-400 text-sm font-light mt-2">{section.description}</p>
                         ) : null}
                       </div>
 
