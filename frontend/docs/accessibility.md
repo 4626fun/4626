@@ -8,7 +8,7 @@
 - [ ] **Names** — Every input has a visible `<label>` or `sr-only` label. Icon-only buttons have `aria-label` (or visible text).
 - [ ] **Images** — Meaningful images get `alt`; decorative images use `alt=""` and/or `aria-hidden="true"`.
 - [ ] **Status** — Loading and errors use `role="status"` or `role="alert"` with `aria-live` where content updates without focus moving.
-- [ ] **Focus** — `:focus-visible` is visible (do not remove outline without a replacement). Modals trap focus and return focus on close (CDS `Modal` / Radix patterns).
+- [ ] **Focus** — `:focus-visible` is visible (do not remove outline without a replacement). Modals trap focus and return focus on close (`@/components/ui/Modal` / Radix dialog patterns).
 - [ ] **Motion** — Respect `prefers-reduced-motion` for large animations (see `index.css` and vault-flow helpers).
 - [ ] **Keyboard** — Tab through the flow once: no traps, no unreachable controls, logical order.
 
