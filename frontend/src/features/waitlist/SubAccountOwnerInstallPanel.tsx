@@ -34,11 +34,8 @@ function mapOwnerInstallError(message: string): string {
   if (lower.includes('base account wallet')) {
     return 'Connect Base App first (open this page in Base App), then tap Enable 4626 signing again.'
   }
-  if (
-    lower.includes('not been authorized by the user') ||
-    lower.includes('requested method and/or account has not been authorized')
-  ) {
-    return 'This request was not approved in Base App. Open 4626 inside Base App (not Safari/Chrome/extensions), tap Enable 4626 signing again, and approve the wallet prompt.'
+  if (lower.includes('not been authorized by the user')) {
+    return 'Base App did not approve this signing request for your 4626 app wallet. Open 4626 inside Base App (not Safari/Chrome/extensions), tap Enable 4626 signing again, and approve the wallet prompt.'
   }
   if (lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')) {
     return 'Signing was canceled in Base App. Tap Enable 4626 signing again and approve the transaction.'
