@@ -53,6 +53,9 @@ vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
     getAccessToken: vi.fn().mockResolvedValue('test-token'),
   }),
+  useBaseAccountSdk: () => ({
+    baseAccountSdk: null,
+  }),
 }))
 
 vi.mock('@/features/accountSetup/addOwner/useAddOwnerRelayFlow', () => ({

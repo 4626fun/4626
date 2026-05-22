@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
 import { useAddOwnerRelayFlow } from '@/features/accountSetup/addOwner/useAddOwnerRelayFlow'
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
+import { detectInAppEnvironment, externalBrowserUrlFor, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { formatCompactEth } from '@/lib/removeOwner/removeOwnerHelpers'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
@@ -73,12 +74,33 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   )
   const useRelaySelfAuthInstall = Boolean(isSelfAuthSession && useRelayOwnerInstall)
 
-  const relayFlow = useAddOwnerRelayFlow({
+  const {
+    preview: relayPreview,
+    previewLoading: relayPreviewLoading,
+    loadPreview: loadRelayPreview,
+    ...relayFlow
+  } = useAddOwnerRelayFlow({
     ownerSignerAddress,
     canonicalCswAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
     enabled: useRelayOwnerInstall,
   })
+
+  useEffect(() => {
+    if (!useRelayOwnerInstall || relayPreview || relayPreviewLoading) return
+    void loadRelayPreview()
+  }, [loadRelayPreview, relayPreview, relayPreviewLoading, useRelayOwnerInstall])
+
+  const relayDepositWei = useMemo(() => {
+    const raw = relayPreview?.relay?.userCall?.value
+    if (!raw) return null
+    try {
+      const wei = BigInt(raw)
+      return wei > 0n ? wei : null
+    } catch {
+      return null
+    }
+  }, [relayPreview?.relay?.userCall?.value])
 
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
   const externalAddOwnerUrl = useMemo(
@@ -113,7 +135,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     await onInstallSuccess?.()
   }
 
-  const installBusy = advancedBusy || relayFlow.busy || relayFlow.previewLoading
+  const installBusy = advancedBusy || relayFlow.busy || relayPreviewLoading
   const installDisabled =
     installBusy ||
     installedAsOwner === true ||
@@ -249,7 +271,30 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           Base App session detected — your canonical smart wallet submits a Relay deposit via{' '}
           <span className="font-mono">wallet_sendCalls</span>, then Relay fills{' '}
           <span className="font-mono">addOwnerAddress(privyEoa)</span> on-chain.
+          {relayDepositWei ? (
+            <>
+              {' '}
+              Relay deposit:{' '}
+              <span className="font-mono text-emerald-50">{formatCompactEth(relayDepositWei)} ETH</span>.
+            </>
+          ) : null}
         </p>
+      ) : null}
+
+      {useRelaySelfAuthInstall && isBaseAppInAppContext(inAppEnv) && onchainEoaOwnerCandidates.length > 0 ? (
+        <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+          If Base App shows &quot;insufficient funds&quot; on approve, that is usually a wallet simulation
+          quirk — your CSW likely has enough ETH for the tiny Relay deposit. Retry once here, or open{' '}
+          <a
+            href={externalAddOwnerUrl}
+            target="_blank"
+            rel="noopener noreferrer external"
+            className="font-medium text-amber-50 underline decoration-dotted"
+          >
+            /add-owner in Safari or Chrome
+          </a>{' '}
+          and connect one of the on-chain EOA owners listed below.
+        </div>
       ) : null}
 
       {onchainEoaOwnerCandidates.length > 0 && variant === 'standalone' ? (
@@ -310,10 +355,10 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={relayFlow.previewLoading || relayFlow.busy}
-            onClick={() => void relayFlow.loadPreview()}
+            disabled={relayPreviewLoading || relayFlow.busy}
+            onClick={() => void loadRelayPreview()}
           >
-            {relayFlow.previewLoading ? 'Building Relay preview…' : 'Rebuild Relay preview'}
+            {relayPreviewLoading ? 'Building Relay preview…' : 'Rebuild Relay preview'}
           </Button>
           {relayFlow.relayReady ? (
             <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">

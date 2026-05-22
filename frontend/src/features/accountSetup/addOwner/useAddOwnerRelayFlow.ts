@@ -1,16 +1,18 @@
 import { useCallback, useState } from 'react'
-import { usePrivy } from '@privy-io/react-auth'
+import { useBaseAccountSdk, usePrivy } from '@privy-io/react-auth'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 import type { PublicClient } from 'viem'
 
 import { fetchAddOwnerPreview, type AddOwnerPreview } from '@/lib/addOwner/addOwnerHelpers'
 import { executeAddOwnerViaRelay } from '@/lib/addOwner/addOwnerExecution'
-import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
+import { formatCompactEth } from '@/lib/removeOwner/removeOwnerHelpers'
 import {
   resolveOwnerMutationWallet,
   resolveOwnerMutationWalletRequest,
+  resolveSelfAuthSendCallsRequest,
 } from '@/lib/relay/resolveOwnerMutationWallet'
+import { normalizeOwnerApprovalError } from '@/lib/wallet/onboardingWalletErrors'
 
 type UseAddOwnerRelayFlowParams = {
   ownerSignerAddress: string | null | undefined
@@ -22,6 +24,7 @@ type UseAddOwnerRelayFlowParams = {
 export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
   const { ownerSignerAddress, canonicalCswAddress, privyExternalOwnerWallet, enabled } = params
   const { getAccessToken } = usePrivy()
+  const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
   const publicClient = wagmiPublicClient as PublicClient | undefined
@@ -110,6 +113,14 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
     setNotice(null)
     setTxHash(null)
 
+    const walletRequest = isSelfAuthSession
+      ? resolveSelfAuthSendCallsRequest({ wagmiWalletClient, baseAccountSdk })
+      : resolveOwnerMutationWalletRequest(walletClient)
+    if (isSelfAuthSession && !walletRequest) {
+      setError('Base App wallet session is unavailable. Reconnect your smart wallet and retry.')
+      return false
+    }
+
     try {
       const appendEvent = import.meta.env.DEV ? (row: string) => console.info('[add-owner-relay]', row) : () => {}
       const result = await executeAddOwnerViaRelay({
@@ -117,7 +128,7 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
         cswAddress: canonicalCswAddress as `0x${string}`,
         publicClient,
         walletClient,
-        walletRequest: resolveOwnerMutationWalletRequest(walletClient),
+        walletRequest,
         isSelfAuthSession,
         appendEvent,
         onTxHash: setTxHash,
@@ -126,7 +137,19 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
       setPreview(null)
       return true
     } catch (err: unknown) {
-      setError(getWalletErrorMessage(err))
+      const normalized = normalizeOwnerApprovalError(err)
+      let message = normalized.message
+      if (isSelfAuthSession && activePreview.relay?.userCall?.value) {
+        const requiredDepositWei = BigInt(activePreview.relay.userCall.value)
+        const depositHint = ` Required Relay deposit: ${formatCompactEth(requiredDepositWei)} ETH.`
+        if (normalized.message.toLowerCase().includes('could not generate')) {
+          message =
+            'Base App could not build the Relay deposit transaction. This is usually a wallet simulation issue, not missing ETH.' +
+            depositHint +
+            ' Retry once in Base App. If it keeps failing, open /add-owner in Safari or Chrome and connect one of your on-chain CSW owner wallets instead.'
+        }
+      }
+      setError(message)
       return false
     } finally {
       setBusy(false)
@@ -138,6 +161,7 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
     loadPreview,
     ownerSignerAddress,
     preview,
+    baseAccountSdk,
     privyExternalOwnerWallet,
     publicClient,
     wagmiWalletClient,

@@ -85,3 +85,31 @@ export function resolveOwnerMutationWalletRequest(
   if (!walletClient?.request) return undefined
   return async (args) => await walletClient.request!(args)
 }
+
+type SelfAuthWalletRequestProvider = {
+  getProvider?: () => { request?: (args: unknown) => Promise<unknown> } | null | undefined
+}
+
+/**
+ * Base App self-auth Relay deposits must use the Base Account SDK provider
+ * (`baseAccountSdk.getProvider()`), not Privy's wrapped wallet provider.
+ * Privy's bridge can fail preflight with a misleading "insufficient funds"
+ * error even when the CSW balance covers the Relay deposit.
+ */
+export function resolveSelfAuthSendCallsRequest(params: {
+  wagmiWalletClient: OwnerMutationWalletLike | null | undefined
+  baseAccountSdk?: SelfAuthWalletRequestProvider | null
+}): ((args: { method: string; params?: unknown[] }) => Promise<unknown>) | undefined {
+  const sdk = params.baseAccountSdk
+  if (sdk && typeof sdk.getProvider === 'function') {
+    try {
+      const sdkProvider = sdk.getProvider()
+      if (sdkProvider && typeof sdkProvider.request === 'function') {
+        return async (args) => await sdkProvider.request!(args)
+      }
+    } catch {
+      /* fall through to wagmi / injected provider */
+    }
+  }
+  return resolveOwnerMutationWalletRequest(params.wagmiWalletClient)
+}

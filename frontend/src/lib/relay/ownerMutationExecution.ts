@@ -42,6 +42,7 @@ async function submitSelfAuthViaSendCalls(params: {
   walletRequest: WalletRequest
   cswAddress: `0x${string}`
   calls: Eip5792Call[]
+  atomicRequired?: boolean
   telemetryPrefix: string
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
@@ -50,6 +51,7 @@ async function submitSelfAuthViaSendCalls(params: {
     csw: params.cswAddress,
     calls: params.calls,
     chainId: base.id,
+    atomicRequired: params.atomicRequired,
     onTelemetry: (event) => {
       try {
         const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
@@ -186,6 +188,8 @@ export async function executeOwnerMutationViaRelay(
       walletRequest: params.walletRequest,
       cswAddress,
       calls: [relay.userCall],
+      // Single native deposit call — atomic bundling can fail Base App simulation.
+      atomicRequired: false,
       telemetryPrefix: 'csw_wallet_sendcalls',
       appendEvent,
     })
