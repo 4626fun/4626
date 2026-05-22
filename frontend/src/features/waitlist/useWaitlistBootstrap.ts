@@ -244,12 +244,17 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         return nextAccount
       }
       const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
+      const setupIntent =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('setup')
+          : null
       setStep(
         resolveWaitlistStep({
           account: nextAccount,
           subAccountFlowEnabled,
           embeddedEoaAvailable,
           subAccountStepCompleted,
+          setupIntent,
         }),
       )
       return nextAccount

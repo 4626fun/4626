@@ -134,6 +134,7 @@ function SubAccountOwnerInstallPanelContent(
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
+  const [baseAppLinkCopyState, setBaseAppLinkCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
 
   const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   const needsBaseAppHost = !inBaseApp
@@ -203,11 +204,10 @@ function SubAccountOwnerInstallPanelContent(
 
     setActionSuccess(true)
     if (result.onChainOwnerWarning && !result.onChainOwnerInstalled) {
-      setActionWarning(
-        mapSubAccountOwnerInstallError(result.onChainOwnerWarning, { inBaseApp }) ||
-          SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
-      )
-      setShowRecovery(true)
+      // Register/finalize already succeeded — optional addOwner failures must not
+      // reuse hard approval-failure copy that tells users to tap Enable again.
+      setActionWarning(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE)
+      setShowRecovery(false)
     } else {
       setActionWarning(null)
       setShowRecovery(false)
@@ -276,9 +276,44 @@ function SubAccountOwnerInstallPanelContent(
   const recoveryVisible = showRecovery || Boolean(actionError) || needsBaseAppHost
 
   const primaryAction = needsBaseAppHost ? (
-    <Button type="button" variant="primary" className="w-full" asChild data-testid="sub-account-open-base-app-button">
-      <a href={baseAppSetupUrl}>Open setup in Base App</a>
-    </Button>
+    <div className="space-y-2">
+      <Button
+        type="button"
+        variant="primary"
+        className="w-full"
+        data-testid="sub-account-copy-base-app-link-button"
+        onClick={() => {
+          void (async () => {
+            try {
+              if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(baseAppSetupUrl)
+                setBaseAppLinkCopyState('copied')
+                return
+              }
+            } catch {
+              // fall through
+            }
+            setBaseAppLinkCopyState('failed')
+          })()
+        }}
+      >
+        Copy Base App setup link
+      </Button>
+      {baseAppLinkCopyState === 'copied' ? (
+        <p className="text-xs leading-relaxed text-emerald-200/90" role="status">
+          Copied. Open Base App on your phone, paste this link, then tap Enable 4626 signing.
+        </p>
+      ) : null}
+      {baseAppLinkCopyState === 'failed' ? (
+        <p className="text-xs leading-relaxed text-amber-200/90" role="status">
+          Copy failed. Use Other ways to finish below, or open{' '}
+          <a href={baseAppSetupUrl} className="underline underline-offset-2">
+            this link
+          </a>{' '}
+          inside Base App.
+        </p>
+      ) : null}
+    </div>
   ) : isSettingUp ? (
     <div className="flex items-center gap-2 text-sm text-zinc-400" role="status" aria-live="polite">
       <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.85)" />

@@ -99,6 +99,19 @@ export function getMarketingWaitlistEntryUrl(): string {
 
 export type WaitlistSetupIntent = 'base-app' | 'owner-install'
 
+export function readWaitlistSetupIntent(value: string | null | undefined): WaitlistSetupIntent | null {
+  const setup = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  if (setup === 'base-app' || setup === 'owner-install') return setup
+  return null
+}
+
+/** SPA-safe waitlist setup path (marketing host route). */
+export function buildWaitlistSetupPath(setup: WaitlistSetupIntent): string {
+  return `${CANONICAL_MARKETING_WAITLIST_PATH}?setup=${setup}`
+}
+
 /** Canonical marketing-host URL for waitlist setup deep links (`4626.fun`, not `app.4626.fun`). */
 export function buildWaitlistSetupUrl(setup: WaitlistSetupIntent): string {
   const url = new URL(getMarketingWaitlistEntryUrl())

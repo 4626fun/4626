@@ -9,6 +9,7 @@ import {
   buildWaitlistEntryUrl,
   buildWaitlistReferralPath,
   buildWaitlistReferralUrl,
+  buildWaitlistSetupPath,
   buildWaitlistSetupUrl,
   buildWaitlistStartAuthPath,
   buildWaitlistStartAuthUrl,
@@ -53,6 +54,7 @@ describe('waitlistEntry', () => {
   it('builds setup deep links on the marketing waitlist host', () => {
     expect(buildWaitlistSetupUrl('base-app')).toBe('http://localhost:3000/waitlist?setup=base-app')
     expect(buildWaitlistSetupUrl('owner-install')).toBe('http://localhost:3000/waitlist?setup=owner-install')
+    expect(buildWaitlistSetupPath('owner-install')).toBe('/waitlist?setup=owner-install')
   })
 
   it('builds setup deep links on 4626.fun even when the caller is on app.4626.fun', () => {

@@ -218,12 +218,14 @@ export function AccountSetupWorkspaceView(props: {
   const preferBaseAppSubAccountSetup =
     subAccountFlowEnabled &&
     Boolean(canonicalCswAddress) &&
-    executionTrack === 'none-yet'
+    executionTrack === 'none-yet' &&
+    !ownerInstallResumeState.requested
   const persistedSubAccountAddress =
     me.accountSignals.baseSubAccount?.address?.trim() ||
     me.baseSubAccount?.trim() ||
     null
   const subAccountOwnerInstallPanel =
+    !ownerInstallResumeState.requested &&
     subAccountFlowEnabled &&
     hasPrivyProviderContext &&
     canonicalCswAddress &&
@@ -253,8 +255,13 @@ export function AccountSetupWorkspaceView(props: {
 
   if (context === 'waitlist') {
     // Which top-level step is expanded: null = auto
-    const resolvedOpen: 1 | 2 =
-      openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
+    const resolvedOpen: 1 | 2 = ownerInstallResumeState.requested
+      ? 2
+      : openStep === 1 || openStep === 2
+        ? openStep
+        : stepOneComplete
+          ? 2
+          : 1
     const ownerWalletConnecting = busyProvider === 'owner_wallet'
     const canSubmitSigningApproval = connectedOwnerReady || connectedCanonicalWalletSelected
     const primarySigningLabel = needsBaseAccountReconnect
@@ -282,7 +289,11 @@ export function AccountSetupWorkspaceView(props: {
     const stepOneStatus: 'done' | 'active' | 'upcoming' =
       stepOneComplete ? 'done' : resolvedOpen === 1 ? 'active' : 'upcoming'
     const stepTwoStatus: 'done' | 'active' | 'upcoming' =
-      signingStepComplete ? 'done' : stepOneComplete && resolvedOpen === 2 ? 'active' : 'upcoming'
+      signingStepComplete
+        ? 'done'
+        : ownerInstallResumeState.requested || (stepOneComplete && resolvedOpen === 2)
+          ? 'active'
+          : 'upcoming'
 
     const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
     const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
@@ -404,6 +415,22 @@ export function AccountSetupWorkspaceView(props: {
                 Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
               </div>
             ) : null}
+          </div>
+        ) : null}
+
+        {ownerInstallResumeState.requested ? (
+          <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
+              <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">Desktop signing setup</span>
+              <span className="text-brand-100/70">Owner install required</span>
+            </div>
+            <div className="mt-2 text-base font-medium text-white">
+              Enable signing on your parent smart wallet from this browser.
+            </div>
+            <p className="mt-1 text-sm leading-relaxed text-brand-50/85">
+              Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), then
+              approve the one-time Enable 4626 signing transaction below.
+            </p>
           </div>
         ) : null}
 
@@ -797,15 +824,18 @@ export function AccountSetupWorkspaceView(props: {
         <div className="rounded-2xl bg-[linear-gradient(180deg,rgba(37,99,235,0.16),rgba(37,99,235,0.05))] px-5 py-4 text-sm text-brand-50 ring-1 ring-brand-primary/20">
           <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
             <span className="inline-flex rounded-full bg-brand-primary/15 px-2.5 py-1">
-              {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Continue setup'}
+              {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Desktop signing setup'}
             </span>
             <span className="text-brand-100/70">Owner install required</span>
           </div>
           <div className="mt-2 text-base font-medium text-white">
-            Your Telegram account is linked. Finish wallet setup here.
+            {ownerInstallResumeState.source === 'telegram'
+              ? 'Your Telegram account is linked. Finish wallet setup here.'
+              : 'Enable signing on your parent smart wallet from this browser.'}
           </div>
           <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
-            4626 detected your Zora Coinbase Smart Wallet. The next step is to connect one of that wallet&apos;s current owners, verify authority on Base, and approve one transaction so 4626 can act through the same wallet.
+            Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), verify
+            authority on Base, and approve one transaction so 4626 can sign through the same wallet.
           </div>
         </div>
       ) : null}

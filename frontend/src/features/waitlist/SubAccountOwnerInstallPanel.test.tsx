@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { getAddress } from 'viem'
 
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import {
   SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 
@@ -58,6 +60,10 @@ function mockExternalBrowserHost() {
   isBaseAppInAppContext.mockReturnValue(false)
 }
 
+function renderPanel(ui: Parameters<typeof render>[0]) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>)
+}
+
 describe('SubAccountOwnerInstallPanel', () => {
   beforeEach(() => {
     mockBaseAppHost()
@@ -76,7 +82,7 @@ describe('SubAccountOwnerInstallPanel', () => {
   it('shows the owner-install button when embedded EOA is not yet owner', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
@@ -86,7 +92,7 @@ describe('SubAccountOwnerInstallPanel', () => {
   it('runs owner install when the button is clicked', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
@@ -105,12 +111,12 @@ describe('SubAccountOwnerInstallPanel', () => {
     mockExternalBrowserHost()
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
     expect(await screen.findByText(SUB_ACCOUNT_WRONG_BROWSER_MESSAGE)).toBeTruthy()
-    expect(screen.getByTestId('sub-account-open-base-app-button')).toBeTruthy()
+    expect(screen.getByTestId('sub-account-copy-base-app-link-button')).toBeTruthy()
     expect(screen.getByText(/Desktop \/ MetaMask path/i)).toBeTruthy()
     expect(screen.queryByTestId('sub-account-owner-install-button')).toBeNull()
   })
@@ -122,7 +128,7 @@ describe('SubAccountOwnerInstallPanel', () => {
       new Error('requested method and/or account has not been authorized by the user'),
     )
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
@@ -135,10 +141,34 @@ describe('SubAccountOwnerInstallPanel', () => {
     })
   })
 
+  it('shows soft optional copy when register succeeds but optional addOwner fails', async () => {
+    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
+    installOwnerOnly.mockResolvedValue({
+      registered: true,
+      alreadyOwner: false,
+      transactionHash: null,
+      onChainOwnerInstalled: false,
+      onChainOwnerWarning: 'requested method and/or account has not been authorized by the user',
+    })
+
+    renderPanel(
+      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
+    )
+
+    fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
+
+    await waitFor(() => {
+      expect(screen.getByText(/4626 signing is enabled/i)).toBeTruthy()
+      expect(screen.getByText(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE)).toBeTruthy()
+    })
+    expect(screen.queryByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeNull()
+    expect(screen.queryByTestId('sub-account-owner-install-recovery')).toBeNull()
+  })
+
   it('hides the button when embedded EOA is already owner', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(true)
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
@@ -149,7 +179,7 @@ describe('SubAccountOwnerInstallPanel', () => {
   it('keeps install actionable when owner read is unknown/null', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(null)
 
-    render(
+    renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 

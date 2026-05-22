@@ -147,6 +147,23 @@ export function shouldForceBaseAppConnectStep(params: {
   return !isSubAccountExecutionReady(params.account.accountSignals)
 }
 
+/**
+ * `/waitlist?setup=owner-install` opens the legacy parent-CSW owner-install workspace
+ * on desktop (Rabby/MetaMask/Base Account), bypassing the Base App sub-account step.
+ */
+export function shouldForceOwnerInstallSetupStep(params: {
+  setupIntent: string | null | undefined
+  subAccountFlowEnabled?: boolean
+  account: { emailVerified: boolean }
+}): boolean {
+  const setup = String(params.setupIntent ?? '')
+    .trim()
+    .toLowerCase()
+  if (setup !== 'owner-install') return false
+  if (params.subAccountFlowEnabled !== true) return false
+  return params.account.emailVerified
+}
+
 export function resolveWaitlistStep(params: {
   account: {
     emailVerified: boolean
@@ -157,9 +174,20 @@ export function resolveWaitlistStep(params: {
   subAccountFlowEnabled?: boolean
   embeddedEoaAvailable?: boolean
   subAccountStepCompleted?: boolean
+  setupIntent?: string | null
 }): WaitlistStep {
-  const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted } = params
+  const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted, setupIntent } = params
   if (!account.emailVerified) return 'auth'
+
+  if (
+    shouldForceOwnerInstallSetupStep({
+      setupIntent,
+      subAccountFlowEnabled,
+      account,
+    })
+  ) {
+    return 'done'
+  }
 
   const track = account.accountSignals?.executionTrack
   const hasSubAccount = hasRegisteredSubAccountExecution(track)

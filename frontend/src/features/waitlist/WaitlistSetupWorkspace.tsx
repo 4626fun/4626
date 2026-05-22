@@ -3,10 +3,9 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { isSubAccountExecutionReady, isWaitlistSigningReadyForUi } from './waitlistFlowState'
+import { isWaitlistSigningReadyForUi } from './waitlistFlowState'
 import { useWaitlistChatJoin, waitlistChatStatusMessage } from './useWaitlistChatJoin'
 
 type WaitlistSetupWorkspaceProps = {
@@ -40,11 +39,8 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     initialData: { me: initialAccount, zoraStatus: null },
     zoraReturnPath: '/waitlist',
   })
-  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const currentAccount = controller.me ?? initialAccount
-  const signingStepComplete = subAccountFlowEnabled
-    ? isSubAccountExecutionReady(currentAccount.accountSignals)
-    : isWaitlistSigningReadyForUi(currentAccount, controller.notice)
+  const signingStepComplete = isWaitlistSigningReadyForUi(currentAccount, controller.notice)
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete

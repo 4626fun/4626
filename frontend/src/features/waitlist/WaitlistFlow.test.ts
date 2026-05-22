@@ -8,6 +8,7 @@ import {
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
+  shouldForceOwnerInstallSetupStep,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
@@ -270,6 +271,40 @@ describe('resolveWaitlistStep', () => {
         },
       }),
     ).toBe(false)
+  })
+
+  it('forces done workspace when setup=owner-install deep link is present', () => {
+    expect(
+      shouldForceOwnerInstallSetupStep({
+        setupIntent: 'owner-install',
+        subAccountFlowEnabled: true,
+        account: { emailVerified: true },
+      }),
+    ).toBe(true)
+  })
+
+  it('routes to done instead of connect-base-app when setup=owner-install is present', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          baseSubAccount: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          accountSignals: {
+            canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            executionTrack: 'none-yet',
+            baseSubAccount: {
+              address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+              registered: false,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        setupIntent: 'owner-install',
+      }),
+    ).toBe('done')
   })
 
   it('treats registered baseSubAccount as signing-ready even when executionTrack lags', () => {

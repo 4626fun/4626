@@ -26,6 +26,7 @@ import {
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
+  shouldForceOwnerInstallSetupStep,
 } from './waitlistFlowState'
 import {
   writePersistedSubAccountConnectOverlay,
@@ -387,6 +388,16 @@ export function WaitlistFlow(props: {
     const setup = searchParams.get('setup')
     if (!subAccountFlowEnabled || !account?.emailVerified) return
     if (
+      shouldForceOwnerInstallSetupStep({
+        setupIntent: setup,
+        subAccountFlowEnabled,
+        account,
+      })
+    ) {
+      setStep('done')
+      return
+    }
+    if (
       shouldForceBaseAppConnectStep({
         setupIntent: setup,
         subAccountFlowEnabled,
@@ -401,10 +412,9 @@ export function WaitlistFlow(props: {
       subAccountFlowEnabled,
       embeddedEoaAvailable: Boolean(embeddedEoaAddress),
       subAccountStepCompleted: resolveSubAccountStepCompleted(account),
+      setupIntent: setup,
     })
-    if (nextStep === 'connect-base-app') {
-      setStep('connect-base-app')
-    }
+    setStep(nextStep)
   }, [
     account,
     embeddedEoaAddress,
