@@ -356,6 +356,18 @@ const XMTP_APP_VERSION = '4626.fun-web'
 const XMTP_CONNECT_FAILURE_COOLDOWN_MS = 5_000
 const XMTP_TAB_LOCK_STALE_MS = 20_000
 const XMTP_TAB_LOCK_HEARTBEAT_MS = 5_000
+const XMTP_TAB_RELEASE_STORAGE_KEY = `cv:xmtp:tabRelease:${XMTP_ENV}`
+const XMTP_PEER_RELEASE_WAIT_MS = 1_200
+const XMTP_OPFS_DELETE_RETRY_DELAYS_MS = [0, 300, 700, 1_500, 2_500, 4_000] as const
+
+function broadcastPeerTabXmtpRelease(): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(XMTP_TAB_RELEASE_STORAGE_KEY, String(Date.now()))
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function autoConnectStorageKey(address: string): string {
   return `cv:xmtp:autoConnect:${XMTP_ENV}:${address.toLowerCase()}`
@@ -398,6 +410,13 @@ function readTabLockRecord(): XmtpTabLockRecord | null {
 function isTabLockStale(lock: XmtpTabLockRecord | null): boolean {
   if (!lock) return true
   return Date.now() - lock.ts > XMTP_TAB_LOCK_STALE_MS
+}
+
+function formatActiveTabLockHint(): string | null {
+  const lock = readTabLockRecord()
+  if (!lock || isTabLockStale(lock)) return null
+  const ageSec = Math.max(1, Math.floor((Date.now() - lock.ts) / 1000))
+  return `Another tab may still hold messaging (lock refreshed ${ageSec}s ago). Close every app.4626.fun tab, then retry.`
 }
 
 function readStoredSignerType(address: string): 'SCW' | 'EOA' | null {
@@ -734,10 +753,9 @@ async function deleteXmtpOpfsDatabaseFiles(): Promise<number> {
 }
 
 async function deleteXmtpOpfsDatabaseFilesWithRetry(): Promise<number> {
-  const retryDelaysMs = [0, 200, 500, 1000]
   let lastError: unknown = null
-  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
-    const delayMs = retryDelaysMs[attempt] ?? 0
+  for (let attempt = 0; attempt < XMTP_OPFS_DELETE_RETRY_DELAYS_MS.length; attempt += 1) {
+    const delayMs = XMTP_OPFS_DELETE_RETRY_DELAYS_MS[attempt] ?? 0
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
@@ -747,7 +765,7 @@ async function deleteXmtpOpfsDatabaseFilesWithRetry(): Promise<number> {
       lastError = err
       const msg = err instanceof Error ? err.message : String(err)
       if (!isOpfsAccessHandleError(msg)) throw err
-      if (attempt === retryDelaysMs.length - 1) throw err
+      if (attempt === XMTP_OPFS_DELETE_RETRY_DELAYS_MS.length - 1) throw err
       xmtpDebug(`[xmtp] OPFS cleanup attempt ${attempt + 1} failed due active lock; retrying...`)
     }
   }
@@ -831,6 +849,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   const conversationsRef = useRef<ChatConversation[]>([])
   const mountedRef = useRef(true)
   const connectInFlightRef = useRef(false)
+  const connectEpochRef = useRef(0)
   const resetLocalStateInFlightRef = useRef(false)
   const connectCooldownUntilRef = useRef(0)
   const tabLockOwnerRef = useRef<string>(
@@ -952,6 +971,18 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('pagehide', onUnload)
     }
   }, [releaseTabLock, stopTabLockHeartbeat])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== XMTP_TAB_RELEASE_STORAGE_KEY) return
+      void cleanup()
+    }
+    window.addEventListener('storage', onStorage)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+    }
+  }, [cleanup])
 
   // Reset when wallet changes
   useEffect(() => {
@@ -1272,6 +1303,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     }
 
     connectInFlightRef.current = true
+    const connectEpoch = connectEpochRef.current
     let tabLockAcquired = false
     let xmtpIdentityAddress = String(address).toLowerCase()
     try {
@@ -1279,6 +1311,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       setLocalStateResetRequired(false)
       const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+      if (connectEpoch !== connectEpochRef.current) return
       xmtpIdentityAddress = resolved.identityAddress
       const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
       const lockResult = acquireTabLock(normalizedIdentity)
@@ -1569,6 +1602,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         buildClient = restoreResult.client
         buildSucceeded = Boolean(buildClient?.inboxId)
 
+        if (connectEpoch !== connectEpochRef.current) {
+          closeClientSafe(buildClient)
+          return
+        }
+
         if (!buildSucceeded) {
           const restoreFailureMessage = restoreResult.failureMessage
           const restoreFailureKind = restoreResult.failureKind
@@ -1641,6 +1679,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // or an "Uninitialized identity" error.  Do NOT fall through to
       // Client.create for transient failures — that would burn an installation.
       if (buildSucceeded && buildClient) {
+        if (connectEpoch !== connectEpochRef.current) {
+          closeClientSafe(buildClient)
+          return
+        }
         try {
           clientRef.current = buildClient
           setInboxId(buildClient.inboxId ?? null)
@@ -1739,6 +1781,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setStatus('connecting')
 
       const signerSelection = await getSignerSelection()
+      if (connectEpoch !== connectEpochRef.current) return
       const { signer, scwSigner, eoaSigner } = signerSelection
       if (signer.type === 'SCW') writeStoredSignerType(xmtpIdentityAddress, 'SCW')
       else writeStoredSignerType(xmtpIdentityAddress, 'EOA')
@@ -2075,9 +2118,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       setInstallationLimitInboxId(null)
       setLocalStateResetRequired(false)
       connectCooldownUntilRef.current = 0
+      connectEpochRef.current += 1
       connectInFlightRef.current = false
 
       await cleanup()
+      broadcastPeerTabXmtpRelease()
+      await new Promise((resolve) => setTimeout(resolve, XMTP_PEER_RELEASE_WAIT_MS))
 
       const deleted = await deleteXmtpOpfsDatabaseFilesWithRetry()
       xmtpDebug(`[xmtp] Reset local XMTP state, deleted ${deleted} OPFS file(s)`)
@@ -2093,11 +2139,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to clear local XMTP state'
       const isOpfsLock = isOpfsAccessHandleError(msg)
+      const tabLockHint = isOpfsLock ? formatActiveTabLockHint() : null
       setStatus('error')
       setError(
         isOpfsLock
           ? 'Could not clear local XMTP state because OPFS is locked by another active XMTP client. ' +
-            'Close other 4626 tabs/windows (and other XMTP sessions in this browser), then retry reset.'
+            'Close other 4626 tabs/windows (and other XMTP sessions in this browser), then retry reset.' +
+            (tabLockHint ? ` ${tabLockHint}` : '')
           : `Could not clear local XMTP state: ${msg}`,
       )
       setLocalStateResetRequired(true)
