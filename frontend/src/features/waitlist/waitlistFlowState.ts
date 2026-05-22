@@ -75,6 +75,60 @@ export function isWaitlistSigningReadyForUi(
   return isWaitlistSigningReady(account) || SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
 }
 
+/** Parent-CSW legacy owner install — not sub-account SDK registration. */
+export function isLegacyParentOwnerSigningReady(params: {
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  parentEmbeddedOwnerOnChain?: boolean
+}): boolean {
+  if (params.parentEmbeddedOwnerOnChain === true) return true
+  return hasLegacyOwnerInstallSigning(params.accountSignals)
+}
+
+/**
+ * Waitlist step 2 completion — track-aware.
+ * Desktop owner-install (`?setup=owner-install`) must not complete from sub-account registration alone.
+ */
+export function isWaitlistStepTwoSigningComplete(params: {
+  ownerInstallRequested: boolean
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  notice?: string | null
+  parentEmbeddedOwnerOnChain?: boolean
+}): boolean {
+  const { ownerInstallRequested, accountSignals, notice, parentEmbeddedOwnerOnChain } = params
+  if (ownerInstallRequested) {
+    return isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })
+  }
+  if (isSubAccountExecutionReady(accountSignals)) return true
+  if (isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })) return true
+  const track = accountSignals?.executionTrack
+  if (track !== 'sub-account' && track !== 'migration-pending') {
+    return SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
+  }
+  return false
+}
+
+export function shouldShowParentCswAddOwnerPanel(params: {
+  ownerInstallRequested: boolean
+  signingStepComplete: boolean
+  executionTrack?: WaitlistAccountWithCanonical['accountSignals']['executionTrack']
+  preferBaseAppSubAccountSetup: boolean
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  parentEmbeddedOwnerOnChain?: boolean
+}): boolean {
+  if (params.ownerInstallRequested) {
+    return !isLegacyParentOwnerSigningReady({
+      accountSignals: params.accountSignals,
+      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+    })
+  }
+  return (
+    !params.signingStepComplete &&
+    params.executionTrack !== 'sub-account' &&
+    params.executionTrack !== 'migration-pending' &&
+    !params.preferBaseAppSubAccountSetup
+  )
+}
+
 export type WaitlistSubAccountConnectOverlay = {
   parentAddress: string
   subAccountAddress: string

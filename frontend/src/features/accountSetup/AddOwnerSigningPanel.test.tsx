@@ -76,7 +76,7 @@ describe('AddOwnerSigningPanel', () => {
         <AddOwnerSigningPanel controller={buildController() as any} variant="waitlist" />
       </MemoryRouter>,
     )
-    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Connect owner wallet')
+    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Connect CSW owner wallet')
   })
 
   it('shows completion state when privy embedded EOA is already an owner', () => {

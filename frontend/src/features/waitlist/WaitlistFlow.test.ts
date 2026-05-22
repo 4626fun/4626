@@ -4,11 +4,13 @@ import {
   applyWaitlistSubAccountConnectOverlay,
   isWaitlistSigningReady,
   isWaitlistSigningReadyForUi,
+  isWaitlistStepTwoSigningComplete,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
   shouldForceOwnerInstallSetupStep,
+  shouldShowParentCswAddOwnerPanel,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
@@ -430,6 +432,62 @@ describe('mergeCanonicalWaitlistAccount', () => {
     )
 
     expect(merged.accountSignals.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
+  })
+})
+
+describe('isWaitlistStepTwoSigningComplete', () => {
+  const subAccountReadySignals = {
+    canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+    executionTrack: 'sub-account' as const,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+    baseSubAccount: { address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', registered: true },
+  }
+
+  it('does not complete desktop owner-install from sub-account registration alone', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: true,
+        accountSignals: subAccountReadySignals,
+      }),
+    ).toBe(false)
+  })
+
+  it('completes desktop owner-install when embedded EOA is parent CSW owner', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: true,
+        accountSignals: {
+          ...subAccountReadySignals,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+      }),
+    ).toBe(true)
+  })
+
+  it('completes Base App path from registered sub-account execution', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: subAccountReadySignals,
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('shouldShowParentCswAddOwnerPanel', () => {
+  it('keeps parent add-owner visible during desktop owner-install even when sub-account is registered', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        ownerInstallRequested: true,
+        signingStepComplete: false,
+        executionTrack: 'sub-account',
+        preferBaseAppSubAccountSetup: false,
+        accountSignals: {
+          executionTrack: 'sub-account',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+      }),
+    ).toBe(true)
   })
 })
 

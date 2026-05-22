@@ -162,10 +162,10 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     ? 'Reconnect via Base Account'
     : needsConnectFirst
       ? hasConnectedSigner
-        ? 'Switch wallet to current owner'
+        ? 'Switch to a CSW owner wallet'
         : ownerWalletConnecting
           ? 'Connecting wallet…'
-          : 'Connect owner wallet'
+          : 'Connect CSW owner wallet'
       : installBusy
         ? 'Installing…'
         : installedAsOwner === true
@@ -207,10 +207,40 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       {variant === 'waitlist' ? (
         <p className="text-xs leading-relaxed text-zinc-500">
-          Install your Privy embedded signer as an owner on your canonical smart wallet so 4626 can
-          prepare sponsored actions. Passkey owners use a Coinbase popup; connected EOA owners can
-          use the Relay route below.
+          Install your Privy embedded signer as an owner on your parent smart wallet so 4626 can
+          prepare sponsored actions. Connect a wallet that is already listed as a CSW owner — not
+          your smart wallet address itself.
         </p>
+      ) : null}
+
+      {needsConnectFirst && onchainEoaOwnerCandidates.length > 0 ? (
+        <div className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs space-y-2">
+          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Current CSW owners</div>
+          <ul className="space-y-1">
+            {onchainEoaOwnerCandidates.map((candidate) => {
+              const matched =
+                connectedOnchainEoaOwner?.ownerAddress.toLowerCase() === candidate.ownerAddress.toLowerCase()
+              return (
+                <li
+                  key={candidate.ownerAddress}
+                  className={`flex items-center gap-2 break-all font-mono ${
+                    matched ? 'text-emerald-300' : 'text-zinc-400'
+                  }`}
+                >
+                  <span className="text-[10px]">[{candidate.index}]</span>
+                  <span>{candidate.ownerAddress}</span>
+                  {matched ? <span className="text-[10px]">connected</span> : null}
+                </li>
+              )
+            })}
+          </ul>
+          {hasConnectedSigner && !connectedOnchainEoaOwner ? (
+            <p className="text-[11px] leading-relaxed text-amber-200/90">
+              The connected wallet is not one of these owners. Use the button above to connect Rabby,
+              MetaMask, or another listed owner.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {inAppEnv?.isAnyWalletInApp && !isSelfAuthSession && !useRelayOwnerInstall ? (
@@ -305,7 +335,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
       ) : (
         <p className="text-[11px] leading-relaxed text-zinc-500">
           {needsConnectFirst
-            ? 'Connect a current CSW owner in the wallet connector, then approve the one-time signing install.'
+            ? 'Connect one of the CSW owner addresses above — not the parent smart wallet address — then approve the one-time signing install.'
             : 'Passkey owners approve through Coinbase prepared calls; no private key export required.'}
         </p>
       )}

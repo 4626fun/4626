@@ -57,10 +57,11 @@ export function deriveOwnerAuthorityState(input: {
   if (input.connectedCanonicalWalletSelected) {
     return {
       phase: 'canonical_wallet',
-      label: 'Canonical wallet',
-      hint: `Same wallet detected: ${shortValue(input.connectedAddress)}`,
-      detail: 'This is the same Coinbase Smart Wallet detected from Zora/Base. 4626 will approve embedded signing on this canonical smart wallet.',
-      badgeClass: 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200',
+      label: 'CSW connected',
+      hint: `Connected as ${shortValue(input.connectedAddress)} — not an owner key`,
+      detail:
+        'This is your smart wallet address, not an owner wallet. Connect one of the listed EOA owners below to approve the one-time signing install.',
+      badgeClass: 'border border-amber-400/20 bg-amber-500/10 text-amber-200',
     }
   }
 
