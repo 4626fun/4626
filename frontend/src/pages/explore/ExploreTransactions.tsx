@@ -407,7 +407,11 @@ export function ExploreTransactions() {
           />
         </div>
       }
-      footer={`Showing ${filteredActivity.length} recently traded tokens on Base`}
+      footer={
+        !isLoading && !isError && filteredActivity.length > 0
+          ? `Showing ${filteredActivity.length} recently traded tokens on Base`
+          : null
+      }
     />
   )
 }

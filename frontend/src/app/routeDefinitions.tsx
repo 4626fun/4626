@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Route } from 'react-router-dom'
+import { Navigate, Route } from 'react-router-dom'
 
 import {
   AccountsPage,
@@ -152,6 +152,7 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
 ]
 
 export const EXPLORE_LIST_CHILD_ROUTES: PathRouteDef[] = [
+  { path: 'creators', index: true, element: <Navigate to="/explore/creators" replace /> },
   { path: 'creators', element: <ExploreCreators /> },
   { path: 'content', element: <ExploreContent /> },
   { path: 'vaults', element: <ExploreVaults /> },
