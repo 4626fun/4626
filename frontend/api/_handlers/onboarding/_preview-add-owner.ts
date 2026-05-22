@@ -185,9 +185,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
-    const cswAddress = bootstrap.canonicalCswAddress
-    const ownerToAdd = bootstrap.privyEmbeddedEoaAddress
-    const txRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
+    const cswAddress = getAddress(bootstrap.canonicalCswAddress) as Address
+    const ownerToAdd = getAddress(bootstrap.privyEmbeddedEoaAddress) as Address
+    const rawTxRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
+    const txRequest: AddOwnerPreviewResponse['txRequest'] = {
+      chainId: 8453,
+      to: cswAddress,
+      data: rawTxRequest.data,
+      value: '0x0',
+    }
     if (txRequest.data.slice(0, 10).toLowerCase() !== ADD_OWNER_ADDRESS_SELECTOR) {
       return res.status(500).json({
         success: false,
