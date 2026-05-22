@@ -6,8 +6,28 @@ import { MemoryRouter } from 'react-router-dom'
 
 import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 
+const mockFetchPreview = vi.fn()
+const mockHandleAdd = vi.fn()
+
+vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
+  useAddOwnerFlow: () => ({
+    preview: null,
+    previewLoading: false,
+    busy: false,
+    pageError: null,
+    pageNotice: null,
+    txHash: null,
+    eventLog: [],
+    lastErrorDetail: null,
+    isSelfAuthSession: true,
+    fetchPreview: mockFetchPreview,
+    handleAdd: mockHandleAdd,
+  }),
+}))
+
 function buildController(overrides: Record<string, unknown> = {}) {
   return {
+    activeExternalOwnerWallet: null,
     busyProvider: null,
     canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
     connectOwnerWallet: vi.fn(),
@@ -25,6 +45,7 @@ function buildController(overrides: Record<string, unknown> = {}) {
       ],
       error: null,
     },
+    loadMe: vi.fn(),
     needsBaseAccountReconnect: false,
     onchainEoaOwnerCandidates: [],
     ownerSignerAddress: null,
@@ -34,6 +55,7 @@ function buildController(overrides: Record<string, unknown> = {}) {
         walletClientType: 'privy',
       },
     ],
+    refreshCswOwners: vi.fn(),
     requiresBaseAppForOwnerInstall: true,
     ...overrides,
   }
@@ -62,7 +84,7 @@ describe('AddOwnerSigningPanel', () => {
     expect(screen.getByText(/Owner install runs on/i)).toBeTruthy()
   })
 
-  it('steers passkey-only CSWs to Base App setup', () => {
+  it('steers passkey-only CSWs to Base App setup when not in self-auth', () => {
     render(
       <MemoryRouter>
         <AddOwnerSigningPanel
@@ -124,5 +146,25 @@ describe('AddOwnerSigningPanel', () => {
       </MemoryRouter>,
     )
     expect(screen.getByRole('link', { name: /Continue on \/add-owner/i }).getAttribute('href')).toBe('/add-owner')
+  })
+
+  it('renders inline Relay step 1 when inlineRelay is enabled and self-auth is ready', () => {
+    render(
+      <MemoryRouter>
+        <AddOwnerSigningPanel
+          inlineRelay
+          controller={
+            buildController({
+              ownerSignerAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+              requiresBaseAppForOwnerInstall: true,
+              connectedSignerLabel: '0x4beab…704ef',
+            }) as any
+          }
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByText(/Step 1 of 2/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Build Relay preview/i })).toBeTruthy()
+    expect(screen.queryByText(/passkey-controlled/i)).toBeNull()
   })
 })

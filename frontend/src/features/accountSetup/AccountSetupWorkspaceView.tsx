@@ -216,7 +216,7 @@ export function AccountSetupWorkspaceView(props: {
     (ownerInstallPathActive ||
       executionTrackForOwnerProbe === 'none-yet' ||
       executionTrackForOwnerProbe === 'legacy-owner-install')
-  const { isOwner: parentEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
+  const { isOwner: parentEmbeddedOwnerOnChain, refresh: refreshParentEmbeddedOwner } = useEmbeddedOwnerOnSubAccount({
     subAccountAddress: canonicalCswAddress,
     embeddedEoaAddress,
     enabled: shouldProbeParentEmbeddedOwner,
@@ -744,7 +744,11 @@ export function AccountSetupWorkspaceView(props: {
                       </div>
                     ) : null}
                     {showParentCswAddOwnerPanel ? (
-                      <AddOwnerSigningPanel controller={controller} />
+                      <AddOwnerSigningPanel
+                        controller={controller}
+                        inlineRelay
+                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
+                      />
                     ) : null}
                     {needsEmbeddedWallet ? (
                       <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
@@ -1139,7 +1143,12 @@ export function AccountSetupWorkspaceView(props: {
                       : ''}
                   </div>
                 ) : null}
-                <AddOwnerSigningPanel controller={controller} className="mt-4" />
+                <AddOwnerSigningPanel
+                  controller={controller}
+                  className="mt-4"
+                  inlineRelay
+                  onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
+                />
               </section>
             </div>
           </div>

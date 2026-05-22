@@ -37,6 +37,8 @@ import {
 
 const CONTENT_COINS_PAGE_SIZE = 20
 const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
+/** Full-bleed hero — taller than one viewport so the intro portrait scene breathes before scroll. */
+const CREATOR_HERO_MIN_HEIGHT_CLASS = 'min-h-[calc(140dvh-3.5rem)]'
 gsap.registerPlugin(ScrollTrigger)
 
 type ContentMediaKind = 'video' | 'text' | 'visual'
@@ -1142,7 +1144,7 @@ export function ExploreCreatorDetail() {
         {/* Recreated hero scene */}
         <section
           ref={heroSectionRef}
-          className="relative overflow-hidden bg-black min-h-[calc(100dvh-3.5rem)] lg:pr-60 xl:pr-64"
+          className={cn('relative overflow-hidden bg-black lg:pr-60 xl:pr-64', CREATOR_HERO_MIN_HEIGHT_CLASS)}
         >
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
@@ -1190,7 +1192,10 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[calc(100dvh-3.5rem)] px-6 sm:px-8 lg:px-12 pb-10 sm:pb-14 flex flex-col justify-end"
+            className={cn(
+              'relative px-6 sm:px-8 lg:px-12 pb-14 sm:pb-20 flex flex-col justify-end',
+              CREATOR_HERO_MIN_HEIGHT_CLASS,
+            )}
           >
             <div className="max-w-4xl">
               <span

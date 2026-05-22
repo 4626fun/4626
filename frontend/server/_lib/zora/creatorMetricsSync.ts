@@ -246,11 +246,23 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
         sampled_creators INTEGER NOT NULL DEFAULT 0,
         drift_estimate_total INTEGER,
         drift_pct NUMERIC(12, 6),
-        last_drift_checked_at TIMESTAMPTZ
+        last_drift_checked_at TIMESTAMPTZ,
+        last_hot_refresh_at TIMESTAMPTZ,
+        cached_creators_total BIGINT,
+        cached_market_cap_usd NUMERIC(38, 12),
+        cached_volume_24h_usd NUMERIC(38, 12),
+        cached_fees_24h_usd NUMERIC(38, 12),
+        cached_totals_at TIMESTAMPTZ
       );
     `
     await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
     await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS last_hot_refresh_at TIMESTAMPTZ;`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_creators_total BIGINT;`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_market_cap_usd NUMERIC(38, 12);`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_volume_24h_usd NUMERIC(38, 12);`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_fees_24h_usd NUMERIC(38, 12);`
+    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_totals_at TIMESTAMPTZ;`
 
     await db.sql`
       CREATE TABLE IF NOT EXISTS creator_metrics_daily_snapshots (
@@ -427,6 +439,120 @@ async function refreshHotFinancialsFromExploreLists(
   return { coinsRefreshed, pagesFetched }
 }
 
+export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<void> {
+  await db.sql`
+    UPDATE creator_metrics_state
+    SET
+      cached_creators_total = (SELECT COUNT(*)::BIGINT FROM creators),
+      cached_market_cap_usd = (
+        SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC
+        FROM creator_coins
+        WHERE chain_id = ${BASE_CHAIN_ID}
+      ),
+      cached_volume_24h_usd = (
+        SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC
+        FROM creator_coins
+        WHERE chain_id = ${BASE_CHAIN_ID}
+      ),
+      cached_fees_24h_usd = (
+        SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC
+        FROM creator_coins
+        WHERE chain_id = ${BASE_CHAIN_ID}
+      ),
+      cached_totals_at = NOW()
+    WHERE id = 1;
+  `
+}
+
+export function cachedTotalsMaxAgeMs(): number {
+  return parsePositiveInt(process.env.CREATOR_METRICS_CACHED_TOTALS_MAX_AGE_MS, DEFAULT_CACHED_TOTALS_MAX_AGE_MS)
+}
+
+export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncResult> {
+  const runId = `creator-metrics-hot-${randomUUID()}`
+  const log = logger.child({ syncRunId: runId })
+  const db = (await getDbForCron()) ?? (await getDb())
+  if (!db) {
+    return {
+      ok: false,
+      runId,
+      coinsRefreshed: 0,
+      pagesFetched: 0,
+      error: 'database_not_configured',
+    }
+  }
+
+  await ensureCreatorMetricsSchema(db)
+  const hotRefreshEnabled = process.env.CREATOR_METRICS_HOT_REFRESH_ENABLED !== '0'
+  if (!hotRefreshEnabled) {
+    return { ok: true, runId, coinsRefreshed: 0, pagesFetched: 0, skipped: true }
+  }
+
+  const minIntervalMs = parsePositiveInt(
+    process.env.CREATOR_METRICS_HOT_SYNC_MIN_INTERVAL_MS,
+    DEFAULT_HOT_SYNC_MIN_INTERVAL_MS,
+  )
+  const throttleResult = await db.sql`
+    SELECT last_hot_refresh_at
+    FROM creator_metrics_state
+    WHERE id = 1
+    LIMIT 1;
+  `
+  const lastHotRefreshAt = parseOptionalTimestamp(throttleResult.rows?.[0]?.last_hot_refresh_at)
+  if (lastHotRefreshAt != null && Date.now() - lastHotRefreshAt < minIntervalMs) {
+    return { ok: true, runId, coinsRefreshed: 0, pagesFetched: 0, skipped: true }
+  }
+
+  const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
+  if (!apiKey) {
+    return {
+      ok: false,
+      runId,
+      coinsRefreshed: 0,
+      pagesFetched: 0,
+      error: 'zora_api_key_missing',
+    }
+  }
+
+  const pageSize = Math.min(parsePositiveInt(process.env.CREATOR_METRICS_SYNC_PAGE_SIZE, DEFAULT_PAGE_SIZE), 50)
+  const hotRefreshPagesPerList = parsePositiveInt(
+    process.env.CREATOR_METRICS_HOT_REFRESH_PAGES_PER_LIST,
+    DEFAULT_HOT_REFRESH_PAGES_PER_LIST,
+  )
+
+  try {
+    const sdk = await getSdk(apiKey)
+    const hotRefresh = await refreshHotFinancialsFromExploreLists(sdk, db, {
+      pageSize,
+      maxPagesPerList: hotRefreshPagesPerList,
+      lists: DEFAULT_HOT_REFRESH_LISTS,
+    })
+    await recomputeAndCacheCreatorMetricsTotals(db)
+    await db.sql`
+      UPDATE creator_metrics_state
+      SET last_hot_refresh_at = NOW()
+      WHERE id = 1;
+    `
+    log.info('[creator-metrics-hot-sync] completed', hotRefresh)
+    return {
+      ok: true,
+      runId,
+      coinsRefreshed: hotRefresh.coinsRefreshed,
+      pagesFetched: hotRefresh.pagesFetched,
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'creator_metrics_hot_sync_failed'
+    log.error('[creator-metrics-hot-sync] failed', { error: errorMessage })
+    return {
+      ok: false,
+      runId,
+      coinsRefreshed: 0,
+      pagesFetched: 0,
+      error: errorMessage,
+    }
+  }
+}
+
 async function recomputeCreatorCounts(db: Db): Promise<void> {
   await db.sql`
     WITH counts AS (
@@ -508,7 +634,21 @@ type RunOptions = {
   forceFull?: boolean
   maxPages?: number
   pageSize?: number
+  /** When false, skips Zora explore hot refresh (used when a dedicated hot cron runs). */
+  includeHotRefresh?: boolean
 }
+
+export type CreatorMetricsHotSyncResult = {
+  ok: boolean
+  runId: string
+  coinsRefreshed: number
+  pagesFetched: number
+  skipped?: boolean
+  error?: string
+}
+
+const DEFAULT_HOT_SYNC_MIN_INTERVAL_MS = 4 * 60 * 1000
+const DEFAULT_CACHED_TOTALS_MAX_AGE_MS = 15 * 60 * 1000
 
 export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<CreatorMetricsSyncResult> {
   const runId = `creator-metrics-sync-${randomUUID()}`
@@ -574,6 +714,9 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     DEFAULT_HOT_REFRESH_PAGES_PER_LIST,
   )
   const hotRefreshEnabled = process.env.CREATOR_METRICS_HOT_REFRESH_ENABLED !== '0'
+  const includeHotRefresh =
+    options.includeHotRefresh ??
+    process.env.CREATOR_METRICS_HOT_REFRESH_IN_FULL_SYNC !== '0'
   const mode: SyncMode = forceFull || !current.backfillComplete ? 'backfill' : 'incremental'
   const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
 
@@ -623,7 +766,7 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
       log.warn('[creator-metrics-sync] running without zora api key; enrichment disabled')
     }
 
-    if (sdk && hotRefreshEnabled) {
+    if (sdk && hotRefreshEnabled && includeHotRefresh) {
       const hotRefresh = await refreshHotFinancialsFromExploreLists(sdk, db, {
         pageSize,
         maxPagesPerList: hotRefreshPagesPerList,
@@ -892,6 +1035,7 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
         last_drift_checked_at = NOW()
       WHERE id = 1;
     `
+    await recomputeAndCacheCreatorMetricsTotals(db)
 
     log.info('[creator-metrics-sync] run completed', {
       mode,

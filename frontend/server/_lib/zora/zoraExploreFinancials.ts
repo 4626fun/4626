@@ -16,6 +16,10 @@ export type ZoraExploreFinancialEstimate = {
 const DEFAULT_PAGE_SIZE = 20
 const DEFAULT_VOLUME_PAGES = 5
 const DEFAULT_MCAP_PAGES = 5
+const DEFAULT_EXPLORE_FINANCIAL_CACHE_MS = 120_000
+
+let exploreFinancialCache: { value: ZoraExploreFinancialEstimate; cachedAt: number } | null = null
+let exploreFinancialInflight: Promise<ZoraExploreFinancialEstimate | null> | null = null
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const n = Number(value)
@@ -82,7 +86,17 @@ async function paginateExploreList(
   return pagesFetched
 }
 
-export async function fetchZoraExploreFinancialEstimate(options?: {
+function getExploreFinancialCacheTtlMs(): number {
+  return parsePositiveInt(process.env.ZORA_METRICS_EXPLORE_CACHE_TTL_MS, DEFAULT_EXPLORE_FINANCIAL_CACHE_MS)
+}
+
+/** Test-only: clears in-memory explore financial cache between Vitest cases. */
+export function resetZoraExploreFinancialEstimateCacheForTests(): void {
+  exploreFinancialCache = null
+  exploreFinancialInflight = null
+}
+
+async function fetchZoraExploreFinancialEstimateUncached(options?: {
   apiKey?: string | null
 }): Promise<ZoraExploreFinancialEstimate | null> {
   const apiKey =
@@ -128,5 +142,37 @@ export async function fetchZoraExploreFinancialEstimate(options?: {
     fees24hUsd,
     marketCapUsd,
     coinCount: seenCoins.size,
+  }
+}
+
+export async function fetchZoraExploreFinancialEstimate(options?: {
+  apiKey?: string | null
+  forceRefresh?: boolean
+}): Promise<ZoraExploreFinancialEstimate | null> {
+  const ttlMs = getExploreFinancialCacheTtlMs()
+  const now = Date.now()
+
+  if (!options?.forceRefresh && exploreFinancialCache && now - exploreFinancialCache.cachedAt < ttlMs) {
+    return exploreFinancialCache.value
+  }
+
+  if (!options?.forceRefresh && exploreFinancialInflight) {
+    return exploreFinancialInflight
+  }
+
+  const inflight = fetchZoraExploreFinancialEstimateUncached(options).then((value) => {
+    if (value) {
+      exploreFinancialCache = { value, cachedAt: Date.now() }
+    }
+    return value
+  })
+
+  exploreFinancialInflight = inflight
+  try {
+    return await inflight
+  } finally {
+    if (exploreFinancialInflight === inflight) {
+      exploreFinancialInflight = null
+    }
   }
 }

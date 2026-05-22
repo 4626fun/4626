@@ -518,9 +518,7 @@ export function useAccountSetupController(params: {
     publicClient,
   ])
 
-  useEffect(() => {
-    let cancelled = false
-
+  const refreshCswOwners = useCallback(async () => {
     if (!canonicalCswAddress) {
       setCswOwnersState({ status: 'idle', owners: [], error: null })
       return
@@ -528,41 +526,36 @@ export function useAccountSetupController(params: {
 
     setCswOwnersState((current) => ({ status: 'loading', owners: current.owners, error: null }))
 
-    const run = async () => {
-      try {
-        const res = await apiFetch('/api/deploy/smartWalletOwners', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ smartWallet: canonicalCswAddress }),
-        })
-        const payload = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
-        if (!res.ok || !payload?.success || !payload.data) {
-          throw new Error(readApiError(payload, 'Failed to load current smart wallet owners.'))
-        }
-        if (cancelled) return
-        setCswOwnersState({
-          status: 'ready',
-          owners: Array.isArray(payload.data.owners) ? payload.data.owners : [],
-          error: null,
-        })
-      } catch (ownerListError: any) {
-        if (cancelled) return
-        setCswOwnersState({
-          status: 'error',
-          owners: [],
-          error:
-            typeof ownerListError?.message === 'string'
-              ? ownerListError.message
-              : 'Failed to load current smart wallet owners.',
-        })
+    try {
+      const res = await apiFetch('/api/deploy/smartWalletOwners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ smartWallet: canonicalCswAddress }),
+      })
+      const payload = (await res.json().catch(() => null)) as ApiEnvelope<any> | null
+      if (!res.ok || !payload?.success || !payload.data) {
+        throw new Error(readApiError(payload, 'Failed to load current smart wallet owners.'))
       }
-    }
-
-    void run()
-    return () => {
-      cancelled = true
+      setCswOwnersState({
+        status: 'ready',
+        owners: Array.isArray(payload.data.owners) ? payload.data.owners : [],
+        error: null,
+      })
+    } catch (ownerListError: any) {
+      setCswOwnersState({
+        status: 'error',
+        owners: [],
+        error:
+          typeof ownerListError?.message === 'string'
+            ? ownerListError.message
+            : 'Failed to load current smart wallet owners.',
+      })
     }
   }, [canonicalCswAddress])
+
+  useEffect(() => {
+    void refreshCswOwners()
+  }, [refreshCswOwners])
 
   const connectOwnerWallet = useCallback(async () => {
     setError(null)
@@ -1641,6 +1634,7 @@ export function useAccountSetupController(params: {
     providerCollision,
     providerCards,
     publicClient,
+    refreshCswOwners,
     readableCswOwners,
     retryOwnerCheck,
     sendPreparedOwnerTx,

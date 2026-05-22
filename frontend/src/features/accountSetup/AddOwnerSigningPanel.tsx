@@ -1,9 +1,12 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/Button'
+import { AddOwnerActionPanel } from '@/features/accountSetup/addOwner/AddOwnerActionPanel'
+import { useAddOwnerFlow } from '@/features/accountSetup/addOwner/useAddOwnerFlow'
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
+import { getAppBaseUrl } from '@/lib/env/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
@@ -11,27 +14,34 @@ type AccountSetupController = ReturnType<typeof useAccountSetupController>
 type AddOwnerSigningPanelProps = {
   controller: AccountSetupController
   className?: string
+  /** Run the Relay add-owner flow inline instead of linking away. */
+  inlineRelay?: boolean
+  onOwnerInstallSuccess?: () => void | Promise<void>
 }
 
 export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
-  const { controller, className = '' } = props
+  const { controller, className = '', inlineRelay = false, onOwnerInstallSuccess } = props
   const {
+    activeExternalOwnerWallet,
     canonicalCswAddress,
     connectOwnerWallet,
     connectedOnchainEoaOwner,
     connectedOwnerReady,
     connectedSignerLabel,
     cswOwnersState,
+    loadMe,
     needsBaseAccountReconnect,
     onchainEoaOwnerCandidates: rawOnchainEoaOwnerCandidates,
     ownerSignerAddress,
     privyWallets,
+    refreshCswOwners,
     requiresBaseAppForOwnerInstall,
     busyProvider,
   } = controller
 
   const onchainEoaOwnerCandidates = rawOnchainEoaOwnerCandidates ?? []
   const baseAppSetupUrl = useMemo(() => buildWaitlistSetupUrl('base-app'), [])
+  const fullPageAddOwnerUrl = useMemo(() => `${getAppBaseUrl()}/add-owner`, [])
 
   const privyEmbeddedEoaAddress = useMemo(() => {
     const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
@@ -56,13 +66,32 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   }, [canonicalCswAddress, ownerSignerAddress])
 
   const passkeyOnlyOwnerInstallBlocked =
-    requiresBaseAppForOwnerInstall && onchainEoaOwnerCandidates.length === 0
+    requiresBaseAppForOwnerInstall &&
+    onchainEoaOwnerCandidates.length === 0 &&
+    !isSelfAuthSession
   const ownerWalletConnecting = busyProvider === 'owner_wallet'
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
-  const canContinueOnAddOwnerPage =
+  const canRunAddOwnerFlow =
     installedAsOwner !== true &&
     !passkeyOnlyOwnerInstallBlocked &&
     (connectedOwnerReady || isSelfAuthSession || Boolean(connectedOnchainEoaOwner))
+
+  const addOwnerFlow = useAddOwnerFlow({
+    canonicalCswAddress,
+    ownerSignerAddress,
+    privyExternalOwnerWallet: activeExternalOwnerWallet,
+    enabled: inlineRelay && canRunAddOwnerFlow,
+  })
+
+  const handleInlineSubmit = useCallback(async () => {
+    const ok = await addOwnerFlow.handleAdd()
+    if (!ok) return
+    await Promise.all([
+      loadMe({ showSpinner: false }),
+      refreshCswOwners(),
+      onOwnerInstallSuccess?.(),
+    ])
+  }, [addOwnerFlow, loadMe, onOwnerInstallSuccess, refreshCswOwners])
 
   if (!canonicalCswAddress) {
     return (
@@ -86,9 +115,14 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   return (
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       <p className="text-xs leading-relaxed text-zinc-500">
-        Owner install runs on <span className="font-mono text-zinc-300">/add-owner</span> as a two-step
-        Relay flow: build preview, then submit deposit. Finish there instead of duplicating a broken inline
-        path here.
+        {inlineRelay
+          ? 'Add your Privy embedded signer as a CSW owner through Relay: build preview, review deposit, then submit.'
+          : (
+              <>
+                Owner install runs on <span className="font-mono text-zinc-300">/add-owner</span> as a two-step
+                Relay flow: build preview, then submit deposit.
+              </>
+            )}
       </p>
 
       {passkeyOnlyOwnerInstallBlocked ? (
@@ -102,7 +136,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           >
             Base App setup
           </a>{' '}
-          first, then continue on <Link to="/add-owner" className="underline">/add-owner</Link>.
+          first, connect your canonical smart wallet, then finish signing here.
         </div>
       ) : null}
 
@@ -135,12 +169,8 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2">
-        {canContinueOnAddOwnerPage ? (
-          <Button type="button" variant="primary" asChild>
-            <Link to="/add-owner">Continue on /add-owner</Link>
-          </Button>
-        ) : (
+      {!canRunAddOwnerFlow ? (
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="primary"
@@ -154,8 +184,38 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
                 ? 'Connecting wallet…'
                 : 'Connect CSW owner wallet'}
           </Button>
-        )}
-      </div>
+        </div>
+      ) : inlineRelay ? (
+        <AddOwnerActionPanel
+          previewLoading={addOwnerFlow.previewLoading}
+          preview={addOwnerFlow.preview}
+          busy={addOwnerFlow.busy}
+          isSelfAuthSession={addOwnerFlow.isSelfAuthSession}
+          handleAdd={handleInlineSubmit}
+          onBuildPreview={() => void addOwnerFlow.fetchPreview()}
+          onRebuildPreview={() => void addOwnerFlow.fetchPreview()}
+          txHash={addOwnerFlow.txHash}
+          pageNotice={addOwnerFlow.pageNotice}
+          pageError={addOwnerFlow.pageError}
+          lastErrorDetail={addOwnerFlow.lastErrorDetail}
+          eventLog={addOwnerFlow.eventLog}
+        />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="primary" asChild>
+            <Link to="/add-owner">Continue on /add-owner</Link>
+          </Button>
+        </div>
+      )}
+
+      {canRunAddOwnerFlow && inlineRelay ? (
+        <p className="text-[11px] text-zinc-600">
+          Need the full-page flow?{' '}
+          <a href={fullPageAddOwnerUrl} className="text-zinc-400 underline underline-offset-2 hover:text-zinc-300">
+            Open /add-owner
+          </a>
+        </p>
+      ) : null}
 
       {connectedSignerLabel ? (
         <p className="text-xs text-zinc-500">

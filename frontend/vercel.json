@@ -42,8 +42,12 @@
   },
   "crons": [
     {
-      "path": "/api/sync-creator-metrics",
+      "path": "/api/sync-creator-metrics?mode=hot",
       "schedule": "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
+    },
+    {
+      "path": "/api/sync-creator-metrics?mode=backfill",
+      "schedule": "5,35 * * * *"
     },
     {
       "path": "/api/waitlist/airtable-sync",

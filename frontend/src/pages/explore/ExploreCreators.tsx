@@ -310,7 +310,7 @@ export function ExploreCreators() {
       if (!lastPage?.pageInfo?.hasNextPage) return undefined
       return lastPage.pageInfo.endCursor
     },
-    staleTime: 30_000,
+    staleTime: 120_000,
   })
 
   // Flatten all pages into a single array of coins
@@ -364,6 +364,7 @@ export function ExploreCreators() {
   const profileIdentifiers = useMemo(() => {
     return baseDisplayCoins
       .filter((coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)))
+      .filter((coin) => !deriveImmediateEthosUserkey(coin))
       .map((coin) => ({
       coinKey: getCoinKey(coin),
       identifier: getZoraCreatorProfileIdentifier(coin),

@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '../../../packages/server-core/src/index.js'
-import { ensureCreatorMetricsSchema } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import {
+  cachedTotalsMaxAgeMs,
+  ensureCreatorMetricsSchema,
+} from '../../../server/_lib/zora/creatorMetricsSync.js'
 import {
   fetchZoraExploreFinancialEstimate,
   preferHigherMetric,
@@ -234,12 +237,36 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       last_sync_finished_at,
       last_full_sync_at,
       drift_estimate_total,
-      drift_pct
+      drift_pct,
+      cached_creators_total,
+      cached_market_cap_usd,
+      cached_volume_24h_usd,
+      cached_fees_24h_usd,
+      cached_totals_at
     FROM creator_metrics_state
     WHERE id = 1
     LIMIT 1;
   `
-  const totalsResult = await db.sql`
+  const state = stateResult.rows?.[0] ?? {}
+  const cachedTotalsAtMs = asIsoString(state.cached_totals_at)
+    ? Date.parse(String(state.cached_totals_at))
+    : NaN
+  const cachedTotalsFresh =
+    Number.isFinite(cachedTotalsAtMs) && Date.now() - cachedTotalsAtMs <= cachedTotalsMaxAgeMs()
+
+  const totalsResult = cachedTotalsFresh
+    ? {
+        rows: [
+          {
+            creators_total: state.cached_creators_total,
+            creators_new_24h: null,
+            market_cap_usd: state.cached_market_cap_usd,
+            volume_24h_usd: state.cached_volume_24h_usd,
+            fees_24h_usd: state.cached_fees_24h_usd,
+          },
+        ],
+      }
+    : await db.sql`
     SELECT
       (SELECT COUNT(*)::BIGINT FROM creators) AS creators_total,
       (
@@ -252,6 +279,15 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
       (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
   `
+  if (cachedTotalsFresh) {
+    const newCreatorsResult = await db.sql`
+      SELECT COUNT(DISTINCT creator_address)::BIGINT AS creators_new_24h
+      FROM creator_coins
+      WHERE chain_id = 8453
+        AND created_at >= NOW() - INTERVAL '24 hours';
+    `
+    totalsResult.rows[0].creators_new_24h = newCreatorsResult.rows?.[0]?.creators_new_24h ?? null
+  }
   let ethosScoredCreators: number | null = null
   let ethos1200Creators: number | null = null
   let ethos1600Creators: number | null = null
@@ -279,7 +315,6 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     // Ethos coverage is optional; keep canonical metrics available even if ethos tables are unavailable.
   }
 
-  const state = stateResult.rows?.[0] ?? {}
   const agg = totalsResult.rows?.[0] ?? {}
   const syncStatus = parseSyncStatus(state.sync_status)
   const backfillComplete = Boolean(state.backfill_complete)

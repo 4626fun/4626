@@ -1,7 +1,14 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { runCreatorMetricsSync } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import { runCreatorMetricsHotSync, runCreatorMetricsSync } from '../../../server/_lib/zora/creatorMetricsSync.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
 declare const process: { env: Record<string, string | undefined> }
+
+function readSyncMode(req: VercelRequest): 'hot' | 'backfill' {
+  const raw = req.query?.mode
+  const value = Array.isArray(raw) ? String(raw[0] ?? '') : typeof raw === 'string' ? raw : ''
+  const normalized = value.trim().toLowerCase()
+  return normalized === 'hot' ? 'hot' : 'backfill'
+}
 
 function readCronSecret(req: VercelRequest): string {
   const header = req.headers['x-cron-secret']
@@ -63,8 +70,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const forceFull = readBooleanQuery(req, 'forceFull')
   const pageSize = readNumberQuery(req, 'pageSize')
   const maxPages = readNumberQuery(req, 'maxPages')
+  const mode = readSyncMode(req)
 
-  const result = await runCreatorMetricsSync({ forceFull, pageSize, maxPages })
+  if (mode === 'hot') {
+    const result = await runCreatorMetricsHotSync()
+    const status = result.ok ? 200 : 500
+    return res.status(status).json({
+      success: result.ok,
+      data: result,
+    })
+  }
+
+  const result = await runCreatorMetricsSync({
+    forceFull,
+    pageSize,
+    maxPages,
+    includeHotRefresh: false,
+  })
   const status = result.ok ? 200 : 500
   return res.status(status).json({
     success: result.ok,

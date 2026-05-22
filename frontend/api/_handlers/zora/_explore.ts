@@ -162,6 +162,154 @@ function isCreatorList(list: ExploreList): boolean {
   )
 }
 
+type ExploreDbListingRow = {
+  coin_address: string
+  creator_address: string
+  twitter_username: string | null
+  zora_handle: string | null
+  created_at: string | null
+  market_cap_usd: string | number | null
+  volume_24h_usd: string | number | null
+}
+
+function exploreRowDisplayLabel(
+  row: Pick<ExploreDbListingRow, 'zora_handle' | 'twitter_username'>,
+  address: string,
+): string {
+  const handle = typeof row.zora_handle === 'string' ? row.zora_handle.trim() : ''
+  if (handle) return handle
+  const twitter = typeof row.twitter_username === 'string' ? row.twitter_username.trim() : ''
+  if (twitter) return twitter.startsWith('@') ? twitter : `@${twitter}`
+  return shortSymbol(address)
+}
+
+function buildCreatorProfileFromExploreRow(
+  row: Pick<ExploreDbListingRow, 'zora_handle' | 'twitter_username'>,
+): Record<string, unknown> | undefined {
+  const handle = typeof row.zora_handle === 'string' ? row.zora_handle.trim() : ''
+  if (handle) {
+    const username = handle.replace(/^@/, '')
+    return { handle, username }
+  }
+  const twitter = typeof row.twitter_username === 'string' ? row.twitter_username.trim() : ''
+  if (twitter) return { username: twitter.replace(/^@/, '') }
+  return undefined
+}
+
+function canServeExploreRowFromDb(
+  row: Pick<ExploreDbListingRow, 'market_cap_usd' | 'volume_24h_usd' | 'zora_handle' | 'twitter_username'>,
+): boolean {
+  const hasMetrics =
+    toFiniteNumberOrNull(row.market_cap_usd) != null || toFiniteNumberOrNull(row.volume_24h_usd) != null
+  const hasIdentity =
+    (typeof row.zora_handle === 'string' && row.zora_handle.trim().length > 0) ||
+    (typeof row.twitter_username === 'string' && row.twitter_username.trim().length > 0)
+  return hasMetrics && hasIdentity
+}
+
+function shouldSkipExploreGetCoin(usingProjectionRows: boolean, row: ExploreDbListingRow): boolean {
+  if (usingProjectionRows) return true
+  return canServeExploreRowFromDb(row)
+}
+
+type EthosSortedCreatorRow = ExploreDbListingRow & {
+  ethos_score?: number | string | null
+  ethos_level?: string | null
+  ethos_score_source?: string | null
+  canonical_social_score?: number | string | null
+  canonical_wallet_score?: number | string | null
+  owner_class_csw_score?: number | string | null
+  owner_class_eoa_score?: number | string | null
+  social_cached_score?: number | string | null
+  wallet_cached_score?: number | string | null
+}
+
+async function assembleEthosSortedCreatorResponse(params: {
+  pageRows: EthosSortedCreatorRow[]
+  offset: number
+  hasNextPage: boolean
+  usingProjectionRows: boolean
+  key: string | null
+  resolveNodeEthos: (
+    row: EthosSortedCreatorRow,
+  ) => { score: number | null; level: string | null; source: string | null }
+}) {
+  let coinDetails = new Map<string, any>()
+  if (params.key) {
+    const rowsNeedingCoinDetail = params.pageRows.filter(
+      (row) => !shouldSkipExploreGetCoin(params.usingProjectionRows, row),
+    )
+    if (rowsNeedingCoinDetail.length > 0) {
+      try {
+        const sdk: any = await import('@zoralabs/coins-sdk')
+        sdk.setApiKey(params.key)
+        const responses = await Promise.allSettled(
+          rowsNeedingCoinDetail.map((row) => sdk.getCoin({ address: row.coin_address, chain: 8453 })),
+        )
+        responses.forEach((result, index) => {
+          if (result.status !== 'fulfilled') return
+          const row = rowsNeedingCoinDetail[index]
+          if (!row) return
+          const token = result.value?.data?.zora20Token
+          if (token) coinDetails.set(row.coin_address.toLowerCase(), token)
+        })
+      } catch {
+        coinDetails = new Map()
+      }
+    }
+  }
+
+  const edges = params.pageRows.map((row, idx) => {
+    const detail = coinDetails.get(String(row.coin_address).toLowerCase()) ?? null
+    const address = String(row.coin_address).toLowerCase()
+    const creatorAddress = String(row.creator_address).toLowerCase()
+    const displayName =
+      typeof detail?.name === 'string' && detail.name.trim()
+        ? detail.name.trim()
+        : exploreRowDisplayLabel(row, address)
+    const displaySymbol =
+      typeof detail?.symbol === 'string' && detail.symbol.trim()
+        ? detail.symbol.trim()
+        : exploreRowDisplayLabel(row, address)
+    const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
+    const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
+    const creatorProfile = detail?.creatorProfile ?? buildCreatorProfileFromExploreRow(row)
+    const ethos = params.resolveNodeEthos(row)
+    return {
+      cursor: String(params.offset + idx + 1),
+      node: {
+        id: typeof detail?.id === 'string' ? detail.id : undefined,
+        address,
+        creatorAddress,
+        payoutRecipientAddress: creatorAddress,
+        name: displayName,
+        symbol: displaySymbol,
+        coinType: 'CREATOR',
+        chainId: 8453,
+        createdAt: (typeof detail?.createdAt === 'string' && detail.createdAt) || row.created_at || undefined,
+        marketCap,
+        volume24h,
+        totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
+        uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
+        mediaContent: detail?.mediaContent,
+        creatorProfile,
+        ethosScore: ethos.score,
+        ethosLevel: ethos.level,
+        ethosScoreSource: ethos.source,
+      },
+    }
+  })
+
+  return {
+    edges,
+    pageInfo: {
+      hasNextPage: params.hasNextPage,
+      endCursor: params.hasNextPage ? String(params.offset + params.pageRows.length) : null,
+    },
+    count: edges.length,
+  }
+}
+
 async function buildEthosSortedCreatorList(params: {
   count: number
   after: string | null
@@ -210,6 +358,21 @@ async function buildEthosSortedCreatorList(params: {
       wallet_cached_score: null,
     }))
     usingProjectionRows = true
+  }
+
+  if (usingProjectionRows && candidateRows.length > 0) {
+    return assembleEthosSortedCreatorResponse({
+      pageRows: candidateRows.slice(0, params.count),
+      offset,
+      hasNextPage: candidateRows.length > params.count,
+      usingProjectionRows: true,
+      key: params.key,
+      resolveNodeEthos: (row) => ({
+        score: toFiniteNumberOrNull(row.ethos_score),
+        level: typeof row.ethos_level === 'string' ? row.ethos_level : null,
+        source: typeof row.ethos_score_source === 'string' ? row.ethos_score_source : null,
+      }),
+    })
   }
 
   if (candidateRows.length === 0) {
@@ -442,9 +605,25 @@ async function buildEthosSortedCreatorList(params: {
     return mergeCreatorEthosScores(projectionEntry, live, live?.source ?? null)
   }
 
+  candidateRows.sort((a, b) => {
+    const aScore = mergedEthosForRow(a).score ?? Number.NEGATIVE_INFINITY
+    const bScore = mergedEthosForRow(b).score ?? Number.NEGATIVE_INFINITY
+    if (aScore !== bScore) return bScore - aScore
+    const aVol = toFiniteNumberOrNull(a.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
+    const bVol = toFiniteNumberOrNull(b.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
+    if (aVol !== bVol) return bVol - aVol
+    const aMcap = toFiniteNumberOrNull(a.market_cap_usd) ?? Number.NEGATIVE_INFINITY
+    const bMcap = toFiniteNumberOrNull(b.market_cap_usd) ?? Number.NEGATIVE_INFINITY
+    if (aMcap !== bMcap) return bMcap - aMcap
+    return String(a.creator_address).localeCompare(String(b.creator_address))
+  })
+
+  const pageRows = candidateRows.slice(offset, offset + params.count)
+  const hasNextPage = candidateRows.length > offset + params.count
+
   const freshUserkeys = Array.from(
     new Set(
-      candidateRows
+      pageRows
         .map((row) => {
           const twitterUsername = typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase() : ''
           if (twitterUsername) return twitterUsername
@@ -467,118 +646,44 @@ async function buildEthosSortedCreatorList(params: {
     return { score: fresh.score, level: typeof fresh.level === 'string' ? fresh.level : null }
   }
 
-  candidateRows.sort((a, b) => {
-    const aMerged = mergedEthosForRow(a).score
-    const bMerged = mergedEthosForRow(b).score
-    const aFresh = getFreshScoreForRow(a).score
-    const bFresh = getFreshScoreForRow(b).score
-    const aScore = Math.max(aMerged ?? Number.NEGATIVE_INFINITY, aFresh ?? Number.NEGATIVE_INFINITY)
-    const bScore = Math.max(bMerged ?? Number.NEGATIVE_INFINITY, bFresh ?? Number.NEGATIVE_INFINITY)
-    if (aScore !== bScore) return bScore - aScore
-    const aVol = toFiniteNumberOrNull(a.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
-    const bVol = toFiniteNumberOrNull(b.volume_24h_usd) ?? Number.NEGATIVE_INFINITY
-    if (aVol !== bVol) return bVol - aVol
-    const aMcap = toFiniteNumberOrNull(a.market_cap_usd) ?? Number.NEGATIVE_INFINITY
-    const bMcap = toFiniteNumberOrNull(b.market_cap_usd) ?? Number.NEGATIVE_INFINITY
-    if (aMcap !== bMcap) return bMcap - aMcap
-    return String(a.creator_address).localeCompare(String(b.creator_address))
-  })
-
-  const pageRows = usingProjectionRows
-    ? candidateRows.slice(0, params.count)
-    : candidateRows.slice(offset, offset + params.count)
-  const hasNextPage = usingProjectionRows
-    ? candidateRows.length > params.count
-    : candidateRows.length > offset + params.count
-
-  let coinDetails = new Map<string, any>()
-  if (params.key) {
-    try {
-      const sdk: any = await import('@zoralabs/coins-sdk')
-      sdk.setApiKey(params.key)
-      const responses = await Promise.allSettled(
-        pageRows.map((row) => sdk.getCoin({ address: row.coin_address, chain: 8453 })),
+  return assembleEthosSortedCreatorResponse({
+    pageRows,
+    offset,
+    hasNextPage,
+    usingProjectionRows: false,
+    key: params.key,
+    resolveNodeEthos: (row) => {
+      const merged = mergedEthosForRow(row)
+      const fresh = getFreshScoreForRow(row)
+      const finalScore = Math.max(
+        merged.score ?? Number.NEGATIVE_INFINITY,
+        fresh.score ?? Number.NEGATIVE_INFINITY,
       )
-      responses.forEach((result, index) => {
-        if (result.status !== 'fulfilled') return
-        const row = pageRows[index]
-        if (!row) return
-        const token = result.value?.data?.zora20Token
-        if (token) coinDetails.set(row.coin_address.toLowerCase(), token)
-      })
-    } catch {
-      coinDetails = new Map()
-    }
-  }
-
-  const edges = pageRows.map((row, idx) => {
-    const detail = coinDetails.get(String(row.coin_address).toLowerCase()) ?? null
-    const address = String(row.coin_address).toLowerCase()
-    const creatorAddress = String(row.creator_address).toLowerCase()
-    const displayName = typeof detail?.name === 'string' && detail.name.trim() ? detail.name.trim() : shortSymbol(address)
-    const displaySymbol = typeof detail?.symbol === 'string' && detail.symbol.trim() ? detail.symbol.trim() : shortSymbol(address)
-    const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
-    const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
-    const creatorProfile = detail?.creatorProfile
-    const merged = mergedEthosForRow(row)
-    const fresh = getFreshScoreForRow(row)
-    const finalScore = Math.max(
-      merged.score ?? Number.NEGATIVE_INFINITY,
-      fresh.score ?? Number.NEGATIVE_INFINITY,
-    )
-    const normalizedFinalScore = Number.isFinite(finalScore) ? finalScore : null
-    const finalLevel =
-      (fresh.score != null && normalizedFinalScore === fresh.score
-        ? fresh.level
-        : merged.level ?? row.ethos_level) ?? null
-    const baseSource =
-      merged.source ??
-      row.ethos_score_source ??
-      resolveEthosScoreSource({
-        canonicalSocial: toFiniteNumberOrNull(row.canonical_social_score),
-        canonicalWallet: toFiniteNumberOrNull(row.canonical_wallet_score),
-        ownerClassFromCsw: toFiniteNumberOrNull(row.owner_class_csw_score),
-        ownerClassEoa: toFiniteNumberOrNull(row.owner_class_eoa_score),
-        socialCached: toFiniteNumberOrNull(row.social_cached_score),
-        walletCached: toFiniteNumberOrNull(row.wallet_cached_score),
-      })
-    const finalScoreSource =
-      fresh.score != null && normalizedFinalScore === fresh.score
-        ? 'social_fresh'
-        : baseSource
-    return {
-      cursor: String(offset + idx + 1),
-      node: {
-        id: typeof detail?.id === 'string' ? detail.id : undefined,
-        address,
-        creatorAddress,
-        payoutRecipientAddress: creatorAddress,
-        name: displayName,
-        symbol: displaySymbol,
-        coinType: 'CREATOR',
-        chainId: 8453,
-        createdAt: (typeof detail?.createdAt === 'string' && detail.createdAt) || row.created_at || undefined,
-        marketCap,
-        volume24h,
-        totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
-        uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
-        mediaContent: detail?.mediaContent,
-        creatorProfile,
-        ethosScore: normalizedFinalScore,
-        ethosLevel: finalLevel,
-        ethosScoreSource: finalScoreSource,
-      },
-    }
-  })
-
-  return {
-    edges,
-    pageInfo: {
-      hasNextPage,
-      endCursor: hasNextPage ? String(offset + params.count) : null,
+      const normalizedFinalScore = Number.isFinite(finalScore) ? finalScore : null
+      const finalLevel =
+        (fresh.score != null && normalizedFinalScore === fresh.score
+          ? fresh.level
+          : merged.level ?? row.ethos_level) ?? null
+      const baseSource =
+        merged.source ??
+        row.ethos_score_source ??
+        resolveEthosScoreSource({
+          canonicalSocial: toFiniteNumberOrNull(row.canonical_social_score),
+          canonicalWallet: toFiniteNumberOrNull(row.canonical_wallet_score),
+          ownerClassFromCsw: toFiniteNumberOrNull(row.owner_class_csw_score),
+          ownerClassEoa: toFiniteNumberOrNull(row.owner_class_eoa_score),
+          socialCached: toFiniteNumberOrNull(row.social_cached_score),
+          walletCached: toFiniteNumberOrNull(row.wallet_cached_score),
+        })
+      const finalScoreSource =
+        fresh.score != null && normalizedFinalScore === fresh.score ? 'social_fresh' : baseSource
+      return {
+        score: normalizedFinalScore,
+        level: finalLevel,
+        source: finalScoreSource,
+      }
     },
-    count: edges.length,
-  }
+  })
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -611,7 +716,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ethosMin,
         key,
       })
-      setCache(res, 120)
+      setCache(res, 180)
       return res.status(200).json({
         success: true,
         data,

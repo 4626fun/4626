@@ -3,7 +3,8 @@ import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export const EXPLORE_CREATORS_METRICS_QUERY_KEY = ['explore', 'creators', 'metrics', 'shared-dashboard'] as const
-export const LIVE_HERO_METRICS_REFETCH_MS = 10_000
+/** Align with server Zora explore financial cache (~2 min) to avoid redundant polls. */
+export const LIVE_HERO_METRICS_REFETCH_MS = 120_000
 
 export type ExploreCreatorsMetrics = {
   scope: 'creators'
