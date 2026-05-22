@@ -37,6 +37,7 @@ import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth }
 import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtils'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
@@ -474,6 +475,9 @@ export function useAccountSetupController(params: {
       // or an on-chain EOA owner instead of treating CSW connect as signing-ready.
       if (passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment()) {
         setConnectedOwnerState({ value: null, reason: 'passkey_requires_base_app' })
+      } else if (!isMobileWalletEnvironment() && !isBaseAppInAppContext()) {
+        // Desktop browsers: the CSW address itself is custody, not an owner signing key.
+        setConnectedOwnerState({ value: null, reason: 'csw_not_owner_signer' })
       } else {
         setConnectedOwnerState({ value: true, reason: 'ok' })
       }

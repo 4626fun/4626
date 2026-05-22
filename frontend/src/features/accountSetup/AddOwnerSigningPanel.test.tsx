@@ -73,10 +73,46 @@ describe('AddOwnerSigningPanel', () => {
   it('renders connect-owner CTA in waitlist variant when no owner wallet is connected', () => {
     render(
       <MemoryRouter>
-        <AddOwnerSigningPanel controller={buildController() as any} variant="waitlist" />
+        <AddOwnerSigningPanel
+          controller={
+            buildController({
+              requiresBaseAppForOwnerInstall: false,
+              onchainEoaOwnerCandidates: [
+                {
+                  index: 1,
+                  ownerAddress: '0x5e1a0afa913ad95aa3762b18ea9add73d31313cf',
+                },
+              ],
+            }) as any
+          }
+          variant="waitlist"
+        />
       </MemoryRouter>,
     )
     expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Connect CSW owner wallet')
+  })
+
+  it('steers passkey-only CSWs to Base App setup instead of connect-owner CTA', () => {
+    render(
+      <MemoryRouter>
+        <AddOwnerSigningPanel
+          controller={
+            buildController({
+              cswOwnersState: {
+                status: 'ready',
+                owners: [{ index: 0, isAddressOwner: false, ownerAddress: null }],
+                error: null,
+              },
+              onchainEoaOwnerCandidates: [],
+              requiresBaseAppForOwnerInstall: true,
+            }) as any
+          }
+          variant="waitlist"
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Open Base App setup')
+    expect(screen.getByText(/passkey-controlled/i)).toBeTruthy()
   })
 
   it('shows completion state when privy embedded EOA is already an owner', () => {

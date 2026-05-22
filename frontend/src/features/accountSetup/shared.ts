@@ -1,4 +1,4 @@
-import type { OwnerAuthorityState, ProviderRow, ZoraResolveResponse } from './types'
+import type { OwnerAuthorityState, ProviderRow, ZoraResolveResponse, ConnectedOwnerState } from './types'
 
 export const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'email', label: 'Email', hint: 'Notification channel' },
@@ -42,7 +42,7 @@ export function deriveOwnerAuthorityState(input: {
   canonicalCswAddress: string | null
   connectedAddress: string | null | undefined
   connectedCanonicalWalletSelected: boolean
-  connectedOwnerState: { value: boolean | null; reason: 'idle' | 'ok' | 'network_mismatch' | 'missing_params' | 'read_failed' }
+  connectedOwnerState: ConnectedOwnerState
 }): OwnerAuthorityState {
   if (!input.canonicalCswAddress) {
     return {

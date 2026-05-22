@@ -6,6 +6,7 @@ import { base } from 'viem/chains'
 import { Button } from '@/components/ui/Button'
 import { useAddOwnerRelayFlow } from '@/features/accountSetup/addOwner/useAddOwnerRelayFlow'
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { addOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
@@ -92,10 +93,16 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
 
   const ownerWalletConnecting = busyProvider === 'owner_wallet'
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
+  const passkeyOnlyOwnerInstallBlocked =
+    requiresBaseAppForOwnerInstall && onchainEoaOwnerCandidates.length === 0
+  const baseAppSetupUrl = useMemo(() => buildWaitlistSetupUrl('base-app'), [])
   const canSubmitSigningApproval =
     connectedOwnerReady || (isSelfAuthSession && !requiresBaseAppForOwnerInstall)
   const needsConnectFirst =
-    !canSubmitSigningApproval && !useRelayOwnerInstall && !isSelfAuthSession
+    !canSubmitSigningApproval &&
+    !useRelayOwnerInstall &&
+    !isSelfAuthSession &&
+    !passkeyOnlyOwnerInstallBlocked
 
   const handleInstall = async () => {
     setSelfAuthError(null)
@@ -158,15 +165,17 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     needsConnectFirst ||
     ((inAppEnv?.isAnyWalletInApp ?? false) && !isSelfAuthSession && !useRelayOwnerInstall)
 
-  const primaryLabel = needsBaseAccountReconnect
-    ? 'Reconnect via Base Account'
-    : needsConnectFirst
-      ? hasConnectedSigner
-        ? 'Switch to a CSW owner wallet'
-        : ownerWalletConnecting
-          ? 'Connecting wallet…'
-          : 'Connect CSW owner wallet'
-      : installBusy
+  const primaryLabel = passkeyOnlyOwnerInstallBlocked
+    ? 'Open Base App setup'
+    : needsBaseAccountReconnect
+      ? 'Reconnect via Base Account'
+      : needsConnectFirst
+        ? hasConnectedSigner
+          ? 'Switch to a CSW owner wallet'
+          : ownerWalletConnecting
+            ? 'Connecting wallet…'
+            : 'Connect CSW owner wallet'
+        : installBusy
         ? 'Installing…'
         : installedAsOwner === true
           ? 'Already installed'
@@ -177,6 +186,10 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
               : 'Enable 4626 signing'
 
   const handlePrimaryClick = () => {
+    if (passkeyOnlyOwnerInstallBlocked) {
+      window.open(baseAppSetupUrl, '_blank', 'noopener,noreferrer')
+      return
+    }
     if (needsBaseAccountReconnect || needsConnectFirst) {
       void connectOwnerWallet()
       return
@@ -211,6 +224,22 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           prepare sponsored actions. Connect a wallet that is already listed as a CSW owner — not
           your smart wallet address itself.
         </p>
+      ) : null}
+
+      {passkeyOnlyOwnerInstallBlocked ? (
+        <div className="rounded-lg border border-brand-primary/25 bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100">
+          Your smart wallet is passkey-controlled and has no on-chain EOA owners. Owner install cannot
+          finish from this desktop browser — open{' '}
+          <a
+            href={baseAppSetupUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-brand-50 underline decoration-dotted underline-offset-2"
+          >
+            Base App setup
+          </a>{' '}
+          to finish signing there instead.
+        </div>
       ) : null}
 
       {needsConnectFirst && onchainEoaOwnerCandidates.length > 0 ? (

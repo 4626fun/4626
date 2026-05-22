@@ -108,7 +108,14 @@ export type ProviderRow = {
 
 export type ConnectedOwnerState = {
   value: boolean | null
-  reason: 'idle' | 'ok' | 'network_mismatch' | 'missing_params' | 'read_failed'
+  reason:
+    | 'idle'
+    | 'ok'
+    | 'network_mismatch'
+    | 'missing_params'
+    | 'read_failed'
+    | 'passkey_requires_base_app'
+    | 'csw_not_owner_signer'
 }
 
 export type CswOwnersState = {
