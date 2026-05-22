@@ -140,4 +140,26 @@ describe('AddOwnerSigningPanel', () => {
     )
     expect(screen.getByTestId('add-owner-signing-complete')).toBeTruthy()
   })
+
+  it('shows Base App Relay install when self-auth session is active', () => {
+    render(
+      <MemoryRouter>
+        <AddOwnerSigningPanel
+          controller={
+            buildController({
+              ownerSignerAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+              requiresBaseAppForOwnerInstall: false,
+              connectedOwnerReady: false,
+              connectedSignerLabel: '0x4beab…704ef',
+            }) as any
+          }
+          variant="waitlist"
+        />
+      </MemoryRouter>,
+    )
+    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain(
+      'Enable 4626 signing in Base App',
+    )
+    expect(screen.getByText('Rebuild Relay preview')).toBeTruthy()
+  })
 })

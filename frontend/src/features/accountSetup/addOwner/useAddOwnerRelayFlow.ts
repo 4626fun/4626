@@ -39,7 +39,11 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
 
   const loadPreview = useCallback(async () => {
     if (!enabled || !ownerSignerAddress) {
-      setError('Connect an on-chain CSW owner wallet first.')
+      setError(
+        isSelfAuthSession
+          ? 'Connect your canonical smart wallet in Base App first.'
+          : 'Connect an on-chain CSW owner wallet first.',
+      )
       return null
     }
     setPreviewLoading(true)
@@ -67,11 +71,15 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
     } finally {
       setPreviewLoading(false)
     }
-  }, [enabled, getAccessToken, ownerSignerAddress])
+  }, [enabled, getAccessToken, isSelfAuthSession, ownerSignerAddress])
 
   const executeRelayInstall = useCallback(async () => {
     if (!enabled || !canonicalCswAddress || !ownerSignerAddress) {
-      setError('Connect an on-chain CSW owner wallet first.')
+      setError(
+        isSelfAuthSession
+          ? 'Connect your canonical smart wallet in Base App first.'
+          : 'Connect an on-chain CSW owner wallet first.',
+      )
       return false
     }
 
@@ -89,7 +97,11 @@ export function useAddOwnerRelayFlow(params: UseAddOwnerRelayFlowParams) {
       privyExternalOwnerWallet,
     })
     if (!walletClient) {
-      setError('Connect the owner wallet that will fund the Relay deposit, then retry.')
+      setError(
+        isSelfAuthSession
+          ? 'Base App wallet session is unavailable. Reconnect your smart wallet and retry.'
+          : 'Connect the owner wallet that will fund the Relay deposit, then retry.',
+      )
       return false
     }
 

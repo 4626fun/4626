@@ -1,7 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useWalletClient } from 'wagmi'
-import { base } from 'viem/chains'
 
 import { Button } from '@/components/ui/Button'
 import { useAddOwnerRelayFlow } from '@/features/accountSetup/addOwner/useAddOwnerRelayFlow'
@@ -9,7 +7,6 @@ import type { useAccountSetupController } from '@/features/accountSetup/useAccou
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
-import { addOwnerViaBaseAppSendCalls } from '@/lib/wallet/baseAppOwnerCalls'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
 
@@ -45,12 +42,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     activeExternalOwnerWallet,
   } = controller
 
-  const { data: walletClient } = useWalletClient()
   const onchainEoaOwnerCandidates = rawOnchainEoaOwnerCandidates ?? []
-  const [selfAuthBusy, setSelfAuthBusy] = useState(false)
-  const [selfAuthError, setSelfAuthError] = useState<string | null>(null)
-  const [selfAuthNotice, setSelfAuthNotice] = useState<string | null>(null)
-  const [selfAuthTxHash, setSelfAuthTxHash] = useState<string | null>(null)
 
   const privyEmbeddedEoaAddress = useMemo(() => {
     const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
@@ -75,8 +67,11 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   }, [canonicalCswAddress, ownerSignerAddress])
 
   const useRelayOwnerInstall = Boolean(
-    connectedOnchainEoaOwner && !isSelfAuthSession && installedAsOwner !== true,
+    installedAsOwner !== true &&
+      ((connectedOnchainEoaOwner && !isSelfAuthSession) ||
+        (isSelfAuthSession && privyEmbeddedEoaAddress)),
   )
+  const useRelaySelfAuthInstall = Boolean(isSelfAuthSession && useRelayOwnerInstall)
 
   const relayFlow = useAddOwnerRelayFlow({
     ownerSignerAddress,
@@ -105,10 +100,6 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     !passkeyOnlyOwnerInstallBlocked
 
   const handleInstall = async () => {
-    setSelfAuthError(null)
-    setSelfAuthNotice(null)
-    setSelfAuthTxHash(null)
-
     if (useRelayOwnerInstall) {
       const ok = await relayFlow.executeRelayInstall()
       if (ok) {
@@ -118,47 +109,11 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
       return
     }
 
-    const request = (walletClient as { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> })
-      ?.request
-    if (isSelfAuthSession && request && canonicalCswAddress && privyEmbeddedEoaAddress) {
-      setSelfAuthBusy(true)
-      try {
-        const submitted = await addOwnerViaBaseAppSendCalls({
-          walletRequest: async (args) => await request(args),
-          csw: canonicalCswAddress as `0x${string}`,
-          ownerToAdd: privyEmbeddedEoaAddress as `0x${string}`,
-          chainId: base.id,
-        })
-        setSelfAuthTxHash(submitted.transactionHash ?? null)
-        setSelfAuthNotice(
-          submitted.transactionHash
-            ? `Signing key submitted (tx ${submitted.transactionHash.slice(0, 10)}…).`
-            : 'Signing key submitted via Base App send-calls.',
-        )
-        await loadMe({ showSpinner: false })
-        await onInstallSuccess?.()
-        return
-      } catch (installError) {
-        const message =
-          installError instanceof Error
-            ? installError.message
-            : 'Failed to submit add-owner via Base App send-calls.'
-        if (message.toLowerCase().includes('self calls are not allowed')) {
-          setSelfAuthNotice('Base App rejected direct self-call; retrying via prepared owner-install lane.')
-        } else {
-          setSelfAuthError(message)
-          return
-        }
-      } finally {
-        setSelfAuthBusy(false)
-      }
-    }
-
     await onEnable4626Signing()
     await onInstallSuccess?.()
   }
 
-  const installBusy = advancedBusy || selfAuthBusy || relayFlow.busy || relayFlow.previewLoading
+  const installBusy = advancedBusy || relayFlow.busy || relayFlow.previewLoading
   const installDisabled =
     installBusy ||
     installedAsOwner === true ||
@@ -181,9 +136,11 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           ? 'Already installed'
           : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession && !useRelayOwnerInstall
             ? 'Open in browser to install'
-            : useRelayOwnerInstall
-              ? 'Enable 4626 signing via Relay'
-              : 'Enable 4626 signing'
+            : useRelaySelfAuthInstall
+              ? 'Enable 4626 signing in Base App'
+              : useRelayOwnerInstall
+                ? 'Enable 4626 signing via Relay'
+                : 'Enable 4626 signing'
 
   const handlePrimaryClick = () => {
     if (passkeyOnlyOwnerInstallBlocked) {
@@ -220,9 +177,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       {variant === 'waitlist' ? (
         <p className="text-xs leading-relaxed text-zinc-500">
-          Install your Privy embedded signer as an owner on your parent smart wallet so 4626 can
-          prepare sponsored actions. Connect a wallet that is already listed as a CSW owner — not
-          your smart wallet address itself.
+          {useRelaySelfAuthInstall
+            ? 'Install your Privy embedded signer as a CSW owner via Base App Relay — your smart wallet funds a small deposit, then Relay executes addOwnerAddress(privyEoa).'
+            : 'Install your Privy embedded signer as an owner on your parent smart wallet so 4626 can prepare sponsored actions. Connect a wallet that is already listed as a CSW owner — not your smart wallet address itself.'}
         </p>
       ) : null}
 
@@ -287,10 +244,11 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
         </div>
       ) : null}
 
-      {isSelfAuthSession ? (
+      {useRelaySelfAuthInstall ? (
         <p className="text-xs text-emerald-100/85">
-          Base App session detected — this uses <span className="font-mono">wallet_sendCalls</span>{' '}
-          for <span className="font-mono">addOwnerAddress(privyEoa)</span>.
+          Base App session detected — your canonical smart wallet submits a Relay deposit via{' '}
+          <span className="font-mono">wallet_sendCalls</span>, then Relay fills{' '}
+          <span className="font-mono">addOwnerAddress(privyEoa)</span> on-chain.
         </p>
       ) : null}
 
@@ -343,7 +301,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
       {useRelayOwnerInstall ? (
         <div className="space-y-2">
           <p className="text-[11px] leading-relaxed text-zinc-500">
-            Connected EOA owner funds a Relay deposit; Relay executes{' '}
+            {useRelaySelfAuthInstall
+              ? 'Your canonical smart wallet funds a small Relay deposit in Base App; Relay executes'
+              : 'Connected EOA owner funds a Relay deposit; Relay executes'}{' '}
             <code className="font-mono text-zinc-400">addOwnerAddress(privyEoa)</code> on your CSW.
           </p>
           <Button
@@ -375,30 +335,30 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
         </p>
       ) : null}
 
-      {relayFlow.notice ?? selfAuthNotice ? (
+      {relayFlow.notice ? (
         <div className="rounded-lg border border-emerald-400/25 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-100">
-          {relayFlow.notice ?? selfAuthNotice}
+          {relayFlow.notice}
         </div>
       ) : null}
 
-      {(relayFlow.txHash ?? selfAuthTxHash) ? (
+      {relayFlow.txHash ? (
         <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-100 break-all">
           Submitted:{' '}
           <a
-            href={`https://basescan.org/tx/${relayFlow.txHash ?? selfAuthTxHash}`}
+            href={`https://basescan.org/tx/${relayFlow.txHash}`}
             target="_blank"
             rel="noreferrer"
             className="font-mono underline"
           >
-            {relayFlow.txHash ?? selfAuthTxHash}
+            {relayFlow.txHash}
           </a>
         </div>
       ) : null}
 
-      {relayFlow.error ?? selfAuthError ?? error ? (
+      {relayFlow.error ?? error ? (
         <div className="space-y-2">
           <div className="rounded-lg border border-rose-400/25 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
-            {relayFlow.error ?? selfAuthError ?? error}
+            {relayFlow.error ?? error}
           </div>
           {variant === 'waitlist' ? (
             <p className="text-[11px] text-zinc-500">
