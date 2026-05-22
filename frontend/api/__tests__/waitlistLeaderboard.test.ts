@@ -50,6 +50,7 @@ describe('waitlist/leaderboard', () => {
                 avatar_url: 'https://cdn.example/akita.png',
                 show_zora_badge: true,
                 show_base_app_badge: false,
+                wallet_provider: null,
                 referral_code: 'C2',
                 border_tier: 0,
                 total_points: 150,
@@ -64,6 +65,7 @@ describe('waitlist/leaderboard', () => {
                 avatar_url: null,
                 show_zora_badge: false,
                 show_base_app_badge: false,
+                wallet_provider: 'rabby',
                 referral_code: 'AKITA',
                 border_tier: 1,
                 total_points: 90,
@@ -106,5 +108,6 @@ describe('waitlist/leaderboard', () => {
     expect(res.body?.data?.leaderboard?.[0]?.avatarUrl).toBe('https://cdn.example/akita.png')
     expect(res.body?.data?.leaderboard?.[0]?.showZoraBadge).toBe(true)
     expect(res.body?.data?.leaderboard?.[0]?.showBaseAppBadge).toBe(false)
+    expect(res.body?.data?.leaderboard?.[1]?.walletProvider).toBe('rabby')
   })
 })

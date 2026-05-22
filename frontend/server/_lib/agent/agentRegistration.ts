@@ -41,7 +41,7 @@ const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
   name: '4626 Agent',
   description: 'Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
-  image: 'https://4626.fun/assets/logo-mark-opaque-1024.png?v=3',
+  image: 'https://4626.fun/assets/base-app-icon-1024.png?v=6',
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
     {
@@ -294,7 +294,7 @@ export function buildAgentRegistration(origin: string): {
   const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || '4626 Agent'
   const description =
     (process.env.ERC8004_AGENT_DESCRIPTION || '').trim() || base.description || 'Agent API for 4626 on Base.'
-  const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/assets/logo-mark-opaque-1024.png?v=3`
+  const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/assets/base-app-icon-1024.png?v=6`
 
   const servicesOverride = parseServicesFromEnv(process.env.ERC8004_AGENT_SERVICES_JSON || '')
   const servicesBase = Array.isArray(base.services) && base.services.length > 0 ? base.services : null

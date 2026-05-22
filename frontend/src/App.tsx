@@ -16,7 +16,6 @@ import {
 import {
   AuthenticatedAppLayout,
   HostGuard,
-  PublicAppLayout,
   SessionAcceptedRoute,
   getGenericNotFoundCta,
   marketingOnlyElement,
@@ -133,7 +132,7 @@ function App() {
         <Route
           element={<LazyGuardedOutlet guard={LazyAccessBoundary} />}
         >
-          <Route element={<PublicAppLayout />}>
+          <Route element={<AuthenticatedAppLayout />}>
             <Route element={<SessionAcceptedRoute />}>
               {renderPathRoutes(EXPLORE_ROUTES)}
             </Route>

@@ -75,7 +75,7 @@
       </a>
 
       <nav class="nav__links" aria-label="Primary">
-        <a href="/#how">How it works</a>
+        <a href="/#lifecycle">How it works</a>
         <a href="/#features">Features</a>
         <a href="/risks">Risks</a>
         <a href="/security">Security</a>
@@ -134,7 +134,7 @@
           </button>
         </div>
         <nav class="nav-drawer__links" aria-label="Mobile primary">
-          <a href="/#how">How it works</a>
+          <a href="/#lifecycle">How it works</a>
           <a href="/#features">Features</a>
           <a href="/risks">Risks</a>
           <a href="/security">Security</a>
@@ -235,8 +235,8 @@
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
-            <a href="/#how" class="btn btn--ghost">
-              <span>Read the standard</span>
+            <a href="/#lifecycle" class="btn btn--ghost">
+              <span>How it works</span>
             </a>
           </div>
         </div>
@@ -503,6 +503,192 @@
       </section>
 
       <!-- =====================================================
+           LIFECYCLE — four-step vault walkthrough (mirrors /faq/how-it-works)
+           ===================================================== -->
+      <section id="lifecycle" class="lifecycle">
+        <header class="section__head">
+          <span class="section__eyebrow">// How it works</span>
+          <h2 class="section__title">Deposit. Mint. <em>Distribute.</em> Earn.</h2>
+          <p class="section__sub">
+            The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
+          </p>
+        </header>
+
+        <div class="lifecycle__track">
+          <div class="lifecycle__rail" aria-hidden="true"></div>
+
+          <article class="lifecycle__step">
+            <div class="lifecycle__badge" aria-hidden="true">01</div>
+            <div class="lifecycle__panel">
+              <span class="lifecycle__label">Deposit</span>
+              <h3 class="lifecycle__title">Open the vault</h3>
+              <p class="lifecycle__copy">
+                To deploy a vault, the creator makes a single one-time deposit of
+                <strong>50,000,000</strong> creator coins — exactly 5% of total supply.
+                This commitment activates the vault and sets the initial share price.
+              </p>
+              <div class="lifecycle__stat">
+                <span class="lifecycle__stat-num">50,000,000</span>
+                <span class="lifecycle__stat-meta">creator coins required = 5% of supply</span>
+              </div>
+              <div class="lifecycle__flow" aria-hidden="true">
+                <img class="lifecycle__flow-token lifecycle__flow-token--round" src="./assets/tokens/akita_source.png" alt="" />
+                <span class="lifecycle__flow-line"></span>
+                <img class="lifecycle__flow-mark" src="/assets/logo-mark.svg" alt="" />
+                <span class="lifecycle__flow-line"></span>
+                <img class="lifecycle__flow-token lifecycle__flow-token--square" src="./assets/tokens/akita_share.png" alt="" />
+              </div>
+              <p class="lifecycle__hint">Creator coin → vault → ■ share token</p>
+            </div>
+          </article>
+
+          <article class="lifecycle__step">
+            <div class="lifecycle__badge" aria-hidden="true">02</div>
+            <div class="lifecycle__panel">
+              <span class="lifecycle__label">Mint</span>
+              <h3 class="lifecycle__title">Receive <span class="lifecycle__accent">■AKITA</span></h3>
+              <p class="lifecycle__copy">
+                <strong>50,000,000 ■AKITA</strong> vault share tokens are minted.
+                These represent proportional ownership of everything the vault earns — for the creator
+                and all future depositors alike. The share price can rise or fall as vault assets change.
+              </p>
+              <ul class="lifecycle__checks">
+                <li>Holding ■AKITA = pro-rata claim on vault assets + yield</li>
+                <li>Transferable and usable across the app like any token</li>
+                <li>Redeemable — burn ■AKITA to get back the underlying creator coin</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="lifecycle__step">
+            <div class="lifecycle__badge" aria-hidden="true">03</div>
+            <div class="lifecycle__panel">
+              <span class="lifecycle__label">CCA distribution</span>
+              <h3 class="lifecycle__title">Public price discovery</h3>
+              <p class="lifecycle__copy">
+                Only during the initial deposit, the <strong>50,000,000 ■AKITA</strong> are split
+                across three destinations. A portion runs through Uniswap's Continuous Clearing Auction
+                over <strong>7 days</strong> — no fixed presale price, no insider advantage.
+              </p>
+              <ul class="lifecycle__alloc">
+                <li>
+                  <div class="lifecycle__alloc-head">
+                    <span class="lifecycle__alloc-name">
+                      <img src="./assets/logos/uniswap-official-pink.svg" alt="" width="14" height="14" />
+                      CCA Launch
+                    </span>
+                    <span class="lifecycle__alloc-meta"><b>20,000,000</b> 40%</span>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:40%"></i></span>
+                  <p>Price discovery that benefits early supporters.</p>
+                </li>
+                <li>
+                  <div class="lifecycle__alloc-head">
+                    <span class="lifecycle__alloc-name">
+                      <img src="./assets/tokens/akita_share.png" alt="" width="14" height="14" />
+                      Creator vesting
+                    </span>
+                    <span class="lifecycle__alloc-meta"><b>20,000,000</b> 40%</span>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:40%"></i></span>
+                  <p>The creator earns alongside participants — on a one-year schedule.</p>
+                </li>
+                <li>
+                  <div class="lifecycle__alloc-head">
+                    <span class="lifecycle__alloc-name">
+                      <img src="./assets/logos/uniswap-official-pink.svg" alt="" width="14" height="14" />
+                      LP reserve
+                    </span>
+                    <span class="lifecycle__alloc-meta"><b>10,000,000</b> 20%</span>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:20%"></i></span>
+                  <p>Liquidity for anyone who wants to exit.</p>
+                </li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="lifecycle__step">
+            <div class="lifecycle__badge" aria-hidden="true">04</div>
+            <div class="lifecycle__panel">
+              <span class="lifecycle__label">Earn</span>
+              <h3 class="lifecycle__title">Tokens go to work</h3>
+              <p class="lifecycle__copy">
+                The deposited creator coins are immediately allocated across four yield strategies.
+                As the vault earns, the <span class="lifecycle__accent">■AKITA</span> share price rises —
+                benefiting every holder proportionally, including the creator.
+              </p>
+              <div class="lifecycle__strategies">
+                <div class="lifecycle__strategy">
+                  <div class="lifecycle__strategy-head">
+                    <span><img src="./assets/logos/charm.png" alt="" width="14" height="14" /> Charm</span>
+                    <b>30%</b>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:30%"></i></span>
+                  <p>Active Uniswap V3 LP — managed for range efficiency.</p>
+                </div>
+                <div class="lifecycle__strategy">
+                  <div class="lifecycle__strategy-head">
+                    <span><img src="./assets/logos/ajna-official.svg" alt="" width="14" height="14" /> Ajna</span>
+                    <b>30%</b>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:30%"></i></span>
+                  <p>Permissionless lending. Yield without counterparty risk.</p>
+                </div>
+                <div class="lifecycle__strategy">
+                  <div class="lifecycle__strategy-head">
+                    <span><img src="./assets/logos/solana-mark.svg" alt="" width="14" height="14" /> Solana</span>
+                    <b>30%</b>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:30%"></i></span>
+                  <p>Cross-chain yield — same principal, different market.</p>
+                </div>
+                <div class="lifecycle__strategy">
+                  <div class="lifecycle__strategy-head">
+                    <span>Idle Reserve</span>
+                    <b>10%</b>
+                  </div>
+                  <span class="lifecycle__bar"><i style="width:10%"></i></span>
+                  <p>Always available for withdrawals. The liquidity floor.</p>
+                </div>
+              </div>
+              <div class="lifecycle__blend">
+                <span>Blended APR</span>
+                <b>1–99%+</b>
+                <i>not guaranteed</i>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="lifecycle__summary">
+          <span class="lifecycle__label">The short version</span>
+          <p>
+            Deposit creator coins → receive <span class="lifecycle__accent">■AKITA</span> shares →
+            a portion distributed publicly via CCA over 7 days →
+            the vault deploys the strategies you activate (Charm active-LP, Ajna lending,
+            Solana bridge — each a $100 opt-in) with idle balance as a fast-exit buffer →
+            hold <span class="lifecycle__accent">■AKITA</span> to earn, or burn to exit.
+          </p>
+          <div class="lifecycle__actions">
+            <a href="/waitlist?start=1" class="btn btn--primary">
+              <span>Join the waitlist</span>
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </a>
+            <a href="/faq/how-it-works" class="btn btn--ghost">
+              <span>Full walkthrough</span>
+            </a>
+          </div>
+          <p class="lifecycle__risk">
+            Nothing here is financial advice. APR ranges are variable and not guarantees — the vault can make or lose money.
+            Smart contracts can fail. Treat this as experimental unless you have independently verified the deployed contracts.
+          </p>
+        </div>
+      </section>
+
+      <!-- =====================================================
            EXAMPLE VAULTS — cloth-physics fabric slider showcasing
            illustrative creator-vault previews (demo only, not live).
            ===================================================== -->
@@ -588,10 +774,10 @@
         </script>
       </section>
 
-      <!-- HOW IT WORKS -->
+      <!-- HOW IT WORKS — product summary (detailed walkthrough is in #lifecycle) -->
       <section id="how" class="how">
         <header class="section__head">
-          <span class="section__eyebrow">// How it works</span>
+          <span class="section__eyebrow">// In practice</span>
           <h2 class="section__title">Three steps. One vault. Shared yield.</h2>
           <p class="section__sub">
             The ERC-4626 standard turns any strategy into a tokenized share. Creators
@@ -1295,7 +1481,7 @@
 
       // Reveal on scroll — use rootMargin so elements reveal slightly before entering viewport
       (function () {
-        const els = document.querySelectorAll('.reveal, .step, .card, .section__head, .cta__inner, .hero__stats, .tokencard, .anatomy__bridge, .flow');
+        const els = document.querySelectorAll('.reveal, .step, .card, .section__head, .cta__inner, .hero__stats, .tokencard, .anatomy__bridge, .flow, .lifecycle__step, .lifecycle__summary');
         if (!('IntersectionObserver' in window)) {
           els.forEach((e) => e.classList.add('is-in'));
           return;

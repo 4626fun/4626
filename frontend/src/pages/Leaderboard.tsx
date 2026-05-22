@@ -190,6 +190,7 @@ export function Leaderboard() {
                     avatarUrl={data.me.avatarUrl}
                     showZoraBadge={data.me.showZoraBadge}
                     showBaseAppBadge={data.me.showBaseAppBadge}
+                    walletProvider={data.me.walletProvider}
                   />
                   {data.me.referralCode ? (
                     <p className="mt-1.5 text-[11px] text-zinc-500">

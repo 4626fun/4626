@@ -46,14 +46,6 @@ const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
 const CREATORS_TIME_FILTER_VALUES = ['1d'] as const
 const CREATORS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
-const ETHOS_FILTER_VALUES = ['all', '1200', '1600', '1800'] as const
-const ETHOS_FILTER_SLIDER_STOPS = ['all', '1200', '1600', '1800'] as const
-const ETHOS_FILTER_OPTIONS = [
-  { label: 'All', value: 'all' },
-  { label: '1200+', value: '1200' },
-  { label: '1600+', value: '1600' },
-  { label: '1800+', value: '1800' },
-] as const satisfies ReadonlyArray<{ label: string; value: (typeof ETHOS_FILTER_VALUES)[number] }>
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeCreatorAddress: true,
@@ -253,11 +245,6 @@ function deriveImmediateEthosUserkey(coin: ZoraCoin): string | null {
   return null
 }
 
-function getEthosFilterMinimum(value: string): number | null {
-  if (value === 'all') return null
-  const parsed = Number(value)
-  return Number.isFinite(parsed) ? parsed : null
-}
 
 function buildProfileIdentifierCandidates(query: string): string[] {
   const normalized = normalizeCoinSearchQuery(query)
@@ -349,15 +336,10 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
   return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
 }
 
-function toCreatorSortMetric(value: unknown): number {
-  const parsed = toFiniteNumber(value)
-  return parsed == null ? Number.NEGATIVE_INFINITY : parsed
-}
 
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
-  const [ethosFilter, setEthosFilter] = useState<(typeof ETHOS_FILTER_VALUES)[number]>('all')
   const screenshotMode = useScreenshotMode()
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
@@ -391,11 +373,15 @@ export function ExploreCreators() {
   const metricsQuery = useQuery({
     queryKey: ['explore', 'creators', 'metrics'],
     queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 5 * 60_000,
+    staleTime: 30_000,
     gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
+    refetchInterval: LIVE_METRICS_REFETCH_MS,
+    refetchIntervalInBackground: true,
     retry: 1,
   })
+
+  const preferLiveMetricCards =
+    metricsQuery.data?.exact !== true || metricsQuery.data?.totals?.partial === true
 
   // Fast-updating top-creator slice used for visibly-live metric cards.
   const liveMetricsQuery = useQuery({
@@ -405,9 +391,11 @@ export function ExploreCreators() {
         list: 'TOP_VOLUME_CREATORS_24H',
         count: PAGE_SIZE,
       }),
-    staleTime: 60_000,
+    staleTime: LIVE_METRICS_REFETCH_MS,
+    refetchInterval: preferLiveMetricCards ? LIVE_METRICS_REFETCH_MS : false,
+    refetchIntervalInBackground: true,
+    enabled: preferLiveMetricCards,
     retry: 1,
-    enabled: false,
   })
 
   const {
@@ -419,15 +407,13 @@ export function ExploreCreators() {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ['explore', 'creators', listType, currentSort, ethosFilter],
+    queryKey: ['explore', 'creators', listType, currentSort],
     queryFn: async ({ pageParam }) => {
-      const ethosMinimum = getEthosFilterMinimum(ethosFilter)
       const result = await fetchZoraExplore({
         list: listType,
         count: PAGE_SIZE,
         after: pageParam,
         ...(currentSort === 'ethosScore' ? { sort: 'ETHOS_SCORE' as const } : {}),
-        ...(ethosMinimum != null ? { ethosMin: ethosMinimum } : {}),
       })
       return result
     },
@@ -569,7 +555,7 @@ export function ExploreCreators() {
       ? metricsFreshnessRefMs - metricsUpdatedAtMs
       : Number.POSITIVE_INFINITY
   const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
-  const useLiveMetricCards = !exactMetrics || metricsTotals?.partial === true || canonicalMetricsStale
+  const useLiveMetricCards = preferLiveMetricCards || canonicalMetricsStale
   const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
   const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
   const marketCapDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
@@ -684,72 +670,7 @@ export function ExploreCreators() {
     return out
   }, [baseDisplayCoins, clientEthosScoreByCoinKey, coinEthosUserkeys, coinsNeedingClientEthosLookup])
 
-  const ethosSortStats = useMemo(() => {
-    let scored = 0
-    let lookupPendingOrUnknown = 0
-    let noIdentity = 0
-    for (const coin of baseDisplayCoins) {
-      const key = getCoinKey(coin)
-      const record = ethosByCoinKey.get(key)
-      if (!record) {
-        noIdentity += 1
-        continue
-      }
-      if (typeof record.score?.score === 'number' && record.score.score > 0) {
-        scored += 1
-      } else {
-        lookupPendingOrUnknown += 1
-      }
-    }
-    return {
-      total: baseDisplayCoins.length,
-      scored,
-      lookupPendingOrUnknown,
-      noIdentity,
-    }
-  }, [baseDisplayCoins, ethosByCoinKey])
-
-  const displayCoins = useMemo(() => {
-    const minimumScore = getEthosFilterMinimum(ethosFilter)
-    const filtered =
-      minimumScore == null
-        ? baseDisplayCoins
-        : baseDisplayCoins.filter((coin) => {
-            const score = ethosByCoinKey.get(getCoinKey(coin))?.score?.score
-            return typeof score === 'number' && score >= minimumScore
-          })
-
-    if (currentSort !== 'ethosScore') return filtered
-
-    return [...filtered].sort((a, b) => {
-      const aRecord = ethosByCoinKey.get(getCoinKey(a))
-      const bRecord = ethosByCoinKey.get(getCoinKey(b))
-
-      const aRawScore = resolveBestEthosScore(aRecord?.score?.score, a.ethosScore)
-      const bRawScore = resolveBestEthosScore(bRecord?.score?.score, b.ethosScore)
-      const aHasScore = aRawScore != null
-      const bHasScore = bRawScore != null
-      if (aHasScore !== bHasScore) return aHasScore ? -1 : 1
-      if (aHasScore && bHasScore) {
-        const delta = bRawScore - aRawScore
-        if (delta !== 0) return delta
-      }
-
-      // Keep rows with a resolved Ethos identity ahead of rows with no identity mapping.
-      const aHasIdentity = Boolean(aRecord?.userkey)
-      const bHasIdentity = Boolean(bRecord?.userkey)
-      if (aHasIdentity !== bHasIdentity) return aHasIdentity ? -1 : 1
-
-      // Tie-breakers keep sort stable and still economically meaningful.
-      const volumeDelta = toCreatorSortMetric(b.volume24h) - toCreatorSortMetric(a.volume24h)
-      if (volumeDelta !== 0) return volumeDelta
-      const mcapDelta = toCreatorSortMetric(b.marketCap) - toCreatorSortMetric(a.marketCap)
-      if (mcapDelta !== 0) return mcapDelta
-      const holdersDelta = toCreatorSortMetric(b.uniqueHolders) - toCreatorSortMetric(a.uniqueHolders)
-      if (holdersDelta !== 0) return holdersDelta
-      return getCoinKey(a).localeCompare(getCoinKey(b))
-    })
-  }, [baseDisplayCoins, currentSort, ethosByCoinKey, ethosFilter])
+  const displayCoins = baseDisplayCoins
 
   const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
   const creatorsTotalUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsTotal : creatorsTotalDisplay
@@ -797,27 +718,6 @@ export function ExploreCreators() {
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
   const screenshotReady = displayCoins.length > 0 && (!isLoading || hasScreenshotFallbackRows)
-  const showEthosSortCallout = currentSort === 'ethosScore' && !isLoading
-  const ethosScoredCreators = metricsTotals?.ethosScoredCreators ?? null
-  const ethos1200Creators = metricsTotals?.ethos1200Creators ?? null
-  const ethos1600Creators = metricsTotals?.ethos1600Creators ?? null
-  const ethos1800Creators = metricsTotals?.ethos1800Creators ?? null
-  const ethosCoverageTotal = metricsTotals?.creatorsTotal ?? null
-  const ethosTopPreview = useMemo(() => {
-    if (currentSort !== 'ethosScore' || displayCoins.length === 0) return null
-    const top = displayCoins.slice(0, 5).map((coin) => {
-      const ethosRecord = ethosByCoinKey.get(getCoinKey(coin))
-      const score = resolveBestEthosScore(ethosRecord?.score?.score, coin.ethosScore)
-      const symbol = coin.symbol || coin.name || 'unknown'
-      const source =
-        ethosRecord?.source ??
-        (typeof coin.ethosScoreSource === 'string' ? coin.ethosScoreSource : 'unknown')
-      return score != null ? `${symbol}:${score.toFixed(0)} (${source})` : `${symbol}:—`
-    })
-    return top.join(' | ')
-  }, [currentSort, displayCoins, ethosByCoinKey])
-  const ethosSliderIndex = Math.max(0, ETHOS_FILTER_SLIDER_STOPS.indexOf(ethosFilter))
-  const ethosSliderLabel = ethosFilter === 'all' ? 'All' : `${ethosFilter}+`
 
   useScreenshotReady(screenshotReady)
 
@@ -897,31 +797,6 @@ export function ExploreCreators() {
           </div>
 
           {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
-          {showEthosSortCallout ? (
-            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] text-zinc-300">
-              {ethosScoredCreators != null && ethosCoverageTotal != null ? (
-                <>
-                  Ethos sort uses DB-backed creator coverage: {ethosScoredCreators.toLocaleString()} of{' '}
-                  {ethosCoverageTotal.toLocaleString()} creators have a scored Ethos identity
-                  {ethos1200Creators != null && ethos1600Creators != null && ethos1800Creators != null
-                    ? ` (${ethos1200Creators.toLocaleString()} at 1200+, ${ethos1600Creators.toLocaleString()} at 1600+, ${ethos1800Creators.toLocaleString()} at 1800+)`
-                    : ''}
-                  .
-                </>
-              ) : (
-                <>
-                  Ethos sort ranks creators by available Ethos identity signal. Showing scored-first order for currently
-                  loaded rows ({ethosSortStats.scored.toLocaleString()} scored of {ethosSortStats.total.toLocaleString()} loaded).
-                </>
-              )}
-              {ethosTopPreview ? (
-                <span className="block mt-1 text-zinc-500">
-                  Top scores on this page: {ethosTopPreview}
-                  {currentSort === 'ethosScore' ? ' (server Ethos sort; run projection refresh if peak looks low)' : ''}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
         </>
       }
       subnav={
@@ -944,31 +819,6 @@ export function ExploreCreators() {
             { label: 'Recently added', value: 'new' },
           ]}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-          extraFilters={
-            <div className="flex items-center gap-2 rounded-full border border-white/12 bg-linear-to-b from-white/7 to-white/3 px-3 py-1.5">
-              <span className="text-[11px] text-zinc-500">Ethos</span>
-              <input
-                type="range"
-                min={0}
-                max={ETHOS_FILTER_SLIDER_STOPS.length - 1}
-                step={1}
-                value={ethosSliderIndex}
-                onChange={(event) => {
-                  const nextIndex = Math.max(
-                    0,
-                    Math.min(ETHOS_FILTER_SLIDER_STOPS.length - 1, Number(event.target.value)),
-                  )
-                  setEthosFilter(ETHOS_FILTER_SLIDER_STOPS[nextIndex] as (typeof ETHOS_FILTER_VALUES)[number])
-                }}
-                className="h-1.5 w-28 accent-[rgb(var(--brand-primary))] cursor-pointer"
-                aria-label="Ethos filter threshold"
-              />
-              <div className="text-[11px] text-zinc-200 tabular-nums min-w-[38px] text-right">{ethosSliderLabel}</div>
-              <div className="sr-only">
-                {ETHOS_FILTER_OPTIONS.map((filter) => filter.label).join(', ')}
-              </div>
-            </div>
-          }
         />
       }
       table={

@@ -21,10 +21,10 @@ import path from 'node:path'
 import process from 'node:process'
 
 const rootCompatibilityCopies = [
-  ['assets/favicon.ico', 'favicon.ico'],
+  ['assets/favicon-brand.ico', 'favicon.ico'],
   ['assets/favicon.svg', 'favicon.svg'],
   ['assets/apple-touch-icon.png', 'apple-touch-icon.png'],
-  ['assets/logo-mark-1024.png', 'icon.png'],
+  ['assets/base-app-icon-1024.png', 'icon.png'],
   ['assets/logo-mark-1024.png', 'logo.png'],
   ['assets/og-image.png', 'og.png'],
 ]
@@ -49,11 +49,12 @@ function exists(p) {
 }
 
 const requiredKitIconAssets = [
-  'favicon.ico',
   'favicon.svg',
   'apple-touch-icon.png',
   'site.webmanifest',
   'browserconfig.xml',
+  'assets/favicon-brand.ico',
+  'assets/base-app-icon-1024.png',
   'assets/favicon-16x16.png',
   'assets/favicon-32x32.png',
   'assets/favicon-48x48.png',

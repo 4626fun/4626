@@ -2956,6 +2956,336 @@ svg.hero__lightning #hero-lightning-bolts path {
 }
 
 /* =============================================================
+   LIFECYCLE — four-step vault walkthrough (/faq/how-it-works parity)
+   ============================================================= */
+.lifecycle {
+  position: relative;
+  padding: clamp(72px, 10vh, 120px) clamp(20px, 4vw, 60px) clamp(88px, 12vh, 140px);
+  max-width: 920px;
+  margin: 0 auto;
+}
+.lifecycle__track {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(18px, 3vw, 28px);
+}
+.lifecycle__rail {
+  position: absolute;
+  left: 19px;
+  top: 32px;
+  bottom: 32px;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,0.08) 12%, rgba(255,255,255,0.08) 88%, transparent);
+}
+.lifecycle__step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: clamp(16px, 3vw, 28px);
+  align-items: start;
+}
+.js .lifecycle__step {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.75s var(--ease), transform 0.75s var(--ease);
+}
+.js .lifecycle__step.is-in {
+  opacity: 1;
+  transform: none;
+}
+.js .lifecycle__step:nth-child(2).is-in { transition-delay: 0.06s; }
+.js .lifecycle__step:nth-child(3).is-in { transition-delay: 0.12s; }
+.js .lifecycle__step:nth-child(4).is-in { transition-delay: 0.18s; }
+.lifecycle__badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(8, 9, 14, 0.92);
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  z-index: 1;
+}
+.lifecycle__panel {
+  padding: clamp(22px, 3vw, 32px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background:
+    linear-gradient(135deg, rgba(18, 17, 26, 0.94) 0%, rgba(12, 12, 18, 0.96) 100%);
+  backdrop-filter: blur(16px);
+}
+.lifecycle__label {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--blue-2);
+  margin-bottom: 8px;
+}
+.lifecycle__title {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-size: clamp(24px, 3.2vw, 32px);
+  font-weight: 400;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.lifecycle__accent {
+  font-family: var(--mono);
+  color: var(--blue-2);
+}
+.lifecycle__copy {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+}
+.lifecycle__copy strong {
+  color: var(--ink);
+  font-weight: 500;
+}
+.lifecycle__stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 14px;
+  padding: 16px 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 18px;
+}
+.lifecycle__stat-num {
+  font-family: var(--mono);
+  font-size: clamp(24px, 4vw, 32px);
+  color: var(--ink);
+  letter-spacing: -0.03em;
+}
+.lifecycle__stat-meta {
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.lifecycle__flow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.lifecycle__flow-token {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+}
+.lifecycle__flow-token--round { border-radius: 999px; }
+.lifecycle__flow-token--square { border-radius: 8px; }
+.lifecycle__flow-mark {
+  width: 24px;
+  height: 24px;
+  opacity: 0.75;
+}
+.lifecycle__flow-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.18), rgba(255,255,255,0.04));
+}
+.lifecycle__hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.lifecycle__checks {
+  list-style: none;
+  margin: 0;
+  padding: 16px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lifecycle__checks li {
+  position: relative;
+  padding-left: 22px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.lifecycle__checks li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 10px;
+  height: 6px;
+  border-left: 1.5px solid #34d399;
+  border-bottom: 1.5px solid #34d399;
+  transform: rotate(-45deg);
+}
+.lifecycle__alloc {
+  list-style: none;
+  margin: 0;
+  padding: 16px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.lifecycle__alloc li p,
+.lifecycle__strategy p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--ink-3);
+}
+.lifecycle__alloc-head,
+.lifecycle__strategy-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lifecycle__alloc-name,
+.lifecycle__strategy-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.lifecycle__alloc-name img,
+.lifecycle__strategy-head img {
+  border-radius: 4px;
+  opacity: 0.85;
+}
+.lifecycle__alloc-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.lifecycle__alloc-meta b {
+  color: var(--ink-2);
+  font-weight: 500;
+  margin-right: 8px;
+}
+.lifecycle__bar {
+  display: block;
+  height: 2px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+.lifecycle__bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(77,126,255,0.35), rgba(77,126,255,0.75));
+}
+.lifecycle__strategies {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.lifecycle__strategy {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.05);
+  background: rgba(255,255,255,0.02);
+}
+.lifecycle__strategy-head b {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.lifecycle__blend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lifecycle__blend b {
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #34d399;
+  font-weight: 500;
+}
+.lifecycle__blend i {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-3);
+}
+.lifecycle__summary {
+  margin-top: clamp(36px, 6vh, 56px);
+  padding: clamp(24px, 3vw, 32px);
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+}
+.js .lifecycle__summary {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
+}
+.js .lifecycle__summary.is-in {
+  opacity: 1;
+  transform: none;
+}
+.lifecycle__summary p {
+  margin: 12px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  max-width: 62ch;
+}
+.lifecycle__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+.lifecycle__risk {
+  margin-top: 18px !important;
+  font-size: 11px !important;
+  line-height: 1.55 !important;
+  color: var(--ink-3) !important;
+  max-width: 62ch;
+}
+
+@media (max-width: 720px) {
+  .lifecycle__rail { display: none; }
+  .lifecycle__step { grid-template-columns: 1fr; }
+  .lifecycle__badge { margin-bottom: -8px; }
+  .lifecycle__strategies { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lifecycle__step, .lifecycle__summary {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* =============================================================
    LIVE VAULTS — cloth-physics fabric slider
    Three.js canvas mounts in .vaults__scene; HTML metadata sits
    alongside it on desktop and stacks below on mobile.
@@ -3588,6 +3918,7 @@ html body.is-folding > header {
 
   /* --- Global section padding compression --- */
   .anatomy,
+  .lifecycle,
   .vaults,
   .how,
   .features,
@@ -4028,6 +4359,7 @@ html body.is-folding > header {
         at the top and bottom of major sections so the boundary feels
         like a soft dissolve, not a hard edge ---- */
 .anatomy::after,
+.lifecycle::after,
 .vaults::after,
 .how::after,
 .features::after {
@@ -4044,6 +4376,7 @@ html body.is-folding > header {
   opacity: 0.5;
 }
 .anatomy,
+.lifecycle,
 .vaults,
 .how,
 .features,
@@ -4076,6 +4409,7 @@ html body.is-folding > header {
   /* Section bleed: extend cross-fade into the next section so the
      transition is even softer on small screens */
   .anatomy::after,
+  .lifecycle::after,
   .vaults::after,
   .how::after,
   .features::after {

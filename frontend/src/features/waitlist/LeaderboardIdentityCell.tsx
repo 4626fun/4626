@@ -4,10 +4,8 @@ import { isAddress } from 'viem'
 import { JazziconAvatar } from '@/components/account/JazziconAvatar'
 import { useBasenameForAddress } from '@/hooks/useBasenameForAddress'
 
-const COINBASE_WALLET_LOGO_URL =
-  'https://gist.githubusercontent.com/taycaldwell/2291907115c0bb5589bc346661435007/raw/cbw.svg'
-const ZORA_LOGO_URL = '/brands/zora-token.svg'
-const BASE_APP_LOGO_URL = '/base/base-square-blue.svg'
+import { LeaderboardAccountBadge } from './LeaderboardAccountBadge'
+import { resolveLeaderboardAccountKind } from './leaderboardAccountKind'
 
 type LeaderboardIdentityCellProps = {
   display: string
@@ -16,6 +14,7 @@ type LeaderboardIdentityCellProps = {
   avatarUrl?: string | null
   showZoraBadge?: boolean
   showBaseAppBadge?: boolean
+  walletProvider?: string | null
   /** Centered column for podium cards. */
   layout?: 'inline' | 'stacked'
 }
@@ -31,26 +30,6 @@ function isHexLabel(label: string): boolean {
 
 function basescanUrl(address: string): string {
   return `https://basescan.org/address/${address}`
-}
-
-function WalletBadge({
-  src,
-  title,
-}: {
-  src: string
-  title: string
-}) {
-  return (
-    <img
-      src={src}
-      alt=""
-      width={16}
-      height={16}
-      loading="lazy"
-      title={title}
-      className="h-4 w-4 shrink-0 object-contain opacity-90"
-    />
-  )
 }
 
 function LeaderboardAvatar({
@@ -94,6 +73,7 @@ export function LeaderboardIdentityCell({
   avatarUrl = null,
   showZoraBadge = false,
   showBaseAppBadge = false,
+  walletProvider = null,
   layout = 'inline',
 }: LeaderboardIdentityCellProps) {
   const csw = cswAddress && isAddress(cswAddress) ? (cswAddress as Address) : null
@@ -129,6 +109,13 @@ export function LeaderboardIdentityCell({
 
   const stacked = layout === 'stacked'
   const avatarSize = stacked ? 40 : 26
+  const accountKind = resolveLeaderboardAccountKind({
+    showZoraBadge,
+    showBaseAppBadge,
+    cswAddress,
+    walletProvider,
+  })
+  const showAccountBadge = accountKind !== 'unknown'
 
   return (
     <div
@@ -138,32 +125,33 @@ export function LeaderboardIdentityCell({
           : 'flex items-center gap-2 min-w-0 flex-1'
       }
     >
-      {csw ? (
-        <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} size={avatarSize} />
-      ) : (
-        <span
-          className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-zinc-400"
-          aria-hidden
-        >
-          {resolvedLabel.slice(0, 1).toUpperCase()}
-        </span>
-      )}
+      <div className="relative shrink-0">
+        {csw ? (
+          <LeaderboardAvatar address={csw} imageUrl={resolvedAvatar} size={avatarSize} />
+        ) : (
+          <span
+            className="inline-flex shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-semibold text-zinc-400"
+            style={{ width: avatarSize, height: avatarSize }}
+            aria-hidden
+          >
+            {resolvedLabel.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        {showAccountBadge ? (
+          <span className="absolute -bottom-0.5 -right-0.5">
+            <LeaderboardAccountBadge
+              showZoraBadge={showZoraBadge}
+              showBaseAppBadge={showBaseAppBadge}
+              cswAddress={cswAddress}
+              walletProvider={walletProvider}
+              size={stacked ? 13 : 12}
+            />
+          </span>
+        ) : null}
+      </div>
       <div className={stacked ? 'min-w-0 w-full' : 'min-w-0 flex-1'}>
-        <div
-          className={
-            stacked
-              ? 'flex flex-col items-center gap-1 min-w-0'
-              : 'flex items-center gap-1.5 min-w-0'
-          }
-        >
-          {showZoraBadge ? <WalletBadge src={ZORA_LOGO_URL} title="Zora Coinbase Smart Wallet" /> : null}
-          {showBaseAppBadge ? <WalletBadge src={BASE_APP_LOGO_URL} title="Base App" /> : null}
-          <div className={stacked ? 'min-w-0 w-full text-sm truncate' : 'min-w-0 text-[13px] sm:text-sm truncate'}>
-            {labelNode}
-          </div>
-          {!stacked && cswAddress ? (
-            <WalletBadge src={COINBASE_WALLET_LOGO_URL} title="Coinbase Smart Wallet" />
-          ) : null}
+        <div className={stacked ? 'min-w-0 w-full text-sm truncate' : 'min-w-0 text-[13px] sm:text-sm truncate'}>
+          {labelNode}
         </div>
         {showCswSubtitle ? (
           <div

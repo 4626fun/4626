@@ -8,18 +8,18 @@
     "ownerAddress": "0x8719fa7Be10533fd69885b124a8c84f9C51071AF"
   },
   "miniapp": {
-    "version": "1",
+    "version": "2",
     "name": "4626.fun",
-    "homeUrl": "https://4626.fun/",
-    "iconUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=5",
-    "splashImageUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=5",
+    "homeUrl": "https://app.4626.fun/",
+    "iconUrl": "https://app.4626.fun/assets/base-app-icon-1024.png",
+    "splashImageUrl": "https://app.4626.fun/assets/base-app-icon-1024.png",
     "splashBackgroundColor": "#020204",
     "subtitle": "Creator vaults on Base",
     "description": "ERC-4626 creator vaults on Base.",
     "primaryCategory": "finance",
     "tags": ["creator", "vaults", "defi", "base", "trading"],
-    "heroImageUrl": "https://4626.fun/assets/og-image.png?v=5",
-    "screenshotUrls": ["https://4626.fun/assets/og-image.png?v=5"],
+    "heroImageUrl": "https://4626.fun/assets/og-image.png?v=6",
+    "screenshotUrls": ["https://4626.fun/assets/og-image.png?v=6"],
     "canonicalDomain": "4626.fun"
   }
 }

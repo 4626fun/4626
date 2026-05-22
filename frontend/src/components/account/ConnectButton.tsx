@@ -23,6 +23,19 @@ import {
   CanonicalIdentityCard,
   CanonicalIdentityDropdown,
 } from '@/components/account/CanonicalIdentityCard'
+import {
+  buildTrayAssetHoldings,
+  buildTrayHoldings,
+  buildTrayWalletSources,
+  buildTrayZoraHoldings,
+  collectZoraLookupAddresses,
+  isEvmAddress,
+  type TrayAssetHolding,
+  type TrayNetworkHolding,
+  type TrayTokenHolding,
+  type TrayWalletSource,
+  type TrayWalletTokenRow,
+} from '@/components/account/trayPortfolioHelpers'
 
 type ConnectButtonStateInput = {
   sessionHydrated: boolean
@@ -163,10 +176,6 @@ function formatTokenAmount(value: number | null | undefined): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
-function isEvmAddress(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(value.trim())
-}
-
 async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const output: R[] = []
   let index = 0
@@ -178,53 +187,6 @@ async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Pr
   })
   await Promise.all(workers)
   return output
-}
-
-type TrayWalletKind = 'canonical' | 'external'
-
-type TrayWalletSource = {
-  kind: TrayWalletKind
-  address: string
-  label: string
-}
-
-type TrayNetworkWalletBreakdown = {
-  kind: TrayWalletKind
-  label: string
-  address: string
-  usdValue: number
-}
-
-type TrayNetworkHolding = {
-  networkId: string
-  networkLabel: string
-  networkLogoUrl: string | null
-  usdTotal: number
-  wallets: TrayNetworkWalletBreakdown[]
-}
-
-type TrayTokenHolding = {
-  tokenAddress: string
-  symbol: string
-  name: string
-  logoUrl: string | null
-  amount: number
-  usdValue: number
-  walletCount: number
-}
-
-type TrayWalletTokenRow = {
-  token: DebankToken
-  wallet: TrayWalletSource
-}
-
-type TrayAssetHolding = {
-  tokenAddress: string
-  symbol: string
-  name: string
-  logoUrl: string | null
-  amount: number
-  usdValue: number
 }
 
 type WaitlistPositionSnapshot = {
@@ -268,66 +230,6 @@ async function fetchWaitlistPositionByWallet(wallet: string): Promise<WaitlistPo
   const json = (await response.json().catch(() => null)) as { success?: boolean; data?: WaitlistPositionSnapshot | null } | null
   if (!json?.success) return null
   return json.data ?? null
-}
-
-function buildTrayHoldings(params: {
-  wallets: TrayWalletSource[]
-  debankResults: Record<string, { totalUsdValue: number; chains: Array<{ id: string; name?: string; logoUrl?: string; usdValue: number }> } | null> | null
-}): {
-  aggregateUsd: number
-  activeNetworkLabel: string
-  activeNetworkUsd: number | null
-  rows: TrayNetworkHolding[]
-} {
-  const aggregateUsd = params.wallets.reduce((sum, wallet) => {
-    const entry = params.debankResults?.[wallet.address.toLowerCase()]
-    return sum + (entry?.totalUsdValue ?? 0)
-  }, 0)
-
-  const map = new Map<string, TrayNetworkHolding>()
-  for (const wallet of params.wallets) {
-    const entry = params.debankResults?.[wallet.address.toLowerCase()]
-    if (!entry) continue
-    for (const chain of entry.chains ?? []) {
-      const networkId = String(chain.id || '').trim().toLowerCase()
-      if (!networkId) continue
-      const chainValue = Number(chain.usdValue ?? 0)
-      if (!Number.isFinite(chainValue) || chainValue <= 0) continue
-      const existing = map.get(networkId)
-      if (existing) {
-        existing.usdTotal += chainValue
-        existing.wallets.push({
-          kind: wallet.kind,
-          label: wallet.label,
-          address: wallet.address,
-          usdValue: chainValue,
-        })
-        continue
-      }
-      map.set(networkId, {
-        networkId,
-        networkLabel: String(chain.name || chain.id || networkId),
-        networkLogoUrl: chain.logoUrl ? String(chain.logoUrl) : null,
-        usdTotal: chainValue,
-        wallets: [{
-          kind: wallet.kind,
-          label: wallet.label,
-          address: wallet.address,
-          usdValue: chainValue,
-        }],
-      })
-    }
-  }
-
-  const rows = Array.from(map.values()).sort((a, b) => b.usdTotal - a.usdTotal)
-  const preferredBase = rows.find((row) => row.networkId === 'base')
-  const active = preferredBase ?? rows[0] ?? null
-  return {
-    aggregateUsd,
-    activeNetworkLabel: active?.networkLabel ?? 'Base',
-    activeNetworkUsd: active?.usdTotal ?? null,
-    rows,
-  }
 }
 
 export function deriveWalletIdentityPresentation(input: WalletIdentityPresentationInput): WalletIdentityPresentation {
@@ -469,24 +371,14 @@ export function ConnectButton({
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
   const shouldHideInjectedConnector = providerCollision.shouldDisableInjectedConnector
-  const trayWalletSources = useMemo<TrayWalletSource[]>(() => {
-    const out: TrayWalletSource[] = []
-    if (canonicalIdentity.cswAddress) {
-      out.push({
-        kind: 'canonical',
-        address: canonicalIdentity.cswAddress,
-        label: '4626 CSW',
-      })
-    }
-    if (canonicalIdentity.externalEoaAddress) {
-      out.push({
-        kind: 'external',
-        address: canonicalIdentity.externalEoaAddress,
-        label: 'External EOA',
-      })
-    }
-    return out
-  }, [canonicalIdentity.cswAddress, canonicalIdentity.externalEoaAddress])
+  const trayWalletSources = useMemo<TrayWalletSource[]>(
+    () =>
+      buildTrayWalletSources({
+        cswAddress: canonicalIdentity.cswAddress,
+        externalEoaAddress: canonicalIdentity.externalEoaAddress,
+      }),
+    [canonicalIdentity.cswAddress, canonicalIdentity.externalEoaAddress],
+  )
   const trayWalletKey = useMemo(
     () => trayWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [trayWalletSources],
@@ -537,46 +429,21 @@ export function ConnectButton({
       )
     },
   })
-  const trayBaseTokens = useMemo<TrayAssetHolding[]>(() => {
-    const rows = (trayTokenRowsQuery.data ?? []) as TrayWalletTokenRow[]
-    const grouped = new Map<string, TrayAssetHolding>()
-    for (const row of rows) {
-      const token = row.token
-      const tokenAddress = String(token.id || '').toLowerCase()
-      if (!isEvmAddress(tokenAddress)) continue
-      const amount = Number(token.amount ?? 0)
-      const usdValue = Number(token.usdValue ?? 0)
-      const existing = grouped.get(tokenAddress)
-      if (existing) {
-        existing.amount += Number.isFinite(amount) ? amount : 0
-        existing.usdValue += Number.isFinite(usdValue) ? usdValue : 0
-        continue
-      }
-      grouped.set(tokenAddress, {
-        tokenAddress,
-        symbol: String(token.symbol || '').trim() || formatAddress(tokenAddress),
-        name: String(token.name || '').trim() || String(token.symbol || '').trim() || tokenAddress,
-        logoUrl: token.logoUrl ? String(token.logoUrl) : null,
-        amount: Number.isFinite(amount) ? amount : 0,
-        usdValue: Number.isFinite(usdValue) ? usdValue : 0,
-      })
-    }
-    return Array.from(grouped.values()).sort((a, b) => b.usdValue - a.usdValue)
-  }, [trayTokenRowsQuery.data])
-  const trayTokenAddressesKey = useMemo(() => {
-    const addresses = (trayTokenRowsQuery.data ?? [])
-      .map((row) => String(row.token.id || '').toLowerCase())
-      .filter((value) => isEvmAddress(value))
-      .sort()
-    return Array.from(new Set(addresses)).join(',')
-  }, [trayTokenRowsQuery.data])
+  const trayTokenRows = useMemo(
+    () => (trayTokenRowsQuery.data ?? []) as TrayWalletTokenRow[],
+    [trayTokenRowsQuery.data],
+  )
+  const trayTokenAddressesKey = useMemo(
+    () => collectZoraLookupAddresses(trayTokenRows).join(','),
+    [trayTokenRows],
+  )
   const trayZoraTokensQuery = useQuery({
     queryKey: ['account-tray', 'zora-token-map', trayTokenAddressesKey],
     enabled: auth.hasSession && trayTokenAddressesKey.length > 0,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
-      const unique = trayTokenAddressesKey.split(',').filter(Boolean)
+      const unique = collectZoraLookupAddresses(trayTokenRows)
       const pairs = await mapWithLimit(unique, 6, async (addressLc) => {
         try {
           const coin = await fetchZoraCoinViaApi(addressLc)
@@ -592,36 +459,22 @@ export function ConnectButton({
       return out
     },
   })
-  const trayZoraTokens = useMemo<TrayTokenHolding[]>(() => {
-    const rows = trayTokenRowsQuery.data ?? []
+  const trayZoraTokenKeys = useMemo(() => {
     const zoraMap = trayZoraTokensQuery.data ?? {}
-    const grouped = new Map<string, TrayTokenHolding>()
-    for (const row of rows) {
-      const token = row.token as DebankToken
-      const tokenAddress = String(token.id || '').toLowerCase()
-      if (!isEvmAddress(tokenAddress)) continue
-      if (!zoraMap[tokenAddress]) continue
-      const amount = Number(token.amount ?? 0)
-      const usdValue = Number(token.usdValue ?? 0)
-      const existing = grouped.get(tokenAddress)
-      if (existing) {
-        existing.amount += Number.isFinite(amount) ? amount : 0
-        existing.usdValue += Number.isFinite(usdValue) ? usdValue : 0
-        existing.walletCount += 1
-        continue
-      }
-      grouped.set(tokenAddress, {
-        tokenAddress,
-        symbol: String(token.symbol || '').trim() || formatAddress(tokenAddress),
-        name: String(token.name || '').trim() || String(token.symbol || '').trim() || tokenAddress,
-        logoUrl: token.logoUrl ? String(token.logoUrl) : null,
-        amount: Number.isFinite(amount) ? amount : 0,
-        usdValue: Number.isFinite(usdValue) ? usdValue : 0,
-        walletCount: 1,
-      })
-    }
-    return Array.from(grouped.values()).sort((a, b) => b.usdValue - a.usdValue)
-  }, [trayTokenRowsQuery.data, trayZoraTokensQuery.data])
+    return new Set(
+      Object.entries(zoraMap)
+        .filter(([, coin]) => Boolean(coin))
+        .map(([address]) => address.toLowerCase()),
+    )
+  }, [trayZoraTokensQuery.data])
+  const trayBaseTokens = useMemo<TrayAssetHolding[]>(
+    () => buildTrayAssetHoldings(trayTokenRows, { excludeTokenKeys: trayZoraTokenKeys }),
+    [trayTokenRows, trayZoraTokenKeys],
+  )
+  const trayZoraTokens = useMemo<TrayTokenHolding[]>(
+    () => buildTrayZoraHoldings(trayTokenRows, trayZoraTokensQuery.data ?? {}),
+    [trayTokenRows, trayZoraTokensQuery.data],
+  )
   const trayZoraTokensLoading = trayTokenRowsQuery.isLoading || trayZoraTokensQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
   const trayPointsLookupWallet = useMemo(() => {
@@ -1150,7 +1003,7 @@ function RelayTrayPortfolioModule(props: {
   const [expandedNetworkId, setExpandedNetworkId] = useState<string | null>(null)
   const topRows = props.rows.slice(0, 6)
   const activityRows = props.rows.slice(0, 4)
-  const topBaseTokens = props.baseTokens.slice(0, 6)
+  const topBaseTokens = props.baseTokens.slice(0, 12)
 
   return (
     <div className="px-4 pt-2 pb-3">
@@ -1229,7 +1082,7 @@ function RelayTrayPortfolioModule(props: {
                         {row.networkId === 'base' ? (
                           <div className="mt-2 border-t border-white/8 pt-2">
                             <div className="px-0.5 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                              Asset breakdown
+                              Tokens on Base
                             </div>
                             {props.baseTokensLoading ? (
                               <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
@@ -1237,16 +1090,29 @@ function RelayTrayPortfolioModule(props: {
                               </div>
                             ) : topBaseTokens.length === 0 ? (
                               <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
-                                No Base token assets found.
+                                {props.zoraTokens.length > 0
+                                  ? 'Other Base tokens appear under Zora tokens below.'
+                                  : 'No Base token balances found yet.'}
                               </div>
                             ) : (
-                              <div className="space-y-1">
+                              <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
                                 {topBaseTokens.map((token) => (
                                   <div
-                                    key={`base-asset:${token.tokenAddress}`}
-                                    className="flex items-center justify-between gap-2 rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5"
+                                    key={`base-asset:${token.tokenKey}`}
+                                    className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5"
                                   >
-                                    <span className="min-w-0">
+                                    {token.logoUrl ? (
+                                      <img
+                                        src={token.logoUrl}
+                                        alt=""
+                                        className="h-5 w-5 shrink-0 rounded-full border border-white/10"
+                                      />
+                                    ) : (
+                                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                                        <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
+                                      </span>
+                                    )}
+                                    <span className="min-w-0 flex-1">
                                       <span className="block truncate text-[10px] text-zinc-200">{token.symbol}</span>
                                       <span className="block truncate text-[10px] text-zinc-600">
                                         {formatTokenAmount(token.amount)}
@@ -1279,7 +1145,7 @@ function RelayTrayPortfolioModule(props: {
                 <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
                   {props.zoraTokens.map((token) => (
                     <div
-                      key={`zora:${token.tokenAddress}`}
+                      key={`zora:${token.tokenKey}`}
                       className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2"
                     >
                       {token.logoUrl ? (
@@ -1321,7 +1187,7 @@ function RelayTrayPortfolioModule(props: {
                 ))}
                 {topBaseTokens.slice(0, 3).map((token) => (
                   <div
-                    key={`activity-token:${token.tokenAddress}`}
+                    key={`activity-token:${token.tokenKey}`}
                     className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
                   >
                     <span className="min-w-0">

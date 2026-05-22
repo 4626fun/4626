@@ -37,7 +37,7 @@ const MASKABLE_512 = `/assets/maskable-icon-512x512.png?v=${BRAND_ASSET_VERSION}
 const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
-const MINIAPP_SPLASH_URL = `https://4626.fun/assets/logo-mark-opaque-1024.png?v=${BRAND_ASSET_VERSION}`
+const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {

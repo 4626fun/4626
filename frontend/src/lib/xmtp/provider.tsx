@@ -48,6 +48,18 @@ import {
   truncateAddress,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
+  buildXmtpDbPath,
+  clearInstallationProvisioned,
+  clearStoredEncKeyHex as clearStoredEncKeyHexForEnv,
+  clearStoredInstallationMeta,
+  hasKnownXmtpInstallation,
+  readStoredEncKeyHex as readStoredEncKeyHexForEnv,
+  readStoredInstallationMeta,
+  writeInstallationProvisioned,
+  writeStoredEncKeyHex as writeStoredEncKeyHexForEnv,
+  writeStoredInstallationMeta,
+} from '@/lib/xmtp/xmtpLocalInstallStorage'
+import {
   Client,
   LogLevel,
   Opfs,
@@ -339,12 +351,6 @@ const XMTP_APP_VERSION = '4626.fun-web'
 const XMTP_CONNECT_FAILURE_COOLDOWN_MS = 5_000
 const XMTP_TAB_LOCK_STALE_MS = 20_000
 const XMTP_TAB_LOCK_HEARTBEAT_MS = 5_000
-const ENC_KEY_HEX_RE = /^0x[0-9a-fA-F]{64}$/
-const inMemoryEncKeys = new Map<string, string>()
-
-function encKeyStorageKey(address: string): string {
-  return `cv:xmtp:encKey:${XMTP_ENV}:${address.toLowerCase()}`
-}
 
 function autoConnectStorageKey(address: string): string {
   return `cv:xmtp:autoConnect:${XMTP_ENV}:${address.toLowerCase()}`
@@ -389,37 +395,6 @@ function isTabLockStale(lock: XmtpTabLockRecord | null): boolean {
   return Date.now() - lock.ts > XMTP_TAB_LOCK_STALE_MS
 }
 
-function installationProvisionedStorageKey(address: string): string {
-  return `cv:xmtp:installationProvisioned:${XMTP_ENV}:${address.toLowerCase()}`
-}
-
-function readInstallationProvisioned(address: string): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.localStorage.getItem(installationProvisionedStorageKey(address)) === '1'
-  } catch {
-    return false
-  }
-}
-
-function writeInstallationProvisioned(address: string): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.setItem(installationProvisionedStorageKey(address), '1')
-  } catch {
-    // ignore storage errors
-  }
-}
-
-function clearInstallationProvisioned(address: string): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.localStorage.removeItem(installationProvisionedStorageKey(address))
-  } catch {
-    // ignore storage errors
-  }
-}
-
 function readStoredSignerType(address: string): 'SCW' | 'EOA' | null {
   if (typeof window === 'undefined') return null
   try {
@@ -450,18 +425,11 @@ function clearStoredSignerType(address: string): void {
 }
 
 export function readStoredEncKeyHex(address: string): string | null {
-  const raw = inMemoryEncKeys.get(encKeyStorageKey(address)) ?? null
-  if (!raw || !ENC_KEY_HEX_RE.test(raw)) return null
-  return raw
+  return readStoredEncKeyHexForEnv(XMTP_ENV, address)
 }
 
 export function writeStoredEncKeyHex(address: string, encKeyHex: string): void {
-  if (!ENC_KEY_HEX_RE.test(encKeyHex)) return
-  inMemoryEncKeys.set(encKeyStorageKey(address), encKeyHex)
-}
-
-function clearStoredEncKeyHex(address: string): void {
-  inMemoryEncKeys.delete(encKeyStorageKey(address))
+  writeStoredEncKeyHexForEnv(XMTP_ENV, address, encKeyHex)
 }
 
 function closeClientSafe(client: Client | null | undefined): void {
@@ -474,20 +442,89 @@ function closeClientSafe(client: Client | null | undefined): void {
 }
 
 /**
- * Get or create a random XMTP DB encryption key for this address.
- * Kept in memory only for the current page session.
+ * Get or create a stable XMTP DB encryption key for this identity.
+ * Persisted in localStorage so Client.build can reopen the same OPFS DB
+ * after refresh instead of falling through to Client.create.
  */
 function getOrCreateEncKeyHex(address: string): string {
-  // 1. Return existing key (works for both old sig-derived and new random keys)
-  const existing = readStoredEncKeyHex(address)
+  const existing = readStoredEncKeyHexForEnv(XMTP_ENV, address)
   if (existing) return existing
 
-  // 2. Generate a random 32-byte key
   const bytes = new Uint8Array(32)
   crypto.getRandomValues(bytes)
   const hex = `0x${Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`
-  writeStoredEncKeyHex(address, hex)
+  writeStoredEncKeyHexForEnv(XMTP_ENV, address, hex)
   return hex
+}
+
+function buildClientRestoreOptions(
+  baseOptions: Record<string, unknown>,
+  encKeyBytes: Uint8Array,
+  storedInstallationMeta: ReturnType<typeof readStoredInstallationMeta>,
+  includeEncryptionKey: boolean,
+): Record<string, unknown> {
+  const options: Record<string, unknown> = {
+    ...baseOptions,
+    ...(includeEncryptionKey ? { dbEncryptionKey: encKeyBytes } : {}),
+  }
+  if (storedInstallationMeta?.inboxId) {
+    options.dbPath = buildXmtpDbPath(XMTP_ENV, storedInstallationMeta.inboxId)
+  }
+  return options
+}
+
+async function tryRestoreClientFromLocalState(input: {
+  identifier: { identifier: `0x${string}`; identifierKind: IdentifierKind }
+  baseOptions: Record<string, unknown>
+  encKeyBytes: Uint8Array
+  storedInstallationMeta: ReturnType<typeof readStoredInstallationMeta>
+  onCloseActiveClient?: () => void
+}): Promise<{ client: Client | null; failureMessage: string | null; failureKind: 'installation_limit' | 'opfs_lock' | null }> {
+  let restoreFailureMessage: string | null = null
+  let restoreFailureKind: 'installation_limit' | 'opfs_lock' | null = null
+
+  const attempts: Array<{ includeEncryptionKey: boolean; label: string }> = [
+    { includeEncryptionKey: true, label: 'stored key' },
+    { includeEncryptionKey: false, label: 'no key' },
+  ]
+
+  for (const attempt of attempts) {
+    let buildClient: Client | null = null
+    try {
+      xmtpDebug(
+        `[xmtp] Attempting Client.build restore (${attempt.label})…`,
+        input.storedInstallationMeta?.inboxId
+          ? `dbPath=${buildXmtpDbPath(XMTP_ENV, input.storedInstallationMeta.inboxId)}`
+          : 'dbPath=auto',
+      )
+      buildClient = await Client.build(
+        input.identifier,
+        buildClientRestoreOptions(
+          input.baseOptions,
+          input.encKeyBytes,
+          input.storedInstallationMeta,
+          attempt.includeEncryptionKey,
+        ) as any,
+      )
+      if (buildClient?.inboxId) {
+        xmtpDebug('[xmtp] Client.build succeeded — reusing installation', buildClient.installationId)
+        return { client: buildClient, failureMessage: null, failureKind: null }
+      }
+      xmtpDebug('[xmtp] Client.build returned no inboxId')
+      closeClientSafe(buildClient)
+    } catch (buildErr) {
+      const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
+      console.warn(`[xmtp] Client.build failed (${attempt.label}):`, buildMsg)
+      restoreFailureMessage = buildMsg
+      if (isInstallationLimitError(buildMsg)) restoreFailureKind = 'installation_limit'
+      else if (isOpfsAccessHandleError(buildMsg)) restoreFailureKind = 'opfs_lock'
+      closeClientSafe(buildClient)
+      input.onCloseActiveClient?.()
+      await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+  }
+
+  return { client: null, failureMessage: restoreFailureMessage, failureKind: restoreFailureKind }
 }
 
 export function setAutoConnectEnabled(address: string): void {
@@ -1256,7 +1293,8 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         identifier: xmtpIdentityAddress as `0x${string}`,
         identifierKind: IdentifierKind.Ethereum,
       }
-      const installationAlreadyProvisioned = readInstallationProvisioned(xmtpIdentityAddress)
+      const storedInstallationMeta = readStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress)
+      const installationAlreadyProvisioned = hasKnownXmtpInstallation(XMTP_ENV, xmtpIdentityAddress)
       const baseOptions = {
         env: XMTP_ENV as any,
         appVersion: XMTP_APP_VERSION,
@@ -1445,7 +1483,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setLocalStateResetRequired(false)
         }
         startTabLockHeartbeat(xmtpIdentityAddress)
-        writeInstallationProvisioned(xmtpIdentityAddress)
+        writeInstallationProvisioned(XMTP_ENV, xmtpIdentityAddress)
+        if (client.inboxId && client.installationId) {
+          writeStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress, {
+            inboxId: client.inboxId,
+            installationId: client.installationId,
+          })
+        }
 
         // Auto-create a DM conversation with the Keepr agent so it appears
         // in the user's chat list.  We do NOT send any message on behalf of
@@ -1499,89 +1543,33 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       let buildClient: Client | null = null
       let buildSucceeded = false
 
-      // Pre-check: does an OPFS database even exist?
-      // If not, Client.build will always fail.  Skip straight to Client.create
-      // to avoid confusing error logs and wasted time.
       const dbExists = await hasOpfsDatabase()
+      const shouldAttemptRestore = dbExists || installationAlreadyProvisioned
 
-      if (dbExists) {
-        let restoreFailureMessage: string | null = null
-        let restoreFailureKind: 'installation_limit' | 'opfs_lock' | null = null
-
-        // Attempt 1: try with the stored encryption key
-        try {
-          xmtpDebug('[xmtp] OPFS database found — attempting Client.build restore…')
-          buildClient = await Client.build(identifier, {
-            ...baseOptions,
-            dbEncryptionKey: encKeyBytes,
-          })
-          if (buildClient?.inboxId) {
-            buildSucceeded = true
-            xmtpDebug(
-              '[xmtp] Client.build succeeded — reusing installation',
-              buildClient.installationId,
-            )
-          } else {
-            xmtpDebug('[xmtp] Client.build returned no inboxId')
-            try { buildClient?.close() } catch {}
-            buildClient = null
-          }
-        } catch (buildErr) {
-          const buildMsg = buildErr instanceof Error ? buildErr.message : String(buildErr)
-          console.warn('[xmtp] Client.build failed with stored key:', buildMsg)
-          restoreFailureMessage = buildMsg
-          if (isInstallationLimitError(buildMsg)) restoreFailureKind = 'installation_limit'
-          else if (isOpfsAccessHandleError(buildMsg)) restoreFailureKind = 'opfs_lock'
-          closeClientSafe(buildClient)
-          buildClient = null
-          closeClientSafe(clientRef.current)
-          clientRef.current = null
-          await new Promise((r) => setTimeout(r, 200))
-        }
-
-        // Attempt 2: try without encryption key — the Browser SDK doesn't use
-        // it for encryption, so the DB may be openable without one (or with a
-        // different one) if the key in localStorage drifted.
-        if (!buildSucceeded) {
-          try {
-            xmtpDebug('[xmtp] Retrying Client.build without dbEncryptionKey…')
-            buildClient = await Client.build(identifier, { ...baseOptions })
-            if (buildClient?.inboxId) {
-              buildSucceeded = true
-              restoreFailureMessage = null
-              restoreFailureKind = null
-              xmtpDebug(
-                '[xmtp] Client.build succeeded (no key) — reusing installation',
-                buildClient.installationId,
-              )
-            } else {
-              try { buildClient?.close() } catch {}
-              buildClient = null
-            }
-          } catch (buildErr2) {
-            const buildMsg2 = buildErr2 instanceof Error ? buildErr2.message : String(buildErr2)
-            console.warn('[xmtp] Client.build without key also failed:', buildErr2)
-            restoreFailureMessage = buildMsg2
-            if (isInstallationLimitError(buildMsg2)) restoreFailureKind = 'installation_limit'
-            else if (isOpfsAccessHandleError(buildMsg2)) restoreFailureKind = 'opfs_lock'
-            closeClientSafe(buildClient)
-            buildClient = null
+      if (shouldAttemptRestore) {
+        const restoreResult = await tryRestoreClientFromLocalState({
+          identifier,
+          baseOptions,
+          encKeyBytes,
+          storedInstallationMeta,
+          onCloseActiveClient: () => {
             closeClientSafe(clientRef.current)
             clientRef.current = null
-            await new Promise((r) => setTimeout(r, 200))
-          }
-        }
+          },
+        })
+        buildClient = restoreResult.client
+        buildSucceeded = Boolean(buildClient?.inboxId)
 
-        // If an OPFS DB already exists, never auto-create a new installation.
-        // This guarantees we reuse an existing installation or fail explicitly
-        // instead of churning through new registrations/revocations.
         if (!buildSucceeded) {
+          const restoreFailureMessage = restoreResult.failureMessage
+          const restoreFailureKind = restoreResult.failureKind
+
           if (restoreFailureKind === 'installation_limit') {
             const limitInboxId = extractInstallationLimitInboxId(restoreFailureMessage ?? '')
             if (limitInboxId) setInstallationLimitInboxId(limitInboxId)
             setStatus('error')
             setError(
-              'XMTP restore found an existing local database but could not reopen it before hitting the 10/10 installation cap. ' +
+              'XMTP could not reopen your existing installation before hitting the 10/10 installation cap. ' +
               'Refusing to auto-create another installation. Close other 4626 chat tabs/windows and retry, or use Reset XMTP installations if needed.',
             )
             return
@@ -1595,25 +1583,28 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return
           }
 
-          setStatus('error')
-          setError(
-            'XMTP found an existing local database but could not restore the previous installation. ' +
-            'Refusing to create a new installation to avoid churn. Retry after closing other tabs/windows.',
-          )
-          return
+          if (installationAlreadyProvisioned) {
+            setStatus('error')
+            setLocalStateResetRequired(true)
+            setError(
+              'XMTP found a previously provisioned installation for this wallet but could not restore local state. ' +
+              'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+              'Retry after closing other tabs/windows, or use "Reset local messaging state" only if you intentionally want a fresh browser installation.',
+            )
+            return
+          }
+
+          if (dbExists) {
+            setStatus('error')
+            setError(
+              'XMTP found an existing local database but could not restore the previous installation. ' +
+              'Refusing to create a new installation to avoid churn. Retry after closing other tabs/windows.',
+            )
+            return
+          }
         }
       } else {
-        xmtpDebug('[xmtp] No OPFS database found — first use, will create new installation')
-        if (installationAlreadyProvisioned) {
-          setStatus('error')
-          setLocalStateResetRequired(true)
-          setError(
-            'XMTP installation was previously provisioned for this wallet, but no local XMTP database was found. ' +
-            'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
-            'If you intentionally want a fresh installation on this browser, use "Reset local messaging state".',
-          )
-          return
-        }
+        xmtpDebug('[xmtp] No known local XMTP installation — first use on this browser')
         if (intent !== 'user') {
           setStatus('idle')
           setError(
@@ -1801,6 +1792,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
 
       clientRef.current = client
       setInboxId(client.inboxId ?? null)
+      writeInstallationProvisioned(XMTP_ENV, xmtpIdentityAddress)
+      if (client.inboxId && client.installationId) {
+        writeStoredInstallationMeta(XMTP_ENV, xmtpIdentityAddress, {
+          inboxId: client.inboxId,
+          installationId: client.installationId,
+        })
+      }
       try {
         await setupConversations(client)
       } catch (setupErr) {
@@ -2058,8 +2056,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       // This preserves restoration markers if cleanup is blocked by lock errors.
       clearAutoConnect(targetIdentity)
       clearStoredSignerType(targetIdentity)
-      clearStoredEncKeyHex(targetIdentity)
-      clearInstallationProvisioned(targetIdentity)
+      clearStoredEncKeyHexForEnv(XMTP_ENV, targetIdentity)
+      clearInstallationProvisioned(XMTP_ENV, targetIdentity)
+      clearStoredInstallationMeta(XMTP_ENV, targetIdentity)
 
       await connect('user')
     } catch (err) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -14,6 +14,7 @@ import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
+import { CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -507,6 +508,65 @@ function ResourceLinks({ tokenAddress, compact = false }: { tokenAddress: string
   )
 }
 
+function resolveCreatorSmartWalletAddress(
+  profile: ZoraProfile | null | undefined,
+  fallbackAddress?: string | null,
+): `0x${string}` | null {
+  for (const edge of profile?.linkedWallets?.edges ?? []) {
+    const walletType = String(edge?.node?.walletType ?? '').toUpperCase()
+    const address = edge?.node?.walletAddress
+    if (walletType === 'SMART_WALLET' && address && isAddress(address)) {
+      return getAddress(address)
+    }
+  }
+
+  const publicWallet = profile?.publicWallet?.walletAddress
+  if (publicWallet && isAddress(publicWallet)) return getAddress(publicWallet)
+
+  if (fallbackAddress && isAddress(fallbackAddress)) return getAddress(fallbackAddress)
+
+  return null
+}
+
+function CreatorStatsRail({
+  stats,
+  className,
+  valueClassName,
+  align = 'start',
+}: {
+  stats: ReadonlyArray<{
+    value: string | number
+    label: string
+    toneClass: string
+    footer?: ReactNode
+    valueClassName?: string
+  }>
+  className?: string
+  valueClassName?: string
+  align?: 'start' | 'end'
+}) {
+  return (
+    <aside className={cn('flex flex-col gap-6 sm:gap-7 overflow-visible', align === 'end' && 'items-end text-right', className)}>
+      {stats.map((stat) => (
+        <div key={stat.label} className="flex flex-col gap-1.5 overflow-visible min-w-0 max-w-full">
+          <span
+            className={cn(
+              'font-semibold tabular-nums overflow-visible',
+              valueClassName,
+              stat.valueClassName,
+              stat.toneClass,
+            )}
+          >
+            {stat.value}
+          </span>
+          <span className="text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
+          {stat.footer ? <div className={cn(align === 'end' && 'flex justify-end')}>{stat.footer}</div> : null}
+        </div>
+      ))}
+    </aside>
+  )
+}
+
 export function ExploreCreatorDetail() {
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
@@ -522,6 +582,7 @@ export function ExploreCreatorDetail() {
   const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
   const [timelineDragging, setTimelineDragging] = useState(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
+  const heroSectionRef = useRef<HTMLElement | null>(null)
   const sceneSectionRef = useRef<HTMLElement | null>(null)
   const timelineSectionRef = useRef<HTMLElement | null>(null)
   const timelineBodyRef = useRef<HTMLDivElement | null>(null)
@@ -753,6 +814,23 @@ export function ExploreCreatorDetail() {
           tween.kill()
         })
       }
+      if (heroSectionRef.current && allowParallax) {
+        const fadeTween = gsap.to(heroSectionRef.current, {
+          autoAlpha: 0.18,
+          ease: 'none',
+          scrollTrigger: {
+            trigger: heroSectionRef.current,
+            start: 'bottom top',
+            end: () => `+=${Math.round(window.innerHeight * 2.2)}`,
+            scrub: 0.85,
+          },
+        })
+        cleanups.push(() => {
+          fadeTween.scrollTrigger?.kill()
+          fadeTween.kill()
+          gsap.set(heroSectionRef.current, { clearProps: 'opacity,visibility' })
+        })
+      }
       if (sceneSectionRef.current && allowParallax) {
         const sceneCards = gsap.utils.toArray<HTMLElement>('[data-scene-card]', sceneSectionRef.current)
         if (sceneCards.length > 0) {
@@ -873,8 +951,7 @@ export function ExploreCreatorDetail() {
   const holders = coin?.uniqueHolders ? coin.uniqueHolders.toLocaleString() : '-'
   const createdAt = formatDateLabel(coin?.createdAt)
   const totalCoinsCreated = createdCoins.length
-  const creatorChatPeer = profile?.publicWallet?.walletAddress || creatorAddress || coin?.payoutRecipientAddress || ''
-  const creatorChatAddress = creatorChatPeer && isAddress(creatorChatPeer) ? getAddress(creatorChatPeer) : null
+  const creatorChatAddress = resolveCreatorSmartWalletAddress(profile, creatorAddress || coin?.payoutRecipientAddress || null)
 
   const { ethosUserkey, ethosScore, theme: ethosTheme, hasPositiveScore: ethosHasPositiveScore } = useCreatorEthosPageTheme({
     profile: profile ?? creatorProfile ?? null,
@@ -1021,7 +1098,12 @@ export function ExploreCreatorDetail() {
         ) : null,
     },
     { value: totalCoinsCreated, label: 'Coins created', toneClass: 'text-white' },
-    { value: createdAt, label: 'Created', toneClass: 'text-white' },
+    {
+      value: createdAt,
+      label: 'Created',
+      toneClass: 'text-white',
+      valueClassName: 'whitespace-nowrap text-2xl xl:text-[1.65rem] tracking-normal',
+    },
   ] as const
 
   return (
@@ -1033,24 +1115,25 @@ export function ExploreCreatorDetail() {
         canonicalPath={`/explore/${chain}/${tokenAddressRaw}`}
       />
       <EthosPageAmbience theme={ethosTheme} />
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-20 sm:py-28">
-        {/* Back navigation */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="mb-8"
-        >
-          <Link
-            to="/explore/creators"
-            className="inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-all duration-200 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            Back to Creators
-          </Link>
-        </motion.div>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pb-0">
+        {/* Hero + content-coins scene share a spanning stats rail on desktop */}
+        <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+          <div className="hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-30 w-52 xl:w-60 pointer-events-none">
+            <CreatorStatsRail
+              stats={heroStats}
+              align="end"
+              className="sticky top-24 pointer-events-auto border-l border-white/10 pl-8 pr-2 pt-24 pb-24 overflow-visible [mask-image:linear-gradient(to_bottom,black_0%,black_88%,transparent_100%)]"
+              valueClassName="text-3xl xl:text-4xl"
+            />
+          </div>
+
+          <div className="pointer-events-none hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-20 w-px bg-gradient-to-b from-white/5 via-white/10 to-transparent" />
 
         {/* Recreated hero scene */}
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-32 sm:mb-40 overflow-hidden bg-black min-h-[112vh] sm:min-h-[124vh]">
+        <section
+          ref={heroSectionRef}
+          className="relative overflow-hidden bg-black min-h-[calc(100dvh-3.5rem)] lg:pr-60 xl:pr-64"
+        >
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
               <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-65" />
@@ -1068,7 +1151,15 @@ export function ExploreCreatorDetail() {
             ))}
           </div>
 
-          <div className="absolute top-5 right-4 sm:top-7 sm:right-6 lg:right-8 z-20 flex flex-col items-end gap-1.5 pointer-events-auto max-w-[min(92vw,420px)] text-right">
+          <Link
+            to="/explore/creators"
+            className="absolute top-3 left-4 sm:top-4 sm:left-6 lg:left-8 z-30 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-all duration-200 group"
+          >
+            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
+            Back to Creators
+          </Link>
+
+          <div className="absolute top-3 right-4 sm:top-4 sm:right-6 lg:right-8 z-20 flex flex-col items-end gap-1.5 pointer-events-auto max-w-[min(92vw,420px)] text-right">
             {website ? (
               <a
                 href={website.startsWith('http') ? website : `https://${website}`}
@@ -1090,9 +1181,9 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[108vh] sm:min-h-[120vh] p-6 sm:p-8 lg:p-12 flex flex-col lg:flex-row lg:items-stretch lg:justify-between gap-12 lg:gap-16"
+            className="relative min-h-[calc(100dvh-3.5rem)] px-6 sm:px-8 lg:px-12 pb-10 sm:pb-14 flex flex-col justify-end"
           >
-            <div className="max-w-4xl flex flex-col justify-center flex-1">
+            <div className="max-w-4xl">
               <span
                 className={cn(
                   'inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] mb-8',
@@ -1162,29 +1253,28 @@ export function ExploreCreatorDetail() {
                       <MessageSquare className="w-4 h-4" />
                       Message Creator
                     </button>
-                    <ActionAddressHint label="Creator wallet" address={creatorAddress || creatorChatAddress} copyButtonProps={copyButtonProps} />
+                    <ActionAddressHint label="Creator smart wallet" address={creatorChatAddress} copyButtonProps={copyButtonProps} />
                   </div>
                 ) : null}
               </div>
-            </div>
 
-            <aside className="shrink-0 flex flex-col justify-center gap-6 sm:gap-7 lg:w-48 xl:w-56 lg:border-l lg:border-white/10 lg:pl-8 lg:py-6 lg:sticky lg:top-28 lg:self-start">
-              {heroStats.map((stat) => (
-                <div key={stat.label} className="flex flex-col gap-1.5 lg:items-end lg:text-right">
-                  <span className={cn('text-2xl sm:text-3xl lg:text-4xl font-semibold tabular-nums', stat.toneClass)}>{stat.value}</span>
-                  <span className="text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
-                  {'footer' in stat && stat.footer ? <div className="lg:flex lg:justify-end">{stat.footer}</div> : null}
-                </div>
-              ))}
-            </aside>
+              <CreatorStatsRail
+                stats={heroStats}
+                className="lg:hidden mt-10 pt-8 border-t border-white/10"
+                valueClassName="text-2xl sm:text-3xl"
+              />
+            </div>
           </motion.div>
         </section>
 
+        <CreatorScrollBridge tone="void" animate={allowParallax} />
+
         <section
           ref={sceneSectionRef}
-          className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mt-20 sm:mt-28 mb-56 sm:mb-72 h-[980px] sm:h-[1120px] overflow-hidden"
+          className="relative h-[980px] sm:h-[1120px] overflow-hidden lg:pr-60 xl:pr-64"
           onWheelCapture={onSceneSectionWheelCapture}
         >
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
           <EthosBlurOrbs theme={ethosTheme} />
@@ -1208,7 +1298,7 @@ export function ExploreCreatorDetail() {
               <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
               <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
 
-              <div className="absolute left-4 right-4 top-6 sm:left-8 sm:right-8 sm:top-8 z-20">
+              <div className="absolute left-4 right-4 top-6 sm:left-8 sm:right-8 sm:top-8 lg:right-64 xl:right-72 z-20">
                 <div className="grid lg:grid-cols-12 gap-6 sm:gap-8 items-end">
                   <div className="lg:col-span-7">
                     <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-4 sm:mb-6">
@@ -1270,9 +1360,12 @@ export function ExploreCreatorDetail() {
           )}
         </section>
 
+        <CreatorScrollBridge tone="void-to-lime" animate={allowParallax} />
+        </div>
+
         <section
           ref={timelineSectionRef}
-          className="relative w-screen ml-[calc(50%-50vw)] mt-48 sm:mt-64 mb-56 sm:mb-72 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+          className="relative w-screen ml-[calc(50%-50vw)] mt-0 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
         >
           <div ref={timelineBodyRef}>
             <div className="px-2 sm:px-4 pb-8">
@@ -1352,6 +1445,8 @@ export function ExploreCreatorDetail() {
             </div>
           </div>
         </section>
+
+        <CreatorScrollBridge tone="lime-to-void" animate={allowParallax} />
 
         {/* Main content */}
         <div>

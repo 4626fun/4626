@@ -13,6 +13,7 @@ export type LeaderboardEntry = {
   avatarUrl: string | null
   showZoraBadge: boolean
   showBaseAppBadge: boolean
+  walletProvider: string | null
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
@@ -115,6 +116,7 @@ function PodiumSlot({ entry, rank, isMe }: PodiumSlotProps) {
             avatarUrl={entry.avatarUrl}
             showZoraBadge={entry.showZoraBadge}
             showBaseAppBadge={entry.showBaseAppBadge}
+            walletProvider={entry.walletProvider}
             layout="stacked"
           />
         </div>
@@ -196,6 +198,7 @@ export function LeaderboardListRow({
             avatarUrl={row.avatarUrl}
             showZoraBadge={row.showZoraBadge}
             showBaseAppBadge={row.showBaseAppBadge}
+            walletProvider={row.walletProvider}
           />
           {isMe ? (
             <span className="shrink-0 rounded-full border border-brand-primary/30 bg-brand-primary/15 px-2 py-0.5 text-[10px] font-semibold text-brand-200">

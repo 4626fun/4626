@@ -11,7 +11,7 @@
  * ┌──────────────────────────────────────────┐
  * │  ...page content...                      │
  * │                                          │
- * │   [ChatWindow 1] [ChatWindow 2]          │ ← bottom-left
+ * │          [ChatWindow 2] [ChatWindow 1] [Bar] │ ← bottom-right
  * └──────────────────────────────────────────┘
  */
 
@@ -93,7 +93,7 @@ type PendingDeepLinkIntent = {
   peerName: string
 }
 
-function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
+function ChatWidgetInner() {
   const { isConnected, address } = useAccount()
   const { startDm, connect, status, identityAddress } = useXmtp()
 
@@ -198,6 +198,10 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
   }, [isMobile])
 
   const processOpenRequest = useCallback(async (request: ChatOpenRequest) => {
+    if (!isMobile) {
+      setBarExpanded(true)
+    }
+
     if (request.kind === 'group') {
       handleOpenChat({
         id: request.conversationId,
@@ -227,7 +231,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
       unreadCount: 0,
       seedCommandId: request.seedCommandId ?? null,
     } as ChatConversation)
-  }, [handleOpenChat, startDm])
+  }, [handleOpenChat, isMobile, startDm])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -529,7 +533,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
         )}
 
         {!showMobileBar && !activeMobileWindow && (
-          <div className="absolute bottom-20 left-4 pointer-events-auto">
+          <div className="absolute bottom-20 right-4 pointer-events-auto">
             <ChatBar
               expanded={false}
               variant="mobile"
@@ -544,13 +548,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
         )}
       </div>
 
-      <div
-        className={`fixed bottom-4 z-50 hidden items-end gap-3 pointer-events-none transition-[left] duration-200 md:flex motion-reduce:transition-none ${
-          props.availabilityRailExpanded
-            ? 'left-[calc(1rem+320px+0.75rem)] xl:left-[calc(1rem+336px+0.75rem)]'
-            : 'left-5'
-        }`}
-      >
+      <div className="fixed bottom-4 right-5 z-50 hidden items-end gap-3 pointer-events-none md:flex md:flex-row-reverse">
         <div className="pointer-events-auto motion-safe:animate-slide-up">
           <ChatBar
             expanded={barExpanded}
@@ -564,7 +562,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
           />
         </div>
 
-        {/* Chat windows — stack from left to right, beside the bottom dock. */}
+        {/* Chat windows — stack leftward from the bottom-right dock. */}
         {openWindows.map((win) => (
           <div key={win.id} className="pointer-events-auto motion-safe:animate-slide-up">
             <ChatWindow
@@ -697,7 +695,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
  * Chat widget dock. The app layout owns the XMTP provider so directory pages,
  * the availability rail, and the dock all share one client.
  */
-export function ChatWidget(props: { initiallyActivated?: boolean; availabilityRailExpanded?: boolean } = {}) {
+export function ChatWidget(props: { initiallyActivated?: boolean } = {}) {
   const { chatActivated, setChatActivated } = useChatActivation({ initiallyActivated: props.initiallyActivated })
 
   if (!chatActivated) {
@@ -710,5 +708,5 @@ export function ChatWidget(props: { initiallyActivated?: boolean; availabilityRa
     )
   }
 
-  return <ChatWidgetInner availabilityRailExpanded={props.availabilityRailExpanded} />
+  return <ChatWidgetInner />
 }

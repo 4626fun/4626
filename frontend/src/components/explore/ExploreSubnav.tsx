@@ -114,6 +114,8 @@ export function ExploreSubnav({
     })
   }
 
+  const showTimeFilter = timeFilters.length > 1
+
   return (
     <div className="space-y-2.5 sm:space-y-3">
       {/* Main navigation row */}
@@ -153,33 +155,35 @@ export function ExploreSubnav({
             </div>
           ) : null}
 
-          <div className="flex flex-col items-start gap-1.5">
-            <div className="w-fit self-start sm:self-auto">
-              <select
-                value={currentTimeFilter}
-                onChange={(event) => handleTimeFilterClick(event.target.value)}
-                className="h-8 sm:h-9 rounded-lg border border-white/12 bg-linear-to-b from-white/7 to-white/3 px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-medium text-zinc-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
-                aria-label="Time range"
-              >
-                {timeFilters.map((filter) => {
-                  const isAvailable = disableUniswapTimeGating || filter.value === '1d' || uniswapAvailable
-                  return (
-                    <option
-                      key={filter.value}
-                      value={filter.value}
-                      disabled={!isAvailable}
-                    >
-                      {filter.label}
-                      {!isAvailable ? ' (Unavailable)' : ''}
-                    </option>
-                  )
-                })}
-              </select>
+          {showTimeFilter ? (
+            <div className="flex flex-col items-start gap-1.5">
+              <div className="w-fit self-start sm:self-auto">
+                <select
+                  value={currentTimeFilter}
+                  onChange={(event) => handleTimeFilterClick(event.target.value)}
+                  className="h-8 sm:h-9 rounded-lg border border-white/12 bg-linear-to-b from-white/7 to-white/3 px-2.5 sm:px-3 text-[10px] sm:text-[11px] font-medium text-zinc-200 focus:outline-none focus:border-brand-primary/50 focus:ring-2 focus:ring-brand-primary/30"
+                  aria-label="Time range"
+                >
+                  {timeFilters.map((filter) => {
+                    const isAvailable = disableUniswapTimeGating || filter.value === '1d' || uniswapAvailable
+                    return (
+                      <option
+                        key={filter.value}
+                        value={filter.value}
+                        disabled={!isAvailable}
+                      >
+                        {filter.label}
+                        {!isAvailable ? ' (Unavailable)' : ''}
+                      </option>
+                    )
+                  })}
+                </select>
+              </div>
+              {volumeColumnNote ? (
+                <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
+              ) : null}
             </div>
-            {volumeColumnNote ? (
-              <p className="text-[11px] text-zinc-500 max-w-md leading-snug">{volumeColumnNote}</p>
-            ) : null}
-          </div>
+          ) : null}
           {extraFilters ? <div className="flex items-center">{extraFilters}</div> : null}
         </div>
       </div>
