@@ -185,7 +185,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
-    const cswAddress = getAddress(bootstrap.canonicalCswAddress) as Address
+    const parentCswAddress = getAddress(bootstrap.canonicalCswAddress) as Address
+    const targetOverride = parseAddress(body.targetCswAddress)
+
+    let cswAddress = parentCswAddress
+    if (targetOverride) {
+      if (targetOverride.toLowerCase() === parentCswAddress.toLowerCase()) {
+        cswAddress = targetOverride
+      } else {
+        const registeredSub = bootstrap.baseSubAccount.address
+        if (!registeredSub || !bootstrap.baseSubAccount.registered) {
+          return res.status(403).json({
+            success: false,
+            error: 'Sub-account is not registered for this account.',
+          } satisfies ApiEnvelope<never>)
+        }
+        const allowedSub = getAddress(registeredSub) as Address
+        if (targetOverride.toLowerCase() !== allowedSub.toLowerCase()) {
+          return res.status(403).json({
+            success: false,
+            error: 'targetCswAddress does not match the registered sub-account.',
+          } satisfies ApiEnvelope<never>)
+        }
+        cswAddress = targetOverride
+      }
+    }
+
+    const isSubAccountTarget = cswAddress.toLowerCase() !== parentCswAddress.toLowerCase()
     const ownerToAdd = getAddress(bootstrap.privyEmbeddedEoaAddress) as Address
     const rawTxRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
     const txRequest: AddOwnerPreviewResponse['txRequest'] = {
@@ -202,11 +228,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const connectedIsCswSelf = connectedAddress.toLowerCase() === cswAddress.toLowerCase()
+    const publicClient = createPublicClient({
+      chain: base,
+      transport: http(resolveBaseRpcUrl()),
+    })
     if (!connectedIsCswSelf) {
-      const publicClient = createPublicClient({
-        chain: base,
-        transport: http(resolveBaseRpcUrl()),
-      })
       const connectedIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedAddress)
       if (!connectedIsOwner) {
         return res.status(403).json({
@@ -216,7 +242,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    if (bootstrap.privyIsOwner) {
+    if (bootstrap.privyIsOwner && !isSubAccountTarget) {
       const response: AddOwnerPreviewResponse = {
         txRequest,
         calls: [],
@@ -235,10 +261,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
     }
 
-    const publicClient = createPublicClient({
-      chain: base,
-      transport: http(resolveBaseRpcUrl()),
-    })
+    const alreadyOwner = isSubAccountTarget
+      ? await isOwnerOnChain(publicClient, cswAddress, ownerToAdd)
+      : bootstrap.privyIsOwner
+
+    if (alreadyOwner) {
+      const response: AddOwnerPreviewResponse = {
+        txRequest,
+        calls: [],
+        relay: null,
+        preflight: {
+          ownerToAdd,
+          alreadyOwner: true,
+          simulation: { ok: true, error: null },
+          relayQuoteError: null,
+          relayQuoteDiagnostics: null,
+        },
+      }
+      return res.status(200).json({
+        success: true,
+        data: response,
+      } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
+    }
     const simulation = await simulateAddOwnerCall({
       publicClient,
       cswAddress,

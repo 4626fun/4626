@@ -11,12 +11,13 @@ const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const hookState = {
   provision: vi.fn(),
-  installOwnerOnly: vi.fn(),
+  linkSubAccount: vi.fn(),
   connectWallet: vi.fn(),
   getLastSetupError: vi.fn(),
   isSettingUp: false,
   lastStage: null as null | { stage: string; status: string; message?: string },
   embeddedAddress: EMBED as string,
+  relayInstallSuccess: vi.fn(),
 }
 
 vi.mock('@/lib/privy/client', () => ({
@@ -26,7 +27,7 @@ vi.mock('@/lib/privy/client', () => ({
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
     provisionSubAccount: hookState.provision,
-    installSubAccountOwnerOnly: hookState.installOwnerOnly,
+    linkSubAccountWithoutOwnerInstall: hookState.linkSubAccount,
     connectBaseAccountWallet: hookState.connectWallet,
     getLastSetupError: hookState.getLastSetupError,
     isSettingUp: hookState.isSettingUp,
@@ -46,7 +47,11 @@ vi.mock('@/components/ui/PixelWaveLoader', () => ({
 }))
 
 vi.mock('./SubAccountOwnerInstallPanel', () => ({
-  SubAccountOwnerInstallPanel: () => null,
+  SubAccountOwnerInstallPanel: (props: { onSuccess?: () => void }) => (
+    <button type="button" data-testid="mock-relay-owner-install" onClick={() => props.onSuccess?.()}>
+      Finish Relay signing
+    </button>
+  ),
 }))
 
 function mockProvision(created = true) {
@@ -58,20 +63,14 @@ function mockProvision(created = true) {
   })
 }
 
-function mockOwnerInstallSuccess() {
-  hookState.installOwnerOnly.mockResolvedValueOnce({
-    registered: true,
-    alreadyOwner: false,
-    onChainOwnerInstalled: true,
-    onChainOwnerWarning: null,
-    transactionHash: null,
-  })
+function mockLinkSuccess() {
+  hookState.linkSubAccount.mockResolvedValueOnce({ ok: true, message: null })
 }
 
 describe('WaitlistConnectBaseApp', () => {
   beforeEach(() => {
     hookState.provision.mockReset()
-    hookState.installOwnerOnly.mockReset()
+    hookState.linkSubAccount.mockReset()
     hookState.connectWallet.mockReset()
     hookState.getLastSetupError.mockReset()
     hookState.isSettingUp = false
@@ -79,7 +78,7 @@ describe('WaitlistConnectBaseApp', () => {
     hookState.embeddedAddress = EMBED
     hookState.connectWallet.mockResolvedValue(true)
     hookState.getLastSetupError.mockReturnValue(null)
-    mockOwnerInstallSuccess()
+    mockLinkSuccess()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -91,7 +90,7 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('connect flow provisions the app wallet then runs the shared owner-install lane', async () => {
+  it('connect flow provisions the app wallet then opens Relay owner install', async () => {
     mockProvision(true)
 
     const onComplete = vi.fn()
@@ -103,11 +102,17 @@ describe('WaitlistConnectBaseApp', () => {
 
     expect(hookState.connectWallet).toHaveBeenCalled()
     await waitFor(() =>
-      expect(hookState.installOwnerOnly).toHaveBeenCalledWith({
+      expect(hookState.linkSubAccount).toHaveBeenCalledWith({
         parentAddress: PARENT,
         subAccountAddress: SUB,
       }),
     )
+    expect(await screen.findByTestId('waitlist-connect-base-app-relay-install')).toBeTruthy()
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('mock-relay-owner-install'))
+    })
+
     await waitFor(
       () =>
         expect(onComplete).toHaveBeenCalledWith({
@@ -118,15 +123,12 @@ describe('WaitlistConnectBaseApp', () => {
     )
   })
 
-  it('surfaces owner-install failure instead of completing when on-chain owner is missing', async () => {
+  it('surfaces link registration failure instead of opening Relay install', async () => {
     mockProvision(true)
-    hookState.installOwnerOnly.mockReset()
-    hookState.installOwnerOnly.mockResolvedValueOnce({
-      registered: true,
-      alreadyOwner: false,
-      onChainOwnerInstalled: false,
-      onChainOwnerWarning: 'Smart wallet signature validation failed during sponsorship (AA23).',
-      transactionHash: null,
+    hookState.linkSubAccount.mockReset()
+    hookState.linkSubAccount.mockResolvedValueOnce({
+      ok: false,
+      message: 'Could not save your Base App signing link.',
     })
 
     const onComplete = vi.fn()
@@ -137,6 +139,7 @@ describe('WaitlistConnectBaseApp', () => {
 
     await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
     expect(onComplete).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('waitlist-connect-base-app-relay-install')).toBeNull()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {
@@ -151,24 +154,15 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByText(/you declined the base app request/i)).toBeTruthy()
   })
 
-  it('allows retry after owner-install lane failure', async () => {
+  it('allows retry after link registration failure', async () => {
     mockProvision(true)
-    hookState.installOwnerOnly.mockReset()
-    hookState.installOwnerOnly
+    hookState.linkSubAccount.mockReset()
+    hookState.linkSubAccount
       .mockResolvedValueOnce({
-        registered: true,
-        alreadyOwner: false,
-        onChainOwnerInstalled: false,
-        onChainOwnerWarning: 'Could not save your Base App signing link.',
-        transactionHash: null,
+        ok: false,
+        message: 'Could not save your Base App signing link.',
       })
-      .mockResolvedValueOnce({
-        registered: true,
-        alreadyOwner: false,
-        onChainOwnerInstalled: true,
-        onChainOwnerWarning: null,
-        transactionHash: null,
-      })
+      .mockResolvedValueOnce({ ok: true, message: null })
 
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
@@ -180,6 +174,7 @@ describe('WaitlistConnectBaseApp', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('retry-base-app-button'))
     })
-    await waitFor(() => expect(hookState.installOwnerOnly).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(hookState.linkSubAccount).toHaveBeenCalledTimes(2))
+    expect(await screen.findByTestId('waitlist-connect-base-app-relay-install')).toBeTruthy()
   })
 })

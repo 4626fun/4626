@@ -344,8 +344,6 @@ export function useSubAccountSetup() {
     [onStageEvent, runWithGuard, setActiveWallet],
   )
 
-  const getLastSetupError = useCallback(() => lastSetupErrorRef.current ?? state.error, [state.error])
-
   const installSubAccountOwnerOnly = useCallback(
     async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
       return runWithGuard(async (bundle) => {
@@ -414,10 +412,44 @@ export function useSubAccountSetup() {
     [onStageEvent, runWithGuard],
   )
 
+  const getLastSetupError = useCallback(() => lastSetupErrorRef.current ?? state.error, [state.error])
+
+  const linkSubAccountWithoutOwnerInstall = useCallback(
+    async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
+      return runWithGuard(async (bundle) => {
+        const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
+        const ctx = await resolveSubAccountSetupContext(walletBundle)
+
+        await finalizeSubAccountSigner({
+          ...walletBundle,
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+        })
+
+        const registered = await registerBaseAppSubAccountLink({
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+          embeddedEoaAddress: ctx.embeddedAddress,
+        })
+
+        setState((prev) => ({
+          ...prev,
+          subAccountAddress: addresses.subAccountAddress,
+          parentAddress: addresses.parentAddress,
+          isSettingUp: false,
+        }))
+
+        return registered
+      })
+    },
+    [onStageEvent, runWithGuard],
+  )
+
   return {
     provisionSubAccount: provision,
     confirmSubAccountEmbeddedOwner: confirmEmbeddedOwner,
     installSubAccountOwnerOnly,
+    linkSubAccountWithoutOwnerInstall,
     finalizeSubAccountSigner: finalizeSigner,
     subAccountAddress: state.subAccountAddress,
     parentAddress: state.parentAddress,

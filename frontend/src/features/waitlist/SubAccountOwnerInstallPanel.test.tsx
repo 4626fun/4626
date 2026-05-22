@@ -3,12 +3,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { getAddress } from 'viem'
 
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import {
-  SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE,
-  SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 
@@ -16,8 +14,8 @@ const PARENT = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const SUB = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
-const installOwnerOnly = vi.fn()
-const getLastSetupError = vi.fn<() => Error | null>(() => null)
+const fetchPreview = vi.fn()
+const handleAdd = vi.fn()
 const isBaseAppInAppContext = vi.fn()
 
 vi.mock('@/lib/flags/featureFlags', () => ({
@@ -36,13 +34,25 @@ vi.mock('@/lib/wallet/subAccountOwnerInstall', () => ({
   readEmbeddedOwnerOnSubAccount: vi.fn(),
 }))
 
+vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
+  useAddOwnerFlow: () => ({
+    preview: null,
+    previewLoading: false,
+    busy: false,
+    pageError: null,
+    pageNotice: null,
+    txHash: null,
+    eventLog: [],
+    lastErrorDetail: null,
+    isSelfAuthSession: true,
+    fetchPreview,
+    handleAdd,
+  }),
+}))
+
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
-    installSubAccountOwnerOnly: installOwnerOnly,
     embeddedWallet: { address: EMBED },
-    isSettingUp: false,
-    getLastSetupError,
-    lastStage: null,
   }),
 }))
 
@@ -67,43 +77,33 @@ function renderPanel(ui: Parameters<typeof render>[0]) {
 describe('SubAccountOwnerInstallPanel', () => {
   beforeEach(() => {
     mockBaseAppHost()
-    getLastSetupError.mockReturnValue(null)
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockReset()
-    installOwnerOnly.mockReset()
-    installOwnerOnly.mockResolvedValue({
-      registered: true,
-      alreadyOwner: false,
-      transactionHash: null,
-      onChainOwnerInstalled: true,
-      onChainOwnerWarning: null,
-    })
+    fetchPreview.mockReset()
+    handleAdd.mockReset()
+    handleAdd.mockResolvedValue(true)
   })
 
-  it('shows the owner-install button when embedded EOA is not yet owner', async () => {
+  it('shows Relay build preview when embedded EOA is not yet owner', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
 
     renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
-    expect(await screen.findByTestId('sub-account-owner-install-button')).toBeTruthy()
+    expect(await screen.findByText('Build Relay preview')).toBeTruthy()
   })
 
-  it('runs owner install when the button is clicked', async () => {
+  it('builds Relay preview when the button is clicked', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
 
     renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
-    const button = await screen.findByTestId('sub-account-owner-install-button')
-    fireEvent.click(button)
+    fireEvent.click(await screen.findByText('Build Relay preview'))
 
     await waitFor(() => {
-      expect(installOwnerOnly).toHaveBeenCalledWith({
-        parentAddress: getAddress(PARENT),
-        subAccountAddress: getAddress(SUB),
-      })
+      expect(fetchPreview).toHaveBeenCalled()
     })
   })
 
@@ -118,74 +118,7 @@ describe('SubAccountOwnerInstallPanel', () => {
     expect(await screen.findByText(SUB_ACCOUNT_WRONG_BROWSER_MESSAGE)).toBeTruthy()
     expect(screen.getByTestId('sub-account-copy-base-app-link-button')).toBeTruthy()
     expect(screen.getByText(/Desktop \/ MetaMask path/i)).toBeTruthy()
-    expect(screen.queryByTestId('sub-account-owner-install-button')).toBeNull()
-  })
-
-  it('surfaces in-app approval failure copy and recovery steps inside Base App', async () => {
-    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
-    installOwnerOnly.mockResolvedValue(null)
-    getLastSetupError.mockReturnValue(
-      new Error('requested method and/or account has not been authorized by the user'),
-    )
-
-    renderPanel(
-      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
-    )
-
-    fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
-
-    await waitFor(() => {
-      expect(screen.getByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeTruthy()
-      expect(screen.getByTestId('sub-account-owner-install-recovery')).toBeTruthy()
-      expect(screen.getByText(/Confirm Base App is on/i)).toBeTruthy()
-    })
-  })
-
-  it('shows retry UI when register succeeds but on-chain owner fails', async () => {
-    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
-    installOwnerOnly.mockResolvedValue({
-      registered: true,
-      alreadyOwner: false,
-      transactionHash: null,
-      onChainOwnerInstalled: false,
-      onChainOwnerWarning: 'Smart wallet signature validation failed during sponsorship (AA23).',
-    })
-
-    renderPanel(
-      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
-    )
-
-    fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
-
-    await waitFor(() => {
-      expect(screen.getByText(SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE)).toBeTruthy()
-      expect(screen.getByTestId('sub-account-owner-install-recovery')).toBeTruthy()
-    })
-    expect(screen.queryByTestId('sub-account-owner-install-complete')).toBeNull()
-    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
-  })
-
-  it('shows retry UI when owner install fails for non-aa23 errors', async () => {
-    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
-    installOwnerOnly.mockResolvedValue({
-      registered: true,
-      alreadyOwner: false,
-      transactionHash: null,
-      onChainOwnerInstalled: false,
-      onChainOwnerWarning: 'requested method and/or account has not been authorized by the user',
-    })
-
-    renderPanel(
-      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
-    )
-
-    fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
-
-    await waitFor(() => {
-      expect(screen.getByTestId('sub-account-owner-install-recovery')).toBeTruthy()
-    })
-    expect(screen.queryByTestId('sub-account-owner-install-complete')).toBeNull()
-    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
+    expect(screen.queryByText('Build Relay preview')).toBeNull()
   })
 
   it('shows pending Base App setup when server link exists outside Base App without on-chain owner', async () => {
@@ -202,11 +135,11 @@ describe('SubAccountOwnerInstallPanel', () => {
     )
 
     expect(await screen.findByTestId('sub-account-owner-install-pending')).toBeTruthy()
-    expect(screen.getByText(/signer is linked, but Base App still needs/i)).toBeTruthy()
+    expect(screen.getByText(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE)).toBeTruthy()
     expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
   })
 
-  it('hides the button when embedded EOA is already owner', async () => {
+  it('hides the relay panel when embedded EOA is already owner', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(true)
 
     renderPanel(
@@ -214,7 +147,7 @@ describe('SubAccountOwnerInstallPanel', () => {
     )
 
     expect(await screen.findByText(/4626 signing is enabled/i)).toBeTruthy()
-    expect(screen.queryByTestId('sub-account-owner-install-button')).toBeNull()
+    expect(screen.queryByText('Build Relay preview')).toBeNull()
   })
 
   it('keeps install actionable when owner read is unknown/null', async () => {
@@ -224,7 +157,7 @@ describe('SubAccountOwnerInstallPanel', () => {
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
-    expect(await screen.findByTestId('sub-account-owner-install-button')).toBeTruthy()
+    expect(await screen.findByText('Build Relay preview')).toBeTruthy()
     expect(screen.queryByText(/Could not verify signing status/i)).toBeNull()
   })
 })

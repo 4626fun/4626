@@ -45,17 +45,24 @@ export type AddOwnerPreview = {
 
 export async function fetchAddOwnerPreview(params: {
   connectedAddress: string
+  /** When set, add-owner targets this CSW (e.g. app sub-account) instead of the canonical parent CSW. */
+  targetCswAddress?: string | null
   headers?: Record<string, string>
 }): Promise<AddOwnerPreview> {
+  const body: Record<string, string> = {
+    connectedAddress: params.connectedAddress,
+  }
+  if (params.targetCswAddress?.trim()) {
+    body.targetCswAddress = params.targetCswAddress.trim()
+  }
+
   const res = await apiFetch('/api/onboarding/preview-add-owner', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(params.headers ?? {}),
     },
-    body: JSON.stringify({
-      connectedAddress: params.connectedAddress,
-    }),
+    body: JSON.stringify(body),
   })
   const json = (await res.json().catch(() => null)) as {
     success?: boolean

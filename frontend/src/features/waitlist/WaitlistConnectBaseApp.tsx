@@ -3,8 +3,8 @@
  *
  * Base App connect flow:
  *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
- *   2. Shared owner-install lane (`installSubAccountOwnerOnly`): signer wiring, server
- *      registration, and on-chain `addOwnerAddress` on the app wallet.
+ *   2. Register the parent/sub-account link server-side.
+ *   3. Finish on-chain owner install via Relay (same kit as /add-owner and /remove-owner).
  *
  * Parent CSW addOwnerAddress from third-party dapps remains blocked; owner install
  * targets the per-app sub-account only.
@@ -24,7 +24,6 @@ import {
   mapSubAccountOwnerInstallError,
   normalizeSubAccountOwnerInstallErrorSource,
 } from './subAccountOwnerInstallMessages'
-import { isSubAccountOwnerInstallSucceeded } from './subAccountOwnerInstallResult'
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 
 export type WaitlistConnectBaseAppResult = {
@@ -51,13 +50,13 @@ type PendingProvision = {
 type ViewState =
   | { kind: 'idle' }
   | { kind: 'connecting' }
+  | { kind: 'relay-install'; parentAddress: Address; subAccountAddress: Address }
   | { kind: 'complete'; parentAddress: Address; subAccountAddress: Address }
   | { kind: 'error'; message: string; canRetry: boolean }
 
 const STAGE_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
   check_existing: 'Checking for your 4626 app wallet…',
   create_sub_account: 'Creating your app wallet (one passkey)…',
-  install_embedded_owner: 'Enabling 4626 signing on your app wallet…',
   configure_signer: 'Linking your 4626 signer…',
 }
 
@@ -118,20 +117,6 @@ function mapSetupFailureMessage(params: {
   return params.fallback
 }
 
-function ownerInstallFailureMessage(params: {
-  warning?: string | null
-  setupError: Error | null
-}): string {
-  return mapSubAccountOwnerInstallError(
-    normalizeSubAccountOwnerInstallErrorSource(
-      params.warning ??
-        params.setupError?.message ??
-        'Base App did not finish the on-chain owner approval for your app wallet.',
-    ),
-    { inBaseApp: isBaseAppInAppContext() },
-  )
-}
-
 export function WaitlistConnectBaseApp(props: Props) {
   const privyClientStatus = usePrivyClientStatus()
   if (privyClientStatus !== 'ready') {
@@ -158,11 +143,12 @@ function WaitlistConnectBaseAppReady(props: Props) {
   const setup = useSubAccountSetup()
   const {
     provisionSubAccount,
-    installSubAccountOwnerOnly,
+    linkSubAccountWithoutOwnerInstall,
     connectBaseAccountWallet,
     getLastSetupError,
     isSettingUp,
     lastStage,
+    embeddedWallet,
   } = setup
 
   const [view, setView] = useState<ViewState>({ kind: 'idle' })
@@ -188,45 +174,6 @@ function WaitlistConnectBaseAppReady(props: Props) {
       subAccountAddress: pending.subAccountAddress,
     })
   }, [])
-
-  const runOwnerInstallLane = useCallback(
-    async (pending: Pick<PendingProvision, 'parentAddress' | 'subAccountAddress'>) => {
-      const result = await installSubAccountOwnerOnly({
-        parentAddress: pending.parentAddress,
-        subAccountAddress: pending.subAccountAddress,
-      })
-      if (cancelledRef.current) return false
-
-      if (!result) {
-        setView({
-          kind: 'error',
-          message: mapSetupFailureMessage({
-            error: getLastSetupError(),
-            lastStage,
-            fallback: 'Could not enable signing on your app wallet.',
-          }),
-          canRetry: true,
-        })
-        return false
-      }
-
-      if (!isSubAccountOwnerInstallSucceeded(result)) {
-        setView({
-          kind: 'error',
-          message: ownerInstallFailureMessage({
-            warning: result.onChainOwnerWarning,
-            setupError: getLastSetupError(),
-          }),
-          canRetry: true,
-        })
-        return false
-      }
-
-      markConnectComplete(pending)
-      return true
-    },
-    [getLastSetupError, installSubAccountOwnerOnly, lastStage, markConnectComplete],
-  )
 
   const handleConnect = useCallback(async () => {
     if (isSettingUp || view.kind === 'connecting') return
@@ -262,7 +209,22 @@ function WaitlistConnectBaseAppReady(props: Props) {
       return
     }
 
-    await runOwnerInstallLane({
+    const linked = await linkSubAccountWithoutOwnerInstall({
+      parentAddress: provisioned.parentAddress,
+      subAccountAddress: provisioned.subAccountAddress,
+    })
+    if (cancelledRef.current) return
+    if (!linked?.ok) {
+      setView({
+        kind: 'error',
+        message: linked?.message ?? getLastSetupError()?.message ?? 'Could not save your Base App signing link.',
+        canRetry: true,
+      })
+      return
+    }
+
+    setView({
+      kind: 'relay-install',
       parentAddress: provisioned.parentAddress,
       subAccountAddress: provisioned.subAccountAddress,
     })
@@ -271,10 +233,18 @@ function WaitlistConnectBaseAppReady(props: Props) {
     getLastSetupError,
     isSettingUp,
     lastStage,
+    linkSubAccountWithoutOwnerInstall,
     provisionSubAccount,
-    runOwnerInstallLane,
     view.kind,
   ])
+
+  const handleRelayInstallSuccess = useCallback(() => {
+    if (view.kind !== 'relay-install') return
+    markConnectComplete({
+      parentAddress: view.parentAddress,
+      subAccountAddress: view.subAccountAddress,
+    })
+  }, [markConnectComplete, view])
 
   const handleRecoverySuccess = useCallback(() => {
     const parent = normalizeAddress(parentAddress)
@@ -367,6 +337,20 @@ function WaitlistConnectBaseAppReady(props: Props) {
         >
           <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.72)" />
           <span data-testid="connect-stage-label">{progressLabel}</span>
+        </div>
+      ) : null}
+
+      {view.kind === 'relay-install' ? (
+        <div className="space-y-4 text-left" data-testid="waitlist-connect-base-app-relay-install">
+          <SubAccountOwnerInstallPanel
+            showHeader={false}
+            parentAddress={view.parentAddress}
+            subAccountAddress={view.subAccountAddress}
+            embeddedEoaAddress={embeddedEoaAddress ?? embeddedWallet?.address}
+            linkRegistered
+            setup={setup}
+            onSuccess={handleRelayInstallSuccess}
+          />
         </div>
       ) : null}
 

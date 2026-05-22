@@ -24,6 +24,8 @@ export type AddOwnerErrorDetail = {
 
 type UseAddOwnerFlowParams = {
   canonicalCswAddress: string | null | undefined
+  /** When set, owner mutation targets this CSW (sub-account) instead of `canonicalCswAddress`. */
+  targetCswAddress?: string | null | undefined
   ownerSignerAddress: string | null | undefined
   privyExternalOwnerWallet?: unknown
   enabled?: boolean
@@ -32,10 +34,13 @@ type UseAddOwnerFlowParams = {
 export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   const {
     canonicalCswAddress,
+    targetCswAddress,
     ownerSignerAddress,
     privyExternalOwnerWallet,
     enabled = true,
   } = params
+
+  const mutationCswAddress = targetCswAddress ?? canonicalCswAddress
   const { getAccessToken } = usePrivy()
   const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
@@ -53,9 +58,11 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   const [lastErrorDetail, setLastErrorDetail] = useState<AddOwnerErrorDetail | null>(null)
 
   const isSelfAuthSession = useMemo(() => {
-    if (!canonicalCswAddress || !ownerSignerAddress) return false
-    return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
-  }, [canonicalCswAddress, ownerSignerAddress])
+    if (!mutationCswAddress || !ownerSignerAddress) return false
+    return ownerSignerAddress.toLowerCase() === mutationCswAddress.toLowerCase()
+  }, [mutationCswAddress, ownerSignerAddress])
+
+  const selfAuthWalletLabel = targetCswAddress ? 'app wallet' : 'canonical smart wallet'
 
   const appendEvent = useMemo(
     () =>
@@ -66,10 +73,10 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   )
 
   const fetchPreview = useCallback(async () => {
-    if (!enabled || !canonicalCswAddress || !ownerSignerAddress) {
+    if (!enabled || !mutationCswAddress || !ownerSignerAddress) {
       setPageError(
         isSelfAuthSession
-          ? 'Connect your canonical smart wallet in Base App first.'
+          ? `Connect your ${selfAuthWalletLabel} in Base App first.`
           : 'Connect an on-chain CSW owner wallet first.',
       )
       return null
@@ -90,6 +97,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       }
       const data = await fetchAddOwnerPreview({
         connectedAddress: ownerSignerAddress,
+        targetCswAddress: targetCswAddress ?? undefined,
         headers: { 'X-Privy-Token': token },
       })
       if (requestId !== previewRequestIdRef.current) return null
@@ -107,7 +115,15 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         setPreviewLoading(false)
       }
     }
-  }, [canonicalCswAddress, enabled, getAccessToken, isSelfAuthSession, ownerSignerAddress])
+  }, [
+    enabled,
+    getAccessToken,
+    isSelfAuthSession,
+    mutationCswAddress,
+    ownerSignerAddress,
+    selfAuthWalletLabel,
+    targetCswAddress,
+  ])
 
   const setErrorDetail = useCallback((input: { revertReason?: string | null; revertData?: string | null }) => {
     setLastErrorDetail({
@@ -119,10 +135,10 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   }, [])
 
   const handleAdd = useCallback(async () => {
-    if (!enabled || !canonicalCswAddress || !ownerSignerAddress) {
+    if (!enabled || !mutationCswAddress || !ownerSignerAddress) {
       setPageError(
         isSelfAuthSession
-          ? 'Connect your canonical smart wallet in Base App first.'
+          ? `Connect your ${selfAuthWalletLabel} in Base App first.`
           : 'Connect an on-chain CSW owner wallet first.',
       )
       return false
@@ -182,7 +198,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
 
       const result = await executeAddOwnerViaRelay({
         preview: activePreview,
-        cswAddress: canonicalCswAddress as `0x${string}`,
+        cswAddress: mutationCswAddress as `0x${string}`,
         publicClient,
         walletClient,
         walletRequest,
@@ -229,14 +245,15 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   }, [
     appendEvent,
     baseAccountSdk,
-    canonicalCswAddress,
     enabled,
     fetchPreview,
     isSelfAuthSession,
+    mutationCswAddress,
     ownerSignerAddress,
     preview,
     privyExternalOwnerWallet,
     publicClient,
+    selfAuthWalletLabel,
     setErrorDetail,
     wagmiWalletClient,
   ])
