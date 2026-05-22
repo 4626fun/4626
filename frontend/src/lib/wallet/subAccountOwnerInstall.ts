@@ -67,10 +67,22 @@ async function ensureBaseMainnetWalletContext(walletRequest: WalletRequest): Pro
   const current = await walletRequest({ method: 'eth_chainId' })
   if (isHexChainId(current) && current.toLowerCase() === BASE_MAINNET_CHAIN_ID_HEX) return
 
-  await walletRequest({
-    method: 'wallet_switchEthereumChain',
-    params: [{ chainId: BASE_MAINNET_CHAIN_ID_HEX }],
-  })
+  try {
+    await walletRequest({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: BASE_MAINNET_CHAIN_ID_HEX }],
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    throw new Error(
+      `Base App is currently in testnet mode. 4626 signing setup requires Base Mainnet. ${message}`.trim(),
+    )
+  }
+
+  const postSwitch = await walletRequest({ method: 'eth_chainId' })
+  if (!isHexChainId(postSwitch) || postSwitch.toLowerCase() !== BASE_MAINNET_CHAIN_ID_HEX) {
+    throw new Error('Base App is currently in testnet mode. 4626 signing setup requires Base Mainnet.')
+  }
 }
 
 export function createBaseSubAccountReadClient() {
@@ -186,20 +198,6 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       csw: params.subAccountAddress,
       ownerToAdd: params.embeddedEoaAddress,
       chainId,
-    })
-    return {
-      installed: true,
-      alreadyOwner: false,
-      transactionHash: submitted.transactionHash,
-      callBundleId: submitted.callBundleId,
-    } satisfies InstallEmbeddedOwnerResult
-  }
-
-  try {
-    const direct = await addOwnerViaEthSendTransaction({
-      walletRequest,
-      subAccountAddress: params.subAccountAddress,
-      embeddedEoaAddress: params.embeddedEoaAddress,
     })
     return {
       installed: true,
