@@ -38,6 +38,7 @@ const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSE
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
 const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -80,15 +81,20 @@ describe('public manifest assets', () => {
   })
 
   it('keeps install metadata aligned in both HTML entry points', () => {
-    for (const htmlPath of htmlEntryPaths) {
-      const html = readFileSync(htmlPath, 'utf8')
+    const marketingHtml = readFileSync(marketingHtmlPath, 'utf8')
+    const appHtml = readFileSync(appHtmlPath, 'utf8')
 
-      expect(html).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any" />`)
-      expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}" />`)
-      expect(html).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}" />`)
-      expect(html).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
-      expect(html).toContain('<meta name="theme-color" content="#020204" />')
-    }
+    expect(marketingHtml).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any" />`)
+    expect(marketingHtml).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}" />`)
+    expect(marketingHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}" />`)
+    expect(marketingHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
+    expect(marketingHtml).toContain('<meta name="theme-color" content="#020204" />')
+
+    expect(appHtml).toContain(`<link rel="icon" href="https://app.4626.fun/assets/favicon-32x32.png?v=${BRAND_ASSET_VERSION}" type="image/png" sizes="32x32" />`)
+    expect(appHtml).toContain(`<link rel="icon" href="https://app.4626.fun/assets/favicon-brand.ico?v=${BRAND_ASSET_VERSION}" sizes="any" />`)
+    expect(appHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="https://app.4626.fun/assets/apple-touch-icon.png?v=${BRAND_ASSET_VERSION}" />`)
+    expect(appHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
+    expect(appHtml).toContain('<meta name="theme-color" content="#020204" />')
   })
 
   it('keeps shell-level social assets aligned with their intended surfaces', () => {
@@ -105,7 +111,9 @@ describe('public manifest assets', () => {
     expect(appHtml).toContain(`<meta property="og:image" content="${OG_SOCIAL_IMAGE_URL}" />`)
     expect(appHtml).toContain(`<meta name="twitter:image" content="${TWITTER_SOCIAL_IMAGE_URL}" />`)
     expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
-    expect(appHtml).toContain(`"splashImageUrl":"${MINIAPP_SPLASH_URL}"`)
+    expect(appHtml).toContain('<link rel="canonical" href="https://app.4626.fun/" />')
+    expect(appHtml).toContain('<meta property="og:url" content="https://app.4626.fun/" />')
+    expect(appHtml).toContain(`"splashImageUrl":"${APP_SHELL_MINIAPP_SPLASH_URL}"`)
     expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')
     expect(appHtml).not.toContain('https://4626.fun/miniapp-hero.png')
     expect(appHtml).not.toContain('https://4626.fun/miniapp-splash.png')

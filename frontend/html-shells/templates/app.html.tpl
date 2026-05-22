@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
-{{> partials/head-shared-base-meta.html}}
+{{> partials/head-app-base-meta.html}}
 {{> partials/head-app-social-meta.html}}
 {{> partials/head-index-wallet-noise-bootstrap.html}}
 {{> partials/head-shared-theme-bootstrap.html}}

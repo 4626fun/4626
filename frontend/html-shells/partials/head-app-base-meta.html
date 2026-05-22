@@ -1,0 +1,22 @@
+    <meta charset="UTF-8" />
+    <!-- Favicons: absolute PNG-first stack for Base App in-app browser caches. -->
+    <link rel="icon" href="{{APP_SHELL_FAVICON_32_URL}}" type="image/png" sizes="32x32" />
+    <link rel="icon" href="{{APP_SHELL_FAVICON_16_URL}}" type="image/png" sizes="16x16" />
+    <link rel="icon" href="{{APP_SHELL_FAVICON_ICO_URL}}" sizes="any" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="{{APP_SHELL_APPLE_TOUCH_URL}}" />
+    <link rel="mask-icon" href="{{SAFARI_PINNED_TAB_PATH}}" color="{{BRAND_BLUE}}" />
+    <meta name="msapplication-TileColor" content="{{MS_TILE_COLOR}}" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="canonical" href="{{APP_SHELL_URL_TRAILING}}" />
+    <title>{{SITE_TITLE}}</title>
+    <meta name="application-name" content="{{SITE_APP_NAME}}" />
+    <meta name="apple-mobile-web-app-title" content="{{SITE_APP_NAME}}" />
+    <meta name="description" content="{{SITE_DESCRIPTION}}" />
+    <meta name="keywords" content="{{SITE_KEYWORDS}}" />
+    <meta name="author" content="{{SITE_AUTHOR}}" />
+    <!-- Robots: default noindex until SSR/prerender is available for crawlable routes -->
+    <meta name="robots" content="noindex, follow" />
+    <!-- Open Graph baseline (overridden per-page by PageMeta component) -->
+    <meta property="og:type" content="website" />

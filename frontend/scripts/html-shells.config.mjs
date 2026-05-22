@@ -23,6 +23,7 @@ function buildAbsoluteUrl(baseUrl, assetPath, version) {
 }
 
 const BRAND_ASSET_VERSION = Number(SHARED_SITE_CONFIG.brandAssetVersion ?? 3)
+const APP_SHELL_ORIGIN = trimTrailingSlash(SHARED_SITE_CONFIG.appUrl ?? 'https://app.4626.fun')
 
 const BASE_HTML_SHELL_CONFIG = {
   appBaseUrl: SHARED_SITE_CONFIG.url,
@@ -102,6 +103,32 @@ export const HTML_SHELL_CONFIG = Object.freeze({
     BASE_HTML_SHELL_CONFIG.miniappSplashPath,
     BASE_HTML_SHELL_CONFIG.miniappSplashVersion,
   ),
+  appShellUrlTrailing: withTrailingSlash(APP_SHELL_ORIGIN),
+  appShellFaviconIcoUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.faviconIco,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellFavicon32Url: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.favicon32,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellFavicon16Url: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.favicon16,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellAppleTouchIconUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    SHARED_SITE_CONFIG.assets.appleTouchIcon,
+    BRAND_ASSET_VERSION,
+  ),
+  appShellMiniappSplashUrl: buildAbsoluteUrl(
+    APP_SHELL_ORIGIN,
+    BASE_HTML_SHELL_CONFIG.miniappSplashPath,
+    BASE_HTML_SHELL_CONFIG.miniappSplashVersion,
+  ),
 })
 
 export const HTML_SHELL_TEMPLATE_VARS = {
@@ -114,6 +141,12 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   OG_IMAGE_HEIGHT: HTML_SHELL_CONFIG.ogImageHeight,
   MINIAPP_HERO_URL: HTML_SHELL_CONFIG.miniappHeroUrl,
   MINIAPP_SPLASH_URL: HTML_SHELL_CONFIG.miniappSplashUrl,
+  APP_SHELL_URL_TRAILING: HTML_SHELL_CONFIG.appShellUrlTrailing,
+  APP_SHELL_FAVICON_ICO_URL: HTML_SHELL_CONFIG.appShellFaviconIcoUrl,
+  APP_SHELL_FAVICON_32_URL: HTML_SHELL_CONFIG.appShellFavicon32Url,
+  APP_SHELL_FAVICON_16_URL: HTML_SHELL_CONFIG.appShellFavicon16Url,
+  APP_SHELL_APPLE_TOUCH_URL: HTML_SHELL_CONFIG.appShellAppleTouchIconUrl,
+  APP_SHELL_MINIAPP_SPLASH_URL: HTML_SHELL_CONFIG.appShellMiniappSplashUrl,
   SITE_APP_NAME: HTML_SHELL_CONFIG.siteAppName,
   SITE_NAME: HTML_SHELL_CONFIG.siteName,
   SITE_TITLE: HTML_SHELL_CONFIG.siteTitle,

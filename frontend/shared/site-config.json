@@ -1,6 +1,7 @@
 {
   "name": "4626.fun",
   "url": "https://4626.fun",
+  "appUrl": "https://app.4626.fun",
   "title": "4626.fun — ERC-4626 Creator Vaults on Base",
   "description": "Creator coin vaults on Base. Wrap creator coins into ERC-4626 vaults, launch fairly, earn fees, and compose with DeFi.",
   "socialDescription": "Creator coin vaults on Base. Deposit. Compound. Withdraw. Onchain.",
@@ -10,7 +11,7 @@
   "backgroundColor": "#020204",
   "brandBlue": "#0000FF",
   "brandBlueSoft": "#1E59FF",
-  "brandAssetVersion": 6,
+  "brandAssetVersion": 7,
   "assets": {
     "logo": "/assets/logo-mark.svg",
     "logoBlue": "/assets/logo-mark-blue.svg",
