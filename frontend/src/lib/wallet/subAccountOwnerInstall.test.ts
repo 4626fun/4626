@@ -50,6 +50,7 @@ describe('subAccountOwnerInstall', () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce([SUB])
       .mockResolvedValueOnce(TX_HASH)
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
@@ -64,6 +65,9 @@ describe('subAccountOwnerInstall', () => {
       method: 'eth_chainId',
     })
     expect(request).toHaveBeenNthCalledWith(2, {
+      method: 'eth_requestAccounts',
+    })
+    expect(request).toHaveBeenNthCalledWith(3, {
       method: 'eth_sendTransaction',
       params: [
         {
@@ -84,6 +88,7 @@ describe('subAccountOwnerInstall', () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce([SUB])
       .mockRejectedValueOnce(new Error('unsupported method'))
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
@@ -107,6 +112,7 @@ describe('subAccountOwnerInstall', () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce([SUB])
       .mockRejectedValueOnce(new Error('requested method and/or account has not been authorized by the user'))
       .mockResolvedValueOnce([SUB])
       .mockRejectedValueOnce(new Error('still unsupported'))
@@ -119,7 +125,8 @@ describe('subAccountOwnerInstall', () => {
     })
     expect(result.installed).toBe(true)
     expect(addOwnerSendCallsMock).toHaveBeenCalledTimes(1)
-    expect(request).toHaveBeenNthCalledWith(3, { method: 'eth_requestAccounts' })
+    expect(request).toHaveBeenNthCalledWith(2, { method: 'eth_requestAccounts' })
+    expect(request).toHaveBeenNthCalledWith(4, { method: 'eth_requestAccounts' })
   })
 
   it('rethrows user rejection from eth_sendTransaction without sendCalls fallback', async () => {

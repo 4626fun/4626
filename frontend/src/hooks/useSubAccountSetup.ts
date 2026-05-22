@@ -9,7 +9,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useWallets, useBaseAccountSdk, useConnectWallet, useActiveWallet, toViemAccount } from '@privy-io/react-auth'
+import { useBaseAccountSdk, useConnectWallet, useActiveWallet, toViemAccount } from '@privy-io/react-auth'
+import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import type { Address } from 'viem'
 import {
   provisionSubAccount,
@@ -82,8 +83,10 @@ function buildWalletBundle(params: {
   }
 }
 
+export type SubAccountSetupControls = ReturnType<typeof useSubAccountSetup>
+
 export function useSubAccountSetup() {
-  const { wallets } = useWallets()
+  const wallets = usePrivyWalletsFromContext()
   const { baseAccountSdk } = useBaseAccountSdk()
   const { connectWallet } = useConnectWallet()
   const { setActiveWallet } = useActiveWallet()

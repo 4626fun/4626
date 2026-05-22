@@ -35,6 +35,7 @@ import {
 } from '@/features/explore/exploreShared'
 
 const CONTENT_COINS_PAGE_SIZE = 20
+const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
 gsap.registerPlugin(ScrollTrigger)
 
 type ContentMediaKind = 'video' | 'text' | 'visual'
@@ -516,6 +517,7 @@ export function ExploreCreatorDetail() {
   const [allowParallax, setAllowParallax] = useState(false)
   const [showCursor, setShowCursor] = useState(false)
   const [isContentTrayOpen, setIsContentTrayOpen] = useState(false)
+  const [isContentSwapTrayOpen, setIsContentSwapTrayOpen] = useState(false)
   const [activeContentCoin, setActiveContentCoin] = useState<ZoraCoin | null>(null)
   const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
   const [timelineDragging, setTimelineDragging] = useState(false)
@@ -629,6 +631,59 @@ export function ExploreCreatorDetail() {
     enabled: Boolean(primaryPool?.id),
     staleTime: 30_000,
   })
+
+  const activeTrayCoinAddress = useMemo(() => {
+    const addr = activeContentCoin?.address
+    if (!addr || !isAddress(addr)) return null
+    return getAddress(addr)
+  }, [activeContentCoin?.address])
+
+  const { data: activeTrayPools = [] } = useQuery({
+    queryKey: ['uniswap', 'poolsByToken', 'contentTray', activeTrayCoinAddress],
+    queryFn: async () => {
+      if (!activeTrayCoinAddress) return []
+      return getPoolsByToken(activeTrayCoinAddress)
+    },
+    enabled: Boolean(activeTrayCoinAddress) && isContentTrayOpen,
+    staleTime: 60_000,
+  })
+
+  const activeTrayPrimaryPool = useMemo<UniswapPool | null>(() => {
+    if (!activeTrayPools || activeTrayPools.length === 0) return null
+    return [...activeTrayPools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0] ?? null
+  }, [activeTrayPools])
+
+  const { data: activeTraySwaps = [], isLoading: activeTraySwapsLoading } = useQuery({
+    queryKey: ['uniswap', 'poolSwaps', 'contentTray', activeTrayPrimaryPool?.id],
+    queryFn: async () => {
+      if (!activeTrayPrimaryPool?.id) return []
+      return getPoolSwaps(activeTrayPrimaryPool.id, 12)
+    },
+    enabled: Boolean(activeTrayPrimaryPool?.id) && isContentTrayOpen,
+    staleTime: 30_000,
+  })
+
+  const activeTrayBuyers = useMemo(() => {
+    const contentAddressLower = activeTrayCoinAddress?.toLowerCase() ?? ''
+    return (activeTraySwaps ?? [])
+      .map((swap: UniswapSwap) => {
+        const amount0 = parseNumber(swap.amount0)
+        const amount1 = parseNumber(swap.amount1)
+        const contentInToken0 = swap.token0.id.toLowerCase() === contentAddressLower
+        const contentAmount = contentInToken0 ? amount0 : amount1
+        const side = contentAmount < 0 ? 'Buy' : contentAmount > 0 ? 'Sell' : 'Swap'
+        return {
+          id: swap.id,
+          timestamp: parseNumber(swap.timestamp || swap.transaction?.timestamp || 0),
+          side,
+          amountUsd: parseNumber(swap.amountUSD),
+          wallet: swap.origin || swap.sender,
+          txHash: swap.transaction?.id ?? '',
+        }
+      })
+      .filter((row) => row.side === 'Buy')
+      .slice(0, 8)
+  }, [activeTraySwaps, activeTrayCoinAddress])
 
   const recentTransactions = useMemo(() => {
     const creatorCoinAddressLower = tokenAddress?.toLowerCase() ?? ''
@@ -792,11 +847,18 @@ export function ExploreCreatorDetail() {
   useEffect(() => {
     if (!isContentTrayOpen) return
     const onKeydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setIsContentTrayOpen(false)
+      if (event.key === 'Escape') {
+        if (isContentSwapTrayOpen) {
+          setIsContentSwapTrayOpen(false)
+          return
+        }
+        setIsContentSwapTrayOpen(false)
+        setIsContentTrayOpen(false)
+      }
     }
     window.addEventListener('keydown', onKeydown)
     return () => window.removeEventListener('keydown', onKeydown)
-  }, [isContentTrayOpen])
+  }, [isContentTrayOpen, isContentSwapTrayOpen])
 
   // Profile info
   const profile = creatorProfile || (profileCoinsData as ZoraProfile | null)
@@ -877,9 +939,13 @@ export function ExploreCreatorDetail() {
   const heroBackgroundImage = creatorTokenLogo || leadSceneCoinImage || null
   const openContentTray = (coin: ZoraCoin) => {
     setActiveContentCoin(coin)
+    setIsContentSwapTrayOpen(false)
     setIsContentTrayOpen(true)
   }
-  const closeContentTray = () => setIsContentTrayOpen(false)
+  const closeContentTray = () => {
+    setIsContentSwapTrayOpen(false)
+    setIsContentTrayOpen(false)
+  }
   const onTimelinePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const container = timelineScrollerRef.current
     if (!container) return
@@ -933,12 +999,30 @@ export function ExploreCreatorDetail() {
   const activeCoinAddress = activeContentCoin?.address || ''
   const activeCoinDescription = (activeContentCoin?.description || '').trim()
   const activeCoinEarningsUsd = activeContentCoin ? calculateTotalEarningsValue(activeContentCoin.creatorEarnings) : 0
-  const activeSceneCoinName = sceneActiveCoin?.name || sceneActiveCoin?.symbol || null
-  const activeSceneCoinSymbol = sceneActiveCoin?.symbol || null
-  const shouldShowActiveSceneSymbol = Boolean(
-    activeSceneCoinSymbol &&
-      (!activeSceneCoinName || activeSceneCoinSymbol.toLowerCase() !== activeSceneCoinName.toLowerCase())
-  )
+  const activeTraySymbol = activeContentCoin?.symbol || '???'
+  const compactActiveTraySymbol = activeTraySymbol.length > 18 ? `${activeTraySymbol.slice(0, 15)}…` : activeTraySymbol
+  const activeTraySwapUrl = activeTrayCoinAddress ? `/swap?token=${activeTrayCoinAddress}` : '/swap'
+  const activeTrayLiquidityUrl = activeTrayPrimaryPool?.id
+    ? `https://app.uniswap.org/explore/pools/base/${activeTrayPrimaryPool.id}`
+    : activeTrayCoinAddress
+      ? `https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`
+      : 'https://app.uniswap.org'
+  const heroStats = [
+    { value: volumeWindow === '24h' ? volume24h : totalVolume, label: volumeWindow === '24h' ? '24H volume' : 'All-time volume', toneClass: 'text-white' },
+    { value: marketCap, label: 'Market cap', toneClass: 'text-white' },
+    { value: holders, label: 'Holders', toneClass: 'text-white' },
+    {
+      value: ethosStatDisplay,
+      label: 'Ethos score',
+      toneClass: ethosHasPositiveScore ? ethosTheme.accentTextClass : 'text-zinc-500',
+      footer:
+        typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
+          <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
+        ) : null,
+    },
+    { value: totalCoinsCreated, label: 'Coins created', toneClass: 'text-white' },
+    { value: createdAt, label: 'Created', toneClass: 'text-white' },
+  ] as const
 
   return (
     <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden">
@@ -966,7 +1050,7 @@ export function ExploreCreatorDetail() {
         </motion.div>
 
         {/* Recreated hero scene */}
-        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-20 sm:mb-24 overflow-hidden bg-black min-h-[112vh] sm:min-h-[124vh]">
+        <section className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mb-32 sm:mb-40 overflow-hidden bg-black min-h-[112vh] sm:min-h-[124vh]">
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
               <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-65" />
@@ -984,18 +1068,18 @@ export function ExploreCreatorDetail() {
             ))}
           </div>
 
-          <div className="absolute top-5 left-4 sm:top-7 sm:left-6 lg:left-8 z-20 flex flex-col items-start gap-1.5 pointer-events-auto max-w-[min(90vw,760px)]">
+          <div className="absolute top-5 right-4 sm:top-7 sm:right-6 lg:right-8 z-20 flex flex-col items-end gap-1.5 pointer-events-auto max-w-[min(92vw,420px)] text-right">
             {website ? (
               <a
                 href={website.startsWith('http') ? website : `https://${website}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-zinc-400 hover:text-white transition-colors"
+                className="text-sm text-zinc-400 hover:text-white transition-colors truncate max-w-full"
               >
                 {website.replace(/^https?:\/\//, '')}
               </a>
             ) : null}
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
               <SocialLinks profile={profile} compact />
               <ResourceLinks tokenAddress={tokenAddress} compact />
             </div>
@@ -1006,9 +1090,9 @@ export function ExploreCreatorDetail() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4 }}
-            className="relative min-h-[108vh] sm:min-h-[120vh] p-6 sm:p-8 lg:p-12 flex flex-col justify-between"
+            className="relative min-h-[108vh] sm:min-h-[120vh] p-6 sm:p-8 lg:p-12 flex flex-col lg:flex-row lg:items-stretch lg:justify-between gap-12 lg:gap-16"
           >
-            <div className="max-w-4xl">
+            <div className="max-w-4xl flex flex-col justify-center flex-1">
               <span
                 className={cn(
                   'inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] mb-8',
@@ -1084,36 +1168,21 @@ export function ExploreCreatorDetail() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-6 sm:gap-8 mt-10 lg:mt-16 lg:max-w-[1100px] lg:ml-auto">
-              {[
-                { value: volumeWindow === '24h' ? volume24h : totalVolume, label: volumeWindow === '24h' ? '24H volume' : 'All-time volume', toneClass: 'text-white' },
-                { value: marketCap, label: 'Market cap', toneClass: 'text-white' },
-                { value: holders, label: 'Holders', toneClass: 'text-white' },
-                {
-                  value: ethosStatDisplay,
-                  label: 'Ethos score',
-                  toneClass: ethosHasPositiveScore ? ethosTheme.accentTextClass : 'text-zinc-500',
-                  footer:
-                    typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
-                      <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
-                    ) : null,
-                },
-                { value: totalCoinsCreated, label: 'Coins created', toneClass: 'text-white' },
-                { value: createdAt, label: 'Created', toneClass: 'text-white' },
-              ].map((stat) => (
-                <div key={stat.label} className="flex flex-col gap-2 lg:items-end lg:text-right">
-                  <span className={cn('text-3xl sm:text-4xl font-semibold tabular-nums', stat.toneClass)}>{stat.value}</span>
-                  <span className="text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
+            <aside className="shrink-0 flex flex-col justify-center gap-6 sm:gap-7 lg:w-48 xl:w-56 lg:border-l lg:border-white/10 lg:pl-8 lg:py-6 lg:sticky lg:top-28 lg:self-start">
+              {heroStats.map((stat) => (
+                <div key={stat.label} className="flex flex-col gap-1.5 lg:items-end lg:text-right">
+                  <span className={cn('text-2xl sm:text-3xl lg:text-4xl font-semibold tabular-nums', stat.toneClass)}>{stat.value}</span>
+                  <span className="text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
                   {'footer' in stat && stat.footer ? <div className="lg:flex lg:justify-end">{stat.footer}</div> : null}
                 </div>
               ))}
-            </div>
+            </aside>
           </motion.div>
         </section>
 
         <section
           ref={sceneSectionRef}
-          className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mt-12 sm:mt-16 mb-48 sm:mb-64 h-[980px] sm:h-[1120px] overflow-hidden"
+          className="relative left-1/2 right-1/2 w-screen -translate-x-1/2 mt-20 sm:mt-28 mb-56 sm:mb-72 h-[980px] sm:h-[1120px] overflow-hidden"
           onWheelCapture={onSceneSectionWheelCapture}
         >
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
@@ -1160,33 +1229,37 @@ export function ExploreCreatorDetail() {
                 </div>
               </div>
 
-              <div className="absolute left-3 top-3 z-20 inline-flex items-center gap-2 border border-white/15 bg-black/70 px-3 py-1.5 text-[11px] text-zinc-200 backdrop-blur-sm">
-                <span className="font-mono uppercase tracking-[1.4px] text-zinc-400">Now Showing</span>
-                <span className="font-medium text-white">{activeSceneCoinName || 'Content coin'}</span>
-                {shouldShowActiveSceneSymbol ? (
-                  <span className="font-mono uppercase tracking-[1.2px] text-zinc-400">{activeSceneCoinSymbol}</span>
-                ) : null}
-              </div>
-
               <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4">
                 <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
                   Top content volume
                 </div>
                 <div className="space-y-1.5">
-                  {topVolumeContentCoins.map((coin, index) => (
-                    <button
-                      key={coin.address || coin.id || `top-volume-${index}`}
-                      type="button"
-                      onClick={() => openContentTray(coin)}
-                      className="w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm text-zinc-200 hover:text-white transition-colors"
-                    >
-                      <span className="truncate">
-                        <span className="font-mono text-zinc-500 mr-2">{String(index + 1).padStart(2, '0')}</span>
-                        {coin.name || coin.symbol || 'Untitled'}
-                      </span>
-                      <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
-                    </button>
-                  ))}
+                  {topVolumeContentCoins.map((coin, index) => {
+                    const isActiveInScene =
+                      Boolean(sceneActiveCoin?.address) &&
+                      coin.address?.toLowerCase() === sceneActiveCoin?.address?.toLowerCase()
+                    return (
+                      <button
+                        key={coin.address || coin.id || `top-volume-${index}`}
+                        type="button"
+                        onClick={() => openContentTray(coin)}
+                        className={cn(
+                          'w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
+                          isActiveInScene
+                            ? 'bg-cyan-400/15 text-white border-l-2 border-cyan-300'
+                            : 'text-zinc-200 hover:text-white hover:bg-white/5',
+                        )}
+                      >
+                        <span className="truncate">
+                          <span className={cn('font-mono mr-2', isActiveInScene ? 'text-cyan-200' : 'text-zinc-500')}>
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          {coin.name || coin.symbol || 'Untitled'}
+                        </span>
+                        <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -1199,7 +1272,7 @@ export function ExploreCreatorDetail() {
 
         <section
           ref={timelineSectionRef}
-          className="relative w-screen ml-[calc(50%-50vw)] mt-36 sm:mt-52 mb-56 sm:mb-72 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+          className="relative w-screen ml-[calc(50%-50vw)] mt-48 sm:mt-64 mb-56 sm:mb-72 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
         >
           <div ref={timelineBodyRef}>
             <div className="px-2 sm:px-4 pb-8">
@@ -1615,40 +1688,49 @@ export function ExploreCreatorDetail() {
             type="button"
             className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
             onClick={closeContentTray}
-            aria-label="Close content coin tray"
+            aria-label="Close content coin panel"
           />
           <aside className="absolute left-0 top-0 h-full w-full max-w-[460px] bg-black/95 shadow-[22px_0_80px_rgba(0,0,0,0.65)] overflow-y-auto">
             <div className="sticky top-0 z-10 bg-black/90 backdrop-blur px-5 sm:px-6 py-4 flex items-center justify-between">
               <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
                 <span className="w-10 h-px bg-white/35" />
-                Content Coin Tray
+                Content Coin
               </span>
               <button
                 type="button"
                 onClick={closeContentTray}
-                    className="inline-flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-white transition-colors"
-                aria-label="Close tray"
+                className="inline-flex items-center justify-center w-8 h-8 text-zinc-400 hover:text-white transition-colors"
+                aria-label="Close panel"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="p-5 sm:p-6 space-y-5">
-              <div className="flex items-start gap-4">
-                <div className="w-16 h-16 rounded-2xl overflow-hidden border border-white/15 bg-zinc-900 shrink-0">
-                  {activeCoinImage ? (
-                    <img src={activeCoinImage} alt={activeContentCoin.name || activeContentCoin.symbol || 'Content coin'} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-zinc-500">
-                      <Coins className="w-6 h-6" />
-                    </div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-2xl font-semibold tracking-tight text-white truncate">
-                    {activeContentCoin.name || activeContentCoin.symbol || 'Untitled'}
-                  </h3>
-                  <div className="text-sm text-zinc-400 mt-1">{activeContentCoin.symbol || '???'}</div>
-                </div>
+              <div className="min-w-0">
+                <h3 className="text-2xl font-semibold tracking-tight text-white truncate">
+                  {activeContentCoin.name || activeContentCoin.symbol || 'Untitled'}
+                </h3>
+                <div className="text-sm text-zinc-400 mt-1">{activeContentCoin.symbol || '???'}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsContentSwapTrayOpen(true)}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-white text-black font-medium text-sm hover:bg-white/90 transition-colors"
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Swap
+                </button>
+                <a
+                  href={activeTrayLiquidityUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-white/15 bg-white/5 text-white font-medium text-sm hover:bg-white/10 transition-colors"
+                >
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Liquidity
+                </a>
               </div>
 
               <div className="bg-zinc-950/30 overflow-hidden rounded-xl">
@@ -1682,7 +1764,7 @@ export function ExploreCreatorDetail() {
                 ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 {activeCoinEarningsUsd > 0 ? (
                   <div className="bg-blue-500/10 px-3 py-3 rounded-lg">
                     <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Earned</div>
@@ -1692,6 +1774,60 @@ export function ExploreCreatorDetail() {
                 <div className="bg-zinc-950/20 px-3 py-3 rounded-lg">
                   <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">All-time volume</div>
                   <div className="text-base text-white mt-1">{formatNumber(activeContentCoin.totalVolume)}</div>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-white/10 overflow-hidden">
+                <div className="px-3 py-3 border-b border-white/10">
+                  <div className="text-[11px] font-mono uppercase tracking-[1.5px] text-zinc-500">Recent buyers</div>
+                  <div className="text-xs text-zinc-500 mt-1">Latest buy-side swaps from the primary pool</div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[320px] text-sm">
+                    <thead>
+                      <tr className="text-left text-zinc-500 text-[11px] uppercase tracking-[1.2px] font-mono">
+                        <th className="px-3 py-2 font-normal">Time</th>
+                        <th className="px-3 py-2 text-right font-normal">USD</th>
+                        <th className="px-3 py-2 text-right font-normal">Wallet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activeTraySwapsLoading ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-zinc-600">
+                            <LoadingText intent="processing" labelOverride="Loading buyers..." />
+                          </td>
+                        </tr>
+                      ) : activeTrayBuyers.length === 0 ? (
+                        <tr>
+                          <td colSpan={3} className="px-3 py-6 text-center text-zinc-600">
+                            No recent buyers yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        activeTrayBuyers.map((row) => (
+                          <tr key={row.id} className="border-t border-white/8">
+                            <td className="px-3 py-2.5 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
+                            <td className="px-3 py-2.5 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
+                            <td className="px-3 py-2.5 text-right">
+                              {row.txHash ? (
+                                <a
+                                  href={`https://basescan.org/tx/${row.txHash}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-zinc-300 hover:text-white font-mono text-xs"
+                                >
+                                  {shortAddress(row.wallet)}
+                                </a>
+                              ) : (
+                                <span className="text-zinc-400 font-mono text-xs">{shortAddress(row.wallet)}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
@@ -1718,6 +1854,100 @@ export function ExploreCreatorDetail() {
                   Open Full Content Coin Page
                 </Link>
               ) : null}
+            </div>
+          </aside>
+        </div>
+      ) : null}
+      {isContentTrayOpen && isContentSwapTrayOpen && activeTrayCoinAddress ? (
+        <div className="fixed inset-0 z-[145]">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+            onClick={() => setIsContentSwapTrayOpen(false)}
+            aria-label="Close swap panel"
+          />
+          <aside className="absolute right-0 top-0 hidden h-full w-full max-w-[380px] border-l border-white/10 bg-black/95 p-5 sm:block">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Swap {compactActiveTraySymbol}</div>
+              <button
+                type="button"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center text-zinc-400 hover:text-white"
+                aria-label="Close swap panel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm">
+              <Link
+                to={activeTraySwapUrl}
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => {
+                  setIsContentSwapTrayOpen(false)
+                  closeContentTray()
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Open in 4626 Swap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <a
+                href={`https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Open in Uniswap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+          </aside>
+          <aside className="absolute bottom-0 left-0 right-0 rounded-t-2xl border-t border-white/10 bg-black/95 p-5 sm:hidden">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-white">Swap {compactActiveTraySymbol}</div>
+              <button
+                type="button"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+                className="inline-flex h-8 w-8 items-center justify-center text-zinc-400 hover:text-white"
+                aria-label="Close swap panel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-2 text-sm">
+              <Link
+                to={activeTraySwapUrl}
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => {
+                  setIsContentSwapTrayOpen(false)
+                  closeContentTray()
+                }}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" />
+                  Open in 4626 Swap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </Link>
+              <a
+                href={`https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex w-full items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-zinc-200 hover:bg-white/10"
+                onClick={() => setIsContentSwapTrayOpen(false)}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <img src={UNISWAP_ICON_URL} alt="Uniswap" className="h-4 w-4 object-contain" />
+                  Open in Uniswap
+                </span>
+                <ExternalLink className="h-4 w-4" />
+              </a>
             </div>
           </aside>
         </div>

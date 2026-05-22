@@ -20,6 +20,10 @@ const hookState = {
   embeddedAddress: EMBED as string,
 }
 
+vi.mock('@/lib/privy/client', () => ({
+  usePrivyClientStatus: () => 'ready',
+}))
+
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
     provisionSubAccount: hookState.provision,

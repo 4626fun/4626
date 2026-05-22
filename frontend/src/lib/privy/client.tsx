@@ -5,6 +5,7 @@ import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
+import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -124,7 +125,11 @@ export function PrivyClientProvider(props: {
   }, [mode, solanaConnectors])
 
   if (!hasRuntimeConfig || !appId) {
-    return <PrivyClientContext.Provider value={ctx}>{children}</PrivyClientContext.Provider>
+    return (
+      <PrivyClientContext.Provider value={ctx}>
+        <PrivyWalletHooksContextProvider enabled={false}>{children}</PrivyWalletHooksContextProvider>
+      </PrivyClientContext.Provider>
+    )
   }
 
   const appearance = createPrivyAppearance({
@@ -177,7 +182,7 @@ export function PrivyClientProvider(props: {
     <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
-        {children}
+        <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>
   )

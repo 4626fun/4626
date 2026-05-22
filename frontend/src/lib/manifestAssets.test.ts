@@ -123,9 +123,9 @@ describe('public manifest assets', () => {
     for (const htmlPath of trustPagePaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain('<link rel="icon" href="/assets/favicon.ico?v=3" sizes="any">')
-      expect(html).toContain('<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg?v=3">')
-      expect(html).toContain('<link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png?v=3">')
+      expect(html).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any">`)
+      expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}">`)
+      expect(html).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}">`)
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
     }
   })

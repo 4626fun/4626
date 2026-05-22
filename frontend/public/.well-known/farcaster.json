@@ -11,15 +11,15 @@
     "version": "1",
     "name": "4626.fun",
     "homeUrl": "https://4626.fun/",
-    "iconUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=3",
-    "splashImageUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=3",
+    "iconUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=5",
+    "splashImageUrl": "https://4626.fun/assets/logo-mark-opaque-1024.png?v=5",
     "splashBackgroundColor": "#020204",
     "subtitle": "Creator vaults on Base",
     "description": "ERC-4626 creator vaults on Base.",
     "primaryCategory": "finance",
     "tags": ["creator", "vaults", "defi", "base", "trading"],
-    "heroImageUrl": "https://4626.fun/assets/og-image.png?v=3",
-    "screenshotUrls": ["https://4626.fun/assets/og-image.png?v=3"],
+    "heroImageUrl": "https://4626.fun/assets/og-image.png?v=5",
+    "screenshotUrls": ["https://4626.fun/assets/og-image.png?v=5"],
     "canonicalDomain": "4626.fun"
   }
 }

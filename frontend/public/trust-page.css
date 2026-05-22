@@ -1,6 +1,6 @@
 :root {
   color-scheme: dark;
-  --bg: #08080b;
+  --bg: #0c0c0f;
   --panel: rgba(255, 255, 255, 0.04);
   --panel-strong: rgba(255, 255, 255, 0.072);
   --text: #f5f7fb;
@@ -10,6 +10,8 @@
   --accent-hi: #7fa0ff;
   --warn: #ffd12f;
   --warn-soft: rgba(255, 209, 47, 0.09);
+  --grid-line: rgba(255, 255, 255, 0.028);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.42'/%3E%3C/svg%3E");
 }
 
 * {
@@ -19,11 +21,14 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(30, 89, 255, 0.20), transparent 34rem),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    var(--bg);
-  background-size: auto, 72px 72px, auto;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 90% 55% at 50% -18%, rgba(30, 89, 255, 0.08), transparent 58%),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px),
+    var(--grain);
+  background-size: 100% 100%, 52px 52px, 52px 52px, 220px 220px;
+  background-attachment: fixed;
   color: var(--text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   line-height: 1.65;

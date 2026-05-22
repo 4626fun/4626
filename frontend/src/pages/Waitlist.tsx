@@ -46,7 +46,7 @@ export function Waitlist() {
     <div className="min-h-screen flex flex-col">
       <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
 
-      <main className="flex-1 px-4 py-10 sm:py-14">
+      <main className="flex flex-1 flex-col justify-center px-4 py-8 sm:py-10">
         <div className="mx-auto w-full max-w-5xl">
           <div>
             <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">

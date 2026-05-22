@@ -142,7 +142,7 @@ export function AccountSetupWorkspaceView(props: {
 }) {
   const { context, controller, summaryActions, waitlistFooter } = props
   const privyClientStatus = usePrivyClientStatus()
-  const hasPrivyProviderContext = privyClientStatus !== 'disabled'
+  const hasPrivyProviderContext = privyClientStatus === 'ready'
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
   const {

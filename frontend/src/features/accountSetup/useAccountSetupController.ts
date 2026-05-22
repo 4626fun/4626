@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -186,14 +187,6 @@ function useSafeActiveWallet() {
   }
 }
 
-function useSafeWallets() {
-  try {
-    return useWallets() as any
-  } catch {
-    return { wallets: [] } as any
-  }
-}
-
 export function useAccountSetupController(params: {
   initialData?: AccountSetupInitialData
   zoraReturnPath?: string
@@ -204,7 +197,7 @@ export function useAccountSetupController(params: {
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
   const { wallet: activePrivyWallet, setActiveWallet } = useSafeActiveWallet()
-  const { wallets: privyLiveWallets } = useSafeWallets()
+  const privyLiveWallets = usePrivyWalletsFromContext()
   const siwe = useSiweAuth()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()

@@ -4,9 +4,24 @@ import { getAddress, isAddress, type Address } from 'viem'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
-import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
+import { useSubAccountSetup, type SubAccountSetupControls } from '@/hooks/useSubAccountSetup'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
+import { usePrivyClientStatus } from '@/lib/privy/client'
+import { detectInAppEnvironment } from '@/lib/wallet/inAppBrowser'
 import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
+
+import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
+import {
+  mapSubAccountOwnerInstallError,
+  SUB_ACCOUNT_IN_BASE_APP_HINT,
+  SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
+} from './subAccountOwnerInstallMessages'
+
+export type SubAccountOwnerInstallSetup = Pick<
+  SubAccountSetupControls,
+  'installSubAccountOwnerOnly' | 'embeddedWallet' | 'isSettingUp' | 'getLastSetupError' | 'lastStage'
+>
 
 type SubAccountOwnerInstallPanelProps = {
   parentAddress: string | null | undefined
@@ -17,6 +32,8 @@ type SubAccountOwnerInstallPanelProps = {
   variant?: 'recovery' | 'inline'
   /** When false, skip the local headline (parent screen already sets context). */
   showHeader?: boolean
+  /** Reuse an existing setup hook instance from a parent surface (avoids duplicate Privy wallet hooks). */
+  setup?: SubAccountOwnerInstallSetup
   onSuccess?: () => void
 }
 
@@ -27,29 +44,6 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   const trimmed = value.trim()
   if (!isAddress(trimmed)) return null
   return getAddress(trimmed)
-}
-
-function mapOwnerInstallError(message: string): string {
-  const lower = message.toLowerCase()
-  if (lower.includes('base account wallet')) {
-    return 'Connect Base App first (open this page in Base App), then tap Enable 4626 signing again.'
-  }
-  if (lower.includes('not been authorized by the user')) {
-    return 'Base App could not complete the signing approval for your 4626 wallet. Please try again. If it keeps failing, refresh 4626 inside Base App and retry Enable 4626 signing.'
-  }
-  if (
-    lower.includes("mainnet wallet can't be used on testnet") ||
-    lower.includes('unable to process testnet transactions after ownership changes')
-  ) {
-    return 'Base App is currently in testnet mode. 4626 signing setup requires Base Mainnet. Switch Base App to mainnet, reopen 4626, and run Enable 4626 signing again.'
-  }
-  if (lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')) {
-    return 'Signing was canceled in Base App. Tap Enable 4626 signing again and approve the transaction.'
-  }
-  if (lower.includes('connect base app first')) {
-    return message
-  }
-  return message
 }
 
 function shortAddr(address: Address): string {
@@ -88,6 +82,31 @@ function FlowStep(props: FlowStepProps) {
 }
 
 export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelProps) {
+  const privyClientStatus = usePrivyClientStatus()
+  if (privyClientStatus !== 'ready') {
+    return (
+      <div className={`flex items-center gap-2 text-sm text-zinc-400 ${props.className ?? ''}`} role="status">
+        <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.55)" />
+        <span>Preparing wallet session…</span>
+      </div>
+    )
+  }
+
+  if (props.setup) {
+    return <SubAccountOwnerInstallPanelContent {...props} setup={props.setup} />
+  }
+
+  return <SubAccountOwnerInstallPanelWithSetup {...props} />
+}
+
+function SubAccountOwnerInstallPanelWithSetup(props: SubAccountOwnerInstallPanelProps) {
+  const setup = useSubAccountSetup()
+  return <SubAccountOwnerInstallPanelContent {...props} setup={setup} />
+}
+
+function SubAccountOwnerInstallPanelContent(
+  props: SubAccountOwnerInstallPanelProps & { setup: SubAccountOwnerInstallSetup },
+) {
   const {
     parentAddress,
     subAccountAddress,
@@ -96,19 +115,14 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
     variant = 'recovery',
     showHeader = variant === 'inline',
     onSuccess,
+    setup,
   } = props
   const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const parent = normalizeAddress(parentAddress)
   const subAccount = normalizeAddress(subAccountAddress)
   const embeddedFromProps = normalizeAddress(embeddedEoaAddress)
 
-  const {
-    installSubAccountOwnerOnly,
-    embeddedWallet,
-    isSettingUp,
-    getLastSetupError,
-    lastStage,
-  } = useSubAccountSetup()
+  const { installSubAccountOwnerOnly, embeddedWallet, isSettingUp, getLastSetupError, lastStage } = setup
 
   const embeddedEoa = embeddedFromProps ?? normalizeAddress(embeddedWallet?.address)
 
@@ -116,9 +130,16 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [showRecovery, setShowRecovery] = useState(false)
+  const [recheckBusy, setRecheckBusy] = useState(false)
+
+  const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
+  const inBaseApp = Boolean(inAppEnv?.isBaseAppInApp)
+  const needsBaseAppHost = Boolean(inAppEnv && !inBaseApp)
 
   const canRender = subAccountFlowEnabled && Boolean(parent && subAccount && embeddedEoa)
   const isInline = variant === 'inline'
+  const baseAppSetupUrl = buildWaitlistSetupUrl('base-app')
 
   const refreshOwnerCheck = useCallback(async () => {
     if (!subAccount || !embeddedEoa) {
@@ -138,9 +159,6 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       setOwnerCheck('needs_install')
       return
     }
-    // Base RPC can return empty call data (`0x`) for contract reads under load or
-    // while a sub-account is still settling; default to install-needed so users
-    // can proceed instead of getting stuck behind a non-actionable status check.
     setOwnerCheck('needs_install')
   }, [embeddedEoa, subAccount])
 
@@ -163,7 +181,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
   }, [lastStage?.stage])
 
   const handleInstall = useCallback(async () => {
-    if (!parent || !subAccount) return
+    if (!parent || !subAccount || needsBaseAppHost) return
     setActionError(null)
     setActionSuccess(false)
 
@@ -172,16 +190,39 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       subAccountAddress: subAccount,
     })
     if (!result) {
-      const message =
-        mapOwnerInstallError(getLastSetupError()?.message ?? 'Could not enable signing on your app wallet.')
+      const message = mapSubAccountOwnerInstallError(
+        getLastSetupError()?.message ?? 'Could not enable signing on your app wallet.',
+        { inBaseApp },
+      )
       setActionError(message)
+      setShowRecovery(true)
       return
     }
 
     setActionSuccess(true)
+    setShowRecovery(false)
     await refreshOwnerCheck()
     onSuccess?.()
-  }, [getLastSetupError, installSubAccountOwnerOnly, onSuccess, parent, refreshOwnerCheck, subAccount])
+  }, [
+    getLastSetupError,
+    inBaseApp,
+    installSubAccountOwnerOnly,
+    needsBaseAppHost,
+    onSuccess,
+    parent,
+    refreshOwnerCheck,
+    subAccount,
+  ])
+
+  const handleRecheck = useCallback(async () => {
+    setActionError(null)
+    setRecheckBusy(true)
+    try {
+      await refreshOwnerCheck()
+    } finally {
+      setRecheckBusy(false)
+    }
+  }, [refreshOwnerCheck])
 
   if (!canRender) return null
 
@@ -216,6 +257,51 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
   }
 
   const primaryLabel = isSettingUp ? progressLabel : 'Enable 4626 signing'
+  const recoveryVisible = showRecovery || Boolean(actionError) || needsBaseAppHost
+
+  const primaryAction = needsBaseAppHost ? (
+    <Button type="button" variant="primary" className="w-full" asChild data-testid="sub-account-open-base-app-button">
+      <a href={baseAppSetupUrl}>Open setup in Base App</a>
+    </Button>
+  ) : isSettingUp ? (
+    <div className="flex items-center gap-2 text-sm text-zinc-400" role="status" aria-live="polite">
+      <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.85)" />
+      <span>{progressLabel}</span>
+    </div>
+  ) : (
+    <Button
+      type="button"
+      variant="primary"
+      className="w-full"
+      onClick={() => void handleInstall()}
+      data-testid="sub-account-owner-install-button"
+    >
+      {primaryLabel}
+    </Button>
+  )
+
+  const contextHint = needsBaseAppHost ? (
+    <p className="text-xs leading-relaxed text-amber-200/90" role="status">
+      {SUB_ACCOUNT_WRONG_BROWSER_MESSAGE}
+    </p>
+  ) : (
+    <p className="text-xs leading-relaxed text-zinc-400">{SUB_ACCOUNT_IN_BASE_APP_HINT}</p>
+  )
+
+  const errorBlock =
+    actionError && !needsBaseAppHost ? (
+      <p className="text-xs leading-relaxed text-rose-300/90" role="alert">
+        {actionError}
+      </p>
+    ) : null
+
+  const recoveryBlock = recoveryVisible ? (
+    <SubAccountOwnerInstallRecovery
+      inBaseApp={inBaseApp}
+      onRecheck={() => void handleRecheck()}
+      recheckBusy={recheckBusy}
+    />
+  ) : null
 
   if (isInline) {
     return (
@@ -223,27 +309,10 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
         <p className="text-xs leading-relaxed text-zinc-400">
           App wallet linked — one Base App approval adds your embedded key as owner.
         </p>
-        {isSettingUp ? (
-          <div className="flex items-center gap-2 text-xs text-zinc-400" role="status" aria-live="polite">
-            <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.72)" />
-            <span>{progressLabel}</span>
-          </div>
-        ) : (
-          <Button
-            type="button"
-            variant="primary"
-            className="w-full"
-            onClick={() => void handleInstall()}
-            data-testid="sub-account-owner-install-button"
-          >
-            {primaryLabel}
-          </Button>
-        )}
-        {actionError ? (
-          <p className="text-xs text-rose-300/90" role="alert">
-            {actionError}
-          </p>
-        ) : null}
+        {contextHint}
+        {primaryAction}
+        {errorBlock}
+        {recoveryBlock}
       </div>
     )
   }
@@ -258,12 +327,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       ) : null}
 
       <ol className="relative space-y-4 border-l border-white/[0.08]">
-        <FlowStep
-          label="Main Base wallet"
-          detail="Unchanged — custody stays here"
-          address={parent}
-          done
-        />
+        <FlowStep label="Main Base wallet" detail="Unchanged — custody stays here" address={parent} done />
         <FlowStep
           label="4626 app wallet"
           detail="Needs your embedded signer for swaps"
@@ -278,33 +342,10 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
         />
       </ol>
 
-      <p className="text-xs leading-relaxed text-zinc-400">
-        Open in <span className="text-zinc-400">Base App</span> and approve one transaction. Safari, Chrome, and
-        extensions cannot sign for sub-accounts.
-      </p>
-
-      {isSettingUp ? (
-        <div className="flex items-center gap-2 text-sm text-zinc-400" role="status" aria-live="polite">
-          <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.85)" />
-          <span>{progressLabel}</span>
-        </div>
-      ) : (
-        <Button
-          type="button"
-          variant="primary"
-          className="w-full"
-          onClick={() => void handleInstall()}
-          data-testid="sub-account-owner-install-button"
-        >
-          {primaryLabel}
-        </Button>
-      )}
-
-      {actionError ? (
-        <p className="text-xs leading-relaxed text-rose-300/90" role="alert">
-          {actionError}
-        </p>
-      ) : null}
+      {contextHint}
+      {primaryAction}
+      {errorBlock}
+      {recoveryBlock}
 
       <div>
         <button

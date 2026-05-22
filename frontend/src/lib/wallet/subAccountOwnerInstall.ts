@@ -176,6 +176,7 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
     }
   }
   await ensureBaseMainnetWalletContext(walletRequest)
+  await refreshBaseAppAuthorization(walletRequest)
 
   async function submitViaSendCalls() {
     const submitted = await addOwnerViaBaseAppSendCalls({
@@ -234,27 +235,6 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
         // Keep historical recovery semantics: if direct lane still fails,
         // fall back to sendCalls where available.
         return await submitViaSendCalls()
-      }
-    }
-
-    if (isUnauthorizedMethodOrAccount(directError)) {
-      await refreshBaseAppAuthorization(walletRequest)
-      try {
-        const retriedDirect = await addOwnerViaEthSendTransaction({
-          walletRequest,
-          subAccountAddress: params.subAccountAddress,
-          embeddedEoaAddress: params.embeddedEoaAddress,
-        })
-        return {
-          installed: true,
-          alreadyOwner: false,
-          transactionHash: retriedDirect.transactionHash,
-          callBundleId: null,
-        }
-      } catch (retryDirectError) {
-        if (isUserRejectedWalletAction(retryDirectError)) {
-          throw retryDirectError
-        }
       }
     }
 

@@ -18,6 +18,7 @@ import type { Address } from 'viem'
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
+import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
@@ -175,7 +176,22 @@ async function registerBaseAppLink(body: Record<string, string>): Promise<{ ok: 
 }
 
 export function WaitlistConnectBaseApp(props: Props) {
+  const privyClientStatus = usePrivyClientStatus()
+  if (privyClientStatus !== 'ready') {
+    return (
+      <div className="flex items-center justify-center gap-2 text-sm text-zinc-400" role="status">
+        <PixelWaveLoader name="wave-lr" size={12} color="rgba(255,255,255,0.72)" />
+        <span>Preparing wallet session…</span>
+      </div>
+    )
+  }
+
+  return <WaitlistConnectBaseAppReady {...props} />
+}
+
+function WaitlistConnectBaseAppReady(props: Props) {
   const { onSkip, onComplete, parentAddress, subAccountAddress, embeddedEoaAddress } = props
+  const setup = useSubAccountSetup()
   const {
     provisionSubAccount,
     confirmSubAccountEmbeddedOwner,
@@ -185,7 +201,7 @@ export function WaitlistConnectBaseApp(props: Props) {
     isSettingUp,
     lastStage,
     embeddedWallet,
-  } = useSubAccountSetup()
+  } = setup
 
   const [view, setView] = useState<ViewState>({ kind: 'idle' })
   const cancelledRef = useRef(false)
@@ -368,6 +384,7 @@ export function WaitlistConnectBaseApp(props: Props) {
               parentAddress={parentAddress}
               subAccountAddress={subAccountAddress}
               embeddedEoaAddress={embeddedEoaAddress}
+              setup={setup}
             />
           ) : null}
 
@@ -393,6 +410,7 @@ export function WaitlistConnectBaseApp(props: Props) {
                 parentAddress={parentAddress}
                 subAccountAddress={subAccountAddress}
                 embeddedEoaAddress={embeddedEoaAddress}
+                setup={setup}
               />
             ) : null}
             <button
