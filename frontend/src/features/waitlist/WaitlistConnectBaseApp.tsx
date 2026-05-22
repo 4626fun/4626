@@ -3,9 +3,8 @@
  *
  * Base App connect flow:
  *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
- *   2. Wire the Privy embedded EOA as the sub-account SDK signer (silent).
- *   3. POST /api/arch-b/sub-account/baseapp/register
- *   4. On-chain owner install on the sub-account (required for swap-ready signing).
+ *   2. Shared owner-install lane (`installSubAccountOwnerOnly`): signer wiring, server
+ *      registration, and on-chain `addOwnerAddress` on the app wallet.
  *
  * Parent CSW addOwnerAddress from third-party dapps remains blocked; owner install
  * targets the per-app sub-account only.
@@ -13,19 +12,19 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2 } from 'lucide-react'
-import type { Address } from 'viem'
+import { getAddress, isAddress, type Address } from 'viem'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
-import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   mapSubAccountOwnerInstallError,
   normalizeSubAccountOwnerInstallErrorSource,
 } from './subAccountOwnerInstallMessages'
+import { isSubAccountOwnerInstallSucceeded } from './subAccountOwnerInstallResult'
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 
 export type WaitlistConnectBaseAppResult = {
@@ -64,53 +63,11 @@ const STAGE_LABELS: Partial<Record<SubAccountSetupStage, string>> = {
 
 const COMPLETE_AUTOADVANCE_MS = 1_400
 
-function mapRegisterError(code: string, fallback: string): { message: string; canRetry: boolean; autoSkip: boolean } {
-  switch (code) {
-    case 'embedded_eoa_mismatch':
-      return {
-        message:
-          'This Base App wallet is linked to a different 4626 account. Sign in with your original email first.',
-        canRetry: false,
-        autoSkip: false,
-      }
-    case 'parent_csw_conflict':
-      return {
-        message:
-          'Your account is already linked to a different Base App wallet. Contact support to change it.',
-        canRetry: false,
-        autoSkip: false,
-      }
-    case 'feature_disabled':
-      return {
-        message: 'This feature is not yet enabled. Skipping for now.',
-        canRetry: false,
-        autoSkip: true,
-      }
-    case 'unexpected_error':
-    case 'db_unavailable':
-      return {
-        message:
-          'We could not save your Base App link right now. Please try again in a moment, or skip and finish setup later.',
-        canRetry: true,
-        autoSkip: false,
-      }
-    case 'profile_not_ready':
-      return {
-        message: 'Finish email verification first, then return to connect Base App.',
-        canRetry: false,
-        autoSkip: false,
-      }
-    default: {
-      const looksLikeCode = /^[a-z][a-z0-9_]*$/.test(code)
-      return {
-        message: looksLikeCode
-          ? 'Could not register your Base App wallet. Please try again.'
-          : fallback || 'Could not register your Base App wallet.',
-        canRetry: true,
-        autoSkip: false,
-      }
-    }
-  }
+function normalizeAddress(value: string | null | undefined): Address | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!isAddress(trimmed)) return null
+  return getAddress(trimmed)
 }
 
 function basescanAddressUrl(address: Address): string {
@@ -135,7 +92,8 @@ function mapSetupFailureMessage(params: {
   ) {
     return 'Base App could not create your app wallet. Update the app and try Connect Base App again.'
   }
-  if (lower.includes('user rejected') ||
+  if (
+    lower.includes('user rejected') ||
     lower.includes('user denied') ||
     lower.includes('rejected the request')
   ) {
@@ -160,15 +118,18 @@ function mapSetupFailureMessage(params: {
   return params.fallback
 }
 
-async function registerBaseAppLink(body: Record<string, string>): Promise<{ ok: boolean; message: string }> {
-  const registered = await registerBaseAppSubAccountLink({
-    parentAddress: body.parentAddress as Address,
-    subAccountAddress: body.subAccountAddress as Address,
-    embeddedEoaAddress: body.embeddedEoaAddress as Address,
-  })
-  if (registered.ok) return { ok: true, message: '' }
-  const mapped = mapRegisterError(registered.errorCode ?? registered.message, registered.message)
-  return { ok: false, message: mapped.message }
+function ownerInstallFailureMessage(params: {
+  warning?: string | null
+  setupError: Error | null
+}): string {
+  return mapSubAccountOwnerInstallError(
+    normalizeSubAccountOwnerInstallErrorSource(
+      params.warning ??
+        params.setupError?.message ??
+        'Base App did not finish the on-chain owner approval for your app wallet.',
+    ),
+    { inBaseApp: isBaseAppInAppContext() },
+  )
 }
 
 export function WaitlistConnectBaseApp(props: Props) {
@@ -197,13 +158,11 @@ function WaitlistConnectBaseAppReady(props: Props) {
   const setup = useSubAccountSetup()
   const {
     provisionSubAccount,
-    confirmSubAccountEmbeddedOwner,
-    finalizeSubAccountSigner,
+    installSubAccountOwnerOnly,
     connectBaseAccountWallet,
     getLastSetupError,
     isSettingUp,
     lastStage,
-    embeddedWallet,
   } = setup
 
   const [view, setView] = useState<ViewState>({ kind: 'idle' })
@@ -222,37 +181,51 @@ function WaitlistConnectBaseAppReady(props: Props) {
     return 'Connecting your Base App wallet…'
   }, [view.kind, lastStage])
 
-  const persistAndComplete = useCallback(
-    async (pending: PendingProvision) => {
-      const embeddedEoaAddress = (embeddedWallet?.address ?? '') as Address
-      if (!embeddedEoaAddress) {
+  const markConnectComplete = useCallback((pending: Pick<PendingProvision, 'parentAddress' | 'subAccountAddress'>) => {
+    setView({
+      kind: 'complete',
+      parentAddress: pending.parentAddress,
+      subAccountAddress: pending.subAccountAddress,
+    })
+  }, [])
+
+  const runOwnerInstallLane = useCallback(
+    async (pending: Pick<PendingProvision, 'parentAddress' | 'subAccountAddress'>) => {
+      const result = await installSubAccountOwnerOnly({
+        parentAddress: pending.parentAddress,
+        subAccountAddress: pending.subAccountAddress,
+      })
+      if (cancelledRef.current) return false
+
+      if (!result) {
         setView({
           kind: 'error',
-          message: 'Could not resolve your 4626 embedded signer address. Try again or skip.',
+          message: mapSetupFailureMessage({
+            error: getLastSetupError(),
+            lastStage,
+            fallback: 'Could not enable signing on your app wallet.',
+          }),
           canRetry: true,
         })
-        return
+        return false
       }
 
-      const registered = await registerBaseAppLink({
-        parentAddress: pending.parentAddress,
-        subAccountAddress: pending.subAccountAddress,
-        embeddedEoaAddress,
-      })
-
-      if (cancelledRef.current) return
-      if (!registered.ok) {
-        setView({ kind: 'error', message: registered.message, canRetry: true })
-        return
+      if (!isSubAccountOwnerInstallSucceeded(result)) {
+        setView({
+          kind: 'error',
+          message: ownerInstallFailureMessage({
+            warning: result.onChainOwnerWarning,
+            setupError: getLastSetupError(),
+          }),
+          canRetry: true,
+        })
+        return false
       }
 
-      setView({
-        kind: 'complete',
-        parentAddress: pending.parentAddress,
-        subAccountAddress: pending.subAccountAddress,
-      })
+      markConnectComplete(pending)
+      return true
     },
-    [embeddedWallet?.address],
+    [getLastSetupError, installSubAccountOwnerOnly, lastStage, markConnectComplete],
   )
 
   const handleConnect = useCallback(async () => {
@@ -289,63 +262,26 @@ function WaitlistConnectBaseAppReady(props: Props) {
       return
     }
 
-    const pending: PendingProvision = {
+    await runOwnerInstallLane({
       parentAddress: provisioned.parentAddress,
       subAccountAddress: provisioned.subAccountAddress,
-      created: provisioned.created,
-    }
-
-    const finalized = await finalizeSubAccountSigner({
-      parentAddress: pending.parentAddress,
-      subAccountAddress: pending.subAccountAddress,
     })
-    if (cancelledRef.current) return
-    if (!finalized) {
-      setView({
-        kind: 'error',
-        message: mapSetupFailureMessage({
-          error: getLastSetupError(),
-          lastStage,
-          fallback: 'Could not link your 4626 signer to the app wallet. Try again.',
-        }),
-        canRetry: true,
-      })
-      return
-    }
-
-    const ownerInstalled = await confirmSubAccountEmbeddedOwner({
-      parentAddress: pending.parentAddress,
-      subAccountAddress: pending.subAccountAddress,
-      provider: provisioned.provider,
-    })
-    if (cancelledRef.current) return
-    if (!ownerInstalled) {
-      setView({
-        kind: 'error',
-        message: mapSubAccountOwnerInstallError(
-          normalizeSubAccountOwnerInstallErrorSource(
-            getLastSetupError()?.message ??
-              'Base App did not finish the on-chain owner approval for your app wallet.',
-          ),
-          { inBaseApp: isBaseAppInAppContext() },
-        ),
-        canRetry: true,
-      })
-      return
-    }
-
-    await persistAndComplete(pending)
   }, [
-    confirmSubAccountEmbeddedOwner,
     connectBaseAccountWallet,
-    finalizeSubAccountSigner,
     getLastSetupError,
     isSettingUp,
     lastStage,
-    persistAndComplete,
     provisionSubAccount,
+    runOwnerInstallLane,
     view.kind,
   ])
+
+  const handleRecoverySuccess = useCallback(() => {
+    const parent = normalizeAddress(parentAddress)
+    const subAccount = normalizeAddress(subAccountAddress)
+    if (!parent || !subAccount) return
+    markConnectComplete({ parentAddress: parent, subAccountAddress: subAccount })
+  }, [markConnectComplete, parentAddress, subAccountAddress])
 
   const handleRetry = useCallback(() => {
     if (view.kind !== 'error' || !view.canRetry) return
@@ -390,6 +326,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
               embeddedEoaAddress={embeddedEoaAddress}
               linkRegistered={linkRegistered}
               setup={setup}
+              onSuccess={handleRecoverySuccess}
             />
           ) : null}
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
+import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import {
   getMarketingWaitlistEntryUrl,
   isWaitlistStartAuthSearchParam,
@@ -433,7 +434,7 @@ export function WaitlistFlow(props: {
   const wrapClass = 'mx-auto w-full max-w-5xl'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
-  const accountsUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl(), '/accounts'), [])
+  const waitlistRecoveryUrl = useMemo(() => getMarketingWaitlistEntryUrl(), [])
   const disableAggressiveSessionReset = useMemo(() => isTelegramMiniAppRuntime(), [])
   const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
@@ -582,7 +583,7 @@ export function WaitlistFlow(props: {
 
     await bridgePrivySession(privyToken)
 
-    let target = accountsUrl
+    let target = waitlistRecoveryUrl
     if (target.startsWith('http') && typeof window !== 'undefined') {
       try {
         const parsed = new URL(target)
@@ -601,7 +602,7 @@ export function WaitlistFlow(props: {
     }
 
     window.location.assign(target)
-  }, [accountsUrl, getAccessToken, login])
+  }, [waitlistRecoveryUrl, getAccessToken, login])
 
   const onContinueAuth = useCallback(async () => {
     if (!beginAuthAttempt()) return

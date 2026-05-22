@@ -17,6 +17,7 @@ import {
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
+import { isSubAccountOwnerInstallSucceeded } from './subAccountOwnerInstallResult'
 
 export type SubAccountOwnerInstallSetup = Pick<
   SubAccountSetupControls,
@@ -186,8 +187,7 @@ function SubAccountOwnerInstallPanelContent(
 
     await refreshOwnerCheck()
 
-    const ownerReady = result.alreadyOwner || result.onChainOwnerInstalled
-    if (!ownerReady) {
+    if (!isSubAccountOwnerInstallSucceeded(result)) {
       const message = mapSubAccountOwnerInstallError(
         result.onChainOwnerWarning ??
           'Base App did not finish the on-chain owner approval for your app wallet.',

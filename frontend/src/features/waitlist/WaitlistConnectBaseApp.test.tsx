@@ -11,8 +11,7 @@ const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const hookState = {
   provision: vi.fn(),
-  confirmOwner: vi.fn(),
-  finalize: vi.fn(),
+  installOwnerOnly: vi.fn(),
   connectWallet: vi.fn(),
   getLastSetupError: vi.fn(),
   isSettingUp: false,
@@ -27,8 +26,7 @@ vi.mock('@/lib/privy/client', () => ({
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
     provisionSubAccount: hookState.provision,
-    confirmSubAccountEmbeddedOwner: hookState.confirmOwner,
-    finalizeSubAccountSigner: hookState.finalize,
+    installSubAccountOwnerOnly: hookState.installOwnerOnly,
     connectBaseAccountWallet: hookState.connectWallet,
     getLastSetupError: hookState.getLastSetupError,
     isSettingUp: hookState.isSettingUp,
@@ -51,20 +49,6 @@ vi.mock('./SubAccountOwnerInstallPanel', () => ({
   SubAccountOwnerInstallPanel: () => null,
 }))
 
-const registerMock = vi.hoisted(() => vi.fn())
-
-vi.mock('@/lib/wallet/subAccountBaseAppRegister', () => ({
-  registerBaseAppSubAccountLink: (...args: unknown[]) => registerMock(...args),
-}))
-
-function jsonResponse(status: number, body: Record<string, unknown>): Response {
-  return {
-    ok: status >= 200 && status < 300,
-    status,
-    json: async () => body,
-  } as unknown as Response
-}
-
 function mockProvision(created = true) {
   hookState.provision.mockResolvedValueOnce({
     parentAddress: PARENT,
@@ -74,21 +58,28 @@ function mockProvision(created = true) {
   })
 }
 
+function mockOwnerInstallSuccess() {
+  hookState.installOwnerOnly.mockResolvedValueOnce({
+    registered: true,
+    alreadyOwner: false,
+    onChainOwnerInstalled: true,
+    onChainOwnerWarning: null,
+    transactionHash: null,
+  })
+}
+
 describe('WaitlistConnectBaseApp', () => {
   beforeEach(() => {
     hookState.provision.mockReset()
-    hookState.confirmOwner.mockReset()
-    hookState.finalize.mockReset()
+    hookState.installOwnerOnly.mockReset()
     hookState.connectWallet.mockReset()
     hookState.getLastSetupError.mockReset()
     hookState.isSettingUp = false
     hookState.lastStage = null
     hookState.embeddedAddress = EMBED
-    registerMock.mockReset()
     hookState.connectWallet.mockResolvedValue(true)
     hookState.getLastSetupError.mockReturnValue(null)
-    hookState.confirmOwner.mockResolvedValue({ alreadyOwner: false, transactionHash: null })
-    hookState.finalize.mockResolvedValue(true)
+    mockOwnerInstallSuccess()
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -100,9 +91,8 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('single-step flow: connect wallet, provision, finalize signer, owner install, then register', async () => {
+  it('connect flow provisions the app wallet then runs the shared owner-install lane', async () => {
     mockProvision(true)
-    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
@@ -113,19 +103,11 @@ describe('WaitlistConnectBaseApp', () => {
 
     expect(hookState.connectWallet).toHaveBeenCalled()
     await waitFor(() =>
-      expect(hookState.finalize).toHaveBeenCalledWith({
+      expect(hookState.installOwnerOnly).toHaveBeenCalledWith({
         parentAddress: PARENT,
         subAccountAddress: SUB,
       }),
     )
-    await waitFor(() =>
-      expect(hookState.confirmOwner).toHaveBeenCalledWith({
-        parentAddress: PARENT,
-        subAccountAddress: SUB,
-        provider: expect.objectContaining({ request: expect.any(Function) }),
-      }),
-    )
-    await waitFor(() => expect(registerMock).toHaveBeenCalled())
     await waitFor(
       () =>
         expect(onComplete).toHaveBeenCalledWith({
@@ -138,10 +120,14 @@ describe('WaitlistConnectBaseApp', () => {
 
   it('surfaces owner-install failure instead of completing when on-chain owner is missing', async () => {
     mockProvision(true)
-    hookState.confirmOwner.mockResolvedValueOnce(null)
-    hookState.getLastSetupError.mockReturnValue(
-      new Error('Smart wallet signature validation failed during sponsorship (AA23).'),
-    )
+    hookState.installOwnerOnly.mockReset()
+    hookState.installOwnerOnly.mockResolvedValueOnce({
+      registered: true,
+      alreadyOwner: false,
+      onChainOwnerInstalled: false,
+      onChainOwnerWarning: 'Smart wallet signature validation failed during sponsorship (AA23).',
+      transactionHash: null,
+    })
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
@@ -149,10 +135,8 @@ describe('WaitlistConnectBaseApp', () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
 
-    await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
     expect(onComplete).not.toHaveBeenCalled()
-    expect(registerMock).not.toHaveBeenCalled()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {
@@ -167,22 +151,35 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByText(/you declined the base app request/i)).toBeTruthy()
   })
 
-  it('generic server error allows retry', async () => {
-    mockProvision(false)
-    registerMock.mockResolvedValueOnce({ ok: false, message: 'unexpected_error', errorCode: 'unexpected_error' })
+  it('allows retry after owner-install lane failure', async () => {
+    mockProvision(true)
+    hookState.installOwnerOnly.mockReset()
+    hookState.installOwnerOnly
+      .mockResolvedValueOnce({
+        registered: true,
+        alreadyOwner: false,
+        onChainOwnerInstalled: false,
+        onChainOwnerWarning: 'Could not save your Base App signing link.',
+        transactionHash: null,
+      })
+      .mockResolvedValueOnce({
+        registered: true,
+        alreadyOwner: false,
+        onChainOwnerInstalled: true,
+        onChainOwnerWarning: null,
+        transactionHash: null,
+      })
 
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
-    await waitFor(() => expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(screen.getByText(/could not save your base app link/i)).toBeTruthy()
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
 
-    mockProvision(false)
-    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
+    mockProvision(true)
     await act(async () => {
       fireEvent.click(screen.getByTestId('retry-base-app-button'))
     })
-    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(hookState.installOwnerOnly).toHaveBeenCalledTimes(2))
   })
 })
