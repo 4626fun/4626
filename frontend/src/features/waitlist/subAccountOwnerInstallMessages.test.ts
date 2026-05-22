@@ -29,4 +29,13 @@ describe('mapSubAccountOwnerInstallError', () => {
       mapSubAccountOwnerInstallError("Mainnet wallet can't be used on testnet", { inBaseApp: true }),
     ).toBe(SUB_ACCOUNT_TESTNET_MESSAGE)
   })
+
+  it('strips setup wrapper text before classifying unauthorized errors', () => {
+    expect(
+      mapSubAccountOwnerInstallError(
+        'Failed to enable 4626 signing on your app wallet: requested method and/or account has not been authorized by the user',
+        { inBaseApp: true },
+      ),
+    ).toBe(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)
+  })
 })

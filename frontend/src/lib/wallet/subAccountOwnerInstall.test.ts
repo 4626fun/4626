@@ -43,10 +43,40 @@ describe('subAccountOwnerInstall', () => {
     expect(addOwnerSendCallsMock).not.toHaveBeenCalled()
   })
 
-  it('submits addOwner via eth_sendTransaction on the sub-account when not yet owner', async () => {
+  it('submits addOwner via wallet_sendCalls when not yet owner', async () => {
     const publicClient = {
       readContract: vi.fn().mockResolvedValue(false),
     }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce([SUB])
+    const result = await installEmbeddedOwnerOnSubAccount({
+      provider: { request },
+      subAccountAddress: SUB,
+      embeddedEoaAddress: EMBED,
+      publicClient: publicClient as any,
+    })
+    expect(result.installed).toBe(true)
+    expect(result.callBundleId).toBe('bundle_1')
+    expect(addOwnerSendCallsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        csw: SUB,
+        ownerToAdd: EMBED,
+      }),
+    )
+    expect(request).toHaveBeenNthCalledWith(1, { method: 'eth_chainId' })
+    expect(request).toHaveBeenNthCalledWith(2, { method: 'eth_requestAccounts' })
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+  })
+
+  it('falls back to eth_sendTransaction when wallet_sendCalls fails for non-rejection reasons', async () => {
+    const publicClient = {
+      readContract: vi.fn().mockResolvedValue(false),
+    }
+    addOwnerSendCallsMock.mockRejectedValueOnce(new Error('unsupported method'))
     const request = vi
       .fn()
       .mockResolvedValueOnce('0x2105')
@@ -61,12 +91,7 @@ describe('subAccountOwnerInstall', () => {
     expect(result.installed).toBe(true)
     expect(result.transactionHash).toBe(TX_HASH)
     expect(result.callBundleId).toBeNull()
-    expect(request).toHaveBeenNthCalledWith(1, {
-      method: 'eth_chainId',
-    })
-    expect(request).toHaveBeenNthCalledWith(2, {
-      method: 'eth_requestAccounts',
-    })
+    expect(addOwnerSendCallsMock).toHaveBeenCalledTimes(1)
     expect(request).toHaveBeenNthCalledWith(3, {
       method: 'eth_sendTransaction',
       params: [
@@ -78,44 +103,21 @@ describe('subAccountOwnerInstall', () => {
         },
       ],
     })
-    expect(addOwnerSendCallsMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to wallet_sendCalls when eth_sendTransaction fails for non-rejection reasons', async () => {
+  it('retries sendCalls after reauth, then falls back to eth_sendTransaction when still unauthorized', async () => {
     const publicClient = {
       readContract: vi.fn().mockResolvedValue(false),
     }
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0x2105')
-      .mockResolvedValueOnce([SUB])
-      .mockRejectedValueOnce(new Error('unsupported method'))
-    const result = await installEmbeddedOwnerOnSubAccount({
-      provider: { request },
-      subAccountAddress: SUB,
-      embeddedEoaAddress: EMBED,
-      publicClient: publicClient as any,
-    })
-    expect(result.installed).toBe(true)
-    expect(addOwnerSendCallsMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        csw: SUB,
-        ownerToAdd: EMBED,
-      }),
-    )
-  })
-
-  it('falls back to wallet_sendCalls if direct retry after reauth still fails', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(false),
-    }
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0x2105')
-      .mockResolvedValueOnce([SUB])
+    addOwnerSendCallsMock
       .mockRejectedValueOnce(new Error('requested method and/or account has not been authorized by the user'))
+      .mockRejectedValueOnce(new Error('still unauthorized'))
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
       .mockResolvedValueOnce([SUB])
-      .mockRejectedValueOnce(new Error('still unsupported'))
+      .mockResolvedValueOnce([SUB])
+      .mockResolvedValueOnce(TX_HASH)
 
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
@@ -124,16 +126,21 @@ describe('subAccountOwnerInstall', () => {
       publicClient: publicClient as any,
     })
     expect(result.installed).toBe(true)
-    expect(addOwnerSendCallsMock).toHaveBeenCalledTimes(1)
+    expect(result.transactionHash).toBe(TX_HASH)
+    expect(addOwnerSendCallsMock).toHaveBeenCalledTimes(2)
     expect(request).toHaveBeenNthCalledWith(2, { method: 'eth_requestAccounts' })
-    expect(request).toHaveBeenNthCalledWith(4, { method: 'eth_requestAccounts' })
+    expect(request).toHaveBeenNthCalledWith(3, { method: 'eth_requestAccounts' })
   })
 
-  it('rethrows user rejection from eth_sendTransaction without sendCalls fallback', async () => {
+  it('rethrows user rejection from wallet_sendCalls without eth_sendTransaction fallback', async () => {
     const publicClient = {
       readContract: vi.fn().mockResolvedValue(false),
     }
-    const request = vi.fn().mockRejectedValue(new Error('User rejected the request'))
+    addOwnerSendCallsMock.mockRejectedValueOnce(new Error('User rejected the request'))
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce([SUB])
     await expect(
       installEmbeddedOwnerOnSubAccount({
         provider: { request },
@@ -142,7 +149,9 @@ describe('subAccountOwnerInstall', () => {
         publicClient: publicClient as any,
       }),
     ).rejects.toThrow(/user rejected/i)
-    expect(addOwnerSendCallsMock).not.toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
   })
 
   it('readEmbeddedOwnerOnSubAccount returns null when contract is not deployed', async () => {

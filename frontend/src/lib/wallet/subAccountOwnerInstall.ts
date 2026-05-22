@@ -55,7 +55,9 @@ function isUnauthorizedMethodOrAccount(error: unknown): boolean {
   const lower = message.toLowerCase()
   return (
     lower.includes('not been authorized by the user') ||
-    lower.includes('requested method and/or account has not been authorized')
+    lower.includes('requested method and/or account has not been authorized') ||
+    lower.includes('must call eth_requestaccounts') ||
+    lower.includes('must call "eth_requestaccounts"')
   )
 }
 
@@ -149,9 +151,8 @@ async function addOwnerViaEthSendTransaction(params: {
 /**
  * Install the Privy embedded EOA as an owner of the sub-account CSW.
  *
- * Primary lane: `eth_sendTransaction` self-call (Base App allows this for
- * addOwnerAddress). Fallback: `wallet_sendCalls` when the direct lane fails
- * for non-user-rejection reasons.
+ * Primary lane: `wallet_sendCalls` (Base App builds UserOps for CSW self-calls).
+ * Fallback: `eth_sendTransaction` when sendCalls is unavailable outside Base App.
  */
 export async function installEmbeddedOwnerOnSubAccount(params: {
   provider: { request: WalletRequest }
@@ -192,12 +193,8 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       callBundleId: submitted.callBundleId,
     } satisfies InstallEmbeddedOwnerResult
   }
-  async function reauthorizeAndRetry<T>(fn: () => Promise<T>): Promise<T> {
-    await walletRequest({ method: 'eth_requestAccounts' })
-    return await fn()
-  }
 
-  try {
+  async function submitViaEthSendTransaction() {
     const direct = await addOwnerViaEthSendTransaction({
       walletRequest,
       subAccountAddress: params.subAccountAddress,
@@ -208,44 +205,48 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       alreadyOwner: false,
       transactionHash: direct.transactionHash,
       callBundleId: null,
+    } satisfies InstallEmbeddedOwnerResult
+  }
+
+  async function reauthorizeAndRetry<T>(fn: () => Promise<T>): Promise<T> {
+    await refreshBaseAppAuthorization(walletRequest)
+    return await fn()
+  }
+
+  try {
+    return await submitViaSendCalls()
+  } catch (sendCallsError) {
+    if (isUserRejectedWalletAction(sendCallsError)) {
+      throw sendCallsError
     }
-  } catch (directError) {
-    if (isUserRejectedWalletAction(directError)) {
-      throw directError
-    }
-    if (isUnauthorizedMethodOrAccount(directError)) {
+    if (isUnauthorizedMethodOrAccount(sendCallsError)) {
       try {
-        return await reauthorizeAndRetry(async () => {
-          const direct = await addOwnerViaEthSendTransaction({
-            walletRequest,
-            subAccountAddress: params.subAccountAddress,
-            embeddedEoaAddress: params.embeddedEoaAddress,
-          })
-          return {
-            installed: true,
-            alreadyOwner: false,
-            transactionHash: direct.transactionHash,
-            callBundleId: null,
-          } satisfies InstallEmbeddedOwnerResult
-        })
-      } catch (directRetryError) {
-        if (isUserRejectedWalletAction(directRetryError)) {
-          throw directRetryError
+        return await reauthorizeAndRetry(submitViaSendCalls)
+      } catch (retrySendCallsError) {
+        if (isUserRejectedWalletAction(retrySendCallsError)) {
+          throw retrySendCallsError
         }
-        // Keep historical recovery semantics: if direct lane still fails,
-        // fall back to sendCalls where available.
-        return await submitViaSendCalls()
+        // Fall through to direct lane after reauth + sendCalls retry.
       }
     }
 
     try {
-      return await submitViaSendCalls()
-    } catch (sendCallsError) {
-      if (!isUnauthorizedMethodOrAccount(sendCallsError)) {
-        throw sendCallsError
+      return await submitViaEthSendTransaction()
+    } catch (directError) {
+      if (isUserRejectedWalletAction(directError)) {
+        throw directError
       }
-      await refreshBaseAppAuthorization(walletRequest)
-      return await submitViaSendCalls()
+      if (isUnauthorizedMethodOrAccount(directError)) {
+        try {
+          return await reauthorizeAndRetry(submitViaEthSendTransaction)
+        } catch (directRetryError) {
+          if (isUserRejectedWalletAction(directRetryError)) {
+            throw directRetryError
+          }
+          throw sendCallsError
+        }
+      }
+      throw sendCallsError
     }
   }
 }

@@ -184,7 +184,7 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
   // collapsing the header to ~34px; this replacement is a plain flex row
   // with a proper 56px min-height and no divider between nav and page.
   return (
-    <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
+    <header className="hidden md:block sticky top-0 left-0 right-0 z-[55]">
       <div aria-hidden="true" className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
       <div className="relative flex min-h-14 items-center gap-4 px-4 lg:px-6">

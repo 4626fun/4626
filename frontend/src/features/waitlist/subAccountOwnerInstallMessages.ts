@@ -2,7 +2,7 @@ export const SUB_ACCOUNT_WRONG_BROWSER_MESSAGE =
   '4626 app-wallet signing only works inside Base App. Open 4626 in Base App (not Safari, Chrome, or wallet extensions), then tap Enable 4626 signing.'
 
 export const SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE =
-  'Base App did not approve the signing request. Confirm Base Mainnet is selected, tap Enable 4626 signing again, and approve the wallet prompt when it appears.'
+  'Base App blocked or dismissed the signing prompt. Confirm Base Mainnet is selected, tap Enable 4626 signing again, and approve the wallet transaction when Base App asks.'
 
 export const SUB_ACCOUNT_USER_REJECTED_MESSAGE =
   'Signing was canceled in Base App. Tap Enable 4626 signing again and approve the transaction.'
@@ -13,11 +13,22 @@ export const SUB_ACCOUNT_TESTNET_MESSAGE =
 export const SUB_ACCOUNT_IN_BASE_APP_HINT =
   'Approve one transaction in Base App when prompted. Your main Base wallet stays unchanged.'
 
+/** Strip nested setup wrapper text before classifying provider errors. */
+export function normalizeSubAccountOwnerInstallErrorSource(message: string): string {
+  const trimmed = message.trim()
+  const prefix = 'failed to enable 4626 signing on your app wallet:'
+  const lower = trimmed.toLowerCase()
+  if (lower.startsWith(prefix)) {
+    return trimmed.slice(prefix.length).trim() || trimmed
+  }
+  return trimmed
+}
+
 export function mapSubAccountOwnerInstallError(
   message: string,
   options: { inBaseApp: boolean },
 ): string {
-  const lower = message.toLowerCase()
+  const lower = normalizeSubAccountOwnerInstallErrorSource(message).toLowerCase()
   if (lower.includes('base account wallet')) {
     return options.inBaseApp
       ? SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE

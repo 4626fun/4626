@@ -16,7 +16,7 @@ const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 
 const installOwnerOnly = vi.fn()
 const getLastSetupError = vi.fn<() => Error | null>(() => null)
-const detectInAppEnvironment = vi.fn()
+const isBaseAppInAppContext = vi.fn()
 
 vi.mock('@/lib/flags/featureFlags', () => ({
   waitlistSubAccountFlowFlag: () => true,
@@ -27,7 +27,7 @@ vi.mock('@/lib/privy/client', () => ({
 }))
 
 vi.mock('@/lib/wallet/inAppBrowser', () => ({
-  detectInAppEnvironment: (...args: unknown[]) => detectInAppEnvironment(...args),
+  isBaseAppInAppContext: (...args: unknown[]) => isBaseAppInAppContext(...args),
 }))
 
 vi.mock('@/lib/wallet/subAccountOwnerInstall', () => ({
@@ -51,23 +51,11 @@ vi.mock('@/components/ui/PixelWaveLoader', () => ({
 import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
 
 function mockBaseAppHost() {
-  detectInAppEnvironment.mockReturnValue({
-    hasInjectedEthereum: true,
-    isCoinbaseInApp: false,
-    isBaseAppInApp: true,
-    isAnyWalletInApp: true,
-    userAgent: 'baseapp-test',
-  })
+  isBaseAppInAppContext.mockReturnValue(true)
 }
 
 function mockExternalBrowserHost() {
-  detectInAppEnvironment.mockReturnValue({
-    hasInjectedEthereum: true,
-    isCoinbaseInApp: false,
-    isBaseAppInApp: false,
-    isAnyWalletInApp: false,
-    userAgent: 'chrome-test',
-  })
+  isBaseAppInAppContext.mockReturnValue(false)
 }
 
 describe('SubAccountOwnerInstallPanel', () => {

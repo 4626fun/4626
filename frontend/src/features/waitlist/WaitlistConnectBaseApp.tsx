@@ -21,6 +21,11 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import {
+  mapSubAccountOwnerInstallError,
+  normalizeSubAccountOwnerInstallErrorSource,
+} from './subAccountOwnerInstallMessages'
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 
 export type WaitlistConnectBaseAppResult = {
@@ -138,6 +143,18 @@ function mapSetupFailureMessage(params: {
   if (lower.includes('base account wallet')) {
     return 'Connect Base App first, then try again.'
   }
+
+  const inBaseApp = isBaseAppInAppContext()
+  const installStageFailure =
+    params.lastStage?.stage === 'install_embedded_owner' ||
+    lower.includes('failed to enable 4626 signing on your app wallet')
+  if (installStageFailure) {
+    const source = normalizeSubAccountOwnerInstallErrorSource(
+      params.error?.message ?? params.lastStage?.message ?? params.fallback,
+    )
+    return mapSubAccountOwnerInstallError(source, { inBaseApp })
+  }
+
   if (params.error?.message) return params.error.message
   return params.fallback
 }

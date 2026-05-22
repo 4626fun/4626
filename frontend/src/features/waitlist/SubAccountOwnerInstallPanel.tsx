@@ -8,7 +8,7 @@ import { useSubAccountSetup, type SubAccountSetupControls } from '@/hooks/useSub
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { detectInAppEnvironment } from '@/lib/wallet/inAppBrowser'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
 
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
@@ -133,9 +133,8 @@ function SubAccountOwnerInstallPanelContent(
   const [showRecovery, setShowRecovery] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
 
-  const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
-  const inBaseApp = Boolean(inAppEnv?.isBaseAppInApp)
-  const needsBaseAppHost = Boolean(inAppEnv && !inBaseApp)
+  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
+  const needsBaseAppHost = !inBaseApp
 
   const canRender = subAccountFlowEnabled && Boolean(parent && subAccount && embeddedEoa)
   const isInline = variant === 'inline'

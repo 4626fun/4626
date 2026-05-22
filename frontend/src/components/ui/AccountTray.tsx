@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useEffect } from 'react'
+import { type CSSProperties, type ReactNode, useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 
@@ -34,19 +34,18 @@ export function AccountTray({
   styles,
   children,
 }: AccountTrayProps) {
-  useEffect(() => {
-    return () => {
-      onCloseComplete?.()
-    }
-  }, [onCloseComplete])
+  const handleRequestClose = useCallback(() => {
+    onRequestClose?.()
+    onCloseComplete?.()
+  }, [onCloseComplete, onRequestClose])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onRequestClose?.()
+      if (event.key === 'Escape') handleRequestClose()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onRequestClose])
+  }, [handleRequestClose])
 
   if (typeof document === 'undefined') return null
 
@@ -56,13 +55,13 @@ export function AccountTray({
         type="button"
         className="fixed inset-0 z-[60] bg-black/55 backdrop-blur-[2px]"
         aria-label={closeAccessibilityLabel}
-        onClick={() => onRequestClose?.()}
+        onClick={() => handleRequestClose()}
       />
       <aside
         role="dialog"
         aria-label={accessibilityLabel}
         className={cn(
-          'fixed z-[61] flex flex-col border border-white/10 bg-vault-card text-vault-text shadow-2xl',
+          'pointer-events-auto fixed z-[61] flex flex-col border border-white/10 bg-vault-card text-vault-text shadow-2xl',
           pin === 'bottom'
             ? 'inset-x-0 bottom-0 max-h-[min(92vh,720px)] rounded-t-2xl'
             : 'top-4 right-2 bottom-2 w-[26rem] max-w-[calc(100vw-1.5rem)] rounded-2xl',
@@ -74,12 +73,12 @@ export function AccountTray({
             <span className="h-1 w-10 rounded-full bg-white/20" aria-hidden />
           </div>
         ) : null}
-        {onRequestClose ? (
+        {onRequestClose || onCloseComplete ? (
           <button
             type="button"
             className="absolute right-3 top-3 rounded-lg p-1.5 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200"
             aria-label={closeAccessibilityLabel}
-            onClick={() => onRequestClose()}
+            onClick={() => handleRequestClose()}
           >
             <X className="size-4" />
           </button>

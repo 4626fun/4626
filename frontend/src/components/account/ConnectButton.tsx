@@ -450,26 +450,18 @@ export function ConnectButton({
           minHeight: '0px',
         },
         content: {
-          paddingTop: 'var(--space-2)',
-          paddingBottom: 'var(--space-3)',
+          paddingTop: '0.5rem',
+          paddingBottom: '0.75rem',
         },
       }
     }
     return {
-      container: {
-        top: 'var(--space-4)',
-        right: 'var(--space-2)',
-        bottom: 'var(--space-2)',
-        width: '26rem',
-        maxWidth: 'calc(100vw - 1.5rem)',
-        borderRadius: 'var(--borderRadius-600)',
-      },
       header: {
         minHeight: '0px',
       },
       content: {
-        paddingTop: 'var(--space-2)',
-        paddingBottom: 'var(--space-3)',
+        paddingTop: '0.5rem',
+        paddingBottom: '0.75rem',
       },
     }
   }, [isPhoneViewport])
