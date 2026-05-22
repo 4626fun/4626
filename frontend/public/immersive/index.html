@@ -140,7 +140,7 @@
           <a href="/security">Security</a>
           <a href="https://docs.4626.fun" target="_blank" rel="noopener noreferrer">Docs</a>
         </nav>
-        <a href="/waitlist" class="btn btn--gold nav-drawer__cta">
+        <a href="/waitlist?start=1" class="btn btn--gold nav-drawer__cta">
           <span>Join the waitlist</span>
           <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
             <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -229,13 +229,12 @@
           </h1>
 
           <p class="hero__sub">
-            On-chain strategy vaults, deployed by creators, deposited into by their
-            community. One standard. One engine. Shared yield.
+            Creator vaults on Base. Deposit alongside the people you trust.
           </p>
 
           <div class="hero__ctas">
-            <a href="/#cta" class="btn btn--primary">
-              <span>Request access</span>
+            <a href="/waitlist?start=1" class="btn btn--primary">
+              <span>Join the waitlist</span>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
@@ -508,41 +507,41 @@
       </section>
 
       <!-- =====================================================
-           LIVE VAULTS — cloth-physics fabric slider showcasing
-           creator vaults. Each panel is a draped fabric mesh
-           rendered with verlet-integrated cloth physics in Three.js.
-           Navigate left/right and the current panel falls / folds
-           away while the next drapes into place.
+           EXAMPLE VAULTS — cloth-physics fabric slider showcasing
+           illustrative creator-vault previews (demo only, not live).
            ===================================================== -->
       <section id="vaults" class="vaults">
         <header class="section__head">
-          <span class="section__eyebrow">// Live Vaults</span>
+          <span class="section__eyebrow">// Example vaults</span>
           <h2 class="section__title">Creator vaults, <em>draped</em> in code.</h2>
           <p class="section__sub">
-            Real strategies. Real depositors. Real on-chain receipts. A glimpse
-            of the vaults already running on Base.
+            Illustrative previews of how creator coins become ERC-4626 vaults on Base.
+            Demo only — vaults are not live yet.
           </p>
         </header>
 
-        <div class="vaults__stage" id="vaults-stage" aria-label="Creator vault showcase">
+        <div class="vaults__stage" id="vaults-stage" aria-label="Example creator vault showcase">
           <!-- Three.js cloth-physics canvas mounts here -->
           <div class="vaults__scene" id="vaults-scene" aria-hidden="true"></div>
 
           <!-- HTML overlay: vault metadata that matches the current panel -->
           <div class="vaults__meta" id="vaults-meta">
             <div class="vaults__meta-inner" data-vault="0">
-              <span class="vaults__creator">Akita Inu</span>
-              <h3 class="vaults__name">Akita Strategy Vault</h3>
+              <span class="vaults__badge">Demo preview · illustrative only</span>
+              <span class="vaults__creator">$akita</span>
+              <h3 class="vaults__name">Akita Vault</h3>
               <p class="vaults__pitch">
-                Memecoin treasury deployed across Ajna lend markets,
-                Charm concentrated LPs, and a Solana cross-chain leg.
+                Illustrative strategy mix across Ajna lend markets, Charm concentrated
+                LPs, and a Solana cross-chain leg.
               </p>
-              <ul class="vaults__stats">
-                <li><span>TVL</span><b>$2.4M</b></li>
-                <li><span>APY (30d)</span><b>11.4%</b></li>
-                <li><span>Holders</span><b>1,283</b></li>
-                <li><span>Ticker</span><b>▪AKITA</b></li>
+              <ul class="vaults__stats vaults__stats--demo">
+                <li><span>Status</span><b class="vaults__stat-accent">Demo preview</b></li>
+                <li><span>Stage</span><b>Vaults not live</b></li>
+                <li><span>Share</span><b class="vaults__ticker">■AKITA</b></li>
               </ul>
+              <p class="vaults__disclaimer">
+                <a href="/risks">Read risks</a> · Outcomes vary and may be zero.
+              </p>
             </div>
           </div>
 
@@ -566,36 +565,27 @@
         <script type="application/json" id="vaults-data">
         [
           {
-            "creator": "Akita Inu",
-            "name": "Akita Strategy Vault",
-            "pitch": "Memecoin treasury deployed across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.",
+            "creator": "$akita",
+            "name": "Akita Vault",
+            "pitch": "Illustrative strategy mix across Ajna lend markets, Charm concentrated LPs, and a Solana cross-chain leg.",
             "avatar": "./assets/creators/akita.webp",
-            "ticker": "▪AKITA",
-            "tvl": "$2.4M",
-            "apy": "11.4%",
-            "holders": "1,283",
+            "ticker": "■AKITA",
             "accent": "#4d7eff"
           },
           {
-            "creator": "Jesse Pollak",
-            "name": "Onchain Summer Vault",
-            "pitch": "Long-Base thesis. Deposits route to Aerodrome LPs and Base-native lending markets, with a 30-day async settlement window.",
+            "creator": "$jesse",
+            "name": "Jesse Vault",
+            "pitch": "Illustrative Base-native strategy mix across lending and LP venues.",
             "avatar": "./assets/creators/jesse.webp",
-            "ticker": "▪OCS",
-            "tvl": "$8.7M",
-            "apy": "14.2%",
-            "holders": "4,902",
+            "ticker": "■JESSE",
             "accent": "#0052ff"
           },
           {
-            "creator": "Gabriel Haines",
-            "name": "DeFi Researcher Vault",
-            "pitch": "High-water-mark performance fee. Quant-driven rotation between Ajna, Charm, and idle Base reserves.",
+            "creator": "$gabrielhaines",
+            "name": "Gabriel Haines Vault",
+            "pitch": "Illustrative rotation between Ajna, Charm, and idle Base reserves.",
             "avatar": "./assets/creators/gabrielhaines.webp",
-            "ticker": "▪GABE",
-            "tvl": "$1.1M",
-            "apy": "9.8%",
-            "holders": "412",
+            "ticker": "■GABRIELHAINES",
             "accent": "#d8a64a"
           }
         ]
@@ -736,7 +726,7 @@
               </svg>
             </div>
             <h3>Social leaderboard</h3>
-            <p>Vaults ranked by APY, TVL, and follow count. Discover strategists by track record, not promises.</p>
+            <p>Discover creators by track record and community — not promised returns.</p>
           </article>
 
           <article class="card">
@@ -761,27 +751,17 @@
             <span class="cta__sub-lockup">Creator Vaults on Base</span>
           </div>
 
-          <h2 class="cta__title">Earn beside the people you<br /><em>actually trust.</em></h2>
-          <p class="cta__sub">
-            4626.fun is in private beta. Get the keys, deploy a vault, or just deposit
-            with a creator you follow.
-          </p>
+          <h2 class="cta__title">Earn beside people you <em>trust.</em></h2>
+          <p class="cta__sub">Private beta on Base. Join for early access.</p>
 
-          <!-- Hand-off to the existing /waitlist React flow rather than
-               capturing a lead inline. Keeps a single source of truth for
-               waitlist signups (referral codes, role picker, wallet link
-               step, points, etc. all live there). -->
           <div class="cta__form cta__form--waitlist">
-            <a href="/waitlist" class="btn btn--gold">
+            <a href="/waitlist?start=1" class="btn btn--gold">
               <span>Join the waitlist</span>
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </a>
           </div>
-          <p class="cta__caption">
-            <em>Base-native &middot; ERC-4626 &middot; Built for creators and builders.</em>
-          </p>
 
           <!-- BUILT WITH lockup -->
           <div class="cta__builtwith" aria-label="Built with">
@@ -831,7 +811,7 @@
           Reserve a spot — the first 200 get a vault deployer credit.
         </p>
         <div class="fold__form">
-          <a href="/waitlist" class="btn btn--gold">
+          <a href="/waitlist?start=1" class="btn btn--gold">
             <span>Reserve access</span>
           </a>
         </div>

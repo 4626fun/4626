@@ -3063,9 +3063,22 @@ svg.hero__lightning #hero-lightning-bolts path {
 .vaults__creator {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.32em;
+  letter-spacing: 0.12em;
+  text-transform: lowercase;
+  color: rgba(220, 220, 230, 0.55);
+}
+.vaults__badge {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: rgba(220, 220, 230, 0.5);
+  color: rgba(216, 166, 74, 0.92);
+  border: 1px solid rgba(216, 166, 74, 0.28);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(216, 166, 74, 0.08);
 }
 .vaults__name {
   font-family: var(--serif);
@@ -3117,7 +3130,15 @@ svg.hero__lightning #hero-lightning-bolts path {
   color: rgba(248, 245, 235, 0.96);
   font-feature-settings: 'tnum' 1, 'lnum' 1;
 }
-.vaults__meta-inner[data-vault] .vaults__stats li:nth-child(4) b {
+.vaults__stats--demo {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.vaults__stat-accent {
+  color: rgba(216, 166, 74, 0.95) !important;
+  -webkit-text-fill-color: rgba(216, 166, 74, 0.95);
+  background: none;
+}
+.vaults__ticker {
   font-style: italic;
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--accent) 30%, white 40%) 0%,
@@ -3125,6 +3146,20 @@ svg.hero__lightning #hero-lightning-bolts path {
   -webkit-background-clip: text;
           background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+.vaults__disclaimer {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(200, 200, 215, 0.55);
+}
+.vaults__disclaimer a {
+  color: rgba(155, 180, 255, 0.92);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(155, 180, 255, 0.35);
+}
+.vaults__disclaimer a:hover {
+  color: rgba(200, 210, 255, 0.98);
 }
 
 /* Slider controls */
@@ -3193,7 +3228,9 @@ svg.hero__lightning #hero-lightning-bolts path {
     margin-top: 28px;
   }
   .vaults__name { font-size: clamp(28px, 7vw, 38px); }
-  .vaults__stats { grid-template-columns: 1fr 1fr; }
+  .vaults__stats--demo { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 10px; }
+  .vaults__stats--demo b { font-size: clamp(16px, 4vw, 22px); }
+  .vaults__disclaimer { font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .vaults__meta-inner { transition: none; }
@@ -3244,6 +3281,7 @@ svg.hero__lightning #hero-lightning-bolts path {
 
 .cta__form--waitlist {
   margin-top: 8px;
+  justify-content: center;
 }
 /* Gold pill button (Renaissance gradient) */
 .btn--gold {
@@ -3759,11 +3797,10 @@ html body.is-folding > header {
     font-size: 14px;
     line-height: 1.55;
   }
-  /* On mobile the 4-stat grid was cramping the ticker — switch to a
-     more breathable 2x2 grid with smaller labels */
-  .vaults__stats {
-    grid-template-columns: 1fr 1fr;
-    gap: 16px 20px;
+  /* Demo stats: three compact columns on mobile */
+  .vaults__stats--demo {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 10px;
     padding-top: 18px;
     margin-top: 8px;
   }

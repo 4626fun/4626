@@ -9,8 +9,10 @@ import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import {
   getMarketingWaitlistEntryUrl,
+  isWaitlistStartAuthSearchParam,
   readStoredWaitlistReferralCode,
   storeWaitlistReferralCode,
+  WAITLIST_START_AUTH_QUERY_KEY,
 } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -199,8 +201,6 @@ function WaitlistAuthStep(props: {
   referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
-  onSignOut: () => void | Promise<void>
-  signOutBusy: boolean
   disableMotion?: boolean
 }) {
   const {
@@ -213,13 +213,11 @@ function WaitlistAuthStep(props: {
     referralCode,
     onContinueAuth,
     onRecoverAccount,
-    onSignOut,
-    signOutBusy,
     disableMotion = false,
   } = props
 
   const privyReady = privyClientStatus === 'ready'
-  const buttonsDisabled = busy || signOutBusy || !privyReady
+  const buttonsDisabled = busy || !privyReady
   const motionEnabled = !disableMotion
   const signedUpCount = Math.max(0, Number(waitlistStats?.signedUpCount ?? 0))
   const capacity = Math.max(0, Number(waitlistStats?.capacity ?? 0))
@@ -266,7 +264,7 @@ function WaitlistAuthStep(props: {
       <div className="relative z-10 w-full max-w-md text-center">
         <motion.div
           {...stagger(0)}
-          className="rounded-2xl border border-white/[0.08] bg-zinc-950/80 px-5 py-6 sm:px-7 sm:py-7"
+          className="px-5 py-6 sm:px-7 sm:py-7"
         >
           <div className="space-y-2">
             <h2 className="text-[1.75rem] font-semibold leading-tight tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
@@ -304,14 +302,6 @@ function WaitlistAuthStep(props: {
                 authUi.ctaLabel
               )}
             </Button>
-            <button
-              type="button"
-              disabled={signOutBusy}
-              onClick={() => void onSignOut()}
-              className="text-xs text-zinc-500 transition hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {signOutBusy ? 'Signing out…' : 'Sign out'}
-            </button>
           </motion.div>
 
           {/* error */}
@@ -424,6 +414,7 @@ export function WaitlistFlow(props: {
   ])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const startAuthAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
   const finalizingBackgroundRetryCountRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
@@ -681,6 +672,25 @@ export function WaitlistFlow(props: {
     tokenlessFinalizingBootstrapCooldownUntilRef,
     tryResumeExistingPrivySession,
   ])
+
+  const clearStartAuthDeepLink = useCallback(() => {
+    if (!isWaitlistStartAuthSearchParam(searchParams.get(WAITLIST_START_AUTH_QUERY_KEY))) return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete(WAITLIST_START_AUTH_QUERY_KEY)
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (step !== 'auth') return
+    if (!isWaitlistStartAuthSearchParam(searchParams.get(WAITLIST_START_AUTH_QUERY_KEY))) return
+    if (privyClientStatus !== 'ready') return
+    if (busy || authAttemptInFlightRef.current) return
+    if (startAuthAutoAttemptedRef.current) return
+
+    startAuthAutoAttemptedRef.current = true
+    clearStartAuthDeepLink()
+    void onContinueAuth()
+  }, [step, searchParams, privyClientStatus, busy, authAttemptInFlightRef, clearStartAuthDeepLink, onContinueAuth])
 
   const onRecoverAccount = useCallback(async () => {
     if (!beginAuthAttempt()) return
@@ -1057,8 +1067,6 @@ export function WaitlistFlow(props: {
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
-            onSignOut={onSignOut}
-            signOutBusy={signOutBusy}
             disableMotion
           />
         ) : step === 'connect-base-app' ? (
@@ -1100,8 +1108,6 @@ export function WaitlistFlow(props: {
               referralCode={activeReferralCode}
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
-              onSignOut={onSignOut}
-              signOutBusy={signOutBusy}
             />
           ) : step === 'connect-base-app' ? (
             <motion.div

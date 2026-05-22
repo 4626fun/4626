@@ -2,6 +2,7 @@ import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/env/host'
 
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
+export const WAITLIST_START_AUTH_QUERY_KEY = 'start'
 
 export const WAITLIST_REFERRAL_CODE_STORAGE_KEY = 'cv:waitlist:referral_code'
 export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_session'
@@ -65,6 +66,22 @@ export function isMarketingWaitlistEntryLocation(location: WaitlistEntryLocation
 
 export function buildWaitlistEntryPath(): string {
   return CANONICAL_MARKETING_WAITLIST_PATH
+}
+
+export function isWaitlistStartAuthSearchParam(value: string | null | undefined): boolean {
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes'
+}
+
+export function buildWaitlistStartAuthPath(): string {
+  return `${CANONICAL_MARKETING_WAITLIST_PATH}?${WAITLIST_START_AUTH_QUERY_KEY}=1`
+}
+
+export function buildWaitlistStartAuthUrl(baseUrl: string): string {
+  const base = String(baseUrl ?? '').replace(/\/+$/, '')
+  return `${base}${buildWaitlistStartAuthPath()}`
 }
 
 export function buildWaitlistEntryUrl(baseUrl: string): string {

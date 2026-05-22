@@ -10,9 +10,12 @@ import {
   buildWaitlistReferralPath,
   buildWaitlistReferralUrl,
   buildWaitlistSetupUrl,
+  buildWaitlistStartAuthPath,
+  buildWaitlistStartAuthUrl,
   clearStoredWaitlistReferralCode,
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
+  isWaitlistStartAuthSearchParam,
   normalizeWaitlistReferralCode,
   readStoredWaitlistReferralCode,
   readWaitlistEntryReferralCode,
@@ -26,6 +29,15 @@ describe('waitlistEntry', () => {
 
   it('builds the canonical waitlist entry path as a clean route', () => {
     expect(buildWaitlistEntryPath()).toBe('/waitlist')
+  })
+
+  it('builds marketing start-auth waitlist links', () => {
+    expect(buildWaitlistStartAuthPath()).toBe('/waitlist?start=1')
+    expect(buildWaitlistStartAuthUrl('https://4626.fun/')).toBe('https://4626.fun/waitlist?start=1')
+    expect(isWaitlistStartAuthSearchParam('1')).toBe(true)
+    expect(isWaitlistStartAuthSearchParam('true')).toBe(true)
+    expect(isWaitlistStartAuthSearchParam('0')).toBe(false)
+    expect(isWaitlistStartAuthSearchParam(null)).toBe(false)
   })
 
   it('builds waitlist entry URLs against the provided base origin', () => {

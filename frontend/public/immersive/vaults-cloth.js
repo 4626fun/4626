@@ -83,7 +83,7 @@ async function renderVaultTexture(vault) {
   ctx.fillStyle = vault.accent;
   ctx.font = '500 26px Inter, system-ui, sans-serif';
   ctx.letterSpacing = '0.32em';
-  ctx.fillText('// CREATOR VAULT', 80, 110);
+  ctx.fillText('// EXAMPLE VAULT', 80, 110);
 
   // Avatar (circular)
   try {
@@ -110,11 +110,11 @@ async function renderVaultTexture(vault) {
     ctx.fill();
   }
 
-  // Creator name (small caps)
+  // Creator coin handle
   ctx.fillStyle = 'rgba(220, 220, 230, 0.5)';
   ctx.font = '500 24px Inter, system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText(vault.creator.toUpperCase(), W / 2, 640);
+  ctx.fillText(vault.creator, W / 2, 640);
 
   // Vault name (display serif)
   ctx.fillStyle = 'rgba(248, 245, 235, 0.96)';
@@ -126,24 +126,14 @@ async function renderVaultTexture(vault) {
   ctx.fillStyle = vault.accent;
   ctx.fillText(vault.ticker, W / 2, 780);
 
-  // Stats grid
-  ctx.textAlign = 'left';
-  const statY = 920;
-  const statGap = 250;
-  const stats = [
-    { label: 'TVL',     value: vault.tvl },
-    { label: 'APY',     value: vault.apy },
-    { label: 'HOLDERS', value: vault.holders },
-  ];
-  stats.forEach((s, i) => {
-    const x = 120 + i * statGap;
-    ctx.fillStyle = 'rgba(200, 200, 215, 0.45)';
-    ctx.font = '500 18px Inter, system-ui, sans-serif';
-    ctx.fillText(s.label, x, statY);
-    ctx.fillStyle = 'rgba(248, 245, 235, 0.96)';
-    ctx.font = '400 44px "Instrument Serif", Georgia, serif';
-    ctx.fillText(s.value, x, statY + 56);
-  });
+  // Demo framing — no TVL, APY, or holder counts
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(200, 200, 215, 0.45)';
+  ctx.font = '500 20px Inter, system-ui, sans-serif';
+  ctx.fillText('DEMO PREVIEW · ILLUSTRATIVE ONLY', W / 2, 920);
+  ctx.fillStyle = vault.accent;
+  ctx.font = '600 22px Inter, system-ui, sans-serif';
+  ctx.fillText('VAULTS NOT LIVE', W / 2, 968);
 
   // Footer chip "BASE · ERC-4626"
   ctx.fillStyle = 'rgba(155, 180, 255, 0.7)';
@@ -424,11 +414,7 @@ function updateMeta() {
     inner.querySelector('.vaults__creator').textContent = v.creator;
     inner.querySelector('.vaults__name').textContent = v.name;
     inner.querySelector('.vaults__pitch').textContent = v.pitch;
-    const stats = inner.querySelectorAll('.vaults__stats li b');
-    stats[0].textContent = v.tvl;
-    stats[1].textContent = v.apy;
-    stats[2].textContent = v.holders;
-    stats[3].textContent = v.ticker;
+    inner.querySelector('.vaults__ticker').textContent = v.ticker;
     inner.style.setProperty('--accent', v.accent);
     inner.style.opacity = '1';
     inner.style.transform = 'translateY(0)';
