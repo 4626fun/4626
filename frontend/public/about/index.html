@@ -42,17 +42,11 @@
   }
   </script>
 </head>
-<body>
+<body data-trust-page="about">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/"><img src="/assets/logo-mark.svg" alt="">4626.fun</a>
-    <nav class="nav" aria-label="Primary">
-      <a href="/">Home</a>
-      <a href="/risks">Risks</a>
-      <a href="/security">Security</a>
-      <a href="/terms">Terms</a>
-      <a href="/privacy">Privacy</a>
-    </nav>
+    <nav class="nav" data-trust-nav aria-label="Primary"></nav>
   </header>
   <main id="main" class="wrap">
     <section class="page-hero">
@@ -97,5 +91,6 @@
   <footer class="site-footer">
     <div>Experimental software. Vaults not live yet. Not financial advice. Read the <a href="/risks">risks</a>.</div>
   </footer>
+  <script src="/trust-nav.js"></script>
 </body>
 </html>
