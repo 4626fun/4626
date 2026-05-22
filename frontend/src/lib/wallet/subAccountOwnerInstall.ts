@@ -34,6 +34,7 @@ export type InstallEmbeddedOwnerResult = {
 }
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
+const BASE_MAINNET_CHAIN_ID_HEX = '0x2105'
 
 function walletRequestFromProvider(provider: { request: WalletRequest }) {
   return async (args: { method: string; params?: unknown[] }) => provider.request(args)
@@ -56,6 +57,20 @@ function isUnauthorizedMethodOrAccount(error: unknown): boolean {
     lower.includes('not been authorized by the user') ||
     lower.includes('requested method and/or account has not been authorized')
   )
+}
+
+function isHexChainId(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[0-9a-f]+$/i.test(value)
+}
+
+async function ensureBaseMainnetWalletContext(walletRequest: WalletRequest): Promise<void> {
+  const current = await walletRequest({ method: 'eth_chainId' })
+  if (isHexChainId(current) && current.toLowerCase() === BASE_MAINNET_CHAIN_ID_HEX) return
+
+  await walletRequest({
+    method: 'wallet_switchEthereumChain',
+    params: [{ chainId: BASE_MAINNET_CHAIN_ID_HEX }],
+  })
 }
 
 export function createBaseSubAccountReadClient() {
@@ -144,6 +159,26 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       callBundleId: null,
     }
   }
+  await ensureBaseMainnetWalletContext(walletRequest)
+
+  async function submitViaSendCalls() {
+    const submitted = await addOwnerViaBaseAppSendCalls({
+      walletRequest,
+      csw: params.subAccountAddress,
+      ownerToAdd: params.embeddedEoaAddress,
+      chainId,
+    })
+    return {
+      installed: true,
+      alreadyOwner: false,
+      transactionHash: submitted.transactionHash,
+      callBundleId: submitted.callBundleId,
+    } satisfies InstallEmbeddedOwnerResult
+  }
+  async function reauthorizeAndRetry<T>(fn: () => Promise<T>): Promise<T> {
+    await walletRequest({ method: 'eth_requestAccounts' })
+    return await fn()
+  }
 
   async function submitViaSendCalls() {
     const submitted = await addOwnerViaBaseAppSendCalls({
@@ -176,6 +211,30 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
     if (isUserRejectedWalletAction(directError)) {
       throw directError
     }
+    if (isUnauthorizedMethodOrAccount(directError)) {
+      try {
+        return await reauthorizeAndRetry(async () => {
+          const direct = await addOwnerViaEthSendTransaction({
+            walletRequest,
+            subAccountAddress: params.subAccountAddress,
+            embeddedEoaAddress: params.embeddedEoaAddress,
+          })
+          return {
+            installed: true,
+            alreadyOwner: false,
+            transactionHash: direct.transactionHash,
+            callBundleId: null,
+          } satisfies InstallEmbeddedOwnerResult
+        })
+      } catch (directRetryError) {
+        if (isUserRejectedWalletAction(directRetryError)) {
+          throw directRetryError
+        }
+        // Keep historical recovery semantics: if direct lane still fails,
+        // fall back to sendCalls where available.
+        return await submitViaSendCalls()
+      }
+    }
 
     try {
       return await submitViaSendCalls()
@@ -183,8 +242,7 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       if (!isUnauthorizedMethodOrAccount(sendCallsError)) {
         throw sendCallsError
       }
-      await walletRequest({ method: 'eth_requestAccounts' })
-      return await submitViaSendCalls()
+      return await reauthorizeAndRetry(submitViaSendCalls)
     }
   }
 }

@@ -47,7 +47,10 @@ describe('subAccountOwnerInstall', () => {
     const publicClient = {
       readContract: vi.fn().mockResolvedValue(false),
     }
-    const request = vi.fn().mockResolvedValue(TX_HASH)
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
+      .mockResolvedValueOnce(TX_HASH)
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
       subAccountAddress: SUB,
@@ -57,7 +60,10 @@ describe('subAccountOwnerInstall', () => {
     expect(result.installed).toBe(true)
     expect(result.transactionHash).toBe(TX_HASH)
     expect(result.callBundleId).toBeNull()
-    expect(request).toHaveBeenCalledWith({
+    expect(request).toHaveBeenNthCalledWith(1, {
+      method: 'eth_chainId',
+    })
+    expect(request).toHaveBeenNthCalledWith(2, {
       method: 'eth_sendTransaction',
       params: [
         {
@@ -75,7 +81,10 @@ describe('subAccountOwnerInstall', () => {
     const publicClient = {
       readContract: vi.fn().mockResolvedValue(false),
     }
-    const request = vi.fn().mockRejectedValue(new Error('unsupported method'))
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
+      .mockRejectedValueOnce(new Error('unsupported method'))
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
       subAccountAddress: SUB,
@@ -89,6 +98,28 @@ describe('subAccountOwnerInstall', () => {
         ownerToAdd: EMBED,
       }),
     )
+  })
+
+  it('falls back to wallet_sendCalls if direct retry after reauth still fails', async () => {
+    const publicClient = {
+      readContract: vi.fn().mockResolvedValue(false),
+    }
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0x2105')
+      .mockRejectedValueOnce(new Error('requested method and/or account has not been authorized by the user'))
+      .mockResolvedValueOnce([SUB])
+      .mockRejectedValueOnce(new Error('still unsupported'))
+
+    const result = await installEmbeddedOwnerOnSubAccount({
+      provider: { request },
+      subAccountAddress: SUB,
+      embeddedEoaAddress: EMBED,
+      publicClient: publicClient as any,
+    })
+    expect(result.installed).toBe(true)
+    expect(addOwnerSendCallsMock).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenNthCalledWith(3, { method: 'eth_requestAccounts' })
   })
 
   it('rethrows user rejection from eth_sendTransaction without sendCalls fallback', async () => {
