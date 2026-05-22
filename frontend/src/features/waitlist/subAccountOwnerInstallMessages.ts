@@ -13,8 +13,8 @@ export const SUB_ACCOUNT_TESTNET_MESSAGE =
 export const SUB_ACCOUNT_IN_BASE_APP_HINT =
   'Approve one transaction in Base App when prompted. Your main Base wallet stays unchanged.'
 
-export const SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE =
-  '4626 signer is linked to your app wallet. Optional on-chain owner approval did not finish — swaps should still work; you can retry owner approval later if needed.'
+export const SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE =
+  'Your 4626 signer is linked, but Base App still needs to approve one on-chain owner transaction on your app wallet before swaps can run. Tap Enable 4626 signing again and approve the prompt.'
 
 /** Strip nested setup wrapper text before classifying provider errors. */
 export function normalizeSubAccountOwnerInstallErrorSource(message: string): string {

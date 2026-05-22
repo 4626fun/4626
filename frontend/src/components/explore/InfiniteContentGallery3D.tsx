@@ -357,7 +357,7 @@ export function InfiniteContentGallery3D({
         />
       </Canvas>
       {interactive ? (
-        <div className="pointer-events-none absolute right-3 top-3 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
+        <div className="pointer-events-none absolute right-3 top-3 sm:right-6 sm:top-6 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
           {isDragging ? 'Release to glide' : 'Drag / wheel / arrows'}
         </div>
       ) : null}

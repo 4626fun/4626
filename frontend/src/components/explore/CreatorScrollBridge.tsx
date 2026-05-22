@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, type ReactNode } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -6,56 +6,139 @@ import { cn } from '@/lib/shared/utils'
 
 gsap.registerPlugin(ScrollTrigger)
 
+/** Timeline section accent — keep in sync with ExploreCreatorDetail timeline bg */
+export const CREATOR_PAGE_LIME = '#d9df72'
+
 export type CreatorScrollBridgeTone = 'void' | 'void-to-lime' | 'lime-to-void'
 
 type CreatorScrollBridgeProps = {
   tone?: CreatorScrollBridgeTone
   className?: string
   animate?: boolean
+  caption?: ReactNode
 }
 
 const BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
 
-const TONE_BG: Record<CreatorScrollBridgeTone, string> = {
+const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
   void: 'bg-black',
-  'void-to-lime': 'bg-gradient-to-b from-black from-35% via-black via-70% to-[#d9df72]',
-  'lime-to-void': 'bg-gradient-to-b from-[#d9df72] from-15% via-zinc-950 via-55% to-zinc-950',
+  'void-to-lime': 'bg-black',
+  'lime-to-void': 'bg-zinc-950',
 }
 
-export function CreatorScrollBridge({ tone = 'void', className, animate = true }: CreatorScrollBridgeProps) {
+/** Fixed-height edge ramps — percentages on 280vh bridges break on long pinned sections. */
+function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
+  const edge = 'pointer-events-none absolute inset-x-0'
+  const lime = CREATOR_PAGE_LIME
+
+  if (tone === 'void') {
+    return (
+      <>
+        <div className={cn(edge, 'top-0 h-[min(32vh,280px)] bg-gradient-to-b from-black to-transparent')} />
+        <div className={cn(edge, 'bottom-0 h-[min(36vh,320px)] bg-gradient-to-t from-black via-black/70 to-transparent')} />
+      </>
+    )
+  }
+
+  if (tone === 'void-to-lime') {
+    return (
+      <>
+        <div className={cn(edge, 'top-0 h-[min(32vh,280px)] bg-gradient-to-b from-black to-transparent')} />
+        <div
+          className={cn(edge, 'bottom-0 h-[min(48vh,420px)]')}
+          style={{
+            background: `linear-gradient(to top, ${lime} 0%, ${lime} 18%, rgba(217,223,114,0.55) 42%, rgba(0,0,0,0) 100%)`,
+          }}
+        />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <div
+        className={cn(edge, 'top-0 h-[min(52vh,460px)]')}
+        style={{
+          background: `linear-gradient(to bottom, ${lime} 0%, ${lime} 28%, rgba(217,223,114,0.72) 52%, rgba(9,9,11,0) 100%)`,
+        }}
+      />
+      <div className={cn(edge, 'bottom-0 h-[min(44vh,400px)] bg-gradient-to-t from-black via-zinc-950/95 to-transparent')} />
+    </>
+  )
+}
+
+export function CreatorScrollBridge({
+  tone = 'void',
+  className,
+  animate = true,
+  caption,
+}: CreatorScrollBridgeProps) {
   const bridgeRef = useRef<HTMLDivElement>(null)
   const hintRef = useRef<HTMLDivElement>(null)
+  const captionRef = useRef<HTMLDivElement>(null)
 
   useGSAP(
     () => {
-      if (!animate || !bridgeRef.current || !hintRef.current) return
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        gsap.set(hintRef.current, { opacity: 0.4 })
-        return
+      if (!bridgeRef.current) return
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      const cleanups: Array<() => void> = []
+
+      if (hintRef.current) {
+        if (!animate || reducedMotion) {
+          gsap.set(hintRef.current, { opacity: reducedMotion ? 0.4 : 0.35 })
+        } else {
+          const hintTween = gsap.fromTo(
+            hintRef.current,
+            { opacity: 0, y: 14 },
+            {
+              opacity: 0.42,
+              y: 0,
+              ease: 'none',
+              scrollTrigger: {
+                trigger: bridgeRef.current,
+                start: 'top 88%',
+                end: 'center center',
+                scrub: 0.75,
+              },
+            },
+          )
+          cleanups.push(() => {
+            hintTween.scrollTrigger?.kill()
+            hintTween.kill()
+          })
+        }
       }
 
-      const tween = gsap.fromTo(
-        hintRef.current,
-        { opacity: 0, y: 14 },
-        {
-          opacity: 0.42,
-          y: 0,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: bridgeRef.current,
-            start: 'top 88%',
-            end: 'center center',
-            scrub: 0.75,
+      if (captionRef.current && animate && !reducedMotion) {
+        const captionTween = gsap.fromTo(
+          captionRef.current,
+          { opacity: 0, y: 20 },
+          {
+            opacity: 1,
+            y: 0,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: bridgeRef.current,
+              start: 'top 72%',
+              end: 'top 38%',
+              scrub: 0.85,
+            },
           },
-        },
-      )
+        )
+        cleanups.push(() => {
+          captionTween.scrollTrigger?.kill()
+          captionTween.kill()
+        })
+      } else if (captionRef.current) {
+        gsap.set(captionRef.current, { opacity: 1 })
+      }
 
       return () => {
-        tween.scrollTrigger?.kill()
-        tween.kill()
+        cleanups.forEach((cleanup) => cleanup())
       }
     },
-    { scope: bridgeRef, dependencies: [animate, tone] },
+    { scope: bridgeRef, dependencies: [animate, tone, caption] },
   )
 
   const showStarfield = tone === 'void' || tone === 'void-to-lime'
@@ -63,12 +146,17 @@ export function CreatorScrollBridge({ tone = 'void', className, animate = true }
   return (
     <div
       ref={bridgeRef}
-      aria-hidden
-      className={cn('relative left-1/2 w-screen -translate-x-1/2 overflow-clip', BRIDGE_HEIGHT_CLASS, TONE_BG[tone], className)}
+      aria-hidden={!caption}
+      className={cn(
+        'relative left-1/2 w-screen -translate-x-1/2 overflow-clip',
+        BRIDGE_HEIGHT_CLASS,
+        BASE_BG[tone],
+        className,
+      )}
     >
       {showStarfield ? (
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.32]"
+          className="pointer-events-none absolute inset-0 opacity-[0.28]"
           style={{
             backgroundImage: `
               radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.45) 50%, transparent 51%),
@@ -78,38 +166,47 @@ export function CreatorScrollBridge({ tone = 'void', className, animate = true }
             `,
             backgroundSize: '220px 220px',
             WebkitMaskImage:
-              'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 18%, black 82%, transparent 100%)',
+              'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
           }}
         />
       ) : null}
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-36 bg-gradient-to-b from-black/80 to-transparent" />
-      {tone === 'void' ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-black to-transparent" />
-      ) : null}
-      {tone === 'void-to-lime' ? (
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#d9df72] to-transparent" />
-      ) : null}
-      {tone === 'lime-to-void' ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#d9df72] to-transparent" />
-      ) : null}
+      <BridgeEdgeFades tone={tone} />
 
-      <div className="sticky top-0 flex h-screen items-center justify-center">
-        <div ref={hintRef} className="flex flex-col items-center gap-2.5 opacity-0">
-          <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            className="text-zinc-600"
-            aria-hidden
-          >
-            <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+      <div className="sticky top-0 flex h-screen flex-col">
+        {caption ? (
+          <div className="flex flex-1 items-end px-6 pb-10 sm:px-10 sm:pb-14 lg:px-16 lg:pb-16">
+            <div
+              ref={captionRef}
+              className={cn(
+                'max-w-2xl opacity-0',
+                tone === 'void-to-lime' ? 'text-zinc-400' : 'text-zinc-500',
+              )}
+            >
+              {caption}
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+
+        <div className="flex flex-1 items-center justify-center pb-[min(18vh,160px)]">
+          <div ref={hintRef} className="flex flex-col items-center gap-2.5 opacity-0">
+            <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              className="text-zinc-600"
+              aria-hidden
+            >
+              <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
         </div>
       </div>
     </div>

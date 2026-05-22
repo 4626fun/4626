@@ -895,14 +895,16 @@ export function ExploreCreatorDetail() {
 
         if (window.innerWidth >= 1024 && maxTimelineScrollLeft() > 0) {
           timelineCameraActiveRef.current = true
+          const panDistance = maxTimelineScrollLeft() + window.innerHeight * 0.55
           const panTween = gsap.to(scroller, {
             scrollLeft: () => maxTimelineScrollLeft(),
             ease: 'none',
             scrollTrigger: {
               trigger: section,
               start: 'top top',
-              end: () => `+=${Math.max(900, maxTimelineScrollLeft() + window.innerHeight * 0.45)}`,
+              end: () => `+=${Math.max(window.innerHeight * 1.1, panDistance)}`,
               pin: true,
+              pinSpacing: true,
               scrub: 1,
               anticipatePin: 1,
               invalidateOnRefresh: true,
@@ -919,8 +921,16 @@ export function ExploreCreatorDetail() {
         cleanups.forEach((cleanup) => cleanup())
       }
     },
-    { dependencies: [allowParallax] }
+    { dependencies: [allowParallax, timelineCoins.length, contentCoins.length] },
   )
+
+  useEffect(() => {
+    if (!allowParallax || typeof window === 'undefined') return
+    const frame = requestAnimationFrame(() => {
+      ScrollTrigger.refresh()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [allowParallax, timelineCoins.length, contentCoins.length])
 
   useEffect(() => {
     if (!isContentTrayOpen) return
@@ -1271,7 +1281,7 @@ export function ExploreCreatorDetail() {
 
         <section
           ref={sceneSectionRef}
-          className="relative h-[980px] sm:h-[1120px] overflow-hidden lg:pr-60 xl:pr-64"
+          className="relative min-h-[calc(100dvh-3.5rem)] h-[calc(100dvh-3.5rem)] overflow-hidden lg:pr-60 xl:pr-64"
           onWheelCapture={onSceneSectionWheelCapture}
         >
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
@@ -1298,28 +1308,23 @@ export function ExploreCreatorDetail() {
               <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
               <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
 
-              <div className="absolute left-4 right-4 top-6 sm:left-8 sm:right-8 sm:top-8 lg:right-64 xl:right-72 z-20">
-                <div className="grid lg:grid-cols-12 gap-6 sm:gap-8 items-end">
-                  <div className="lg:col-span-7">
-                    <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-4 sm:mb-6">
+              <div className="absolute inset-0 z-20 flex flex-col pointer-events-none">
+                <div className="flex flex-1 flex-col justify-between px-4 pt-6 pb-28 sm:px-8 sm:pt-8 sm:pb-32 lg:pr-64 xl:pr-72">
+                  <div className="lg:col-span-7 flex flex-col justify-between min-h-[42vh] sm:min-h-[48vh] lg:min-h-[52vh] max-w-4xl">
+                    <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
                       <span className="w-10 sm:w-12 h-px bg-white/30" />
                       Collections
                     </span>
-                    <h2 className="text-4xl sm:text-5xl lg:text-[88px] font-semibold tracking-tight leading-[0.9]">
+                    <h2 className="text-[clamp(3rem,11vw,7.5rem)] font-semibold tracking-tight leading-[0.88]">
                       Content
                       <br />
                       <span className="text-white/35">coins.</span>
                     </h2>
                   </div>
-                  <div className="lg:col-span-5 lg:pb-4">
-                    <p className="text-sm sm:text-base lg:text-lg text-zinc-300/90 leading-relaxed max-w-[54ch]">
-                      A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a visual scene.
-                    </p>
-                  </div>
                 </div>
               </div>
 
-              <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4">
+              <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
                 <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
                   Top content volume
                 </div>
@@ -1360,13 +1365,29 @@ export function ExploreCreatorDetail() {
           )}
         </section>
 
-        <CreatorScrollBridge tone="void-to-lime" animate={allowParallax} />
+        <CreatorScrollBridge
+          tone="void-to-lime"
+          animate={allowParallax}
+          caption={
+            <p className="text-sm sm:text-base lg:text-lg leading-relaxed">
+              A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a
+              visual scene.
+            </p>
+          }
+        />
         </div>
 
-        <section
+        <div
           ref={timelineSectionRef}
-          className="relative w-screen ml-[calc(50%-50vw)] mt-0 bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+          className="relative w-screen ml-[calc(50%-50vw)] isolate bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
         >
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[min(24vh,200px)]"
+            style={{
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.42) 0%, transparent 100%)',
+            }}
+            aria-hidden
+          />
           <div ref={timelineBodyRef}>
             <div className="px-2 sm:px-4 pb-8">
               <div className="grid lg:grid-cols-12 gap-6 items-end">
@@ -1444,7 +1465,7 @@ export function ExploreCreatorDetail() {
               </div>
             </div>
           </div>
-        </section>
+        </div>
 
         <CreatorScrollBridge tone="lime-to-void" animate={allowParallax} />
 

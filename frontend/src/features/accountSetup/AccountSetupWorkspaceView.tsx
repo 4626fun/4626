@@ -21,7 +21,9 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
+import { useEmbeddedOwnerOnSubAccount } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
@@ -198,6 +200,23 @@ export function AccountSetupWorkspaceView(props: {
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
+  const persistedSubAccountAddressForOwnerCheck =
+    me?.accountSignals.baseSubAccount?.address?.trim() ||
+    me?.baseSubAccount?.trim() ||
+    null
+  const executionTrackForOwnerCheck = me?.accountSignals.executionTrack
+  const subAccountTrackForOwnerCheck =
+    executionTrackForOwnerCheck === 'sub-account' ||
+    executionTrackForOwnerCheck === 'migration-pending'
+  const { isOwner: subAccountEmbeddedOwnerReady } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: persistedSubAccountAddressForOwnerCheck,
+    embeddedEoaAddress,
+    enabled:
+      subAccountFlowEnabled &&
+      subAccountTrackForOwnerCheck &&
+      Boolean(persistedSubAccountAddressForOwnerCheck),
+  })
 
   if (loading && !me) {
     return (
@@ -238,11 +257,13 @@ export function AccountSetupWorkspaceView(props: {
       />
     ) : null
   const signingStepComplete =
-    executionTrack === 'sub-account' ||
-    executionTrack === 'migration-pending' ||
+    ((executionTrack === 'sub-account' || executionTrack === 'migration-pending') &&
+      subAccountEmbeddedOwnerReady) ||
     executionTrack === 'legacy-owner-install' ||
     me.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true ||
-    /4626 signing is enabled|already enabled/i.test(notice ?? '')
+    (executionTrack !== 'sub-account' &&
+      executionTrack !== 'migration-pending' &&
+      /4626 signing is enabled|already enabled/i.test(notice ?? ''))
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase

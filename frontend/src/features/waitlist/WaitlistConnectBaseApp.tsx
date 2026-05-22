@@ -5,7 +5,7 @@
  *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
  *   2. Wire the Privy embedded EOA as the sub-account SDK signer (silent).
  *   3. POST /api/arch-b/sub-account/baseapp/register
- *   4. Best-effort on-chain owner install on the sub-account (optional retry lane).
+ *   4. On-chain owner install on the sub-account (required for swap-ready signing).
  *
  * Parent CSW addOwnerAddress from third-party dapps remains blocked; owner install
  * targets the per-app sub-account only.
@@ -305,10 +305,6 @@ function WaitlistConnectBaseAppReady(props: Props) {
       return
     }
 
-    await persistAndComplete(pending)
-
-    if (cancelledRef.current) return
-
     const ownerInstalled = await confirmSubAccountEmbeddedOwner({
       parentAddress: pending.parentAddress,
       subAccountAddress: pending.subAccountAddress,
@@ -316,9 +312,20 @@ function WaitlistConnectBaseAppReady(props: Props) {
     })
     if (cancelledRef.current) return
     if (!ownerInstalled) {
-      // Signer link + server registration succeeded; optional on-chain owner can retry later.
+      setView({
+        kind: 'error',
+        message: mapSetupFailureMessage({
+          error: getLastSetupError(),
+          lastStage,
+          fallback:
+            'Your app wallet is linked, but Base App did not finish the on-chain owner approval. Tap Try again and approve the signing prompt.',
+        }),
+        canRetry: true,
+      })
       return
     }
+
+    await persistAndComplete(pending)
   }, [
     confirmSubAccountEmbeddedOwner,
     connectBaseAccountWallet,

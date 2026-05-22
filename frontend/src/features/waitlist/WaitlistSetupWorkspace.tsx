@@ -5,8 +5,11 @@ import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { isWaitlistSigningReadyForUi } from './waitlistFlowState'
+import { isWaitlistSigningReadyForUi, resolveSubAccountAddress } from './waitlistFlowState'
 import { useWaitlistChatJoin, waitlistChatStatusMessage } from './useWaitlistChatJoin'
+import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -40,7 +43,23 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     zoraReturnPath: '/waitlist',
   })
   const currentAccount = controller.me ?? initialAccount
-  const signingStepComplete = isWaitlistSigningReadyForUi(currentAccount, controller.notice)
+  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
+  const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
+  const persistedSubAccountAddress = resolveSubAccountAddress({
+    baseSubAccount: currentAccount.baseSubAccount ?? null,
+    accountSignals: currentAccount.accountSignals,
+  })
+  const executionTrack = currentAccount.accountSignals?.executionTrack
+  const subAccountTrack =
+    executionTrack === 'sub-account' || executionTrack === 'migration-pending'
+  const { isOwner: subAccountEmbeddedOwnerReady } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: persistedSubAccountAddress,
+    embeddedEoaAddress,
+    enabled: subAccountFlowEnabled && subAccountTrack && Boolean(persistedSubAccountAddress),
+  })
+  const signingStepComplete = subAccountTrack
+    ? subAccountEmbeddedOwnerReady
+    : isWaitlistSigningReadyForUi(currentAccount, controller.notice)
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete

@@ -101,7 +101,7 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
+  it('single-step flow: connect wallet, provision, finalize signer, owner install, then register', async () => {
     mockProvision(true)
     registerMock.mockResolvedValueOnce({ ok: true, message: '' })
 
@@ -119,6 +119,13 @@ describe('WaitlistConnectBaseApp', () => {
         subAccountAddress: SUB,
       }),
     )
+    await waitFor(() =>
+      expect(hookState.confirmOwner).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+        provider: expect.objectContaining({ request: expect.any(Function) }),
+      }),
+    )
     await waitFor(() => expect(registerMock).toHaveBeenCalled())
     await waitFor(
       () =>
@@ -128,29 +135,23 @@ describe('WaitlistConnectBaseApp', () => {
         }),
       { timeout: 3000 },
     )
-    await waitFor(() =>
-      expect(hookState.confirmOwner).toHaveBeenCalledWith({
-        parentAddress: PARENT,
-        subAccountAddress: SUB,
-        provider: expect.objectContaining({ request: expect.any(Function) }),
-      }),
-    )
   })
 
-  it('still completes when optional owner install fails after register', async () => {
+  it('surfaces retryable error when required owner install fails before register', async () => {
     mockProvision(true)
-    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
     hookState.confirmOwner.mockResolvedValueOnce(null)
 
     const onComplete = vi.fn()
-    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
+    render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
 
     await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-complete')).toBeTruthy())
-    expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
+    expect(registerMock).not.toHaveBeenCalled()
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('waitlist-connect-base-app-complete')).toBeNull()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {

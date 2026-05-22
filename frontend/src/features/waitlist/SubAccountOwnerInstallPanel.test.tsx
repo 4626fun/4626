@@ -8,7 +8,7 @@ import { getAddress } from 'viem'
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import {
   SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
-  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 
@@ -141,7 +141,7 @@ describe('SubAccountOwnerInstallPanel', () => {
     })
   })
 
-  it('shows soft optional copy when register succeeds but optional addOwner fails', async () => {
+  it('keeps install actionable when register succeeds but on-chain owner approval fails', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
     installOwnerOnly.mockResolvedValue({
       registered: true,
@@ -158,11 +158,11 @@ describe('SubAccountOwnerInstallPanel', () => {
     fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
 
     await waitFor(() => {
-      expect(screen.getByText(/4626 signing is enabled/i)).toBeTruthy()
-      expect(screen.getByText(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE)).toBeTruthy()
+      expect(screen.getByText(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE)).toBeTruthy()
+      expect(screen.getByTestId('sub-account-owner-install-button')).toBeTruthy()
     })
-    expect(screen.queryByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeNull()
-    expect(screen.queryByTestId('sub-account-owner-install-recovery')).toBeNull()
+    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
+    expect(screen.queryByTestId('sub-account-owner-install-complete')).toBeNull()
   })
 
   it('hides the button when embedded EOA is already owner', async () => {

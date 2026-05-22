@@ -1248,7 +1248,9 @@ export function useSwapExecution(params: {
       setError(
         params.executionTrack === 'none-yet'
           ? 'Swap signer is not ready yet. Open /waitlist?setup=base-app and complete "Enable 4626 signing".'
-          : 'Swap signer is not ready yet. Finish wallet setup and try again.',
+          : params.executionTrack === 'sub-account' || params.executionTrack === 'migration-pending'
+            ? 'Swap signer is not ready yet. Open 4626 in Base App, finish Enable 4626 signing on /waitlist?setup=base-app, then return here.'
+            : 'Swap signer is not ready yet. Finish wallet setup and try again.',
       )
       return
     }

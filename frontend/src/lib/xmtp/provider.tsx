@@ -60,6 +60,11 @@ import {
   writeStoredInstallationMeta,
 } from '@/lib/xmtp/xmtpLocalInstallStorage'
 import {
+  shouldAllowFirstTimeCreate,
+  shouldAttemptXmtpRestore,
+  shouldRefuseAutoCreateAfterFailedRestore,
+} from '@/lib/xmtp/xmtpConnectPolicy'
+import {
   Client,
   LogLevel,
   Opfs,
@@ -681,8 +686,9 @@ async function requestPersistentStorage(): Promise<void> {
 /**
  * Check whether an XMTP database file exists in OPFS for the given env.
  * Returns true if at least one `xmtp-{env}-*.db3` file is present.
- * When no database exists, Client.build cannot possibly succeed so callers
- * should skip directly to Client.create.
+ * When no database exists and there is no known installation marker,
+ * callers should skip Client.build and require explicit user intent
+ * before Client.create.
  */
 async function hasOpfsDatabase(): Promise<boolean> {
   try {
@@ -1544,7 +1550,10 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       let buildSucceeded = false
 
       const dbExists = await hasOpfsDatabase()
-      const shouldAttemptRestore = dbExists || installationAlreadyProvisioned
+      const shouldAttemptRestore = shouldAttemptXmtpRestore({
+        opfsDatabaseExists: dbExists,
+        hasKnownInstallation: installationAlreadyProvisioned,
+      })
 
       if (shouldAttemptRestore) {
         const restoreResult = await tryRestoreClientFromLocalState({
@@ -1583,18 +1592,24 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             return
           }
 
-          if (installationAlreadyProvisioned) {
-            setStatus('error')
-            setLocalStateResetRequired(true)
-            setError(
-              'XMTP found a previously provisioned installation for this wallet but could not restore local state. ' +
-              'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
-              'Retry after closing other tabs/windows, or use "Reset local messaging state" only if you intentionally want a fresh browser installation.',
-            )
-            return
-          }
+          if (
+            shouldRefuseAutoCreateAfterFailedRestore({
+              restoreSucceeded: false,
+              hasKnownInstallation: installationAlreadyProvisioned,
+              opfsDatabaseExists: dbExists,
+            })
+          ) {
+            if (installationAlreadyProvisioned) {
+              setStatus('error')
+              setLocalStateResetRequired(true)
+              setError(
+                'XMTP found a previously provisioned installation for this wallet but could not restore local state. ' +
+                'Refusing to auto-create a new installation to avoid revoke/grant churn. ' +
+                'Retry after closing other tabs/windows, or use "Reset local messaging state" only if you intentionally want a fresh browser installation.',
+              )
+              return
+            }
 
-          if (dbExists) {
             setStatus('error')
             setError(
               'XMTP found an existing local database but could not restore the previous installation. ' +
@@ -1605,7 +1620,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         }
       } else {
         xmtpDebug('[xmtp] No known local XMTP installation — first use on this browser')
-        if (intent !== 'user') {
+        if (
+          !shouldAllowFirstTimeCreate({
+            intent,
+            hasKnownInstallation: installationAlreadyProvisioned,
+            opfsDatabaseExists: dbExists,
+            restoreSucceeded: false,
+          })
+        ) {
           setStatus('idle')
           setError(
             'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',
@@ -1733,7 +1755,14 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         )
         return
       }
-      if (intent !== 'user') {
+      if (
+        !shouldAllowFirstTimeCreate({
+          intent,
+          hasKnownInstallation: installationAlreadyProvisioned,
+          opfsDatabaseExists: dbExists,
+          restoreSucceeded: buildSucceeded,
+        })
+      ) {
         setStatus('idle')
         setError(
           'Messaging is not enabled on this browser yet. Use "Connect Messaging" to create your first XMTP installation.',

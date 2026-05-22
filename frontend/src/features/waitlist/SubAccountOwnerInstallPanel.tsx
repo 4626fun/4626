@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { CheckCircle2, ChevronDown } from 'lucide-react'
 import { getAddress, isAddress, type Address } from 'viem'
 
@@ -9,15 +9,14 @@ import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
-
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
 import {
   mapSubAccountOwnerInstallError,
   SUB_ACCOUNT_IN_BASE_APP_HINT,
-  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
+import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
 
 export type SubAccountOwnerInstallSetup = Pick<
   SubAccountSetupControls,
@@ -37,8 +36,6 @@ type SubAccountOwnerInstallPanelProps = {
   setup?: SubAccountOwnerInstallSetup
   onSuccess?: () => void
 }
-
-type OwnerCheckState = 'idle' | 'checking' | 'needs_install' | 'already_owner'
 
 function normalizeAddress(value: string | null | undefined): Address | null {
   if (typeof value !== 'string') return null
@@ -127,10 +124,8 @@ function SubAccountOwnerInstallPanelContent(
 
   const embeddedEoa = embeddedFromProps ?? normalizeAddress(embeddedWallet?.address)
 
-  const [ownerCheck, setOwnerCheck] = useState<OwnerCheckState>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
-  const [actionWarning, setActionWarning] = useState<string | null>(null)
-  const [actionSuccess, setActionSuccess] = useState(false)
+  const [signerLinkedPendingOwner, setSignerLinkedPendingOwner] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
@@ -143,34 +138,15 @@ function SubAccountOwnerInstallPanelContent(
   const isInline = variant === 'inline'
   const baseAppSetupUrl = buildWaitlistSetupUrl('base-app')
 
-  const refreshOwnerCheck = useCallback(async () => {
-    if (!subAccount || !embeddedEoa) {
-      setOwnerCheck('idle')
-      return
-    }
-    setOwnerCheck('checking')
-    const isOwner = await readEmbeddedOwnerOnSubAccount({
-      subAccountAddress: subAccount,
-      embeddedEoaAddress: embeddedEoa,
-    })
-    if (isOwner === true) {
-      setOwnerCheck('already_owner')
-      return
-    }
-    if (isOwner === false) {
-      setOwnerCheck('needs_install')
-      return
-    }
-    setOwnerCheck('needs_install')
-  }, [embeddedEoa, subAccount])
-
-  useEffect(() => {
-    if (!canRender) {
-      setOwnerCheck('idle')
-      return
-    }
-    void refreshOwnerCheck()
-  }, [canRender, refreshOwnerCheck])
+  const {
+    status: ownerCheck,
+    refresh: refreshOwnerCheck,
+    isOwner: embeddedOwnerOnSubAccount,
+  } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: subAccount,
+    embeddedEoaAddress: embeddedEoa,
+    enabled: canRender,
+  })
 
   const progressLabel = useMemo(() => {
     if (lastStage?.stage === 'install_embedded_owner') {
@@ -185,8 +161,7 @@ function SubAccountOwnerInstallPanelContent(
   const handleInstall = useCallback(async () => {
     if (!parent || !subAccount || needsBaseAppHost) return
     setActionError(null)
-    setActionWarning(null)
-    setActionSuccess(false)
+    setSignerLinkedPendingOwner(false)
 
     const result = await installSubAccountOwnerOnly({
       parentAddress: parent,
@@ -202,17 +177,22 @@ function SubAccountOwnerInstallPanelContent(
       return
     }
 
-    setActionSuccess(true)
-    if (result.onChainOwnerWarning && !result.onChainOwnerInstalled) {
-      // Register/finalize already succeeded — optional addOwner failures must not
-      // reuse hard approval-failure copy that tells users to tap Enable again.
-      setActionWarning(SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE)
-      setShowRecovery(false)
-    } else {
-      setActionWarning(null)
-      setShowRecovery(false)
-    }
     await refreshOwnerCheck()
+
+    const ownerReady = result.alreadyOwner || result.onChainOwnerInstalled
+    if (!ownerReady) {
+      const message = mapSubAccountOwnerInstallError(
+        result.onChainOwnerWarning ??
+          'Base App did not finish the on-chain owner approval for your app wallet.',
+        { inBaseApp },
+      )
+      setActionError(message)
+      setSignerLinkedPendingOwner(true)
+      setShowRecovery(true)
+      return
+    }
+
+    setShowRecovery(false)
     onSuccess?.()
   }, [
     getLastSetupError,
@@ -250,7 +230,7 @@ function SubAccountOwnerInstallPanelContent(
     )
   }
 
-  if (ownerCheck === 'already_owner' || actionSuccess) {
+  if (embeddedOwnerOnSubAccount) {
     return (
       <div
         className={`flex items-start gap-2.5 text-left ${className}`}
@@ -262,11 +242,6 @@ function SubAccountOwnerInstallPanelContent(
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
             Your embedded key can sign for the app wallet.
           </p>
-          {actionWarning ? (
-            <p className="mt-2 text-xs leading-relaxed text-amber-200/90" role="status">
-              {actionWarning}
-            </p>
-          ) : null}
         </div>
       </div>
     )
@@ -339,6 +314,13 @@ function SubAccountOwnerInstallPanelContent(
     <p className="text-xs leading-relaxed text-zinc-400">{SUB_ACCOUNT_IN_BASE_APP_HINT}</p>
   )
 
+  const pendingOwnerBlock =
+    signerLinkedPendingOwner && !needsBaseAppHost ? (
+      <p className="text-xs leading-relaxed text-amber-200/90" role="status">
+        {SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE}
+      </p>
+    ) : null
+
   const errorBlock =
     actionError && !needsBaseAppHost ? (
       <p className="text-xs leading-relaxed text-rose-300/90" role="alert">
@@ -362,6 +344,7 @@ function SubAccountOwnerInstallPanelContent(
         </p>
         {contextHint}
         {primaryAction}
+        {pendingOwnerBlock}
         {errorBlock}
         {recoveryBlock}
       </div>
@@ -395,6 +378,7 @@ function SubAccountOwnerInstallPanelContent(
 
       {contextHint}
       {primaryAction}
+      {pendingOwnerBlock}
       {errorBlock}
       {recoveryBlock}
 
