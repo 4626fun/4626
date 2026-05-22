@@ -485,18 +485,28 @@ export async function setupSubAccount(params: {
   onStageEvent?: (event: SubAccountSetupStageEvent) => void
 }): Promise<SubAccountSetupResult> {
   const provisioned = await provisionSubAccount(params)
-  await confirmSubAccountEmbeddedOwner({
-    provider: provisioned.provider,
-    parentAddress: provisioned.parentAddress,
-    subAccountAddress: provisioned.subAccountAddress,
-    embeddedEoaAddress: params.embeddedWallet.address as Address,
-    onStageEvent: params.onStageEvent,
-  })
   await finalizeSubAccountSigner({
     ...params,
     parentAddress: provisioned.parentAddress,
     subAccountAddress: provisioned.subAccountAddress,
   })
+  try {
+    await confirmSubAccountEmbeddedOwner({
+      provider: provisioned.provider,
+      parentAddress: provisioned.parentAddress,
+      subAccountAddress: provisioned.subAccountAddress,
+      embeddedEoaAddress: params.embeddedWallet.address as Address,
+      onStageEvent: params.onStageEvent,
+    })
+  } catch (err) {
+    params.onStageEvent?.({
+      stage: 'install_embedded_owner',
+      status: 'error',
+      parentAddress: provisioned.parentAddress,
+      subAccountAddress: provisioned.subAccountAddress,
+      message: err instanceof Error ? err.message : String(err),
+    })
+  }
   return {
     subAccountAddress: provisioned.subAccountAddress,
     parentAddress: provisioned.parentAddress,

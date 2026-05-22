@@ -64,7 +64,13 @@ describe('SubAccountOwnerInstallPanel', () => {
     getLastSetupError.mockReturnValue(null)
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockReset()
     installOwnerOnly.mockReset()
-    installOwnerOnly.mockResolvedValue({ alreadyOwner: false, transactionHash: null })
+    installOwnerOnly.mockResolvedValue({
+      registered: true,
+      alreadyOwner: false,
+      transactionHash: null,
+      onChainOwnerInstalled: true,
+      onChainOwnerWarning: null,
+    })
   })
 
   it('shows the owner-install button when embedded EOA is not yet owner', async () => {

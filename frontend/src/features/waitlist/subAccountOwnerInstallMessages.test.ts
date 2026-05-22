@@ -38,4 +38,13 @@ describe('mapSubAccountOwnerInstallError', () => {
       ),
     ).toBe(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)
   })
+
+  it('maps legacy combined copy to the current in-app guidance', () => {
+    expect(
+      mapSubAccountOwnerInstallError(
+        'Base App did not approve this signing request for your 4626 app wallet. Open 4626 inside Base App (not Safari/Chrome/extensions), tap Enable 4626 signing again, and approve the wallet prompt.',
+        { inBaseApp: true },
+      ),
+    ).toBe(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)
+  })
 })

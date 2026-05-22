@@ -13,6 +13,9 @@ export const SUB_ACCOUNT_TESTNET_MESSAGE =
 export const SUB_ACCOUNT_IN_BASE_APP_HINT =
   'Approve one transaction in Base App when prompted. Your main Base wallet stays unchanged.'
 
+export const SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE =
+  '4626 signer is linked to your app wallet. Optional on-chain owner approval did not finish — swaps should still work; you can retry owner approval later if needed.'
+
 /** Strip nested setup wrapper text before classifying provider errors. */
 export function normalizeSubAccountOwnerInstallErrorSource(message: string): string {
   const trimmed = message.trim()
@@ -29,6 +32,12 @@ export function mapSubAccountOwnerInstallError(
   options: { inBaseApp: boolean },
 ): string {
   const lower = normalizeSubAccountOwnerInstallErrorSource(message).toLowerCase()
+  if (
+    lower.includes('did not approve this signing request for your 4626 app wallet') ||
+    lower.includes('open 4626 inside base app')
+  ) {
+    return options.inBaseApp ? SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE : SUB_ACCOUNT_WRONG_BROWSER_MESSAGE
+  }
   if (lower.includes('base account wallet')) {
     return options.inBaseApp
       ? SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE

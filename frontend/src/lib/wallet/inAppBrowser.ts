@@ -94,12 +94,25 @@ export function detectInAppEnvironment(): InAppEnvironment | null {
  * flags, so `isBaseAppInApp` alone false-negatives and surfaces "open in Base App"
  * copy while the user is already inside Base App.
  */
+function hasCoinbaseInjectedProvider(): boolean {
+  if (typeof window === 'undefined') return false
+  const ethereum = (window as unknown as { ethereum?: { isCoinbaseWallet?: boolean; providers?: Array<{ isCoinbaseWallet?: boolean }> } })
+    .ethereum
+  if (!ethereum) return false
+  if (Boolean(ethereum.isCoinbaseWallet)) return true
+  if (Array.isArray(ethereum.providers)) {
+    return ethereum.providers.some((provider) => Boolean(provider?.isCoinbaseWallet))
+  }
+  return false
+}
+
 export function isBaseAppInAppContext(env: InAppEnvironment | null = detectInAppEnvironment()): boolean {
   if (!env) return false
   if (env.isBaseAppInApp) return true
 
   const uaLower = env.userAgent.toLowerCase()
   if (
+    uaLower.includes('coinbase') ||
     uaLower.includes('cbios') ||
     uaLower.includes('cbandroid') ||
     uaLower.includes('baseapp') ||
@@ -112,6 +125,8 @@ export function isBaseAppInAppContext(env: InAppEnvironment | null = detectInApp
   if (/coinbase/.test(uaLower) && (uaLower.includes('wv') || env.isCoinbaseInApp)) {
     return true
   }
+
+  if (hasCoinbaseInjectedProvider()) return true
 
   return false
 }

@@ -52,9 +52,10 @@ vi.mock('./SubAccountOwnerInstallPanel', () => ({
   SubAccountOwnerInstallPanel: () => null,
 }))
 
-const fetchMock = vi.fn()
-vi.mock('@/lib/api/apiBase', () => ({
-  apiFetch: (...args: unknown[]) => fetchMock(...args),
+const registerMock = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/wallet/subAccountBaseAppRegister', () => ({
+  registerBaseAppSubAccountLink: (...args: unknown[]) => registerMock(...args),
 }))
 
 function jsonResponse(status: number, body: Record<string, unknown>): Response {
@@ -84,7 +85,7 @@ describe('WaitlistConnectBaseApp', () => {
     hookState.isSettingUp = false
     hookState.lastStage = null
     hookState.embeddedAddress = EMBED
-    fetchMock.mockReset()
+    registerMock.mockReset()
     hookState.connectWallet.mockResolvedValue(true)
     hookState.getLastSetupError.mockReturnValue(null)
     hookState.confirmOwner.mockResolvedValue({ alreadyOwner: false, transactionHash: null })
@@ -100,14 +101,9 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByTestId('skip-base-app-button')).toBeTruthy()
   })
 
-  it('single-step flow: connect wallet, provision, install owner, finalize signer, then register', async () => {
+  it('single-step flow: connect wallet, provision, finalize signer, register, then optional owner install', async () => {
     mockProvision(true)
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, {
-        success: true,
-        data: { profileId: 'p1', parentAddress: PARENT, subAccountAddress: SUB },
-      }),
-    )
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
@@ -118,19 +114,12 @@ describe('WaitlistConnectBaseApp', () => {
 
     expect(hookState.connectWallet).toHaveBeenCalled()
     await waitFor(() =>
-      expect(hookState.confirmOwner).toHaveBeenCalledWith({
-        parentAddress: PARENT,
-        subAccountAddress: SUB,
-        provider: expect.objectContaining({ request: expect.any(Function) }),
-      }),
-    )
-    await waitFor(() =>
       expect(hookState.finalize).toHaveBeenCalledWith({
         parentAddress: PARENT,
         subAccountAddress: SUB,
       }),
     )
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(registerMock).toHaveBeenCalled())
     await waitFor(
       () =>
         expect(onComplete).toHaveBeenCalledWith({
@@ -139,21 +128,29 @@ describe('WaitlistConnectBaseApp', () => {
         }),
       { timeout: 3000 },
     )
+    await waitFor(() =>
+      expect(hookState.confirmOwner).toHaveBeenCalledWith({
+        parentAddress: PARENT,
+        subAccountAddress: SUB,
+        provider: expect.objectContaining({ request: expect.any(Function) }),
+      }),
+    )
   })
 
-  it('surfaces owner-install failure before finalize', async () => {
+  it('still completes when optional owner install fails after register', async () => {
     mockProvision(true)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
     hookState.confirmOwner.mockResolvedValueOnce(null)
-    hookState.getLastSetupError.mockReturnValue(new Error('User rejected the request'))
 
+    const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
       fireEvent.click(screen.getByTestId('connect-base-app-button'))
     })
 
-    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(hookState.finalize).not.toHaveBeenCalled()
-    expect(screen.getByText(/you declined the base app request/i)).toBeTruthy()
+    await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-complete')).toBeTruthy())
+    expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeNull()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {
@@ -170,7 +167,7 @@ describe('WaitlistConnectBaseApp', () => {
 
   it('generic server error allows retry', async () => {
     mockProvision(false)
-    fetchMock.mockResolvedValueOnce(jsonResponse(500, { success: false, error: 'unexpected_error' }))
+    registerMock.mockResolvedValueOnce({ ok: false, message: 'unexpected_error', errorCode: 'unexpected_error' })
 
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={() => {}} />)
     await act(async () => {
@@ -180,12 +177,10 @@ describe('WaitlistConnectBaseApp', () => {
     expect(screen.getByText(/could not save your base app link/i)).toBeTruthy()
 
     mockProvision(false)
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse(200, { success: true, data: { profileId: 'p1', parentAddress: PARENT, subAccountAddress: SUB } }),
-    )
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
     await act(async () => {
       fireEvent.click(screen.getByTestId('retry-base-app-button'))
     })
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(registerMock).toHaveBeenCalledTimes(2))
   })
 })

@@ -15,6 +15,7 @@ import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery
 import {
   mapSubAccountOwnerInstallError,
   SUB_ACCOUNT_IN_BASE_APP_HINT,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 
@@ -128,6 +129,7 @@ function SubAccountOwnerInstallPanelContent(
 
   const [ownerCheck, setOwnerCheck] = useState<OwnerCheckState>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
+  const [actionWarning, setActionWarning] = useState<string | null>(null)
   const [actionSuccess, setActionSuccess] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
@@ -182,6 +184,7 @@ function SubAccountOwnerInstallPanelContent(
   const handleInstall = useCallback(async () => {
     if (!parent || !subAccount || needsBaseAppHost) return
     setActionError(null)
+    setActionWarning(null)
     setActionSuccess(false)
 
     const result = await installSubAccountOwnerOnly({
@@ -199,7 +202,16 @@ function SubAccountOwnerInstallPanelContent(
     }
 
     setActionSuccess(true)
-    setShowRecovery(false)
+    if (result.onChainOwnerWarning && !result.onChainOwnerInstalled) {
+      setActionWarning(
+        mapSubAccountOwnerInstallError(result.onChainOwnerWarning, { inBaseApp }) ||
+          SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_OPTIONAL_MESSAGE,
+      )
+      setShowRecovery(true)
+    } else {
+      setActionWarning(null)
+      setShowRecovery(false)
+    }
     await refreshOwnerCheck()
     onSuccess?.()
   }, [
@@ -250,6 +262,11 @@ function SubAccountOwnerInstallPanelContent(
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
             Your embedded key can sign for the app wallet.
           </p>
+          {actionWarning ? (
+            <p className="mt-2 text-xs leading-relaxed text-amber-200/90" role="status">
+              {actionWarning}
+            </p>
+          ) : null}
         </div>
       </div>
     )

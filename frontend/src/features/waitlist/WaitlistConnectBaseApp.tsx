@@ -3,9 +3,9 @@
  *
  * Base App connect flow:
  *   1. Connect Base Account + provision the per-app sub-account (passkey when creating).
- *   2. Install the Privy embedded EOA as an on-chain owner on the sub-account (addOwnerAddress).
- *   3. Wire the Privy embedded EOA as the sub-account SDK signer (silent).
- *   4. POST /api/arch-b/sub-account/baseapp/register
+ *   2. Wire the Privy embedded EOA as the sub-account SDK signer (silent).
+ *   3. POST /api/arch-b/sub-account/baseapp/register
+ *   4. Best-effort on-chain owner install on the sub-account (optional retry lane).
  *
  * Parent CSW addOwnerAddress from third-party dapps remains blocked; owner install
  * targets the per-app sub-account only.
@@ -17,10 +17,10 @@ import type { Address } from 'viem'
 
 import { Button } from '@/components/ui/Button'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
-import { apiFetch } from '@/lib/api/apiBase'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import type { SubAccountSetupStage, SubAccountSetupStageEvent } from '@/lib/wallet/subAccountSetup'
+import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   mapSubAccountOwnerInstallError,
@@ -160,35 +160,13 @@ function mapSetupFailureMessage(params: {
 }
 
 async function registerBaseAppLink(body: Record<string, string>): Promise<{ ok: boolean; message: string }> {
-  let response: Response
-  try {
-    response = await apiFetch('/api/arch-b/sub-account/baseapp/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
-    })
-  } catch (err) {
-    return {
-      ok: false,
-      message: err instanceof Error ? err.message : 'Network error while registering Base App wallet.',
-    }
-  }
-
-  let payload: { success?: boolean; error?: string } | null = null
-  try {
-    payload = (await response.json()) as { success?: boolean; error?: string } | null
-  } catch {
-    payload = null
-  }
-
-  if (response.ok && payload?.success) {
-    return { ok: true, message: '' }
-  }
-
-  const errorCode = (payload?.error ?? '').toString()
-  const fallbackMessage = errorCode || `Server returned ${response.status}.`
-  const mapped = mapRegisterError(errorCode, fallbackMessage)
+  const registered = await registerBaseAppSubAccountLink({
+    parentAddress: body.parentAddress as Address,
+    subAccountAddress: body.subAccountAddress as Address,
+    embeddedEoaAddress: body.embeddedEoaAddress as Address,
+  })
+  if (registered.ok) return { ok: true, message: '' }
+  const mapped = mapRegisterError(registered.errorCode ?? registered.message, registered.message)
   return { ok: false, message: mapped.message }
 }
 
@@ -309,25 +287,6 @@ function WaitlistConnectBaseAppReady(props: Props) {
       created: provisioned.created,
     }
 
-    const ownerInstalled = await confirmSubAccountEmbeddedOwner({
-      parentAddress: pending.parentAddress,
-      subAccountAddress: pending.subAccountAddress,
-      provider: provisioned.provider,
-    })
-    if (cancelledRef.current) return
-    if (!ownerInstalled) {
-      setView({
-        kind: 'error',
-        message: mapSetupFailureMessage({
-          error: getLastSetupError(),
-          lastStage,
-          fallback: 'Could not enable 4626 signing on your app wallet. Try again.',
-        }),
-        canRetry: true,
-      })
-      return
-    }
-
     const finalized = await finalizeSubAccountSigner({
       parentAddress: pending.parentAddress,
       subAccountAddress: pending.subAccountAddress,
@@ -347,6 +306,19 @@ function WaitlistConnectBaseAppReady(props: Props) {
     }
 
     await persistAndComplete(pending)
+
+    if (cancelledRef.current) return
+
+    const ownerInstalled = await confirmSubAccountEmbeddedOwner({
+      parentAddress: pending.parentAddress,
+      subAccountAddress: pending.subAccountAddress,
+      provider: provisioned.provider,
+    })
+    if (cancelledRef.current) return
+    if (!ownerInstalled) {
+      // Signer link + server registration succeeded; optional on-chain owner can retry later.
+      return
+    }
   }, [
     confirmSubAccountEmbeddedOwner,
     connectBaseAccountWallet,

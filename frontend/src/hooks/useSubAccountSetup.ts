@@ -21,6 +21,7 @@ import {
   type SubAccountSetupResult,
   type SubAccountSetupStageEvent,
 } from '@/lib/wallet/subAccountSetup'
+import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
 
 type SubAccountSetupState = {
   subAccountAddress: Address | null
@@ -352,25 +353,64 @@ export function useSubAccountSetup() {
       return runWithGuard(async (bundle) => {
         const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
         const ctx = await resolveSubAccountSetupContext(walletBundle)
-        const ownerResult = await confirmSubAccountEmbeddedOwner({
-          provider: ctx.provider,
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-          embeddedEoaAddress: ctx.embeddedAddress,
-          onStageEvent,
-        })
+
         await finalizeSubAccountSigner({
           ...walletBundle,
           parentAddress: addresses.parentAddress,
           subAccountAddress: addresses.subAccountAddress,
         })
+
+        const registered = await registerBaseAppSubAccountLink({
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+          embeddedEoaAddress: ctx.embeddedAddress,
+        })
+        if (!registered.ok) {
+          throw new Error(registered.message)
+        }
+
+        let ownerResult: {
+          alreadyOwner: boolean
+          transactionHash: `0x${string}` | null
+          onChainOwnerInstalled: boolean
+          onChainOwnerWarning: string | null
+        } = {
+          alreadyOwner: false,
+          transactionHash: null,
+          onChainOwnerInstalled: false,
+          onChainOwnerWarning: null,
+        }
+
+        try {
+          const installed = await confirmSubAccountEmbeddedOwner({
+            provider: ctx.provider,
+            parentAddress: addresses.parentAddress,
+            subAccountAddress: addresses.subAccountAddress,
+            embeddedEoaAddress: ctx.embeddedAddress,
+            onStageEvent,
+          })
+          ownerResult = {
+            alreadyOwner: installed.alreadyOwner,
+            transactionHash: installed.transactionHash,
+            onChainOwnerInstalled: true,
+            onChainOwnerWarning: null,
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          ownerResult.onChainOwnerWarning = message
+        }
+
         setState((prev) => ({
           ...prev,
           subAccountAddress: addresses.subAccountAddress,
           parentAddress: addresses.parentAddress,
           isSettingUp: false,
         }))
-        return ownerResult
+
+        return {
+          registered: true,
+          ...ownerResult,
+        }
       })
     },
     [onStageEvent, runWithGuard],
