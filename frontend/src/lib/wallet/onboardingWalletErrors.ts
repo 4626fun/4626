@@ -44,6 +44,12 @@ export function classifyOwnerApprovalError(error: unknown): ClassifiedOwnerAppro
   if (lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))) {
     return { message, lower, code: 'aa23_validation' }
   }
+  if (
+    lower.includes('failed to estimate gas for user operation') &&
+    lower.includes('useroperation reverted')
+  ) {
+    return { message, lower, code: 'aa23_validation' }
+  }
   if (lower.includes('userop_submission_timeout')) {
     return { message, lower, code: 'submission_timeout' }
   }

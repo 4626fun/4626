@@ -6,7 +6,12 @@ import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
-import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import {
+  ExploreHeroMetric,
+  ExploreLoadMoreButton,
+  ExploreLoadingMoreRows,
+  ExploreTableMessage,
+} from '@/components/explore/ExploreUiPrimitives'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
@@ -22,6 +27,7 @@ import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier
 import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
   flattenExplorePagedNodes,
+  formatCompactUsd,
   matchesCoinSearchQuery,
   normalizeCoinSearchQuery,
   recordExploreQueryRefresh,
@@ -156,15 +162,6 @@ async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
     // ignore and return null below
   }
   return null
-}
-
-function formatCompactUsd(v: number | null): string {
-  if (v == null || !Number.isFinite(v)) return '—'
-  const n = v
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(2)}K`
-  return `$${n.toFixed(2)}`
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -548,14 +545,6 @@ export function ExploreCreators() {
   const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
   const syncMeta = metricsQuery.data?.sync ?? null
   const metricsTotals = metricsQuery.data?.totals ?? null
-  const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
-  const metricsFreshnessRefMs = metricsQuery.dataUpdatedAt || metricsUpdatedAtMs
-  const metricsAgeMs =
-    Number.isFinite(metricsUpdatedAtMs) && Number.isFinite(metricsFreshnessRefMs)
-      ? metricsFreshnessRefMs - metricsUpdatedAtMs
-      : Number.POSITIVE_INFINITY
-  const canonicalMetricsStale = metricsAgeMs > LIVE_METRICS_REFETCH_MS * 3
-  const useLiveMetricCards = preferLiveMetricCards || canonicalMetricsStale
   const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
   const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
   const marketCapDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
@@ -682,20 +671,22 @@ export function ExploreCreators() {
   const updatedTimeDisplay = canonicalUpdatedAt
     ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : null
-  const indexedCreatorProgress =
-    !exactMetrics && creatorsTotalDisplay != null
-      ? syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalDisplay
-        ? `Indexed ${creatorsTotalDisplay.toLocaleString()} of ~${syncMeta.driftEstimateTotal.toLocaleString()} creators`
-        : `Indexed ${creatorsTotalDisplay.toLocaleString()} creators`
-      : null
+  const creatorsMetricHint =
+    creatorsNew24hUi != null
+      ? `+${creatorsNew24hUi.toLocaleString()} today`
+      : !exactMetrics && creatorsTotalDisplay != null && syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalDisplay
+        ? `~${syncMeta.driftEstimateTotal.toLocaleString()} on Zora`
+        : !exactMetrics
+          ? 'Still indexing creator coins'
+          : null
   const metricsStatusLine =
     syncStatus === 'error'
       ? 'Canonical totals retrying in background.'
-      : useLiveMetricCards
-        ? indexedCreatorProgress ?? (updatedTimeDisplay ? `Estimated totals refreshed ${updatedTimeDisplay}` : null)
-        : exactMetrics && updatedTimeDisplay
+      : updatedTimeDisplay
+        ? exactMetrics
           ? `Canonical totals refreshed ${updatedTimeDisplay}`
-          : indexedCreatorProgress
+          : `Estimated totals refreshed ${updatedTimeDisplay}`
+        : null
   const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
   const marketLabel = 'Market Cap'
   const isSearchingDirectMatches =
@@ -758,42 +749,36 @@ export function ExploreCreators() {
       subtitle="Creator Coins ranked by volume, market cap, and more."
       headerContent={
         <>
-          {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
-          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            <div
-              className="px-1 sm:px-2 py-1"
+          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <ExploreHeroMetric
+              label={creatorsLabel}
+              value={creatorsTotalUi?.toLocaleString() ?? '—'}
+              hint={creatorsMetricHint}
               title={
                 creatorsNew24hUi != null
-                  ? `+${creatorsNew24hUi.toLocaleString()} today`
-                  : 'Tracking newly created creators'
+                  ? `+${creatorsNew24hUi.toLocaleString()} new in the last 24 hours`
+                  : 'Canonical creator-coin index size'
               }
-            >
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {creatorsTotalUi?.toLocaleString() ?? '—'}
-              </div>
-            </div>
-
-            <div className="px-1 sm:px-2 py-1" title="Live market-cap snapshot">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(marketCapUi)}
-              </div>
-            </div>
-
-            <div className="px-1 sm:px-2 py-1" title="24H trade volume across creator coins">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(volume24hUi)}
-              </div>
-            </div>
-
-            <div className="px-1 sm:px-2 py-1" title="24H fees from creator-coin trading">
-              <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
-              <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(fees24hUi)}
-              </div>
-            </div>
+            />
+            <ExploreHeroMetric
+              label={marketLabel}
+              value={formatCompactUsd(marketCapUi)}
+              hint="Live market-cap snapshot"
+              accent
+              title="Live market-cap snapshot"
+            />
+            <ExploreHeroMetric
+              label="1D Vol"
+              value={formatCompactUsd(volume24hUi)}
+              hint="24H trade volume"
+              title="24H trade volume across creator coins"
+            />
+            <ExploreHeroMetric
+              label="1D Fees"
+              value={formatCompactUsd(fees24hUi)}
+              hint="24H trading fees"
+              title="24H fees from creator-coin trading"
+            />
           </div>
 
           {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}

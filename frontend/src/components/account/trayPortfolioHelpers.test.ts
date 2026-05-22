@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTrayAssetHoldings,
   buildTrayHoldings,
+  buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
   parseDebankToken,
 } from './trayPortfolioHelpers'
@@ -80,6 +81,40 @@ describe('parseDebankToken', () => {
       usdValue: 10,
     })
     expect(parsed?.tokenAddress).toBe(token.toLowerCase())
+  })
+})
+
+describe('buildTrayTokenRowsFromPortfolios', () => {
+  it('maps server portfolio topTokens into tray rows', () => {
+    const wallet = { kind: 'canonical' as const, address: CSW, label: '4626 CSW' }
+    const rows = buildTrayTokenRowsFromPortfolios({
+      wallets: [wallet],
+      portfolios: {
+        [CSW.toLowerCase()]: {
+          address: CSW,
+          totalUsdValue: 9.98,
+          topTokens: [
+            {
+              id: 'base',
+              chain: 'base',
+              name: 'Ether',
+              symbol: 'ETH',
+              amount: 0.002,
+              price: 2285,
+              usdValue: 4.57,
+            },
+          ],
+          activeChains: [],
+          protocols: [],
+          asOf: Date.now(),
+        },
+      },
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.token.id).toBe('base')
+    const holdings = buildTrayAssetHoldings(rows)
+    expect(holdings[0]?.symbol).toBe('ETH')
+    expect(holdings[0]?.usdValue).toBeCloseTo(4.57, 2)
   })
 })
 

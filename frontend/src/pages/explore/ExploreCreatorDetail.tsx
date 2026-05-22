@@ -396,14 +396,14 @@ function SocialLinks({ profile, compact = false }: { profile: ZoraProfile | null
 
   if (compact) {
     return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex flex-nowrap items-center gap-x-3">
         {links.map((link) => (
           <a
             key={link.name}
             href={link.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
           >
             <span className="text-zinc-500">{link.icon}</span>
             <span>{link.handle}</span>
@@ -465,14 +465,14 @@ function ResourceLinks({ tokenAddress, compact = false }: { tokenAddress: string
 
   if (compact) {
     return (
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      <div className="flex flex-nowrap items-center gap-x-3">
         {links.map((link) => (
           <a
             key={link.name}
             href={link.href}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
           >
             <span className="w-3.5 h-3.5 overflow-hidden shrink-0">
               <img src={link.iconUrl} alt={link.name} className="w-full h-full object-contain" />
@@ -1169,21 +1169,20 @@ export function ExploreCreatorDetail() {
             Back to Creators
           </Link>
 
-          <div className="absolute top-3 right-4 sm:top-4 sm:right-6 lg:right-8 z-20 flex flex-col items-end gap-1.5 pointer-events-auto max-w-[min(92vw,420px)] text-right">
+          <div className="absolute top-3 right-4 sm:top-4 sm:right-6 lg:right-8 z-20 flex flex-nowrap items-center justify-end gap-x-3 pointer-events-auto max-w-[min(92vw,calc(100%-2rem))] overflow-x-auto text-right">
             {website ? (
               <a
                 href={website.startsWith('http') ? website : `https://${website}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-zinc-400 hover:text-white transition-colors truncate max-w-full"
+                className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
               >
-                {website.replace(/^https?:\/\//, '')}
+                <span>{website.replace(/^https?:\/\//, '')}</span>
+                <ExternalLink className="w-3 h-3 text-zinc-500" />
               </a>
             ) : null}
-            <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
-              <SocialLinks profile={profile} compact />
-              <ResourceLinks tokenAddress={tokenAddress} compact />
-            </div>
+            <SocialLinks profile={profile} compact />
+            <ResourceLinks tokenAddress={tokenAddress} compact />
           </div>
 
           <motion.div

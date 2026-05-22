@@ -45,7 +45,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=8" />
 
     <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
          module sources stay 'self' under the production CSP. The import
@@ -250,7 +250,7 @@
            lead word, then the section concludes with a small caption
            that cues the product details below.
            ==================================================== -->
-      <section class="reveal" aria-label="What 4626 is">
+      <section class="reveal page-flow-section" aria-label="What 4626 is">
         <div class="reveal__starfield" aria-hidden="true">
           <div class="reveal__starlayer reveal__starlayer--far"></div>
           <div class="reveal__starlayer reveal__starlayer--mid"></div>
@@ -285,21 +285,23 @@
         </div>
       </section>
 
-      <!-- HOW IT WORKS — FAQ-aligned glass timeline (full detail at /faq/how-it-works) -->
-      <section id="lifecycle" class="mkt-section">
-        <div class="mkt-wrap">
-          <header class="mkt-intro mkt-reveal">
-            <span class="mkt-label">How it works</span>
-            <h2 class="mkt-headline">Deposit. Mint.<br class="mkt-br-sm" /> Distribute. Earn.</h2>
-            <p class="mkt-lede">
-              The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
-            </p>
-          </header>
+      <!-- HOW IT WORKS — scroll-story timeline (full detail at /faq/how-it-works) -->
+      <section id="lifecycle" class="mkt-section mkt-scrollstory page-flow-section">
+        <div class="mkt-scrollstory__pin">
+          <div class="mkt-wrap">
+            <header class="mkt-intro">
+              <span class="mkt-label">How it works</span>
+              <h2 class="mkt-headline">Deposit. Mint.<br class="mkt-br-sm" /> Distribute. Earn.</h2>
+              <p class="mkt-lede">
+                The complete creator vault lifecycle — four steps from first deposit to ongoing yield.
+              </p>
+            </header>
 
-          <div class="mkt-timeline">
-            <div class="mkt-timeline__rail" aria-hidden="true"></div>
+            <div class="mkt-scrollstory__stage">
+              <div class="mkt-timeline mkt-scrollstory__track">
+                <div class="mkt-timeline__rail" aria-hidden="true"></div>
 
-            <article class="mkt-step mkt-reveal">
+                <article class="mkt-step" data-story-step="1">
               <div class="mkt-step__badge" aria-hidden="true">01</div>
               <div class="mkt-glass mkt-step__panel">
                 <span class="mkt-label">Deposit</span>
@@ -324,8 +326,8 @@
               </div>
             </article>
 
-            <article class="mkt-step mkt-reveal">
-              <div class="mkt-step__badge" aria-hidden="true">02</div>
+                <article class="mkt-step" data-story-step="2">
+                  <div class="mkt-step__badge" aria-hidden="true">02</div>
               <div class="mkt-glass mkt-step__panel">
                 <span class="mkt-label">Mint</span>
                 <h3 class="mkt-step__title">Receive <span class="mkt-accent">■AKITA</span></h3>
@@ -342,8 +344,8 @@
               </div>
             </article>
 
-            <article class="mkt-step mkt-reveal">
-              <div class="mkt-step__badge" aria-hidden="true">03</div>
+                <article class="mkt-step" data-story-step="3">
+                  <div class="mkt-step__badge" aria-hidden="true">03</div>
               <div class="mkt-glass mkt-step__panel">
                 <span class="mkt-label">CCA distribution</span>
                 <h3 class="mkt-step__title">Public price discovery</h3>
@@ -381,8 +383,8 @@
               </div>
             </article>
 
-            <article class="mkt-step mkt-reveal">
-              <div class="mkt-step__badge" aria-hidden="true">04</div>
+                <article class="mkt-step" data-story-step="4">
+                  <div class="mkt-step__badge" aria-hidden="true">04</div>
               <div class="mkt-glass mkt-step__panel">
                 <span class="mkt-label">Earn</span>
                 <h3 class="mkt-step__title">Tokens go to work</h3>
@@ -431,24 +433,26 @@
                   <i>not guaranteed</i>
                 </div>
               </div>
-            </article>
-          </div>
+                </article>
+              </div>
+            </div>
 
-          <footer class="mkt-more mkt-reveal">
-            <a href="/faq/how-it-works" class="mkt-link">
-              Explore the full walkthrough
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <p class="mkt-disclaimer">
-              Nothing here is financial advice. APR ranges are variable and not guarantees — the vault can make or lose money.
-              Smart contracts can fail. Treat this as experimental unless you have independently verified the deployed contracts.
-            </p>
-          </footer>
+            <footer class="mkt-more mkt-scrollstory__footer">
+              <a href="/faq/how-it-works" class="mkt-link">
+                Explore the full walkthrough
+                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </a>
+              <p class="mkt-disclaimer">
+                Nothing here is financial advice. APR ranges are variable and not guarantees — the vault can make or lose money.
+                Smart contracts can fail. Treat this as experimental unless you have independently verified the deployed contracts.
+              </p>
+            </footer>
+          </div>
         </div>
       </section>
 
       <!-- EXAMPLE VAULTS — demo previews in FAQ glass style -->
-      <section id="vaults" class="mkt-section">
+      <section id="vaults" class="mkt-section page-flow-section">
         <div class="mkt-wrap">
           <header class="mkt-intro mkt-reveal">
             <span class="mkt-label">Example vaults</span>
@@ -527,7 +531,7 @@
       </section>
 
       <!-- FEATURES -->
-      <section id="features" class="mkt-section">
+      <section id="features" class="mkt-section page-flow-section">
         <div class="mkt-wrap">
           <header class="mkt-intro mkt-reveal">
             <span class="mkt-label">Features</span>
@@ -567,7 +571,7 @@
         </div>
       </section>
       <!-- CTA -->
-      <section id="cta" class="cta">
+      <section id="cta" class="cta page-flow-section">
         <div class="cta__inner">
           <!-- Wordmark lockup, Renaissance-style -->
           <div class="cta__lockup" aria-hidden="true">
@@ -1162,6 +1166,7 @@
       // Reveal on scroll — use rootMargin so elements reveal slightly before entering viewport
       (function () {
         const els = document.querySelectorAll('.reveal, .cta__inner, .hero__stats, .mkt-reveal');
+        const scrollStorySteps = document.querySelectorAll('.mkt-scrollstory .mkt-step');
         if (!('IntersectionObserver' in window)) {
           els.forEach((e) => e.classList.add('is-in'));
           return;
@@ -1178,6 +1183,7 @@
           { threshold: 0.01, rootMargin: '0px 0px -10% 0px' }
         );
         els.forEach((e) => {
+          if (scrollStorySteps.length && e.closest('.mkt-scrollstory')) return;
           io.observe(e);
           // If element is already on screen at load, reveal immediately
           const r = e.getBoundingClientRect();
@@ -1186,7 +1192,12 @@
           }
         });
         // Safety net: reveal everything after 1.2s in case IO never fires (e.g. printing/screenshots)
-        setTimeout(() => els.forEach((e) => e.classList.add('is-in')), 1200);
+        setTimeout(() => {
+          els.forEach((e) => {
+            if (scrollStorySteps.length && e.closest('.mkt-scrollstory')) return;
+            e.classList.add('is-in');
+          });
+        }, 1200);
       })();
     </script>
 
@@ -1270,6 +1281,111 @@
           });
         }
         function onScroll() { if (!raf) raf = requestAnimationFrame(update); }
+        window.addEventListener('scroll', onScroll, { passive: true });
+        window.addEventListener('resize', onScroll, { passive: true });
+        update();
+      })();
+    </script>
+
+    <!-- How it works scroll-story: steps accumulate as user scrolls through #lifecycle -->
+    <script>
+      (function () {
+        const section = document.querySelector('.mkt-scrollstory');
+        if (!section) return;
+
+        const track = section.querySelector('.mkt-scrollstory__track');
+        const stage = section.querySelector('.mkt-scrollstory__stage');
+        const steps = Array.from(section.querySelectorAll('.mkt-step[data-story-step]'));
+
+        const storyClasses = ['is-story-1', 'is-story-2', 'is-story-3', 'is-story-4', 'is-story-done'];
+
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          storyClasses.forEach((cls) => section.classList.add(cls));
+          return;
+        }
+
+        const isMobile = matchMedia('(max-width: 720px)').matches;
+        const stops = isMobile
+          ? [
+              { p: 0, step: 1 },
+              { p: 0.24, step: 2 },
+              { p: 0.46, step: 3 },
+              { p: 0.68, step: 4 },
+              { p: 0.86, done: true },
+            ]
+          : [
+              { p: 0, step: 1 },
+              { p: 0.28, step: 2 },
+              { p: 0.50, step: 3 },
+              { p: 0.72, step: 4 },
+              { p: 0.88, done: true },
+            ];
+
+        let raf = null;
+        let lastActiveStep = -1;
+
+        function measureOffset(activeStep) {
+          if (!track || !stage || activeStep < 1) {
+            section.style.setProperty('--story-offset', '0px');
+            section.style.setProperty('--story-rail-height', '72px');
+            return;
+          }
+
+          const gap = parseFloat(getComputedStyle(track).gap) || 16;
+          let heightThroughActive = 0;
+          for (let i = 0; i < activeStep; i++) {
+            const el = steps[i];
+            if (el) heightThroughActive += el.offsetHeight + (i > 0 ? gap : 0);
+          }
+
+          const stageHeight = stage.clientHeight;
+          const targetBottom = stageHeight * 0.78;
+          let offset = 0;
+          if (heightThroughActive > targetBottom) {
+            offset = -(heightThroughActive - targetBottom);
+          }
+          if (heightThroughActive > stageHeight) {
+            offset = Math.min(offset, -(heightThroughActive - stageHeight));
+          }
+
+          section.style.setProperty('--story-offset', offset + 'px');
+          section.style.setProperty('--story-rail-height', Math.max(72, heightThroughActive - 32) + 'px');
+        }
+
+        function update() {
+          raf = null;
+          const rect = section.getBoundingClientRect();
+          const vh = window.innerHeight || document.documentElement.clientHeight;
+          const total = rect.height - vh;
+          if (total <= 0) return;
+
+          const progress = Math.max(0, Math.min(1, (-rect.top) / total));
+          let activeStep = 0;
+          let done = false;
+
+          stops.forEach(({ p, step, done: isDone }) => {
+            if (step && progress >= p) activeStep = step;
+            if (isDone && progress >= p) done = true;
+          });
+
+          storyClasses.forEach((cls) => section.classList.remove(cls));
+          if (activeStep >= 1) section.classList.add('is-story-' + activeStep);
+          if (done) section.classList.add('is-story-done');
+
+          if (activeStep !== lastActiveStep) {
+            lastActiveStep = activeStep;
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => measureOffset(activeStep));
+            });
+          } else if (activeStep > 0) {
+            measureOffset(activeStep);
+          }
+        }
+
+        function onScroll() {
+          if (!raf) raf = requestAnimationFrame(update);
+        }
+
         window.addEventListener('scroll', onScroll, { passive: true });
         window.addEventListener('resize', onScroll, { passive: true });
         update();

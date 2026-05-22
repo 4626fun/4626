@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
+import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
@@ -67,16 +67,24 @@ function MarketingLayout() {
 
 export function RootRouter() {
   const location = useLocation()
-  const isMarketingHost = getHostMode() === 'marketing'
+  const hostMode = getHostMode()
+  const isMarketingHost = hostMode === 'marketing'
   const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
   const shouldRouteToApp =
     isMarketingHost &&
     isAppOnlyPath(location.pathname) &&
     !isCurrentWindowUrl(appRedirectTarget)
+  const marketingHomeTarget = `${MARKETING_ORIGIN}${location.pathname}${location.search}${location.hash}`
+  const shouldRouteAppHostRootToMarketing =
+    hostMode === 'app' &&
+    location.pathname === '/' &&
+    !isCurrentWindowUrl(marketingHomeTarget)
 
   return (
     <>
-      {shouldRouteToApp ? (
+      {shouldRouteAppHostRootToMarketing ? (
+        <AppHostRedirect target={marketingHomeTarget} />
+      ) : shouldRouteToApp ? (
         <AppHostRedirect target={appRedirectTarget} />
       ) : (
         <Routes>

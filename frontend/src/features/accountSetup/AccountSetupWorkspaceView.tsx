@@ -180,7 +180,7 @@ export function AccountSetupWorkspaceView(props: {
     providerCollision,
     readableCswOwners,
     zoraCrossAppCount,
-    zoraHandoffUrl,
+    requiresBaseAppForOwnerInstall,
     zoraLinked,
   } = controller
   const copyAddress = useCallback((addr: string) => {
@@ -284,7 +284,8 @@ export function AccountSetupWorkspaceView(props: {
           ? 2
           : 1
     const ownerWalletConnecting = busyProvider === 'owner_wallet'
-    const canSubmitSigningApproval = connectedOwnerReady || connectedCanonicalWalletSelected
+    const canSubmitSigningApproval =
+      connectedOwnerReady || (connectedCanonicalWalletSelected && !requiresBaseAppForOwnerInstall)
     const primarySigningLabel = needsBaseAccountReconnect
       ? 'Reconnect via Base Account'
       : canSubmitSigningApproval
@@ -702,7 +703,25 @@ export function AccountSetupWorkspaceView(props: {
                     ) : (
                       subAccountOwnerInstallPanel
                     )}
-                    {shouldHintBaseAccountForZora ? (
+                    {requiresBaseAppForOwnerInstall ? (
+                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
+                        Your Zora smart wallet is passkey-controlled. Owner install cannot finish from this
+                        desktop browser — open{' '}
+                        {baseAppUrl ? (
+                          <a
+                            href={baseAppUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-semibold text-brand-50 underline decoration-dotted underline-offset-2"
+                          >
+                            Base app
+                          </a>
+                        ) : (
+                          <span className="font-semibold">Base app</span>
+                        )}{' '}
+                        or connect an on-chain EOA owner in the wallet connector first.
+                      </div>
+                    ) : shouldHintBaseAccountForZora ? (
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
                         in the wallet connector. Your Zora smart wallet is passkey-controlled,
@@ -907,7 +926,7 @@ export function AccountSetupWorkspaceView(props: {
                     <div className="text-[11px] uppercase tracking-[0.18em] text-brand-200">Step 1</div>
                     <div className="text-base font-medium text-white">Link your Zora identity</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Start with Zora so we can recover your creator identity and map your canonical smart wallet with fewer retries.
+                      Connect with Zora through Privy cross-app auth (read-only) so we can recover your creator identity and map your canonical smart wallet.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -935,14 +954,9 @@ export function AccountSetupWorkspaceView(props: {
                       onClick={() => void onLinkZora()}
                       className="inline-flex"
                     >
-                      {busyProvider === 'zora_cross_app' ? 'Linking...' : 'Link Zora'}
+                      {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect with Zora'}
                     </Button>
                   )}
-                  <Button variant="secondary" asChild>
-                    <a href={zoraHandoffUrl} target="_blank" rel="noreferrer">
-                      Open Zora
-                    </a>
-                  </Button>
                   {!zoraLinked ? (
                     <button
                       type="button"

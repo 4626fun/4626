@@ -382,3 +382,11 @@ export function formatTokenAmount(value: number): string {
   if (abs < 1000) return abs.toFixed(4)
   return abs.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
+
+export function formatCompactUsd(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return '—'
+  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`
+  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
+  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}K`
+  return `$${v.toFixed(2)}`
+}

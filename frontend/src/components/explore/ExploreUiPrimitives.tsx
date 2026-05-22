@@ -205,3 +205,28 @@ export function ExploreLoadMoreButton({
     </div>
   )
 }
+
+type ExploreHeroMetricProps = {
+  label: string
+  value: string
+  hint?: string | null
+  title?: string
+  accent?: boolean
+}
+
+export function ExploreHeroMetric({ label, value, hint, title, accent = false }: ExploreHeroMetricProps) {
+  return (
+    <div
+      className={`vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
+        accent ? 'bg-blue-950/16' : 'bg-white/[0.03]'
+      }`}
+      title={title}
+    >
+      <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{label}</div>
+      <div className="mt-1 text-xl sm:text-[26px] font-semibold tracking-tight text-white tabular-nums lining-nums">
+        {value}
+      </div>
+      {hint ? <div className="app-meta-value mt-1 text-zinc-500">{hint}</div> : null}
+    </div>
+  )
+}

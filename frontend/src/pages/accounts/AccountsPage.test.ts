@@ -129,7 +129,7 @@ describe('AccountsPage', () => {
     expect(html).toContain('Workspace')
     expect(html).toContain('Open leaderboard')
     expect(html).toContain('Account settings')
-    expect(html).toContain('Open Zora')
+    expect(html).toContain('Connect with Zora')
     expect(html).toContain('Refresh Zora signals')
     expect(html).toContain('Owner authority')
     expect(html).toContain('Current owners')

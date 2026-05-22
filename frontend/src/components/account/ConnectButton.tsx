@@ -16,7 +16,7 @@ import {
 } from '@/components/account/trayEvents'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { fetchDebankTokenList, fetchDebankTotalBalanceBatch, type DebankToken } from '@/lib/debank/client'
+import { fetchDebankTotalBalanceBatch, fetchDebankWalletPortfolioBatch } from '@/lib/debank/client'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
@@ -26,6 +26,7 @@ import {
 import {
   buildTrayAssetHoldings,
   buildTrayHoldings,
+  buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
   buildTrayZoraHoldings,
   collectZoraLookupAddresses,
@@ -34,7 +35,6 @@ import {
   type TrayNetworkHolding,
   type TrayTokenHolding,
   type TrayWalletSource,
-  type TrayWalletTokenRow,
 } from '@/components/account/trayPortfolioHelpers'
 
 type ConnectButtonStateInput = {
@@ -408,30 +408,26 @@ export function ConnectButton({
       }),
     [trayBalancesQuery.data, trayWalletSources],
   )
-  const trayTokenRowsQuery = useQuery({
-    queryKey: ['account-tray', 'debank-token-rows', zoraTokenWalletKey],
+  const trayPortfolioQuery = useQuery({
+    queryKey: ['account-tray', 'debank-wallet-portfolio', zoraTokenWalletKey],
     enabled: auth.hasSession && zoraTokenWalletSources.length > 0,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
-      const lists = await mapWithLimit(zoraTokenWalletSources, 2, async (wallet) => {
-        const list = await fetchDebankTokenList({ address: wallet.address, chainId: 'base' })
-        return {
-          wallet,
-          tokens: list?.tokens ?? [],
-        }
+      const batch = await fetchDebankWalletPortfolioBatch({
+        addresses: zoraTokenWalletSources.map((wallet) => wallet.address),
+        topTokenCount: 50,
       })
-      return lists.flatMap((entry) =>
-        entry.tokens.map((token) => ({
-          token,
-          wallet: entry.wallet,
-        })),
-      )
+      return batch?.results ?? null
     },
   })
   const trayTokenRows = useMemo(
-    () => (trayTokenRowsQuery.data ?? []) as TrayWalletTokenRow[],
-    [trayTokenRowsQuery.data],
+    () =>
+      buildTrayTokenRowsFromPortfolios({
+        wallets: zoraTokenWalletSources,
+        portfolios: trayPortfolioQuery.data ?? null,
+      }),
+    [trayPortfolioQuery.data, zoraTokenWalletSources],
   )
   const trayTokenAddressesKey = useMemo(
     () => collectZoraLookupAddresses(trayTokenRows).join(','),
@@ -459,23 +455,16 @@ export function ConnectButton({
       return out
     },
   })
-  const trayZoraTokenKeys = useMemo(() => {
-    const zoraMap = trayZoraTokensQuery.data ?? {}
-    return new Set(
-      Object.entries(zoraMap)
-        .filter(([, coin]) => Boolean(coin))
-        .map(([address]) => address.toLowerCase()),
-    )
-  }, [trayZoraTokensQuery.data])
-  const trayBaseTokens = useMemo<TrayAssetHolding[]>(
-    () => buildTrayAssetHoldings(trayTokenRows, { excludeTokenKeys: trayZoraTokenKeys }),
-    [trayTokenRows, trayZoraTokenKeys],
+  const trayHoldingsList = useMemo<TrayAssetHolding[]>(
+    () => buildTrayAssetHoldings(trayTokenRows),
+    [trayTokenRows],
   )
   const trayZoraTokens = useMemo<TrayTokenHolding[]>(
     () => buildTrayZoraHoldings(trayTokenRows, trayZoraTokensQuery.data ?? {}),
     [trayTokenRows, trayZoraTokensQuery.data],
   )
-  const trayZoraTokensLoading = trayTokenRowsQuery.isLoading || trayZoraTokensQuery.isLoading
+  const trayHoldingsLoading = trayPortfolioQuery.isLoading || trayBalancesQuery.isLoading
+  const trayZoraTokensLoading = trayPortfolioQuery.isLoading || trayZoraTokensQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
   const trayPointsLookupWallet = useMemo(() => {
     const candidate =
@@ -674,9 +663,9 @@ export function ConnectButton({
                   aggregateUsd={trayHoldings.aggregateUsd}
                   activeNetworkLabel={trayHoldings.activeNetworkLabel}
                   rows={trayHoldings.rows}
-                  loading={trayBalancesQuery.isLoading}
-                  baseTokens={trayBaseTokens}
-                  baseTokensLoading={trayTokenRowsQuery.isLoading}
+                  loading={trayHoldingsLoading}
+                  holdings={trayHoldingsList}
+                  holdingsLoading={trayPortfolioQuery.isLoading}
                   zoraTokens={trayZoraTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
@@ -833,9 +822,9 @@ export function ConnectButton({
                   aggregateUsd={trayHoldings.aggregateUsd}
                   activeNetworkLabel={trayHoldings.activeNetworkLabel}
                   rows={trayHoldings.rows}
-                  loading={trayBalancesQuery.isLoading}
-                  baseTokens={trayBaseTokens}
-                  baseTokensLoading={trayTokenRowsQuery.isLoading}
+                  loading={trayHoldingsLoading}
+                  holdings={trayHoldingsList}
+                  holdingsLoading={trayPortfolioQuery.isLoading}
                   zoraTokens={trayZoraTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
@@ -995,15 +984,17 @@ function RelayTrayPortfolioModule(props: {
   activeNetworkLabel: string
   rows: TrayNetworkHolding[]
   loading: boolean
-  baseTokens: TrayAssetHolding[]
-  baseTokensLoading: boolean
+  holdings: TrayAssetHolding[]
+  holdingsLoading: boolean
   zoraTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
 }) {
-  const [expandedNetworkId, setExpandedNetworkId] = useState<string | null>(null)
+  const [networksExpanded, setNetworksExpanded] = useState(false)
   const topRows = props.rows.slice(0, 6)
   const activityRows = props.rows.slice(0, 4)
-  const topBaseTokens = props.baseTokens.slice(0, 12)
+  const topHoldings = props.holdings.slice(0, 24)
+  const hasBalanceWithoutTokens =
+    !props.holdingsLoading && topHoldings.length === 0 && props.aggregateUsd > 0.01
 
   return (
     <div className="px-4 pt-2 pb-3">
@@ -1031,146 +1022,83 @@ function RelayTrayPortfolioModule(props: {
         </div>
 
         {props.tab === 'tokens' ? (
-          <div className="mt-2 space-y-1">
-            {props.loading ? (
+          <div className="mt-3">
+            <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Holdings</div>
+            {props.loading || props.holdingsLoading ? (
               <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                Loading balances…
+                Loading token balances…
               </div>
-            ) : topRows.length === 0 ? (
+            ) : topHoldings.length === 0 ? (
               <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                No balances found yet.
+                {hasBalanceWithoutTokens
+                  ? `Portfolio total is ${formatUsdValue(props.aggregateUsd)}, but individual tokens could not be loaded. Try again in a moment.`
+                  : 'No token balances found yet.'}
               </div>
             ) : (
-              topRows.map((row) => {
-                const expanded = expandedNetworkId === row.networkId
-                return (
-                  <div key={row.networkId} className="rounded-lg border border-white/8 bg-black/20">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedNetworkId(expanded ? null : row.networkId)}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left"
-                    >
-                      {row.networkLogoUrl ? (
-                        <img src={row.networkLogoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
-                      ) : (
-                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                          <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
-                        </span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] text-white">{row.networkLabel}</span>
-                        <span className="block text-[10px] text-zinc-500">
-                          {row.wallets.length} wallet lane{row.wallets.length > 1 ? 's' : ''}
-                        </span>
-                      </span>
-                      <span className="text-[12px] font-medium tabular-nums text-zinc-100">{formatUsdValue(row.usdTotal)}</span>
-                      <ChevronDown className={`h-3.5 w-3.5 text-zinc-500 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                    </button>
-                    {expanded ? (
-                      <div className="space-y-1 border-t border-white/8 px-3 py-2">
-                        {row.wallets
-                          .sort((a, b) => b.usdValue - a.usdValue)
-                          .map((wallet) => (
-                            <div key={`${row.networkId}:${wallet.kind}:${wallet.address}`} className="flex items-center justify-between gap-2">
-                              <span className="min-w-0">
-                                <span className="block truncate text-[11px] text-zinc-300">{wallet.label}</span>
-                                <span className="block text-[10px] text-zinc-600">{formatAddress(wallet.address)}</span>
-                              </span>
-                              <span className="text-[11px] tabular-nums text-zinc-300">{formatUsdValue(wallet.usdValue)}</span>
-                            </div>
-                          ))}
-                        {row.networkId === 'base' ? (
-                          <div className="mt-2 border-t border-white/8 pt-2">
-                            <div className="px-0.5 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
-                              Tokens on Base
-                            </div>
-                            {props.baseTokensLoading ? (
-                              <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
-                                Loading assets…
-                              </div>
-                            ) : topBaseTokens.length === 0 ? (
-                              <div className="rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5 text-[10px] text-zinc-500">
-                                {props.zoraTokens.length > 0
-                                  ? 'Other Base tokens appear under Zora tokens below.'
-                                  : 'No Base token balances found yet.'}
-                              </div>
-                            ) : (
-                              <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
-                                {topBaseTokens.map((token) => (
-                                  <div
-                                    key={`base-asset:${token.tokenKey}`}
-                                    className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-2.5 py-1.5"
-                                  >
-                                    {token.logoUrl ? (
-                                      <img
-                                        src={token.logoUrl}
-                                        alt=""
-                                        className="h-5 w-5 shrink-0 rounded-full border border-white/10"
-                                      />
-                                    ) : (
-                                      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                                        <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
-                                      </span>
-                                    )}
-                                    <span className="min-w-0 flex-1">
-                                      <span className="block truncate text-[10px] text-zinc-200">{token.symbol}</span>
-                                      <span className="block truncate text-[10px] text-zinc-600">
-                                        {formatTokenAmount(token.amount)}
-                                      </span>
-                                    </span>
-                                    <span className="text-[10px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })
+              <div className="max-h-64 space-y-1 overflow-y-auto pr-1">
+                {topHoldings.map((token) => (
+                  <RelayTrayHoldingRow key={`holding:${token.tokenKey}`} token={token} />
+                ))}
+              </div>
             )}
-            <div className="mt-3 border-t border-white/8 pt-2">
-              <div className="px-1 pb-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Zora tokens</div>
-              {props.zoraTokensLoading ? (
-                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  Loading Zora token balances…
-                </div>
-              ) : props.zoraTokens.length === 0 ? (
-                <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  No Zora-tagged token holdings found on Base.
-                </div>
-              ) : (
-                <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
-                  {props.zoraTokens.map((token) => (
-                    <div
-                      key={`zora:${token.tokenKey}`}
-                      className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2"
-                    >
-                      {token.logoUrl ? (
-                        <img src={token.logoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
-                      ) : (
-                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
-                          <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
-                        </span>
-                      )}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12px] text-white">{token.symbol}</span>
-                        <span className="block truncate text-[10px] text-zinc-600">
-                          {formatTokenAmount(token.amount)} · {token.walletCount} wallet lane{token.walletCount > 1 ? 's' : ''}
-                        </span>
-                      </span>
-                      <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(token.usdValue)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+            {topRows.length > 0 ? (
+              <div className="mt-3 border-t border-white/8 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNetworksExpanded((current) => !current)}
+                  className="flex w-full items-center justify-between gap-2 px-0.5 py-1 text-left"
+                >
+                  <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                    By network ({topRows.length})
+                  </span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 shrink-0 text-zinc-500 transition-transform ${networksExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {networksExpanded ? (
+                  <div className="mt-1 space-y-1">
+                    {topRows.map((row) => (
+                      <div
+                        key={row.networkId}
+                        className="flex items-center gap-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2"
+                      >
+                        {row.networkLogoUrl ? (
+                          <img src={row.networkLogoUrl} alt="" className="h-5 w-5 shrink-0 rounded-full border border-white/10" />
+                        ) : (
+                          <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+                            <span className="h-2.5 w-2.5 rounded-sm bg-[rgb(var(--brand-primary))]" />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-zinc-200">{row.networkLabel}</span>
+                        <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {props.zoraTokens.length > 0 || props.zoraTokensLoading ? (
+              <div className="mt-3 border-t border-white/8 pt-2">
+                <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Zora creator coins</div>
+                {props.zoraTokensLoading ? (
+                  <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
+                    Loading Zora coin metadata…
+                  </div>
+                ) : (
+                  <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
+                    {props.zoraTokens.map((token) => (
+                      <RelayTrayHoldingRow key={`zora:${token.tokenKey}`} token={token} subtitle="Zora coin" />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="mt-2 space-y-1">
-            {activityRows.length === 0 && topBaseTokens.length === 0 ? (
+            {activityRows.length === 0 && topHoldings.length === 0 ? (
               <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
                 No recent portfolio activity yet.
               </div>
@@ -1185,7 +1113,7 @@ function RelayTrayPortfolioModule(props: {
                     <span className="text-[12px] tabular-nums text-zinc-300">{formatUsdValue(row.usdTotal)}</span>
                   </div>
                 ))}
-                {topBaseTokens.slice(0, 3).map((token) => (
+                {topHoldings.slice(0, 3).map((token) => (
                   <div
                     key={`activity-token:${token.tokenKey}`}
                     className="flex items-center justify-between rounded-lg border border-white/8 bg-black/20 px-3 py-2"
@@ -1202,6 +1130,28 @@ function RelayTrayPortfolioModule(props: {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string }) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+      {props.token.logoUrl ? (
+        <img src={props.token.logoUrl} alt="" className="h-8 w-8 shrink-0 rounded-full border border-white/10" />
+      ) : (
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04]">
+          <span className="h-3 w-3 rounded-sm bg-[rgb(var(--brand-primary))]" />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-medium text-white">{props.token.symbol}</span>
+        <span className="block truncate text-[11px] text-zinc-500">
+          {formatTokenAmount(props.amount)}
+          {props.subtitle ? ` · ${props.subtitle}` : ''}
+        </span>
+      </span>
+      <span className="text-[13px] font-medium tabular-nums text-zinc-100">{formatUsdValue(props.token.usdValue)}</span>
     </div>
   )
 }

@@ -1,10 +1,12 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
+import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
+import { LoadingText } from '@/components/ui/LoadingState'
+import { formatCompactUsd } from '@/features/explore/exploreShared'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { LoadingText } from '@/components/ui/LoadingState'
 
 type ExploreMetricHistoryPoint = {
   date: string
@@ -16,6 +18,9 @@ type ExploreMetrics = {
   updatedAt: string
   exact: boolean
   syncStatus: 'idle' | 'running' | 'error'
+  sync?: {
+    driftEstimateTotal: number | null
+  }
   totals: {
     creatorsTotal: number | null
     creatorsNew24h: number | null
@@ -47,14 +52,6 @@ async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
   return null
 }
 
-function formatCompactUsd(v: number | null | undefined): string {
-  if (v == null || !Number.isFinite(v)) return '—'
-  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(2)}B`
-  if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(2)}M`
-  if (v >= 1_000) return `$${(v / 1_000).toFixed(2)}K`
-  return `$${v.toFixed(2)}`
-}
-
 function joinClasses(...parts: Array<string | undefined | null | false>): string {
   return parts.filter(Boolean).join(' ')
 }
@@ -78,6 +75,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   const updatedAt = metricsQuery.data?.updatedAt ?? null
   const status = metricsQuery.data?.syncStatus ?? 'idle'
   const exact = metricsQuery.data?.exact === true
+  const syncMeta = metricsQuery.data?.sync ?? null
 
   const statusLine = useMemo(() => {
     if (!updatedAt) return 'Canonical totals unavailable'
@@ -92,49 +90,48 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
   const marketCap = totals?.creatorCoinsMarketCapUsd
   const volume24h = totals?.creatorCoinsVolume24hUsd
   const fees24h = totals?.creatorCoinsFees24hUsd
+  const creatorsLabel = exact ? 'Creators' : 'Indexed creators'
+  const creatorsMetricHint =
+    creatorsNew24h != null
+      ? `+${creatorsNew24h.toLocaleString()} today`
+      : !exact && creatorsTotal != null && syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotal
+        ? `~${syncMeta.driftEstimateTotal.toLocaleString()} on Zora`
+        : !exact
+          ? 'Still indexing creator coins'
+          : null
 
   return (
     <div className={joinClasses('space-y-2', className)}>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">Creators</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            {creatorsNew24h != null ? `+${creatorsNew24h.toLocaleString()} today` : 'Tracking newly created creators'}
-          </div>
-        </div>
-
-        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">Market Cap</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(marketCap)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            Live market-cap snapshot
-          </div>
-        </div>
-
-        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(volume24h)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            24H trade volume across creator coins
-          </div>
-        </div>
-
-        <div className="vault-hover-lift rounded-xl sm:rounded-2xl bg-white/[0.03] px-3 sm:px-4 py-2.5 sm:py-3">
-          <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
-          <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-            {formatCompactUsd(fees24h)}
-          </div>
-          <div className="app-meta-value mt-0.5 hidden sm:block">
-            24H fees from creator-coin trading
-          </div>
-        </div>
+        <ExploreHeroMetric
+          label={creatorsLabel}
+          value={creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
+          hint={creatorsMetricHint ?? 'Tracking newly created creators'}
+          title={
+            creatorsNew24h != null
+              ? `+${creatorsNew24h.toLocaleString()} new in the last 24 hours`
+              : 'Canonical creator-coin index size'
+          }
+        />
+        <ExploreHeroMetric
+          label="Market Cap"
+          value={formatCompactUsd(marketCap)}
+          hint="Live market-cap snapshot"
+          accent
+          title="Live market-cap snapshot"
+        />
+        <ExploreHeroMetric
+          label="1D Vol"
+          value={formatCompactUsd(volume24h)}
+          hint="24H trade volume"
+          title="24H trade volume across creator coins"
+        />
+        <ExploreHeroMetric
+          label="1D Fees"
+          value={formatCompactUsd(fees24h)}
+          hint="24H trading fees"
+          title="24H fees from creator-coin trading"
+        />
       </div>
 
       <div className="app-meta-value text-right text-zinc-500/90">

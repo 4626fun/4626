@@ -462,8 +462,21 @@ export function useAccountSetupController(params: {
       return
     }
 
+    const hasOnchainEoaOwner = cswOwnersState.owners.some(
+      (owner) => owner.isAddressOwner && owner.ownerAddress,
+    )
+    const passkeyOnlyCanonicalCsw =
+      cswOwnersState.status === 'ready' && cswOwnersState.owners.length > 0 && !hasOnchainEoaOwner
+
     if (connectedCanonicalWalletSelected) {
-      setConnectedOwnerState({ value: true, reason: 'ok' })
+      // Passkey-owned Zora CSWs cannot complete owner install from a desktop
+      // browser session — WebAuthn RP IDs are Coinbase-scoped. Steer to Base App
+      // or an on-chain EOA owner instead of treating CSW connect as signing-ready.
+      if (passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment()) {
+        setConnectedOwnerState({ value: null, reason: 'passkey_requires_base_app' })
+      } else {
+        setConnectedOwnerState({ value: true, reason: 'ok' })
+      }
       return
     }
 
@@ -482,7 +495,15 @@ export function useAccountSetupController(params: {
     return () => {
       cancelled = true
     }
-  }, [canonicalCswAddress, connectedCanonicalWalletSelected, ownerSignerAddress, ownerSignerChainId, publicClient])
+  }, [
+    canonicalCswAddress,
+    connectedCanonicalWalletSelected,
+    cswOwnersState.owners,
+    cswOwnersState.status,
+    ownerSignerAddress,
+    ownerSignerChainId,
+    publicClient,
+  ])
 
   useEffect(() => {
     let cancelled = false
@@ -812,7 +833,7 @@ export function useAccountSetupController(params: {
         Number(zoraError?.status) === 401 ||
         String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
       ) {
-        setError('Privy cross-app Zora auth is unavailable right now. Open Zora, confirm your wallet there, then return here and use Refresh Zora signals.')
+        setError('Privy cross-app Zora auth is unavailable right now. Use Connect with Zora again, or refresh signals if you already linked.')
       } else {
         setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
       }
@@ -1001,6 +1022,20 @@ export function useAccountSetupController(params: {
     const lower = connectedAddress.toLowerCase()
     return onchainEoaOwnerCandidates.find((c) => c.ownerAddress.toLowerCase() === lower) ?? null
   }, [connectedAddress, onchainEoaOwnerCandidates])
+  const passkeyOnlyCanonicalCsw = useMemo(
+    () =>
+      Boolean(
+        canonicalCswAddress &&
+          cswOwnersState.status === 'ready' &&
+          cswOwnersState.owners.length > 0 &&
+          onchainEoaOwnerCandidates.length === 0,
+      ),
+    [canonicalCswAddress, cswOwnersState.owners.length, cswOwnersState.status, onchainEoaOwnerCandidates.length],
+  )
+  const requiresBaseAppForOwnerInstall = useMemo(
+    () => passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment() && !connectedOnchainEoaOwner,
+    [connectedOnchainEoaOwner, passkeyOnlyCanonicalCsw],
+  )
 
   const submitOwnerInstallViaOnchainEoa = useCallback(
     async (txRequest: PreparedOwnerTxRequest): Promise<`0x${string}`> => {
@@ -1165,13 +1200,26 @@ export function useAccountSetupController(params: {
     setOwnerDelegationFlags(null)
     try {
       // ── Owner-approval path ─────────────────────────────────────────
+      if (requiresBaseAppForOwnerInstall) {
+        const setupBaseAppUrl = ownerDelegationFlags?.baseAppUrl?.trim() || null
+        const baseAppHint = setupBaseAppUrl
+          ? ` Open Base app: ${setupBaseAppUrl}`
+          : ' Open Base app and finish signing there.'
+        throw new Error(
+          `Your Zora Coinbase Smart Wallet is passkey-controlled and cannot approve owner install from this desktop browser.${baseAppHint} Or connect an on-chain EOA owner wallet here first.`,
+        )
+      }
+
       const ownerCheck = await checkEoaOwnershipOfCsw({
         publicClient,
         chainId: ownerSignerChainId,
         cswAddress: canonicalCswAddress,
         ownerAddress: connectedCanonicalWalletSelected ? canonicalCswAddress : ownerSignerAddress ?? null,
       })
-      const effectiveOwnerCheck = connectedCanonicalWalletSelected ? { value: true, reason: 'ok' as const } : ownerCheck
+      const effectiveOwnerCheck =
+        connectedCanonicalWalletSelected && !requiresBaseAppForOwnerInstall
+          ? { value: true, reason: 'ok' as const }
+          : ownerCheck
       setConnectedOwnerState(effectiveOwnerCheck)
       if (effectiveOwnerCheck.value !== true) {
         if (ownerCheck.reason === 'network_mismatch') {
@@ -1325,9 +1373,11 @@ export function useAccountSetupController(params: {
     emitOwnerApprovalStageEvent,
     ensureEmbeddedWallet,
     loadMe,
+    ownerDelegationFlags?.baseAppUrl,
     ownerSignerAddress,
     ownerSignerChainId,
     publicClient,
+    requiresBaseAppForOwnerInstall,
     runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
   ])
@@ -1777,6 +1827,8 @@ export function useAccountSetupController(params: {
     telegramLaunchParamsAvailable,
     walletClient,
     zoraCrossAppCount,
+    passkeyOnlyCanonicalCsw,
+    requiresBaseAppForOwnerInstall,
     zoraHandoffUrl,
     zoraLinked,
     zoraStatus,

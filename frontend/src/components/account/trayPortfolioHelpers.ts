@@ -1,4 +1,4 @@
-import type { DebankToken } from '@/lib/debank/client'
+import type { DebankPortfolioToken, DebankToken, DebankWalletPortfolio } from '@/lib/debank/client'
 
 export type TrayWalletKind = 'canonical' | 'external'
 
@@ -332,6 +332,38 @@ export function collectZoraLookupAddresses(rows: TrayWalletTokenRow[]): string[]
     if (parsed?.tokenAddress) out.add(parsed.tokenAddress.toLowerCase())
   }
   return Array.from(out).sort()
+}
+
+export function portfolioTokenToDebankToken(token: DebankPortfolioToken): DebankToken {
+  return {
+    id: token.id,
+    chain: token.chain,
+    name: token.name,
+    symbol: token.symbol,
+    logoUrl: token.logoUrl,
+    amount: token.amount,
+    price: token.price,
+    usdValue: token.usdValue,
+  }
+}
+
+/** Flatten server wallet portfolios into tray token rows (DeBank all_token_list). */
+export function buildTrayTokenRowsFromPortfolios(params: {
+  wallets: TrayWalletSource[]
+  portfolios: Record<string, DebankWalletPortfolio | null> | null
+}): TrayWalletTokenRow[] {
+  const out: TrayWalletTokenRow[] = []
+  for (const wallet of params.wallets) {
+    const portfolio = params.portfolios?.[wallet.address.toLowerCase()]
+    if (!portfolio?.topTokens?.length) continue
+    for (const token of portfolio.topTokens) {
+      out.push({
+        wallet,
+        token: portfolioTokenToDebankToken(token),
+      })
+    }
+  }
+  return out
 }
 
 function formatShortAddress(value: string): string {

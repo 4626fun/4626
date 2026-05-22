@@ -175,8 +175,9 @@ describe('ExploreCreators', () => {
 
     expect(html).toContain('Indexed creators')
     expect(html).toContain('1,507')
+    expect(html).toContain('+12 today')
     expect(html).toContain('Creator list is still syncing')
-    expect(html).toContain('Indexed 1,507 creators')
+    expect(html).not.toContain('Indexed 1,507 creators')
     expect(html).not.toContain('No creators available')
   })
 
@@ -196,7 +197,8 @@ describe('ExploreCreators', () => {
 
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('Indexed 2,000 creators')
+    expect(html).toContain('+25 today')
+    expect(html).not.toContain('Indexed 2,000 creators')
     expect(html).toContain('$100.00')
     expect(html).toContain('$200.00')
     expect(html).toContain('$2.00')
