@@ -35,7 +35,7 @@ function rankAccent(rank: number): string {
   if (rank === 1) return 'text-amber-300'
   if (rank === 2) return 'text-zinc-200'
   if (rank === 3) return 'text-orange-300/90'
-  return 'text-zinc-500'
+  return 'text-zinc-400'
 }
 
 function RankGlyph({ rank, featured = false }: { rank: number; featured?: boolean }) {
@@ -68,7 +68,7 @@ export function LeaderboardPoints({
       <div className={cn('font-semibold tabular-nums text-zinc-50', totalClass)}>
         {formatWholeNumber(row.pointsTotal)}
       </div>
-      <div className="mt-0.5 text-[10px] sm:text-[11px] tabular-nums text-zinc-500">
+      <div className="mt-0.5 text-[10px] sm:text-[11px] tabular-nums text-zinc-400">
         {formatWholeNumber(row.pointsInvite)} invite · {formatWholeNumber(row.pointsAgent)} agent
       </div>
     </div>
@@ -157,7 +157,7 @@ export function LeaderboardPodium({
 export function LeaderboardListHeader() {
   return (
     <div
-      className="grid grid-cols-[2.75rem_1fr_auto] sm:grid-cols-[3.25rem_1fr_auto] gap-3 px-4 py-2.5 border-b border-white/10 bg-black/25 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500"
+      className="grid grid-cols-[2.75rem_1fr_auto] sm:grid-cols-[3.25rem_1fr_auto] gap-3 px-4 py-2.5 border-b border-white/10 bg-black/25 text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-400"
       aria-hidden
     >
       <span>Rank</span>
@@ -204,7 +204,7 @@ export function LeaderboardListRow({
           ) : null}
         </div>
         {showReferralCode && row.referralCode ? (
-          <p className="mt-1 pl-8 sm:pl-9 text-[10px] text-zinc-500">
+          <p className="mt-1 pl-8 sm:pl-9 text-[10px] text-zinc-400">
             Referral code <span className="font-mono text-zinc-400">{row.referralCode}</span>
           </p>
         ) : null}
@@ -238,7 +238,7 @@ export function LeaderboardSkeleton({ rows = 8 }: { rows?: number }) {
 export function LeaderboardEmptyState({ message }: { message: ReactNode }) {
   return (
     <div className="px-6 py-14 text-center">
-      <p className="text-sm text-zinc-500">{message}</p>
+      <p className="text-sm text-zinc-400">{message}</p>
     </div>
   )
 }

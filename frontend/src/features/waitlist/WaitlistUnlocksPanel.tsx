@@ -61,13 +61,13 @@ export function WaitlistUnlocksPanel({
           <span>
             Tier {progress.currentTier.id} · <span className="text-zinc-200">{progress.currentTier.name}</span>
           </span>
-          <ArrowUpRight className="h-3 w-3 text-zinc-600 transition-colors group-hover:text-brand-200" aria-hidden="true" />
+          <ArrowUpRight className="h-3 w-3 text-zinc-400 transition-colors group-hover:text-brand-200" aria-hidden="true" />
         </Link>
         <div className="flex items-baseline gap-2">
           <span className="font-display text-xl leading-none text-white tabular-nums">
             {progress.points.toLocaleString()}
           </span>
-          <span className="text-[11px] text-zinc-500">
+          <span className="text-[11px] text-zinc-400">
             {progress.points === 1 ? 'point' : 'points'}
           </span>
         </div>
@@ -75,7 +75,7 @@ export function WaitlistUnlocksPanel({
 
       {progress.nextTier ? (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-[11px] text-zinc-500">
+          <div className="flex items-center justify-between text-[11px] text-zinc-400">
             <span>{progress.pointsToNext} points to {progress.nextTier.name}</span>
             <span className="tabular-nums">{Math.round(progress.progressPercent)}%</span>
           </div>

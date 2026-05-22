@@ -254,17 +254,17 @@ function WaitlistAuthStep(props: {
       animate={motionEnabled ? { opacity: 1 } : false}
       exit={motionEnabled ? { opacity: 0, y: -6 } : undefined}
       transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
-      className="relative flex min-h-[420px] items-center justify-center py-12 sm:py-16"
+      className="relative py-4 sm:py-6"
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgb(var(--brand-primary)/0.08),transparent_65%)]"
-      />
+      <div className="relative z-10 mx-auto w-full max-w-md text-center">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1/2 top-1/2 h-40 w-[min(100%,22rem)] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(ellipse_at_center,rgb(var(--brand-primary)/0.07),transparent_72%)]"
+        />
 
-      <div className="relative z-10 w-full max-w-md text-center">
         <motion.div
           {...stagger(0)}
-          className="px-5 py-6 sm:px-7 sm:py-7"
+          className="relative px-2 sm:px-4"
         >
           <div className="space-y-2">
             <h2 className="text-[1.75rem] font-semibold leading-tight tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>

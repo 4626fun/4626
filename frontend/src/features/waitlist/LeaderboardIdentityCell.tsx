@@ -169,8 +169,8 @@ export function LeaderboardIdentityCell({
           <div
             className={
               stacked
-                ? 'mt-1 font-mono text-[10px] text-zinc-500 truncate max-w-full'
-                : 'mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-500 truncate'
+                ? 'mt-1 font-mono text-[10px] text-zinc-400 truncate max-w-full'
+                : 'mt-0.5 font-mono text-[10px] sm:text-[11px] text-zinc-400 truncate'
             }
             title={cswAddress ?? undefined}
           >

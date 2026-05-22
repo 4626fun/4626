@@ -435,12 +435,12 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
         </div>
         <div className="space-y-1.5 text-[12px]">
           <div className="flex items-center gap-2 text-zinc-400">
-            <span className="text-zinc-500 shrink-0">Coin</span>
+            <span className="text-zinc-400 shrink-0">Coin</span>
             <span className="font-mono truncate">${symbolClean}</span>
           </div>
           {createdCoinAddress && (
             <div className="flex items-center gap-2 text-zinc-400">
-              <span className="text-zinc-500 shrink-0">Address</span>
+              <span className="text-zinc-400 shrink-0">Address</span>
               <a
                 href={`https://zora.co/coin/base:${createdCoinAddress}`}
                 target="_blank"
@@ -453,7 +453,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
           )}
           {txHash && (
             <div className="flex items-center gap-2 text-zinc-400">
-              <span className="text-zinc-500 shrink-0">Tx</span>
+              <span className="text-zinc-400 shrink-0">Tx</span>
               <a
                 href={`https://basescan.org/tx/${txHash}`}
                 target="_blank"
@@ -465,7 +465,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
             </div>
           )}
         </div>
-        <div className="text-[11px] text-zinc-600 pt-1">
+        <div className="text-[11px] text-zinc-400 pt-1">
           Your coin is live on Zora. Gas was on us.
         </div>
       </motion.div>
@@ -484,19 +484,19 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
         </div>
         <div>
           <div className="text-[14px] font-semibold text-white">{isOneClick ? 'Create your Creator Coin' : 'Launch Your Creator Coin'}</div>
-          <div className="text-[11px] text-zinc-500">Free to create — gas is sponsored</div>
+          <div className="text-[11px] text-zinc-400">Free to create — gas is sponsored</div>
         </div>
       </div>
 
       {isOneClick ? (
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-          <div className="text-[11px] uppercase tracking-wider text-zinc-600">Prefilled</div>
+          <div className="text-[11px] uppercase tracking-wider text-zinc-400">Prefilled</div>
           <div className="mt-1 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[14px] text-white font-medium truncate">{effectiveName || '--'}</div>
-              <div className="text-[12px] text-zinc-500 font-mono truncate">${symbolClean || '--'}</div>
+              <div className="text-[12px] text-zinc-400 font-mono truncate">${symbolClean || '--'}</div>
             </div>
-            <div className="text-[11px] text-zinc-600 text-right">Uses your username</div>
+            <div className="text-[11px] text-zinc-400 text-right">Uses your username</div>
           </div>
         </div>
       ) : (
@@ -504,57 +504,61 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
         <div className="space-y-3">
           {/* Name */}
           <div>
-            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Name</label>
+            <label htmlFor="launch-coin-name" className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">Name</label>
             <input
+              id="launch-coin-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Akita"
               disabled={isBusy}
               maxLength={64}
-              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50"
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-400 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50"
             />
           </div>
 
           {/* Symbol */}
           <div>
-            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">Symbol</label>
+            <label htmlFor="launch-coin-symbol" className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">Symbol</label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-[14px]">$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-[14px]">$</span>
               <input
+                id="launch-coin-symbol"
                 type="text"
                 value={symbol}
                 onChange={(e) => setSymbol(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8))}
                 placeholder="e.g. AKITA"
                 disabled={isBusy}
                 maxLength={8}
-                className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 uppercase"
+                className="w-full pl-7 pr-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[14px] placeholder:text-zinc-400 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 uppercase"
               />
             </div>
           </div>
 
           {/* Description (optional) */}
           <div>
-            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
-              Description <span className="text-zinc-700">(optional)</span>
+            <label htmlFor="launch-coin-description" className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
+              Description <span className="text-zinc-400">(optional)</span>
             </label>
             <textarea
+              id="launch-coin-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What's your coin about?"
               disabled={isBusy}
               maxLength={280}
               rows={2}
-              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-600 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 resize-none"
+              className="w-full px-3 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-zinc-400 focus:outline-none focus:border-[rgb(var(--brand-primary)/0.4)] transition-colors disabled:opacity-50 resize-none"
             />
           </div>
 
           {/* Image upload */}
           <div>
-            <label className="text-[11px] text-zinc-500 uppercase tracking-wider block mb-1">
-              Image <span className="text-zinc-700">(optional)</span>
+            <label htmlFor="launch-coin-image" className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1">
+              Image <span className="text-zinc-400">(optional)</span>
             </label>
             <input
+              id="launch-coin-image"
               ref={fileInputRef}
               type="file"
               accept={ACCEPTED_IMAGE_TYPES.join(',')}
@@ -565,7 +569,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
               type="button"
               disabled={isBusy}
               onClick={() => fileInputRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] text-zinc-500 text-[13px] hover:border-white/[0.12] hover:text-zinc-400 transition-colors disabled:opacity-50 cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] text-zinc-400 text-[13px] hover:border-white/[0.12] hover:text-zinc-400 transition-colors disabled:opacity-50 cursor-pointer"
             >
               {imagePreview ? (
                 <div className="flex items-center gap-2">
@@ -620,7 +624,7 @@ export const LaunchCoinCard = memo(function LaunchCoinCard({
             'w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200',
             canSubmit
               ? 'bg-[rgb(var(--brand-primary))] text-white hover:bg-[rgb(var(--brand-hover))] cursor-pointer shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_6px_24px_-6px_rgb(var(--brand-primary)/0.4)]'
-              : 'bg-white/[0.04] text-zinc-600 cursor-not-allowed',
+              : 'bg-white/[0.04] text-zinc-400 cursor-not-allowed',
           ].join(' ')}
         >
           <Coins className="w-4 h-4" />

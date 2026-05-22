@@ -64,14 +64,14 @@ export function ReferralShareBlock({
     <div className={`space-y-3 ${className}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500 flex items-center gap-1.5">
+          <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-400 flex items-center gap-1.5">
             <UserPlus className="w-3 h-3" /> Invite friends
           </div>
-          <div className="mt-1 text-[11px] text-zinc-600">
+          <div className="mt-1 text-[11px] text-zinc-400">
             Earn +6 per qualified referral (+2 while pending).
           </div>
         </div>
-        <div className="text-[11px] tabular-nums text-zinc-500 flex items-center gap-3">
+        <div className="text-[11px] tabular-nums text-zinc-400 flex items-center gap-3">
           <span>
             <span className="text-zinc-300">{qualifiedCount}</span> qualified
           </span>

@@ -28,7 +28,7 @@ export function SwapSettingsModal(props: {
       <div className="space-y-4 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] sm:pb-0">
         {/* Slippage */}
         <div>
-          <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-vault-subtext">Slippage tolerance</label>
+          <label htmlFor="slippage-input" className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-vault-subtext">Slippage tolerance</label>
           <div className="grid grid-cols-[1fr_auto] gap-2">
             <div className="relative">
               <input

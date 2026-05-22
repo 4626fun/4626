@@ -99,6 +99,7 @@ export function TokenSelectorModal({
   const [addressMetadataCache, setAddressMetadataCache] = useState<Record<string, AddressMetadataCacheEntry>>({})
 
   const listRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
   const publicClient = usePublicClient({
@@ -296,6 +297,11 @@ export function TokenSelectorModal({
   }, [addressCandidate, chainIdForLookup, isAddressSearchActive, matchedTokens])
 
   useEffect(() => {
+    if (!open) return
+    searchInputRef.current?.focus()
+  }, [open])
+
+  useEffect(() => {
     if (activeIndex >= rows.length) setActiveIndex(0)
   }, [activeIndex, rows.length])
 
@@ -364,12 +370,12 @@ export function TokenSelectorModal({
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-muted" />
           <input
+            ref={searchInputRef}
             type="text"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Search by name, symbol, or 0x address"
             className="h-11 w-full rounded-xl border border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card-raised)/0.72)] pl-9 pr-9 text-sm text-vault-text placeholder:text-vault-muted outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
-            autoFocus
           />
           {query && (
             <button

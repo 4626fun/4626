@@ -11,7 +11,7 @@
 - [ ] **Focus** — `:focus-visible` is visible (do not remove outline without a replacement). Modals trap focus and return focus on close (`@/components/ui/Modal` / Radix dialog patterns).
 - [ ] **Motion** — Respect `prefers-reduced-motion` for large animations (see `index.css` and vault-flow helpers).
 - [ ] **Keyboard** — Tab through the flow once: no traps, no unreachable controls, logical order.
-- [ ] **Marketing contrast** — On dark `glass-card` / charcoal backgrounds (`4626.fun`), prefer `text-zinc-400` for `text-sm` and smaller secondary copy; `text-zinc-500` / `text-zinc-600` often fail axe `color-contrast`.
+- [ ] **Marketing contrast** — On dark `glass-card` / charcoal backgrounds (`4626.fun`), prefer `text-zinc-400` for `text-sm` and smaller secondary copy; `text-zinc-500` / `text-zinc-600` often fail axe `color-contrast`. Static immersive landing copy uses `--ink-3` in `public/immersive/styles.css` — keep tertiary text at or above that contrast level.
 - [ ] **Marketing host + wagmi** — `4626.fun` routes in `MARKETING_ONLY_ROUTES` have **no** `WagmiProvider`. Do not mount `TokenImage` / `useReadContract` on those pages; use static assets or server-fetched metadata instead.
 
 ## Automation in this repo

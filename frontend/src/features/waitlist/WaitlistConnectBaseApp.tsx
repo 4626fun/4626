@@ -372,7 +372,7 @@ export function WaitlistConnectBaseApp(props: Props) {
           ) : null}
 
           {showRecoveryPanel ? (
-            <p className="text-center text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-600">
+            <p className="text-center text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-400">
               Or start fresh
             </p>
           ) : null}
@@ -397,7 +397,7 @@ export function WaitlistConnectBaseApp(props: Props) {
             ) : null}
             <button
               type="button"
-              className="text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+              className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
               onClick={onSkip}
               data-testid="skip-base-app-button"
             >
@@ -427,13 +427,13 @@ export function WaitlistConnectBaseApp(props: Props) {
           <p className="inline-flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
             <CheckCircle2 className="h-4 w-4 text-emerald-400/90" aria-hidden />
             <span>Base App connected</span>
-            <span className="font-mono text-xs text-zinc-500">{shortAddress(view.subAccountAddress)}</span>
+            <span className="font-mono text-xs text-zinc-400">{shortAddress(view.subAccountAddress)}</span>
           </p>
           <a
             href={basescanAddressUrl(view.subAccountAddress)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-zinc-500 underline-offset-2 hover:text-zinc-300 hover:underline"
+            className="text-xs text-zinc-400 underline-offset-2 hover:text-zinc-300 hover:underline"
             data-testid="basescan-link"
           >
             View on Basescan ↗
@@ -457,7 +457,7 @@ export function WaitlistConnectBaseApp(props: Props) {
             ) : null}
             <button
               type="button"
-              className="text-xs font-medium uppercase tracking-wider text-zinc-500 hover:text-zinc-300"
+              className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
               onClick={onSkip}
               data-testid="skip-base-app-button"
             >

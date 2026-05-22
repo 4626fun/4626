@@ -64,7 +64,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
 
           {chatStatusMessage ? (
-            <p className="text-xs text-zinc-500">{chatStatusMessage}</p>
+            <p className="text-xs text-zinc-400">{chatStatusMessage}</p>
           ) : null}
 
           {canEnterNow ? (
@@ -96,7 +96,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
           type="button"
           onClick={() => void onSignOut()}
           disabled={signOutBusy}
-          className="text-xs text-zinc-500 transition hover:text-zinc-300 disabled:opacity-50"
+          className="text-xs text-zinc-400 transition hover:text-zinc-300 disabled:opacity-50"
         >
           {signOutBusy ? 'Signing out...' : 'Sign out'}
         </button>

@@ -9,7 +9,7 @@
   --bg-2: #0a0c16;
   --ink: #f1eee4;
   --ink-2: #c8c5b8;
-  --ink-3: #8a8779;
+  --ink-3: #a3a090;
   --ink-4: #4a4940;
   --line: rgba(241, 238, 228, 0.08);
   --line-2: rgba(241, 238, 228, 0.14);
@@ -3151,7 +3151,7 @@ svg.hero__lightning #hero-lightning-bolts path {
   margin: 4px 0 0;
   font-size: 12px;
   line-height: 1.5;
-  color: rgba(200, 200, 215, 0.55);
+  color: rgba(200, 200, 215, 0.72);
 }
 .vaults__disclaimer a {
   color: rgba(155, 180, 255, 0.92);

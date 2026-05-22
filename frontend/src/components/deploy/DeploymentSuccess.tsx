@@ -195,10 +195,11 @@ export function AjnaAutomationOptInCard({
 
       {showVaultInput ? (
         <div>
-          <label className="block text-[10px] uppercase tracking-[0.18em] text-zinc-500 mb-1.5">
+          <label htmlFor="ajna-vault-address" className="block text-[10px] uppercase tracking-[0.18em] text-zinc-400 mb-1.5">
             Vault Address For Ajna Automation
           </label>
           <input
+            id="ajna-vault-address"
             aria-label="Ajna vault address"
             type="text"
             value={vaultAddress}

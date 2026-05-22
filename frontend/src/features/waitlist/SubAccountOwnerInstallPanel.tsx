@@ -77,12 +77,12 @@ function FlowStep(props: FlowStepProps) {
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className={`text-sm ${active ? 'font-medium text-white' : 'text-zinc-300'}`}>{label}</span>
         {address ? (
-          <span className="font-mono text-[11px] text-zinc-600" title={address}>
+          <span className="font-mono text-[11px] text-zinc-400" title={address}>
             {shortAddr(address)}
           </span>
         ) : null}
       </div>
-      <p className="mt-0.5 text-xs leading-relaxed text-zinc-500">{detail}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">{detail}</p>
     </li>
   )
 }
@@ -188,7 +188,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
   if (ownerCheck === 'checking' || ownerCheck === 'idle') {
     return (
       <div
-        className={`flex items-center gap-2 text-sm text-zinc-500 ${className}`}
+        className={`flex items-center gap-2 text-sm text-zinc-400 ${className}`}
         data-testid="sub-account-owner-install-checking"
         role="status"
       >
@@ -207,7 +207,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400/90" aria-hidden />
         <div>
           <p className="text-sm text-zinc-200">4626 signing is enabled</p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
             Your embedded key can sign for the app wallet.
           </p>
         </div>
@@ -220,7 +220,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
   if (isInline) {
     return (
       <div className={`space-y-3 text-left ${className}`} data-testid="sub-account-owner-install-panel">
-        <p className="text-xs leading-relaxed text-zinc-500">
+        <p className="text-xs leading-relaxed text-zinc-400">
           App wallet linked — one Base App approval adds your embedded key as owner.
         </p>
         {isSettingUp ? (
@@ -278,7 +278,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
         />
       </ol>
 
-      <p className="text-xs leading-relaxed text-zinc-500">
+      <p className="text-xs leading-relaxed text-zinc-400">
         Open in <span className="text-zinc-400">Base App</span> and approve one transaction. Safari, Chrome, and
         extensions cannot sign for sub-accounts.
       </p>
@@ -309,7 +309,7 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
       <div>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-xs text-zinc-600 transition-colors hover:text-zinc-400"
+          className="inline-flex items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-zinc-400"
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen((open) => !open)}
         >
@@ -320,8 +320,8 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
           />
         </button>
         {detailsOpen ? (
-          <p className="mt-2 max-w-sm text-[11px] leading-relaxed text-zinc-600">
-            We call <span className="font-mono text-zinc-500">addOwnerAddress</span> on your app wallet so your Privy
+          <p className="mt-2 max-w-sm text-[11px] leading-relaxed text-zinc-400">
+            We call <span className="font-mono text-zinc-400">addOwnerAddress</span> on your app wallet so your Privy
             embedded key can co-sign. Your main smart wallet is not modified.
           </p>
         ) : null}
