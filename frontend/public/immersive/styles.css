@@ -1650,8 +1650,8 @@ a {
 .hero__copy {
   position: relative;
   z-index: 5;
-  margin-top: 70vh;
-  padding: 40px clamp(24px, 4vw, 56px) 80px;
+  margin-top: 52vh;
+  padding: 24px clamp(24px, 4vw, 56px) 64px;
   max-width: 760px;
   margin-left: auto;
   margin-right: auto;
@@ -1677,7 +1677,7 @@ a {
   font-size: clamp(40px, 5.6vw, 80px);
   line-height: 1.04;
   letter-spacing: -0.022em;
-  margin: 0 0 22px;
+  margin: 0 0 18px;
   color: var(--ink);
   opacity: 0;
   transform: translateY(14px);
@@ -1689,23 +1689,13 @@ a {
   font-style: italic;
   color: var(--gold);
 }
-.hero__copy .hero__sub {
-  font-size: clamp(15px, 1.2vw, 17px);
-  line-height: 1.65;
-  color: var(--ink-2);
-  margin: 0 auto 32px;
-  max-width: 520px;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: rise 1s var(--ease) 0.6s forwards;
-}
 .hero__copy .hero__ctas {
   display: flex;
   gap: 12px;
   justify-content: center;
   flex-wrap: wrap;
   opacity: 0;
-  animation: rise 1s var(--ease) 0.75s forwards;
+  animation: rise 1s var(--ease) 0.58s forwards;
 }
 
 @media (max-width: 740px) {
@@ -1713,7 +1703,7 @@ a {
   .hero__cube { width: 80vw; height: 80vw; top: 36vh; }
   .hero__clouds--bottom { top: 56vh; }
   .hero__fade { top: 56vh; }
-  .hero__copy { margin-top: 64vh; }
+  .hero__copy { margin-top: 46vh; }
 }
 
 /* =============================================================
@@ -4332,6 +4322,7 @@ html.nav-drawer-open body {
    the fold (signaling there's more to scroll). */
 @media (max-width: 480px) {
   .hero__copy {
+    margin-top: 40vh !important;
     padding-top: 0 !important;
     padding-bottom: 32px !important;
   }

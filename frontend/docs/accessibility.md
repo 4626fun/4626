@@ -18,10 +18,10 @@
 
 | Command | Purpose |
 | -------- | -------- |
-| `pnpm -C frontend lint:a11y` | ESLint with `eslint-plugin-jsx-a11y` (**warn** today; promote to error in main `lint` when noise is low) |
+| `pnpm -C frontend lint:a11y` | Alias of main `lint` — jsx-a11y rules at **error** in `eslint.config.js` |
 | `pnpm -C frontend smoke:a11y -- --serve` | Playwright + axe on `/faq`, `/faq/how-it-works`, `/waitlist`, `/swap` (fails on **serious/critical** only). With `--serve`, restarts Vite per host shell (`marketing` vs `app`). |
 
-CI runs both in [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml) as **non-blocking** until the team flips `A11Y_CI_BLOCKING=true` on the workflow (or removes `continue-on-error`).
+CI runs both in [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml). Set repository variable **`A11Y_CI_BLOCKING=true`** so the job fails PRs on regressions (default is non-blocking when the variable is unset).
 
 **Note:** `eslint-plugin-jsx-a11y` needs `minimatch@3` under the plugin (see `pnpm.overrides` `eslint-plugin-jsx-a11y>minimatch`) because the repo pins `minimatch@10` elsewhere.
 
@@ -52,12 +52,11 @@ Prioritize manual keyboard + screen reader passes on:
 - Explore 3D gallery and charts (often need text alternatives beyond color)
 - Chat rail (`ChatAvailabilityRail`, `ChatWindow`)
 
-## Promoting jsx-a11y from warn → error
+## jsx-a11y in main lint
 
-1. Drive `pnpm -C frontend lint:a11y` toward zero warnings (fix or narrowly disable with a comment).
-2. Move rules from `eslint.a11y.config.js` into `eslint.config.js` as `'error'`.
-3. Remove the separate `lint:a11y` script or keep it as an alias.
-4. Set repository variable **`A11Y_CI_BLOCKING=true`** in GitHub (Settings → Secrets and variables → Actions → Variables) so [`.github/workflows/accessibility.yml`](../../.github/workflows/accessibility.yml) fails PRs on regressions.
+jsx-a11y **recommended** rules run at **error** severity in `eslint.config.js`. `pnpm -C frontend lint:a11y` is an alias of `pnpm lint`.
+
+To fail CI on accessibility regressions, set repository variable **`A11Y_CI_BLOCKING=true`** in GitHub (Settings → Secrets and variables → Actions → Variables).
 
 ## References
 

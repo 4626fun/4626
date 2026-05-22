@@ -1,5 +1,6 @@
 import tsParser from '@typescript-eslint/parser'
 import tsPlugin from '@typescript-eslint/eslint-plugin'
+import jsxA11y from 'eslint-plugin-jsx-a11y'
 import reactHooks from 'eslint-plugin-react-hooks'
 import reactRefresh from 'eslint-plugin-react-refresh'
 
@@ -45,6 +46,7 @@ export default [
       'react-refresh/only-export-components': 'off',
     },
   },
+  jsxA11y.flatConfigs.recommended,
 ]
 
 

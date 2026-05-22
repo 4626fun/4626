@@ -35,7 +35,7 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm --dir frontend exec playwright install chromium --with-deps
 
-      - name: jsx-a11y ESLint (warn)
+      - name: jsx-a11y ESLint (error)
         run: pnpm --dir frontend lint:a11y
 
       - name: axe smoke (local Vite)
@@ -49,7 +49,7 @@ jobs:
           {
             echo "### Accessibility"
             echo ""
-            echo "- \`lint:a11y\` — jsx-a11y rules at **warn** (see \`frontend/eslint.a11y.config.js\`)"
+            echo "- \`lint:a11y\` — jsx-a11y rules at **error** (see \`frontend/eslint.config.js\`)"
             echo "- \`smoke:a11y\` — axe serious/critical on \`/faq\`, \`/faq/how-it-works\`, \`/waitlist\`, \`/swap\` (marketing + app Vite shells)"
             echo ""
             if [ "${{ env.A11Y_CI_BLOCKING }}" = "true" ]; then

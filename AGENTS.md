@@ -55,7 +55,7 @@ These are repo-level guardrails for internal automation, deploy orchestration, a
 Standard commands are documented in `frontend/package.json` scripts:
 
 - `pnpm -C frontend lint` — ESLint (clean — 0 warnings, 0 errors)
-- `pnpm -C frontend lint:a11y` — jsx-a11y rules at **warn** (`eslint.a11y.config.js`; promote to main `lint` when clean)
+- `pnpm -C frontend lint:a11y` — jsx-a11y rules at **error** (alias of `lint`; see `frontend/eslint.config.js`)
 - `pnpm -C frontend smoke:a11y -- --serve` — Playwright + axe on `/faq`, `/faq/how-it-works`, `/waitlist`, `/swap` (fails on serious/critical). With `--serve`, `frontend/scripts/a11y-smoke.ts` restarts Vite per host shell (`marketing` for FAQ/waitlist, `app` for swap). CI: `.github/workflows/accessibility.yml` (non-blocking until repo var `A11Y_CI_BLOCKING=true`). Checklist: `frontend/docs/accessibility.md`
 - **Marketing-host a11y + wagmi:** `4626.fun` has no `WagmiProvider` — do not use `TokenImage` / wagmi hooks on `MARKETING_ONLY_ROUTES` (e.g. `/faq/how-it-works` uses static story badges). Secondary copy on dark cards should use `text-zinc-400` (not `zinc-500`/`zinc-600`) for WCAG contrast; audit with `A11Y_BASE_URL=https://4626.fun pnpm -C frontend smoke:a11y`.
 - `pnpm -C frontend typecheck` — TypeScript (clean — 0 errors)
