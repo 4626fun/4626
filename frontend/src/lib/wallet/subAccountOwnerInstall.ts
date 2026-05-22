@@ -59,30 +59,8 @@ function isUnauthorizedMethodOrAccount(error: unknown): boolean {
   )
 }
 
-function isHexChainId(value: unknown): value is `0x${string}` {
-  return typeof value === 'string' && /^0x[0-9a-f]+$/i.test(value)
-}
-
-async function ensureBaseMainnetWalletContext(walletRequest: WalletRequest): Promise<void> {
-  const current = await walletRequest({ method: 'eth_chainId' })
-  if (isHexChainId(current) && current.toLowerCase() === BASE_MAINNET_CHAIN_ID_HEX) return
-
-  try {
-    await walletRequest({
-      method: 'wallet_switchEthereumChain',
-      params: [{ chainId: BASE_MAINNET_CHAIN_ID_HEX }],
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error ?? '')
-    throw new Error(
-      `Base App is currently in testnet mode. 4626 signing setup requires Base Mainnet. ${message}`.trim(),
-    )
-  }
-
-  const postSwitch = await walletRequest({ method: 'eth_chainId' })
-  if (!isHexChainId(postSwitch) || postSwitch.toLowerCase() !== BASE_MAINNET_CHAIN_ID_HEX) {
-    throw new Error('Base App is currently in testnet mode. 4626 signing setup requires Base Mainnet.')
-  }
+async function refreshBaseAppAuthorization(walletRequest: WalletRequest): Promise<void> {
+  await walletRequest({ method: 'eth_requestAccounts' })
 }
 
 export function createBaseSubAccountReadClient() {
@@ -234,13 +212,35 @@ export async function installEmbeddedOwnerOnSubAccount(params: {
       }
     }
 
+    if (isUnauthorizedMethodOrAccount(directError)) {
+      await refreshBaseAppAuthorization(walletRequest)
+      try {
+        const retriedDirect = await addOwnerViaEthSendTransaction({
+          walletRequest,
+          subAccountAddress: params.subAccountAddress,
+          embeddedEoaAddress: params.embeddedEoaAddress,
+        })
+        return {
+          installed: true,
+          alreadyOwner: false,
+          transactionHash: retriedDirect.transactionHash,
+          callBundleId: null,
+        }
+      } catch (retryDirectError) {
+        if (isUserRejectedWalletAction(retryDirectError)) {
+          throw retryDirectError
+        }
+      }
+    }
+
     try {
       return await submitViaSendCalls()
     } catch (sendCallsError) {
       if (!isUnauthorizedMethodOrAccount(sendCallsError)) {
         throw sendCallsError
       }
-      return await reauthorizeAndRetry(submitViaSendCalls)
+      await refreshBaseAppAuthorization(walletRequest)
+      return await submitViaSendCalls()
     }
   }
 }

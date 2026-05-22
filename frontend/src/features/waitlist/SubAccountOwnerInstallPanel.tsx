@@ -34,11 +34,8 @@ function mapOwnerInstallError(message: string): string {
   if (lower.includes('base account wallet')) {
     return 'Connect Base App first (open this page in Base App), then tap Enable 4626 signing again.'
   }
-  if (
-    lower.includes('not been authorized by the user') ||
-    lower.includes('requested method and/or account has not been authorized')
-  ) {
-    return 'Base App did not approve this signing request for your 4626 app wallet. Open 4626 inside Base App (not Safari/Chrome/extensions), tap Enable 4626 signing again, and approve the wallet prompt.'
+  if (lower.includes('not been authorized by the user')) {
+    return 'Base App could not complete the signing approval for your 4626 wallet. Please try again. If it keeps failing, refresh 4626 inside Base App and retry Enable 4626 signing.'
   }
   if (
     lower.includes("mainnet wallet can't be used on testnet") ||
