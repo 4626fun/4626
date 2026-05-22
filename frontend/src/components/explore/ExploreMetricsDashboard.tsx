@@ -1,55 +1,10 @@
-import { useEffect, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
-
 import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { formatCompactUsd } from '@/features/explore/exploreShared'
-import { apiFetch } from '@/lib/api/apiBase'
-import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-
-type ExploreMetricHistoryPoint = {
-  date: string
-  creatorCoinsMarketCapUsd: number | null
-}
-
-type ExploreMetrics = {
-  scope: 'creators'
-  updatedAt: string
-  exact: boolean
-  syncStatus: 'idle' | 'running' | 'error'
-  sync?: {
-    driftEstimateTotal: number | null
-  }
-  totals: {
-    creatorsTotal: number | null
-    creatorsNew24h: number | null
-    creatorCoinsMarketCapUsd: number | null
-    creatorCoinsVolume24hUsd: number | null
-    creatorCoinsFees24hUsd: number | null
-    ethosScoredCreators: number | null
-    ethos1200Creators: number | null
-    ethos1600Creators: number | null
-    ethos1800Creators: number | null
-  }
-  history30d: ExploreMetricHistoryPoint[]
-}
+import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 
 type ExploreMetricsDashboardProps = {
   className?: string
-}
-
-let cachedExploreMetrics: ExploreMetrics | null = null
-
-async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
-  try {
-    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
-    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
-    if (res.ok && json?.success) return json.data ?? null
-  } catch {
-    // Non-blocking metrics card.
-  }
-  return null
 }
 
 function joinClasses(...parts: Array<string | undefined | null | false>): string {
@@ -57,48 +12,22 @@ function joinClasses(...parts: Array<string | undefined | null | false>): string
 }
 
 export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardProps) {
-  const metricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'metrics', 'shared-dashboard'],
-    queryFn: fetchExploreCreatorsMetrics,
-    initialData: cachedExploreMetrics ?? undefined,
-    staleTime: 5 * 60_000,
-    gcTime: 30 * 60_000,
-    refetchOnWindowFocus: false,
-    retry: 1,
-  })
+  const {
+    creatorsLabel,
+    creatorsTotal,
+    creatorsNew24h,
+    marketCap,
+    volume24h,
+    fees24h,
+    statusLine,
+    isLoading,
+    isFetching,
+  } = useExploreCreatorsHeroMetrics()
 
-  useEffect(() => {
-    if (metricsQuery.data) cachedExploreMetrics = metricsQuery.data
-  }, [metricsQuery.data])
-
-  const totals = metricsQuery.data?.totals
-  const updatedAt = metricsQuery.data?.updatedAt ?? null
-  const status = metricsQuery.data?.syncStatus ?? 'idle'
-  const exact = metricsQuery.data?.exact === true
-  const syncMeta = metricsQuery.data?.sync ?? null
-
-  const statusLine = useMemo(() => {
-    if (!updatedAt) return 'Canonical totals unavailable'
-    const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    if (status === 'error') return `Metrics refresh error — showing last known values (${time})`
-    if (status === 'running' || !exact) return `Estimated totals refreshed ${time}`
-    return `Canonical totals refreshed ${time}`
-  }, [exact, status, updatedAt])
-
-  const creatorsTotal = totals?.creatorsTotal
-  const creatorsNew24h = totals?.creatorsNew24h
-  const marketCap = totals?.creatorCoinsMarketCapUsd
-  const volume24h = totals?.creatorCoinsVolume24hUsd
-  const fees24h = totals?.creatorCoinsFees24hUsd
-  const creatorsLabel = exact ? 'Creators' : 'Indexed creators'
   const creatorsMetricHint =
-    creatorsNew24h != null
+    creatorsNew24h != null && creatorsNew24h > 0
       ? `+${creatorsNew24h.toLocaleString()} today`
-      : !exact && creatorsTotal != null && syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotal
-        ? `~${syncMeta.driftEstimateTotal.toLocaleString()} on Zora`
-        : !exact
-          ? 'Still indexing creator coins'
-          : null
+      : 'Tracking newly created creators'
 
   return (
     <div className={joinClasses('space-y-2', className)}>
@@ -106,9 +35,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         <ExploreHeroMetric
           label={creatorsLabel}
           value={creatorsTotal != null ? creatorsTotal.toLocaleString() : '—'}
-          hint={creatorsMetricHint ?? 'Tracking newly created creators'}
+          hint={creatorsMetricHint}
           title={
-            creatorsNew24h != null
+            creatorsNew24h != null && creatorsNew24h > 0
               ? `+${creatorsNew24h.toLocaleString()} new in the last 24 hours`
               : 'Canonical creator-coin index size'
           }
@@ -116,9 +45,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         <ExploreHeroMetric
           label="Market Cap"
           value={formatCompactUsd(marketCap)}
-          hint="Live market-cap snapshot"
+          hint="Indexed creator market cap"
           accent
-          title="Live market-cap snapshot"
+          title="Indexed creator-coin market cap"
         />
         <ExploreHeroMetric
           label="1D Vol"
@@ -135,7 +64,14 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
       </div>
 
       <div className="app-meta-value text-right text-zinc-500/90">
-        {!updatedAt ? <LoadingText intent="processing" size="sm" labelOverride={statusLine} /> : statusLine}
+        {isLoading ? (
+          <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
+        ) : (
+          <>
+            {statusLine}
+            {isFetching ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
+          </>
+        )}
       </div>
     </div>
   )

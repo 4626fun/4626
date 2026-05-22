@@ -3,12 +3,14 @@ import { motion } from 'framer-motion'
 
 type ExplorePageShellProps = {
   leading?: ReactNode
-  title: string
-  subtitle: string
+  title?: string
+  subtitle?: string
   headerContent?: ReactNode
   subnav: ReactNode
   table: ReactNode
   footer?: ReactNode
+  /** List routes: hero lives in ExploreListLayout; only filters + table render here. */
+  variant?: 'full' | 'table'
 }
 
 export function ExplorePageShell({
@@ -19,7 +21,20 @@ export function ExplorePageShell({
   subnav,
   table,
   footer,
+  variant = 'full',
 }: ExplorePageShellProps) {
+  const isTableVariant = variant === 'table'
+
+  if (isTableVariant) {
+    return (
+      <>
+        <div className="mb-6">{subnav}</div>
+        <div className="vault-surface relative overflow-hidden">{table}</div>
+        {footer ? <div className="mt-4 text-center text-xs text-zinc-600">{footer}</div> : null}
+      </>
+    )
+  }
+
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
       {leading}

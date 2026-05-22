@@ -39,6 +39,7 @@ import {
   ExploreCreatorDetail,
   ExploreCreators,
   ExploreCreatorTransactions,
+  ExploreListLayout,
   ExploreTransactions,
   ExploreTrends,
   ExploreVaults,
@@ -52,18 +53,26 @@ import {
 } from './lazyRoutes'
 import { SmartWalletRoute } from './routeGuards'
 
-export type PathRouteDef = { path: string; element: ReactNode }
+export type PathRouteDef = {
+  path: string
+  element: ReactNode
+  index?: boolean
+  children?: PathRouteDef[]
+}
 
 export function renderPathRoutes(
   routes: PathRouteDef[],
   transformElement?: (element: ReactNode) => ReactNode,
 ) {
-  return routes.map(({ path, element }) => (
+  return routes.map(({ path, element, index, children }) => (
     <Route
-      key={path}
-      path={path}
+      key={index ? `${path}:index` : path}
+      path={index ? undefined : path}
+      index={index}
       element={transformElement ? transformElement(element) : element}
-    />
+    >
+      {children ? renderPathRoutes(children, transformElement) : null}
+    </Route>
   ))
 }
 
@@ -142,12 +151,20 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
   },
 ]
 
+export const EXPLORE_LIST_CHILD_ROUTES: PathRouteDef[] = [
+  { path: 'creators', element: <ExploreCreators /> },
+  { path: 'content', element: <ExploreContent /> },
+  { path: 'vaults', element: <ExploreVaults /> },
+  { path: 'trends', element: <ExploreTrends /> },
+  { path: 'transactions', element: <ExploreTransactions /> },
+]
+
 export const EXPLORE_ROUTES: PathRouteDef[] = [
-  { path: '/explore/creators', element: <ExploreCreators /> },
-  { path: '/explore/content', element: <ExploreContent /> },
-  { path: '/explore/vaults', element: <ExploreVaults /> },
-  { path: '/explore/trends', element: <ExploreTrends /> },
-  { path: '/explore/transactions', element: <ExploreTransactions /> },
+  {
+    path: '/explore',
+    element: <ExploreListLayout />,
+    children: EXPLORE_LIST_CHILD_ROUTES,
+  },
   { path: '/explore/creators/:chain/:tokenAddress', element: <ExploreCreatorDetail /> },
   {
     path: '/explore/creators/:chain/:tokenAddress/transactions',

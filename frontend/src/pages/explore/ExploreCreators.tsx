@@ -1,23 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
-import {
-  ExploreHeroMetric,
-  ExploreLoadMoreButton,
-  ExploreLoadingMoreRows,
-  ExploreTableMessage,
-} from '@/components/explore/ExploreUiPrimitives'
+import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
-import { apiFetch } from '@/lib/api/apiBase'
-import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
@@ -27,13 +18,13 @@ import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier
 import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
   flattenExplorePagedNodes,
-  formatCompactUsd,
   matchesCoinSearchQuery,
   normalizeCoinSearchQuery,
   recordExploreQueryRefresh,
   useDebouncedValue,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -46,9 +37,6 @@ const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
 const PAGE_SIZE = 20
 const SEARCH_AUTO_FETCH_MAX_PAGES = 30
 const REMOTE_SEARCH_MIN_QUERY_LENGTH = 3
-const LIVE_METRICS_REFETCH_MS = 10_000
-const ONE_DAY_MS = 24 * 60 * 60 * 1000
-const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 const CREATORS_SORT_VALUES = ['volume', 'marketCap', 'priceChange', 'new', 'ethosScore'] as const
 const CREATORS_TIME_FILTER_VALUES = ['1d'] as const
 const CREATORS_TIME_FILTERS = [{ label: '1D', value: '1d' }] as const
@@ -58,13 +46,6 @@ const CREATOR_SEARCH_MATCH_OPTIONS = {
   includePayoutAddress: true,
   includeQueryVariants: true,
   includeHandleBasenameVariant: true,
-} as const
-const SCREENSHOT_DEMO_METRICS = {
-  creatorsTotal: 12840,
-  creatorsNew24h: 184,
-  creatorCoinsMarketCapUsd: 14200000,
-  creatorCoinsVolume24hUsd: 845000,
-  creatorCoinsFees24hUsd: 25350,
 } as const
 const SCREENSHOT_DEMO_COINS: ZoraCoin[] = [
   {
@@ -118,52 +99,6 @@ type CreatorEthosRecord = {
   source: string | null
 }
 
-type ExploreMetrics = {
-  scope: 'creators'
-  updatedAt: string
-  exact: boolean
-  syncStatus: 'idle' | 'running' | 'error'
-  sync: {
-    backfillComplete: boolean
-    sampledCreators: number
-    lastSyncStartedAt: string | null
-    lastSyncFinishedAt: string | null
-    lastFullSyncAt: string | null
-    syncError: string | null
-    driftEstimateTotal: number | null
-    driftPct: number | null
-  }
-  totals: {
-    creatorsTotal: number | null
-    creatorsNew24h: number | null
-    creatorCoinsMarketCapUsd: number | null
-    creatorCoinsVolume24hUsd: number | null
-    creatorCoinsFees24hUsd: number | null
-    ethosScoredCreators: number | null
-    ethos1200Creators: number | null
-    ethos1600Creators: number | null
-    ethos1800Creators: number | null
-    partial: boolean
-    sampledCreators: number
-  }
-  history30d: Array<{
-    date: string
-    creatorCoinsMarketCapUsd: number | null
-  }>
-}
-
-async function fetchExploreCreatorsMetrics(): Promise<ExploreMetrics | null> {
-  // Prefer server-side metrics (fast + cached) via apiFetch (alias-aware).
-  try {
-    const res = await apiFetch(`${API_ENDPOINTS.zora.metrics}?scope=creators`, { method: 'GET' })
-    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreMetrics | null> | null
-    if (res.ok && json?.success) return json.data ?? null
-  } catch {
-    // ignore and return null below
-  }
-  return null
-}
-
 function toFiniteNumber(value: unknown): number | null {
   const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN
   if (!Number.isFinite(n)) return null
@@ -206,14 +141,6 @@ function resolveBestEthosSource(
   if (queryScore != null && queryScore === bestScore) return querySource
   if (serverScore != null && serverScore === bestScore) return serverSource ?? null
   return serverSource ?? querySource
-}
-
-function coalesceMetricValue(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (value == null) continue
-    if (Number.isFinite(value)) return value
-  }
-  return null
 }
 
 function dedupeCoinsByAddress(coins: ZoraCoin[]): ZoraCoin[] {
@@ -325,15 +252,6 @@ async function resolveCreatorSearchCandidates(query: string): Promise<ZoraCoin[]
   return dedupeCoinsByAddress(results)
 }
 
-function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number {
-  const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-  if (address && migratedCoins?.has(address)) return 0.01
-  const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-  if (!Number.isFinite(createdAtMs)) return 0.01
-  return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
-}
-
-
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
@@ -366,34 +284,7 @@ export function ExploreCreators() {
   
   // Fetch migrated coins for accurate fee detection
   const { migratedCoins } = useMigratedCoins()
-
-  const metricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'metrics'],
-    queryFn: fetchExploreCreatorsMetrics,
-    staleTime: 30_000,
-    gcTime: 30 * 60_000,
-    refetchInterval: LIVE_METRICS_REFETCH_MS,
-    refetchIntervalInBackground: true,
-    retry: 1,
-  })
-
-  const preferLiveMetricCards =
-    metricsQuery.data?.exact !== true || metricsQuery.data?.totals?.partial === true
-
-  // Fast-updating top-creator slice used for visibly-live metric cards.
-  const liveMetricsQuery = useQuery({
-    queryKey: ['explore', 'creators', 'live', 'top-volume-24h'],
-    queryFn: async () =>
-      fetchZoraExplore({
-        list: 'TOP_VOLUME_CREATORS_24H',
-        count: PAGE_SIZE,
-      }),
-    staleTime: LIVE_METRICS_REFETCH_MS,
-    refetchInterval: preferLiveMetricCards ? LIVE_METRICS_REFETCH_MS : false,
-    refetchIntervalInBackground: true,
-    enabled: preferLiveMetricCards,
-    retry: 1,
-  })
+  const { syncStatus, creatorsTotalCount } = useExploreCreatorsHeroMetrics()
 
   const {
     data,
@@ -467,90 +358,6 @@ export function ExploreCreators() {
     return localFilteredCoins
   }, [allCoins, directSearchCoins, localFilteredCoins, trimmedSearchQuery])
 
-  const liveMetricCoins = useMemo(() => {
-    const edges = Array.isArray(liveMetricsQuery.data?.edges) ? liveMetricsQuery.data.edges : []
-    const nodes = edges
-      .map((edge) => edge?.node as ZoraCoin | undefined)
-      .filter((node): node is ZoraCoin => Boolean(node))
-    return nodes.length > 0 ? nodes : allCoins
-  }, [allCoins, liveMetricsQuery.data])
-
-  const localMetricsFallback = useMemo(() => {
-    const seenCoinKeys = new Set<string>()
-    const seenCreators = new Set<string>()
-    const creatorLatestCreatedAt = new Map<string, number>()
-    const createdAtSamples: number[] = []
-
-    let marketCapUsd = 0
-    let volume24hUsd = 0
-    let fees24hUsd = 0
-
-    for (const coin of liveMetricCoins) {
-      const coinAddress = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-      const coinKey =
-        coinAddress ||
-        `${coin.creatorAddress ?? ''}:${coin.payoutRecipientAddress ?? ''}:${coin.symbol ?? ''}:${coin.createdAt ?? ''}`
-      if (seenCoinKeys.has(coinKey)) continue
-      seenCoinKeys.add(coinKey)
-
-      const creatorAddressRaw =
-        (typeof coin.creatorAddress === 'string' && coin.creatorAddress) ||
-        (typeof coin.payoutRecipientAddress === 'string' && coin.payoutRecipientAddress) ||
-        ''
-      const creatorAddress = creatorAddressRaw.toLowerCase()
-      if (creatorAddress) seenCreators.add(creatorAddress)
-
-      const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-      if (Number.isFinite(createdAtMs)) {
-        createdAtSamples.push(createdAtMs)
-      }
-      if (creatorAddress && Number.isFinite(createdAtMs)) {
-        const prevCreatedAt = creatorLatestCreatedAt.get(creatorAddress)
-        if (prevCreatedAt == null || createdAtMs > prevCreatedAt) {
-          creatorLatestCreatedAt.set(creatorAddress, createdAtMs)
-        }
-      }
-
-      const marketCapValue = toFiniteNumber(coin.marketCap)
-      if (marketCapValue != null) marketCapUsd += marketCapValue
-
-      const volumeValue = toFiniteNumber(coin.volume24h)
-      if (volumeValue != null) {
-        volume24hUsd += volumeValue
-        fees24hUsd += volumeValue * inferFeeRate(coin, migratedCoins)
-      }
-    }
-
-    const metricsUpdatedAtMs = Date.parse(metricsQuery.data?.updatedAt ?? '')
-    const fallbackNowMs =
-      Number.isFinite(metricsUpdatedAtMs) ? metricsUpdatedAtMs : createdAtSamples.length > 0 ? Math.max(...createdAtSamples) : null
-    const dayAgoMs = fallbackNowMs != null ? fallbackNowMs - ONE_DAY_MS : null
-    let creatorsNew24h = 0
-    if (dayAgoMs != null) {
-      for (const createdAtMs of creatorLatestCreatedAt.values()) {
-        if (createdAtMs >= dayAgoMs) creatorsNew24h += 1
-      }
-    }
-
-    return {
-      creatorsTotal: seenCreators.size > 0 ? seenCreators.size : seenCoinKeys.size,
-      creatorsNew24h,
-      creatorCoinsMarketCapUsd: marketCapUsd,
-      creatorCoinsVolume24hUsd: volume24hUsd,
-      creatorCoinsFees24hUsd: fees24hUsd,
-    }
-  }, [liveMetricCoins, metricsQuery.data?.updatedAt, migratedCoins])
-
-  const exactMetrics = metricsQuery.data?.exact === true
-  const syncStatus = metricsQuery.data?.syncStatus ?? 'running'
-  const syncMeta = metricsQuery.data?.sync ?? null
-  const metricsTotals = metricsQuery.data?.totals ?? null
-  const creatorsTotalDisplay = metricsTotals?.creatorsTotal ?? null
-  const creatorsNew24hDisplay = metricsTotals?.creatorsNew24h ?? null
-  const marketCapDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsMarketCapUsd, localMetricsFallback.creatorCoinsMarketCapUsd)
-  const volume24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsVolume24hUsd, localMetricsFallback.creatorCoinsVolume24hUsd)
-  const fees24hDisplay = coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
-  const creatorsTotalCount = creatorsTotalDisplay ?? 0
   const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
 
@@ -662,33 +469,6 @@ export function ExploreCreators() {
   const displayCoins = baseDisplayCoins
 
   const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
-  const creatorsTotalUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsTotal : creatorsTotalDisplay
-  const creatorsNew24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsNew24h : creatorsNew24hDisplay
-  const marketCapUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsMarketCapUsd : marketCapDisplay
-  const volume24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsVolume24hUsd : volume24hDisplay
-  const fees24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsFees24hUsd : fees24hDisplay
-  const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
-  const updatedTimeDisplay = canonicalUpdatedAt
-    ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    : null
-  const creatorsMetricHint =
-    creatorsNew24hUi != null
-      ? `+${creatorsNew24hUi.toLocaleString()} today`
-      : !exactMetrics && creatorsTotalDisplay != null && syncMeta?.driftEstimateTotal && syncMeta.driftEstimateTotal > creatorsTotalDisplay
-        ? `~${syncMeta.driftEstimateTotal.toLocaleString()} on Zora`
-        : !exactMetrics
-          ? 'Still indexing creator coins'
-          : null
-  const metricsStatusLine =
-    syncStatus === 'error'
-      ? 'Canonical totals retrying in background.'
-      : updatedTimeDisplay
-        ? exactMetrics
-          ? `Canonical totals refreshed ${updatedTimeDisplay}`
-          : `Estimated totals refreshed ${updatedTimeDisplay}`
-        : null
-  const creatorsLabel = exactMetrics ? 'Creators' : 'Indexed creators'
-  const marketLabel = 'Market Cap'
   const isSearchingDirectMatches =
     trimmedSearchQuery.length >= REMOTE_SEARCH_MIN_QUERY_LENGTH &&
     localFilteredCoins.length === 0 &&
@@ -744,46 +524,7 @@ export function ExploreCreators() {
 
   return (
     <ExplorePageShell
-      leading={<PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore" />}
-      title="Top Creators on Base"
-      subtitle="Creator Coins ranked by volume, market cap, and more."
-      headerContent={
-        <>
-          <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-            <ExploreHeroMetric
-              label={creatorsLabel}
-              value={creatorsTotalUi?.toLocaleString() ?? '—'}
-              hint={creatorsMetricHint}
-              title={
-                creatorsNew24hUi != null
-                  ? `+${creatorsNew24hUi.toLocaleString()} new in the last 24 hours`
-                  : 'Canonical creator-coin index size'
-              }
-            />
-            <ExploreHeroMetric
-              label={marketLabel}
-              value={formatCompactUsd(marketCapUi)}
-              hint="Live market-cap snapshot"
-              accent
-              title="Live market-cap snapshot"
-            />
-            <ExploreHeroMetric
-              label="1D Vol"
-              value={formatCompactUsd(volume24hUi)}
-              hint="24H trade volume"
-              title="24H trade volume across creator coins"
-            />
-            <ExploreHeroMetric
-              label="1D Fees"
-              value={formatCompactUsd(fees24hUi)}
-              hint="24H trading fees"
-              title="24H fees from creator-coin trading"
-            />
-          </div>
-
-          {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
-        </>
-      }
+      variant="table"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search creators"
@@ -794,6 +535,7 @@ export function ExploreCreators() {
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
           timeFilters={CREATORS_TIME_FILTERS}
+          showTabs={false}
           showSearch={false}
           showMobileSortRow={false}
           sortOptions={[

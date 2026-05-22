@@ -3,7 +3,6 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
@@ -107,11 +106,7 @@ export function ExploreContent() {
 
   return (
     <ExplorePageShell
-      title="Top Content on Base"
-      subtitle="Content Coins ranked by volume, market cap, and more."
-      headerContent={
-        <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-      }
+      variant="table"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search content"
@@ -122,6 +117,7 @@ export function ExploreContent() {
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
           timeFilters={CONTENT_TIME_FILTERS}
+          showTabs={false}
           showSearch={false}
           showMobileSortRow={false}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}

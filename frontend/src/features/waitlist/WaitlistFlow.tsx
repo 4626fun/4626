@@ -23,6 +23,7 @@ import {
   applyWaitlistSubAccountConnectOverlay,
   type WaitlistStep,
   type WaitlistSubAccountConnectOverlay,
+  isSubAccountExecutionReady,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
@@ -1089,6 +1090,7 @@ export function WaitlistFlow(props: {
                 account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
+              serverExecutionReady={isSubAccountExecutionReady(account?.accountSignals)}
             />
           </div>
         ) : step === 'done' && account ? (
@@ -1136,6 +1138,7 @@ export function WaitlistFlow(props: {
                 account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
+              serverExecutionReady={isSubAccountExecutionReady(account?.accountSignals)}
             />
             </motion.div>
           ) : step === 'done' && account ? (

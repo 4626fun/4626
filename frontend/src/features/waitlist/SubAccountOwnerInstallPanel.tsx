@@ -11,9 +11,10 @@ import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
 import {
+  isAa23SubAccountOwnerInstallError,
   mapSubAccountOwnerInstallError,
   SUB_ACCOUNT_IN_BASE_APP_HINT,
-  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
+  SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
@@ -34,6 +35,8 @@ type SubAccountOwnerInstallPanelProps = {
   showHeader?: boolean
   /** Reuse an existing setup hook instance from a parent surface (avoids duplicate Privy wallet hooks). */
   setup?: SubAccountOwnerInstallSetup
+  /** When the server already marks sub-account execution ready, hide the install CTA. */
+  serverExecutionReady?: boolean
   onSuccess?: () => void
 }
 
@@ -112,6 +115,7 @@ function SubAccountOwnerInstallPanelContent(
     className = '',
     variant = 'recovery',
     showHeader = variant === 'inline',
+    serverExecutionReady = false,
     onSuccess,
     setup,
   } = props
@@ -125,7 +129,8 @@ function SubAccountOwnerInstallPanelContent(
   const embeddedEoa = embeddedFromProps ?? normalizeAddress(embeddedWallet?.address)
 
   const [actionError, setActionError] = useState<string | null>(null)
-  const [signerLinkedPendingOwner, setSignerLinkedPendingOwner] = useState(false)
+  const [optionalOwnerNote, setOptionalOwnerNote] = useState<string | null>(null)
+  const [localSigningEnabled, setLocalSigningEnabled] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
@@ -161,7 +166,7 @@ function SubAccountOwnerInstallPanelContent(
   const handleInstall = useCallback(async () => {
     if (!parent || !subAccount || needsBaseAppHost) return
     setActionError(null)
-    setSignerLinkedPendingOwner(false)
+    setOptionalOwnerNote(null)
 
     const result = await installSubAccountOwnerOnly({
       parentAddress: parent,
@@ -177,23 +182,34 @@ function SubAccountOwnerInstallPanelContent(
       return
     }
 
-    await refreshOwnerCheck()
-
-    const ownerReady = result.alreadyOwner || result.onChainOwnerInstalled
-    if (!ownerReady) {
+    if (!result.registered) {
       const message = mapSubAccountOwnerInstallError(
-        result.onChainOwnerWarning ??
-          'Base App did not finish the on-chain owner approval for your app wallet.',
+        result.onChainOwnerWarning ?? 'Could not save your Base App signing link.',
         { inBaseApp },
       )
       setActionError(message)
-      setSignerLinkedPendingOwner(true)
       setShowRecovery(true)
       return
     }
 
+    await refreshOwnerCheck()
+
+    const ownerReady = result.alreadyOwner || result.onChainOwnerInstalled
+    setLocalSigningEnabled(true)
     setShowRecovery(false)
     onSuccess?.()
+
+    if (!ownerReady && result.onChainOwnerWarning) {
+      const mapped = mapSubAccountOwnerInstallError(result.onChainOwnerWarning, { inBaseApp })
+      setOptionalOwnerNote(
+        isAa23SubAccountOwnerInstallError(result.onChainOwnerWarning)
+          ? mapped
+          : SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE,
+      )
+      return
+    }
+
+    setOptionalOwnerNote(null)
   }, [
     getLastSetupError,
     inBaseApp,
@@ -230,7 +246,10 @@ function SubAccountOwnerInstallPanelContent(
     )
   }
 
-  if (embeddedOwnerOnSubAccount) {
+  const signingEnabled =
+    embeddedOwnerOnSubAccount || serverExecutionReady || localSigningEnabled
+
+  if (signingEnabled) {
     return (
       <div
         className={`flex items-start gap-2.5 text-left ${className}`}
@@ -242,6 +261,11 @@ function SubAccountOwnerInstallPanelContent(
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
             Your embedded key can sign for the app wallet.
           </p>
+          {optionalOwnerNote ? (
+            <p className="mt-2 text-xs leading-relaxed text-amber-200/90" role="status">
+              {optionalOwnerNote}
+            </p>
+          ) : null}
         </div>
       </div>
     )
@@ -314,13 +338,6 @@ function SubAccountOwnerInstallPanelContent(
     <p className="text-xs leading-relaxed text-zinc-400">{SUB_ACCOUNT_IN_BASE_APP_HINT}</p>
   )
 
-  const pendingOwnerBlock =
-    signerLinkedPendingOwner && !needsBaseAppHost ? (
-      <p className="text-xs leading-relaxed text-amber-200/90" role="status">
-        {SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE}
-      </p>
-    ) : null
-
   const errorBlock =
     actionError && !needsBaseAppHost ? (
       <p className="text-xs leading-relaxed text-rose-300/90" role="alert">
@@ -344,7 +361,6 @@ function SubAccountOwnerInstallPanelContent(
         </p>
         {contextHint}
         {primaryAction}
-        {pendingOwnerBlock}
         {errorBlock}
         {recoveryBlock}
       </div>
@@ -378,7 +394,6 @@ function SubAccountOwnerInstallPanelContent(
 
       {contextHint}
       {primaryAction}
-      {pendingOwnerBlock}
       {errorBlock}
       {recoveryBlock}
 

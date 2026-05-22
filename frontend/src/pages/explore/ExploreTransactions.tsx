@@ -1,11 +1,10 @@
 import { useMemo } from 'react'
-import { motion } from 'framer-motion'
 import { ArrowUpRight, ArrowDownLeft, ExternalLink } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
+import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import { fetchZoraExplore } from '@/lib/zora/client'
@@ -338,56 +337,28 @@ export function ExploreTransactions() {
   })
 
   return (
-    <div className="relative pb-24 md:pb-0 min-h-screen">
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl sm:text-4xl font-medium text-white mb-2">
-            Recent activity
-          </h1>
-          <p className="text-zinc-400 text-sm">
-            Recently traded coins across the Zora ecosystem.
-          </p>
-
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </motion.div>
-
-        {/* Navigation & Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <ExploreSubnav
-            searchPlaceholder="Filter by token"
-            searchValue={searchQuery}
-            onSearch={handleSearchChange}
-            onTimeFilterChange={handleTimeFilterChange}
-            onSortChange={handleSortChange}
-            currentTimeFilter={currentTimeFilter}
-            currentSort={currentSort}
-            timeFilters={TRANSACTIONS_TIME_FILTERS}
-            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-            sortOptions={TRANSACTIONS_SORT_OPTIONS}
-            disableUniswapTimeGating
-            showSearch={false}
-            showMobileSortRow={false}
-          />
-        </motion.div>
-
-        {/* Activity Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="overflow-hidden rounded-2xl bg-vault-card/35"
-        >
+    <ExplorePageShell
+      variant="table"
+      subnav={
+        <ExploreSubnav
+          searchPlaceholder="Filter by token"
+          searchValue={searchQuery}
+          onSearch={handleSearchChange}
+          onTimeFilterChange={handleTimeFilterChange}
+          onSortChange={handleSortChange}
+          currentTimeFilter={currentTimeFilter}
+          currentSort={currentSort}
+          timeFilters={TRANSACTIONS_TIME_FILTERS}
+          volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+          sortOptions={TRANSACTIONS_SORT_OPTIONS}
+          disableUniswapTimeGating
+          showTabs={false}
+          showSearch={false}
+          showMobileSortRow={false}
+        />
+      }
+      table={
+        <div className="overflow-hidden rounded-2xl bg-vault-card/35">
           {/* Sticky header */}
           <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
             <ActivityTableHeader timeframe={currentTimeFilter} />
@@ -434,18 +405,9 @@ export function ExploreTransactions() {
               void fetchNextPage()
             }}
           />
-        </motion.div>
-
-        {/* Info footer */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
-          className="mt-4 text-center text-xs text-zinc-600"
-        >
-          Showing {filteredActivity.length} recently traded tokens on Base
-        </motion.div>
-      </div>
-    </div>
+        </div>
+      }
+      footer={`Showing ${filteredActivity.length} recently traded tokens on Base`}
+    />
   )
 }

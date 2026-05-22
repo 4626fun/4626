@@ -137,9 +137,10 @@ describe('WaitlistConnectBaseApp', () => {
     )
   })
 
-  it('surfaces retryable error when required owner install fails before register', async () => {
+  it('completes when optional owner install fails after signer link succeeds', async () => {
     mockProvision(true)
     hookState.confirmOwner.mockResolvedValueOnce(null)
+    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
@@ -148,10 +149,16 @@ describe('WaitlistConnectBaseApp', () => {
     })
 
     await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
-    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
-    expect(registerMock).not.toHaveBeenCalled()
-    expect(onComplete).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('waitlist-connect-base-app-complete')).toBeNull()
+    await waitFor(() => expect(registerMock).toHaveBeenCalled())
+    await waitFor(
+      () =>
+        expect(onComplete).toHaveBeenCalledWith({
+          parentAddress: PARENT,
+          subAccountAddress: SUB,
+        }),
+      { timeout: 3000 },
+    )
+    expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeNull()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {

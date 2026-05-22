@@ -155,6 +155,10 @@ export const AuctionDemo = lazyDefault(() => import('../pages/auction/AuctionDem
 export const AgentDirectory = lazyNamed(() => import('../pages/agents/AgentDirectory'), 'AgentDirectory')
 export const AgentRegister = lazyNamed(() => import('../pages/agents/AgentRegister'), 'AgentRegister')
 export const AgentUriService = lazyNamed(() => import('../pages/agents/AgentUriService'), 'AgentUriService')
+export const ExploreListLayout = lazyNamed(
+  () => import('../components/explore/ExploreListLayout'),
+  'ExploreListLayout',
+)
 export const ExploreCreators = lazyNamed(() => import('../pages/explore/ExploreCreators'), 'ExploreCreators')
 export const ExploreContent = lazyNamed(() => import('../pages/explore/ExploreContent'), 'ExploreContent')
 export const ExploreVaults = lazyNamed(() => import('../pages/explore/ExploreVaults'), 'ExploreVaults')

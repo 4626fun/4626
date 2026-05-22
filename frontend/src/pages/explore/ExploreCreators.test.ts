@@ -4,10 +4,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreCreators } from './ExploreCreators'
 
-const { useQueryMock, useInfiniteQueryMock, useQueriesMock } = vi.hoisted(() => ({
-  useQueryMock: vi.fn(),
+const { useInfiniteQueryMock, useQueriesMock, useQueryMock } = vi.hoisted(() => ({
   useInfiniteQueryMock: vi.fn(),
   useQueriesMock: vi.fn(),
+  useQueryMock: vi.fn(),
+}))
+
+vi.mock('@/features/explore/useExploreCreatorsHeroMetrics', () => ({
+  useExploreCreatorsHeroMetrics: () => ({
+    syncStatus: 'running',
+    creatorsTotalCount: 1507,
+  }),
 }))
 
 vi.mock('framer-motion', () => ({
@@ -74,27 +81,7 @@ const BASE_COIN = {
   volume24h: '5730',
 }
 
-function configureQueries(params?: {
-  metrics?: {
-    exact: boolean
-    creatorsTotal: number
-    creatorsNew24h: number
-    marketCap: number
-    volume24h: number
-    fees24h: number
-  }
-  liveEdges?: any[]
-  pageEdges?: any[]
-}) {
-  const metrics = params?.metrics ?? {
-    exact: false,
-    creatorsTotal: 1507,
-    creatorsNew24h: 12,
-    marketCap: 6260000,
-    volume24h: 5720,
-    fees24h: 57.17,
-  }
-  const liveEdges = params?.liveEdges ?? []
+function configureQueries(params?: { pageEdges?: any[] }) {
   const pageEdges = params?.pageEdges ?? []
 
   useInfiniteQueryMock.mockReturnValue({
@@ -114,48 +101,12 @@ function configureQueries(params?: {
     error: null,
   })
 
-  useQueryMock.mockImplementation((opts: any) => {
-    const queryKey = Array.isArray(opts?.queryKey) ? opts.queryKey : []
-    const queryType = String(queryKey[2] ?? '')
-
-    if (queryType === 'metrics') {
-      return {
-        data: {
-          exact: metrics.exact,
-          syncStatus: 'running',
-          updatedAt: '2025-01-01T00:00:00.000Z',
-          sync: {
-            lastFullSyncAt: null,
-            driftEstimateTotal: null,
-          },
-          totals: {
-            creatorsTotal: metrics.creatorsTotal,
-            creatorsNew24h: metrics.creatorsNew24h,
-            creatorCoinsMarketCapUsd: metrics.marketCap,
-            creatorCoinsVolume24hUsd: metrics.volume24h,
-            creatorCoinsFees24hUsd: metrics.fees24h,
-            partial: !metrics.exact,
-            sampledCreators: 100,
-          },
-        },
-      }
-    }
-
-    if (queryType === 'live') {
-      return {
-        data: {
-          edges: liveEdges,
-          pageInfo: { hasNextPage: false, endCursor: null },
-        },
-      }
-    }
-
-    return {
-      data: [],
-      isLoading: false,
-      isFetching: false,
-    }
+  useQueryMock.mockReturnValue({
+    data: [],
+    isLoading: false,
+    isFetching: false,
   })
+
   useQueriesMock.mockImplementation((opts: any) => {
     const queries = Array.isArray(opts?.queries) ? opts.queries : []
     return queries.map(() => ({
@@ -169,38 +120,22 @@ function configureQueries(params?: {
 }
 
 describe('ExploreCreators', () => {
-  it('uses partial-sync copy and includes live estimate status', () => {
+  it('shows syncing empty state when indexed totals exist but rows are empty', () => {
     configureQueries()
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('Indexed creators')
-    expect(html).toContain('1,507')
-    expect(html).toContain('+12 today')
     expect(html).toContain('Creator list is still syncing')
-    expect(html).not.toContain('Indexed 1,507 creators')
     expect(html).not.toContain('No creators available')
   })
 
-  it('prefers live metric cards when canonical totals are partial', () => {
+  it('renders loaded creator rows', () => {
     configureQueries({
-      metrics: {
-        exact: false,
-        creatorsTotal: 2000,
-        creatorsNew24h: 25,
-        marketCap: 100,
-        volume24h: 200,
-        fees24h: 2,
-      },
-      liveEdges: [{ node: BASE_COIN }],
       pageEdges: [{ node: BASE_COIN }],
     })
 
     const html = renderToStaticMarkup(React.createElement(ExploreCreators))
 
-    expect(html).toContain('+25 today')
-    expect(html).not.toContain('Indexed 2,000 creators')
-    expect(html).toContain('$100.00')
-    expect(html).toContain('$200.00')
-    expect(html).toContain('$2.00')
+    expect(html).toContain('token-row')
+    expect(html).toContain('Showing 1 creators')
   })
 })

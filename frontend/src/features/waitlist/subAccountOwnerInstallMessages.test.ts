@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   mapSubAccountOwnerInstallError,
+  SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE,
   SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
   SUB_ACCOUNT_TESTNET_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
@@ -37,6 +38,12 @@ describe('mapSubAccountOwnerInstallError', () => {
         { inBaseApp: true },
       ),
     ).toBe(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)
+  })
+
+  it('maps aa23 errors to explicit signature guidance', () => {
+    expect(
+      mapSubAccountOwnerInstallError('AA23 reverted (or OOG)', { inBaseApp: true }),
+    ).toBe(SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE)
   })
 
   it('maps legacy combined copy to the current in-app guidance', () => {

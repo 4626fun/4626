@@ -1,12 +1,7 @@
 import type { ReactNode } from 'react'
 import { Search } from 'lucide-react'
-import { Link, useLocation } from 'react-router-dom'
 import { useUniswapServiceStatus } from '@/lib/uniswap/hooks'
-
-type Tab = {
-  label: string
-  to: string
-}
+import { ExploreTabNav } from '@/components/explore/ExploreTabNav'
 
 type ExploreTimeFilterOption = {
   label: string
@@ -17,14 +12,6 @@ type ExploreSortOption = {
   label: string
   value: string
 }
-
-const TABS: Tab[] = [
-  { label: 'Creators', to: '/explore/creators' },
-  { label: 'Content', to: '/explore/content' },
-  { label: 'Vaults', to: '/explore/vaults' },
-  { label: 'Trends', to: '/explore/trends' },
-  { label: 'Transactions', to: '/explore/transactions' },
-]
 
 // Zora explore volume is 24h or all-time (`totalVolume`); 1W is labeled honestly in copy when selected.
 // Pill availability: 1D always; others when Uniswap historical service is configured (see useUniswapServiceStatus).
@@ -40,11 +27,6 @@ const DEFAULT_SORT_OPTIONS: readonly ExploreSortOption[] = [
   { label: 'Price change', value: 'priceChange' },
   { label: 'Recently added', value: 'new' },
 ]
-
-function isActive(pathname: string, to: string): boolean {
-  if (pathname === to) return true
-  return pathname.startsWith(`${to}/`)
-}
 
 export function applyExploreParamChange({
   value,
@@ -75,6 +57,7 @@ export function ExploreSubnav({
   extraFilters,
   showSearch = true,
   showMobileSortRow = true,
+  showTabs = true,
 }: {
   searchPlaceholder?: string
   searchValue?: string
@@ -91,9 +74,9 @@ export function ExploreSubnav({
   extraFilters?: ReactNode
   showSearch?: boolean
   showMobileSortRow?: boolean
+  /** When false, tab links render in ExploreListLayout instead (list routes only). */
+  showTabs?: boolean
 }) {
-  const location = useLocation()
-
   // Check if Uniswap historical data service is available
   const { data: uniswapStatus } = useUniswapServiceStatus()
   const uniswapAvailable = uniswapStatus?.available === true
@@ -118,29 +101,10 @@ export function ExploreSubnav({
 
   return (
     <div className="space-y-2.5 sm:space-y-3">
-      {/* Main navigation row */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
-        {/* Tabs */}
-        <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto scrollbar-hide">
-          {TABS.map((tab) => {
-            const active = isActive(location.pathname, tab.to)
-            return (
-              <Link
-                key={tab.to}
-                to={tab.to}
-                aria-current={active ? 'page' : undefined}
-                className={`py-1 text-[13px] sm:text-sm transition-colors duration-150 whitespace-nowrap ${
-                  active ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white font-medium'
-                }`}
-              >
-                {tab.label}
-              </Link>
-            )
-          })}
-        </div>
+        {showTabs ? <ExploreTabNav /> : null}
 
-        {/* Search & Filters */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 lg:ml-auto">
           {showSearch ? (
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />

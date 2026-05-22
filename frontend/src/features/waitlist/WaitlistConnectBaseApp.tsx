@@ -40,6 +40,7 @@ type Props = {
   parentAddress?: string | null
   subAccountAddress?: string | null
   embeddedEoaAddress?: string | null
+  serverExecutionReady?: boolean
 }
 
 type PendingProvision = {
@@ -185,7 +186,14 @@ export function WaitlistConnectBaseApp(props: Props) {
 }
 
 function WaitlistConnectBaseAppReady(props: Props) {
-  const { onSkip, onComplete, parentAddress, subAccountAddress, embeddedEoaAddress } = props
+  const {
+    onSkip,
+    onComplete,
+    parentAddress,
+    subAccountAddress,
+    embeddedEoaAddress,
+    serverExecutionReady = false,
+  } = props
   const setup = useSubAccountSetup()
   const {
     provisionSubAccount,
@@ -312,17 +320,12 @@ function WaitlistConnectBaseAppReady(props: Props) {
     })
     if (cancelledRef.current) return
     if (!ownerInstalled) {
-      setView({
-        kind: 'error',
-        message: mapSetupFailureMessage({
-          error: getLastSetupError(),
-          lastStage,
-          fallback:
-            'Your app wallet is linked, but Base App did not finish the on-chain owner approval. Tap Try again and approve the signing prompt.',
-        }),
-        canRetry: true,
+      // On-chain addOwner is optional once the signer is linked; registration is the gate for swaps.
+      console.warn('waitlist.base_app.optional_owner_install_failed', {
+        parentAddress: pending.parentAddress,
+        subAccountAddress: pending.subAccountAddress,
+        message: getLastSetupError()?.message ?? lastStage?.message ?? null,
       })
-      return
     }
 
     await persistAndComplete(pending)
@@ -380,6 +383,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
               parentAddress={parentAddress}
               subAccountAddress={subAccountAddress}
               embeddedEoaAddress={embeddedEoaAddress}
+              serverExecutionReady={serverExecutionReady}
               setup={setup}
             />
           ) : null}
@@ -406,6 +410,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
                 parentAddress={parentAddress}
                 subAccountAddress={subAccountAddress}
                 embeddedEoaAddress={embeddedEoaAddress}
+                serverExecutionReady={serverExecutionReady}
                 setup={setup}
               />
             ) : null}

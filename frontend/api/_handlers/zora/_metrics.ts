@@ -388,7 +388,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
 
   return {
     scope,
-    updatedAt: lastFullSyncAt ?? lastSyncFinishedAt ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     exact,
     syncStatus,
     sync: {

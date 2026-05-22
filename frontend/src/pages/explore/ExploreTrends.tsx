@@ -3,7 +3,6 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
@@ -106,11 +105,7 @@ export function ExploreTrends() {
 
   return (
     <ExplorePageShell
-      title="Top Trends on Base"
-      subtitle="Trend Coins ranked by trend velocity, volume, and market cap."
-      headerContent={
-        <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-      }
+      variant="table"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search trends"
@@ -121,6 +116,7 @@ export function ExploreTrends() {
           currentTimeFilter={currentTimeFilter}
           currentSort={currentSort}
           timeFilters={TRENDS_TIME_FILTERS}
+          showTabs={false}
           showSearch={false}
           showMobileSortRow={false}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
