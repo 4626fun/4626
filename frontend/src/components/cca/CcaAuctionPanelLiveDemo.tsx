@@ -369,12 +369,13 @@ export function CcaAuctionPanelLiveDemo({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Amount input */}
               <div className="space-y-2">
-                <label className="label flex items-center justify-between">
+                <label htmlFor="cca-demo-spend-eth" className="label flex items-center justify-between">
                   <span>ETH to Commit</span>
                   <span className="text-[9px] text-zinc-600">ETH</span>
                 </label>
                 <div className="relative">
                   <input
+                    id="cca-demo-spend-eth"
                     value={spendEth}
                     onChange={(e) => setSpendEth(e.target.value)}
                     placeholder="0.05"
@@ -402,10 +403,10 @@ export function CcaAuctionPanelLiveDemo({
 
               {/* Estimated tokens */}
               <div className="space-y-2">
-                <label className="label flex items-center justify-between">
+                <p className="label flex items-center justify-between">
                   <span>Estimated Allocation</span>
                   <span className="text-[9px] text-zinc-600">{tokenSymbol}</span>
-                </label>
+                </p>
                 <div className="bg-black/80 border border-white/5 rounded-lg p-4 h-[72px] flex flex-col justify-center">
                   <AnimatePresence mode="wait">
                     {estTokens ? (
@@ -439,11 +440,12 @@ export function CcaAuctionPanelLiveDemo({
                   exit={{ opacity: 0, height: 0 }}
                 >
                   <div className="space-y-2">
-                    <label className="label flex items-center justify-between">
+                    <label htmlFor="cca-demo-max-price" className="label flex items-center justify-between">
                       <span>Max Price (ETH per token)</span>
                       <span className="text-[9px] text-uniswap">CUSTOM</span>
                     </label>
                     <input
+                      id="cca-demo-max-price"
                       value={maxPriceEthPerToken}
                       onChange={(e) => setMaxPriceEthPerToken(e.target.value)}
                       placeholder={clearingPriceText}
@@ -453,7 +455,7 @@ export function CcaAuctionPanelLiveDemo({
                   </div>
 
                   <div className="space-y-2">
-                    <label className="label">Effective Max Price</label>
+                    <p className="label">Effective Max Price</p>
                     <div className="bg-black/80 border border-white/5 rounded-lg p-4 h-[72px] flex flex-col justify-center">
                       <div className="value mono text-2xl text-uniswap">
                         {maxPriceText} ETH

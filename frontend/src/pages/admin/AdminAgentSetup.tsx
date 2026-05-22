@@ -1344,8 +1344,9 @@ export function AdminAgentSetup() {
             <>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Vault Address</label>
+                  <label htmlFor="agent-vault-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Vault Address</label>
                   <input
+                    id="agent-vault-address"
                     type="text"
                     value={vaultAddress}
                     onChange={(e) => setVaultAddress(e.target.value)}
@@ -1357,8 +1358,9 @@ export function AdminAgentSetup() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Creator Coin Address</label>
+                  <label htmlFor="agent-creator-coin-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Creator Coin Address</label>
                   <input
+                    id="agent-creator-coin-address"
                     type="text"
                     value={creatorCoinAddress}
                     onChange={(e) => setCreatorCoinAddress(e.target.value)}
@@ -1372,8 +1374,9 @@ export function AdminAgentSetup() {
               </div>
 
               <div>
-                <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">XMTP Group ID</label>
+                <label htmlFor="agent-xmtp-group-id" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">XMTP Group ID</label>
                 <input
+                  id="agent-xmtp-group-id"
                   type="text"
                   value={groupId}
                   onChange={(e) => setGroupId(e.target.value)}
@@ -1387,8 +1390,9 @@ export function AdminAgentSetup() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Address (optional)</label>
+                  <label htmlFor="agent-lens-group-address" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Address (optional)</label>
                   <input
+                    id="agent-lens-group-address"
                     type="text"
                     value={lensGroupAddress}
                     onChange={(e) => setLensGroupAddress(e.target.value)}
@@ -1400,8 +1404,9 @@ export function AdminAgentSetup() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Metadata URI (optional)</label>
+                  <label htmlFor="agent-lens-metadata-uri" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Lens Group Metadata URI (optional)</label>
                   <input
+                    id="agent-lens-metadata-uri"
                     type="text"
                     value={lensMetadataUri}
                     onChange={(e) => setLensMetadataUri(e.target.value)}
@@ -1435,24 +1440,26 @@ export function AdminAgentSetup() {
             <p className="text-xs text-zinc-500">Enable your agent first.</p>
           ) : (
             <>
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
+              <label htmlFor="agent-gating-enabled" className="flex items-center gap-3 cursor-pointer">
+                <span className="relative inline-flex items-center">
                   <input
+                    id="agent-gating-enabled"
                     type="checkbox"
                     checked={gatingEnabled}
                     onChange={(e) => setGatingEnabled(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/60" />
-                </label>
+                  <span className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500/60" />
+                </span>
                 <span className="text-xs text-zinc-300">Require vault shares to join</span>
-              </div>
+              </label>
 
               {gatingEnabled && (
                 <div className="grid gap-4 sm:grid-cols-2 pl-12">
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Gating Mode</label>
+                    <label htmlFor="agent-gating-mode" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Gating Mode</label>
                     <select
+                      id="agent-gating-mode"
                       value={gatingMode}
                       onChange={(e) => setGatingMode(e.target.value as 'shares' | 'none')}
                       className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-violet-500/30"
@@ -1462,8 +1469,9 @@ export function AdminAgentSetup() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Min Shares</label>
+                    <label htmlFor="agent-min-shares" className="block text-[10px] uppercase tracking-wider text-zinc-500 mb-1.5">Min Shares</label>
                     <input
+                      id="agent-min-shares"
                       type="text"
                       value={minShares}
                       onChange={(e) => setMinShares(e.target.value)}
@@ -1474,21 +1482,26 @@ export function AdminAgentSetup() {
                 </div>
               )}
 
-              <div className="flex items-center gap-3">
-                <label className="relative inline-flex items-center cursor-pointer">
+              <label
+                htmlFor="agent-join-locked"
+                aria-label="Lock joins. Prevent new members from joining even if they pass gating checks."
+                className="flex items-center gap-3 cursor-pointer"
+              >
+                <span className="relative inline-flex items-center">
                   <input
+                    id="agent-join-locked"
                     type="checkbox"
                     checked={joinLocked}
                     onChange={(e) => setJoinLocked(e.target.checked)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500/60" />
-                </label>
-                <div>
+                  <span className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500/60" />
+                </span>
+                <span>
                   <span className="text-xs text-zinc-300">Lock joins</span>
                   <p className="app-meta-value text-zinc-600">Prevent new members from joining even if they pass gating checks</p>
-                </div>
-              </div>
+                </span>
+              </label>
             </>
           )}
         </div>

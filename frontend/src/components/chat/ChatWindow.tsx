@@ -1066,7 +1066,9 @@ export function ChatWindow({
   const headerMenu = headerMenuOpen ? (
     <div
       className="absolute left-0 top-[calc(100%+8px)] z-[80] w-[292px] overflow-hidden rounded-2xl border border-white/10 bg-[#202123]/98 p-2 text-zinc-100 shadow-[0_20px_70px_-24px_rgba(0,0,0,0.95)] ring-1 ring-black/40 backdrop-blur-xl"
-      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      tabIndex={-1}
       role="menu"
       aria-label={`${headerName} chat menu`}
     >
@@ -1238,9 +1240,11 @@ export function ChatWindow({
           </button>
         </div>
       ) : (
-        <div
-          className="flex items-center justify-between gap-2 px-3 py-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none shrink-0"
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 px-3 py-2 bg-zinc-800/80 border-b border-white/10 cursor-pointer select-none shrink-0 text-left"
           onClick={onMinimize}
+          aria-label={`Minimize chat with ${headerName}`}
         >
           <div className="flex items-center gap-2 min-w-0">
             <ChatHeaderAvatar
@@ -1327,7 +1331,7 @@ export function ChatWindow({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
-        </div>
+        </button>
       )}
 
       {/* Messages */}

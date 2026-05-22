@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { encodeFunctionData, getAddress } from 'viem'
 import {
@@ -40,6 +40,13 @@ const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
   // No official google icon in lucide — fall back to a styled letter badge.
   google: null,
   zora_cross_app: null,
+}
+
+function handleAccordionToggleKeyboard(event: KeyboardEvent, toggle: () => void) {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault()
+    toggle()
+  }
 }
 
 function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
@@ -422,11 +429,15 @@ export function AccountSetupWorkspaceView(props: {
             const isOpen = s === 'active'
             const addr = canonicalCswAddress
             return (
-              <div
-                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                onClick={() => toggleStep(1)}
-              >
-                <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}>
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleStep(1)}
+                  onKeyDown={(event) => handleAccordionToggleKeyboard(event, () => toggleStep(1))}
+                >
                   {/* Number / check badge */}
                   <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
@@ -500,7 +511,7 @@ export function AccountSetupWorkspaceView(props: {
 
                 {/* Expanded body */}
                 {isOpen ? (
-                  <div className="space-y-3 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-3 px-4 pb-4 pl-[52px]">
                     {/* Primary actions */}
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -530,10 +541,7 @@ export function AccountSetupWorkspaceView(props: {
                     </div>
 
                     {/* Wallet detection sub-section */}
-                    <div
-                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
-                      onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
                       <div className="flex items-center gap-2 text-[11px] text-zinc-500">
                         <WalletProviderIcon provider="coinbase" size={11} />
                         <span>Coinbase Smart Wallet detection</span>
@@ -602,11 +610,15 @@ export function AccountSetupWorkspaceView(props: {
             const s = stepTwoStatus
             const isOpen = s === 'active'
             return (
-              <div
-                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                onClick={() => toggleStep(2)}
-              >
-                <div className="flex items-center gap-3 px-4 py-3.5">
+              <div className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}>
+                <div
+                  className="flex items-center gap-3 px-4 py-3.5"
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => toggleStep(2)}
+                  onKeyDown={(event) => handleAccordionToggleKeyboard(event, () => toggleStep(2))}
+                >
                   <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
@@ -624,7 +636,7 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
 
                 {isOpen ? (
-                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
                     {preferBaseAppSubAccountSetup ? (
                       <div className="space-y-4">
                         <p className="text-xs leading-relaxed text-zinc-500">

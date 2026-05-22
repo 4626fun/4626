@@ -111,6 +111,7 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
   const [pendingDeepLinkIntent, setPendingDeepLinkIntent] = useState<PendingDeepLinkIntent | null>(null)
   const [pendingOpenRequest, setPendingOpenRequest] = useState<ChatOpenRequest | null>(null)
   const newDmPreviewCacheRef = useRef<Map<string, DmRecipientResolution | null>>(new Map())
+  const newDmInputRef = useRef<HTMLInputElement>(null)
 
   const maybeConnectMessaging = useCallback(() => {
     if (shouldAutoConnectMessaging(status)) {
@@ -346,6 +347,11 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
     window.addEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
     return () => window.removeEventListener(CHAT_NEW_DM_REQUEST_EVENT, handleNewDmRequest)
   }, [handleNewDm, maybeConnectMessaging])
+
+  useEffect(() => {
+    if (!showNewDm) return
+    newDmInputRef.current?.focus()
+  }, [showNewDm])
 
   useEffect(() => {
     if (!showNewDm) return
@@ -596,8 +602,12 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs text-zinc-400">Recipient address or Basename</label>
+              <label htmlFor="chat-new-dm-recipient" className="text-xs text-zinc-400">
+                Recipient address or Basename
+              </label>
               <input
+                id="chat-new-dm-recipient"
+                ref={newDmInputRef}
                 type="text"
                 value={newDmAddress}
                 onChange={(e) => {
@@ -608,7 +618,6 @@ function ChatWidgetInner(props: { availabilityRailExpanded?: boolean }) {
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleStartDm() }}
                 placeholder="0x... or akita"
                 className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-primary/40 font-mono"
-                autoFocus
               />
               {showBasenameAutocomplete && basenameAutocomplete && (
                 <button

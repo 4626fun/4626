@@ -2043,10 +2043,9 @@ export function Swap() {
                           checked={useAmoePointsForEntry}
                           onChange={(event) => setUseAmoePointsForEntry(event.target.checked)}
                           className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-brand-primary"
+                          aria-label="Use points for a free jackpot entry"
                         />
-                        <span className="min-w-0">
-                          <span className="block font-medium">Use points for a free jackpot entry</span>
-                        </span>
+                        <span className="min-w-0 block font-medium">Use points for a free jackpot entry</span>
                       </label>
                     </motion.div>
                   )}
@@ -2435,8 +2434,9 @@ function LiquidityPanel(props: {
 
         <div className="mt-2 grid grid-cols-2 gap-2">
           <div>
-            <label className="label mb-1 block">Fee tier</label>
+            <label htmlFor="swap-lp-fee-tier" className="label mb-1 block">Fee tier</label>
             <select
+              id="swap-lp-fee-tier"
               value={props.lpFeeTier}
               onChange={(e) => props.onSetLpFeeTier(e.target.value)}
               className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
@@ -2447,8 +2447,9 @@ function LiquidityPanel(props: {
             </select>
           </div>
           <div>
-            <label className="label mb-1 block">Position ID</label>
+            <label htmlFor="swap-lp-position-id" className="label mb-1 block">Position ID</label>
             <input
+              id="swap-lp-position-id"
               className="min-h-10 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none placeholder:text-zinc-600"
               value={props.lpPositionId}
               onChange={(e) => props.onSetLpPositionId(e.target.value)}

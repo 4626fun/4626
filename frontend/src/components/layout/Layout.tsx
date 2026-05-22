@@ -321,7 +321,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
           hideMobileNav ? 'hidden' : ''
         }`}
       >
-        <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4" role="list">
+        <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4">
           {items.map((item) => {
             const { path, icon: Icon, label } = item
             const isActive = isActiveLink(location, item)
@@ -351,7 +351,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
                   className={className}
-                  role="listitem"
                 >
                   {content}
                 </Link>
@@ -362,7 +361,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
                   className={className}
-                  role="listitem"
                 >
                   {content}
                 </a>
@@ -376,7 +374,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                   aria-label={label}
                   aria-current={isActive ? 'page' : undefined}
                   className="flex flex-col items-center justify-center gap-1 group min-h-10 min-w-[48px] sm:min-w-[52px] px-2 rounded-xl transition-all duration-200 active:scale-[0.97] hover:-translate-y-px hover:bg-white/6"
-                  role="listitem"
                   onClick={() => requestOpenAccountTray({ section: 'portfolio', tab: 'tokens', source: 'mobile-nav' })}
                 >
                   <img
@@ -403,7 +400,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
                     ? 'border-brand-primary/35 bg-brand-primary/12 shadow-[0_10px_22px_-16px_rgb(var(--brand-primary)/0.9)]'
                     : 'border-transparent hover:-translate-y-px hover:border-white/10 hover:bg-white/6'
                 }`}
-                role="listitem"
               >
                 <Icon
                   aria-hidden="true"

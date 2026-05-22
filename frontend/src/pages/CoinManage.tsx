@@ -296,8 +296,9 @@ export function CoinManage() {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="label">New CreatorCoin payout recipient</label>
+                    <label htmlFor="coin-manage-payout-recipient" className="label">New CreatorCoin payout recipient</label>
                     <input
+                      id="coin-manage-payout-recipient"
                       value={newPayoutRecipient}
                       onChange={(e) => setNewPayoutRecipient(e.target.value)}
                       placeholder="0x..."
@@ -328,8 +329,9 @@ export function CoinManage() {
                   <div className="label">Metadata</div>
 
                   <div className="space-y-2">
-                    <label className="label">New metadata URI</label>
+                    <label htmlFor="coin-manage-metadata-uri" className="label">New metadata URI</label>
                     <input
+                      id="coin-manage-metadata-uri"
                       value={newUri}
                       onChange={(e) => setNewUri(e.target.value)}
                       placeholder="ipfs://… or https://… (must return JSON)"
