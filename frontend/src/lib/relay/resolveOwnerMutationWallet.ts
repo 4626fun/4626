@@ -96,6 +96,21 @@ type SelfAuthWalletRequestProvider = {
  * Privy's bridge can fail preflight with a misleading "insufficient funds"
  * error even when the CSW balance covers the Relay deposit.
  */
+export function resolveOwnerMutationSessionWalletRequest(params: {
+  isSelfAuthSession: boolean
+  walletClient: OwnerMutationWalletLike | null | undefined
+  wagmiWalletClient: OwnerMutationWalletLike | null | undefined
+  baseAccountSdk?: SelfAuthWalletRequestProvider | null
+}): ((args: { method: string; params?: unknown[] }) => Promise<unknown>) | undefined {
+  if (params.isSelfAuthSession) {
+    return resolveSelfAuthSendCallsRequest({
+      wagmiWalletClient: params.wagmiWalletClient,
+      baseAccountSdk: params.baseAccountSdk,
+    })
+  }
+  return resolveOwnerMutationWalletRequest(params.walletClient)
+}
+
 export function resolveSelfAuthSendCallsRequest(params: {
   wagmiWalletClient: OwnerMutationWalletLike | null | undefined
   baseAccountSdk?: SelfAuthWalletRequestProvider | null

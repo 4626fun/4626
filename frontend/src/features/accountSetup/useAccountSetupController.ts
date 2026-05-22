@@ -1224,200 +1224,6 @@ export function useAccountSetupController(params: {
     [publicClient],
   )
 
-  const onEnable4626Signing = useCallback(async () => {
-    if (!canonicalCswAddress) return
-    const runId = ++ownerApprovalRunIdRef.current
-    const approvalRunId = `owner-approval-${Date.now()}-${runId}`
-    setOwnerInstallIntent('embeddedOwner')
-    setCustomOwnerGasPreflight(null)
-    setAdvancedBusy(true)
-    setError(null)
-    setNotice(null)
-    setOwnerDelegationFlags(null)
-    try {
-      // ── Owner-approval path ─────────────────────────────────────────
-      if (requiresBaseAppForOwnerInstall) {
-        const setupBaseAppUrl = ownerDelegationFlags?.baseAppUrl?.trim() || null
-        const baseAppHint = setupBaseAppUrl
-          ? ` Open Base app: ${setupBaseAppUrl}`
-          : ' Open Base app and finish signing there.'
-        throw new Error(
-          `Your Zora Coinbase Smart Wallet is passkey-controlled and cannot approve owner install from this desktop browser.${baseAppHint} Or connect an on-chain EOA owner wallet here first.`,
-        )
-      }
-
-      const ownerCheck = await checkEoaOwnershipOfCsw({
-        publicClient,
-        chainId: ownerSignerChainId,
-        cswAddress: canonicalCswAddress,
-        ownerAddress: connectedCanonicalWalletSelected ? canonicalCswAddress : ownerSignerAddress ?? null,
-      })
-      const effectiveOwnerCheck =
-        connectedCanonicalWalletSelected && !requiresBaseAppForOwnerInstall
-          ? { value: true, reason: 'ok' as const }
-          : ownerCheck
-      setConnectedOwnerState(effectiveOwnerCheck)
-      if (effectiveOwnerCheck.value !== true) {
-        if (ownerCheck.reason === 'network_mismatch') {
-          throw new Error('Switch the connected wallet to Base, then retry owner approval.')
-        }
-        if (ownerSignerAddress) {
-          throw new Error('Connected wallet is not a current owner of your Coinbase Smart Wallet. Connect an existing owner and retry.')
-        }
-        throw new Error('Connect a wallet that is already an owner of your Coinbase Smart Wallet before enabling 4626 signing.')
-      }
-
-      let { headers, response: preflightRes, payload: preflightPayload } = await runOnboardingBootstrapPreflight()
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'preflight',
-        status: 'start',
-        attempt: 1,
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
-        await ensureEmbeddedWallet()
-        const embeddedRetry = await runOnboardingBootstrapPreflight()
-        headers = embeddedRetry.headers
-        preflightRes = embeddedRetry.response
-        preflightPayload = embeddedRetry.payload
-        if (!preflightRes.ok || !preflightPayload?.success) {
-          emitOwnerApprovalStageEvent({
-            runId: approvalRunId,
-            stage: 'preflight',
-            status: 'error',
-            executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-            signerAddress: ownerSignerAddress ?? null,
-            canonicalCswAddress,
-            code: 'preflight_failed_after_embedded_retry',
-            message: readApiError(preflightPayload, 'Signer preflight failed.'),
-          })
-          throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
-        }
-      }
-      if (!preflightRes.ok || !preflightPayload?.success) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'preflight_failed',
-          message: readApiError(preflightPayload, 'Signer preflight failed.'),
-        })
-        throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
-      }
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'preflight',
-        status: 'success',
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const preflightOwnerLookupAddress =
-        connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
-          ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
-          : null
-
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'start',
-        attempt: 1,
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
-      if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'error',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'prepare_failed',
-          message: readApiError(preparePayload, 'Failed to prepare owner install.'),
-        })
-        throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
-      }
-      if (preparePayload.data.alreadyOwner) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'prepare',
-          status: 'success',
-          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'already_owner',
-        })
-        setNotice('4626 signing is already enabled.')
-        return
-      }
-      emitOwnerApprovalStageEvent({
-        runId: approvalRunId,
-        stage: 'prepare',
-        status: 'success',
-        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
-        signerAddress: ownerSignerAddress ?? null,
-        canonicalCswAddress,
-      })
-      // Self-auth (CSW selected as the connected wallet) must stay on the
-      // passkey/WebAuthn lane. The split EOA-owner lane is only for cases where
-      // the user has connected a real on-chain EOA owner separately.
-      const ownerAddressForTx = ownerSignerAddress ?? null
-      await sendPreparedOwnerTx(
-        preparePayload.data.txRequest,
-        ownerAddressForTx,
-        preflightOwnerLookupAddress,
-        {
-          approvalRunId,
-          onStageEvent: emitOwnerApprovalStageEvent,
-          ownerInstallIntent: 'embeddedOwner',
-        },
-      )
-      setNotice('4626 signing is enabled on your canonical CSW.')
-      await loadMe({ showSpinner: false })
-    } catch (ownerError: any) {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      const flags = {
-        ...(ownerError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
-        ...(ownerError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
-        ...(typeof ownerError?.baseAppUrl === 'string' && ownerError.baseAppUrl.trim()
-          ? { baseAppUrl: ownerError.baseAppUrl.trim() }
-          : null),
-      }
-      setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
-      setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
-    } finally {
-      if (runId !== ownerApprovalRunIdRef.current) return
-      setAdvancedBusy(false)
-    }
-  }, [
-    canonicalCswAddress,
-    connectedCanonicalWalletSelected,
-    emitOwnerApprovalStageEvent,
-    ensureEmbeddedWallet,
-    loadMe,
-    ownerDelegationFlags?.baseAppUrl,
-    ownerSignerAddress,
-    ownerSignerChainId,
-    publicClient,
-    requiresBaseAppForOwnerInstall,
-    runOnboardingBootstrapPreflight,
-    sendPreparedOwnerTx,
-  ])
-
   const retryOwnerCheck = useCallback(async () => {
     if (!canonicalCswAddress) return
     const result = await checkEoaOwnershipOfCsw({
@@ -1703,9 +1509,9 @@ export function useAccountSetupController(params: {
   )
   const connectedSignerLabel = ownerSignerAddress ? shortValue(ownerSignerAddress) : 'No wallet connected'
   const connectedSignerDetail = ownerApprovalReady
-    ? ownerAuthorityState.detail
+    ? 'Continue on /add-owner to build the Relay preview and submit the add-owner deposit.'
     : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before submitting the Base smart-wallet approval.'
+      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before opening /add-owner.'
       : ownerAuthorityState.detail
   const readableCswOwners = useMemo(
     () => cswOwnersState.owners.filter((owner) => owner.ownerAddress),
@@ -1733,19 +1539,16 @@ export function useAccountSetupController(params: {
         state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
       },
       {
-        title: 'Approve on Base',
+        title: 'Add owner on Base',
         description: ownerApprovalReady
-          ? connectedCanonicalWalletSelected
-            ? '4626 can now enable embedded signing for your smart wallet.'
-            : '4626 can now use one Base owner transaction for signing access.'
+          ? 'Open /add-owner, build the Relay preview, then submit the deposit.'
           : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-            ? 'Wait for the signer client to finish hydrating, then approve.'
-            : 'Approval unlocks after a current owner is connected and verified.',
+            ? 'Wait for the signer client to finish hydrating, then open /add-owner.'
+            : 'Relay add-owner unlocks after a current owner is connected and verified.',
         state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
       },
     ],
     [
-      connectedCanonicalWalletSelected,
       connectedOwnerReady,
       ownerApprovalReady,
       ownerAuthorityState.hint,
@@ -1757,12 +1560,12 @@ export function useAccountSetupController(params: {
   const ownerPrimaryCtaLabel = needsBaseAccountReconnect
     ? 'Reconnect via Base Account'
     : ownerApprovalReady
-      ? 'Approve 4626 on this wallet'
+      ? 'Continue on /add-owner'
       : needsEmbeddedWallet
         ? 'Provisioning embedded wallet…'
         : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
           ? 'Finishing wallet session…'
-          : 'Owner approval required'
+          : 'Connect owner wallet'
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1813,7 +1616,6 @@ export function useAccountSetupController(params: {
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
-    onEnable4626Signing,
     onLinkProvider,
     onLinkZora,
     onUnlinkProvider,

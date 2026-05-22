@@ -1,15 +1,26 @@
 import { randomUUID } from 'node:crypto'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { base } from 'viem/chains'
-import { getDb } from '../db/postgres.js'
+import { getDb, getDbForCron } from '../db/postgres.js'
 import { logger } from '../infra/logger.js'
 import { requireServerKey } from '../../zora/_shared.js'
+import {
+  DEFAULT_HOT_REFRESH_LISTS,
+  detectFeeModel,
+  extractExploreListEdges,
+  feeRateFromModel,
+  isStaleRunningLock,
+  normalizeAddress,
+  parseExploreCoinFinancialSnapshot,
+  parseTimestamp,
+  toFiniteNumber,
+  type ExploreList,
+} from './creatorMetricsSyncHelpers.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
-type ExploreList = 'NEW_CREATORS' | 'TOP_VOLUME_CREATORS_24H' | 'MOST_VALUABLE_CREATORS'
 type SyncStatus = 'idle' | 'running' | 'error'
 
 type SyncMode = 'backfill' | 'incremental'
@@ -51,9 +62,6 @@ type CoinCandidate = {
 
 const BASE_CHAIN_ID = 8453
 const BASE_CHAIN_NAME = base
-const LEGACY_FEE_RATE = 0.03
-const V4_FEE_RATE = 0.01
-const V4_CUTOFF_MS = Date.parse('2025-06-06T00:00:00Z')
 const ZORA_FACTORY_ADDRESS = '0x777777751622c0d3258f214f9df38e35bf45baf3'
 const ZORA_FACTORY_DEPLOY_BLOCK = 26602741n
 const ZORA_FACTORY_COIN_CREATED_EVENT = parseAbiItem(
@@ -65,6 +73,8 @@ const DEFAULT_MAX_PAGES_PER_RUN = 120
 const DEFAULT_CHAIN_SCAN_BLOCK_SPAN = 90_000
 const DEFAULT_MAX_CHAIN_SCAN_CHUNKS = 8
 const DEFAULT_ENRICH_BATCH_SIZE = 200
+const DEFAULT_HOT_REFRESH_PAGES_PER_LIST = 8
+const DEFAULT_STALE_RUNNING_LOCK_MS = 20 * 60 * 1000
 const MAX_SYNC_RETRIES = 4
 let creatorMetricsSchemaEnsured = false
 let creatorMetricsSchemaEnsurePromise: Promise<void> | null = null
@@ -96,25 +106,6 @@ function parseOptionalBigInt(v: unknown): bigint | null {
   return null
 }
 
-function normalizeAddress(v: unknown): string | null {
-  const s = typeof v === 'string' ? v.trim() : ''
-  if (!/^0x[a-fA-F0-9]{40}$/.test(s)) return null
-  return s.toLowerCase()
-}
-
-function toFiniteNumber(v: unknown): number | null {
-  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
-  if (!Number.isFinite(n)) return null
-  return n
-}
-
-function parseTimestamp(v: unknown): string | null {
-  if (typeof v !== 'string') return null
-  const ms = Date.parse(v)
-  if (!Number.isFinite(ms)) return null
-  return new Date(ms).toISOString()
-}
-
 function timestampFromUnixSeconds(v: bigint): string {
   return new Date(Number(v) * 1000).toISOString()
 }
@@ -122,24 +113,6 @@ function timestampFromUnixSeconds(v: bigint): string {
 function checkpointCursorFromChain(blockNumber: bigint | null, logIndex: number | null): string | null {
   if (blockNumber == null || logIndex == null) return null
   return `${blockNumber.toString()}:${logIndex}`
-}
-
-function detectFeeModel(coin: CoinCandidate): 'legacy' | 'v4' {
-  const feeBps = toFiniteNumber(coin?.market?.feeBps)
-  if (feeBps === 300) return 'legacy'
-  if (feeBps === 100) return 'v4'
-
-  const protocolVersion = typeof coin?.market?.protocolVersion === 'string' ? coin.market.protocolVersion.toLowerCase() : ''
-  if (protocolVersion.includes('legacy') || protocolVersion.includes('v3')) return 'legacy'
-  if (protocolVersion.includes('v4')) return 'v4'
-
-  const createdAtMs = typeof coin?.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-  if (!Number.isFinite(createdAtMs)) return 'v4'
-  return createdAtMs >= V4_CUTOFF_MS ? 'v4' : 'legacy'
-}
-
-function feeRateFromModel(feeModel: 'legacy' | 'v4'): number {
-  return feeModel === 'legacy' ? LEGACY_FEE_RATE : V4_FEE_RATE
 }
 
 function sleep(ms: number): Promise<void> {
@@ -328,9 +301,9 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
   return creatorMetricsSchemaEnsurePromise
 }
 
-async function loadState(db: Db): Promise<StateRow> {
+async function loadState(db: Db): Promise<StateRow & { lastSyncStartedAt: string | null }> {
   const result = await db.sql`
-    SELECT checkpoint_cursor, checkpoint_block, checkpoint_log_index, backfill_complete, sync_status
+    SELECT checkpoint_cursor, checkpoint_block, checkpoint_log_index, backfill_complete, sync_status, last_sync_started_at
     FROM creator_metrics_state
     WHERE id = 1
     LIMIT 1;
@@ -338,13 +311,120 @@ async function loadState(db: Db): Promise<StateRow> {
   const row = result.rows?.[0] ?? {}
   const syncStatusRaw = String(row.sync_status ?? 'idle')
   const syncStatus: SyncStatus = syncStatusRaw === 'running' || syncStatusRaw === 'error' ? syncStatusRaw : 'idle'
+  const lastSyncStartedAt =
+    typeof row.last_sync_started_at === 'string' && row.last_sync_started_at.length > 0
+      ? new Date(row.last_sync_started_at).toISOString()
+      : null
   return {
     checkpointCursor: typeof row.checkpoint_cursor === 'string' && row.checkpoint_cursor.length > 0 ? row.checkpoint_cursor : null,
     checkpointBlock: parseOptionalBigInt(row.checkpoint_block),
     checkpointLogIndex: parseCount(row.checkpoint_log_index),
     backfillComplete: Boolean(row.backfill_complete),
     syncStatus,
+    lastSyncStartedAt,
   }
+}
+
+async function maybeRecoverStaleRunningLock(db: Db, thresholdMs: number): Promise<boolean> {
+  const state = await loadState(db)
+  if (state.syncStatus !== 'running') return false
+  if (!isStaleRunningLock(state.lastSyncStartedAt, Date.now(), thresholdMs)) return false
+
+  await db.sql`
+    UPDATE creator_metrics_state
+    SET
+      sync_status = 'idle',
+      sync_error = 'recovered_stale_running_lock',
+      last_sync_finished_at = NOW()
+    WHERE id = 1;
+  `
+  logger.warn('[creator-metrics-sync] recovered stale running lock', {
+    lastSyncStartedAt: state.lastSyncStartedAt,
+    thresholdMs,
+  })
+  return true
+}
+
+async function upsertHotFinancialSnapshot(db: Db, snapshot: ReturnType<typeof parseExploreCoinFinancialSnapshot>): Promise<void> {
+  if (!snapshot) return
+  await db.sql`
+    INSERT INTO creator_coins (
+      coin_address,
+      creator_address,
+      created_at,
+      chain_id,
+      market_cap_usd,
+      volume_24h_usd,
+      fees_24h_usd,
+      fee_model,
+      last_seen_at
+    ) VALUES (
+      ${snapshot.coinAddress},
+      ${snapshot.creatorAddress},
+      ${snapshot.createdAt},
+      ${BASE_CHAIN_ID},
+      ${snapshot.marketCapUsd},
+      ${snapshot.volume24hUsd},
+      ${snapshot.fees24hUsd},
+      ${snapshot.feeModel},
+      NOW()
+    )
+    ON CONFLICT (coin_address) DO UPDATE SET
+      creator_address = EXCLUDED.creator_address,
+      created_at = COALESCE(creator_coins.created_at, EXCLUDED.created_at),
+      chain_id = EXCLUDED.chain_id,
+      market_cap_usd = EXCLUDED.market_cap_usd,
+      volume_24h_usd = EXCLUDED.volume_24h_usd,
+      fees_24h_usd = EXCLUDED.fees_24h_usd,
+      fee_model = EXCLUDED.fee_model,
+      last_seen_at = NOW();
+  `
+
+  await db.sql`
+    INSERT INTO creators (creator_address, first_seen_at, coin_count, last_seen_at)
+    VALUES (${snapshot.creatorAddress}, ${snapshot.createdAt}, 0, NOW())
+    ON CONFLICT (creator_address) DO UPDATE SET
+      first_seen_at = COALESCE(
+        LEAST(creators.first_seen_at, EXCLUDED.first_seen_at),
+        creators.first_seen_at,
+        EXCLUDED.first_seen_at
+      ),
+      last_seen_at = GREATEST(creators.last_seen_at, EXCLUDED.last_seen_at);
+  `
+}
+
+async function refreshHotFinancialsFromExploreLists(
+  sdk: any,
+  db: Db,
+  options: { pageSize: number; maxPagesPerList: number; lists: readonly ExploreList[] },
+): Promise<{ coinsRefreshed: number; pagesFetched: number }> {
+  let coinsRefreshed = 0
+  let pagesFetched = 0
+
+  for (const list of options.lists) {
+    let after: string | null = null
+    for (let page = 0; page < options.maxPagesPerList; page += 1) {
+      const response = await withRetry(`hot_refresh_${list}_page_${page}`, () =>
+        fetchPage(sdk, list, options.pageSize, after),
+      )
+      const { edges, pageInfo } = extractExploreListEdges(response)
+      pagesFetched += 1
+      if (edges.length === 0) break
+
+      for (const edge of edges) {
+        const snapshot = parseExploreCoinFinancialSnapshot(edge?.node)
+        if (!snapshot) continue
+        await withRetry('upsert_hot_financial_snapshot', () => upsertHotFinancialSnapshot(db, snapshot))
+        coinsRefreshed += 1
+      }
+
+      if (!pageInfo.hasNextPage) break
+      after = pageInfo.endCursor
+      if (!after) break
+    }
+  }
+
+  return { coinsRefreshed, pagesFetched }
 }
 
 async function recomputeCreatorCounts(db: Db): Promise<void> {
@@ -433,7 +513,7 @@ type RunOptions = {
 export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<CreatorMetricsSyncResult> {
   const runId = `creator-metrics-sync-${randomUUID()}`
   const log = logger.child({ syncRunId: runId })
-  const db = await getDb()
+  const db = (await getDbForCron()) ?? (await getDb())
   if (!db) {
     return {
       ok: false,
@@ -453,7 +533,12 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
   }
 
   await ensureCreatorMetricsSchema(db)
-  const current = await loadState(db)
+  const staleLockMs = parsePositiveInt(
+    process.env.CREATOR_METRICS_STALE_RUNNING_LOCK_MS,
+    DEFAULT_STALE_RUNNING_LOCK_MS,
+  )
+  await maybeRecoverStaleRunningLock(db, staleLockMs)
+  let current = await loadState(db)
 
   if (current.syncStatus === 'running') {
     return {
@@ -481,9 +566,14 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
   )
   const maxChainScanChunks = parsePositiveInt(
     process.env.CREATOR_METRICS_MAX_CHAIN_SCAN_CHUNKS,
-    options.maxPages ?? DEFAULT_MAX_CHAIN_SCAN_CHUNKS,
+    DEFAULT_MAX_CHAIN_SCAN_CHUNKS,
   )
   const enrichBatchSize = parsePositiveInt(process.env.CREATOR_METRICS_ENRICH_BATCH_SIZE, DEFAULT_ENRICH_BATCH_SIZE)
+  const hotRefreshPagesPerList = parsePositiveInt(
+    process.env.CREATOR_METRICS_HOT_REFRESH_PAGES_PER_LIST,
+    DEFAULT_HOT_REFRESH_PAGES_PER_LIST,
+  )
+  const hotRefreshEnabled = process.env.CREATOR_METRICS_HOT_REFRESH_ENABLED !== '0'
   const mode: SyncMode = forceFull || !current.backfillComplete ? 'backfill' : 'incremental'
   const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
 
@@ -531,6 +621,17 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     } else {
       coverageWarning = 'zora_api_key_missing_enrichment_disabled'
       log.warn('[creator-metrics-sync] running without zora api key; enrichment disabled')
+    }
+
+    if (sdk && hotRefreshEnabled) {
+      const hotRefresh = await refreshHotFinancialsFromExploreLists(sdk, db, {
+        pageSize,
+        maxPagesPerList: hotRefreshPagesPerList,
+        lists: DEFAULT_HOT_REFRESH_LISTS,
+      })
+      coinsUpserted += hotRefresh.coinsRefreshed
+      pagesProcessed += hotRefresh.pagesFetched
+      log.info('[creator-metrics-sync] hot financial refresh completed', hotRefresh)
     }
 
     const blockTimestampCache = new Map<string, string>()

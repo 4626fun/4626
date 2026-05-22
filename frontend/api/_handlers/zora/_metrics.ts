@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '../../../packages/server-core/src/index.js'
 import { ensureCreatorMetricsSchema } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import {
+  fetchZoraExploreFinancialEstimate,
+  preferHigherMetric,
+} from '../../../server/_lib/zora/zoraExploreFinancials.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'
@@ -33,6 +37,7 @@ type MetricsResponse = {
     ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
+    usingZoraExploreFinancials: boolean
   }
   history30d: Array<{
     date: string
@@ -209,6 +214,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         ethos1800Creators: null,
         partial: true,
         sampledCreators: 0,
+        usingZoraExploreFinancials: false,
       },
       history30d: [],
     }
@@ -288,9 +294,24 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
 
   const creatorsTotal = toNumber(agg.creators_total)
   const creatorsNew24h = toNumber(agg.creators_new_24h)
-  const creatorCoinsMarketCapUsd = toNumber(agg.market_cap_usd)
-  const creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
-  const creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
+  let creatorCoinsMarketCapUsd = toNumber(agg.market_cap_usd)
+  let creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
+  let creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
+  let usingZoraExploreFinancials = false
+
+  if (!exact) {
+    try {
+      const zoraFinancials = await fetchZoraExploreFinancialEstimate()
+      if (zoraFinancials) {
+        usingZoraExploreFinancials = true
+        creatorCoinsVolume24hUsd = preferHigherMetric(creatorCoinsVolume24hUsd, zoraFinancials.volume24hUsd)
+        creatorCoinsFees24hUsd = preferHigherMetric(creatorCoinsFees24hUsd, zoraFinancials.fees24hUsd)
+        creatorCoinsMarketCapUsd = preferHigherMetric(creatorCoinsMarketCapUsd, zoraFinancials.marketCapUsd)
+      }
+    } catch (error) {
+      console.warn('[zora/metrics] zora explore financial estimate failed', error)
+    }
+  }
 
   // Persist one daily canonical snapshot and return the latest 30-day market-cap series.
   // This keeps the dashboard trend independent from client-side sort/view state.
@@ -414,6 +435,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       ethos1800Creators,
       partial: !exact,
       sampledCreators,
+      usingZoraExploreFinancials,
     },
     history30d,
   }

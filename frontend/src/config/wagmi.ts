@@ -20,7 +20,7 @@ import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
  * no signer — appropriate for read/link flows only.
  * For users whose CBSW is exclusively passkey-controlled, the only working
  * onboarding path is to reconnect through Base Account SDK and use the
- * sub-account derivation in `useAccountSetupController.onEnable4626Signing`.
+ * sub-account derivation in account setup flows.
  */
 
 const BASE_RPC_URL_RAW =

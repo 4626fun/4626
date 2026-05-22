@@ -14,7 +14,7 @@ import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
-import { CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
+import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -1378,15 +1378,9 @@ export function ExploreCreatorDetail() {
 
         <div
           ref={timelineSectionRef}
-          className="relative w-screen ml-[calc(50%-50vw)] isolate bg-[#d9df72] text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+          className="relative w-screen ml-[calc(50%-50vw)] isolate text-zinc-900 px-4 sm:px-6 py-14 sm:py-[4.5rem]"
+          style={{ backgroundColor: CREATOR_PAGE_LIME }}
         >
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[min(24vh,200px)]"
-            style={{
-              background: 'linear-gradient(to bottom, rgba(0,0,0,0.42) 0%, transparent 100%)',
-            }}
-            aria-hidden
-          />
           <div ref={timelineBodyRef}>
             <div className="px-2 sm:px-4 pb-8">
               <div className="grid lg:grid-cols-12 gap-6 items-end">

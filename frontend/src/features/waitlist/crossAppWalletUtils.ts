@@ -7,7 +7,7 @@
  * right Privy auth helper for Zora cross-app linking. The actual
  * wallet-readiness gate for user-initiated frontend execution is the
  * canonical parent CSW + Privy embedded-owner path in
- * `useAccountSetupController.onEnable4626Signing`.
+ * account setup owner-mutation flows.
  * See `docs/4626-connection-methods.md` Section 2 and
  * `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
  *

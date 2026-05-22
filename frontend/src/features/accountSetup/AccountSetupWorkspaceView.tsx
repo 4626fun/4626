@@ -175,7 +175,6 @@ export function AccountSetupWorkspaceView(props: {
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
-    onEnable4626Signing,
     onLinkZora,
     onRefreshZora,
     onResetOwnerApproval,
@@ -211,10 +210,16 @@ export function AccountSetupWorkspaceView(props: {
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallPathActive = ownerInstallResumeState.requested
+  const executionTrackForOwnerProbe = me?.accountSignals.executionTrack
+  const shouldProbeParentEmbeddedOwner =
+    Boolean(canonicalCswAddress && embeddedEoaAddress) &&
+    (ownerInstallPathActive ||
+      executionTrackForOwnerProbe === 'none-yet' ||
+      executionTrackForOwnerProbe === 'legacy-owner-install')
   const { isOwner: parentEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
     subAccountAddress: canonicalCswAddress,
     embeddedEoaAddress,
-    enabled: ownerInstallPathActive && Boolean(canonicalCswAddress && embeddedEoaAddress),
+    enabled: shouldProbeParentEmbeddedOwner,
   })
   const persistedSubAccountAddress = resolveSubAccountAddress({
     baseSubAccount: me?.baseSubAccount ?? null,
@@ -461,7 +466,7 @@ export function AccountSetupWorkspaceView(props: {
             </div>
             <p className="mt-1 text-sm leading-relaxed text-brand-50/85">
               Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), then
-              approve the one-time Enable 4626 signing transaction below.
+              finish the two-step Relay flow on <span className="font-mono text-brand-50">/add-owner</span>.
             </p>
           </div>
         ) : null}
@@ -739,11 +744,7 @@ export function AccountSetupWorkspaceView(props: {
                       </div>
                     ) : null}
                     {showParentCswAddOwnerPanel ? (
-                      <AddOwnerSigningPanel
-                        controller={controller}
-                        variant="waitlist"
-                        onInstallSuccess={() => loadMe({ showSpinner: false })}
-                      />
+                      <AddOwnerSigningPanel controller={controller} />
                     ) : null}
                     {needsEmbeddedWallet ? (
                       <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
@@ -838,7 +839,8 @@ export function AccountSetupWorkspaceView(props: {
           </div>
           <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
             Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), verify
-            authority on Base, and approve one transaction so 4626 can sign through the same wallet.
+            authority on Base, then finish the two-step Relay add-owner flow on{' '}
+            <span className="font-mono text-brand-50">/add-owner</span>.
           </div>
         </div>
       ) : null}
@@ -981,7 +983,9 @@ export function AccountSetupWorkspaceView(props: {
                     <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
                     <div className="text-base font-medium text-white">Enable 4626 smart-wallet signing</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Your canonical CSW stays primary. 4626 confirms embedded signing for sponsored user actions and one-time server signing for deploy and agent flows.
+                      Your canonical CSW stays primary. Finish the two-step Relay add-owner flow on{' '}
+                      <span className="font-mono text-zinc-300">/add-owner</span> so your Privy embedded signer can
+                      co-sign sponsored actions.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -994,7 +998,8 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {ownerInstallResumeState.requested ? (
                   <div className="mt-4 rounded-xl bg-brand-primary/10 px-3 py-3 text-xs leading-5 text-brand-50/90 ring-1 ring-brand-primary/20">
-                    This step was resumed from another surface. Connect a current owner of the detected CSW, verify the signer, then approve the Base transaction below.
+                    This step was resumed from another surface. Connect a current owner of the detected CSW, verify the
+                    signer, then continue on <span className="font-mono">/add-owner</span> for the Relay add-owner flow.
                   </div>
                 ) : null}
                 <details className="mt-4 rounded-xl bg-white/[0.02] px-3 py-3 ring-1 ring-white/10">
@@ -1096,59 +1101,35 @@ export function AccountSetupWorkspaceView(props: {
                   </div>
                 ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-3">
-                  {needsBaseAccountReconnect ? (
+                  {!connectedOwnerReady ? (
                     <Button
                       type="button"
                       variant="primary"
                       onClick={() => connectOwnerWallet()}
                       className="inline-flex"
                     >
-                      {ownerPrimaryCtaLabel}
-                    </Button>
-                  ) : connectedOwnerReady ? (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
-                      onClick={() => void onEnable4626Signing()}
-                      className="inline-flex"
-                    >
-                      {advancedBusy ? 'Preparing...' : ownerPrimaryCtaLabel}
+                      {needsBaseAccountReconnect ? ownerPrimaryCtaLabel : 'Connect owner wallet'}
                     </Button>
                   ) : (
-                    <Button
-                      type="button"
-                      variant="primary"
-                      onClick={() => connectOwnerWallet()}
-                      className="inline-flex"
-                    >
-                      Connect owner wallet
-                    </Button>
+                    <>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={advancedBusy}
+                        onClick={() => connectOwnerWallet()}
+                      >
+                        Switch owner wallet
+                      </Button>
+                      <button
+                        type="button"
+                        disabled={advancedBusy || busyProvider === 'owner_wallet'}
+                        onClick={() => void onResetOwnerApproval()}
+                        className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
+                      >
+                        Retry owner check
+                      </button>
+                    </>
                   )}
-                  {connectedOwnerReady ? (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      disabled={advancedBusy}
-                      onClick={() => connectOwnerWallet()}
-                    >
-                      Switch owner wallet
-                    </Button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={advancedBusy || busyProvider === 'owner_wallet'}
-                      onClick={() => void onResetOwnerApproval()}
-                      className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
-                    >
-                      Retry owner check
-                    </button>
-                  )}
-                  <span className="max-w-xl text-xs leading-relaxed text-zinc-500">
-                    {connectedOwnerReady
-                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits the one-time Base smart-wallet approval for embedded signing and deploy/agent server signing.'
-                      : 'Connect a current CSW owner first, then approve 4626 signing for deploy/agent server flows.'}
-                  </span>
                 </div>
                 {!connectedOwnerReady ? (
                   <div className="mt-3 text-xs text-zinc-500">
@@ -1158,6 +1139,7 @@ export function AccountSetupWorkspaceView(props: {
                       : ''}
                   </div>
                 ) : null}
+                <AddOwnerSigningPanel controller={controller} className="mt-4" />
               </section>
             </div>
           </div>

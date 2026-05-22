@@ -1,47 +1,48 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useBaseAccountSdk } from '@privy-io/react-auth'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { useBaseAccountSdk, usePrivy } from '@privy-io/react-auth'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 import type { PublicClient } from 'viem'
 
-import { executeRemoveOwnerViaRelay } from '@/lib/removeOwner/removeOwnerExecution'
+import { fetchAddOwnerPreview, type AddOwnerPreview } from '@/lib/addOwner/addOwnerHelpers'
+import { executeAddOwnerViaRelay } from '@/lib/addOwner/addOwnerExecution'
 import {
-  fetchRemoveOwnerPreview,
   getWalletErrorMessage,
-  INITIAL_DIAGNOSTICS,
-  loadLiveCswDiagnostics,
   mapRemoveOwnerSubmissionError,
-  type LiveDiagnostics,
-  type RemoveOwnerPreview,
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import {
   resolveOwnerMutationSessionWalletRequest,
   resolveOwnerMutationWallet,
 } from '@/lib/relay/resolveOwnerMutationWallet'
 
-export type RemoveOwnerErrorDetail = {
+export type AddOwnerErrorDetail = {
   revertReason: string | null
   revertData: string | null
   relayTx: unknown
   rawBody: string | null
 }
 
-type UseRemoveOwnerFlowParams = {
+type UseAddOwnerFlowParams = {
   canonicalCswAddress: string | null | undefined
   ownerSignerAddress: string | null | undefined
   privyExternalOwnerWallet?: unknown
+  enabled?: boolean
 }
 
-export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
-  const { canonicalCswAddress, ownerSignerAddress, privyExternalOwnerWallet } = params
+export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
+  const {
+    canonicalCswAddress,
+    ownerSignerAddress,
+    privyExternalOwnerWallet,
+    enabled = true,
+  } = params
+  const { getAccessToken } = usePrivy()
   const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
   const publicClient = wagmiPublicClient as PublicClient | undefined
 
-  const [diagnostics, setDiagnostics] = useState<LiveDiagnostics>(INITIAL_DIAGNOSTICS)
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(null)
-  const [preview, setPreview] = useState<RemoveOwnerPreview | null>(null)
+  const [preview, setPreview] = useState<AddOwnerPreview | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewRequestIdRef = useRef(0)
   const [busy, setBusy] = useState(false)
@@ -49,7 +50,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
   const [pageNotice, setPageNotice] = useState<string | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
-  const [lastErrorDetail, setLastErrorDetail] = useState<RemoveOwnerErrorDetail | null>(null)
+  const [lastErrorDetail, setLastErrorDetail] = useState<AddOwnerErrorDetail | null>(null)
 
   const isSelfAuthSession = useMemo(() => {
     if (!canonicalCswAddress || !ownerSignerAddress) return false
@@ -64,66 +65,49 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     [],
   )
 
-  useEffect(() => {
-    let cancelled = false
-    if (!canonicalCswAddress || !publicClient) {
-      setDiagnostics(INITIAL_DIAGNOSTICS)
-      return () => {
-        cancelled = true
+  const fetchPreview = useCallback(async () => {
+    if (!enabled || !canonicalCswAddress || !ownerSignerAddress) {
+      setPageError(
+        isSelfAuthSession
+          ? 'Connect your canonical smart wallet in Base App first.'
+          : 'Connect an on-chain CSW owner wallet first.',
+      )
+      return null
+    }
+
+    const requestId = ++previewRequestIdRef.current
+    setPreviewLoading(true)
+    setPageError(null)
+    setLastErrorDetail(null)
+    setPageNotice(null)
+    setPreview(null)
+    setTxHash(null)
+
+    try {
+      const token = await getAccessToken()
+      if (!token) {
+        throw new Error('Missing Privy auth token. Sign in and retry.')
+      }
+      const data = await fetchAddOwnerPreview({
+        connectedAddress: ownerSignerAddress,
+        headers: { 'X-Privy-Token': token },
+      })
+      if (requestId !== previewRequestIdRef.current) return null
+      setPreview(data)
+      if (data.preflight.alreadyOwner) {
+        setPageNotice('4626 signing is already enabled on this wallet.')
+      }
+      return data
+    } catch (err: unknown) {
+      if (requestId !== previewRequestIdRef.current) return null
+      setPageError(err instanceof Error ? err.message : 'Failed to build add-owner preview.')
+      return null
+    } finally {
+      if (requestId === previewRequestIdRef.current) {
+        setPreviewLoading(false)
       }
     }
-    setDiagnostics({ ...INITIAL_DIAGNOSTICS, status: 'loading' })
-    void loadLiveCswDiagnostics({
-      publicClient,
-      cswAddress: canonicalCswAddress as `0x${string}`,
-    }).then((next) => {
-      if (!cancelled) setDiagnostics(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [canonicalCswAddress, publicClient])
-
-  const fetchPreview = useCallback(
-    async (index: number) => {
-      if (!canonicalCswAddress || !ownerSignerAddress) {
-        setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
-        return
-      }
-      const requestId = ++previewRequestIdRef.current
-      setPreviewLoading(true)
-      setPageError(null)
-      setLastErrorDetail(null)
-      setPageNotice(null)
-      setPreview(null)
-      setTxHash(null)
-      try {
-        const data = await fetchRemoveOwnerPreview({
-          cswAddress: canonicalCswAddress,
-          connectedAddress: ownerSignerAddress,
-          ownerIndex: index,
-        })
-        if (requestId !== previewRequestIdRef.current) return
-        setPreview(data)
-      } catch (err: unknown) {
-        if (requestId !== previewRequestIdRef.current) return
-        setPageError(err instanceof Error ? err.message : 'Failed to build remove-owner preview.')
-      } finally {
-        if (requestId === previewRequestIdRef.current) {
-          setPreviewLoading(false)
-        }
-      }
-    },
-    [canonicalCswAddress, ownerSignerAddress],
-  )
-
-  const handleSelectIndex = useCallback(
-    (index: number) => {
-      setSelectedIndex(index)
-      void fetchPreview(index)
-    },
-    [fetchPreview],
-  )
+  }, [canonicalCswAddress, enabled, getAccessToken, isSelfAuthSession, ownerSignerAddress])
 
   const setErrorDetail = useCallback((input: { revertReason?: string | null; revertData?: string | null }) => {
     setLastErrorDetail({
@@ -134,10 +118,22 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     })
   }, [])
 
-  const handleRemove = useCallback(async () => {
-    if (!preview || !canonicalCswAddress || !ownerSignerAddress || selectedIndex === null) {
-      setPageError('Connect your wallet and select an owner index first.')
-      return
+  const handleAdd = useCallback(async () => {
+    if (!enabled || !canonicalCswAddress || !ownerSignerAddress) {
+      setPageError(
+        isSelfAuthSession
+          ? 'Connect your canonical smart wallet in Base App first.'
+          : 'Connect an on-chain CSW owner wallet first.',
+      )
+      return false
+    }
+
+    let activePreview = preview
+    if (!activePreview) {
+      activePreview = await fetchPreview()
+    }
+    if (!activePreview || activePreview.preflight.alreadyOwner) {
+      return activePreview?.preflight.alreadyOwner === true
     }
 
     const walletClient = await resolveOwnerMutationWallet({
@@ -151,7 +147,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
           ? 'Base App wallet session is unavailable. Reconnect your smart wallet and retry.'
           : 'Connect the owner wallet that will fund the Relay deposit, then retry.',
       )
-      return
+      return false
     }
 
     setBusy(true)
@@ -161,18 +157,16 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     setTxHash(null)
     setEventLog([])
     appendEvent('lane:preview_bound_relay_user_call')
-    appendEvent(`target:function=${preview.preflight.selectedFunction}`)
-    appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
-    appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
-    appendEvent(`target:selector=${preview.txRequest.data.slice(0, 10)}`)
+    appendEvent(`target:owner=${activePreview.preflight.ownerToAdd}`)
+    appendEvent(`target:selector=${activePreview.txRequest.data.slice(0, 10)}`)
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
 
     let requiredDepositWei: bigint | null = null
-    let latestCswBalanceWei: bigint | null = null
+    const latestCswBalanceWei: bigint | null = null
 
     try {
-      if (preview.relay?.userCall?.value) {
-        requiredDepositWei = BigInt(preview.relay.userCall.value)
+      if (activePreview.relay?.userCall?.value) {
+        requiredDepositWei = BigInt(activePreview.relay.userCall.value)
       }
 
       const walletRequest = resolveOwnerMutationSessionWalletRequest({
@@ -183,11 +177,11 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
       })
       if (isSelfAuthSession && !walletRequest) {
         setPageError('Base App wallet session is unavailable. Reconnect your smart wallet and retry.')
-        return
+        return false
       }
-      const result = await executeRemoveOwnerViaRelay({
-        preview,
-        selectedIndex,
+
+      const result = await executeAddOwnerViaRelay({
+        preview: activePreview,
         cswAddress: canonicalCswAddress as `0x${string}`,
         publicClient,
         walletClient,
@@ -197,15 +191,9 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         onTxHash: setTxHash,
       })
 
-      setPageNotice(`Owner removal confirmed on-chain (execution tx ${result.txHash.slice(0, 10)}…).`)
+      setPageNotice(`4626 signing enabled via Relay (execution tx ${result.txHash.slice(0, 10)}…).`)
       setPreview(null)
-      setSelectedIndex(null)
-      if (publicClient && canonicalCswAddress) {
-        void loadLiveCswDiagnostics({
-          publicClient,
-          cswAddress: canonicalCswAddress as `0x${string}`,
-        }).then(setDiagnostics)
-      }
+      return true
     } catch (err: unknown) {
       appendEvent(`error:${getWalletErrorMessage(err).slice(0, 260)}`)
       if (err && typeof err === 'object') {
@@ -234,6 +222,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         latestCswBalanceWei,
       })
       setPageError(mapped ?? getWalletErrorMessage(err))
+      return false
     } finally {
       setBusy(false)
     }
@@ -241,19 +230,18 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     appendEvent,
     baseAccountSdk,
     canonicalCswAddress,
+    enabled,
+    fetchPreview,
     isSelfAuthSession,
     ownerSignerAddress,
     preview,
     privyExternalOwnerWallet,
     publicClient,
-    selectedIndex,
     setErrorDetail,
     wagmiWalletClient,
   ])
 
   return {
-    diagnostics,
-    selectedIndex,
     preview,
     previewLoading,
     busy,
@@ -263,7 +251,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
-    handleSelectIndex,
-    handleRemove,
+    fetchPreview,
+    handleAdd,
   }
 }

@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createMockReq, createMockRes } from './helpers'
 
-const { getDbMock, ensureCreatorMetricsSchemaMock } = vi.hoisted(() => ({
+const { getDbMock, ensureCreatorMetricsSchemaMock, fetchZoraExploreFinancialEstimateMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureCreatorMetricsSchemaMock: vi.fn(),
+  fetchZoraExploreFinancialEstimateMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -14,6 +15,14 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
 vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({
   ensureCreatorMetricsSchema: ensureCreatorMetricsSchemaMock,
 }))
+
+vi.mock('../../server/_lib/zora/zoraExploreFinancials.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../server/_lib/zora/zoraExploreFinancials.js')>()
+  return {
+    ...actual,
+    fetchZoraExploreFinancialEstimate: fetchZoraExploreFinancialEstimateMock,
+  }
+})
 
 vi.mock('../../server/zora/_shared.js', () => ({
   getStringQuery: vi.fn((req: any, key: string) => req.query?.[key] ?? null),
@@ -52,6 +61,7 @@ describe('GET /api/zora/metrics', () => {
 
     getDbMock.mockResolvedValue({ sql })
     ensureCreatorMetricsSchemaMock.mockResolvedValue(undefined)
+    fetchZoraExploreFinancialEstimateMock.mockResolvedValue(null)
   })
 
   it('returns usable aggregate totals even while canonical sync is partial', async () => {
@@ -75,6 +85,33 @@ describe('GET /api/zora/metrics', () => {
       creatorCoinsFees24hUsd: 1250.1,
       partial: true,
       sampledCreators: 24,
+    })
+  })
+
+  it('blends Zora explore financials into partial headline totals', async () => {
+    fetchZoraExploreFinancialEstimateMock.mockResolvedValueOnce({
+      volume24hUsd: 494_592.77,
+      fees24hUsd: 4_945.93,
+      marketCapUsd: 12_500_000,
+      coinCount: 20,
+    })
+
+    const { default: handler } = await import('../_handlers/zora/_metrics.ts')
+    const req = createMockReq({
+      method: 'GET',
+      query: { scope: 'creators' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.totals).toMatchObject({
+      creatorCoinsMarketCapUsd: 12_500_000,
+      creatorCoinsVolume24hUsd: 494_592.77,
+      creatorCoinsFees24hUsd: 4_945.93,
+      usingZoraExploreFinancials: true,
+      partial: true,
     })
   })
 

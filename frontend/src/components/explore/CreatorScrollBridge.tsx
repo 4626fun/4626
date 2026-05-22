@@ -23,19 +23,20 @@ const BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
 const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
   void: 'bg-black',
   'void-to-lime': 'bg-black',
-  'lime-to-void': 'bg-zinc-950',
+  'lime-to-void': 'bg-[#d9df72]',
 }
 
-/** Fixed-height edge ramps — percentages on 280vh bridges break on long pinned sections. */
+/** Short edge ramps only — tall solid-stop gradients read as black/lime bands over the timeline. */
 function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
-  const edge = 'pointer-events-none absolute inset-x-0'
+  const edge = 'pointer-events-none absolute inset-x-0 z-[1]'
   const lime = CREATOR_PAGE_LIME
+  const limeRgb = '217,223,114'
 
   if (tone === 'void') {
     return (
       <>
-        <div className={cn(edge, 'top-0 h-[min(32vh,280px)] bg-gradient-to-b from-black to-transparent')} />
-        <div className={cn(edge, 'bottom-0 h-[min(36vh,320px)] bg-gradient-to-t from-black via-black/70 to-transparent')} />
+        <div className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-black via-black/55 to-transparent')} />
+        <div className={cn(edge, 'bottom-0 h-[min(20vh,180px)] bg-gradient-to-t from-black via-black/50 to-transparent')} />
       </>
     )
   }
@@ -43,11 +44,11 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
   if (tone === 'void-to-lime') {
     return (
       <>
-        <div className={cn(edge, 'top-0 h-[min(32vh,280px)] bg-gradient-to-b from-black to-transparent')} />
+        <div className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-black via-black/50 to-transparent')} />
         <div
-          className={cn(edge, 'bottom-0 h-[min(48vh,420px)]')}
+          className={cn(edge, 'bottom-0 h-[min(22vh,200px)]')}
           style={{
-            background: `linear-gradient(to top, ${lime} 0%, ${lime} 18%, rgba(217,223,114,0.55) 42%, rgba(0,0,0,0) 100%)`,
+            background: `linear-gradient(to top, ${lime} 0%, rgba(${limeRgb},0.72) 28%, rgba(${limeRgb},0.22) 62%, transparent 100%)`,
           }}
         />
       </>
@@ -57,12 +58,12 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
   return (
     <>
       <div
-        className={cn(edge, 'top-0 h-[min(52vh,460px)]')}
+        className={cn(edge, 'top-0 h-[min(22vh,200px)]')}
         style={{
-          background: `linear-gradient(to bottom, ${lime} 0%, ${lime} 28%, rgba(217,223,114,0.72) 52%, rgba(9,9,11,0) 100%)`,
+          background: `linear-gradient(to bottom, ${lime} 0%, rgba(${limeRgb},0.55) 32%, rgba(9,9,11,0.12) 68%, transparent 100%)`,
         }}
       />
-      <div className={cn(edge, 'bottom-0 h-[min(44vh,400px)] bg-gradient-to-t from-black via-zinc-950/95 to-transparent')} />
+      <div className={cn(edge, 'bottom-0 h-[min(22vh,200px)] bg-gradient-to-t from-black via-zinc-950/70 to-transparent')} />
     </>
   )
 }

@@ -186,7 +186,7 @@
       "dest": "https://pinata.4626.fun/ipfs/$1"
     },
     {
-      "src": "/assets/(favicon-brand\\.ico|base-app-icon-1024\\.png|favicon-(16|32)x32\\.png|apple-touch-icon\\.png)",
+      "src": "/assets/(favicon-brand\\.ico|base-app-icon-1024\\.png|favicon-\\d+x\\d+\\.png|apple-touch-icon\\.png|android-chrome-(192x192|512x512)\\.png|maskable-icon-(192x192|512x512)\\.png|mstile-150x150\\.png)",
       "headers": {
         "cache-control": "public, max-age=3600, must-revalidate"
       },

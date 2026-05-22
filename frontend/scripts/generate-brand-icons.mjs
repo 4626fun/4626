@@ -1,16 +1,10 @@
 #!/usr/bin/env node
 /**
- * Brand asset generator.
+ * Regenerate favicon/PWA PNG derivatives from the canonical Base App icon.
  *
- * Why:
- * - Browser tabs, install surfaces, and mobile shells require PNG derivatives
- *   with fixed dimensions.
- * - The 4626 v2 brand kit is now the canonical source for favicon/PWA
- *   images, committed under `public/assets/`.
- * - This script is kept for existing operator muscle memory, but no longer
- *   regenerates stale root-level favicon and PWA PNGs.
- *
- * This script verifies the committed kit assets are present.
+ * Source of truth: public/assets/base-app-icon-1024.png (white 4 on black).
+ * Legacy maskable/android PNGs carried a blue bezel that Base App still picked
+ * up for the in-app domain chrome on 4626.fun.
  *
  * Usage:
  *   node scripts/generate-brand-icons.mjs --out public
@@ -19,6 +13,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+
+import sharp from 'sharp'
 
 const rootCompatibilityCopies = [
   ['assets/favicon-brand.ico', 'favicon.ico'],
@@ -34,6 +30,22 @@ const docsBrandCopies = [
   ['assets/favicon.svg', 'brand/favicon.svg'],
 ]
 
+const PNG_DERIVATIVES = [
+  { size: 16, file: 'assets/favicon-16x16.png' },
+  { size: 32, file: 'assets/favicon-32x32.png' },
+  { size: 48, file: 'assets/favicon-48x48.png' },
+  { size: 64, file: 'assets/favicon-64x64.png' },
+  { size: 180, file: 'assets/apple-touch-icon.png' },
+  { size: 192, file: 'assets/android-chrome-192x192.png' },
+  { size: 512, file: 'assets/android-chrome-512x512.png' },
+  { size: 150, file: 'assets/mstile-150x150.png' },
+]
+
+const MASKABLE_DERIVATIVES = [
+  { size: 192, file: 'assets/maskable-icon-192x192.png' },
+  { size: 512, file: 'assets/maskable-icon-512x512.png' },
+]
+
 function parseArg(flag, fallback) {
   const i = process.argv.indexOf(flag)
   if (i === -1) return fallback
@@ -41,32 +53,49 @@ function parseArg(flag, fallback) {
   return typeof v === 'string' && v.trim().length > 0 ? v.trim() : fallback
 }
 
-function exists(p) {
-  return fs
-    .stat(p)
-    .then(() => true)
-    .catch(() => false)
+async function exists(p) {
+  try {
+    await fs.stat(p)
+    return true
+  } catch {
+    return false
+  }
 }
 
-const requiredKitIconAssets = [
-  'favicon.svg',
-  'apple-touch-icon.png',
-  'site.webmanifest',
-  'browserconfig.xml',
-  'assets/favicon-brand.ico',
-  'assets/base-app-icon-1024.png',
-  'assets/favicon-16x16.png',
-  'assets/favicon-32x32.png',
-  'assets/favicon-48x48.png',
-  'assets/favicon-64x64.png',
-  'assets/android-chrome-192x192.png',
-  'assets/android-chrome-512x512.png',
-  'assets/apple-touch-icon.png',
-  'assets/maskable-icon-192x192.png',
-  'assets/maskable-icon-512x512.png',
-  'assets/mstile-150x150.png',
-  'assets/safari-pinned-tab.svg',
-]
+async function writeSquareIcon(source, outPath, size, { maskableSafeZone = false } = {}) {
+  const innerSize = maskableSafeZone ? Math.round(size * 0.8) : size
+  const resized = await sharp(source).resize(innerSize, innerSize, { fit: 'contain' }).png().toBuffer()
+
+  if (!maskableSafeZone) {
+    await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
+    return
+  }
+
+  const inset = Math.floor((size - innerSize) / 2)
+  await sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 1 },
+    },
+  })
+    .composite([{ input: resized, left: inset, top: inset }])
+    .png()
+    .toFile(outPath)
+}
+
+async function regeneratePngDerivatives(outDir, sourcePath) {
+  for (const { size, file } of PNG_DERIVATIVES) {
+    const outPath = path.join(outDir, file)
+    await writeSquareIcon(sourcePath, outPath, size)
+  }
+
+  for (const { size, file } of MASKABLE_DERIVATIVES) {
+    const outPath = path.join(outDir, file)
+    await writeSquareIcon(sourcePath, outPath, size, { maskableSafeZone: true })
+  }
+}
 
 async function syncCompatibilityAssets(outDir, copies, label) {
   for (const [sourceRelativePath, destRelativePath] of copies) {
@@ -87,24 +116,20 @@ async function syncCompatibilityAssets(outDir, copies, label) {
   return true
 }
 
-async function verifyCanonicalKitIconAssets() {
+async function main() {
   const root = process.cwd()
   const outRel = parseArg('--out', 'public')
   const outDir = path.resolve(root, outRel)
-  const missing = []
+  const sourcePath = path.join(outDir, 'assets/base-app-icon-1024.png')
 
-  for (const relativePath of requiredKitIconAssets) {
-    if (!(await exists(path.join(outDir, relativePath)))) {
-      missing.push(relativePath)
-    }
-  }
-
-  if (missing.length > 0) {
+  if (!(await exists(sourcePath))) {
     // eslint-disable-next-line no-console
-    console.error(`Missing v2 brand-kit icon assets in ${outRel}: ${missing.join(', ')}`)
+    console.error(`Missing canonical icon source: ${sourcePath}`)
     process.exitCode = 1
     return
   }
+
+  await regeneratePngDerivatives(outDir, sourcePath)
 
   const syncedRoot = await syncCompatibilityAssets(outDir, rootCompatibilityCopies, 'root compatibility icons')
   if (!syncedRoot) return
@@ -113,9 +138,9 @@ async function verifyCanonicalKitIconAssets() {
   if (!syncedDocsBrand) return
 
   // eslint-disable-next-line no-console
-  console.log(`verified committed v2 brand-kit icon assets in ${outRel}`)
+  console.log(`regenerated favicon/PWA PNG derivatives from assets/base-app-icon-1024.png in ${outRel}`)
   // eslint-disable-next-line no-console
   console.log('synced root compatibility icons and docs-site brand/favicon.svg + brand/logo.svg from canonical assets')
 }
 
-await verifyCanonicalKitIconAssets()
+await main()

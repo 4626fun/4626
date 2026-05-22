@@ -494,6 +494,21 @@ describe('isWaitlistStepTwoSigningComplete', () => {
       }),
     ).toBe(true)
   })
+
+  it('does not complete none-yet parent signing from a stale success notice alone', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: {
+          canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+          executionTrack: 'none-yet',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        notice: '4626 signing is enabled on your canonical wallet.',
+        parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('shouldShowParentCswAddOwnerPanel', () => {

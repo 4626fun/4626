@@ -4,15 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
-const inAppBrowserMocks = vi.hoisted(() => ({
-  isBaseAppInApp: false,
-}))
-
 import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 
 function buildController(overrides: Record<string, unknown> = {}) {
   return {
-    advancedBusy: false,
     busyProvider: null,
     canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
     connectOwnerWallet: vi.fn(),
@@ -30,12 +25,8 @@ function buildController(overrides: Record<string, unknown> = {}) {
       ],
       error: null,
     },
-    error: null,
-    loadMe: vi.fn(),
     needsBaseAccountReconnect: false,
     onchainEoaOwnerCandidates: [],
-    onEnable4626Signing: vi.fn(),
-    onResetOwnerApproval: vi.fn(),
     ownerSignerAddress: null,
     privyWallets: [
       {
@@ -44,48 +35,12 @@ function buildController(overrides: Record<string, unknown> = {}) {
       },
     ],
     requiresBaseAppForOwnerInstall: true,
-    activeExternalOwnerWallet: null,
     ...overrides,
   }
 }
 
-vi.mock('wagmi', () => ({
-  useWalletClient: () => ({ data: null }),
-}))
-
-vi.mock('@/lib/wallet/inAppBrowser', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/wallet/inAppBrowser')>()
-  return {
-    ...actual,
-    isBaseAppInAppContext: () => inAppBrowserMocks.isBaseAppInApp,
-  }
-})
-
-vi.mock('@privy-io/react-auth', () => ({
-  usePrivy: () => ({
-    getAccessToken: vi.fn().mockResolvedValue('test-token'),
-  }),
-  useBaseAccountSdk: () => ({
-    baseAccountSdk: null,
-  }),
-}))
-
-vi.mock('@/features/accountSetup/addOwner/useAddOwnerRelayFlow', () => ({
-  useAddOwnerRelayFlow: () => ({
-    preview: null,
-    previewLoading: false,
-    busy: false,
-    error: null,
-    notice: null,
-    txHash: null,
-    loadPreview: vi.fn(),
-    executeRelayInstall: vi.fn(),
-    relayReady: false,
-  }),
-}))
-
 describe('AddOwnerSigningPanel', () => {
-  it('renders connect-owner CTA in waitlist variant when no owner wallet is connected', () => {
+  it('renders connect-owner CTA when no owner wallet is connected', () => {
     render(
       <MemoryRouter>
         <AddOwnerSigningPanel
@@ -100,14 +55,14 @@ describe('AddOwnerSigningPanel', () => {
               ],
             }) as any
           }
-          variant="waitlist"
         />
       </MemoryRouter>,
     )
-    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Connect CSW owner wallet')
+    expect(screen.getByRole('button', { name: /Connect CSW owner wallet/i })).toBeTruthy()
+    expect(screen.getByText(/Owner install runs on/i)).toBeTruthy()
   })
 
-  it('steers passkey-only CSWs to Base App setup instead of connect-owner CTA', () => {
+  it('steers passkey-only CSWs to Base App setup', () => {
     render(
       <MemoryRouter>
         <AddOwnerSigningPanel
@@ -122,12 +77,11 @@ describe('AddOwnerSigningPanel', () => {
               requiresBaseAppForOwnerInstall: true,
             }) as any
           }
-          variant="waitlist"
         />
       </MemoryRouter>,
     )
-    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain('Open Base App setup')
     expect(screen.getByText(/passkey-controlled/i)).toBeTruthy()
+    expect(screen.getByText(/Base App setup/i)).toBeTruthy()
   })
 
   it('shows completion state when privy embedded EOA is already an owner', () => {
@@ -149,15 +103,13 @@ describe('AddOwnerSigningPanel', () => {
               },
             }) as any
           }
-          variant="waitlist"
         />
       </MemoryRouter>,
     )
     expect(screen.getByTestId('add-owner-signing-complete')).toBeTruthy()
   })
 
-  it('uses prepared calls in Base App self-auth session', () => {
-    inAppBrowserMocks.isBaseAppInApp = true
+  it('links to /add-owner when a valid signer session is connected', () => {
     render(
       <MemoryRouter>
         <AddOwnerSigningPanel
@@ -165,19 +117,12 @@ describe('AddOwnerSigningPanel', () => {
             buildController({
               ownerSignerAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
               requiresBaseAppForOwnerInstall: false,
-              connectedOwnerReady: false,
               connectedSignerLabel: '0x4beab…704ef',
             }) as any
           }
-          variant="waitlist"
         />
       </MemoryRouter>,
     )
-    expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain(
-      'Enable 4626 signing in Base App',
-    )
-    expect(screen.queryByText('Rebuild Relay preview')).toBeNull()
-    expect(screen.getByText(/wallet_prepareCalls/i)).toBeTruthy()
-    inAppBrowserMocks.isBaseAppInApp = false
+    expect(screen.getByRole('link', { name: /Continue on \/add-owner/i }).getAttribute('href')).toBe('/add-owner')
   })
 })

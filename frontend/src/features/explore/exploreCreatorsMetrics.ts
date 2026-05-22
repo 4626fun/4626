@@ -1,13 +1,9 @@
-import type { ZoraCoin } from '@/lib/zora/types'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { fetchZoraExplore } from '@/lib/zora/client'
 
 export const EXPLORE_CREATORS_METRICS_QUERY_KEY = ['explore', 'creators', 'metrics', 'shared-dashboard'] as const
 export const LIVE_HERO_METRICS_REFETCH_MS = 10_000
-const LIVE_ESTIMATE_COUNT = 50
-const V4_CUTOFF_DATE_MS = Date.parse('2025-06-06T00:00:00Z')
 
 export type ExploreCreatorsMetrics = {
   scope: 'creators'
@@ -36,17 +32,12 @@ export type ExploreCreatorsMetrics = {
     ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
+    usingZoraExploreFinancials?: boolean
   }
   history30d: Array<{
     date: string
     creatorCoinsMarketCapUsd: number | null
   }>
-}
-
-export type ExploreHeroLiveFinancials = {
-  volume24hUsd: number
-  fees24hUsd: number
-  coinCount: number
 }
 
 let cachedExploreMetrics: ExploreCreatorsMetrics | null = null
@@ -68,31 +59,6 @@ export async function fetchExploreCreatorsMetrics(): Promise<ExploreCreatorsMetr
     // Non-blocking metrics card.
   }
   return null
-}
-
-export async function fetchLiveHeroFinancialEstimate(
-  migratedCoins: Set<string> | null = null,
-): Promise<ExploreHeroLiveFinancials> {
-  const volumeList = await fetchZoraExplore({
-    list: 'TOP_VOLUME_CREATORS_24H',
-    count: LIVE_ESTIMATE_COUNT,
-  })
-  const edges = Array.isArray(volumeList?.edges) ? volumeList.edges : []
-  let volume24hUsd = 0
-  let fees24hUsd = 0
-  let coinCount = 0
-
-  for (const edge of edges) {
-    const coin = edge?.node as ZoraCoin | undefined
-    if (!coin) continue
-    coinCount += 1
-    const volumeValue = toFiniteNumber(coin.volume24h)
-    if (volumeValue == null) continue
-    volume24hUsd += volumeValue
-    fees24hUsd += volumeValue * inferCreatorCoinFeeRate(coin, migratedCoins)
-  }
-
-  return { volume24hUsd, fees24hUsd, coinCount }
 }
 
 export function toFiniteNumber(value: unknown): number | null {
@@ -118,14 +84,6 @@ export function preferLiveMetricValue(
   if (canonicalValue == null) return liveValue
   if (liveValue == null) return canonicalValue
   return Math.max(canonicalValue, liveValue)
-}
-
-export function inferCreatorCoinFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number {
-  const address = typeof coin.address === 'string' ? coin.address.toLowerCase() : ''
-  if (address && migratedCoins?.has(address)) return 0.01
-  const createdAtMs = typeof coin.createdAt === 'string' ? Date.parse(coin.createdAt) : NaN
-  if (!Number.isFinite(createdAtMs)) return 0.01
-  return createdAtMs >= V4_CUTOFF_DATE_MS ? 0.01 : 0.03
 }
 
 export function buildExploreHeroStatusLine(input: {

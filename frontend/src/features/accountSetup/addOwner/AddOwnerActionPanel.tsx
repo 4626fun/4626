@@ -1,4 +1,4 @@
-import type { RemoveOwnerPreview } from '@/lib/removeOwner/removeOwnerHelpers'
+import type { AddOwnerPreview } from '@/lib/addOwner/addOwnerHelpers'
 import { OwnerMutationStepFlow } from '@/features/accountSetup/ownerMutation/OwnerMutationStepFlow'
 
 type LastErrorDetail = {
@@ -8,12 +8,14 @@ type LastErrorDetail = {
   rawBody: string | null
 }
 
-type RemoveOwnerActionPanelProps = {
+type AddOwnerActionPanelProps = {
   previewLoading: boolean
-  preview: RemoveOwnerPreview | null
+  preview: AddOwnerPreview | null
   busy: boolean
   isSelfAuthSession: boolean
-  handleRemove: () => Promise<void>
+  handleAdd: () => Promise<boolean | void>
+  onBuildPreview: () => void
+  onRebuildPreview: () => void
   txHash: string | null
   pageNotice: string | null
   pageError: string | null
@@ -21,7 +23,7 @@ type RemoveOwnerActionPanelProps = {
   eventLog: string[]
 }
 
-function RemoveOwnerPreviewDetails(props: { preview: RemoveOwnerPreview }) {
+function AddOwnerPreviewDetails(props: { preview: AddOwnerPreview }) {
   const { preview } = props
   return (
     <details className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">
@@ -30,8 +32,8 @@ function RemoveOwnerPreviewDetails(props: { preview: RemoveOwnerPreview }) {
       </summary>
       <dl className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Target index</dt>
-          <dd className="mt-0.5 font-mono text-zinc-200">{preview.preflight.targetOwnerIndex}</dd>
+          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Owner to add</dt>
+          <dd className="mt-0.5 break-all font-mono text-zinc-200">{preview.preflight.ownerToAdd}</dd>
         </div>
         <div>
           <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Simulation</dt>
@@ -44,23 +46,19 @@ function RemoveOwnerPreviewDetails(props: { preview: RemoveOwnerPreview }) {
           </dd>
         </div>
       </dl>
-      {preview.preflight.targetOwnerAddress ? (
-        <div className="mt-2 break-all text-[11px] text-zinc-400">
-          Removing{' '}
-          <span className="font-mono text-zinc-300">{preview.preflight.targetOwnerAddress}</span>
-        </div>
-      ) : null}
     </details>
   )
 }
 
-export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
+export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
   const {
     previewLoading,
     preview,
     busy,
     isSelfAuthSession,
-    handleRemove,
+    handleAdd,
+    onBuildPreview,
+    onRebuildPreview,
     txHash,
     pageNotice,
     pageError,
@@ -68,9 +66,11 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
     eventLog,
   } = props
 
+  const alreadyOwner = preview?.preflight.alreadyOwner === true
+
   return (
     <OwnerMutationStepFlow
-      mutation="remove"
+      mutation="add"
       isSelfAuthSession={isSelfAuthSession}
       previewLoading={previewLoading}
       preview={preview}
@@ -80,15 +80,12 @@ export function RemoveOwnerActionPanel(props: RemoveOwnerActionPanelProps) {
       pageError={pageError}
       lastErrorDetail={lastErrorDetail}
       eventLog={eventLog}
-      waitingMessage={
-        !preview && !previewLoading
-          ? 'Select an owner slot above to build the Relay preview.'
-          : null
-      }
-      showBuildPreviewButton={false}
-      onBuildPreview={() => {}}
-      onSubmit={() => void handleRemove()}
-      previewDetails={preview ? <RemoveOwnerPreviewDetails preview={preview} /> : null}
+      alreadyComplete={alreadyOwner}
+      alreadyCompleteMessage="4626 signing is already enabled on this wallet."
+      onBuildPreview={onBuildPreview}
+      onSubmit={() => void handleAdd()}
+      onRebuildPreview={onRebuildPreview}
+      previewDetails={preview ? <AddOwnerPreviewDetails preview={preview} /> : null}
     />
   )
 }

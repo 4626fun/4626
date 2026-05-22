@@ -131,10 +131,9 @@ export function isWaitlistStepTwoSigningComplete(params: {
     })
   }
   if (isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })) return true
-  const track = accountSignals?.executionTrack
-  if (track !== 'sub-account' && track !== 'migration-pending') {
-    return SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
-  }
+  // Do not treat stale success notices as structural step completion — that belongs in
+  // isWaitlistSigningReadyForUi for optimistic copy only.
+  void notice
   return false
 }
 
