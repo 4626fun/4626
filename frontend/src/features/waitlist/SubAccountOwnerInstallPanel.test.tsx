@@ -9,7 +9,6 @@ import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import {
   SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE,
   SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
-  SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 
@@ -142,7 +141,7 @@ describe('SubAccountOwnerInstallPanel', () => {
     })
   })
 
-  it('shows signing enabled when register succeeds but optional on-chain owner fails', async () => {
+  it('shows retry UI when register succeeds but on-chain owner fails', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
     installOwnerOnly.mockResolvedValue({
       registered: true,
@@ -159,14 +158,14 @@ describe('SubAccountOwnerInstallPanel', () => {
     fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('sub-account-owner-install-complete')).toBeTruthy()
       expect(screen.getByText(SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE)).toBeTruthy()
+      expect(screen.getByTestId('sub-account-owner-install-recovery')).toBeTruthy()
     })
-    expect(screen.queryByTestId('sub-account-owner-install-button')).toBeNull()
-    expect(screen.queryByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeNull()
+    expect(screen.queryByTestId('sub-account-owner-install-complete')).toBeNull()
+    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
   })
 
-  it('shows signing enabled with soft note when optional owner fails for non-aa23 errors', async () => {
+  it('shows retry UI when owner install fails for non-aa23 errors', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
     installOwnerOnly.mockResolvedValue({
       registered: true,
@@ -183,10 +182,10 @@ describe('SubAccountOwnerInstallPanel', () => {
     fireEvent.click(await screen.findByTestId('sub-account-owner-install-button'))
 
     await waitFor(() => {
-      expect(screen.getByTestId('sub-account-owner-install-complete')).toBeTruthy()
-      expect(screen.getByText(SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE)).toBeTruthy()
+      expect(screen.getByTestId('sub-account-owner-install-recovery')).toBeTruthy()
     })
-    expect(screen.queryByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeNull()
+    expect(screen.queryByTestId('sub-account-owner-install-complete')).toBeNull()
+    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
   })
 
   it('shows pending Base App setup when server link exists outside Base App without on-chain owner', async () => {
@@ -198,12 +197,12 @@ describe('SubAccountOwnerInstallPanel', () => {
         parentAddress={PARENT}
         subAccountAddress={SUB}
         embeddedEoaAddress={EMBED}
-        serverExecutionReady
+        linkRegistered
       />,
     )
 
     expect(await screen.findByTestId('sub-account-owner-install-pending')).toBeTruthy()
-    expect(screen.getByText(/signing link is saved/i)).toBeTruthy()
+    expect(screen.getByText(/signer is linked, but Base App still needs/i)).toBeTruthy()
     expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
   })
 

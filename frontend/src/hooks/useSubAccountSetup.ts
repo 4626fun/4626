@@ -17,8 +17,6 @@ import {
   confirmSubAccountEmbeddedOwner,
   finalizeSubAccountSigner,
   resolveSubAccountSetupContext,
-  setupSubAccount as runSubAccountSetup,
-  type SubAccountSetupResult,
   type SubAccountSetupStageEvent,
 } from '@/lib/wallet/subAccountSetup'
 import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
@@ -416,22 +414,7 @@ export function useSubAccountSetup() {
     [onStageEvent, runWithGuard],
   )
 
-  const setup = useCallback(async (): Promise<SubAccountSetupResult | null> => {
-    return runWithGuard(async (bundle) => {
-      const result = await runSubAccountSetup(buildWalletBundle({ ...bundle, onStageEvent }))
-      setState((prev) => ({
-        ...prev,
-        subAccountAddress: result.subAccountAddress,
-        parentAddress: result.parentAddress,
-        isSettingUp: false,
-        created: result.created,
-      }))
-      return result
-    })
-  }, [onStageEvent, runWithGuard])
-
   return {
-    setupSubAccount: setup,
     provisionSubAccount: provision,
     confirmSubAccountEmbeddedOwner: confirmEmbeddedOwner,
     installSubAccountOwnerOnly,

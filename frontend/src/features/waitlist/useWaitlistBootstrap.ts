@@ -9,7 +9,7 @@ import {
   applyWaitlistSubAccountConnectOverlay,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
-  isWaitlistSigningReady,
+  isWaitlistSubAccountLinkReady,
   type WaitlistStep,
   type WaitlistSubAccountConnectOverlay,
 } from './waitlistFlowState'
@@ -227,7 +227,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         subAccountConnectOverlayRef.current,
         subAccountStepCompleted,
       )
-      if (isWaitlistSigningReady(nextAccount)) {
+      if (isWaitlistSubAccountLinkReady(nextAccount)) {
         subAccountConnectOverlayRef.current = null
         clearPersistedSubAccountConnectOverlay(getSubAccountCompletionAccountKey(nextAccount))
       }
@@ -340,5 +340,3 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
     recoveryRequiredBootstrapCooldownUntilRef,
   }
 }
-
-export { isSessionFinalizingError, SESSION_FINALIZING_RETRY_MESSAGE, RECOVERY_REQUIRED_MESSAGE }

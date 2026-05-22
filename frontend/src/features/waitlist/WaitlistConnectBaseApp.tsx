@@ -40,7 +40,7 @@ type Props = {
   parentAddress?: string | null
   subAccountAddress?: string | null
   embeddedEoaAddress?: string | null
-  serverExecutionReady?: boolean
+  linkRegistered?: boolean
 }
 
 type PendingProvision = {
@@ -192,7 +192,7 @@ function WaitlistConnectBaseAppReady(props: Props) {
     parentAddress,
     subAccountAddress,
     embeddedEoaAddress,
-    serverExecutionReady = false,
+    linkRegistered = false,
   } = props
   const setup = useSubAccountSetup()
   const {
@@ -320,12 +320,18 @@ function WaitlistConnectBaseAppReady(props: Props) {
     })
     if (cancelledRef.current) return
     if (!ownerInstalled) {
-      // On-chain addOwner is optional once the signer is linked; registration is the gate for swaps.
-      console.warn('waitlist.base_app.optional_owner_install_failed', {
-        parentAddress: pending.parentAddress,
-        subAccountAddress: pending.subAccountAddress,
-        message: getLastSetupError()?.message ?? lastStage?.message ?? null,
+      setView({
+        kind: 'error',
+        message: mapSubAccountOwnerInstallError(
+          normalizeSubAccountOwnerInstallErrorSource(
+            getLastSetupError()?.message ??
+              'Base App did not finish the on-chain owner approval for your app wallet.',
+          ),
+          { inBaseApp: isBaseAppInAppContext() },
+        ),
+        canRetry: true,
       })
+      return
     }
 
     await persistAndComplete(pending)
@@ -378,12 +384,11 @@ function WaitlistConnectBaseAppReady(props: Props) {
         <div className="space-y-4 text-left">
           {showRecoveryPanel ? (
             <SubAccountOwnerInstallPanel
-              variant="recovery"
               showHeader={false}
               parentAddress={parentAddress}
               subAccountAddress={subAccountAddress}
               embeddedEoaAddress={embeddedEoaAddress}
-              serverExecutionReady={serverExecutionReady}
+              linkRegistered={linkRegistered}
               setup={setup}
             />
           ) : null}
@@ -404,16 +409,6 @@ function WaitlistConnectBaseAppReady(props: Props) {
             >
               {showRecoveryPanel ? 'Run full Base App setup' : 'Connect Base App'}
             </Button>
-            {!showRecoveryPanel ? (
-              <SubAccountOwnerInstallPanel
-                variant="inline"
-                parentAddress={parentAddress}
-                subAccountAddress={subAccountAddress}
-                embeddedEoaAddress={embeddedEoaAddress}
-                serverExecutionReady={serverExecutionReady}
-                setup={setup}
-              />
-            ) : null}
             <button
               type="button"
               className="text-xs font-medium uppercase tracking-wider text-zinc-400 hover:text-zinc-300"
@@ -488,5 +483,3 @@ function WaitlistConnectBaseAppReady(props: Props) {
     </div>
   )
 }
-
-export default WaitlistConnectBaseApp

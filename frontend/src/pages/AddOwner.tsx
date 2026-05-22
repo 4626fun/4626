@@ -21,7 +21,6 @@ export function AddOwnerPage() {
     activeExternalOwnerWallet,
     privyWallets,
     connectOwnerWallet,
-    needsBaseAccountReconnect,
   } = controller
 
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
@@ -171,7 +170,7 @@ export function AddOwnerPage() {
                         building the Relay preview.
                       </p>
                       <Button type="button" variant="primary" onClick={() => void connectOwnerWallet()}>
-                        {needsBaseAccountReconnect ? 'Reconnect via Base Account' : 'Connect owner wallet'}
+                        Connect owner wallet
                       </Button>
                     </div>
                   ) : null}

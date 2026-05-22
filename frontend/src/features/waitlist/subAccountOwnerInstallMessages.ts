@@ -17,10 +17,7 @@ export const SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE =
   'Your 4626 signer is linked, but Base App still needs to approve one on-chain owner transaction on your app wallet before swaps can run. Tap Enable 4626 signing again and approve the prompt.'
 
 export const SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE =
-  'Base App could not validate the smart-wallet signature for the optional on-chain owner step (AA23). Force-close 4626 in Base App, reopen this page, confirm Base Mainnet is selected, then tap Enable 4626 signing once. If swaps already work, you can continue without retrying.'
-
-export const SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE =
-  '4626 signing is linked to your app wallet. The optional on-chain owner step did not finish; sponsored swaps should still work inside Base App.'
+  'Base App could not validate the smart-wallet signature for the on-chain owner step (AA23). Force-close 4626 in Base App, reopen this page, confirm Base Mainnet is selected, then tap Enable 4626 signing again.'
 
 /** Strip nested setup wrapper text before classifying provider errors. */
 export function normalizeSubAccountOwnerInstallErrorSource(message: string): string {

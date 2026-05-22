@@ -270,7 +270,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(await screen.findByRole('button', { name: /continue/i })).toBeTruthy()
+    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -329,7 +330,6 @@ describe('WaitlistFlow simplified completion UI', () => {
           canEnterApp={false}
           completionBusy={false}
           onEnterApp={vi.fn()}
-          onOpenAccounts={vi.fn()}
           onSignOut={onSignOut}
         />
       </MemoryRouter>,
@@ -350,7 +350,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(await screen.findByRole('button', { name: /continue/i })).toBeTruthy()
+    expect(await screen.findByText(/activate your account/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^continue$/i })).toBeNull()
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {
@@ -360,13 +361,11 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
-    expect(screen.getAllByRole('heading', { name: /^waitlist$/i })).toHaveLength(1)
+    expect(await screen.findByRole('heading', { name: /activate your account/i })).toBeTruthy()
+    expect(screen.getAllByRole('heading', { name: /activate your account/i })).toHaveLength(1)
   })
 
   it('keeps waitlist workspace focused and hides advanced settings action', async () => {
-    const openAccounts = vi.fn()
-
     render(
       <MemoryRouter>
         <WaitlistSetupWorkspace
@@ -374,7 +373,6 @@ describe('WaitlistFlow simplified completion UI', () => {
           canEnterApp={false}
           completionBusy={false}
           onEnterApp={vi.fn()}
-          onOpenAccounts={openAccounts}
           onSignOut={vi.fn()}
         />
       </MemoryRouter>,
@@ -382,7 +380,6 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     expect(await screen.findByText(/activate your account/i)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /advanced account settings/i })).toBeNull()
-    expect(openAccounts).toHaveBeenCalledTimes(0)
   })
 
   it('hides enter app until all setup steps are complete', async () => {
@@ -393,7 +390,6 @@ describe('WaitlistFlow simplified completion UI', () => {
           canEnterApp
           completionBusy={false}
           onEnterApp={vi.fn()}
-          onOpenAccounts={vi.fn()}
           onSignOut={vi.fn()}
         />
       </MemoryRouter>,
@@ -531,6 +527,12 @@ describe('WaitlistFlow simplified completion UI', () => {
       if (input.startsWith('/api/auth/privy')) {
         return jsonResponse({ success: true }) as any
       }
+      if (input.startsWith('/api/waitlist/stats')) {
+        return jsonResponse({
+          success: true,
+          data: { signedUpCount: 0, capacity: 0, spotsRemaining: 0 },
+        }) as any
+      }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
 
@@ -540,12 +542,12 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /continue/i }))
     await waitFor(() => {
       expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     }, { timeout: 7_000 })
-    // Scheduler keeps retries bounded while still allowing completion.
-    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getByText(/activate your account/i)).toBeTruthy()
+    }, { timeout: 7_000 })
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
   })

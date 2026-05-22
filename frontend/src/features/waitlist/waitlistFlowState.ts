@@ -45,59 +45,29 @@ export function resolveSubAccountAddress(params: {
   return fromProfile || null
 }
 
-export function shouldPromptBaseAccountReconnect(params: {
-  subAccountFlowEnabled: boolean
+export function isWaitlistSubAccountLinkReady(account: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
-  if (!params.subAccountFlowEnabled) return false
-  const signals = params.accountSignals
-  if (!signals?.canonicalCswAddress?.trim()) return false
-  if (isSubAccountExecutionReady(signals)) return false
-  if (signals.executionTrack === 'legacy-owner-install') return false
-  if (signals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
-  return signals.executionTrack === 'none-yet'
-}
-
-export function isWaitlistSigningReady(account: {
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-}): boolean {
+  /** Sub-account link registered (DB/bootstrap), not on-chain owner or swap operability. */
   if (isSubAccountExecutionReady(account.accountSignals)) return true
   return hasLegacyOwnerInstallSigning(account.accountSignals)
 }
 
-const SIGNING_ENABLED_NOTICE_RE = /4626 signing is enabled|already enabled/i
-
-/** Server signals plus optimistic UI when a success notice landed before `me` refreshes. */
-export function isWaitlistSigningReadyForUi(
-  account: Parameters<typeof isWaitlistSigningReady>[0],
-  notice?: string | null,
-): boolean {
-  return isWaitlistSigningReady(account) || SIGNING_ENABLED_NOTICE_RE.test(notice ?? '')
-}
-
-/** Parent-CSW legacy owner install — not sub-account SDK registration. */
-export function isLegacyParentOwnerSigningReady(params: {
+/** Parent-CSW legacy owner install — requires on-chain confirmation, not server/db flags alone. */
+function isLegacyParentOwnerSigningReady(params: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
-  if (params.parentEmbeddedOwnerOnChain === true) return true
-  if (params.parentEmbeddedOwnerOnChain === false) return false
-  return hasLegacyOwnerInstallSigning(params.accountSignals)
+  return params.parentEmbeddedOwnerOnChain === true
 }
 
-/**
- * Sub-account track is operable when the embedded EOA can sign swaps:
- * on-chain owner on the sub-account, or an active Base App session with a saved link.
- */
-export function isSubAccountSigningOperable(params: {
+/** Sub-account track is swap-ready only when the embedded EOA is an on-chain owner of the app wallet. */
+function isSubAccountSigningOperable(params: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   subAccountEmbeddedOwnerOnChain?: boolean
-  subAccountSessionReady?: boolean
 }): boolean {
   if (!isSubAccountExecutionReady(params.accountSignals)) return false
-  if (params.subAccountEmbeddedOwnerOnChain === true) return true
-  if (params.subAccountSessionReady === true) return true
-  return false
+  return params.subAccountEmbeddedOwnerOnChain === true
 }
 
 /**
@@ -107,19 +77,11 @@ export function isSubAccountSigningOperable(params: {
 export function isWaitlistStepTwoSigningComplete(params: {
   ownerInstallRequested: boolean
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-  notice?: string | null
   parentEmbeddedOwnerOnChain?: boolean
   subAccountEmbeddedOwnerOnChain?: boolean
-  subAccountSessionReady?: boolean
 }): boolean {
-  const {
-    ownerInstallRequested,
-    accountSignals,
-    notice,
-    parentEmbeddedOwnerOnChain,
-    subAccountEmbeddedOwnerOnChain,
-    subAccountSessionReady,
-  } = params
+  const { ownerInstallRequested, accountSignals, parentEmbeddedOwnerOnChain, subAccountEmbeddedOwnerOnChain } =
+    params
   if (ownerInstallRequested) {
     return isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })
   }
@@ -127,13 +89,9 @@ export function isWaitlistStepTwoSigningComplete(params: {
     return isSubAccountSigningOperable({
       accountSignals,
       subAccountEmbeddedOwnerOnChain,
-      subAccountSessionReady,
     })
   }
   if (isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })) return true
-  // Do not treat stale success notices as structural step completion — that belongs in
-  // isWaitlistSigningReadyForUi for optimistic copy only.
-  void notice
   return false
 }
 
@@ -171,7 +129,7 @@ export function applyWaitlistSubAccountConnectOverlay<T extends WaitlistAccountW
   subAccountStepCompleted: boolean,
 ): T {
   if (!overlay || !subAccountStepCompleted) return account
-  if (isWaitlistSigningReady(account)) return account
+  if (isWaitlistSubAccountLinkReady(account)) return account
 
   const canonical =
     (typeof account.accountSignals.canonicalCswAddress === 'string' &&
@@ -278,7 +236,7 @@ export function resolveWaitlistStep(params: {
   const signingReady =
     subAccountFlowEnabled === true
       ? isSubAccountExecutionReady(account.accountSignals)
-      : isWaitlistSigningReady(account)
+      : isWaitlistSubAccountLinkReady(account)
   const hasCanonicalCsw = Boolean(
     typeof account.accountSignals?.canonicalCswAddress === 'string' &&
       account.accountSignals.canonicalCswAddress.trim(),

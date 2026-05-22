@@ -79,13 +79,6 @@ export function isAlreadyLoggedInAuthError(error: unknown): boolean {
   )
 }
 
-export function shouldStopWaitlistAutoAuthRetry(params: {
-  isSessionMismatch: boolean
-  isRecoveryRequired: boolean
-}): boolean {
-  return params.isSessionMismatch || params.isRecoveryRequired
-}
-
 export async function runWaitlistPrivyLogout(params: {
   logout: (() => Promise<void>) | null | undefined
   timeoutMs?: number

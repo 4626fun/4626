@@ -31,7 +31,6 @@ vi.mock('@/hooks/useSubAccountSetup', () => ({
     finalizeSubAccountSigner: hookState.finalize,
     connectBaseAccountWallet: hookState.connectWallet,
     getLastSetupError: hookState.getLastSetupError,
-    setupSubAccount: vi.fn(),
     isSettingUp: hookState.isSettingUp,
     lastStage: hookState.lastStage,
     embeddedWallet: hookState.embeddedAddress ? { address: hookState.embeddedAddress } : null,
@@ -137,10 +136,12 @@ describe('WaitlistConnectBaseApp', () => {
     )
   })
 
-  it('completes when optional owner install fails after signer link succeeds', async () => {
+  it('surfaces owner-install failure instead of completing when on-chain owner is missing', async () => {
     mockProvision(true)
     hookState.confirmOwner.mockResolvedValueOnce(null)
-    registerMock.mockResolvedValueOnce({ ok: true, message: '' })
+    hookState.getLastSetupError.mockReturnValue(
+      new Error('Smart wallet signature validation failed during sponsorship (AA23).'),
+    )
 
     const onComplete = vi.fn()
     render(<WaitlistConnectBaseApp onSkip={() => {}} onComplete={onComplete} />)
@@ -149,16 +150,9 @@ describe('WaitlistConnectBaseApp', () => {
     })
 
     await waitFor(() => expect(hookState.finalize).toHaveBeenCalled())
-    await waitFor(() => expect(registerMock).toHaveBeenCalled())
-    await waitFor(
-      () =>
-        expect(onComplete).toHaveBeenCalledWith({
-          parentAddress: PARENT,
-          subAccountAddress: SUB,
-        }),
-      { timeout: 3000 },
-    )
-    expect(screen.queryByTestId('waitlist-connect-base-app-error')).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('waitlist-connect-base-app-error')).toBeTruthy())
+    expect(onComplete).not.toHaveBeenCalled()
+    expect(registerMock).not.toHaveBeenCalled()
   })
 
   it('surfaces user-rejection copy when provisioning fails', async () => {

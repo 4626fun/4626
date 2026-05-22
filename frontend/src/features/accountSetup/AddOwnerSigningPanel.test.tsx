@@ -46,7 +46,6 @@ function buildController(overrides: Record<string, unknown> = {}) {
       error: null,
     },
     loadMe: vi.fn(),
-    needsBaseAccountReconnect: false,
     onchainEoaOwnerCandidates: [],
     ownerSignerAddress: null,
     privyWallets: [

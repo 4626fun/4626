@@ -30,7 +30,6 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     connectedSignerLabel,
     cswOwnersState,
     loadMe,
-    needsBaseAccountReconnect,
     onchainEoaOwnerCandidates: rawOnchainEoaOwnerCandidates,
     ownerSignerAddress,
     privyWallets,
@@ -178,11 +177,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
             loading={ownerWalletConnecting}
             onClick={() => void connectOwnerWallet()}
           >
-            {needsBaseAccountReconnect
-              ? 'Reconnect via Base Account'
-              : ownerWalletConnecting
-                ? 'Connecting wallet…'
-                : 'Connect CSW owner wallet'}
+            {ownerWalletConnecting
+              ? 'Connecting wallet…'
+              : 'Connect CSW owner wallet'}
           </Button>
         </div>
       ) : inlineRelay ? (

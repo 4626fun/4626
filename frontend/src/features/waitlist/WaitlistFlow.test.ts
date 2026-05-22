@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   applyWaitlistSubAccountConnectOverlay,
-  isWaitlistSigningReady,
-  isWaitlistSigningReadyForUi,
+  isWaitlistSubAccountLinkReady,
   isWaitlistStepTwoSigningComplete,
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
@@ -309,28 +308,14 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('treats registered baseSubAccount as signing-ready even when executionTrack lags', () => {
+  it('treats registered baseSubAccount as link-ready even when executionTrack lags', () => {
     expect(
-      isWaitlistSigningReady({
+      isWaitlistSubAccountLinkReady({
         accountSignals: {
           executionTrack: 'none-yet',
           baseSubAccount: { address: '0xabc', registered: true, isDistinctFromCsw: true },
         },
       }),
-    ).toBe(true)
-  })
-
-  it('isWaitlistSigningReadyForUi accepts optimistic notice before me refresh', () => {
-    expect(
-      isWaitlistSigningReadyForUi(
-        {
-          accountSignals: {
-            executionTrack: 'none-yet',
-            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
-          },
-        },
-        '4626 signing is enabled on your Zora CSW.',
-      ),
     ).toBe(true)
   })
 
@@ -355,7 +340,7 @@ describe('resolveWaitlistStep', () => {
     )
     expect(merged.accountSignals.executionTrack).toBe('sub-account')
     expect(merged.baseSubAccount).toBe('0x00000000000000000000000000000000000000dd')
-    expect(isWaitlistSigningReady(merged)).toBe(true)
+    expect(isWaitlistSubAccountLinkReady(merged)).toBe(true)
   })
 })
 
@@ -452,7 +437,7 @@ describe('isWaitlistStepTwoSigningComplete', () => {
     ).toBe(false)
   })
 
-  it('completes desktop owner-install when embedded EOA is parent CSW owner', () => {
+  it('completes desktop owner-install only when embedded EOA is on-chain parent CSW owner', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
         ownerInstallRequested: true,
@@ -460,27 +445,30 @@ describe('isWaitlistStepTwoSigningComplete', () => {
           ...subAccountReadySignals,
           privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
         },
+        parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
   })
 
-  it('completes Base App path from registered sub-account execution in an active Base App session', () => {
+  it('does not complete desktop owner-install from server owner flag without on-chain confirmation', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
-        ownerInstallRequested: false,
-        accountSignals: subAccountReadySignals,
-        subAccountSessionReady: true,
+        ownerInstallRequested: true,
+        accountSignals: {
+          ...subAccountReadySignals,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+        parentEmbeddedOwnerOnChain: false,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('does not complete sub-account registration alone outside Base App without on-chain owner', () => {
+  it('does not complete Base App path from registered sub-account without on-chain owner', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
         ownerInstallRequested: false,
         accountSignals: subAccountReadySignals,
         subAccountEmbeddedOwnerOnChain: false,
-        subAccountSessionReady: false,
       }),
     ).toBe(false)
   })
@@ -495,16 +483,15 @@ describe('isWaitlistStepTwoSigningComplete', () => {
     ).toBe(true)
   })
 
-  it('does not complete none-yet parent signing from a stale success notice alone', () => {
+  it('does not complete none-yet parent signing from a stale success notice or server flag alone', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
         ownerInstallRequested: false,
         accountSignals: {
           canonicalCswAddress: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
           executionTrack: 'none-yet',
-          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
         },
-        notice: '4626 signing is enabled on your canonical wallet.',
         parentEmbeddedOwnerOnChain: false,
       }),
     ).toBe(false)

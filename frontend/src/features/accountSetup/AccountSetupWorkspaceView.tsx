@@ -24,16 +24,12 @@ import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
 import {
   isSubAccountExecutionReady,
-  isWaitlistStepTwoSigningComplete,
-  resolveSubAccountAddress,
   shouldShowParentCswAddOwnerPanel,
 } from '@/features/waitlist/waitlistFlowState'
-import { useEmbeddedOwnerOnSubAccount } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
+import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
-import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
@@ -149,8 +145,9 @@ export function AccountSetupWorkspaceView(props: {
   controller: AccountSetupWorkspaceController
   summaryActions?: ReactNode
   waitlistFooter?: ReactNode
+  onSigningStepCompleteChange?: (complete: boolean) => void
 }) {
-  const { context, controller, summaryActions, waitlistFooter } = props
+  const { context, controller, summaryActions, waitlistFooter, onSigningStepCompleteChange } = props
   const privyClientStatus = usePrivyClientStatus()
   const hasPrivyProviderContext = privyClientStatus === 'ready'
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
@@ -171,7 +168,6 @@ export function AccountSetupWorkspaceView(props: {
     loadMe,
     loading,
     me,
-    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
@@ -207,42 +203,23 @@ export function AccountSetupWorkspaceView(props: {
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
-  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
-  const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallPathActive = ownerInstallResumeState.requested
-  const executionTrackForOwnerProbe = me?.accountSignals.executionTrack
-  const shouldProbeParentEmbeddedOwner =
-    Boolean(canonicalCswAddress && embeddedEoaAddress) &&
-    (ownerInstallPathActive ||
-      executionTrackForOwnerProbe === 'none-yet' ||
-      executionTrackForOwnerProbe === 'legacy-owner-install')
-  const { isOwner: parentEmbeddedOwnerOnChain, refresh: refreshParentEmbeddedOwner } = useEmbeddedOwnerOnSubAccount({
-    subAccountAddress: canonicalCswAddress,
-    embeddedEoaAddress,
-    enabled: shouldProbeParentEmbeddedOwner,
-  })
-  const persistedSubAccountAddress = resolveSubAccountAddress({
-    baseSubAccount: me?.baseSubAccount ?? null,
+  const {
+    signingStepComplete,
+    parentEmbeddedOwnerOnChain,
+    refreshParentEmbeddedOwner,
+    persistedSubAccountAddress,
+    subAccountFlowEnabled,
+  } = useWaitlistSigningStepComplete({
     accountSignals: me?.accountSignals,
+    baseSubAccount: me?.baseSubAccount ?? null,
+    canonicalCswAddress,
+    ownerInstallRequested: ownerInstallPathActive,
   })
-  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
-  const subAccountSessionReady =
-    inBaseApp && Boolean(me && isSubAccountExecutionReady(me.accountSignals))
-  const { isOwner: subAccountEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
-    subAccountAddress: persistedSubAccountAddress,
-    embeddedEoaAddress,
-    enabled: subAccountFlowEnabled && Boolean(persistedSubAccountAddress && embeddedEoaAddress),
-  })
-  const signingStepComplete = me
-    ? isWaitlistStepTwoSigningComplete({
-        ownerInstallRequested: ownerInstallPathActive,
-        accountSignals: me.accountSignals,
-        notice,
-        parentEmbeddedOwnerOnChain,
-        subAccountEmbeddedOwnerOnChain,
-        subAccountSessionReady,
-      })
-    : false
+
+  useEffect(() => {
+    onSigningStepCompleteChange?.(signingStepComplete)
+  }, [onSigningStepCompleteChange, signingStepComplete])
 
   if (loading && !me) {
     return (
@@ -281,18 +258,19 @@ export function AccountSetupWorkspaceView(props: {
     canonicalCswAddress &&
     persistedSubAccountAddress ? (
       <SubAccountOwnerInstallPanel
-        variant="recovery"
         showHeader={false}
         parentAddress={canonicalCswAddress}
         subAccountAddress={persistedSubAccountAddress}
-        serverExecutionReady={isSubAccountExecutionReady(me.accountSignals)}
+        linkRegistered={isSubAccountExecutionReady(me.accountSignals)}
       />
     ) : null
-  const stepTwoDoneSubtitle = ownerInstallPathActive
-    ? 'Embedded signer installed on your parent smart wallet'
-    : executionTrack === 'sub-account' || executionTrack === 'migration-pending'
-      ? 'App wallet signing linked in Base App'
-      : 'Signing enabled on your canonical wallet'
+  const stepTwoDoneSubtitle = signingStepComplete
+    ? ownerInstallPathActive
+      ? 'Embedded signer installed on your parent smart wallet'
+      : executionTrack === 'sub-account' || executionTrack === 'migration-pending'
+        ? 'App wallet owner approved on-chain'
+        : 'Signing enabled on your canonical wallet'
+    : 'Approve 4626 signing on your app wallet'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
@@ -301,7 +279,7 @@ export function AccountSetupWorkspaceView(props: {
   // to Base Account before they burn a connection attempt on an unrelated EOA.
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
   const shouldHintBaseAccountForZora =
-    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect && !hasConnectedSigner
+    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !hasConnectedSigner
 
   if (context === 'waitlist') {
     // Which top-level step is expanded: null = auto
@@ -1112,7 +1090,7 @@ export function AccountSetupWorkspaceView(props: {
                       onClick={() => connectOwnerWallet()}
                       className="inline-flex"
                     >
-                      {needsBaseAccountReconnect ? ownerPrimaryCtaLabel : 'Connect owner wallet'}
+                      Connect owner wallet
                     </Button>
                   ) : (
                     <>

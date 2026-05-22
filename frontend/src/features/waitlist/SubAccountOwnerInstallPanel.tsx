@@ -11,10 +11,9 @@ import { usePrivyClientStatus } from '@/lib/privy/client'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
 import {
-  isAa23SubAccountOwnerInstallError,
   mapSubAccountOwnerInstallError,
   SUB_ACCOUNT_IN_BASE_APP_HINT,
-  SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE,
+  SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
 import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
@@ -29,14 +28,12 @@ type SubAccountOwnerInstallPanelProps = {
   subAccountAddress: string | null | undefined
   embeddedEoaAddress?: string | null | undefined
   className?: string
-  /** `recovery` — step content when sub-account exists. `inline` — one-line follow-up under connect. */
-  variant?: 'recovery' | 'inline'
   /** When false, skip the local headline (parent screen already sets context). */
   showHeader?: boolean
   /** Reuse an existing setup hook instance from a parent surface (avoids duplicate Privy wallet hooks). */
   setup?: SubAccountOwnerInstallSetup
-  /** When the server already marks sub-account execution ready, hide the install CTA. */
-  serverExecutionReady?: boolean
+  /** Server saved parent/sub-account link; does not imply on-chain owner or swap readiness. */
+  linkRegistered?: boolean
   onSuccess?: () => void
 }
 
@@ -113,9 +110,8 @@ function SubAccountOwnerInstallPanelContent(
     subAccountAddress,
     embeddedEoaAddress,
     className = '',
-    variant = 'recovery',
-    showHeader = variant === 'inline',
-    serverExecutionReady = false,
+    showHeader = false,
+    linkRegistered = false,
     onSuccess,
     setup,
   } = props
@@ -129,8 +125,6 @@ function SubAccountOwnerInstallPanelContent(
   const embeddedEoa = embeddedFromProps ?? normalizeAddress(embeddedWallet?.address)
 
   const [actionError, setActionError] = useState<string | null>(null)
-  const [optionalOwnerNote, setOptionalOwnerNote] = useState<string | null>(null)
-  const [localSigningEnabled, setLocalSigningEnabled] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [showRecovery, setShowRecovery] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
@@ -140,7 +134,6 @@ function SubAccountOwnerInstallPanelContent(
   const needsBaseAppHost = !inBaseApp
 
   const canRender = subAccountFlowEnabled && Boolean(parent && subAccount && embeddedEoa)
-  const isInline = variant === 'inline'
   const baseAppSetupUrl = buildWaitlistSetupUrl('base-app')
 
   const {
@@ -166,7 +159,6 @@ function SubAccountOwnerInstallPanelContent(
   const handleInstall = useCallback(async () => {
     if (!parent || !subAccount || needsBaseAppHost) return
     setActionError(null)
-    setOptionalOwnerNote(null)
 
     const result = await installSubAccountOwnerOnly({
       parentAddress: parent,
@@ -195,21 +187,19 @@ function SubAccountOwnerInstallPanelContent(
     await refreshOwnerCheck()
 
     const ownerReady = result.alreadyOwner || result.onChainOwnerInstalled
-    setLocalSigningEnabled(true)
-    setShowRecovery(false)
-    onSuccess?.()
-
-    if (!ownerReady && result.onChainOwnerWarning) {
-      const mapped = mapSubAccountOwnerInstallError(result.onChainOwnerWarning, { inBaseApp })
-      setOptionalOwnerNote(
-        isAa23SubAccountOwnerInstallError(result.onChainOwnerWarning)
-          ? mapped
-          : SUB_ACCOUNT_OPTIONAL_OWNER_SKIPPED_MESSAGE,
+    if (!ownerReady) {
+      const message = mapSubAccountOwnerInstallError(
+        result.onChainOwnerWarning ??
+          'Base App did not finish the on-chain owner approval for your app wallet.',
+        { inBaseApp },
       )
+      setActionError(message)
+      setShowRecovery(true)
       return
     }
 
-    setOptionalOwnerNote(null)
+    setShowRecovery(false)
+    onSuccess?.()
   }, [
     getLastSetupError,
     inBaseApp,
@@ -246,11 +236,7 @@ function SubAccountOwnerInstallPanelContent(
     )
   }
 
-  const signingOperable =
-    embeddedOwnerOnSubAccount || localSigningEnabled || (serverExecutionReady && inBaseApp)
-  const signingLinkSavedOnly = serverExecutionReady && !signingOperable
-
-  if (signingOperable) {
+  if (embeddedOwnerOnSubAccount) {
     return (
       <div
         className={`flex items-start gap-2.5 text-left ${className}`}
@@ -260,32 +246,18 @@ function SubAccountOwnerInstallPanelContent(
         <div>
           <p className="text-sm text-zinc-200">4626 signing is enabled</p>
           <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            Your embedded key can sign for the app wallet.
+            Your embedded key is an on-chain owner of the app wallet.
           </p>
-          {optionalOwnerNote ? (
-            <p className="mt-2 text-xs leading-relaxed text-amber-200/90" role="status">
-              {optionalOwnerNote}
-            </p>
-          ) : null}
         </div>
       </div>
     )
   }
 
-  if (signingLinkSavedOnly) {
+  if (linkRegistered) {
     return (
       <div className={`space-y-3 ${className}`} data-testid="sub-account-owner-install-pending">
         <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-          Your Base App signing link is saved, but your embedded key is not an on-chain owner yet. Open{' '}
-          <a
-            href={baseAppSetupUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-amber-50 underline decoration-dotted underline-offset-2"
-          >
-            Base App setup
-          </a>{' '}
-          and tap Enable 4626 signing to finish.
+          {SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE}
         </div>
         {needsBaseAppHost ? (
           <Button
@@ -400,20 +372,6 @@ function SubAccountOwnerInstallPanelContent(
       recheckBusy={recheckBusy}
     />
   ) : null
-
-  if (isInline) {
-    return (
-      <div className={`space-y-3 text-left ${className}`} data-testid="sub-account-owner-install-panel">
-        <p className="text-xs leading-relaxed text-zinc-400">
-          App wallet linked — one Base App approval adds your embedded key as owner.
-        </p>
-        {contextHint}
-        {primaryAction}
-        {errorBlock}
-        {recoveryBlock}
-      </div>
-    )
-  }
 
   return (
     <section className={`space-y-5 text-left ${className}`} data-testid="sub-account-owner-install-panel">

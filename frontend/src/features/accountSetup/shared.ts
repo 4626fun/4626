@@ -10,12 +10,6 @@ export const PROVIDER_ROWS: ProviderRow[] = [
   { provider: 'external_eoa', label: 'Wallet connect (EOA)', hint: 'External signer wallet' },
 ]
 
-export function normalizeAddress(value: string): string | null {
-  const raw = value.trim()
-  if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) return null
-  return raw.toLowerCase()
-}
-
 export function shortValue(value: string | null | undefined): string {
   if (!value) return '—'
   if (value.length <= 18) return value

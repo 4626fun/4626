@@ -1487,8 +1487,6 @@ export function useAccountSetupController(params: {
       ownerSignerAddress &&
       (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
   )
-  const subAccountReady = false
-  const needsBaseAccountReconnect = false
   const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
   const ownerAuthorityState = useMemo(
     () =>
@@ -1550,15 +1548,13 @@ export function useAccountSetupController(params: {
       signerClientReady,
     ],
   )
-  const ownerPrimaryCtaLabel = needsBaseAccountReconnect
-    ? 'Reconnect via Base Account'
-    : ownerApprovalReady
-      ? 'Continue on /add-owner'
-      : needsEmbeddedWallet
-        ? 'Provisioning embedded wallet…'
-        : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-          ? 'Finishing wallet session…'
-          : 'Connect owner wallet'
+  const ownerPrimaryCtaLabel = ownerApprovalReady
+    ? 'Continue on /add-owner'
+    : needsEmbeddedWallet
+      ? 'Provisioning embedded wallet…'
+      : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+        ? 'Finishing wallet session…'
+        : 'Connect owner wallet'
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1605,7 +1601,6 @@ export function useAccountSetupController(params: {
     login,
     loginWithCrossAppAccount,
     me,
-    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
@@ -1650,11 +1645,6 @@ export function useAccountSetupController(params: {
     setOwnerDelegationFlags,
     setZoraStatus,
     signerClientReady,
-    subAccountReady,
-    subAccountAddress: null,
-    subAccountSettingUp: false,
-    subAccountError: null,
-    subAccountStage: null,
     switchChainAsync,
     telegramLaunchParamsAvailable,
     walletClient,

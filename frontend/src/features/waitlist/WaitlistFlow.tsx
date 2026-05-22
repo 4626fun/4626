@@ -56,13 +56,11 @@ import {
   SESSION_MISMATCH_MESSAGE,
   STALE_PRIVY_SESSION_MESSAGE,
   getWalletProviderCollisionMessage,
+  isSessionFinalizingError,
   isWalletProviderCollisionError,
   withTimeout,
 } from './waitlistBootstrapUtils'
-import {
-  isSessionFinalizingError,
-  useWaitlistBootstrap,
-} from './useWaitlistBootstrap'
+import { useWaitlistBootstrap } from './useWaitlistBootstrap'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import { WaitlistConnectBaseApp, type WaitlistConnectBaseAppResult } from './WaitlistConnectBaseApp'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
@@ -1090,7 +1088,7 @@ export function WaitlistFlow(props: {
                 account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
-              serverExecutionReady={isSubAccountExecutionReady(account?.accountSignals)}
+              linkRegistered={isSubAccountExecutionReady(account?.accountSignals)}
             />
           </div>
         ) : step === 'done' && account ? (
@@ -1100,7 +1098,6 @@ export function WaitlistFlow(props: {
               canEnterApp={canEnterApp}
               completionBusy={completionBusy}
               onEnterApp={onEnterApp}
-              onOpenAccounts={() => undefined}
               onSignOut={onSignOut}
               signOutBusy={signOutBusy}
             />
@@ -1138,7 +1135,7 @@ export function WaitlistFlow(props: {
                 account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
-              serverExecutionReady={isSubAccountExecutionReady(account?.accountSignals)}
+              linkRegistered={isSubAccountExecutionReady(account?.accountSignals)}
             />
             </motion.div>
           ) : step === 'done' && account ? (
@@ -1154,7 +1151,6 @@ export function WaitlistFlow(props: {
                 canEnterApp={canEnterApp}
                 completionBusy={completionBusy}
                 onEnterApp={onEnterApp}
-                onOpenAccounts={() => undefined}
                 onSignOut={onSignOut}
                 signOutBusy={signOutBusy}
               />
