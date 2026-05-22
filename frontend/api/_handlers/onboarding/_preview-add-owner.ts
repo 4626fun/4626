@@ -1,0 +1,292 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node'
+import {
+  checkRateLimit,
+  getClientIp,
+  getDb,
+  handleOptions,
+  RATE_LIMITS,
+  rateLimitKey,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  type ApiEnvelope,
+} from '../../../packages/server-core/src/index.js'
+import {
+  createPublicClient,
+  getAddress,
+  http,
+  isAddress,
+  type Address,
+  type Hex,
+} from 'viem'
+import { base } from 'viem/chains'
+import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import {
+  bootstrapCanonicalDelegationState,
+  extractDelegationFlags,
+} from '../../../server/_lib/wallet/canonicalCswDelegation.js'
+import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
+import { ADD_OWNER_ADDRESS_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
+
+const PREVIEW_ADD_OWNER_BODY_MAX_BYTES = 8 * 1024
+
+type Eip5792Call = {
+  to: `0x${string}`
+  data: `0x${string}`
+  value: `0x${string}`
+}
+
+type RelayFlow = {
+  requestId: `0x${string}`
+  orderId: `0x${string}` | null
+  paymentDetails: {
+    chainId: number | null
+    depository: `0x${string}`
+    currency: `0x${string}`
+    amount: string
+  } | null
+  userCall: Eip5792Call
+  userCallSource: 'quote_tx' | 'built_from_payment_details'
+  feeUsd: string | null
+}
+
+type AddOwnerPreviewResponse = {
+  txRequest: {
+    chainId: 8453
+    to: `0x${string}`
+    data: `0x${string}`
+    value: '0x0'
+  }
+  calls: Eip5792Call[]
+  relay: RelayFlow | null
+  preflight: {
+    ownerToAdd: `0x${string}`
+    alreadyOwner: boolean
+    simulation: {
+      ok: boolean
+      error: string | null
+    }
+    relayQuoteError: string | null
+    relayQuoteDiagnostics: {
+      requestId: `0x${string}` | null
+      orderId: `0x${string}` | null
+      paymentDetails: {
+        chainId: number | null
+        depository: `0x${string}` | null
+        currency: `0x${string}` | null
+        amount: string | null
+      } | null
+      userTransaction: {
+        to: `0x${string}`
+        value: string
+        chainId: number
+        dataSelector: string | null
+      } | null
+      feeUsd: string | null
+      rawSnippet: string | null
+    } | null
+  }
+}
+
+function resolveBaseRpcUrl(): string {
+  const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
+  return envUrl || 'https://mainnet.base.org'
+}
+
+function parseAddress(input: unknown): Address | null {
+  const value = typeof input === 'string' ? input.trim() : ''
+  if (!isAddress(value)) return null
+  return getAddress(value) as Address
+}
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const shortMessage = (error as { shortMessage?: unknown }).shortMessage
+    if (typeof shortMessage === 'string' && shortMessage.trim()) return shortMessage
+  }
+  if (error instanceof Error) return error.message
+  return String(error ?? 'unknown error')
+}
+
+function resolveStatusCode(error: unknown): number {
+  const flags = extractDelegationFlags(error)
+  if (flags.needsBaseAppSetup || flags.needsEmbeddedWallet) return 409
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  if (
+    lower.includes('missing privy auth token') ||
+    lower.includes('invalid privy auth token') ||
+    lower.includes('privy verification failed') ||
+    lower.includes('jwt') ||
+    lower.includes('unauthorized') ||
+    lower.includes('forbidden')
+  ) {
+    return 401
+  }
+  if (lower.includes('not configured')) return 503
+  return 500
+}
+
+async function simulateAddOwnerCall(params: {
+  publicClient: any
+  cswAddress: Address
+  data: Hex
+}): Promise<{ ok: boolean; error: string | null }> {
+  try {
+    await params.publicClient.call({
+      to: params.cswAddress,
+      account: params.cswAddress,
+      data: params.data,
+    })
+    return { ok: true, error: null }
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) }
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setCors(req, res)
+  setNoStore(res)
+  if (handleOptions(req, res)) return
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('onboarding-preview-add-owner', getClientIp(req)),
+    RATE_LIMITS.cswLink,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = (await readJsonBody(req, { maxBytes: PREVIEW_ADD_OWNER_BODY_MAX_BYTES })) as Record<string, unknown>
+  } catch {
+    return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<never>)
+  }
+
+  const connectedAddress = parseAddress(body.connectedAddress ?? body.connectedEoa)
+  if (!connectedAddress) {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid input. Expected { connectedAddress }.',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
+  }
+
+  try {
+    const bootstrap = await bootstrapCanonicalDelegationState({ db: db as any, req })
+    const cswAddress = bootstrap.canonicalCswAddress
+    const ownerToAdd = bootstrap.privyEmbeddedEoaAddress
+    const txRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
+    if (txRequest.data.slice(0, 10).toLowerCase() !== ADD_OWNER_ADDRESS_SELECTOR) {
+      return res.status(500).json({
+        success: false,
+        error: 'Prepared add-owner calldata has unexpected selector.',
+      } satisfies ApiEnvelope<never>)
+    }
+
+    const connectedIsCswSelf = connectedAddress.toLowerCase() === cswAddress.toLowerCase()
+    if (!connectedIsCswSelf) {
+      const publicClient = createPublicClient({
+        chain: base,
+        transport: http(resolveBaseRpcUrl()),
+      })
+      const connectedIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedAddress)
+      if (!connectedIsOwner) {
+        return res.status(403).json({
+          success: false,
+          error: 'Connected wallet is not an owner of this CSW.',
+        } satisfies ApiEnvelope<never>)
+      }
+    }
+
+    if (bootstrap.privyIsOwner) {
+      const response: AddOwnerPreviewResponse = {
+        txRequest,
+        calls: [],
+        relay: null,
+        preflight: {
+          ownerToAdd,
+          alreadyOwner: true,
+          simulation: { ok: true, error: null },
+          relayQuoteError: null,
+          relayQuoteDiagnostics: null,
+        },
+      }
+      return res.status(200).json({
+        success: true,
+        data: response,
+      } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
+    }
+
+    const publicClient = createPublicClient({
+      chain: base,
+      transport: http(resolveBaseRpcUrl()),
+    })
+    const simulation = await simulateAddOwnerCall({
+      publicClient,
+      cswAddress,
+      data: txRequest.data,
+    })
+
+    let relay: RelayFlow | null = null
+    let relayQuoteError: string | null = null
+    let relayQuoteDiagnostics: AddOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
+    const relayQuote = await buildOwnerMutationRelayFlow({
+      publicClient,
+      cswAddress,
+      relayQuoteUser: connectedAddress,
+      mutationCalldata: txRequest.data,
+      relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
+    })
+    relayQuoteDiagnostics = relayQuote.diagnostics
+    if (relayQuote.ok) {
+      relay = relayQuote.relay
+    } else {
+      relayQuoteError = relayQuote.error
+    }
+
+    const calls: Eip5792Call[] = relay
+      ? [relay.userCall]
+      : [
+          {
+            to: cswAddress,
+            data: txRequest.data,
+            value: '0x0',
+          },
+        ]
+
+    const response: AddOwnerPreviewResponse = {
+      txRequest,
+      calls,
+      relay,
+      preflight: {
+        ownerToAdd,
+        alreadyOwner: false,
+        simulation,
+        relayQuoteError,
+        relayQuoteDiagnostics,
+      },
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: response,
+    } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to preview owner install'
+    return res
+      .status(resolveStatusCode(error))
+      .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies ApiEnvelope<never>)
+  }
+}

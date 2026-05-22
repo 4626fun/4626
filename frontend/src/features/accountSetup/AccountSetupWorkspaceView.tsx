@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
+import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
 import { isSubAccountExecutionReady } from '@/features/waitlist/waitlistFlowState'
@@ -159,6 +160,7 @@ export function AccountSetupWorkspaceView(props: {
     cswOwnersState,
     error,
     inTelegramMiniApp,
+    loadMe,
     loading,
     me,
     needsBaseAccountReconnect,
@@ -265,20 +267,6 @@ export function AccountSetupWorkspaceView(props: {
         : stepOneComplete
           ? 2
           : 1
-    const ownerWalletConnecting = busyProvider === 'owner_wallet'
-    const canSubmitSigningApproval =
-      connectedOwnerReady || (connectedCanonicalWalletSelected && !requiresBaseAppForOwnerInstall)
-    const primarySigningLabel = needsBaseAccountReconnect
-      ? 'Reconnect via Base Account'
-      : canSubmitSigningApproval
-        ? 'Enable 4626 signing'
-        : hasConnectedSigner
-          ? 'Switch wallet to current owner'
-        : ownerWalletConnecting
-          ? 'Connecting wallet…'
-          : 'Connect owner wallet'
-    const primarySigningActionLabel = advancedBusy ? 'Working…' : primarySigningLabel
-
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
     }
@@ -298,6 +286,12 @@ export function AccountSetupWorkspaceView(props: {
         : ownerInstallResumeState.requested || (stepOneComplete && resolvedOpen === 2)
           ? 'active'
           : 'upcoming'
+
+    const showParentCswAddOwnerPanel =
+      !signingStepComplete &&
+      executionTrack !== 'sub-account' &&
+      executionTrack !== 'migration-pending' &&
+      !preferBaseAppSubAccountSetup
 
     const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
     const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
@@ -710,54 +704,12 @@ export function AccountSetupWorkspaceView(props: {
                         so 4626 can approve embedded signing on the canonical smart wallet.
                       </div>
                     ) : null}
-                    {!preferBaseAppSubAccountSetup && error && (connectedCanonicalWalletSelected || inTelegramMiniApp) ? (
-                      <div className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-                        Owner install from a third-party dapp often fails inside the Base App
-                        in-app browser. Open{' '}
-                        <a href="/add-owner" className="font-medium text-amber-50 underline decoration-dotted">
-                          /add-owner
-                        </a>{' '}
-                        in Safari or Chrome, or use the sub-account flow when available.
-                      </div>
-                    ) : null}
-                    {!preferBaseAppSubAccountSetup ? (
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
-                          onClick={() =>
-                            needsBaseAccountReconnect
-                              ? connectOwnerWallet()
-                              : canSubmitSigningApproval
-                                ? void onEnable4626Signing()
-                                : connectOwnerWallet()
-                          }
-                          className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgb(var(--brand-primary)/0.22)] hover:bg-brand-hover disabled:opacity-50"
-                        >
-                          {primarySigningActionLabel}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void onResetOwnerApproval()}
-                          className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
-                        >
-                          Reset
-                        </button>
-                      </div>
-                    ) : null}
-
-                    {/* Contextual status — only rendered when relevant */}
-                    {!connectedOwnerReady && (!connectedSignerLabel || /no wallet connected/i.test(connectedSignerLabel)) ? (
-                      <p className="text-xs text-zinc-500">Signer not detected, please connect wallet.</p>
-                    ) : !connectedOwnerReady && hasConnectedSigner ? (
-                      <p className="text-xs text-amber-300/90">
-                        This signer is connected, but it is not a current CSW owner. Switch wallet in the connector to one of the owner addresses listed below.
-                      </p>
-                    ) : connectedSignerLabel ? (
-                      <p className="text-xs text-zinc-500">
-                        Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
-                        {connectedSignerDetail ? <span className="ml-1 text-zinc-600">— {connectedSignerDetail}</span> : null}
-                      </p>
+                    {showParentCswAddOwnerPanel ? (
+                      <AddOwnerSigningPanel
+                        controller={controller}
+                        variant="waitlist"
+                        onInstallSuccess={() => loadMe({ showSpinner: false })}
+                      />
                     ) : null}
                     {needsEmbeddedWallet ? (
                       <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
@@ -767,11 +719,6 @@ export function AccountSetupWorkspaceView(props: {
                     ) : null}
                     {providerCollision.shouldDisableInjectedConnector ? (
                       <p className="text-xs text-zinc-600">Coinbase/Base is the most reliable option when a wallet collision is detected.</p>
-                    ) : null}
-                    {advancedBusy ? (
-                      <p className="text-xs text-zinc-500">
-                        Waiting for wallet confirmation. If no prompt appears, click Reset and try again.
-                      </p>
                     ) : null}
                   </div>
                 ) : null}

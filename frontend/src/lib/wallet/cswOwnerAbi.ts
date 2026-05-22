@@ -85,6 +85,7 @@ export const RELAY_DEPOSITORY_ABI = [
 ] as const
 
 export const REMOVE_OWNER_AT_INDEX_SELECTOR = '0x89625b57' as const
+export const ADD_OWNER_ADDRESS_SELECTOR = '0x0f0f3f24' as const
 export const RELAY_MULTICALL_SELECTOR = '0xcd6e13f7' as const
 export const EXECUTE_WITHOUT_CHAIN_ID_SELECTOR = '0x2c2abd1e' as const
 export const NATIVE_CURRENCY_ADDRESS = '0x0000000000000000000000000000000000000000' as const

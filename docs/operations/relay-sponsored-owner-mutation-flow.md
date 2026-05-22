@@ -69,6 +69,7 @@ This avoids requiring in-app `wallet_prepareCalls` from the funding side.
 
 ## Related
 
+- `docs/operations/relay-owner-mutation-kit-guide.md` — relay-kit + Privy example mapping, quote body templates, lane selection
 - `docs/operations/csw-recovery-playbook.md`
 - `docs/operations/coinbase-inapp-signaturewrapper-bug.md`
 - `docs/owner-mutation-decision-2026-05.md`

@@ -22,16 +22,11 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
-import { getRelayQuote } from '../../../server/_lib/relay/getQuote.js'
+import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
 
-import { CSW_OWNER_ABI, RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import { CSW_OWNER_ABI } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const PREVIEW_REMOVE_OWNER_BODY_MAX_BYTES = 8 * 1024
-
-const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
-const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const RELAY_QUOTE_OUTPUT_MULTIPLIER = 6n
-const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 
 /**
  * One EIP-5792 call. Mirrors the shape passed to wallet_sendCalls.calls[].
@@ -124,22 +119,6 @@ type RemoveOwnerPreviewResponse = {
   }
 }
 
-function encodeExecuteWithoutChainIdValidation(innerCallData: `0x${string}`): `0x${string}` {
-  return encodeFunctionData({
-    abi: [
-      {
-        type: 'function',
-        name: 'executeWithoutChainIdValidation',
-        inputs: [{ name: 'calls', type: 'bytes[]' }],
-        outputs: [],
-        stateMutability: 'payable',
-      },
-    ] as const,
-    functionName: 'executeWithoutChainIdValidation',
-    args: [[innerCallData]],
-  })
-}
-
 function resolveBaseRpcUrl(): string {
   const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
   return envUrl || 'https://mainnet.base.org'
@@ -177,96 +156,6 @@ function errorMessage(error: unknown): string {
   }
   if (error instanceof Error) return error.message
   return String(error ?? 'unknown error')
-}
-
-async function deriveRelayQuoteTxsGasLimit(params: {
-  publicClient: any
-  cswAddress: Address
-  data: Hex
-}): Promise<number> {
-  try {
-    const estimated = await params.publicClient.estimateGas({
-      account: params.cswAddress,
-      to: params.cswAddress,
-      data: params.data,
-      value: 0n,
-    })
-    const withBuffer = estimated + estimated / 2n
-    const bounded =
-      withBuffer < RELAY_QUOTE_MIN_GAS_LIMIT
-        ? RELAY_QUOTE_MIN_GAS_LIMIT
-        : withBuffer > DEFAULT_RELAY_QUOTE_GAS_LIMIT
-          ? DEFAULT_RELAY_QUOTE_GAS_LIMIT
-          : withBuffer
-    return Number(bounded)
-  } catch {
-    return Number(DEFAULT_RELAY_QUOTE_GAS_LIMIT)
-  }
-}
-
-async function resolveRelayQuoteInputWei(params: {
-  publicClient: any
-  relayQuoteTxsGasLimit: number
-}): Promise<string> {
-  const configured = (process.env.RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI ?? '').trim()
-  if (/^[1-9][0-9]*$/.test(configured)) return configured
-  const gasPrice = await params.publicClient.getGasPrice()
-  const gasLimit = BigInt(params.relayQuoteTxsGasLimit)
-  const derived = gasPrice * gasLimit * RELAY_QUOTE_OUTPUT_MULTIPLIER
-  if (derived <= 0n) {
-    throw new Error('Could not derive relay quote input wei; derived amount is zero.')
-  }
-  return derived.toString(10)
-}
-
-function parseRelayQuotedInputAmountWei(raw: unknown): bigint | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  const details = obj.details
-  if (!details || typeof details !== 'object') return null
-  const currencyIn = (details as Record<string, unknown>).currencyIn
-  if (!currencyIn || typeof currencyIn !== 'object') return null
-  const amount = (currencyIn as Record<string, unknown>).amount
-  if (typeof amount !== 'string' || !/^[1-9][0-9]*$/.test(amount)) return null
-  try {
-    const wei = BigInt(amount)
-    return wei > 0n ? wei : null
-  } catch {
-    return null
-  }
-}
-
-function parseRelayQuotedFeeAmountWei(raw: unknown): bigint | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  const fees = obj.fees
-  if (!fees || typeof fees !== 'object') return null
-  const feeObj = fees as Record<string, unknown>
-  const parts = [feeObj.gas, feeObj.fixed, feeObj.price]
-  let total = 0n
-  let seen = false
-  for (const part of parts) {
-    if (typeof part === 'string' && /^[0-9]+$/.test(part)) {
-      total += BigInt(part)
-      seen = true
-      continue
-    }
-    if (typeof part === 'number' && Number.isFinite(part) && part >= 0) {
-      total += BigInt(Math.trunc(part))
-      seen = true
-    }
-  }
-  return seen && total > 0n ? total : null
-}
-
-function parseDecimalWei(value: unknown): bigint | null {
-  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) return null
-  try {
-    const wei = BigInt(value)
-    return wei > 0n ? wei : null
-  } catch {
-    return null
-  }
 }
 
 async function simulateRemoveCall(params: {
@@ -423,190 +312,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const selectedBy: 'heuristic' | 'simulation' = 'heuristic'
     const data = removeOwnerAtIndexData
     const selectedSimulation = removeOwnerAtIndexSimulation
-    const relayDestinationData = encodeExecuteWithoutChainIdValidation(data)
 
-    // ─────────────────────────────────────────────────────────────────────
-    // RELAY QUOTE — single user transaction, two-part on-chain flow
-    //
-    // We ask Relay's /quote/v2 to orchestrate executing our mutation calldata
-    // on Base. Relay returns ONE transaction the user must submit (typically a
-    // router transaction that performs the request-bound deposit).
-    // After that single tx lands, Relay's solver picks up the deposit event,
-    // pre-signs and submits Part 2 (our destination mutation) from its own
-    // bundler infrastructure, in the same block.
-    //
-    // Reference May 5 flow:
-    //   Part 1 — tx 0x34edd28d…2aadf (CSW → router → depository, signed by CSW)
-    //   Part 2 — tx 0xa9a06340…9a36 (Relay's solver bundler → EntryPoint →
-    //                                   CSW.executeWithoutChainIdValidation,
-    //                                   signed off-chain by session-key)
-    // Both in block 45,600,637.
-    //
-    // If the quote fails (rate limit, Relay downtime, unsupported pair), relay
-    // stays null and the page blocks submission until preview is rebuilt.
-    // ─────────────────────────────────────────────────────────────────────
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     let relayQuoteDiagnostics: RemoveOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
-    try {
-      // Use Relay's own quote as the source of truth for required funding.
-      // Deposit-specified transaction flows require EXACT_OUTPUT. For owner
-      // mutations we request a deterministic same-chain output amount
-      // (historically 0.00001 ETH) and then fund exactly the returned
-      // userTransaction.value for that requestId.
-      const relayQuoteTxsGasLimit = await deriveRelayQuoteTxsGasLimit({
-        publicClient,
-        cswAddress,
-        data,
-      })
-      const relayQuoteOutputWei = await resolveRelayQuoteInputWei({
-        publicClient,
-        relayQuoteTxsGasLimit,
-      })
-      const relayQuoteUser = connectedAddress
-      const relayQuoteRecipient = cswAddress
-      const quoteParams = {
-        // Routed relay transactions validate against the quoted user context.
-        // When an external owner signer submits Part 1, quote with that signer
-        // as `user`, while keeping CSW as `recipient` for the destination leg.
-        user: relayQuoteUser,
-        recipient: relayQuoteRecipient,
-        originChainId: 8453,
-        destinationChainId: 8453,
-        tradeType: 'EXACT_OUTPUT' as const,
-        txs: [
-          {
-            to: cswAddress,
-            data: relayDestinationData,
-            value: '0',
-          },
-        ],
-        txsGasLimit: relayQuoteTxsGasLimit,
-      }
-      const quote = await getRelayQuote({
-        ...quoteParams,
-        amount: relayQuoteOutputWei,
-      })
-      if (quote.ok) {
-        const e = quote.extract
-        const requestBoundDepositId = e.orderId ?? e.requestId
-        const quotedUserValue =
-          e.userTransaction && typeof e.userTransaction.value === 'string' && /^[1-9][0-9]*$/.test(e.userTransaction.value)
-            ? e.userTransaction.value
-            : null
-        const paymentDetails =
-          e.paymentDetails &&
-          e.paymentDetails.depository &&
-          e.paymentDetails.currency &&
-          e.paymentDetails.currency.toLowerCase() === '0x0000000000000000000000000000000000000000' &&
-          e.paymentDetails.amount &&
-          /^[1-9][0-9]*$/.test(e.paymentDetails.amount)
-            ? {
-                chainId: e.paymentDetails.chainId,
-                depository: e.paymentDetails.depository,
-                currency: e.paymentDetails.currency,
-                amount: e.paymentDetails.amount,
-              }
-            : requestBoundDepositId && quotedUserValue
-              ? {
-                  chainId: 8453,
-                  depository: RELAY_DEPOSITORY_BASE,
-                  currency: NATIVE_CURRENCY,
-                  amount: quotedUserValue,
-                }
-            : null
-
-        const paymentAmountWei = parseDecimalWei(paymentDetails?.amount ?? null)
-        const depositoryFromPaymentDetails = paymentDetails?.depository ?? null
-        const builtUserCallFromPaymentDetails =
-          requestBoundDepositId && paymentDetails && paymentAmountWei && depositoryFromPaymentDetails
-            ? {
-                to: depositoryFromPaymentDetails,
-                data: encodeFunctionData({
-                  abi: [
-                    {
-                      type: 'function',
-                      name: 'depositNative',
-                      stateMutability: 'payable',
-                      inputs: [
-                        { name: 'depositor', type: 'address' },
-                        { name: 'id', type: 'bytes32' },
-                      ],
-                      outputs: [],
-                    },
-                  ] as const,
-                  functionName: 'depositNative',
-                  args: [relayQuoteUser, requestBoundDepositId],
-                }),
-                value: `0x${paymentAmountWei.toString(16)}` as `0x${string}`,
-              }
-            : null
-        relayQuoteDiagnostics = {
-          requestId: e.requestId,
-          orderId: requestBoundDepositId,
-          paymentDetails,
-          userTransaction: e.userTransaction
-            ? {
-                to: e.userTransaction.to,
-                value: e.userTransaction.value,
-                chainId: e.userTransaction.chainId,
-                dataSelector: e.userTransaction.data.slice(0, 10) ?? null,
-              }
-            : null,
-          feeUsd: e.feeUsd,
-          rawSnippet:
-            e.raw == null
-              ? null
-              : JSON.stringify(e.raw).slice(0, 1600),
-        }
-        if (
-          e.requestId &&
-          e.userTransaction &&
-          typeof e.userTransaction.value === 'string' &&
-          /^[1-9][0-9]*$/.test(e.userTransaction.value) &&
-          typeof e.userTransaction.data === 'string' &&
-          e.userTransaction.data.startsWith('0xcd6e13f7')
-        ) {
-          // Primary path: use Relay's full quoted multicall transaction exactly as returned.
-          relay = {
-            requestId: e.requestId,
-            orderId: requestBoundDepositId,
-            paymentDetails,
-            userCall:
-              ({
-                to: e.userTransaction.to,
-                data: e.userTransaction.data,
-                value: `0x${BigInt(e.userTransaction.value).toString(16)}` as `0x${string}`,
-              } satisfies Eip5792Call),
-            userCallSource: 'quote_tx',
-            feeUsd: e.feeUsd,
-          }
-        } else if (e.requestId && builtUserCallFromPaymentDetails) {
-          relay = {
-            requestId: e.requestId,
-            orderId: requestBoundDepositId,
-            paymentDetails,
-            userCall: builtUserCallFromPaymentDetails,
-            userCallSource: 'built_from_payment_details',
-            feeUsd: e.feeUsd,
-          }
-        } else {
-          relayQuoteError =
-            'Relay quote missing a valid user transaction and usable protocol.v2 paymentDetails.'
-        }
-      } else {
-        relayQuoteDiagnostics = {
-          requestId: null,
-          orderId: null,
-          paymentDetails: null,
-          userTransaction: null,
-          feeUsd: null,
-          rawSnippet: quote.raw == null ? null : JSON.stringify(quote.raw).slice(0, 1600),
-        }
-        relayQuoteError = quote.error
-      }
-    } catch (error) {
-      relayQuoteError = `Relay quote threw: ${errorMessage(error)}`
+    const relayQuote = await buildOwnerMutationRelayFlow({
+      publicClient,
+      cswAddress,
+      relayQuoteUser: connectedAddress,
+      mutationCalldata: data,
+      relayQuoteOutputWeiEnvKey: 'RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI',
+    })
+    relayQuoteDiagnostics = relayQuote.diagnostics
+    if (relayQuote.ok) {
+      relay = relayQuote.relay
+    } else {
+      relayQuoteError = relayQuote.error
     }
 
     // Build the EIP-5792 calls array. When Relay quote succeeds, emit the

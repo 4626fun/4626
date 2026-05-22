@@ -19,6 +19,7 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Coinbase Smart Wallet Capabilities](/operations/coinbase-smart-wallet-capabilities)** | Observed CSW/Base App provider methods, event payloads, signing behavior, and 4626 usage notes |
 | **[CSW Recovery Playbook](/operations/csw-recovery-playbook)** | Recovery path and known-good owner-install execution lanes for CSW owner setup |
 | **[Relay-Sponsored Owner Mutation Flow](/operations/relay-sponsored-owner-mutation-flow)** | Two-session signer/funder architecture for Relay-backed owner mutations |
+| **[Relay Kit — Owner Mutation Guide](/operations/relay-owner-mutation-kit-guide)** | relay-kit + Privy example mapping for add-owner / remove-owner on Base CSWs |
 | **[Coinbase In-App SignatureWrapper Bug](/operations/coinbase-inapp-signaturewrapper-bug)** | Incident note for in-app owner-index/signature mismatch and mitigations |
 | **[Sponsored Canonical Swap Pattern](/operations/sponsored-canonical-swap-pattern)** | Known-good ERC-4337/paymaster path for canonical WETH-backed swaps |
 | **[Oracle Post-Deploy QA](/operations/oracle-post-deploy-qa)** | Read-only post-deploy oracle verification runbook and triage guide |

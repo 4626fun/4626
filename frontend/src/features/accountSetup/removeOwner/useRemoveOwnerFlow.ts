@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
-import { useQuote } from '@relayprotocol/relay-kit-hooks'
-import type { paths } from '@relayprotocol/relay-sdk'
 import type { PublicClient } from 'viem'
 
-import { NATIVE_CURRENCY_ADDRESS } from '@/lib/wallet/cswOwnerAbi'
-import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
 import { executeRemoveOwnerViaRelay } from '@/lib/removeOwner/removeOwnerExecution'
 import {
   fetchRemoveOwnerPreview,
@@ -14,13 +10,13 @@ import {
   INITIAL_DIAGNOSTICS,
   loadLiveCswDiagnostics,
   mapRemoveOwnerSubmissionError,
-  toRelayAmountDecimal,
   type LiveDiagnostics,
   type RemoveOwnerPreview,
 } from '@/lib/removeOwner/removeOwnerHelpers'
-import { createRemoveOwnerRelayClient } from '@/lib/removeOwner/removeOwnerRelayClient'
-
-type RelayQuoteBody = paths['/quote/v2']['post']['requestBody']['content']['application/json']
+import {
+  resolveOwnerMutationWallet,
+  resolveOwnerMutationWalletRequest,
+} from '@/lib/relay/resolveOwnerMutationWallet'
 
 export type RemoveOwnerErrorDetail = {
   revertReason: string | null
@@ -32,11 +28,12 @@ export type RemoveOwnerErrorDetail = {
 type UseRemoveOwnerFlowParams = {
   canonicalCswAddress: string | null | undefined
   ownerSignerAddress: string | null | undefined
+  privyExternalOwnerWallet?: unknown
 }
 
 export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
-  const { canonicalCswAddress, ownerSignerAddress } = params
-  const { data: walletClient } = useWalletClient()
+  const { canonicalCswAddress, ownerSignerAddress, privyExternalOwnerWallet } = params
+  const { data: wagmiWalletClient } = useWalletClient()
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
   const publicClient = wagmiPublicClient as PublicClient | undefined
 
@@ -63,54 +60,6 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         ? (row: string) => setEventLog((prev) => [...prev, row].slice(-40))
         : () => {},
     [],
-  )
-
-  const relayClient = useMemo(() => createRemoveOwnerRelayClient(), [])
-
-  const relayQuoteOptions = useMemo<RelayQuoteBody | undefined>(() => {
-    if (!preview || !canonicalCswAddress || !ownerSignerAddress) return undefined
-    if (!preview.relay) return undefined
-    const amountDecimal =
-      toRelayAmountDecimal(preview.relay.paymentDetails?.amount) ??
-      toRelayAmountDecimal(preview.relay.userCall?.value)
-    if (!amountDecimal) return undefined
-    return {
-      user: ownerSignerAddress,
-      recipient: canonicalCswAddress,
-      originChainId: base.id,
-      destinationChainId: base.id,
-      originCurrency: NATIVE_CURRENCY_ADDRESS,
-      destinationCurrency: NATIVE_CURRENCY_ADDRESS,
-      tradeType: 'EXACT_OUTPUT',
-      amount: amountDecimal,
-      originGasOverhead: 300000,
-      subsidizeFees: true,
-      txs: [
-        {
-          to: canonicalCswAddress,
-          data: encodeExecuteWithoutChainIdValidation(preview.txRequest.data),
-          value: '0',
-        },
-      ],
-    } satisfies RelayQuoteBody
-  }, [canonicalCswAddress, ownerSignerAddress, preview])
-
-  const {
-    data: relayHookQuote,
-    error: relayHookQuoteError,
-    refetch: refetchRelayHookQuote,
-    executeQuote,
-  } = useQuote(
-    relayClient,
-    walletClient,
-    relayQuoteOptions,
-    undefined,
-    undefined,
-    {
-      enabled: Boolean(relayQuoteOptions),
-      retry: false,
-      refetchOnWindowFocus: false,
-    },
   )
 
   useEffect(() => {
@@ -184,8 +133,18 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
   }, [])
 
   const handleRemove = useCallback(async () => {
-    if (!preview || !canonicalCswAddress || !walletClient || selectedIndex === null) {
+    if (!preview || !canonicalCswAddress || !ownerSignerAddress || selectedIndex === null) {
       setPageError('Connect your wallet and select an owner index first.')
+      return
+    }
+
+    const walletClient = await resolveOwnerMutationWallet({
+      wagmiWalletClient: wagmiWalletClient,
+      ownerSignerAddress,
+      privyExternalOwnerWallet,
+    })
+    if (!walletClient) {
+      setPageError('Connect the owner wallet that will fund the Relay deposit, then retry.')
       return
     }
 
@@ -195,7 +154,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     setPageNotice(null)
     setTxHash(null)
     setEventLog([])
-    appendEvent('lane:relay_hook_execute_quote')
+    appendEvent('lane:preview_bound_relay_user_call')
     appendEvent(`target:function=${preview.preflight.selectedFunction}`)
     appendEvent(`target:index=${preview.preflight.targetOwnerIndex}`)
     appendEvent(`target:owner=${preview.preflight.targetOwnerAddress ?? '<bytes>'}`)
@@ -210,24 +169,15 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         requiredDepositWei = BigInt(preview.relay.userCall.value)
       }
 
-      const walletRequest = (walletClient as { request?: WalletRequest }).request
+      const walletRequest = resolveOwnerMutationWalletRequest(walletClient)
       const result = await executeRemoveOwnerViaRelay({
         preview,
         selectedIndex,
         cswAddress: canonicalCswAddress as `0x${string}`,
         publicClient,
-        walletRequest: walletRequest
-          ? async (args) => await walletRequest(args)
-          : undefined,
+        walletClient,
+        walletRequest,
         isSelfAuthSession,
-        relayQuoteReady: Boolean(relayQuoteOptions),
-        relayHookQuote,
-        relayHookQuoteError,
-        refetchRelayHookQuote: async () => {
-          const refetchResult = await refetchRelayHookQuote()
-          return { data: refetchResult.data, status: refetchResult.status }
-        },
-        executeQuote: (onProgress) => Promise.resolve(executeQuote(onProgress)),
         appendEvent,
         onTxHash: setTxHash,
       })
@@ -275,17 +225,14 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
   }, [
     appendEvent,
     canonicalCswAddress,
-    executeQuote,
     isSelfAuthSession,
+    ownerSignerAddress,
     preview,
+    privyExternalOwnerWallet,
     publicClient,
-    refetchRelayHookQuote,
-    relayHookQuote,
-    relayHookQuoteError,
-    relayQuoteOptions,
     selectedIndex,
     setErrorDetail,
-    walletClient,
+    wagmiWalletClient,
   ])
 
   return {
@@ -304,5 +251,3 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     handleRemove,
   }
 }
-
-type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>

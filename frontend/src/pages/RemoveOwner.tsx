@@ -17,6 +17,7 @@ export function RemoveOwnerPage() {
     privyAuthed,
     login,
     ownerSignerAddress,
+    activeExternalOwnerWallet,
   } = controller
 
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
@@ -36,7 +37,11 @@ export function RemoveOwnerPage() {
     isSelfAuthSession,
     handleSelectIndex,
     handleRemove,
-  } = useRemoveOwnerFlow({ canonicalCswAddress, ownerSignerAddress })
+  } = useRemoveOwnerFlow({
+    canonicalCswAddress,
+    ownerSignerAddress,
+    privyExternalOwnerWallet: activeExternalOwnerWallet,
+  })
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -110,7 +115,7 @@ export function RemoveOwnerPage() {
         {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
             In-app browser detected with a CSW self-auth session. This page uses
-            Relay hook-native quote execution from the active signer context. If the
+            Relay-bound preview execution from the active signer context. If the
             wallet prompt stalls, open the page in an external browser and retry.
           </div>
         ) : null}

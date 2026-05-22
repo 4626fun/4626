@@ -188,7 +188,9 @@ export function extractExecuteQuotePayload(raw: unknown): RelayQuoteExecutePaylo
   return { requestId, txValueWei, statusEndpoint }
 }
 
-export function validatePreviewRelayUserCallIsNativeDepository(preview: RemoveOwnerPreview | null): string | null {
+export function validatePreviewRelayUserCallIsNativeDepository(
+  preview: { relay?: PreviewRelayFlow | null } | null,
+): string | null {
   const userCall = preview?.relay?.userCall
   if (!userCall) return 'missing relay user call in preview'
   if (!/^0x[0-9a-fA-F]{40}$/.test(userCall.to)) {
