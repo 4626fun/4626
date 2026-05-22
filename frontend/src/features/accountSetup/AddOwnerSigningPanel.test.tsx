@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
+const inAppBrowserMocks = vi.hoisted(() => ({
+  isBaseAppInApp: false,
+}))
+
 import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 
 function buildController(overrides: Record<string, unknown> = {}) {
@@ -48,6 +52,14 @@ function buildController(overrides: Record<string, unknown> = {}) {
 vi.mock('wagmi', () => ({
   useWalletClient: () => ({ data: null }),
 }))
+
+vi.mock('@/lib/wallet/inAppBrowser', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/wallet/inAppBrowser')>()
+  return {
+    ...actual,
+    isBaseAppInAppContext: () => inAppBrowserMocks.isBaseAppInApp,
+  }
+})
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
@@ -144,7 +156,8 @@ describe('AddOwnerSigningPanel', () => {
     expect(screen.getByTestId('add-owner-signing-complete')).toBeTruthy()
   })
 
-  it('shows Base App Relay install when self-auth session is active', () => {
+  it('uses prepared calls in Base App self-auth session', () => {
+    inAppBrowserMocks.isBaseAppInApp = true
     render(
       <MemoryRouter>
         <AddOwnerSigningPanel
@@ -163,6 +176,8 @@ describe('AddOwnerSigningPanel', () => {
     expect(screen.getByTestId('add-owner-signing-primary').textContent).toContain(
       'Enable 4626 signing in Base App',
     )
-    expect(screen.getByText('Rebuild Relay preview')).toBeTruthy()
+    expect(screen.queryByText('Rebuild Relay preview')).toBeNull()
+    expect(screen.getByText(/wallet_prepareCalls/i)).toBeTruthy()
+    inAppBrowserMocks.isBaseAppInApp = false
   })
 })

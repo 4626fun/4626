@@ -6,7 +6,6 @@ import { useAddOwnerRelayFlow } from '@/features/accountSetup/addOwner/useAddOwn
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { detectInAppEnvironment, externalBrowserUrlFor, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
-import { formatCompactEth } from '@/lib/removeOwner/removeOwnerHelpers'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
@@ -44,6 +43,12 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   } = controller
 
   const onchainEoaOwnerCandidates = rawOnchainEoaOwnerCandidates ?? []
+  const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
+  const inBaseApp = isBaseAppInAppContext(inAppEnv)
+  const externalAddOwnerUrl = useMemo(
+    () => externalBrowserUrlFor(variant === 'waitlist' ? '/waitlist' : '/add-owner'),
+    [variant],
+  )
 
   const privyEmbeddedEoaAddress = useMemo(() => {
     const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
@@ -67,12 +72,17 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
   }, [canonicalCswAddress, ownerSignerAddress])
 
-  const useRelayOwnerInstall = Boolean(
-    installedAsOwner !== true &&
-      ((connectedOnchainEoaOwner && !isSelfAuthSession) ||
-        (isSelfAuthSession && privyEmbeddedEoaAddress)),
+  // Base App self-auth: Coinbase prepared calls (wallet_prepareCalls → wallet_sendPreparedCalls).
+  // Relay native-deposit wallet_sendCalls is unreliable in Base App and surfaces misleading
+  // "insufficient funds" errors even when the CSW balance is sufficient.
+  const useBaseAppPreparedInstall = Boolean(
+    isSelfAuthSession && inBaseApp && privyEmbeddedEoaAddress && installedAsOwner !== true,
   )
-  const useRelaySelfAuthInstall = Boolean(isSelfAuthSession && useRelayOwnerInstall)
+
+  // External EOA owner funds Relay; CSW receives addOwnerAddress(privyEoa) via solver fill.
+  const useRelayOwnerInstall = Boolean(
+    installedAsOwner !== true && connectedOnchainEoaOwner && !isSelfAuthSession,
+  )
 
   const {
     preview: relayPreview,
@@ -90,23 +100,6 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     if (!useRelayOwnerInstall || relayPreview || relayPreviewLoading) return
     void loadRelayPreview()
   }, [loadRelayPreview, relayPreview, relayPreviewLoading, useRelayOwnerInstall])
-
-  const relayDepositWei = useMemo(() => {
-    const raw = relayPreview?.relay?.userCall?.value
-    if (!raw) return null
-    try {
-      const wei = BigInt(raw)
-      return wei > 0n ? wei : null
-    } catch {
-      return null
-    }
-  }, [relayPreview?.relay?.userCall?.value])
-
-  const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
-  const externalAddOwnerUrl = useMemo(
-    () => externalBrowserUrlFor(variant === 'waitlist' ? '/waitlist' : '/add-owner'),
-    [variant],
-  )
 
   const ownerWalletConnecting = busyProvider === 'owner_wallet'
   const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
@@ -158,7 +151,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           ? 'Already installed'
           : inAppEnv?.isAnyWalletInApp && !isSelfAuthSession && !useRelayOwnerInstall
             ? 'Open in browser to install'
-            : useRelaySelfAuthInstall
+            : useBaseAppPreparedInstall
               ? 'Enable 4626 signing in Base App'
               : useRelayOwnerInstall
                 ? 'Enable 4626 signing via Relay'
@@ -199,8 +192,8 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       {variant === 'waitlist' ? (
         <p className="text-xs leading-relaxed text-zinc-500">
-          {useRelaySelfAuthInstall
-            ? 'Install your Privy embedded signer as a CSW owner via Base App Relay — your smart wallet funds a small deposit, then Relay executes addOwnerAddress(privyEoa).'
+          {useBaseAppPreparedInstall
+            ? 'Install your Privy embedded signer as a CSW owner in Base App using Coinbase prepared calls for addOwnerAddress(privyEoa).'
             : 'Install your Privy embedded signer as an owner on your parent smart wallet so 4626 can prepare sponsored actions. Connect a wallet that is already listed as a CSW owner — not your smart wallet address itself.'}
         </p>
       ) : null}
@@ -266,35 +259,12 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
         </div>
       ) : null}
 
-      {useRelaySelfAuthInstall ? (
+      {useBaseAppPreparedInstall ? (
         <p className="text-xs text-emerald-100/85">
-          Base App session detected — your canonical smart wallet submits a Relay deposit via{' '}
-          <span className="font-mono">wallet_sendCalls</span>, then Relay fills{' '}
-          <span className="font-mono">addOwnerAddress(privyEoa)</span> on-chain.
-          {relayDepositWei ? (
-            <>
-              {' '}
-              Relay deposit:{' '}
-              <span className="font-mono text-emerald-50">{formatCompactEth(relayDepositWei)} ETH</span>.
-            </>
-          ) : null}
+          Base App session detected — approve the prepared owner install for{' '}
+          <span className="font-mono">addOwnerAddress(privyEoa)</span>. This uses Coinbase{' '}
+          <span className="font-mono">wallet_prepareCalls</span>, not a Relay ETH deposit.
         </p>
-      ) : null}
-
-      {useRelaySelfAuthInstall && isBaseAppInAppContext(inAppEnv) && onchainEoaOwnerCandidates.length > 0 ? (
-        <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
-          If Base App shows &quot;insufficient funds&quot; on approve, that is usually a wallet simulation
-          quirk — your CSW likely has enough ETH for the tiny Relay deposit. Retry once here, or open{' '}
-          <a
-            href={externalAddOwnerUrl}
-            target="_blank"
-            rel="noopener noreferrer external"
-            className="font-medium text-amber-50 underline decoration-dotted"
-          >
-            /add-owner in Safari or Chrome
-          </a>{' '}
-          and connect one of the on-chain EOA owners listed below.
-        </div>
       ) : null}
 
       {onchainEoaOwnerCandidates.length > 0 && variant === 'standalone' ? (
@@ -318,6 +288,20 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
               )
             })}
           </ul>
+          {useBaseAppPreparedInstall ? (
+            <p className="text-[11px] leading-relaxed text-zinc-400">
+              Need the Relay path instead? Open{' '}
+              <a
+                href={externalAddOwnerUrl}
+                target="_blank"
+                rel="noopener noreferrer external"
+                className="text-zinc-200 underline decoration-dotted"
+              >
+                /add-owner in Safari or Chrome
+              </a>{' '}
+              and connect one of these EOA owners.
+            </p>
+          ) : null}
         </div>
       ) : null}
 
@@ -346,9 +330,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
       {useRelayOwnerInstall ? (
         <div className="space-y-2">
           <p className="text-[11px] leading-relaxed text-zinc-500">
-            {useRelaySelfAuthInstall
-              ? 'Your canonical smart wallet funds a small Relay deposit in Base App; Relay executes'
-              : 'Connected EOA owner funds a Relay deposit; Relay executes'}{' '}
+            Connected EOA owner funds a Relay deposit; Relay executes{' '}
             <code className="font-mono text-zinc-400">addOwnerAddress(privyEoa)</code> on your CSW.
           </p>
           <Button
@@ -370,7 +352,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
         <p className="text-[11px] leading-relaxed text-zinc-500">
           {needsConnectFirst
             ? 'Connect one of the CSW owner addresses above — not the parent smart wallet address — then approve the one-time signing install.'
-            : 'Passkey owners approve through Coinbase prepared calls; no private key export required.'}
+            : useBaseAppPreparedInstall
+              ? 'Approve the passkey/prepared-call prompt in Base App to add your Privy embedded signer as a CSW owner.'
+              : 'Passkey owners approve through Coinbase prepared calls; no private key export required.'}
         </p>
       )}
 

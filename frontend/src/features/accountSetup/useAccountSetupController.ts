@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useActiveWallet, useBaseAccountSdk, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
@@ -153,6 +153,14 @@ function useSafePrivy() {
   }
 }
 
+function useSafeBaseAccountSdk() {
+  try {
+    return useBaseAccountSdk()
+  } catch {
+    return { baseAccountSdk: null as ReturnType<typeof useBaseAccountSdk>['baseAccountSdk'] | null }
+  }
+}
+
 function useSafeLogin() {
   try {
     return useLogin() as any
@@ -206,6 +214,7 @@ export function useAccountSetupController(params: {
   const wagmiConnections = useConnections()
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
+  const { baseAccountSdk } = useSafeBaseAccountSdk()
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
@@ -912,6 +921,28 @@ export function useAccountSetupController(params: {
       let effectiveSwitchChain = switchChainAsync
       let effectiveSignerAddress = ownerSignerAddress
 
+      if (
+        canonicalCswAddress &&
+        effectiveSignerAddress?.toLowerCase() === canonicalCswAddress.toLowerCase() &&
+        baseAccountSdk &&
+        typeof (baseAccountSdk as { getProvider?: () => unknown }).getProvider === 'function'
+      ) {
+        try {
+          const sdkProvider = (
+            baseAccountSdk as { getProvider: () => { request?: (args: unknown) => Promise<unknown> } }
+          ).getProvider()
+          if (sdkProvider?.request) {
+            effectiveWalletClient = createWalletClient({
+              account: canonicalCswAddress as Address,
+              chain: base,
+              transport: custom(sdkProvider as Parameters<typeof custom>[0]),
+            }) as typeof walletClient
+          }
+        } catch {
+          /* keep wagmi wallet client */
+        }
+      }
+
       if (typeof opts?.signerAddressOverride === 'string' && opts.signerAddressOverride.trim()) {
         try {
           effectiveSignerAddress = getAddress(opts.signerAddressOverride.trim())
@@ -989,6 +1020,7 @@ export function useAccountSetupController(params: {
     [
       activeExternalOwnerWallet,
       authHeaders,
+      baseAccountSdk,
       canonicalCswAddress,
       chainId,
       ensurePaymasterSession,
