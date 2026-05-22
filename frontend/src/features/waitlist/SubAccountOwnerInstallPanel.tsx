@@ -246,10 +246,11 @@ function SubAccountOwnerInstallPanelContent(
     )
   }
 
-  const signingEnabled =
-    embeddedOwnerOnSubAccount || serverExecutionReady || localSigningEnabled
+  const signingOperable =
+    embeddedOwnerOnSubAccount || localSigningEnabled || (serverExecutionReady && inBaseApp)
+  const signingLinkSavedOnly = serverExecutionReady && !signingOperable
 
-  if (signingEnabled) {
+  if (signingOperable) {
     return (
       <div
         className={`flex items-start gap-2.5 text-left ${className}`}
@@ -267,6 +268,53 @@ function SubAccountOwnerInstallPanelContent(
             </p>
           ) : null}
         </div>
+      </div>
+    )
+  }
+
+  if (signingLinkSavedOnly) {
+    return (
+      <div className={`space-y-3 ${className}`} data-testid="sub-account-owner-install-pending">
+        <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+          Your Base App signing link is saved, but your embedded key is not an on-chain owner yet. Open{' '}
+          <a
+            href={baseAppSetupUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-amber-50 underline decoration-dotted underline-offset-2"
+          >
+            Base App setup
+          </a>{' '}
+          and tap Enable 4626 signing to finish.
+        </div>
+        {needsBaseAppHost ? (
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full"
+            data-testid="sub-account-open-base-app-setup-button"
+            onClick={() => {
+              window.open(baseAppSetupUrl, '_blank', 'noopener,noreferrer')
+            }}
+          >
+            Open Base App setup
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="primary"
+            className="w-full"
+            data-testid="sub-account-owner-install-button"
+            onClick={() => void handleInstall()}
+          >
+            Enable 4626 signing
+          </Button>
+        )}
+        <SubAccountOwnerInstallRecovery
+          inBaseApp={inBaseApp}
+          onRecheck={() => void handleRecheck()}
+          recheckBusy={recheckBusy}
+        />
       </div>
     )
   }

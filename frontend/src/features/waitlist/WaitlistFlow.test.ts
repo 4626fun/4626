@@ -464,11 +464,33 @@ describe('isWaitlistStepTwoSigningComplete', () => {
     ).toBe(true)
   })
 
-  it('completes Base App path from registered sub-account execution', () => {
+  it('completes Base App path from registered sub-account execution in an active Base App session', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
         ownerInstallRequested: false,
         accountSignals: subAccountReadySignals,
+        subAccountSessionReady: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('does not complete sub-account registration alone outside Base App without on-chain owner', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: subAccountReadySignals,
+        subAccountEmbeddedOwnerOnChain: false,
+        subAccountSessionReady: false,
+      }),
+    ).toBe(false)
+  })
+
+  it('completes sub-account registration when embedded EOA is on-chain owner of the sub-account', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: subAccountReadySignals,
+        subAccountEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
   })

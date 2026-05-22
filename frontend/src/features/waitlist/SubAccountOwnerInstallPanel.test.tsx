@@ -189,6 +189,24 @@ describe('SubAccountOwnerInstallPanel', () => {
     expect(screen.queryByText(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)).toBeNull()
   })
 
+  it('shows pending Base App setup when server link exists outside Base App without on-chain owner', async () => {
+    mockExternalBrowserHost()
+    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
+
+    renderPanel(
+      <SubAccountOwnerInstallPanel
+        parentAddress={PARENT}
+        subAccountAddress={SUB}
+        embeddedEoaAddress={EMBED}
+        serverExecutionReady
+      />,
+    )
+
+    expect(await screen.findByTestId('sub-account-owner-install-pending')).toBeTruthy()
+    expect(screen.getByText(/signing link is saved/i)).toBeTruthy()
+    expect(screen.queryByText(/4626 signing is enabled/i)).toBeNull()
+  })
+
   it('hides the button when embedded EOA is already owner', async () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(true)
 

@@ -19,6 +19,7 @@ export type CanonicalSignerGateInput = {
   embeddedWalletAddress: string | null
   embeddedWalletCanSign: boolean
   ownerCheckStatus: CanonicalOwnerCheckStatus
+  subAccountOwnerCheckStatus?: CanonicalOwnerCheckStatus
 }
 
 export type CanonicalSignerGateResult = {
@@ -154,7 +155,8 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       )
     }
     if (input.subAccountProviderReady !== true) {
-      if (input.ownerCheckStatus === 'owner') {
+      const fallbackOwnerStatus = input.subAccountOwnerCheckStatus ?? input.ownerCheckStatus
+      if (fallbackOwnerStatus === 'owner') {
         return {
           required: true,
           ready: true,
@@ -162,7 +164,7 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
           reason: null,
         }
       }
-      if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {
+      if (fallbackOwnerStatus === 'pending' || fallbackOwnerStatus === 'unknown') {
         return gateFailure(
           'owner-check-pending',
           'Waiting for canonical ownership check before falling back from sub-account routing.',

@@ -5,10 +5,12 @@ import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { isWaitlistStepTwoSigningComplete } from './waitlistFlowState'
+import { isSubAccountExecutionReady, isWaitlistStepTwoSigningComplete, resolveSubAccountAddress } from './waitlistFlowState'
 import { useWaitlistChatJoin, waitlistChatStatusMessage } from './useWaitlistChatJoin'
 import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -42,18 +44,33 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     zoraReturnPath: '/waitlist',
   })
   const currentAccount = controller.me ?? initialAccount
+  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallPathActive = controller.ownerInstallResumeState.requested
+  const persistedSubAccountAddress = resolveSubAccountAddress({
+    baseSubAccount: currentAccount.baseSubAccount ?? null,
+    accountSignals: currentAccount.accountSignals,
+  })
+  const inBaseApp = isBaseAppInAppContext()
+  const subAccountSessionReady =
+    inBaseApp && isSubAccountExecutionReady(currentAccount.accountSignals)
   const { isOwner: parentEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
     subAccountAddress: controller.canonicalCswAddress,
     embeddedEoaAddress,
     enabled: ownerInstallPathActive && Boolean(controller.canonicalCswAddress && embeddedEoaAddress),
+  })
+  const { isOwner: subAccountEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: persistedSubAccountAddress,
+    embeddedEoaAddress,
+    enabled: subAccountFlowEnabled && Boolean(persistedSubAccountAddress && embeddedEoaAddress),
   })
   const signingStepComplete = isWaitlistStepTwoSigningComplete({
     ownerInstallRequested: ownerInstallPathActive,
     accountSignals: currentAccount.accountSignals,
     notice: controller.notice,
     parentEmbeddedOwnerOnChain,
+    subAccountEmbeddedOwnerOnChain,
+    subAccountSessionReady,
   })
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete

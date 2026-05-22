@@ -46,6 +46,7 @@ import {
 } from '@/lib/uniswap/liquidityApi'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
+import { useEmbeddedOwnerOnSubAccount } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -874,6 +875,19 @@ export function Swap() {
 
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
+  const { status: subAccountEmbeddedOwnerStatus } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: baseSubAccountAddress,
+    embeddedEoaAddress: privyEmbeddedEoaAddress,
+    enabled: subAccountTrack && Boolean(baseSubAccountAddress && privyEmbeddedEoaAddress),
+  })
+  const subAccountOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
+    if (subAccountEmbeddedOwnerStatus === 'checking' || subAccountEmbeddedOwnerStatus === 'idle') {
+      return 'pending'
+    }
+    if (subAccountEmbeddedOwnerStatus === 'owner') return 'owner'
+    if (subAccountEmbeddedOwnerStatus === 'not-owner') return 'not-owner'
+    return 'unknown'
+  }, [subAccountEmbeddedOwnerStatus])
   const subAccountRuntime = useSwapSubAccountRuntime({
     enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
     canonicalAddress,
@@ -1087,6 +1101,7 @@ export function Swap() {
         embeddedWalletAddress: privyEmbeddedEoaAddress,
         embeddedWalletCanSign: privyEmbeddedEoaCanSign,
         ownerCheckStatus: canonicalOwnerCheckStatus,
+        subAccountOwnerCheckStatus,
       }),
     [
       executionTrack,
@@ -1099,6 +1114,7 @@ export function Swap() {
       privyEmbeddedEoaAddress,
       privyEmbeddedEoaCanSign,
       canonicalOwnerCheckStatus,
+      subAccountOwnerCheckStatus,
     ],
   )
   const useSubAccountCanonicalSigner =

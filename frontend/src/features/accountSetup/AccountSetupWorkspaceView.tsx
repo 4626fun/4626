@@ -25,6 +25,7 @@ import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwner
 import {
   isSubAccountExecutionReady,
   isWaitlistStepTwoSigningComplete,
+  resolveSubAccountAddress,
   shouldShowParentCswAddOwnerPanel,
 } from '@/features/waitlist/waitlistFlowState'
 import { useEmbeddedOwnerOnSubAccount } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
@@ -32,6 +33,7 @@ import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
@@ -214,6 +216,28 @@ export function AccountSetupWorkspaceView(props: {
     embeddedEoaAddress,
     enabled: ownerInstallPathActive && Boolean(canonicalCswAddress && embeddedEoaAddress),
   })
+  const persistedSubAccountAddress = resolveSubAccountAddress({
+    baseSubAccount: me?.baseSubAccount ?? null,
+    accountSignals: me?.accountSignals,
+  })
+  const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
+  const subAccountSessionReady =
+    inBaseApp && Boolean(me && isSubAccountExecutionReady(me.accountSignals))
+  const { isOwner: subAccountEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
+    subAccountAddress: persistedSubAccountAddress,
+    embeddedEoaAddress,
+    enabled: subAccountFlowEnabled && Boolean(persistedSubAccountAddress && embeddedEoaAddress),
+  })
+  const signingStepComplete = me
+    ? isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: ownerInstallPathActive,
+        accountSignals: me.accountSignals,
+        notice,
+        parentEmbeddedOwnerOnChain,
+        subAccountEmbeddedOwnerOnChain,
+        subAccountSessionReady,
+      })
+    : false
 
   if (loading && !me) {
     return (
@@ -236,16 +260,6 @@ export function AccountSetupWorkspaceView(props: {
     Boolean(canonicalCswAddress) &&
     executionTrack === 'none-yet' &&
     !ownerInstallPathActive
-  const persistedSubAccountAddress =
-    me.accountSignals.baseSubAccount?.address?.trim() ||
-    me.baseSubAccount?.trim() ||
-    null
-  const signingStepComplete = isWaitlistStepTwoSigningComplete({
-    ownerInstallRequested: ownerInstallPathActive,
-    accountSignals: me.accountSignals,
-    notice,
-    parentEmbeddedOwnerOnChain,
-  })
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,

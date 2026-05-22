@@ -81,7 +81,23 @@ export function isLegacyParentOwnerSigningReady(params: {
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
   if (params.parentEmbeddedOwnerOnChain === true) return true
+  if (params.parentEmbeddedOwnerOnChain === false) return false
   return hasLegacyOwnerInstallSigning(params.accountSignals)
+}
+
+/**
+ * Sub-account track is operable when the embedded EOA can sign swaps:
+ * on-chain owner on the sub-account, or an active Base App session with a saved link.
+ */
+export function isSubAccountSigningOperable(params: {
+  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
+  subAccountEmbeddedOwnerOnChain?: boolean
+  subAccountSessionReady?: boolean
+}): boolean {
+  if (!isSubAccountExecutionReady(params.accountSignals)) return false
+  if (params.subAccountEmbeddedOwnerOnChain === true) return true
+  if (params.subAccountSessionReady === true) return true
+  return false
 }
 
 /**
@@ -93,12 +109,27 @@ export function isWaitlistStepTwoSigningComplete(params: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   notice?: string | null
   parentEmbeddedOwnerOnChain?: boolean
+  subAccountEmbeddedOwnerOnChain?: boolean
+  subAccountSessionReady?: boolean
 }): boolean {
-  const { ownerInstallRequested, accountSignals, notice, parentEmbeddedOwnerOnChain } = params
+  const {
+    ownerInstallRequested,
+    accountSignals,
+    notice,
+    parentEmbeddedOwnerOnChain,
+    subAccountEmbeddedOwnerOnChain,
+    subAccountSessionReady,
+  } = params
   if (ownerInstallRequested) {
     return isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })
   }
-  if (isSubAccountExecutionReady(accountSignals)) return true
+  if (isSubAccountExecutionReady(accountSignals)) {
+    return isSubAccountSigningOperable({
+      accountSignals,
+      subAccountEmbeddedOwnerOnChain,
+      subAccountSessionReady,
+    })
+  }
   if (isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })) return true
   const track = accountSignals?.executionTrack
   if (track !== 'sub-account' && track !== 'migration-pending') {
