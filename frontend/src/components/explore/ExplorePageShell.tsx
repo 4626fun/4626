@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 
+import { ExploreTableLoadingOverlay } from '@/components/explore/ExploreUiPrimitives'
+
 type ExplorePageShellProps = {
   leading?: ReactNode
   title?: string
@@ -11,6 +13,9 @@ type ExplorePageShellProps = {
   footer?: ReactNode
   /** List routes: hero lives in ExploreListLayout; only filters + table render here. */
   variant?: 'full' | 'table'
+  /** When true, shows a table-only loading overlay (hero/subnav stay visible). */
+  tablePending?: boolean
+  tablePendingLabel?: string
 }
 
 export function ExplorePageShell({
@@ -22,6 +27,8 @@ export function ExplorePageShell({
   table,
   footer,
   variant = 'full',
+  tablePending = false,
+  tablePendingLabel,
 }: ExplorePageShellProps) {
   const isTableVariant = variant === 'table'
 
@@ -29,7 +36,10 @@ export function ExplorePageShell({
     return (
       <>
         <div className="mb-6">{subnav}</div>
-        <div className="vault-surface relative overflow-hidden">{table}</div>
+        <div className="vault-surface relative min-h-[280px] overflow-hidden">
+          <ExploreTableLoadingOverlay active={tablePending} label={tablePendingLabel} />
+          {table}
+        </div>
         {footer ? <div className="mt-4 text-center text-xs text-zinc-600">{footer}</div> : null}
       </>
     )

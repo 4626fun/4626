@@ -1,14 +1,18 @@
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { ExploreTabNav } from '@/components/explore/ExploreTabNav'
+import { useExploreListTabScrollReset } from '@/features/explore/exploreListNavigation'
 
 export const EXPLORE_LIST_TITLE = 'Explore on Base'
 export const EXPLORE_LIST_SUBTITLE =
   'Creator coins, content, vaults, and live activity across the Zora ecosystem.'
 
 export function ExploreListLayout() {
+  const location = useLocation()
+  useExploreListTabScrollReset()
+
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
       <PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore/creators" />
@@ -21,7 +25,7 @@ export function ExploreListLayout() {
 
         <ExploreTabNav className="mb-4 sm:mb-6" />
 
-        <Outlet />
+        <Outlet key={location.pathname} />
       </div>
     </div>
   )

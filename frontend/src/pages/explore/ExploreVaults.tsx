@@ -17,6 +17,7 @@ import {
   useDebouncedValue,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 
 type ExploreVaultItem = {
   vaultAddress: `0x${string}` | null
@@ -131,6 +132,7 @@ export function ExploreVaults() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -162,9 +164,17 @@ export function ExploreVaults() {
     onLoadMore: fetchNextPage,
   })
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: vaults.length > 0,
+  })
+
   return (
     <ExplorePageShell
       variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading vaults…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search vault, creator coin, or group"

@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 
+import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
+
 type ExploreCopyButtonProps = {
   text: string
   className?: string
@@ -212,6 +214,29 @@ type ExploreHeroMetricProps = {
   hint?: string | null
   title?: string
   accent?: boolean
+}
+
+type ExploreTableLoadingOverlayProps = {
+  active: boolean
+  label?: string
+}
+
+export function ExploreTableLoadingOverlay({
+  active,
+  label = 'Loading…',
+}: ExploreTableLoadingOverlayProps) {
+  if (!active) return null
+
+  return (
+    <div
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-vault-bg/75 backdrop-blur-[2px]"
+      aria-busy="true"
+      aria-live="polite"
+    >
+      <PixelWaveLoader size="sm" />
+      <p className="text-xs text-zinc-400">{label}</p>
+    </div>
+  )
 }
 
 export function ExploreHeroMetric({ label, value, hint, title, accent = false }: ExploreHeroMetricProps) {

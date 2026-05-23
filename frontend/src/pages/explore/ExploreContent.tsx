@@ -18,6 +18,7 @@ import {
   matchesCoinSearchQuery,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -53,6 +54,7 @@ export function ExploreContent() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -104,9 +106,17 @@ export function ExploreContent() {
     return getHorizontalScrollStops(columns)
   }, [currentTimeFilter])
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: filteredCoins.length > 0,
+  })
+
   return (
     <ExplorePageShell
       variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading content…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search content"

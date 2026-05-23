@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
 
+import { buildExploreTabSearchParams } from '@/features/explore/exploreListNavigation'
+
 const TABS = [
   { label: 'Creators', to: '/explore/creators' },
   { label: 'Content', to: '/explore/content' },
@@ -19,6 +21,7 @@ type ExploreTabNavProps = {
 
 export function ExploreTabNav({ className }: ExploreTabNavProps) {
   const location = useLocation()
+  const preservedSearch = buildExploreTabSearchParams(location.search)
 
   return (
     <div className={className}>
@@ -28,7 +31,7 @@ export function ExploreTabNav({ className }: ExploreTabNavProps) {
           return (
             <Link
               key={tab.to}
-              to={tab.to}
+              to={`${tab.to}${preservedSearch}`}
               aria-current={active ? 'page' : undefined}
               className={`py-1 text-[13px] sm:text-sm transition-colors duration-150 whitespace-nowrap ${
                 active ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white font-medium'

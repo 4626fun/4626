@@ -7,7 +7,7 @@ import { ExploreTabNav } from './ExploreTabNav'
 vi.mock('react-router-dom', () => ({
   Link: ({ to, children, ...props }: { to: string; children: React.ReactNode }) =>
     React.createElement('a', { href: to, ...props }, children),
-  useLocation: () => ({ pathname: '/explore/creators' }),
+  useLocation: () => ({ pathname: '/explore/creators', search: '' }),
 }))
 
 describe('ExploreTabNav', () => {

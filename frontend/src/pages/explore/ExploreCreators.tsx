@@ -24,6 +24,7 @@ import {
   useDebouncedValue,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
@@ -291,6 +292,7 @@ export function ExploreCreators() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -523,9 +525,17 @@ export function ExploreCreators() {
     return getHorizontalScrollStops(columns)
   }, [currentTimeFilter, collapseIdentity])
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: displayCoins.length > 0,
+  })
+
   return (
     <ExplorePageShell
       variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading creators…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search creators"

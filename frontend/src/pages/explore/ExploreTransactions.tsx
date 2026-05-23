@@ -20,6 +20,7 @@ import {
   matchesCoinSearchQuery,
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
+import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 
 function formatTimeAgo(dateStr: string | undefined): string {
   if (!dateStr) return '-'
@@ -256,6 +257,7 @@ export function ExploreTransactions() {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
+    isFetching,
     isLoading,
     isError,
     error,
@@ -336,9 +338,17 @@ export function ExploreTransactions() {
     onLoadMore: fetchNextPage,
   })
 
+  const tablePending = shouldShowExploreTableLoading({
+    isLoading,
+    isFetching,
+    hasRows: filteredActivity.length > 0,
+  })
+
   return (
     <ExplorePageShell
       variant="table"
+      tablePending={tablePending}
+      tablePendingLabel="Loading activity…"
       subnav={
         <ExploreSubnav
           searchPlaceholder="Filter by token"
