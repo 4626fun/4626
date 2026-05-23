@@ -45,7 +45,7 @@
       href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=8" />
+    <link rel="stylesheet" href="styles.css?v=9" />
 
     <!-- Three.js v0.183.0 is vendored locally under vendor/three/ so all
          module sources stay 'self' under the production CSP. The import
@@ -1304,28 +1304,33 @@
           return;
         }
 
-        const isMobile = matchMedia('(max-width: 720px)').matches;
-        const stops = isMobile
-          ? [
-              { p: 0, step: 1 },
-              { p: 0.24, step: 2 },
-              { p: 0.46, step: 3 },
-              { p: 0.68, step: 4 },
-              { p: 0.86, done: true },
-            ]
-          : [
-              { p: 0, step: 1 },
-              { p: 0.28, step: 2 },
-              { p: 0.50, step: 3 },
-              { p: 0.72, step: 4 },
-              { p: 0.88, done: true },
-            ];
+        const mobileMq = matchMedia('(max-width: 720px)');
+        function isMobileView() {
+          return mobileMq.matches;
+        }
+        function getStops() {
+          return isMobileView()
+            ? [
+                { p: 0.06, step: 1 },
+                { p: 0.28, step: 2 },
+                { p: 0.50, step: 3 },
+                { p: 0.72, step: 4 },
+                { p: 0.88, done: true },
+              ]
+            : [
+                { p: 0, step: 1 },
+                { p: 0.28, step: 2 },
+                { p: 0.50, step: 3 },
+                { p: 0.72, step: 4 },
+                { p: 0.88, done: true },
+              ];
+        }
 
         let raf = null;
         let lastActiveStep = -1;
 
         function measureOffset(activeStep) {
-          if (!track || !stage || activeStep < 1) {
+          if (!track || !stage || activeStep < 1 || isMobileView()) {
             section.style.setProperty('--story-offset', '0px');
             section.style.setProperty('--story-rail-height', '72px');
             return;
@@ -1363,7 +1368,7 @@
           let activeStep = 0;
           let done = false;
 
-          stops.forEach(({ p, step, done: isDone }) => {
+          getStops().forEach(({ p, step, done: isDone }) => {
             if (step && progress >= p) activeStep = step;
             if (isDone && progress >= p) done = true;
           });
@@ -1387,7 +1392,14 @@
         }
 
         window.addEventListener('scroll', onScroll, { passive: true });
-        window.addEventListener('resize', onScroll, { passive: true });
+        window.addEventListener('resize', () => {
+          lastActiveStep = -1;
+          onScroll();
+        }, { passive: true });
+        mobileMq.addEventListener('change', () => {
+          lastActiveStep = -1;
+          onScroll();
+        });
         update();
       })();
     </script>

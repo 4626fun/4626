@@ -5326,10 +5326,75 @@ html.nav-drawer-open body {
 }
 
 @media (max-width: 720px) {
-  .mkt-scrollstory { height: 300vh; }
-  .mkt-scrollstory__stage {
-    max-height: calc(100vh - clamp(200px, 28vh, 260px));
+  /* Slower, reveal-style pacing — one step at a time, intro pinned at top */
+  .mkt-scrollstory { height: 360vh; }
+
+  .mkt-scrollstory__pin {
+    align-items: stretch;
   }
+
+  .mkt-scrollstory .mkt-wrap {
+    justify-content: flex-start;
+    align-items: stretch;
+    height: 100vh;
+    min-height: 100vh;
+    padding:
+      clamp(80px, 12vh, 104px)
+      clamp(16px, 4vw, 24px)
+      clamp(16px, 3vh, 28px);
+  }
+
+  .mkt-scrollstory .mkt-intro {
+    margin-bottom: clamp(14px, 2vh, 22px);
+  }
+
+  .mkt-scrollstory .mkt-headline {
+    font-size: clamp(1.65rem, 7.5vw, 2.15rem);
+    margin-bottom: 10px;
+  }
+
+  .mkt-scrollstory .mkt-lede {
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .mkt-scrollstory__stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+    /* Drop the top fade — it was clipping step titles near the section headline */
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);
+            mask-image: linear-gradient(to bottom, black 0%, black 90%, transparent 100%);
+  }
+
+  .mkt-scrollstory__track {
+    transform: none !important;
+    transition: none;
+  }
+
+  /* Mobile: reveal-style — show only the active step, not a scrolling stack */
+  .mkt-scrollstory.is-story-1 .mkt-step[data-story-step="1"],
+  .mkt-scrollstory.is-story-2 .mkt-step[data-story-step="2"],
+  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="3"],
+  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="4"] {
+    display: flex;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+  }
+
+  .mkt-scrollstory.is-story-2 .mkt-step[data-story-step="1"],
+  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="1"],
+  .mkt-scrollstory.is-story-3 .mkt-step[data-story-step="2"],
+  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="1"],
+  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="2"],
+  .mkt-scrollstory.is-story-4 .mkt-step[data-story-step="3"] {
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
   .mkt-scrollstory .mkt-step__panel {
     padding: clamp(16px, 4vw, 22px);
   }
@@ -5338,6 +5403,14 @@ html.nav-drawer-open body {
   }
   .mkt-scrollstory .mkt-strategy-grid {
     grid-template-columns: 1fr;
+  }
+  .mkt-scrollstory .mkt-strategy {
+    padding: 12px 0;
+  }
+  .mkt-scrollstory .mkt-strategy p,
+  .mkt-scrollstory .mkt-alloc li p {
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 

@@ -589,7 +589,7 @@ async function buildEthosSortedCreatorList(params: {
       ? await resolveCreatorEthosByAddress(normalizedCandidateAddresses)
       : new Map()
 
-  const mergedEthosForRow = (row: (typeof candidateRows)[number]) => {
+  const mergedEthosForRow = (row: EthosSortedCreatorRow) => {
     const creatorAddress = String(row.creator_address).toLowerCase()
     const projectionScore = toFiniteNumberOrNull(row.ethos_score)
     const projectionEntry =

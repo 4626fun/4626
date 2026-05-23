@@ -108,7 +108,7 @@ export function isStaleRunningLock(
 
 export function extractExploreListEdges(response: unknown): {
   edges: Array<{ node?: unknown }>
-  pageInfo: { hasNextPage?: boolean; endCursor?: string | null }
+  pageInfo: { hasNextPage: boolean; endCursor: string | null }
 } {
   const list =
     (response as any)?.data?.exploreList ??
