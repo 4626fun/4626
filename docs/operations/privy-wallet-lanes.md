@@ -54,6 +54,36 @@ Server owner-install resolution (`extractPrivyEmbeddedEoaAddress`) excludes wall
 
 Renaming alone does not change runtime behavior; it prevents operators from mistaking the agent wallet for the user's CSW or login signer.
 
+## Orphan cleanup: `alfaclub` key quorum (safe to delete)
+
+An experimental key quorum was created in the **4626 Privy app** during an AlfaClub wallet experiment. It is **not** wired to live AlfaClub chat auth (that uses AlfaClub's separate Privy app + JWT refresh).
+
+| Resource | ID | Address |
+| --- | --- | --- |
+| Key quorum `alfaclub` | `iugbyquej8u2oe80w6ox9kfv` | — |
+| Owned wallet | `l6zzzn135ig2w0y44r1ycq19` | `0x5744e8DBf8815F4BA4d1a87984da849289c4e75b` |
+
+On-chain: 0 ETH, nonce 0. Not referenced in code or env.
+
+**API delete note:** Privy requires an authorization signature from **this quorum's member key** (public key ending `…ztreGwg`). That private key is **not** the same as `PRIVY_WALLET_AUTHORIZATION_KEY` (4626 Server Agent Owner). Unless you saved the alfaclub quorum's private key at creation time, use the dashboard path below.
+
+### Dashboard delete (recommended)
+
+1. Open [4626 Privy app → Wallets](https://dashboard.privy.io/apps/cmk411efm034jl50cs618o8cy/wallets).
+2. Find wallet **`0x5744e8…e75b`** → delete/remove wallet.
+3. Open [Key quorums](https://dashboard.privy.io/apps/cmk411efm034jl50cs618o8cy/authorization-keys) (or Wallets → Authorization).
+4. Delete quorum **`alfaclub`** (`iugbyquej8u2oe80w6ox9kfv`).
+
+Do **not** delete **`4626 Server Agent Owner`** (`lr8vgu2l0wnmwg824n4jrtr3`).
+
+### API delete (only if you have the alfaclub quorum private key)
+
+```bash
+# Pass the quorum-specific wallet-auth key (NOT the 4626 server agent key)
+PRIVY_WALLET_AUTHORIZATION_KEY='wallet-auth:<alfaclub-quorum-private-key>' \
+  pnpm -C frontend exec tsx --env-file=.env scripts/ops/delete-privy-orphan-quorum.ts --apply
+```
+
 ## Local env gap
 
 If `PRIVY_WALLET_POLICY_ID` is empty locally but set on Vercel/Railway, copy the production value (`a7vgzko1jhidbaqqg1whufnc`) into `frontend/.env` for local agent-wallet scripts and dry-runs.
