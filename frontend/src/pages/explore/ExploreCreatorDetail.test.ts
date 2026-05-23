@@ -89,6 +89,7 @@ vi.mock('@/lib/zora/hooks', () => ({
             coinType: index === 0 ? 'CREATOR' : 'CONTENT',
             name: `Coin ${index}`,
             symbol: `C${index}`,
+            createdAt: `2026-${String((index % 12) + 1).padStart(2, '0')}-${String((index % 27) + 1).padStart(2, '0')}T00:00:00.000Z`,
           },
         })),
       },

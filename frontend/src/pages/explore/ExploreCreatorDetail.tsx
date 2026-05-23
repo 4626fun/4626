@@ -17,6 +17,7 @@ import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { ExplorePageCanvas } from '@/components/explore/ExplorePageCanvas'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
+import { CreatorContentTimeline } from '@/components/explore/CreatorContentTimeline'
 import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
@@ -58,16 +59,6 @@ function formatNumber(value: string | number | undefined): string {
 
 function shortAddress(addr: string): string {
   return formatShortAddress(addr, '')
-}
-
-function formatMonthDay(value?: string | null): string {
-  if (!value) return '-- --'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '-- --'
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  })
 }
 
 function PremiumCursor({ enabled }: { enabled: boolean }) {
@@ -1202,65 +1193,17 @@ export function ExploreCreatorDetail() {
                     <span className="w-8 h-8 rounded-full bg-white border border-black/20 inline-flex items-center justify-center text-[10px]">
                       ↓
                     </span>
-                    Scroll the vertical archive
+                    Follow the publish trail
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="relative mx-auto max-w-3xl px-2 sm:px-4 pb-4">
-              <div className="pointer-events-none absolute left-[1.125rem] sm:left-6 top-2 bottom-2 w-px bg-black/15" aria-hidden />
-              <div className="flex flex-col gap-8 sm:gap-10">
-                {timelineCoins.length === 0 ? (
-                  <div className="pl-10 sm:pl-14 py-10 text-sm text-zinc-700">No content coins available for timeline yet.</div>
-                ) : (
-                  timelineCoins.map((coin, idx) => {
-                    const image = getContentCoinAssetUrl(coin)
-                    const monthDay = formatMonthDay(coin.createdAt)
-                    return (
-                      <button
-                        key={coin.address || coin.id || `timeline-${idx}`}
-                        type="button"
-                        onClick={() => openContentTray(coin)}
-                        className="group relative w-full pl-10 sm:pl-14 text-left transition-colors hover:bg-black/[0.04] rounded-xl py-2 sm:py-3 -mx-2 px-2 sm:mx-0 sm:px-0"
-                      >
-                        <span
-                          className="pointer-events-none absolute left-[0.6875rem] sm:left-[1.375rem] top-8 sm:top-9 h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-black/25 bg-white shadow-[0_0_0_4px_rgba(217,223,114,0.55)] transition-transform group-hover:scale-110"
-                          aria-hidden
-                        />
-                        <div className="grid gap-5 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-6">
-                          <div className="text-4xl sm:text-5xl font-semibold tracking-tight leading-none text-zinc-900">
-                            {monthDay}
-                          </div>
-                          <div className="min-w-0">
-                            {image ? (
-                              <div className="w-full aspect-[4/3] max-w-md bg-white/80 overflow-hidden mb-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                                <img
-                                  src={image}
-                                  alt={coin.name || coin.symbol || 'Content coin'}
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            ) : (
-                              <div className="w-full max-w-md aspect-[4/3] bg-white/60 mb-4 flex items-center justify-center text-zinc-500">
-                                <ImageIcon className="w-5 h-5" />
-                              </div>
-                            )}
-                            <div className="text-lg font-medium leading-tight">{coin.name || coin.symbol || 'Untitled'}</div>
-                            <div className="mt-2 text-xs font-mono uppercase tracking-[1.4px] text-zinc-700">
-                              {coin.symbol || '???'}
-                            </div>
-                            <p className="mt-3 text-xs sm:text-sm text-zinc-800 leading-relaxed line-clamp-4">
-                              {(coin.description || 'Open tray for full content context.').trim()}
-                            </p>
-                          </div>
-                        </div>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            </div>
+            <CreatorContentTimeline
+              coins={timelineCoins}
+              getImage={getContentCoinAssetUrl}
+              onSelect={openContentTray}
+            />
           </div>
         </div>
 
