@@ -154,22 +154,20 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
         'Canonical swaps require a distinct app-scoped Base sub-account.',
       )
     }
+    const subAccountOwnerStatus = input.subAccountOwnerCheckStatus ?? 'pending'
+    if (subAccountOwnerStatus === 'pending' || subAccountOwnerStatus === 'unknown') {
+      return gateFailure(
+        'owner-check-pending',
+        'Waiting for app wallet ownership check before canonical swaps can proceed.',
+      )
+    }
+    if (subAccountOwnerStatus === 'not-owner') {
+      return gateFailure(
+        'embedded-wallet-not-owner',
+        'Privy embedded wallet is not an on-chain owner of your 4626 app wallet. Finish signing setup first.',
+      )
+    }
     if (input.subAccountProviderReady !== true) {
-      const fallbackOwnerStatus = input.subAccountOwnerCheckStatus ?? input.ownerCheckStatus
-      if (fallbackOwnerStatus === 'owner') {
-        return {
-          required: true,
-          ready: true,
-          code: 'ok',
-          reason: null,
-        }
-      }
-      if (fallbackOwnerStatus === 'pending' || fallbackOwnerStatus === 'unknown') {
-        return gateFailure(
-          'owner-check-pending',
-          'Waiting for canonical ownership check before falling back from sub-account routing.',
-        )
-      }
       return gateFailure(
         'base-sub-account-provider-missing',
         'Reconnect with Base Account to route canonical swaps through your 4626 sub-account.',
