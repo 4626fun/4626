@@ -110,12 +110,10 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  // `/add-owner` is a single-purpose surface that installs the user's Privy
-  // embedded EOA onto their canonical Coinbase Smart Wallet via the
-  // `prepare-add-privy-owner` lane. The address is resolved server-side from
-  // the user's authenticated Privy session — the user never has to obtain or
-  // paste an EOA address. Same passkey-via-prepareCalls submission lane that
-  // the waitlist setup uses for owner installs.
+  // `/add-owner` installs the user's Privy embedded EOA onto their canonical CSW
+  // via Relay (`preview-add-owner` → `useAddOwnerFlow`). The embedded EOA is
+  // resolved server-side from the Privy session; an existing CSW owner approves
+  // the mutation. Same lane as waitlist `AddOwnerSigningPanel` / `?setup=owner-install`.
   {
     path: '/add-owner',
     element: (
@@ -124,11 +122,9 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  // `/remove-owner` is the sibling surface for removing an owner from the
-  // canonical CSW. Routes through _submitOwnerViaSelfBuiltUserOp directly
-  // (bypassing sendPreparedOwnerTx) so the submission goes through Relay's
-  // /execute/call endpoint. Surfaces live on-chain owner-slot diagnostics
-  // so users can see whether the signing path will validate before signing.
+  // `/remove-owner` removes an owner from the canonical CSW via the same Relay
+  // deposit + solver-fill lane as add-owner (`preview-remove-owner` →
+  // `useRemoveOwnerFlow` → `executeOwnerMutationViaRelay`).
   {
     path: '/remove-owner',
     element: (

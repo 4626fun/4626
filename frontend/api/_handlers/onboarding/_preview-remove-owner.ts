@@ -322,6 +322,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteUser: connectedAddress,
       mutationCalldata: data,
       relayQuoteOutputWeiEnvKey: 'RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI',
+      relaySource: '4626-remove-owner',
     })
     relayQuoteDiagnostics = relayQuote.diagnostics
     if (relayQuote.ok) {

@@ -74,18 +74,24 @@ Expected shape:
 
 ## Current API boundaries
 
-These endpoints are the stable contract for the flow:
-
-- `POST /api/wallet/prepare-add-privy-owner`
-- `POST /api/wallet/confirm-owner`
-
-`prepare-add-privy-owner` returns a prepared call against the canonical CSW.
-
-`confirm-owner` is the authoritative onchain confirmation step and must remain the truth source for whether the embedded EOA is installed.
+| Endpoint | Role |
+| --- | --- |
+| `POST /api/onboarding/preview-add-owner` | **Canonical** — Relay quote + `userCall` for `addOwnerAddress(4626 embedded EOA)` |
+| `POST /api/onboarding/preview-remove-owner` | Same Relay lane for `removeOwnerAtIndex` |
+| `POST /api/onboarding/preview-agent-owner` | **Server agent only** — preview for `addOwnerAddress(server agent wallet)` |
+| `POST /api/onboarding/provision-agent-owner` | **Server agent only** — creates agent wallet + calldata |
+| `POST /api/wallet/prepare-add-privy-owner` | **Legacy** — calldata only, no Relay quote; no SPA caller |
+| `POST /api/wallet/confirm-owner` | On-chain confirmation; truth source for embedded EOA install |
 
 ## Current client execution boundary
 
-Current implementation anchors:
+Canonical user owner install:
+
+- `frontend/src/features/accountSetup/addOwner/useAddOwnerFlow.ts`
+- `frontend/src/lib/relay/ownerMutationExecution.ts`
+- Base App self-auth deposits: `frontend/src/lib/wallet/cswSendCalls.ts` (`wallet_sendCalls`)
+
+Legacy / server-agent paths still reference:
 
 - `frontend/src/features/accountSetup/useAccountSetupController.ts`
 - `frontend/src/lib/wallet/onboardingWallet.ts`

@@ -4,32 +4,22 @@
  * Submits a CSW call via EIP-5792 `wallet_sendCalls`, which is what Base App's
  * in-app browser actually supports for owner-mutation flows.
  *
- * Why this lane exists (re-discovered 2026-05-11 after reverting PR #580):
+ * Why this lane exists:
  *
- * The historical working pre-fund UserOp 0xa6b54357...b4c3 was submitted by
- * a public bundler EOA 0x54e2acab... (NOT the CSW, NOT the user). Base App
- * itself did all of this:
+ * Owner-mutation Relay deposits (Part 1) are submitted from Base App via
+ * `wallet_sendCalls` with the preview-bound router `multicall` calldata from
+ * `/quote/v2`. Golden reference (block 45600637):
  *
- *   1. User taps "Submit" inside Base App
- *   2. Base App builds a UserOp from the requested call
- *   3. Base App's wallet signs the UserOp locally with the on-device passkey
- *      (no popup, no keys.coinbase.com round-trip \u2014 the passkey is reachable
- *      because Base App is the RP)
- *   4. Base App's bundler submits the UserOp via eth_sendUserOperation
- *   5. The bundler EOA batches it with other UserOps into a handleOps tx
- *   6. The CSW pays gas from its EntryPoint deposit
+ *   - Part 1 (user deposit): 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3
+ *   - Part 2 (solver fill):  0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
  *
- * On the dapp side, all we have to do is hand Base App the calls we want
- * executed. The EIP-5792 standard says: call `wallet_sendCalls` with the
- * version, chainId, atomic flag, and a list of {to, data, value}. The wallet
- * does steps 1-6 internally and returns a call-bundle id (which can be
- * fetched as a tx hash via `wallet_getCallsStatus`).
+ * Base App wraps the deposit in a UserOp internally; Relay's solver submits
+ * the destination `handleOps` + `executeWithoutChainIdValidation` mutation in
+ * the same block. On the dapp side we pass EIP-5792 `{ to, data, value }`
+ * from the server preview and poll `wallet_getCallsStatus` for the tx hash.
  *
- * No EOA funder. No Relay. No wallet_prepareCalls (which is blocked in-app).
- * No CSW self-call eth_sendTransaction (which reverts with Unauthorized()).
- *
- * This is what the reference tx actually did. We just have to ask for it
- * correctly.
+ * Do not use bare CSW self-call `eth_sendTransaction` for owner mutations from
+ * third-party dapps (reverts or blocked). See relay-owner-mutation-kit-guide.md.
  */
 
 import { getAddress, type Hex } from 'viem'

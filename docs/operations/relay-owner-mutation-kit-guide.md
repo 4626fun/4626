@@ -24,6 +24,33 @@ Bridge/swap examples in the Privy sample (`EXACT_INPUT`, cross-chain ETH) are **
 
 ---
 
+## Golden reference transactions (Base mainnet)
+
+Successful **add embedded EOA owner** via Relay on block **45600637** (May 5, 2026). Both txs landed in the same block.
+
+| Part | Tx hash | Role |
+| --- | --- | --- |
+| **1 — User deposit** | [0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3](https://basescan.org/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3) | CSW submits Relay router `multicall` via Base App `wallet_sendCalls`; embeds `depositNative(depositor=CSW, orderId=…)` |
+| **2 — Solver fill** | [0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36](https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36) | Relay solver → router `multicall` → `EntryPoint.handleOps` → CSW `executeWithoutChainIdValidation` → **`addOwnerAddress(newOwner)`** |
+
+Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
+
+- Router: `0xb92fe925DC43a0ECdE6c8b1a2709c170Ec4fFf4f`
+- Selector: `multicall` (`0xcd6e13f7`)
+- `refundTo` / `nftRecipient`: the CSW (self-auth deposit lane)
+- Event: `AddOwner` with new owner EOA at owner index 33
+- Paymaster: `0x0` on the destination UserOp (self-funded)
+
+4626 replicates this by:
+
+1. Server `/quote/v2` with `user = depositor` (CSW for self-auth, parent CSW for sub-account, EOA for external funder), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`.
+2. Client submits preview `userCall` (router multicall when quote returns `0xcd6e13f7`).
+3. Poll `/intents/status/v3` with `orderId ?? requestId`; verify on-chain `isOwnerAddress(embeddedEoa)`.
+
+Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `cswSendCalls.ts`.
+
+---
+
 ## Canonical relay-kit pattern (Settlement API)
 
 Official flow from [relay-kit](https://github.com/relayprotocol/relay-kit) + [Privy example README](https://github.com/relayprotocol/relay-wallet-provider-examples/tree/main/privy):

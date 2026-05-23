@@ -61,6 +61,8 @@ export type BuildOwnerMutationRelayFlowParams = {
   relayQuoteUser: `0x${string}`
   mutationCalldata: `0x${string}`
   relayQuoteOutputWeiEnvKey?: string
+  /** Relay dashboard source tag (e.g. `4626-add-owner`, `4626-remove-owner`). */
+  relaySource?: string
 }
 
 export type BuildOwnerMutationRelayFlowResult =
@@ -148,7 +150,7 @@ export async function buildOwnerMutationRelayFlow(
       originChainId: 8453,
       destinationChainId: 8453,
       tradeType: 'EXACT_OUTPUT',
-      source: '4626-owner-mutation',
+      source: params.relaySource ?? '4626-owner-mutation',
       txs: [
         {
           to: params.cswAddress,

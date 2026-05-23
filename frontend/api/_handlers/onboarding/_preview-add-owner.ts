@@ -89,6 +89,11 @@ type AddOwnerPreviewResponse = {
   }
 }
 
+type PreviewAddOwnerErrorEnvelope = ApiEnvelope<never> & {
+  needsEmbeddedWallet?: boolean
+  needsBaseAppSetup?: boolean
+}
+
 function resolveBaseRpcUrl(): string {
   const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
   return envUrl || 'https://mainnet.base.org'
@@ -221,7 +226,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         success: false,
         error: 'Owner install must target the Privy embedded EOA, not the Coinbase Smart Wallet.',
         needsEmbeddedWallet: true,
-      } satisfies ApiEnvelope<never>)
+      } satisfies PreviewAddOwnerErrorEnvelope)
     }
     const rawTxRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
     const txRequest: AddOwnerPreviewResponse['txRequest'] = {
@@ -314,13 +319,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     let relayQuoteDiagnostics: AddOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
-    const relayQuoteUser = isSubAccountTarget ? parentCswAddress : connectedAddress
+    const relayQuoteUser =
+      connectedIsParentFundingSubAccount || isSubAccountTarget
+        ? parentCswAddress
+        : connectedIsCswSelf
+          ? cswAddress
+          : connectedAddress
     const relayQuote = await buildOwnerMutationRelayFlow({
       publicClient,
       cswAddress,
       relayQuoteUser,
       mutationCalldata: txRequest.data,
       relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
+      relaySource: '4626-add-owner',
     })
     relayQuoteDiagnostics = relayQuote.diagnostics
     if (relayQuote.ok) {
