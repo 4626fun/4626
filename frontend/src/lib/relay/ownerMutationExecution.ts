@@ -6,7 +6,7 @@ import {
   EXECUTE_WITHOUT_CHAIN_ID_SELECTOR,
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
-import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
+import { submitSelfAuthRelayPart1SelfFunded } from '@/lib/relay/submitRelayPart1SelfFunded'
 import {
   extractRelayExecutionTxHash,
   formatCompactEth,
@@ -40,60 +40,6 @@ export type ExecuteOwnerMutationViaRelayParams = {
   onTxHash: (txHash: string) => void
   verifyMutation: () => Promise<boolean>
   precheckMutation?: () => Promise<void>
-}
-
-async function submitSelfAuthViaSendCalls(params: {
-  walletRequest: WalletRequest
-  cswAddress: `0x${string}`
-  calls: OwnerMutationEip5792Call[]
-  atomicRequired?: boolean
-  telemetryPrefix: string
-  appendEvent: (row: string) => void
-}): Promise<`0x${string}`> {
-  const sendCallsResult = await _submitOwnerViaSendCalls({
-    walletRequest: params.walletRequest,
-    csw: params.cswAddress,
-    calls: params.calls,
-    chainId: base.id,
-    atomicRequired: params.atomicRequired,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        const cap = event.step.includes('error') ? 4000 : 240
-        params.appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
-      } catch {
-        params.appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
-      }
-    },
-  })
-  params.appendEvent(`${params.telemetryPrefix}:bundle_id=${sendCallsResult.callBundleId}`)
-  const resolution = await waitForCallsTxHash({
-    walletRequest: params.walletRequest,
-    callBundleId: sendCallsResult.callBundleId,
-    timeoutMs: 60_000,
-    intervalMs: 1_500,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        const cap = event.step.includes('error') ? 4000 : 320
-        params.appendEvent(`${params.telemetryPrefix}.${event.step}: ${detail.slice(0, cap)}`)
-      } catch {
-        params.appendEvent(`${params.telemetryPrefix}.${event.step}: <unloggable>`)
-      }
-    },
-  })
-  if (!resolution.transactionHash && !resolution.userOperationHash) {
-    throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
-  }
-  if (resolution.userOperationHash) {
-    params.appendEvent(`${params.telemetryPrefix}:user_op_hash=${resolution.userOperationHash}`)
-  }
-  if (!resolution.transactionHash && resolution.userOperationHash) {
-    params.appendEvent(
-      `${params.telemetryPrefix}:warn bundle_tx_hash_missing user_op_only=${resolution.userOperationHash}`,
-    )
-  }
-  return resolution.transactionHash ?? resolution.userOperationHash!
 }
 
 async function submitExternalFunderRelayDeposit(params: {
@@ -292,15 +238,14 @@ export async function executeOwnerMutationViaRelay(
     if (!params.walletRequest) {
       throw new Error('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
     }
-    appendEvent('relay_execute:self_auth_route=preview_user_call_send_calls')
+    appendEvent('relay_execute:self_auth_route=preview_user_call_self_funded')
     appendEvent(`relay_execute:funding_csw=${fundingCswAddress}`)
-    executeTxHash = await submitSelfAuthViaSendCalls({
+    executeTxHash = await submitSelfAuthRelayPart1SelfFunded({
       walletRequest: params.walletRequest,
-      cswAddress: fundingCswAddress,
-      calls: [relay.userCall],
-      // Single native deposit call — atomic bundling can fail Base App simulation.
-      atomicRequired: false,
-      telemetryPrefix: 'csw_wallet_sendcalls',
+      fundingCsw: fundingCswAddress,
+      userCall: relay.userCall,
+      chainId: base.id,
+      publicClient,
       appendEvent,
     })
     onTxHash(executeTxHash)

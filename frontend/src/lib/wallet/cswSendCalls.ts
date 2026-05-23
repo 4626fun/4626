@@ -31,6 +31,11 @@
  *
  * Do not use bare CSW self-call `eth_sendTransaction` for owner mutations from
  * third-party dapps (reverts or blocked). See relay-owner-mutation-kit-guide.md.
+ *
+ * Relay Part 1 self-auth deposits should use `submitRelayPart1SelfFunded.ts`
+ * (prepare_calls / self-funded bundler) — not `_submitOwnerViaSendCalls`, because
+ * Base App `wallet_sendCalls` can attach Coinbase's USDC paymaster even when the
+ * dapp omits paymasterService.
  */
 
 import { getAddress, type Hex } from 'viem'
