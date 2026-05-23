@@ -16,6 +16,7 @@ import {
 } from '@/lib/relay/resolveOwnerMutationWallet'
 import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
 import { readPersistedRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
+import { useDeferUntilMounted } from '@/hooks/useDeferUntilMounted'
 
 export type AddOwnerErrorDetail = {
   revertReason: string | null
@@ -58,6 +59,9 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     preferFundingCswSelfAuth = false,
     enabled = true,
   } = params
+
+  const clientReady = useDeferUntilMounted()
+  const flowEnabled = enabled && clientReady
 
   const mutationCswAddress = targetCswAddress ?? canonicalCswAddress
   const fundingCswAddress = relayFundingCswAddress ?? mutationCswAddress
@@ -120,7 +124,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
 
   const fetchPreview = useCallback(
     async (options?: { resetExecution?: boolean }) => {
-      if (!enabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
+      if (!flowEnabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
         setPageError(
           signingBlockedReason ??
             (isSelfAuthSession
@@ -163,7 +167,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       }
     },
     [
-      enabled,
+      flowEnabled,
       getAccessToken,
       isSelfAuthSession,
       mutationCswAddress,
@@ -200,7 +204,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
 
   const runRelayExecution = useCallback(
     async (mode: 'submit' | 'recheck') => {
-      if (!enabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
+      if (!flowEnabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
         setPageError(
           signingBlockedReason ??
             (isSelfAuthSession
@@ -349,7 +353,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     [
       appendEvent,
       baseAccountSdk,
-      enabled,
+      flowEnabled,
       fetchPreview,
       fundingCswAddress,
       isSelfAuthSession,

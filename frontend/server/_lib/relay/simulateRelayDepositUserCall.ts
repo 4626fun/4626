@@ -1,8 +1,6 @@
 import { encodeFunctionData, type Address, type Hex } from 'viem'
 
-import {
-  resolveRelayPart1UserOpGasReserveWei,
-} from '../../../src/lib/relay/relayPart1GasReserve.js'
+import { resolveRelayPart1UserOpGasReserveWei } from './relayPart1GasReserve.js'
 import {
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
