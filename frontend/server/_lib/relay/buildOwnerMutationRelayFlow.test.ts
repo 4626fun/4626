@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { selectOwnerMutationRelayUserCall } from './buildOwnerMutationRelayFlow.js'
+import {
+  selectOwnerMutationRelayUserCall,
+  validateSelectedOwnerMutationRelayUserCall,
+} from './buildOwnerMutationRelayFlow.js'
 import { RELAY_DEPOSITORY_BASE, RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const ROUTER = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
@@ -56,5 +59,46 @@ describe('selectOwnerMutationRelayUserCall', () => {
 
     expect(selected?.userCallSource).toBe('quote_tx')
     expect(selected?.userCall.to).toBe(ROUTER)
+  })
+})
+
+describe('validateSelectedOwnerMutationRelayUserCall', () => {
+  const orderId =
+    '0xb00755d1810713e0485fa287c8f5d326c5378de6149464662d186166c23b56f3' as const
+
+  it('rejects underfunded deposits that match the broken 0xdfec2946 pattern', () => {
+    const selected = selectOwnerMutationRelayUserCall({
+      userTransaction: {
+        to: ROUTER,
+        data: `0xcd6e13f7${'0'.repeat(120)}${orderId.slice(2)}` as `0x${string}`,
+        value: '2880000000000',
+      },
+      builtUserCallFromPaymentDetails: null,
+    })
+    expect(selected).not.toBeNull()
+    expect(
+      validateSelectedOwnerMutationRelayUserCall({
+        requestBoundDepositId: orderId,
+        selected: selected!,
+      }),
+    ).toMatch(/below minimum/)
+  })
+
+  it('accepts golden-scale router multicall deposits with bound order id', () => {
+    const selected = selectOwnerMutationRelayUserCall({
+      userTransaction: {
+        to: ROUTER,
+        data: `0xcd6e13f7${'0'.repeat(120)}${orderId.slice(2)}` as `0x${string}`,
+        value: '18871666861048',
+      },
+      builtUserCallFromPaymentDetails: null,
+    })
+    expect(selected).not.toBeNull()
+    expect(
+      validateSelectedOwnerMutationRelayUserCall({
+        requestBoundDepositId: orderId,
+        selected: selected!,
+      }),
+    ).toBeNull()
   })
 })

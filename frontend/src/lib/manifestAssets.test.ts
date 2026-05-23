@@ -22,20 +22,24 @@ const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {
   assets?: {
     favicon32?: string
     appleTouchIcon?: string
+    miniappIcon?: string
+    miniappSplash?: string
   }
 }
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
-const TAB_ICON_32 = `${siteConfig.assets?.favicon32 ?? '/assets/app-tab-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
-const TAB_ICON_180 = `${siteConfig.assets?.appleTouchIcon ?? '/assets/app-tab-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
+const TAB_ICON_32 = `${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
+const TAB_ICON_180 = `${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
+const MINIAPP_ICON_PATH = siteConfig.assets?.miniappIcon ?? '/assets/base-miniapp-icon-200.png'
 const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}`
 const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
 const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
-const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
-const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
-const APP_SHELL_TAB_ICON_32 = `https://app.4626.fun${siteConfig.assets?.favicon32 ?? '/assets/app-tab-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
-const APP_SHELL_TAB_ICON_180 = `https://app.4626.fun${siteConfig.assets?.appleTouchIcon ?? '/assets/app-tab-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
+const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_TAB_ICON_32 = `https://app.4626.fun${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_TAB_ICON_180 = `https://app.4626.fun${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
+const farcasterManifestPath = path.join(publicRoot, '.well-known/farcaster.json')
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -132,8 +136,22 @@ describe('public manifest assets', () => {
     for (const htmlPath of trustPagePaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain('/assets/favicon-brand.ico')
+      expect(html).toContain(TAB_ICON_32)
+      expect(html).toContain(TAB_ICON_180)
+      expect(html).not.toContain('rel="mask-icon"')
+      expect(html).not.toContain('image/svg+xml')
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
     }
+  })
+
+  it('points Base mini-app manifest iconUrl at the 200px domain icon asset', () => {
+    const manifest = JSON.parse(readFileSync(farcasterManifestPath, 'utf8')) as {
+      miniapp?: { iconUrl?: string; splashImageUrl?: string; version?: string }
+    }
+
+    expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
+    expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
+    expect(manifest.miniapp?.version).toBe('3')
+    expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

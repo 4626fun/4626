@@ -3,24 +3,28 @@
  * Regenerate favicon/PWA PNG derivatives from the canonical Base App icon.
  *
  * Source of truth: public/assets/base-app-icon-1024.png (white 4 on black).
- * Legacy maskable/android PNGs carried a blue bezel that Base App still picked
- * up for the in-app domain chrome on 4626.fun.
+ * Use fresh filenames for domain-bar assets so Base App cannot reuse stale cache
+ * entries keyed only by path (query strings are often ignored).
  *
  * Usage:
  *   node scripts/generate-brand-icons.mjs --out public
  */
 
+import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
+import { promisify } from 'node:util'
 
 import sharp from 'sharp'
+
+const execFileAsync = promisify(execFile)
 
 const rootCompatibilityCopies = [
   ['assets/favicon-brand.ico', 'favicon.ico'],
   ['assets/favicon.svg', 'favicon.svg'],
   ['assets/apple-touch-icon.png', 'apple-touch-icon.png'],
-  ['assets/base-app-icon-1024.png', 'icon.png'],
+  ['assets/base-miniapp-icon-200.png', 'icon.png'],
   ['assets/logo-mark-1024.png', 'logo.png'],
   ['assets/og-image.png', 'og.png'],
 ]
@@ -34,13 +38,16 @@ const PNG_DERIVATIVES = [
   { size: 16, file: 'assets/favicon-16x16.png' },
   { size: 32, file: 'assets/favicon-32x32.png' },
   { size: 32, file: 'assets/app-tab-icon-32.png' },
+  { size: 32, file: 'assets/domain-bar-icon-32.png' },
   { size: 48, file: 'assets/favicon-48x48.png' },
   { size: 64, file: 'assets/favicon-64x64.png' },
   { size: 180, file: 'assets/apple-touch-icon.png' },
   { size: 180, file: 'assets/app-tab-icon-180.png' },
+  { size: 180, file: 'assets/domain-bar-icon-180.png' },
   { size: 192, file: 'assets/android-chrome-192x192.png' },
   { size: 512, file: 'assets/android-chrome-512x512.png' },
   { size: 150, file: 'assets/mstile-150x150.png' },
+  { size: 200, file: 'assets/base-miniapp-icon-200.png' },
 ]
 
 const MASKABLE_DERIVATIVES = [
@@ -77,6 +84,22 @@ async function writeSquareIcon(source, outPath, size, { maskableSafeZone = false
   await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
 }
 
+async function writeFaviconIco(outDir, source32Path) {
+  const icoPath = path.join(outDir, 'assets/favicon-brand.ico')
+  try {
+    await execFileAsync('convert', [
+      source32Path,
+      '-define',
+      'icon:auto-resize=16,32,48',
+      icoPath,
+    ])
+  } catch (error) {
+    // eslint-disable-next-line no-console
+    console.warn('ImageMagick convert unavailable; copying 32px PNG as favicon fallback', error?.message ?? error)
+    await fs.copyFile(source32Path, icoPath)
+  }
+}
+
 async function regeneratePngDerivatives(outDir, sourcePath) {
   for (const { size, file } of PNG_DERIVATIVES) {
     const outPath = path.join(outDir, file)
@@ -87,6 +110,8 @@ async function regeneratePngDerivatives(outDir, sourcePath) {
     const outPath = path.join(outDir, file)
     await writeSquareIcon(sourcePath, outPath, size, { maskableSafeZone: true })
   }
+
+  await writeFaviconIco(outDir, path.join(outDir, 'assets/domain-bar-icon-32.png'))
 }
 
 async function syncCompatibilityAssets(outDir, copies, label) {

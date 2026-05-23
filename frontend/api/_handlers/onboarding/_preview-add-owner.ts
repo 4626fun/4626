@@ -340,15 +340,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteError = relayQuote.error
     }
 
-    const calls: Eip5792Call[] = relay
-      ? [relay.userCall]
-      : [
-          {
-            to: cswAddress,
-            data: txRequest.data,
-            value: '0x0',
-          },
-        ]
+    // Relay-only lane: never fall back to bare CSW addOwnerAddress in `calls`.
+    const calls: Eip5792Call[] = relay ? [relay.userCall] : []
 
     const response: AddOwnerPreviewResponse = {
       txRequest,

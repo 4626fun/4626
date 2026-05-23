@@ -331,17 +331,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteError = relayQuote.error
     }
 
-    // Build the EIP-5792 calls array. When Relay quote succeeds, emit the
-    // deposit userCall; otherwise include raw mutation calldata for diagnostics only.
-    const calls: Eip5792Call[] = relay
-      ? [relay.userCall]
-      : [
-          {
-            to: cswAddress,
-            data,
-            value: '0x0',
-          },
-        ]
+    // Relay-only lane: omit bare mutation calldata when the quote is unavailable.
+    const calls: Eip5792Call[] = relay ? [relay.userCall] : []
 
     const response: RemoveOwnerPreviewResponse = {
       txRequest: {

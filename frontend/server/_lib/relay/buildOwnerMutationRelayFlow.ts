@@ -16,6 +16,8 @@ const GOLDEN_RELAY_SOLVER_EXECUTION_GAS_LIMIT = 2_617_448
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 const RELAY_ROUTER_MULTICALL_SELECTOR = '0xcd6e13f7'
 const RELAY_ROUTER_BASE = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
+/** Broken 0xdfec2946… Part 1 deposit — solver fill never fired (~2.88e12 wei). */
+const MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI = 8_000_000_000_000n
 
 type RelayUserCallCandidate = {
   userCall: OwnerMutationRelayFlow['userCall']
@@ -75,6 +77,28 @@ export function selectOwnerMutationRelayUserCall(params: {
     }
   }
 
+  return null
+}
+
+export function validateSelectedOwnerMutationRelayUserCall(params: {
+  requestBoundDepositId: `0x${string}` | null
+  selected: RelayUserCallCandidate
+}): string | null {
+  let valueWei: bigint
+  try {
+    valueWei = BigInt(params.selected.userCall.value)
+  } catch {
+    return 'relay user call value is not valid wei'
+  }
+  if (valueWei < MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI) {
+    return `relay deposit ${valueWei.toString()} wei is below minimum ${MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI.toString()} wei (underfunded quotes skip Part 2 solver fill)`
+  }
+  if (params.requestBoundDepositId) {
+    const idNeedle = params.requestBoundDepositId.slice(2).toLowerCase()
+    if (!params.selected.userCall.data.toLowerCase().includes(idNeedle)) {
+      return 'relay user call calldata does not embed the request-bound deposit id'
+    }
+  }
   return null
 }
 
@@ -318,6 +342,17 @@ export async function buildOwnerMutationRelayFlow(
     })
 
     if (e.requestId && selectedUserCall) {
+      const validationError = validateSelectedOwnerMutationRelayUserCall({
+        requestBoundDepositId,
+        selected: selectedUserCall,
+      })
+      if (validationError) {
+        return {
+          ok: false,
+          error: validationError,
+          diagnostics,
+        }
+      }
       return {
         ok: true,
         relay: {
