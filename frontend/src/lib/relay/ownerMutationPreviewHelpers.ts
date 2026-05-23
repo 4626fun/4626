@@ -1,6 +1,9 @@
 import { formatEther } from 'viem'
 
 export type RelayPreviewShape = {
+  txRequest?: {
+    to?: `0x${string}`
+  }
   relay?: {
     userCall?: { value?: string | bigint | null }
     paymentDetails?: { amount?: string | null } | null
@@ -9,11 +12,15 @@ export type RelayPreviewShape = {
     alreadyOwner?: boolean
     simulation?: {
       ok?: boolean
+      error?: string | null
     }
     relayQuoteError?: string | null
     relayDepositSimulation?: {
       ok?: boolean
       error?: string | null
+      funderBalanceWei?: string
+      depositWei?: string
+      gasBufferWei?: string
     } | null
     relayQuoteDiagnostics?: {
       paymentDetails?: { amount?: string | null } | null
@@ -21,6 +28,32 @@ export type RelayPreviewShape = {
     } | null
   } | null
 } | null
+
+export type RelayFundingShortfall = {
+  funderAddress: `0x${string}` | null
+  balanceWei: bigint
+  depositWei: bigint
+  gasBufferWei: bigint
+  /** Minimum native ETH on the CSW for Relay Part 1 depositNative. */
+  requiredNativeWei: bigint
+  /** deposit + gas buffer — conservative send target on Base. */
+  recommendedTopUpWei: bigint
+  shortfallWei: bigint
+}
+
+function parseNonNegativeWeiField(value: string | undefined | null): bigint | null {
+  if (typeof value !== 'string' || !/^[0-9]+$/.test(value)) return null
+  try {
+    return BigInt(value)
+  } catch {
+    return null
+  }
+}
+
+function parsePositiveWeiField(value: string | undefined | null): bigint | null {
+  const parsed = parseNonNegativeWeiField(value)
+  return parsed !== null && parsed > 0n ? parsed : null
+}
 
 export type RelayFlowStepStatus = 'pending' | 'blocked' | 'ready' | 'done'
 
@@ -133,12 +166,50 @@ export function resolveRelayRequiredDepositWei(preview: RelayPreviewShape): bigi
   const quotedUserValue = preview.relay.userCall?.value
   if (typeof quotedUserValue === 'string' && /^0x[0-9a-fA-F]+$/.test(quotedUserValue)) {
     const wei = BigInt(quotedUserValue)
-    return wei > 0n ? wei : null
+    if (wei > 0n) return wei
   }
   if (typeof quotedUserValue === 'string' && /^[1-9][0-9]*$/.test(quotedUserValue)) {
     return BigInt(quotedUserValue)
   }
+  const simDeposit = parsePositiveWeiField(preview.preflight?.relayDepositSimulation?.depositWei)
+  if (simDeposit !== null) return simDeposit
+  const diagnosticAmount = preview.preflight?.relayQuoteDiagnostics?.paymentDetails?.amount
+  if (typeof diagnosticAmount === 'string' && /^[1-9][0-9]*$/.test(diagnosticAmount)) {
+    return BigInt(diagnosticAmount)
+  }
   return null
+}
+
+/** When deposit preflight fails for insufficient native balance, return funding targets. */
+export function resolveRelayFundingShortfall(preview: RelayPreviewShape): RelayFundingShortfall | null {
+  const sim = preview?.preflight?.relayDepositSimulation
+  if (!sim || sim.ok !== false) return null
+
+  const depositWei = parsePositiveWeiField(sim.depositWei)
+  if (depositWei === null) return null
+
+  const gasBufferWei = parseNonNegativeWeiField(sim.gasBufferWei) ?? 0n
+  const balanceWei = parseNonNegativeWeiField(sim.funderBalanceWei) ?? 0n
+  const recommendedTopUpWei = depositWei + gasBufferWei
+  const shortfallWei = recommendedTopUpWei > balanceWei ? recommendedTopUpWei - balanceWei : 0n
+  if (shortfallWei <= 0n) return null
+
+  const errorText = [sim.error, preview.preflight?.relayQuoteError].filter(Boolean).join(' ')
+  const addressMatch = errorText.match(/Fund (0x[a-fA-F0-9]{40})/)
+  const funderAddress =
+    (addressMatch?.[1] as `0x${string}` | undefined) ??
+    preview.txRequest?.to ??
+    null
+
+  return {
+    funderAddress,
+    balanceWei,
+    depositWei,
+    gasBufferWei,
+    requiredNativeWei: depositWei,
+    recommendedTopUpWei,
+    shortfallWei,
+  }
 }
 
 export function formatRelayDepositEth(requiredDepositWei: bigint): string {

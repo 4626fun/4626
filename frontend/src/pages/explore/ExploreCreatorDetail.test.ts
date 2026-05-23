@@ -52,6 +52,11 @@ vi.mock('@/components/explore/CreatorImmersiveStatsBeat', () => ({
     ),
 }))
 
+vi.mock('@/components/explore/CreatorVaultReserveBeat', () => ({
+  CreatorVaultReserveBeat: () =>
+    React.createElement('div', { 'data-testid': 'creator-vault-reserve-beat' }, 'Creator vaults & strategies.'),
+}))
+
 vi.mock('@/lib/zora/client', () => ({
   fetchZoraCoin: vi.fn(async () => ({
     address: '0x1111111111111111111111111111111111111111',
@@ -176,5 +181,6 @@ describe('ExploreCreatorDetail', () => {
     expect(html).toContain('data-testid="creator-immersive-stats-beat"')
     expect(html).toContain('24H volume')
     expect(html).toContain('Market cap')
+    expect(html).toContain('data-testid="creator-vault-reserve-beat"')
   })
 })

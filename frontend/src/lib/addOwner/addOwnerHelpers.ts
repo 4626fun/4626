@@ -72,6 +72,8 @@ export async function fetchAddOwnerPreview(params: {
   connectedAddress: string
   /** When set, add-owner targets this CSW (e.g. app sub-account) instead of the canonical parent CSW. */
   targetCswAddress?: string | null
+  /** CSW that pays Relay Part 1 in self-auth mode — pins server-side funder balance reads. */
+  relayFundingCswAddress?: string | null
   headers?: Record<string, string>
 }): Promise<AddOwnerPreview> {
   const body: Record<string, string> = {
@@ -80,11 +82,15 @@ export async function fetchAddOwnerPreview(params: {
   if (params.targetCswAddress?.trim()) {
     body.targetCswAddress = params.targetCswAddress.trim()
   }
+  if (params.relayFundingCswAddress?.trim()) {
+    body.relayFundingCswAddress = params.relayFundingCswAddress.trim()
+  }
 
   const res = await apiFetch('/api/onboarding/preview-add-owner', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
       ...(params.headers ?? {}),
     },
     body: JSON.stringify(body),

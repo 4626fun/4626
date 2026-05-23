@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider, usePrivyClientStatus } from '@/lib/privy/client'
 import { AppQueryProvider } from '@/web3/Web3Providers'
@@ -29,11 +29,11 @@ function WaitlistFlowGate() {
   }
 
   if (privyClientStatus === 'loading') {
-    return <AppLoadingState intent="session" />
+    return <AppLoadingRegistrar intent="session" />
   }
 
   return (
-    <Suspense fallback={<AppLoadingState intent="session" />}>
+    <Suspense fallback={<AppLoadingRegistrar intent="session" />}>
       <LazyWaitlistFlow sectionId="waitlist-page" />
     </Suspense>
   )

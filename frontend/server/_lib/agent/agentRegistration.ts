@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
+
 import {
   AGENT_REGISTRATION_WELL_KNOWN_PATH,
   buildPublicAgentRegistrationUrl,
@@ -37,11 +39,14 @@ export { AGENT_REGISTRATION_WELL_KNOWN_PATH, ERC8004_DOMAIN_VERIFICATION_PATH }
 export const STRICT_IMMUTABLE_AGENT_URI_HINT = STRICT_IMMUTABLE_AGENT_URI_SUMMARY
 const CANONICAL_AGENT_WALLET_CAIP10 = `eip155:8453:${TARGET_CANONICAL_CSW_ADDRESS}` as const
 
+const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
+const BASE_APP_ICON_URL = `https://4626.fun/assets/base-app-icon-1024.png?v=${BRAND_ASSET_VERSION}`
+
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
   name: '4626 Agent',
   description: 'Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
-  image: 'https://4626.fun/assets/base-app-icon-1024.png?v=6',
+  image: BASE_APP_ICON_URL,
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
     {
@@ -294,7 +299,7 @@ export function buildAgentRegistration(origin: string): {
   const name = (process.env.ERC8004_AGENT_NAME || '').trim() || base.name || '4626 Agent'
   const description =
     (process.env.ERC8004_AGENT_DESCRIPTION || '').trim() || base.description || 'Agent API for 4626 on Base.'
-  const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/assets/base-app-icon-1024.png?v=6`
+  const imageRaw = (process.env.ERC8004_AGENT_IMAGE_URL || '').trim() || base.image || `${origin}/assets/base-app-icon-1024.png?v=${BRAND_ASSET_VERSION}`
 
   const servicesOverride = parseServicesFromEnv(process.env.ERC8004_AGENT_SERVICES_JSON || '')
   const servicesBase = Array.isArray(base.services) && base.services.length > 0 ? base.services : null

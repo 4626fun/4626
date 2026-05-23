@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
@@ -121,7 +121,7 @@ function RequireRouteAccess(props: { routeId: RouteId; children?: React.ReactNod
   const access = useAccessContext()
   const decision = resolveAccess(props.routeId, access)
   if (!decision.allow) {
-    if (decision.reason === 'loading') return <AppLoadingState intent="session" />
+    if (decision.reason === 'loading') return <AppLoadingRegistrar intent="session" />
     const to = decision.redirectTo ?? '/'
     if (to.startsWith('http://') || to.startsWith('https://')) {
       if (typeof window !== 'undefined') window.location.replace(to)
@@ -154,11 +154,11 @@ export function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode 
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingState intent="session" />
+    return <AppLoadingRegistrar intent="session" />
   }
 
   const acceptedDecision = resolveAccess('accepted', access)
-  if (acceptedDecision.reason === 'loading') return <AppLoadingState intent="session" />
+  if (acceptedDecision.reason === 'loading') return <AppLoadingRegistrar intent="session" />
   if (acceptedDecision.allow) {
     return <Navigate to="/swap" replace state={{ from: location.pathname }} />
   }

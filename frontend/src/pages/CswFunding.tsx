@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { usePublicClient } from 'wagmi'
 import { base } from 'viem/chains'
 import {
@@ -94,6 +94,11 @@ const INITIAL_BALANCES: Balances = {
  * the CSW. Anyone can credit a smart wallet's EntryPoint deposit.
  */
 export function CswFundingPage() {
+  const [searchParams] = useSearchParams()
+  const returnPath = searchParams.get('return')?.trim() || '/accounts'
+  const fundingMode = searchParams.get('mode')?.trim().toLowerCase() ?? ''
+  const suggestedAmount = searchParams.get('amount')?.trim() ?? ''
+
   const controller = useAccountSetupController({ zoraReturnPath: '/csw-funding' })
   const { canonicalCswAddress, loading, privyAuthed, login, ownerSignerAddress } =
     controller
@@ -105,9 +110,22 @@ export function CswFundingPage() {
 
   // Top-up form state
   const [amountEthInput, setAmountEthInput] = useState('0.0001')
+  const [nativeAmountEthInput, setNativeAmountEthInput] = useState('0.002')
   const [topUpBusy, setTopUpBusy] = useState(false)
+  const [nativeTopUpBusy, setNativeTopUpBusy] = useState(false)
   const [topUpError, setTopUpError] = useState<string | null>(null)
+  const [nativeTopUpError, setNativeTopUpError] = useState<string | null>(null)
   const [topUpTxHash, setTopUpTxHash] = useState<string | null>(null)
+  const [nativeTopUpTxHash, setNativeTopUpTxHash] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (suggestedAmount && /^\d+(\.\d+)?$/.test(suggestedAmount)) {
+      setNativeAmountEthInput(suggestedAmount)
+      if (fundingMode === 'native') {
+        setAmountEthInput(suggestedAmount)
+      }
+    }
+  }, [fundingMode, suggestedAmount])
 
   // Read all three balances together. We re-read after a successful top-up so
   // the user sees the new EntryPoint deposit reflected immediately.
@@ -166,6 +184,19 @@ export function CswFundingPage() {
     }
   }, [amountEthInput])
 
+  const nativeAmountWei = useMemo(() => {
+    const trimmed = nativeAmountEthInput.trim()
+    if (!trimmed) return null
+    if (!/^\d+(\.\d+)?$/.test(trimmed)) return null
+    try {
+      const wei = parseEther(trimmed)
+      if (wei <= 0n) return null
+      return wei
+    } catch {
+      return null
+    }
+  }, [nativeAmountEthInput])
+
   const handleTopUp = useCallback(async () => {
     if (!canonicalCswAddress || !ownerSignerAddress) {
       setTopUpError('Connect a wallet first.')
@@ -221,6 +252,48 @@ export function CswFundingPage() {
     }
   }, [amountWei, canonicalCswAddress, ownerSignerAddress, refreshBalances])
 
+  const handleNativeTopUp = useCallback(async () => {
+    if (!canonicalCswAddress || !ownerSignerAddress) {
+      setNativeTopUpError('Connect a wallet first.')
+      return
+    }
+    if (!nativeAmountWei) {
+      setNativeTopUpError('Enter a positive ETH amount.')
+      return
+    }
+    setNativeTopUpBusy(true)
+    setNativeTopUpError(null)
+    setNativeTopUpTxHash(null)
+    try {
+      const provider = (window as unknown as {
+        ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+      }).ethereum
+      if (!provider?.request) {
+        throw new Error('No injected wallet provider found. Open this page in a wallet browser.')
+      }
+      const valueHex = `0x${nativeAmountWei.toString(16)}`
+      const txHash = (await provider.request({
+        method: 'eth_sendTransaction',
+        params: [
+          {
+            from: ownerSignerAddress,
+            to: canonicalCswAddress,
+            value: valueHex,
+          },
+        ],
+      })) as `0x${string}`
+      if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
+        throw new Error('Wallet did not return a transaction hash.')
+      }
+      setNativeTopUpTxHash(txHash)
+      setTimeout(() => void refreshBalances(), 3000)
+    } catch (err) {
+      setNativeTopUpError(err instanceof Error ? err.message : String(err ?? ''))
+    } finally {
+      setNativeTopUpBusy(false)
+    }
+  }, [canonicalCswAddress, nativeAmountWei, ownerSignerAddress, refreshBalances])
+
   const fmt = (wei: bigint | null) => (wei == null ? '\u2014' : `${formatEther(wei)} ETH`)
 
   return (
@@ -233,20 +306,24 @@ export function CswFundingPage() {
       <div className="mx-auto w-full max-w-2xl px-6 py-16 space-y-6">
         <div>
           <Link
-            to="/accounts"
+            to={returnPath.startsWith('/') ? returnPath : '/accounts'}
             className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 hover:text-zinc-300"
           >
-            ← Account setup
+            ← Back to setup
           </Link>
           <h1 className="mt-2 text-2xl font-semibold">CSW funding</h1>
           <p className="mt-1 text-sm text-zinc-400">
-            Live diagnostics for the three funding sources that matter when
-            running UserOps on Base, and a top-up form for the EntryPoint
-            deposit. The CSW&apos;s EntryPoint deposit pays for UserOp gas
-            when{' '}
-            <code className="font-mono text-zinc-300">paymasterAndData</code>{' '}
-            is empty.
+            Live diagnostics for funding sources on Base. For Relay owner install, the CSW needs
+            enough <span className="text-zinc-300">native ETH</span> to cover the Relay deposit plus
+            a small gas buffer. EntryPoint deposit helps other UserOp paths but does not substitute
+            for the Relay deposit amount.
           </p>
+          {fundingMode === 'native' && suggestedAmount ? (
+            <p className="mt-2 text-xs text-brand-100/90">
+              Suggested send: <span className="font-mono">{suggestedAmount} ETH</span> on Base to your
+              canonical CSW below.
+            </p>
+          ) : null}
         </div>
 
         {!privyAuthed ? (
@@ -387,6 +464,66 @@ export function CswFundingPage() {
               >
                 Refresh balances
               </button>
+            </div>
+
+            {/* Native ETH top-up — required for Relay Part 1 depositNative */}
+            <div className="card rounded-2xl border border-brand-primary/25 bg-brand-primary/5 p-6 space-y-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-brand-100/80">
+                Top up CSW native balance (Relay)
+              </div>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                Sends a plain native ETH transfer to your canonical CSW on Base. Relay Part 1 reads
+                this balance for <code className="font-mono">depositNative</code>. Use Coinbase / Base
+                App send if your connected wallet is the CSW itself and cannot pay a simple transfer.
+              </p>
+
+              <label className="block text-xs text-zinc-300">
+                Amount (ETH)
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={nativeAmountEthInput}
+                  onChange={(e) => setNativeAmountEthInput(e.target.value)}
+                  className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 font-mono text-sm text-white outline-none focus:border-white/35"
+                  placeholder="0.002"
+                  disabled={nativeTopUpBusy}
+                />
+              </label>
+
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleNativeTopUp()}
+                disabled={nativeTopUpBusy || !nativeAmountWei || !ownerSignerAddress}
+              >
+                {nativeTopUpBusy
+                  ? 'Sending ETH…'
+                  : !ownerSignerAddress
+                    ? 'Connect a wallet first'
+                    : !nativeAmountWei
+                      ? 'Enter a positive ETH amount'
+                      : `Send ${nativeAmountEthInput} ETH to CSW`}
+              </Button>
+
+              {nativeTopUpError ? (
+                <div className="rounded-xl border border-rose-400/25 bg-rose-500/10 p-3 text-xs text-rose-100 break-all">
+                  {nativeTopUpError}
+                </div>
+              ) : null}
+
+              {nativeTopUpTxHash ? (
+                <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100 break-all">
+                  Submitted:{' '}
+                  <a
+                    href={`https://basescan.org/tx/${nativeTopUpTxHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-mono underline"
+                  >
+                    {nativeTopUpTxHash}
+                  </a>
+                </div>
+              ) : null}
             </div>
 
             {/* Top-up form */}

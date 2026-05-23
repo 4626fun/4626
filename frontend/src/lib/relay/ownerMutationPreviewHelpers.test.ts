@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   resolveOwnerMutationPhase,
+  resolveRelayFundingShortfall,
   resolveRelayPreviewStepOneStatus,
+  resolveRelayRequiredDepositWei,
   resolveRelaySubmitStepTwoStatus,
 } from '@/lib/relay/ownerMutationPreviewHelpers'
 
@@ -151,5 +153,48 @@ describe('ownerMutationPreviewHelpers', () => {
         waitingForRelayFill: true,
       }),
     ).toBe('waiting')
+  })
+
+  it('falls back to deposit simulation wei when relay paymentDetails are missing', () => {
+    expect(
+      resolveRelayRequiredDepositWei({
+        relay: { userCall: { value: '0x0' }, paymentDetails: { amount: '0' } },
+        preflight: {
+          relayDepositSimulation: {
+            ok: false,
+            depositWei: '3013495263000000',
+            gasBufferWei: '401799368400000',
+            funderBalanceWei: '1386794618158156',
+          },
+        },
+      }),
+    ).toBe(3013495263000000n)
+  })
+
+  it('computes relay funding shortfall from deposit preflight', () => {
+    expect(
+      resolveRelayFundingShortfall({
+        txRequest: { to: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' },
+        relay: { userCall: { value: '0x0' }, paymentDetails: null },
+        preflight: {
+          relayQuoteError:
+            'Funder native balance (1386794618158156 wei) is below Relay deposit (3013495263000000 wei). Fund 0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF and rebuild preview.',
+          relayDepositSimulation: {
+            ok: false,
+            depositWei: '3013495263000000',
+            gasBufferWei: '401799368400000',
+            funderBalanceWei: '1386794618158156',
+          },
+        },
+      }),
+    ).toEqual({
+      funderAddress: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      balanceWei: 1386794618158156n,
+      depositWei: 3013495263000000n,
+      gasBufferWei: 401799368400000n,
+      requiredNativeWei: 3013495263000000n,
+      recommendedTopUpWei: 3415294631400000n,
+      shortfallWei: 2028500013241844n,
+    })
   })
 })

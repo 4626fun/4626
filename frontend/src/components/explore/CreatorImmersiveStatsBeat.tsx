@@ -284,7 +284,7 @@ export function CreatorImmersiveStatsBeat({
         className={cn(
           useScrollReveal
             ? 'relative min-h-[12rem] sm:min-h-[14rem] lg:min-h-[16rem] lg:pr-16'
-            : 'flex flex-col items-center gap-16 sm:gap-[4.5rem]',
+            : 'flex flex-col items-center gap-10 sm:gap-16',
         )}
       >
         {isLoading ? (
@@ -329,7 +329,7 @@ export function CreatorImmersiveStatsBeat({
                     }}
                     type="button"
                     onClick={() => onVolumeWindowChange(volumeWindow === '24h' ? 'all' : '24h')}
-                    className="text-[11px] sm:text-xs text-zinc-400/90 font-mono uppercase tracking-[0.22em] hover:text-zinc-200 transition-colors underline-offset-4 hover:underline"
+                    className="text-xs sm:text-xs text-zinc-400 font-mono uppercase tracking-[0.18em] sm:tracking-[0.22em] hover:text-zinc-200 transition-colors underline-offset-4 hover:underline"
                     style={useScrollReveal ? { opacity: 0 } : undefined}
                     title="Toggle 24H vs all-time volume"
                   >
@@ -340,7 +340,7 @@ export function CreatorImmersiveStatsBeat({
                     ref={(el) => {
                       labelRefs.current[index] = el
                     }}
-                    className="text-[11px] sm:text-xs text-zinc-400/90 font-mono uppercase tracking-[0.22em]"
+                    className="text-xs sm:text-xs text-zinc-400 font-mono uppercase tracking-[0.18em] sm:tracking-[0.22em]"
                     style={useScrollReveal ? { opacity: 0 } : undefined}
                   >
                     {stat.label}

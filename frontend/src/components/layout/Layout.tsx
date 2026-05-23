@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ArrowLeftRight, Mail, Search, ShieldCheck, Vault, Wallet } from 'lucide-react'
 import {
   buildCanonicalMarketingWaitlistUrl,
@@ -8,7 +8,8 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
+import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
 import { VaultNavBar } from '@/components/brand/VaultNavBar'
@@ -290,8 +291,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         <XmtpChatProvider>
           {/* Main */}
           <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-            <Suspense fallback={<AppLoadingState intent="page" />}>
-              <Outlet />
+            <Suspense fallback={<AppLoadingRegistrar intent="page" />}>
+              <PageTransitionOutlet />
             </Suspense>
           </main>
 
@@ -302,8 +303,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         </XmtpChatProvider>
       ) : (
         <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-          <Suspense fallback={<AppLoadingState intent="page" />}>
-            <Outlet />
+          <Suspense fallback={<AppLoadingRegistrar intent="page" />}>
+            <PageTransitionOutlet />
           </Suspense>
         </main>
       )}

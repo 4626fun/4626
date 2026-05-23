@@ -1,6 +1,7 @@
 import { encodeFunctionData, type Address, type Hex } from 'viem'
 
 import { resolveRelayPart1UserOpGasReserveWei } from './relayPart1GasReserve.js'
+import { readMaxNativeBalanceWei } from '../onchain/baseNativeBalance.js'
 import {
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
@@ -138,8 +139,10 @@ export async function simulateRelayDepositUserCall(params: {
     address: params.funderAddress,
   })
 
-  const [funderBalanceWei, gasReserveWei, entryPointDepositWei] = await Promise.all([
-    params.publicClient.getBalance({ address: params.funderAddress }),
+  const [funderBalanceWeiRaw, gasReserveWei, entryPointDepositWei] = await Promise.all([
+    readMaxNativeBalanceWei(params.funderAddress).catch(() =>
+      params.publicClient.getBalance({ address: params.funderAddress }),
+    ),
     resolveRelayPart1UserOpGasReserveWei(params.publicClient),
     funderIsSmartWallet && typeof params.publicClient.readContract === 'function'
       ? params.publicClient
@@ -153,6 +156,7 @@ export async function simulateRelayDepositUserCall(params: {
           .catch(() => 0n)
       : Promise.resolve(0n),
   ])
+  const funderBalanceWei = funderBalanceWeiRaw
 
   // Depository value must come from CSW native balance. Gas can draw from native
   // and/or the CSW's EntryPoint.depositTo balance.

@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, act } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -46,8 +47,10 @@ vi.mock('@/lib/env/host', async () => {
   }
 })
 
-vi.mock('@/components/layout/AppLoadingState', () => ({
-  AppLoadingState: () => <div data-testid="loading-state">loading</div>,
+vi.mock('@/components/layout/AppLoadingOverlay', () => ({
+  AppLoadingRegistrar: () => <div data-testid="loading-state">loading</div>,
+  AppLoadingProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
+  AppLoadingOverlay: () => null,
 }))
 
 import { AccessStateProvider, RequireAccepted } from './accessRuntime'

@@ -191,6 +191,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Invalid input. Expected { connectedAddress }.',
     } satisfies ApiEnvelope<never>)
   }
+  const relayFundingCswHint = parseAddress(body.relayFundingCswAddress)
 
   const db = await getDb()
   if (!db) {
@@ -337,11 +338,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relayDepositSimulation: AddOwnerPreviewResponse['preflight']['relayDepositSimulation'] = null
     let relayQuoteDiagnostics: AddOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
     const relayQuoteUser =
-      connectedIsParentFundingSubAccount || isSubAccountTarget
-        ? parentCswAddress
-        : connectedIsCswSelf
-          ? cswAddress
-          : connectedAddress
+      relayFundingCswHint &&
+      (relayFundingCswHint.toLowerCase() === parentCswAddress.toLowerCase() ||
+        relayFundingCswHint.toLowerCase() === cswAddress.toLowerCase())
+        ? relayFundingCswHint
+        : connectedIsParentFundingSubAccount || isSubAccountTarget
+          ? parentCswAddress
+          : connectedIsCswSelf
+            ? cswAddress
+            : connectedAddress
     if (counterfactualSubAccount) {
       relayQuoteError =
         'App wallet is not deployed on Base Mainnet yet. In Base App, tap Deploy app wallet, approve the prompt, then rebuild Enable 4626 signing. Relay cannot addOwnerAddress until the app wallet has on-chain bytecode.'

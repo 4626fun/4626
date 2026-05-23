@@ -4,7 +4,7 @@ import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
 import App from './App'
@@ -23,7 +23,9 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 function LazyRouteBoundary(props: { children: ReactNode }) {
   const location = useLocation()
   const intent = getLoadingIntentFromPath(location.pathname)
-  return <Suspense fallback={<AppLoadingState intent={intent} />}>{props.children}</Suspense>
+  return (
+    <Suspense fallback={<AppLoadingRegistrar intent={intent} />}>{props.children}</Suspense>
+  )
 }
 
 const Home = lazyNamed(() => import('./pages/Home'), 'Home')
@@ -49,7 +51,7 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
     window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
   }, [location.hash, location.search, props.htmlPath])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar intent="redirect" />
 }
 
 function AppHostRedirect(props: { target: string }) {
@@ -59,7 +61,7 @@ function AppHostRedirect(props: { target: string }) {
     window.location.replace(props.target)
   }, [props.target])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar intent="redirect" />
 }
 
 function MarketingLayout() {
@@ -83,8 +85,10 @@ export function RootRouter() {
 
   return (
     <>
-      <AppCanvas />
-      {shouldRouteAppHostRootToMarketing ? (
+      <AppLoadingProvider>
+        <AppCanvas />
+        <AppLoadingOverlay />
+        {shouldRouteAppHostRootToMarketing ? (
         <AppHostRedirect target={marketingHomeTarget} />
       ) : shouldRouteToApp ? (
         <AppHostRedirect target={appRedirectTarget} />
@@ -121,6 +125,7 @@ export function RootRouter() {
           />
         </Routes>
       )}
+      </AppLoadingProvider>
     </>
   )
 }

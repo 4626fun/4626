@@ -142,6 +142,7 @@ export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
       onSubmit={() => void handleAdd()}
       onRecheck={handleRecheck ? () => void handleRecheck() : undefined}
       onRebuildPreview={onRebuildPreview}
+      fundingCswAddress={preview?.txRequest?.to}
       previewDetails={preview ? <AddOwnerPreviewDetails preview={preview} /> : null}
     />
   )

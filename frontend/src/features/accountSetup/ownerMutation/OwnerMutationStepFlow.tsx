@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { Button } from '@/components/ui/Button'
+import { OwnerMutationFundingGuide } from '@/features/accountSetup/ownerMutation/OwnerMutationFundingGuide'
 import { RemoveOwnerStatusCards } from '@/features/accountSetup/removeOwner/RemoveOwnerStatusCards'
 import {
   formatRelayDepositEth,
@@ -41,6 +42,8 @@ type OwnerMutationStepFlowProps = {
   onSubmit: () => void
   onRebuildPreview?: () => void
   previewDetails?: ReactNode
+  /** Canonical CSW that must hold native ETH for Relay Part 1. */
+  fundingCswAddress?: `0x${string}` | string | null
 }
 
 export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
@@ -66,6 +69,7 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
     onSubmit,
     onRebuildPreview,
     previewDetails,
+    fundingCswAddress,
   } = props
 
   const requiredDepositWei = resolveRelayRequiredDepositWei(preview)
@@ -134,6 +138,15 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
                 <p className="font-mono text-[11px] leading-relaxed text-amber-50/90">{previewBlockReason}</p>
               ) : null}
             </div>
+          ) : null}
+          {preview ? (
+            <OwnerMutationFundingGuide
+              preview={preview}
+              fundingCswAddress={fundingCswAddress}
+              isSelfAuthSession={isSelfAuthSession}
+              onRebuildPreview={onBuildPreview}
+              previewLoading={previewLoading}
+            />
           ) : null}
           {previewDetails}
           {showBuildPreviewButton ? (

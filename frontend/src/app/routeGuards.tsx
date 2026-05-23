@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
 import { useLocation } from 'react-router-dom'
 
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { Layout } from '@/components/layout/Layout'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
@@ -26,7 +26,7 @@ function ReplaceOnMount(props: { to: string }) {
     window.location.replace(props.to)
   }, [props.to])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar intent="redirect" />
 }
 
 /**
@@ -71,7 +71,7 @@ function HandoffOnMount(props: { to: string }) {
     })()
   }, [props.to, ready, authenticated, getAccessToken])
 
-  return <AppLoadingState intent="redirect" />
+  return <AppLoadingRegistrar intent="redirect" />
 }
 
 /** Redirect from 4626.fun to app.4626.fun when user hits app-only routes. */

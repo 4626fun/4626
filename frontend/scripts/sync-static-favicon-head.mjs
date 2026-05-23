@@ -17,6 +17,9 @@ const version = Number(siteConfig.brandAssetVersion ?? 3)
 const favicon16 = `${siteConfig.assets?.favicon16 ?? '/assets/favicon-16x16.png'}?v=${version}`
 const favicon32 = `${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${version}`
 const appleTouch = `${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${version}`
+const ogImageUrl = `https://4626.fun${siteConfig.assets?.ogImage ?? '/assets/og-image.png'}?v=${version}`
+const twitterImageUrl = `https://4626.fun${siteConfig.assets?.twitterImage ?? '/assets/twitter-card.png'}?v=${version}`
+const logoPngUrl = `https://4626.fun${siteConfig.assets?.logoPng ?? '/assets/logo-mark-1024.png'}?v=${version}`
 
 const canonicalBlock = [
   '    <link rel="icon" type="image/png" sizes="16x16" href="' + favicon16 + '" />',
@@ -27,11 +30,14 @@ const canonicalBlock = [
   '    <link rel="icon" href="/favicon.ico" sizes="any" />',
 ].join('\n')
 
-const legacyIconBlockPattern =
-  /<!--(?:\s*Brand favicons[^\n]*|Single PNG favicon stack[^\n]*)-->\s*(?:<link rel="icon"[^>]*>\s*)+/g
+const canonicalComment =
+  '<!-- Canonical PNG favicon stack (Base App domain bar + /favicon.ico). -->'
 
-const legacyLooseIconPattern =
-  /(?:<link rel="icon"[^>]*>\s*)+(?:<link rel="apple-touch-icon"[^>]*>\s*)?(?:<link rel="mask-icon"[^>]*>\s*)?/g
+const iconLinkPattern =
+  /<link rel="(?:icon|apple-touch-icon(?:-precomposed)?|mask-icon|shortcut icon)"[^>]*>\s*/gi
+
+const canonicalCommentPattern =
+  /<!--\s*Canonical PNG favicon stack[^]*?-->\s*/g
 
 async function walkHtmlFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
@@ -49,29 +55,60 @@ async function walkHtmlFiles(dir) {
   return files
 }
 
-function injectCanonicalHead(html) {
+function normalizeBrandVersionUrls(html) {
   let next = html
-  next = next.replace(/<link rel="mask-icon"[^>]*>\s*/g, '')
-  next = next.replace(/<link rel="icon" type="image\/svg\+xml"[^>]*>\s*/g, '')
+  next = next.replace(/https:\/\/4626\.fun\/assets\/og-image\.png\?v=\d+/g, ogImageUrl)
+  next = next.replace(/https:\/\/4626\.fun\/assets\/twitter-card\.png\?v=\d+/g, twitterImageUrl)
+  next = next.replace(/https:\/\/4626\.fun\/assets\/logo-mark-1024\.png\?v=\d+/g, logoPngUrl)
+  return next
+}
 
-  if (legacyIconBlockPattern.test(next)) {
-    legacyIconBlockPattern.lastIndex = 0
-    next = next.replace(
-      legacyIconBlockPattern,
-      `<!-- Canonical PNG favicon stack (Base App domain bar + /favicon.ico). -->\n${canonicalBlock}\n`,
-    )
-    return next
+function injectCanonicalHead(html) {
+  let next = normalizeBrandVersionUrls(html)
+  next = next.replace(canonicalCommentPattern, '')
+  next = next.replace(iconLinkPattern, '')
+  next = next.replace(/<link rel="icon" type="image\/svg\+xml"[^>]*>\s*/gi, '')
+
+  return next.replace(/<head>\s*/i, `<head>\n${canonicalComment}\n${canonicalBlock}\n`)
+}
+
+async function syncManifestFiles() {
+  const manifestPaths = [
+    path.join(publicRoot, 'site.webmanifest'),
+    path.join(publicRoot, 'manifest.json'),
+  ]
+
+  for (const manifestPath of manifestPaths) {
+    const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8'))
+    manifest.icons = [
+      {
+        src: `/assets/android-chrome-192x192.png?v=${version}`,
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: `/assets/android-chrome-512x512.png?v=${version}`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+    ]
+    await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
   }
 
-  if (next.includes('rel="icon"')) {
-    next = next.replace(
-      /<link rel="icon"[^>]*>\s*(?:<link rel="icon"[^>]*>\s*)*(?:<link rel="apple-touch-icon"[^>]*>\s*)?/,
-      `${canonicalBlock}\n`,
-    )
-    return next
-  }
-
-  return next.replace(/<head>\s*/i, `<head>\n${canonicalBlock}\n`)
+  const browserConfigPath = path.join(publicRoot, 'browserconfig.xml')
+  const browserConfig = `<?xml version="1.0" encoding="utf-8"?>
+<browserconfig>
+  <msapplication>
+    <tile>
+      <square150x150logo src="/assets/mstile-150x150.png?v=${version}"/>
+      <TileColor>#020204</TileColor>
+    </tile>
+  </msapplication>
+</browserconfig>
+`
+  await fs.writeFile(browserConfigPath, browserConfig)
 }
 
 async function main() {
@@ -88,6 +125,8 @@ async function main() {
       console.log(`updated ${path.relative(publicRoot, filePath)}`)
     }
   }
+
+  await syncManifestFiles()
 
   // eslint-disable-next-line no-console
   console.log(`synced favicon head on ${updated} static html file(s)`)

@@ -17,6 +17,7 @@ import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
 import { CreatorContentTimeline } from '@/components/explore/CreatorContentTimeline'
+import { CreatorVaultReserveBeat } from '@/components/explore/CreatorVaultReserveBeat'
 import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
@@ -39,8 +40,8 @@ import {
 
 const CONTENT_COINS_PAGE_SIZE = 20
 const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
-/** Full-bleed hero — taller than one viewport so the intro portrait scene breathes before scroll. */
-const CREATOR_HERO_MIN_HEIGHT_CLASS = 'min-h-[calc(140dvh-3.5rem)]'
+/** Full-bleed hero — taller than one viewport on desktop so the intro portrait scene breathes before scroll. */
+const CREATOR_HERO_MIN_HEIGHT_CLASS = 'min-h-[calc(100svh-3.5rem)] md:min-h-[calc(140dvh-3.5rem)]'
 gsap.registerPlugin(ScrollTrigger)
 
 type ContentMediaKind = 'video' | 'text' | 'visual'
@@ -488,6 +489,7 @@ export function ExploreCreatorDetail() {
   const [contentCoinsPage, setContentCoinsPage] = useState(1)
   const [volumeWindow, setVolumeWindow] = useState<'24h' | 'all'>('24h')
   const [allowParallax, setAllowParallax] = useState(false)
+  const [isMobileViewport, setIsMobileViewport] = useState(false)
   const [showCursor, setShowCursor] = useState(false)
   const [isContentTrayOpen, setIsContentTrayOpen] = useState(false)
   const [isContentSwapTrayOpen, setIsContentSwapTrayOpen] = useState(false)
@@ -682,10 +684,12 @@ export function ExploreCreatorDetail() {
     const reducedMotionMq = window.matchMedia('(prefers-reduced-motion: reduce)')
     const finePointerMq = window.matchMedia('(pointer: fine)')
     const desktopMq = window.matchMedia('(min-width: 1024px)')
+    const mobileMq = window.matchMedia('(max-width: 767px)')
 
     const updateMotionPrefs = () => {
       const canAnimate = !reducedMotionMq.matches
       setAllowParallax(canAnimate)
+      setIsMobileViewport(mobileMq.matches)
       setShowCursor(canAnimate && finePointerMq.matches && desktopMq.matches)
     }
     updateMotionPrefs()
@@ -694,12 +698,16 @@ export function ExploreCreatorDetail() {
     reducedMotionMq.addEventListener('change', listener)
     finePointerMq.addEventListener('change', listener)
     desktopMq.addEventListener('change', listener)
+    mobileMq.addEventListener('change', listener)
     return () => {
       reducedMotionMq.removeEventListener('change', listener)
       finePointerMq.removeEventListener('change', listener)
       desktopMq.removeEventListener('change', listener)
+      mobileMq.removeEventListener('change', listener)
     }
   }, [])
+
+  const allowImmersiveStatsScroll = allowParallax && !isMobileViewport
 
   useGSAP(
     () => {
@@ -951,28 +959,35 @@ export function ExploreCreatorDetail() {
             ))}
           </div>
 
-          <Link
-            to="/explore/creators"
-            className="absolute top-3 left-4 sm:top-4 sm:left-6 lg:left-8 z-30 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-all duration-200 group"
-          >
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            Back to Creators
-          </Link>
+          <div className="absolute inset-x-0 top-0 z-[2] h-32 sm:h-40 bg-gradient-to-b from-black/85 via-black/50 to-transparent pointer-events-none" />
 
-          <div className="absolute top-3 right-4 sm:top-4 sm:right-6 lg:right-8 z-20 flex flex-nowrap items-center justify-end gap-x-3 pointer-events-auto max-w-[min(92vw,calc(100%-2rem))] overflow-x-auto text-right">
-            {website ? (
-              <a
-                href={website.startsWith('http') ? website : `https://${website}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex shrink-0 items-center gap-1.5 text-sm text-zinc-400 hover:text-white transition-colors"
+          <div className="absolute inset-x-0 top-0 z-30 flex items-start justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 lg:px-8 pointer-events-none">
+            <div className="pointer-events-auto min-w-0">
+              <Link
+                to="/explore/creators"
+                className="inline-flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-sm text-zinc-200 backdrop-blur-sm hover:text-white transition-all duration-200 group"
               >
-                <span>{website.replace(/^https?:\/\//, '')}</span>
-                <ExternalLink className="w-3 h-3 text-zinc-500" />
-              </a>
-            ) : null}
-            <SocialLinks profile={profile} compact />
-            <ResourceLinks tokenAddress={tokenAddress} compact />
+                <ArrowLeft className="w-4 h-4 shrink-0 group-hover:-translate-x-0.5 transition-transform" />
+                <span className="hidden sm:inline">Back to Creators</span>
+                <span className="sm:hidden">Back</span>
+              </Link>
+            </div>
+
+            <div className="pointer-events-auto flex max-w-[min(68vw,20rem)] sm:max-w-none flex-nowrap items-center justify-end gap-x-3 overflow-x-auto scrollbar-hide text-right">
+              {website ? (
+                <a
+                  href={website.startsWith('http') ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/40 px-2.5 py-1 text-sm text-zinc-300 backdrop-blur-sm hover:text-white transition-colors"
+                >
+                  <span className="max-w-[8rem] truncate sm:max-w-none">{website.replace(/^https?:\/\//, '')}</span>
+                  <ExternalLink className="w-3 h-3 shrink-0 text-zinc-500" />
+                </a>
+              ) : null}
+              <SocialLinks profile={profile} compact />
+              <ResourceLinks tokenAddress={tokenAddress} compact />
+            </div>
           </div>
 
           <motion.div
@@ -981,7 +996,7 @@ export function ExploreCreatorDetail() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: heroBackgroundImage ? 0.38 : 0.1, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
-              'relative px-6 sm:px-8 lg:px-12 pb-14 sm:pb-20 flex flex-col justify-end',
+              'relative px-4 sm:px-8 lg:px-12 pt-16 sm:pt-20 pb-14 sm:pb-20 flex flex-col justify-end',
               CREATOR_HERO_MIN_HEIGHT_CLASS,
             )}
           >
@@ -1012,7 +1027,7 @@ export function ExploreCreatorDetail() {
                     size="lg"
                   />
                 </div>
-                <h1 className="text-[clamp(2.2rem,8vw,7rem)] leading-[0.9] tracking-tight font-semibold text-white">
+                <h1 className="text-[clamp(1.85rem,7vw,7rem)] leading-[0.92] tracking-tight font-semibold text-white min-w-0">
                   {displayName}
                   <br />
                   <span className={ethosTheme.isActive ? `${ethosTheme.accentTextClass} opacity-80` : 'text-white/35'}>
@@ -1067,11 +1082,12 @@ export function ExploreCreatorDetail() {
         <CreatorScrollBridge
           ref={statsBridgeRef}
           tone="void"
-          animate={allowParallax}
+          size="stats"
+          animate={allowImmersiveStatsScroll}
           centerContent={
             <CreatorImmersiveStatsBeat
               stats={creatorStats}
-              animate={allowParallax}
+              animate={allowImmersiveStatsScroll}
               isLoading={isLoading}
               volumeWindow={volumeWindow}
               onVolumeWindowChange={setVolumeWindow}
@@ -1122,7 +1138,7 @@ export function ExploreCreatorDetail() {
                 <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
                 <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
 
-                <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
+                <div className="absolute inset-x-3 bottom-20 sm:inset-x-auto sm:left-4 sm:bottom-4 z-20 sm:w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
                   <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
                     Top content volume
                   </div>
@@ -1137,13 +1153,13 @@ export function ExploreCreatorDetail() {
                           type="button"
                           onClick={() => openContentTray(coin)}
                           className={cn(
-                            'w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
+                            'w-full flex items-center justify-between gap-2 sm:gap-3 min-w-0 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
                             isActiveInScene
                               ? 'bg-cyan-400/15 text-white border-l-2 border-cyan-300'
                               : 'text-zinc-200 hover:text-white hover:bg-white/5',
                           )}
                         >
-                          <span className="truncate">
+                          <span className="truncate min-w-0 flex-1">
                             <span className={cn('font-mono mr-2', isActiveInScene ? 'text-cyan-200' : 'text-zinc-500')}>
                               {String(index + 1).padStart(2, '0')}
                             </span>
@@ -1164,7 +1180,11 @@ export function ExploreCreatorDetail() {
           </div>
         </section>
 
-        <CreatorScrollBridge tone="void-to-lime" animate={allowParallax} />
+        <CreatorScrollBridge
+          tone="void-to-lime"
+          animate={allowParallax}
+          centerContent={<CreatorVaultReserveBeat />}
+        />
         </div>
 
         <div
@@ -1331,36 +1351,36 @@ export function ExploreCreatorDetail() {
                     ) : null}
                   </div>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[680px] text-sm">
+                  <div className="overflow-x-auto scrollbar-hide -mx-1 px-1 sm:mx-0 sm:px-0">
+                    <table className="w-full min-w-[28rem] sm:min-w-[680px] text-sm">
                       <thead>
                         <tr className="text-left text-zinc-500 text-[11px] uppercase tracking-[1.5px] font-mono">
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 font-normal">Time</th>
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 font-normal">Type</th>
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 text-right font-normal">USD</th>
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 text-right font-normal">{symbol}</th>
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 text-right font-normal">Pair</th>
-                          <th className="px-6 sm:px-8 py-4 sm:py-5 text-right font-normal">Wallet</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 font-normal">Time</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 font-normal">Type</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">USD</th>
+                          <th className="px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">{symbol}</th>
+                          <th className="hidden md:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">Pair</th>
+                          <th className="hidden lg:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right font-normal">Wallet</th>
                         </tr>
                       </thead>
                       <tbody>
                         {swapsLoading ? (
                           <tr>
-                            <td colSpan={6} className="px-6 sm:px-8 py-10 text-center text-zinc-600">
+                            <td colSpan={6} className="px-3 sm:px-8 py-10 text-center text-zinc-600">
                               <LoadingText intent="processing" labelOverride="Loading swaps..." />
                             </td>
                           </tr>
                         ) : recentTransactions.length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="px-6 sm:px-8 py-10 text-center text-zinc-600">
+                            <td colSpan={6} className="px-3 sm:px-8 py-10 text-center text-zinc-600">
                               No swap data available for this creator coin yet.
                             </td>
                           </tr>
                         ) : (
                           recentTransactions.map((row) => (
                             <tr key={row.id} className="hover:bg-white/[0.03] transition-colors">
-                              <td className="px-6 sm:px-8 py-4 sm:py-5 text-zinc-400">{formatTimestamp(row.timestamp)}</td>
-                              <td className="px-6 sm:px-8 py-4 sm:py-5">
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-zinc-400 whitespace-nowrap text-xs sm:text-sm">{formatTimestamp(row.timestamp)}</td>
+                              <td className="px-3 sm:px-8 py-3 sm:py-5">
                                 <span
                                   className={`inline-flex px-2.5 py-1 text-[11px] font-medium font-mono uppercase tracking-[1px] ${
                                     row.side === 'Buy'
@@ -1373,9 +1393,9 @@ export function ExploreCreatorDetail() {
                                   {row.side}
                                 </span>
                               </td>
-                              <td className="px-6 sm:px-8 py-4 sm:py-5 text-right text-white tabular-nums">{formatUsd(row.amountUsd)}</td>
-                              <td className="px-6 sm:px-8 py-4 sm:py-5 text-right text-zinc-300 tabular-nums">
-                                <div className="inline-flex items-center justify-end gap-2 w-full">
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-right text-white tabular-nums whitespace-nowrap">{formatUsd(row.amountUsd)}</td>
+                              <td className="px-3 sm:px-8 py-3 sm:py-5 text-right text-zinc-300 tabular-nums whitespace-nowrap">
+                                <div className="inline-flex items-center justify-end gap-2">
                                   <span>{formatTokenAmount(row.creatorCoinAmount)}</span>
                                   <TokenGlyph
                                     symbol={row.creatorCoinSymbol}
@@ -1388,7 +1408,7 @@ export function ExploreCreatorDetail() {
                                   />
                                 </div>
                               </td>
-                              <td className="px-6 sm:px-8 py-4 sm:py-5 text-right text-zinc-300 tabular-nums">
+                              <td className="hidden md:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right text-zinc-300 tabular-nums">
                                 <div className="inline-flex items-center justify-end gap-2 w-full">
                                   <span>{formatTokenAmount(row.otherAmount)}</span>
                                   <TokenGlyph
@@ -1402,7 +1422,7 @@ export function ExploreCreatorDetail() {
                                   />
                                 </div>
                               </td>
-                              <td className="px-6 sm:px-8 py-4 sm:py-5 text-right">
+                              <td className="hidden lg:table-cell px-3 sm:px-8 py-3 sm:py-5 text-right">
                                 {row.txHash ? (
                                   <a
                                     href={`https://basescan.org/tx/${row.txHash}`}

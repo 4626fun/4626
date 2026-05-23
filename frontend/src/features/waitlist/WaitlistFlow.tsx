@@ -4,7 +4,7 @@ import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { Button } from '@/components/ui/Button'
-import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -1083,7 +1083,7 @@ export function WaitlistFlow(props: {
   return (
     <>
       {showAuthBootstrapLoader ? (
-        <AppLoadingState
+        <AppLoadingRegistrar
           intent="session"
           labelOverride={authUi.busyLabel}
           srStatusOverride={authUi.busyLabel}

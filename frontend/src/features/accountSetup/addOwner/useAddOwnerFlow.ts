@@ -43,6 +43,48 @@ function isTxHash(value: string | null | undefined): value is `0x${string}` {
   return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
 }
 
+function previewFundingBlockLooksStale(preview: AddOwnerPreview, liveBalanceWei: bigint): boolean {
+  const sim = preview.preflight.relayDepositSimulation
+  if (!sim || sim.ok !== false) return false
+  try {
+    const depositWei = BigInt(sim.depositWei)
+    const serverBalanceWei = BigInt(sim.funderBalanceWei)
+    return liveBalanceWei >= depositWei && liveBalanceWei > serverBalanceWei
+  } catch {
+    return false
+  }
+}
+
+async function loadAddOwnerPreview(params: {
+  relayConnectedAddress: string
+  targetCswAddress?: string
+  relayFundingCswAddress?: string
+  headers: Record<string, string>
+  publicClient?: PublicClient
+  fundingCswAddress?: string | null
+}): Promise<AddOwnerPreview> {
+  const requestPreview = () =>
+    fetchAddOwnerPreview({
+      connectedAddress: params.relayConnectedAddress,
+      targetCswAddress: params.targetCswAddress,
+      relayFundingCswAddress: params.relayFundingCswAddress,
+      headers: params.headers,
+    })
+
+  let preview = await requestPreview()
+  if (
+    params.publicClient &&
+    params.fundingCswAddress &&
+    previewFundingBlockLooksStale(preview, await params.publicClient.getBalance({
+      address: params.fundingCswAddress as `0x${string}`,
+    }))
+  ) {
+    await new Promise((resolve) => window.setTimeout(resolve, 400))
+    preview = await requestPreview()
+  }
+  return preview
+}
+
 function resolveRelayOrderId(preview: AddOwnerPreview | null): `0x${string}` | null {
   const orderId = preview?.relay?.orderId ?? preview?.relay?.requestId
   return typeof orderId === 'string' && orderId.startsWith('0x') ? (orderId as `0x${string}`) : null
@@ -148,10 +190,13 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         if (!token) {
           throw new Error('Missing Privy auth token. Sign in and retry.')
         }
-        const data = await fetchAddOwnerPreview({
-          connectedAddress: relayConnectedAddress,
+        const data = await loadAddOwnerPreview({
+          relayConnectedAddress,
           targetCswAddress: targetCswAddress ?? undefined,
+          relayFundingCswAddress: fundingCswAddress ?? undefined,
           headers: { 'X-Privy-Token': token },
+          publicClient,
+          fundingCswAddress,
         })
         if (requestId !== previewRequestIdRef.current) return null
         setPreview(data)
@@ -176,6 +221,8 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       selfAuthWalletLabel,
       signingBlockedReason,
       signingReady,
+      fundingCswAddress,
+      publicClient,
       targetCswAddress,
     ],
   )

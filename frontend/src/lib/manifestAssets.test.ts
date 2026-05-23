@@ -140,6 +140,8 @@ describe('public manifest assets', () => {
       expect(html).toContain(TAB_ICON_180)
       expect(html).not.toContain('rel="mask-icon"')
       expect(html).not.toContain('image/svg+xml')
+      expect(html).not.toContain('/assets/apple-touch-icon.png?v=')
+      expect(html).not.toContain('og-image.png?v=8')
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
     }
   })
@@ -150,6 +152,7 @@ describe('public manifest assets', () => {
     expect(immersiveHtml).toContain(TAB_ICON_32)
     expect(immersiveHtml).toContain('/favicon.ico')
     expect(immersiveHtml).not.toContain('rel="mask-icon"')
+    expect(immersiveHtml).not.toContain('/assets/apple-touch-icon.png?v=')
     expect(immersiveHtml).not.toContain('app-tab-icon-32.png?v=9')
   })
 
@@ -173,7 +176,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('6')
+    expect(manifest.miniapp?.version).toBe('7')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

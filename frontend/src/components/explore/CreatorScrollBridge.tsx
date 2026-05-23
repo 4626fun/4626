@@ -13,6 +13,8 @@ export type CreatorScrollBridgeTone = 'void' | 'void-to-lime' | 'lime-to-void'
 
 type CreatorScrollBridgeProps = {
   tone?: CreatorScrollBridgeTone
+  /** `stats` = tall pinned corridor for immersive metric reveals; `default` = standard transition height */
+  size?: 'default' | 'stats'
   className?: string
   animate?: boolean
   caption?: ReactNode
@@ -21,6 +23,7 @@ type CreatorScrollBridgeProps = {
 
 const DEFAULT_BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
 const STATS_BRIDGE_HEIGHT_CLASS = 'h-[820vh] md:h-[920vh]'
+const STATS_BRIDGE_COMPACT_HEIGHT_CLASS = 'min-h-0 h-auto'
 
 const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
   void: 'bg-transparent',
@@ -77,7 +80,7 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
 }
 
 export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridgeProps>(function CreatorScrollBridge(
-  { tone = 'void', className, animate = true, caption, centerContent },
+  { tone = 'void', size = 'default', className, animate = true, caption, centerContent },
   forwardedRef,
 ) {
   const bridgeRef = useRef<HTMLDivElement>(null)
@@ -159,7 +162,13 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
   )
 
   const showStarfield = tone === 'void' || tone === 'void-to-lime'
-  const bridgeHeightClass = centerContent ? STATS_BRIDGE_HEIGHT_CLASS : DEFAULT_BRIDGE_HEIGHT_CLASS
+  const immersiveStats = size === 'stats' && animate
+  const bridgeHeightClass =
+    size === 'stats'
+      ? immersiveStats
+        ? STATS_BRIDGE_HEIGHT_CLASS
+        : STATS_BRIDGE_COMPACT_HEIGHT_CLASS
+      : DEFAULT_BRIDGE_HEIGHT_CLASS
 
   return (
     <div
@@ -214,7 +223,8 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
       <div
         ref={pinRef}
         className={cn(
-          'sticky top-0 flex h-screen w-full flex-col',
+          'flex w-full flex-col',
+          immersiveStats ? 'sticky top-0 h-screen' : centerContent ? 'relative min-h-0' : 'sticky top-0 h-screen',
           centerContent && 'items-center justify-center',
         )}
       >
@@ -235,8 +245,14 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
         )}
 
         {centerContent ? (
-          <div className="relative z-[2] flex flex-1 w-full flex-col items-center justify-center px-4 sm:px-10 lg:px-16 py-10 sm:py-14 text-center">
+          <div
+            className={cn(
+              'relative z-[2] flex w-full flex-col items-center justify-center px-4 sm:px-10 lg:px-16 text-center',
+              immersiveStats ? 'flex-1 py-10 sm:py-14' : 'py-12 sm:py-16',
+            )}
+          >
             {centerContent}
+            {immersiveStats ? (
             <div ref={hintRef} className="mt-10 sm:mt-14 flex flex-col items-center gap-2.5 opacity-35">
               <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
               <svg
@@ -252,6 +268,7 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
                 <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
+            ) : null}
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center pb-[min(18vh,160px)]">

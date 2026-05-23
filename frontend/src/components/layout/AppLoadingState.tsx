@@ -1,12 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
-import { getLoadingIntentConfig, type LoadingIntent } from './appLoadingIntents'
+import {
+  getLoadingIntentConfig,
+  resolveOverlayPatternIntent,
+  type LoadingIntent,
+} from './appLoadingIntents'
 
 export type AppLoadingStateProps = {
   intent?: LoadingIntent
   labelOverride?: string
   srStatusOverride?: string
+  /** When true, session/page handoffs keep the same loader pattern (no animation reset). */
+  stabilizePattern?: boolean
 }
 
 function rotateIndex(index: number, phase: number, count: number) {
@@ -16,7 +22,8 @@ function rotateIndex(index: number, phase: number, count: number) {
 
 export function AppLoadingState(props: AppLoadingStateProps = {}) {
   const intent = props.intent ?? 'page'
-  const config = getLoadingIntentConfig(intent)
+  const patternIntent = props.stabilizePattern ? resolveOverlayPatternIntent(intent) : intent
+  const config = getLoadingIntentConfig(patternIntent)
   const [phase, setPhase] = useState(0)
 
   useEffect(() => {
@@ -59,7 +66,9 @@ export function AppLoadingState(props: AppLoadingStateProps = {}) {
             name={config.pattern.preset}
             size={20}
           />
-          <h2 className="text-sm font-medium tracking-tight text-zinc-200 sm:text-base">{heading}</h2>
+          <h2 className="text-sm font-medium tracking-tight text-zinc-200 transition-opacity duration-200 sm:text-base">
+            {heading}
+          </h2>
         </div>
       </div>
 

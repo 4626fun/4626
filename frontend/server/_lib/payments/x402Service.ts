@@ -13,6 +13,7 @@ import {
 import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 
 import { getCanonicalOrigin } from '../infra/origin.js'
+import siteConfig from '../../../shared/site-config.json' with { type: 'json' }
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -317,7 +318,7 @@ export function sendPaymentRequiredResponse(
         currentUrl: resolveResourceUrl(req, req.url ?? params.paymentRequirements.resource),
         testnet: params.network === 'base-sepolia',
         appName: '4626',
-        appLogo: 'https://4626.fun/assets/base-app-icon-1024.png?v=6',
+        appLogo: `https://4626.fun/assets/base-app-icon-1024.png?v=${Number(siteConfig.brandAssetVersion ?? 3)}`,
         cdpClientKey: (process.env.X402_CDP_CLIENT_KEY ?? '').trim() || undefined,
       }),
     )

@@ -280,6 +280,16 @@ export function InfiniteContentGallery3D({
     lastInteractionAt: 0,
   })
   const [isDragging, setIsDragging] = useState(false)
+  const [touchLikeInput, setTouchLikeInput] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const coarsePointerMq = window.matchMedia('(pointer: coarse)')
+    const update = () => setTouchLikeInput(coarsePointerMq.matches)
+    update()
+    coarsePointerMq.addEventListener('change', update)
+    return () => coarsePointerMq.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     scrollRef.current.lastInteractionAt = performance.now()
@@ -357,8 +367,8 @@ export function InfiniteContentGallery3D({
         />
       </Canvas>
       {interactive ? (
-        <div className="pointer-events-none absolute right-3 top-3 sm:right-6 sm:top-6 text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
-          {isDragging ? 'Release to glide' : 'Drag / wheel / arrows'}
+        <div className="pointer-events-none absolute left-3 top-3 sm:left-auto sm:right-6 sm:top-6 max-w-[calc(100%-1.5rem)] text-[10px] font-mono uppercase tracking-[1.8px] text-zinc-300/85">
+          {isDragging ? 'Release to glide' : touchLikeInput ? 'Swipe to browse' : 'Drag / wheel / arrows'}
         </div>
       ) : null}
     </>
