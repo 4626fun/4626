@@ -13,16 +13,7 @@ import { createPublicClient, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
 import { addOwnerViaBaseAppSendCalls, encodeAddOwnerCall } from '@/lib/wallet/baseAppOwnerCalls'
-
-const COINBASE_SMART_WALLET_OWNER_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
+import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 
 export type InstallEmbeddedOwnerResult = {
   /** True when we submitted addOwnerAddress (user signed). */
@@ -108,18 +99,11 @@ export async function readEmbeddedOwnerOnSubAccount(params: {
   embeddedEoaAddress: Address
 }): Promise<boolean | null> {
   const client = params.publicClient ?? createBaseSubAccountReadClient()
-  try {
-    const isOwner = await client.readContract({
-      address: params.subAccountAddress,
-      abi: COINBASE_SMART_WALLET_OWNER_ABI,
-      functionName: 'isOwnerAddress',
-      args: [params.embeddedEoaAddress],
-    })
-    return Boolean(isOwner)
-  } catch {
-    // Counterfactual / not-yet-deployed sub-accounts have no code to read.
-    return null
-  }
+  return readIsOwnerAddressIfDeployed({
+    publicClient: client,
+    cswAddress: params.subAccountAddress,
+    ownerAddress: params.embeddedEoaAddress,
+  })
 }
 
 async function addOwnerViaEthSendTransaction(params: {

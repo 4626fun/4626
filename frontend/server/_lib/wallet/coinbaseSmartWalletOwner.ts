@@ -27,6 +27,26 @@ function normalizeAddress(value: string, fieldName: string): Address {
   return getAddress(raw) as Address
 }
 
+function hasDeployedBytecode(bytecode: string | null | undefined): boolean {
+  return typeof bytecode === 'string' && bytecode !== '' && bytecode !== '0x'
+}
+
+export async function isOwnerIfDeployed(
+  publicClient: Pick<PublicClient, 'readContract' | 'getBytecode'>,
+  cswAddress: string,
+  ownerAddress: string,
+): Promise<boolean | null> {
+  const csw = normalizeAddress(cswAddress, 'csw')
+  const owner = normalizeAddress(ownerAddress, 'owner')
+  const code = await publicClient.getBytecode({ address: csw }).catch(() => null)
+  if (!hasDeployedBytecode(code)) return null
+  try {
+    return await isOwner(publicClient, csw, owner)
+  } catch {
+    return null
+  }
+}
+
 export async function isOwner(
   publicClient: Pick<PublicClient, 'readContract'>,
   cswAddress: string,

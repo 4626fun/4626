@@ -5,8 +5,8 @@ import { executeOwnerMutationViaRelay } from '@/lib/relay/ownerMutationExecution
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 import {
   ADD_OWNER_ADDRESS_SELECTOR,
-  CSW_OWNER_READ_ABI,
 } from '@/lib/wallet/cswOwnerAbi'
+import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 
@@ -66,13 +66,12 @@ export async function executeAddOwnerViaRelay(
     },
     verifyMutation: async () => {
       if (!publicClient) return true
-      const installed = (await publicClient.readContract({
-        address: cswAddress,
-        abi: CSW_OWNER_READ_ABI,
-        functionName: 'isOwnerAddress',
-        args: [ownerToAdd],
-      })) as boolean
-      return installed
+      const installed = await readIsOwnerAddressIfDeployed({
+        publicClient,
+        cswAddress,
+        ownerAddress: ownerToAdd,
+      })
+      return installed === true
     },
   })
 }

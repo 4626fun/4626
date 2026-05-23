@@ -20,7 +20,7 @@ import {
   type Hex,
 } from 'viem'
 import { base } from 'viem/chains'
-import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import { isOwnerIfDeployed } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
@@ -233,8 +233,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       transport: http(resolveBaseRpcUrl()),
     })
     if (!connectedIsCswSelf) {
-      const connectedIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedAddress)
-      if (!connectedIsOwner) {
+      const connectedIsOwner = await isOwnerIfDeployed(publicClient, cswAddress, connectedAddress)
+      if (connectedIsOwner !== true) {
         return res.status(403).json({
           success: false,
           error: 'Connected wallet is not an owner of this CSW.',
@@ -261,11 +261,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
     }
 
-    const alreadyOwner = isSubAccountTarget
-      ? await isOwnerOnChain(publicClient, cswAddress, ownerToAdd)
+    const alreadyOwnerState = isSubAccountTarget
+      ? await isOwnerIfDeployed(publicClient, cswAddress, ownerToAdd)
       : bootstrap.privyIsOwner
+        ? true
+        : await isOwnerIfDeployed(publicClient, cswAddress, ownerToAdd)
 
-    if (alreadyOwner) {
+    if (alreadyOwnerState === true) {
       const response: AddOwnerPreviewResponse = {
         txRequest,
         calls: [],
@@ -283,11 +285,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         data: response,
       } satisfies ApiEnvelope<AddOwnerPreviewResponse>)
     }
-    const simulation = await simulateAddOwnerCall({
-      publicClient,
-      cswAddress,
-      data: txRequest.data,
-    })
+    const subAccountBytecode = isSubAccountTarget
+      ? await publicClient.getBytecode({ address: cswAddress }).catch(() => null)
+      : null
+    const counterfactualSubAccount =
+      isSubAccountTarget && (subAccountBytecode == null || subAccountBytecode === '0x')
+
+    const simulation = counterfactualSubAccount
+      ? { ok: true, error: null }
+      : await simulateAddOwnerCall({
+          publicClient,
+          cswAddress,
+          data: txRequest.data,
+        })
 
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null

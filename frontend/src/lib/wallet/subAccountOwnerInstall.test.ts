@@ -17,6 +17,13 @@ const SUB = '0x1111111111111111111111111111111111111111' as const
 const EMBED = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as const
 const TX_HASH = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as const
 
+function mockPublicClient(readContract: ReturnType<typeof vi.fn>, bytecode: `0x${string}` | null = '0x60016000') {
+  return {
+    getBytecode: vi.fn().mockResolvedValue(bytecode),
+    readContract,
+  }
+}
+
 describe('subAccountOwnerInstall', () => {
   beforeEach(() => {
     addOwnerSendCallsMock.mockReset()
@@ -27,9 +34,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('skips addOwner when embedded EOA is already owner', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(true),
-    }
+    const publicClient = mockPublicClient(vi.fn().mockResolvedValue(true))
     const request = vi.fn()
     const result = await installEmbeddedOwnerOnSubAccount({
       provider: { request },
@@ -44,9 +49,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('submits addOwner via wallet_sendCalls when not yet owner', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(false),
-    }
+    const publicClient = mockPublicClient(vi.fn().mockResolvedValue(false))
     const request = vi
       .fn()
       .mockResolvedValueOnce('0x2105')
@@ -73,9 +76,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('falls back to eth_sendTransaction when wallet_sendCalls fails for non-rejection reasons', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(false),
-    }
+    const publicClient = mockPublicClient(vi.fn().mockResolvedValue(false))
     addOwnerSendCallsMock.mockRejectedValueOnce(new Error('unsupported method'))
     const request = vi
       .fn()
@@ -106,9 +107,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('retries sendCalls after reauth, then falls back to eth_sendTransaction when still unauthorized', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(false),
-    }
+    const publicClient = mockPublicClient(vi.fn().mockResolvedValue(false))
     addOwnerSendCallsMock
       .mockRejectedValueOnce(new Error('requested method and/or account has not been authorized by the user'))
       .mockRejectedValueOnce(new Error('still unauthorized'))
@@ -133,9 +132,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('rethrows user rejection from wallet_sendCalls without eth_sendTransaction fallback', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockResolvedValue(false),
-    }
+    const publicClient = mockPublicClient(vi.fn().mockResolvedValue(false))
     addOwnerSendCallsMock.mockRejectedValueOnce(new Error('User rejected the request'))
     const request = vi
       .fn()
@@ -155,9 +152,7 @@ describe('subAccountOwnerInstall', () => {
   })
 
   it('readEmbeddedOwnerOnSubAccount returns null when contract is not deployed', async () => {
-    const publicClient = {
-      readContract: vi.fn().mockRejectedValue(new Error('no code')),
-    }
+    const publicClient = mockPublicClient(vi.fn(), '0x')
     const result = await readEmbeddedOwnerOnSubAccount({
       publicClient: publicClient as any,
       subAccountAddress: SUB,

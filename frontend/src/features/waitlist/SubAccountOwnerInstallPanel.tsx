@@ -203,6 +203,11 @@ function SubAccountOwnerInstallPanelContent(
         <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
           {SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE}
         </div>
+        {ownerCheck === 'unknown' ? (
+          <p className="text-xs leading-relaxed text-zinc-400">
+            Your app wallet is not deployed on Base yet. Relay will deploy it when you submit the deposit.
+          </p>
+        ) : null}
         {needsBaseAppHost ? (
           <Button
             type="button"
@@ -344,6 +349,11 @@ function SubAccountOwnerInstallPanelContent(
       </ol>
 
       {contextHint}
+      {ownerCheck === 'unknown' && inBaseApp ? (
+        <p className="text-xs leading-relaxed text-zinc-400">
+          Your app wallet is not deployed on Base yet. Relay will deploy it when you submit the deposit.
+        </p>
+      ) : null}
       {primaryAction}
       {recoveryBlock}
 
