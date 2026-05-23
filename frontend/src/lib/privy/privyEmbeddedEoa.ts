@@ -40,10 +40,28 @@ export function isEmbeddedPrivyEoaCandidate(
   if (excludedWalletAddress && rawAddress.toLowerCase() === excludedWalletAddress.trim().toLowerCase()) return false
 
   const walletType = getWalletClientType(wallet)
-  if (!(walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded'))) return false
   if (isSmartWalletLikeType(walletType)) return false
+  if (walletType.includes('coinbase_smart_wallet') || walletType.includes('base_account')) return false
+  if (!(walletType === 'privy' || walletType.includes('privy') || walletType.includes('embedded'))) return false
 
   return true
+}
+
+export function collectPrivySmartWalletAddressesFromWallets(
+  wallets: readonly WalletLike[] | null | undefined,
+): string[] {
+  const candidates = Array.isArray(wallets) ? wallets : []
+  const addresses: string[] = []
+  for (const wallet of candidates) {
+    const rawAddress = typeof wallet?.address === 'string' ? String(wallet.address).trim() : ''
+    if (!isAddressLike(rawAddress)) continue
+    const walletType = getWalletClientType(wallet)
+    if (!isSmartWalletLikeType(walletType) && !walletType.includes('coinbase_smart_wallet') && !walletType.includes('base_account')) {
+      continue
+    }
+    addresses.push(rawAddress.toLowerCase())
+  }
+  return addresses
 }
 
 export function pickPrivyEmbeddedEoaWallet<T extends WalletLike>(
@@ -51,5 +69,16 @@ export function pickPrivyEmbeddedEoaWallet<T extends WalletLike>(
   excludedWalletAddress?: string | null,
 ): T | null {
   const candidates = Array.isArray(wallets) ? wallets : []
-  return candidates.find((wallet) => isEmbeddedPrivyEoaCandidate(wallet, excludedWalletAddress)) ?? null
+  const excluded = new Set<string>()
+  if (excludedWalletAddress) excluded.add(excludedWalletAddress.trim().toLowerCase())
+  for (const smartWalletAddress of collectPrivySmartWalletAddressesFromWallets(candidates)) {
+    excluded.add(smartWalletAddress)
+  }
+  return (
+    candidates.find((wallet) => {
+      const rawAddress = typeof wallet?.address === 'string' ? String(wallet.address).trim().toLowerCase() : ''
+      if (rawAddress && excluded.has(rawAddress)) return false
+      return isEmbeddedPrivyEoaCandidate(wallet, excludedWalletAddress)
+    }) ?? null
+  )
 }

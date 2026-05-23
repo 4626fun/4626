@@ -13,7 +13,7 @@ import {
 } from './executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
-import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
+import { classifyLinkedAccounts, extractPrivyEmbeddedEoaAddress, collectPrivySmartWalletAddresses, type PrivyUserLike } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -545,14 +545,37 @@ export function resolveConfirmOwnerCanonicalCsw(params: {
   return requestedCanonical ?? persistedCanonical
 }
 
+function rejectNonEmbeddedOwnerCandidate(params: {
+  address: string | null
+  smartWalletAddresses: Set<string>
+  canonicalCswAddress?: string | null
+  baseSubAccountAddress?: string | null
+}): string | null {
+  const normalized = normalizeAddress(params.address)
+  if (!normalized) return null
+  if (params.smartWalletAddresses.has(normalized)) return null
+  const canonical = normalizeAddress(params.canonicalCswAddress ?? null)
+  if (canonical && normalized === canonical) return null
+  const subAccount = normalizeAddress(params.baseSubAccountAddress ?? null)
+  if (subAccount && normalized === subAccount) return null
+  return normalized
+}
+
 export async function getPrivyEmbeddedEOA(params: {
   db: Db
   profileId: number
   privyUser: PrivyUserLike
+  canonicalCswAddress?: string | null
+  baseSubAccountAddress?: string | null
 }): Promise<string> {
-  const classification = classifyLinkedAccounts(params.privyUser)
-  const embedded = normalizeAddress(classification.embeddedEoa?.address ?? null)
-  if (embedded) return embedded
+  const smartWalletAddresses = collectPrivySmartWalletAddresses(params.privyUser)
+  const extracted = rejectNonEmbeddedOwnerCandidate({
+    address: extractPrivyEmbeddedEoaAddress(params.privyUser),
+    smartWalletAddresses,
+    canonicalCswAddress: params.canonicalCswAddress,
+    baseSubAccountAddress: params.baseSubAccountAddress,
+  })
+  if (extracted) return extracted
 
   const result = await params.db.sql`
     SELECT primary_embedded_eoa, embedded_wallet
@@ -561,7 +584,12 @@ export async function getPrivyEmbeddedEOA(params: {
     LIMIT 1;
   `
   const row = result.rows?.[0] ?? null
-  const persisted = normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet)
+  const persisted = rejectNonEmbeddedOwnerCandidate({
+    address: normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet),
+    smartWalletAddresses,
+    canonicalCswAddress: params.canonicalCswAddress,
+    baseSubAccountAddress: params.baseSubAccountAddress,
+  })
   if (persisted) return persisted
 
   throw buildStructuredError('Privy embedded EOA is not ready for this account yet. Retry in a moment.', {
@@ -634,10 +662,22 @@ export async function bootstrapCanonicalDelegationState(params: {
     privyUserId: context.privyUserId,
     privyUser: context.privyUser,
   })
+  const subAccountPrefetch = await db.sql`
+    SELECT base_sub_account
+    FROM profiles
+    WHERE id = ${canonical.profileId}
+    LIMIT 1;
+  `
+  const rawSubAccountPrefetch =
+    typeof subAccountPrefetch.rows?.[0]?.base_sub_account === 'string'
+      ? subAccountPrefetch.rows[0].base_sub_account
+      : null
   const privyEmbeddedEoaAddress = await getPrivyEmbeddedEOA({
     db,
     profileId: canonical.profileId,
     privyUser: context.privyUser,
+    canonicalCswAddress: canonical.canonicalCswAddress,
+    baseSubAccountAddress: rawSubAccountPrefetch,
   })
 
   await ensureCanonicalWalletRow({
@@ -670,8 +710,8 @@ export async function bootstrapCanonicalDelegationState(params: {
   await db.sql`
     UPDATE profiles
     SET
-      primary_embedded_eoa = COALESCE(primary_embedded_eoa, ${privyEmbeddedEoaAddress}),
-      embedded_wallet = COALESCE(embedded_wallet, ${privyEmbeddedEoaAddress}),
+      primary_embedded_eoa = ${privyEmbeddedEoaAddress},
+      embedded_wallet = ${privyEmbeddedEoaAddress},
       updated_at = NOW()
     WHERE id = ${canonical.profileId};
   `

@@ -136,6 +136,27 @@ describe('wallet mapping + sync', () => {
     expect(classified.primaryWalletAddress).toBe('0x00000000000000000000000000000000000000e2')
   })
 
+  it('prefers nested embeddedWallets over Privy smart-wallet counterfactuals for embedded EOA resolution', () => {
+    const embedded = '0x00000000000000000000000000000000000000f1'
+    const privySmartWallet = '0x00000000000000000000000000000000000000f2'
+    const user = {
+      id: 'did:privy:embedded-vs-smart',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          address: privySmartWallet,
+          walletClientType: 'privy',
+          embeddedWallets: [{ address: embedded, walletClientType: 'embedded_privy_wallet' }],
+          smartWallets: [{ address: privySmartWallet, walletClientType: 'privy' }],
+        },
+      ],
+    }
+
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.embeddedEoa?.address).toBe(embedded)
+    expect(classified.embeddedEoa?.address).not.toBe(privySmartWallet)
+  })
+
   it('syncUserWallets writes profile + wallet graph rows', async () => {
     const db = createLooseDb()
     const user = {

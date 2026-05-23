@@ -109,19 +109,118 @@ export function extractPrivyWalletsFromUser(user: unknown): Record<string, unkno
   return wallets
 }
 
-export function pickPrivyEmbeddedEoaAddressFromWallets(wallets: unknown): Address | null {
+function isSmartWalletLikeRecord(value: unknown): boolean {
+  const record = normalizedWalletRecord(value)
+  if (!record) return false
+  const rawType = normalizePrivyText(record.type ?? record.provider)
+  if (rawType === 'smart_wallet' || rawType.includes('smart_wallet')) return true
+  const walletClientType = normalizePrivyText(
+    record.wallet_client_type ?? record.walletClientType ?? record.connector_type ?? record.connectorType ?? record.type ?? record.provider,
+  )
+  const normalized = walletClientType.replace(/[\s_-]+/g, '')
+  return (
+    normalized.includes('smartwallet') ||
+    normalized.includes('smartaccount') ||
+    walletClientType.includes('coinbase_smart_wallet') ||
+    walletClientType.includes('base_account')
+  )
+}
+
+function collectSmartWalletAddressesFromUser(user: unknown): Set<string> {
+  const addresses = new Set<string>()
+  const record = normalizedWalletRecord(user)
+  if (!record) return addresses
+
+  const linkedAccounts = Array.isArray(record.linkedAccounts)
+    ? record.linkedAccounts
+    : Array.isArray(record.linked_accounts)
+      ? record.linked_accounts
+      : []
+
+  for (const account of linkedAccounts) {
+    const linkedRecord = normalizedWalletRecord(account)
+    if (!linkedRecord) continue
+    const smartWallets = Array.isArray(linkedRecord.smartWallets)
+      ? linkedRecord.smartWallets
+      : Array.isArray(linkedRecord.smart_wallets)
+        ? linkedRecord.smart_wallets
+        : []
+    for (const wallet of smartWallets) {
+      const address = normalizeAddressOrNull((wallet as Record<string, unknown>).address)
+      if (address) addresses.add(address.toLowerCase())
+    }
+  }
+
+  for (const wallet of extractPrivyWalletsFromUser(user)) {
+    if (!isSmartWalletLikeRecord(wallet)) continue
+    const address = normalizeAddressOrNull(wallet.address)
+    if (address) addresses.add(address.toLowerCase())
+  }
+
+  return addresses
+}
+
+function collectEmbeddedWalletRecordsFromUser(user: unknown): Record<string, unknown>[] {
+  const record = normalizedWalletRecord(user)
+  if (!record) return []
+
+  const embeddedRecords: Record<string, unknown>[] = []
+  const linkedAccounts = Array.isArray(record.linkedAccounts)
+    ? record.linkedAccounts
+    : Array.isArray(record.linked_accounts)
+      ? record.linked_accounts
+      : []
+
+  for (const account of linkedAccounts) {
+    const linkedRecord = normalizedWalletRecord(account)
+    if (!linkedRecord) continue
+    const embeddedWallets = Array.isArray(linkedRecord.embeddedWallets)
+      ? linkedRecord.embeddedWallets
+      : Array.isArray(linkedRecord.embedded_wallets)
+        ? linkedRecord.embedded_wallets
+        : []
+    for (const wallet of embeddedWallets) {
+      const embeddedRecord = normalizedWalletRecord(wallet)
+      if (embeddedRecord) embeddedRecords.push(embeddedRecord)
+    }
+  }
+
+  return embeddedRecords
+}
+
+export function pickPrivyEmbeddedEoaAddressFromWallets(
+  wallets: unknown,
+  excludedWalletAddresses: readonly string[] = [],
+): Address | null {
+  const excluded = new Set(
+    excludedWalletAddresses
+      .map((value) => normalizeAddressOrNull(value)?.toLowerCase())
+      .filter((value): value is string => Boolean(value)),
+  )
   const entries = Array.isArray(wallets) ? wallets : []
   for (const wallet of entries) {
     if (!isEmbeddedEthereumWalletRecord(wallet)) continue
+    if (isSmartWalletLikeRecord(wallet)) continue
     const address = normalizeAddressOrNull((wallet as Record<string, unknown>).address)
-    if (address) return address
+    if (!address || excluded.has(address.toLowerCase())) continue
+    return address
   }
   return null
 }
 
 export function pickPrivyEmbeddedEoaAddressFromUser(user: unknown): Address | null {
+  const smartWalletAddresses = collectSmartWalletAddressesFromUser(user)
+  const excluded = Array.from(smartWalletAddresses)
+
+  for (const wallet of collectEmbeddedWalletRecordsFromUser(user)) {
+    if (isSmartWalletLikeRecord(wallet)) continue
+    const address = normalizeAddressOrNull(wallet.address)
+    if (!address || smartWalletAddresses.has(address.toLowerCase())) continue
+    return address
+  }
+
   const walletCandidates = extractPrivyWalletsFromUser(user)
-  return pickPrivyEmbeddedEoaAddressFromWallets(walletCandidates)
+  return pickPrivyEmbeddedEoaAddressFromWallets(walletCandidates, excluded)
 }
 
 type CreateWalletFn = (() => Promise<unknown>) | null

@@ -213,6 +213,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const isSubAccountTarget = cswAddress.toLowerCase() !== parentCswAddress.toLowerCase()
     const ownerToAdd = getAddress(bootstrap.privyEmbeddedEoaAddress) as Address
+    if (
+      ownerToAdd.toLowerCase() === parentCswAddress.toLowerCase() ||
+      ownerToAdd.toLowerCase() === cswAddress.toLowerCase()
+    ) {
+      return res.status(409).json({
+        success: false,
+        error: 'Owner install must target the Privy embedded EOA, not the Coinbase Smart Wallet.',
+        needsEmbeddedWallet: true,
+      } satisfies ApiEnvelope<never>)
+    }
     const rawTxRequest = prepareAddOwnerTx(cswAddress, ownerToAdd)
     const txRequest: AddOwnerPreviewResponse['txRequest'] = {
       chainId: 8453,
