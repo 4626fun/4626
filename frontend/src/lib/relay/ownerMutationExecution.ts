@@ -12,6 +12,8 @@ import {
   formatCompactEth,
   normalizeRelayStatusEndpoint,
   pollRelayStatusEndpoint,
+  resolveRelayIndexRequestIds,
+  resolveRelayStatusFallbackRequestId,
   resolveRelayStatusRequestId,
   validatePreviewRelayUserCallIsNativeDepository,
 } from '@/lib/removeOwner/removeOwnerHelpers'
@@ -86,6 +88,11 @@ async function submitSelfAuthViaSendCalls(params: {
   if (resolution.userOperationHash) {
     params.appendEvent(`${params.telemetryPrefix}:user_op_hash=${resolution.userOperationHash}`)
   }
+  if (!resolution.transactionHash && resolution.userOperationHash) {
+    params.appendEvent(
+      `${params.telemetryPrefix}:warn bundle_tx_hash_missing user_op_only=${resolution.userOperationHash}`,
+    )
+  }
   return resolution.transactionHash ?? resolution.userOperationHash!
 }
 
@@ -120,18 +127,42 @@ async function submitExternalFunderRelayDeposit(params: {
   return txHash
 }
 
-async function wakeRelaySolverAfterPart1Deposit(params: {
+async function waitForBundleDepositReceipt(params: {
+  publicClient: PublicClient | undefined
   depositTxHash: `0x${string}`
-  requestId: `0x${string}`
-  userCall: OwnerMutationEip5792Call
   appendEvent: (row: string) => void
 }): Promise<void> {
-  params.appendEvent('relay_notify:start')
+  if (!params.publicClient) return
+  try {
+    const tx = await params.publicClient.getTransaction({ hash: params.depositTxHash })
+    if (tx?.blockNumber == null) {
+      params.appendEvent('relay_notify:waiting_for_bundle_receipt')
+      await params.publicClient.waitForTransactionReceipt({
+        hash: params.depositTxHash,
+        timeout: 90_000,
+      })
+    }
+    params.appendEvent('relay_notify:bundle_receipt=confirmed')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? 'receipt wait failed')
+    params.appendEvent(`relay_notify:bundle_receipt=warn:${message.slice(0, 220)}`)
+  }
+}
+
+async function wakeRelaySolverAfterPart1Deposit(params: {
+  depositTxHash: `0x${string}`
+  indexRequestIds: `0x${string}`[]
+  userCall: OwnerMutationEip5792Call
+  appendEvent: (row: string) => void
+}): Promise<{ indexed: boolean; sameChainSingle: boolean }> {
+  params.appendEvent(
+    `relay_notify:start index_request_ids=${params.indexRequestIds.join(',') || 'tx_only'}`,
+  )
   try {
     const result = await notifyRelaySolverAfterPart1Deposit({
       chainId: base.id,
       depositTxHash: params.depositTxHash,
-      requestId: params.requestId,
+      indexRequestIds: params.indexRequestIds,
       userCall: params.userCall,
       referrer: '4626-owner-mutation',
     })
@@ -141,9 +172,11 @@ async function wakeRelaySolverAfterPart1Deposit(params: {
     for (const warning of result.warnings) {
       params.appendEvent(`relay_notify:warn=${warning.slice(0, 260)}`)
     }
+    return { indexed: result.indexed, sameChainSingle: result.sameChainSingle }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error ?? 'notify failed')
     params.appendEvent(`relay_notify:error=${message.slice(0, 260)}`)
+    return { indexed: false, sameChainSingle: false }
   }
 }
 
@@ -229,10 +262,16 @@ export async function executeOwnerMutationViaRelay(
     }
   }
 
+  const indexRequestIds = resolveRelayIndexRequestIds(relay)
   const statusRequestId = resolveRelayStatusRequestId(relay)
+  const statusFallbackRequestId = resolveRelayStatusFallbackRequestId(relay)
   let statusEndpoint = normalizeRelayStatusEndpoint(null, statusRequestId)
   appendEvent(`relay:preview_request_id=${relay.requestId}`)
+  appendEvent(`relay:index_request_ids=${indexRequestIds.join(',') || 'tx_only'}`)
   appendEvent(`relay:status_request_id=${statusRequestId}`)
+  if (statusFallbackRequestId) {
+    appendEvent(`relay:status_fallback_request_id=${statusFallbackRequestId}`)
+  }
   appendEvent(`relay:user_call_to=${relay.userCall.to}`)
   appendEvent(`relay:user_call_value=${relay.userCall.value}`)
   appendEvent(`relay:user_call_selector=${relay.userCall.data.slice(0, 10)}`)
@@ -271,12 +310,29 @@ export async function executeOwnerMutationViaRelay(
     onTxHash(executeTxHash)
   }
 
-  await wakeRelaySolverAfterPart1Deposit({
+  let notifyResult = await wakeRelaySolverAfterPart1Deposit({
     depositTxHash: executeTxHash,
-    requestId: statusRequestId,
+    indexRequestIds,
     userCall: relay.userCall,
     appendEvent,
   })
+
+  await waitForBundleDepositReceipt({
+    publicClient,
+    depositTxHash: executeTxHash,
+    appendEvent,
+  })
+
+  if (!notifyResult.indexed) {
+    appendEvent('relay_notify:retry_after_receipt')
+    await new Promise((resolve) => setTimeout(resolve, 3_000))
+    notifyResult = await wakeRelaySolverAfterPart1Deposit({
+      depositTxHash: executeTxHash,
+      indexRequestIds,
+      userCall: relay.userCall,
+      appendEvent,
+    })
+  }
 
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
@@ -293,14 +349,9 @@ export async function executeOwnerMutationViaRelay(
   )
     .trim()
     .toLowerCase()
-  if (
-    primaryStatusLabel === 'unknown' &&
-    relay.orderId &&
-    relay.requestId &&
-    relay.orderId.toLowerCase() !== relay.requestId.toLowerCase()
-  ) {
-    appendEvent(`relay:status_retry_with_request_id=${relay.requestId}`)
-    statusEndpoint = normalizeRelayStatusEndpoint(null, relay.requestId)
+  if (primaryStatusLabel === 'unknown' && statusFallbackRequestId) {
+    appendEvent(`relay:status_retry_with_fallback_id=${statusFallbackRequestId}`)
+    statusEndpoint = normalizeRelayStatusEndpoint(null, statusFallbackRequestId)
     appendEvent(`relay:status_endpoint=${statusEndpoint}`)
     status = await pollStatus(statusEndpoint)
   }
@@ -324,6 +375,11 @@ export async function executeOwnerMutationViaRelay(
     if (statusLabel === 'unknown') {
       throw new Error(
         'Relay does not recognize this quote requestId. Rebuild the preview and submit again without waiting.',
+      )
+    }
+    if (statusLabel === 'waiting') {
+      throw new Error(
+        'Relay received the Part 1 deposit but has not submitted Part 2 (addOwnerAddress) yet. Rebuild preview and retry, or wait a minute and use Recheck. If this keeps happening after a successful deposit, contact support with the deposit tx hash and preview requestId from the event log.',
       )
     }
     throw new Error(

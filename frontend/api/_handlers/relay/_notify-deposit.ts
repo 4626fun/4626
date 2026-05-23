@@ -20,6 +20,7 @@ type NotifyDepositBody = {
   chainId?: unknown
   depositTxHash?: unknown
   requestId?: unknown
+  indexRequestIds?: unknown
   userCall?: unknown
   referrer?: unknown
 }
@@ -109,12 +110,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  if (!isRequestId(body.requestId)) {
-    return res.status(400).json({
-      success: false,
-      error: 'requestId must be a 32-byte 0x-prefixed Relay order/request id',
-    } satisfies ApiEnvelope<never>)
+  const indexRequestIds: `0x${string}`[] = []
+  const pushRequestId = (value: unknown) => {
+    if (!isRequestId(value)) return
+    const lower = value.toLowerCase()
+    if (indexRequestIds.some((existing) => existing.toLowerCase() === lower)) return
+    indexRequestIds.push(value)
   }
+  if (Array.isArray(body.indexRequestIds)) {
+    for (const candidate of body.indexRequestIds) {
+      pushRequestId(candidate)
+    }
+  }
+  pushRequestId(body.requestId)
 
   const userCall = parseUserCall(body.userCall)
   const referrer =
@@ -123,7 +131,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const result = await notifyRelaySolverDeposit({
     chainId,
     depositTxHash: body.depositTxHash,
-    requestId: body.requestId,
+    indexRequestIds: indexRequestIds.length > 0 ? indexRequestIds : undefined,
     userCall,
     referrer,
   })

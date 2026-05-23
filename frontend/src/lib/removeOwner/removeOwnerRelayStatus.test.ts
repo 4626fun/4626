@@ -3,19 +3,23 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   parseRelayIntentStatus,
   pollRelayStatusEndpoint,
+  resolveRelayIndexRequestIds,
+  resolveRelayStatusFallbackRequestId,
   resolveRelayStatusRequestId,
   mapRemoveOwnerSubmissionError,
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
 
 describe('removeOwner relay status helpers', () => {
-  it('prefers orderId for status polling when both ids are present', () => {
+  it('uses order id for status polling and indexes both ids when they differ', () => {
     const relay = {
       requestId: '0x1111111111111111111111111111111111111111111111111111111111111111',
       orderId: '0x2222222222222222222222222222222222222222222222222222222222222222',
     } as Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>
 
+    expect(resolveRelayIndexRequestIds(relay)).toEqual([relay.orderId, relay.requestId])
     expect(resolveRelayStatusRequestId(relay)).toBe(relay.orderId)
+    expect(resolveRelayStatusFallbackRequestId(relay)).toBe(relay.requestId)
   })
 
   it('falls back to requestId when orderId is missing', () => {

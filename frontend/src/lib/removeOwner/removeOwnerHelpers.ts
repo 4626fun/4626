@@ -91,11 +91,40 @@ export function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`):
   return `https://api.relay.link/intents/status/v3?requestId=${encodeURIComponent(requestId)}`
 }
 
-/** Prefer orderId — it is the bytes32 bound to depositNative for request-bound deposits. */
+/** Unique Relay ids to pass as optional hints on POST /transactions/index. */
+export function resolveRelayIndexRequestIds(
+  relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
+): `0x${string}`[] {
+  const ids: `0x${string}`[] = []
+  const push = (value: `0x${string}` | null | undefined) => {
+    if (!value) return
+    const lower = value.toLowerCase()
+    if (ids.some((existing) => existing.toLowerCase() === lower)) return
+    ids.push(value)
+  }
+  push(relay.orderId ?? null)
+  push(relay.requestId)
+  return ids
+}
+
+/**
+ * Primary status poll id — prefer on-chain `depositNative` order id when present.
+ * Relay binds explicit-deposit Part 1 to protocol.v2.orderId; steps[].requestId
+ * can differ and returns `unknown` when polled alone.
+ */
 export function resolveRelayStatusRequestId(
   relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
 ): `0x${string}` {
   return (relay.orderId ?? relay.requestId) as `0x${string}`
+}
+
+/** Secondary poll id when primary returns `unknown` and ids differ. */
+export function resolveRelayStatusFallbackRequestId(
+  relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
+): `0x${string}` | null {
+  if (!relay.orderId) return null
+  if (relay.orderId.toLowerCase() === relay.requestId.toLowerCase()) return null
+  return relay.requestId
 }
 
 export type ParsedRelayIntentStatus = {

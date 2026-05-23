@@ -1,16 +1,26 @@
-import { describe, expect, it, afterEach } from 'vitest'
+import { describe, expect, it, afterEach, vi } from 'vitest'
 import { encodeFunctionData } from 'viem'
 
 import {
   resolveRelayQuoteRequestAmount,
   selectOwnerMutationRelayUserCall,
   validateSelectedOwnerMutationRelayUserCall,
+  buildOwnerMutationRelayFlow,
 } from './buildOwnerMutationRelayFlow.js'
+import { getRelayQuote } from './getQuote.js'
 import {
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
+  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
+
+vi.mock('./getQuote.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./getQuote.js')>()
+  return { ...actual, getRelayQuote: vi.fn() }
+})
+
+const mockedGetRelayQuote = vi.mocked(getRelayQuote)
 
 const ROUTER = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
 
@@ -244,5 +254,114 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
         paymentDetailsAmountWei: runtimeDeposit,
       }),
     ).toBeNull()
+  })
+})
+
+describe('buildOwnerMutationRelayFlow golden re-quote', () => {
+  const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+  const OWNER = '0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0' as const
+  const requestId = `0x${'aa'.repeat(32)}` as const
+
+  afterEach(() => {
+    mockedGetRelayQuote.mockReset()
+  })
+
+  it('re-quotes with golden native seed when amount=0 quote has no deposit', async () => {
+    const mutationCalldata = encodeFunctionData({
+      abi: [
+        {
+          name: 'addOwnerAddress',
+          type: 'function',
+          stateMutability: 'nonpayable',
+          inputs: [{ name: 'owner', type: 'address' }],
+          outputs: [],
+        },
+      ],
+      functionName: 'addOwnerAddress',
+      args: [OWNER],
+    })
+
+    const zeroQuoteRaw = {
+      steps: [
+        {
+          kind: 'transaction',
+          requestId,
+          items: [
+            {
+              data: {
+                to: '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f',
+                data: '0xcd6e13f7',
+                value: '0',
+                chainId: 8453,
+              },
+            },
+          ],
+        },
+      ],
+      details: {
+        currencyIn: {
+          amount: '0',
+          currency: { address: '0x0000000000000000000000000000000000000000' },
+        },
+      },
+    }
+
+    const goldenQuoteRaw = {
+      steps: [
+        {
+          kind: 'transaction',
+          requestId,
+          items: [
+            {
+              data: {
+                to: '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f',
+                data: '0xcd6e13f7',
+                value: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+                chainId: 8453,
+              },
+            },
+          ],
+        },
+      ],
+      details: {
+        currencyIn: {
+          amount: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+          currency: { address: '0x0000000000000000000000000000000000000000' },
+        },
+      },
+    }
+
+    mockedGetRelayQuote
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        extract: (await import('./getQuote.js')).extractFromRelayQuoteResponse(zeroQuoteRaw),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        extract: (await import('./getQuote.js')).extractFromRelayQuoteResponse(goldenQuoteRaw),
+      })
+
+    const result = await buildOwnerMutationRelayFlow({
+      publicClient: {
+        estimateGas: async () => 120_000n,
+        getBytecode: async () => '0x1234',
+      },
+      cswAddress: CSW,
+      relayQuoteUser: CSW,
+      mutationCalldata,
+      relaySource: '4626-add-owner',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.relay.paymentDetails?.amount).toBe(GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString())
+    expect(result.relay.userCall.to).toBe(RELAY_DEPOSITORY_BASE)
+    expect(result.relay.userCall.data.slice(0, 10)).toBe(RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR)
+    expect(mockedGetRelayQuote).toHaveBeenCalledTimes(2)
+    expect(mockedGetRelayQuote.mock.calls[1]?.[0]?.amount).toBe(
+      GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+    )
   })
 })

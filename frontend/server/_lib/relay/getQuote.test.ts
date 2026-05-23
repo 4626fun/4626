@@ -88,4 +88,33 @@ describe('resolveQuotedNativeDepositWei', () => {
     })
     expect(resolveQuotedNativeDepositWei(extract)).toBe(12_000_000_000_000n)
   })
+
+  it('ignores USDC currencyIn when paymentDetails is absent', () => {
+    const extract = extractFromRelayQuoteResponse({
+      steps: [
+        {
+          kind: 'transaction',
+          requestId: '0x' + 'ef'.repeat(32),
+          items: [
+            {
+              data: {
+                to: '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f',
+                data: '0xcd6e13f7',
+                value: '0',
+                chainId: 8453,
+              },
+            },
+          ],
+        },
+      ],
+      details: {
+        currencyIn: {
+          amount: '1000000',
+          currency: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+        },
+      },
+      protocol: { v2: { paymentDetails: null } },
+    })
+    expect(resolveQuotedNativeDepositWei(extract)).toBeNull()
+  })
 })

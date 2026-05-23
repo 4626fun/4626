@@ -14,7 +14,7 @@ export type NotifyRelaySolverDepositClientResult = {
 export async function notifyRelaySolverAfterPart1Deposit(params: {
   chainId: number
   depositTxHash: `0x${string}`
-  requestId: `0x${string}`
+  indexRequestIds?: `0x${string}`[]
   userCall: OwnerMutationEip5792Call
   referrer?: string
 }): Promise<NotifyRelaySolverDepositClientResult> {
@@ -25,7 +25,7 @@ export async function notifyRelaySolverAfterPart1Deposit(params: {
     body: JSON.stringify({
       chainId: params.chainId,
       depositTxHash: params.depositTxHash,
-      requestId: params.requestId,
+      indexRequestIds: params.indexRequestIds,
       userCall: params.userCall,
       referrer: params.referrer,
     }),

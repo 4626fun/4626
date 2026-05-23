@@ -9,11 +9,10 @@ import {
   GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
-import { getRelayQuote, resolveQuotedNativeDepositWei } from './getQuote.js'
+import { getRelayQuote, isNativeRelayCurrency, NATIVE_CURRENCY, resolveQuotedNativeDepositWei } from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 const RELAY_ROUTER_MULTICALL_SELECTOR = '0xcd6e13f7'
 const RELAY_ROUTER_BASE = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
 type RelayUserCallCandidate = {
@@ -286,9 +285,10 @@ async function deriveRelayQuoteTxsGasLimit(params: {
 /**
  * Relay `/quote/v2` `amount` for owner mutations: EXACT_OUTPUT destination value
  * (typically `"0"` wei on `txs[0].value`). When Relay returns
- * `protocol.v2.paymentDetails.amount`, that field is authoritative; when it
- * does not, we re-quote with a golden-scale seed amount and resolve the deposit
- * from `details.currencyIn.amount` / step value via `resolveQuotedNativeDepositWei`.
+ * `protocol.v2.paymentDetails.amount`, that field is authoritative when currency
+ * is native ETH. When it does not, we re-quote with a golden-scale native seed
+ * amount and resolve the deposit via `resolveQuotedNativeDepositWei` (native
+ * ETH only — USDC / ERC-20 currencyIn is rejected).
  *
  * Ops may override the request `amount` via `RELAY_*_QUOTE_OUTPUT_WEI` for
  * debugging only.
@@ -376,11 +376,13 @@ export async function buildOwnerMutationRelayFlow(
 
     const requestBoundDepositId = e.orderId ?? e.requestId
     const paymentDetails =
-      resolvedDepositWei && requestBoundDepositId
+      resolvedDepositWei &&
+      requestBoundDepositId &&
+      (e.paymentDetails?.currency == null || isNativeRelayCurrency(e.paymentDetails.currency))
         ? {
             chainId: e.paymentDetails?.chainId ?? 8453,
             depository: (e.paymentDetails?.depository ?? RELAY_DEPOSITORY_BASE) as `0x${string}`,
-            currency: (e.paymentDetails?.currency ?? NATIVE_CURRENCY) as `0x${string}`,
+            currency: NATIVE_CURRENCY,
             amount: resolvedDepositWei.toString(),
           }
         : null
@@ -431,8 +433,8 @@ export async function buildOwnerMutationRelayFlow(
       return {
         ok: false,
         error: preferDepositoryDepositNative
-          ? 'Relay quote did not return a usable native Part 1 deposit for CSW Depository.depositNative (paymentDetails absent or zero).'
-          : 'Relay quote missing a funded router multicall or usable native Part 1 deposit.',
+          ? 'Relay quote did not return a native ETH Part 1 deposit for CSW Depository.depositNative (paymentDetails absent, zero, or non-native).'
+          : 'Relay quote missing a funded router multicall or usable native ETH Part 1 deposit.',
         diagnostics,
       }
     }

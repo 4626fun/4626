@@ -30,7 +30,12 @@ import { logger } from '../../../packages/server-core/src/index.js'
 import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
-const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000'
+export const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
+
+export function isNativeRelayCurrency(address: unknown): boolean {
+  if (typeof address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(address)) return false
+  return address.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
+}
 
 export type RelayDestinationCall = {
   to: `0x${string}`
@@ -199,6 +204,7 @@ function normalizePaymentDetailsCandidate(
         ? Number(chainCandidate)
         : null
   if (!depository && !amount) return null
+  if (currency && !isNativeRelayCurrency(currency)) return null
   return {
     chainId: Number.isFinite(chainId as number) ? (chainId as number) : null,
     depository,
@@ -218,9 +224,9 @@ function parsePositiveDecimalWei(value: unknown): bigint | null {
 }
 
 /**
- * Resolves the native Part 1 deposit Relay expects for owner-mutation quotes.
- * Prefer `protocol.v2.paymentDetails.amount` when present; otherwise fall back to
- * positive `details.currencyIn.amount` or step transaction value.
+ * Resolves the native ETH Part 1 deposit Relay expects for owner-mutation quotes.
+ * Rejects USDC/ERC-20 currencyIn or paymentDetails — Part 1 must stay
+ * Depository.depositNative with native value only.
  */
 export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigint | null {
   const raw = extract.raw
@@ -229,22 +235,41 @@ export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigin
   const paymentFromProtocol = (protocolV2?.v2 as Record<string, unknown> | undefined)
     ?.paymentDetails as Record<string, unknown> | undefined
 
-  const candidates: unknown[] = [
-    extract.paymentDetails?.amount,
-    paymentFromProtocol?.amount,
-    extract.userTransaction?.value,
-  ]
+  if (
+    extract.paymentDetails?.amount &&
+    isNativeRelayCurrency(extract.paymentDetails.currency)
+  ) {
+    const wei = parsePositiveDecimalWei(extract.paymentDetails.amount)
+    if (wei) return wei
+  }
+
+  if (
+    paymentFromProtocol?.amount &&
+    isNativeRelayCurrency(paymentFromProtocol.currency)
+  ) {
+    const wei = parsePositiveDecimalWei(paymentFromProtocol.amount)
+    if (wei) return wei
+  }
+
+  const userTxValue = extract.userTransaction?.value
+  if (userTxValue) {
+    const wei = parsePositiveDecimalWei(userTxValue)
+    if (wei) return wei
+  }
 
   if (rawObj) {
     const details = rawObj.details as Record<string, unknown> | undefined
     const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
-    candidates.push(currencyIn?.amount, currencyIn?.minimumAmount)
+    const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+    const currencyInAddress = asAddress(currencyInObj?.address ?? null)
+    if (currencyInAddress && isNativeRelayCurrency(currencyInAddress)) {
+      for (const key of ['amount', 'minimumAmount'] as const) {
+        const wei = parsePositiveDecimalWei(currencyIn?.[key])
+        if (wei) return wei
+      }
+    }
   }
 
-  for (const candidate of candidates) {
-    const wei = parsePositiveDecimalWei(candidate)
-    if (wei) return wei
-  }
   return null
 }
 
@@ -257,7 +282,12 @@ function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
     )
     if (!keyHit) continue
     const normalized = normalizePaymentDetailsCandidate(obj)
-    if (normalized?.amount && normalized.depository && parsePositiveDecimalWei(normalized.amount)) {
+    if (
+      normalized?.amount &&
+      normalized.depository &&
+      parsePositiveDecimalWei(normalized.amount) &&
+      isNativeRelayCurrency(normalized.currency)
+    ) {
       return normalized
     }
   }
@@ -332,7 +362,11 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
 
       const paymentRaw = v2.paymentDetails as Record<string, unknown> | undefined
       const normalized = normalizePaymentDetailsCandidate(paymentRaw)
-      if (normalized && parsePositiveDecimalWei(normalized.amount)) {
+      if (
+        normalized &&
+        parsePositiveDecimalWei(normalized.amount) &&
+        isNativeRelayCurrency(normalized.currency)
+      ) {
         extract.paymentDetails = normalized
       }
     }

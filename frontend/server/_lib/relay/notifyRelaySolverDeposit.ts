@@ -4,6 +4,7 @@ const RELAY_API_BASE = 'https://api.relay.link'
 const RELAY_SDK_VERSION = '5.2.7'
 const DEFAULT_REFERRER = '4626-owner-mutation'
 const BASE_MAINNET_CHAIN_ID = 8453
+const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c'
 
 export type RelayDepositUserCall = {
   to: `0x${string}`
@@ -14,7 +15,8 @@ export type RelayDepositUserCall = {
 export type NotifyRelaySolverDepositParams = {
   chainId: number
   depositTxHash: `0x${string}`
-  requestId: `0x${string}`
+  /** Optional quote ids to associate while indexing (order id + step request id). */
+  indexRequestIds?: `0x${string}`[]
   userCall?: RelayDepositUserCall | null
   referrer?: string
 }
@@ -42,6 +44,11 @@ function relayUpstreamHeaders(): Record<string, string> {
   const apiKey = resolveRelayApiKey()
   if (apiKey) headers['x-api-key'] = apiKey
   return headers
+}
+
+function isDepositoryDepositNativeUserCall(userCall: RelayDepositUserCall | null | undefined): boolean {
+  if (!userCall) return false
+  return userCall.data.slice(0, 10).toLowerCase() === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR
 }
 
 async function postRelayUpstream(params: {
@@ -78,11 +85,11 @@ async function postRelayUpstream(params: {
 }
 
 /**
- * Mirrors relay-kit `executeSteps` post-deposit solver wakeups:
- * - POST /transactions/index — index the Part 1 deposit tx hash
- * - POST /transactions/single — same-chain notify with request-bound calldata + tx hash
+ * Mirrors relay-kit `executeSteps` post-deposit solver wakeups for AA/proxy Part 1:
+ * - POST /transactions/index immediately after broadcast (trace-detect internal deposits)
  *
- * Non-fatal by design: deposit indexing may already be in flight from on-chain watchers.
+ * CSW Depository `depositNative` lanes must NOT call `/transactions/single` — Relay rejects
+ * call-execution deposits with "Same-chain request is not a send, wrap, or unwrap".
  */
 export async function notifyRelaySolverDeposit(
   params: NotifyRelaySolverDepositParams,
@@ -90,29 +97,72 @@ export async function notifyRelaySolverDeposit(
   const chainId = params.chainId
   const referrer = (params.referrer ?? DEFAULT_REFERRER).trim() || DEFAULT_REFERRER
   const warnings: string[] = []
+  const depositoryLane = isDepositoryDepositNativeUserCall(params.userCall)
 
-  const indexResult = await postRelayUpstream({
-    path: '/transactions/index',
-    body: {
-      txHash: params.depositTxHash,
-      chainId: String(chainId),
-      referrer,
-    },
-  })
-  if (!indexResult.ok) {
-    warnings.push(
-      `transactions/index failed (${indexResult.status || 'network'}): ${indexResult.message}`,
-    )
+  const indexIds = params.indexRequestIds?.length
+    ? params.indexRequestIds
+    : ([] as `0x${string}`[])
+
+  let indexed = false
+  const indexAttempts: Array<{ requestId?: string; result: { ok: boolean; status: number; message: string } }> =
+    []
+
+  if (indexIds.length === 0) {
+    const indexResult = await postRelayUpstream({
+      path: '/transactions/index',
+      body: {
+        txHash: params.depositTxHash,
+        chainId: String(chainId),
+        referrer,
+      },
+    })
+    indexAttempts.push({ result: indexResult })
+    indexed = indexResult.ok
+    if (!indexResult.ok) {
+      warnings.push(
+        `transactions/index failed (${indexResult.status || 'network'}): ${indexResult.message}`,
+      )
+    }
+  } else {
+    for (const requestId of indexIds) {
+      const indexResult = await postRelayUpstream({
+        path: '/transactions/index',
+        body: {
+          txHash: params.depositTxHash,
+          chainId: String(chainId),
+          requestId,
+          referrer,
+        },
+      })
+      indexAttempts.push({ requestId, result: indexResult })
+      indexed = indexed || indexResult.ok
+      if (!indexResult.ok) {
+        warnings.push(
+          `transactions/index(${requestId.slice(0, 10)}…) failed (${indexResult.status || 'network'}): ${indexResult.message}`,
+        )
+      }
+    }
+  }
+
+  if (!indexed) {
     logger.warn('[relay/notifyRelaySolverDeposit] transactions/index failed', {
-      status: indexResult.status,
-      message: indexResult.message,
       depositTxHash: params.depositTxHash,
-      requestId: params.requestId,
+      indexRequestIds: indexIds,
+      attempts: indexAttempts.map((attempt) => ({
+        requestId: attempt.requestId,
+        status: attempt.result.status,
+        message: attempt.result.message,
+      })),
     })
   }
 
   let sameChainSingle = false
-  if (params.userCall && chainId === BASE_MAINNET_CHAIN_ID) {
+  if (
+    !depositoryLane &&
+    params.userCall &&
+    chainId === BASE_MAINNET_CHAIN_ID &&
+    indexIds[0]
+  ) {
     const value =
       typeof params.userCall.value === 'string' && params.userCall.value.startsWith('0x')
         ? BigInt(params.userCall.value).toString(10)
@@ -129,7 +179,7 @@ export async function notifyRelaySolverDeposit(
           txHash: params.depositTxHash,
         }),
         chainId: String(chainId),
-        requestId: params.requestId,
+        requestId: indexIds[0],
         referrer,
       },
     })
@@ -142,13 +192,13 @@ export async function notifyRelaySolverDeposit(
         status: singleResult.status,
         message: singleResult.message,
         depositTxHash: params.depositTxHash,
-        requestId: params.requestId,
+        requestId: indexIds[0],
       })
     }
   }
 
   return {
-    indexed: indexResult.ok,
+    indexed,
     sameChainSingle,
     warnings,
   }
