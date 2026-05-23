@@ -13,7 +13,10 @@ vi.mock('viem/account-abstraction', async (importOriginal) => {
 })
 
 import {
+  assertRelayPart1LandedSelfFunded,
   ensureRelayIndexablePart1TxHash,
+  ENTRY_POINT_USER_OPERATION_EVENT_TOPIC,
+  readPaymasterFromBundleReceipt,
   resolveBundleTxFromUserOperationHash,
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
@@ -118,5 +121,72 @@ describe('resolveBundleTxFromUserOperationHash', () => {
     await expect(
       resolveBundleTxFromUserOperationHash({ userOperationHash: USER_OP_TX }),
     ).resolves.toBeNull()
+  })
+})
+
+describe('readPaymasterFromBundleReceipt', () => {
+  it('reads paymaster from EntryPoint UserOperationEvent topic3', async () => {
+    const publicClient = {
+      getTransactionReceipt: vi.fn(async () => ({
+        logs: [
+          {
+            address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+            topics: [
+              ENTRY_POINT_USER_OPERATION_EVENT_TOPIC,
+              '0x091ac8aa61097db4db3cb7de29531d49ae836004729fe9640dc3d2c58df1b53a',
+              '0x0000000000000000000000004beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+              '0x0000000000000000000000002faeb0760d4230ef2ac21496bb4f0b47d634fd4c',
+            ],
+          },
+        ],
+      })),
+    }
+
+    const paymaster = await readPaymasterFromBundleReceipt({
+      publicClient: publicClient as never,
+      transactionHash: BUNDLE_TX,
+      sender: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+    })
+
+    expect(paymaster).toBe('0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c')
+  })
+})
+
+describe('assertRelayPart1LandedSelfFunded', () => {
+  beforeEach(() => {
+    mockGetUserOperationReceipt.mockReset()
+  })
+
+  it('rejects when only bundle tx hash is present and receipt shows a paymaster', async () => {
+    mockGetUserOperationReceipt.mockResolvedValue(null)
+    const publicClient = {
+      getTransactionReceipt: vi.fn(async () => ({
+        logs: [
+          {
+            address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
+            topics: [
+              ENTRY_POINT_USER_OPERATION_EVENT_TOPIC,
+              '0x091ac8aa61097db4db3cb7de29531d49ae836004729fe9640dc3d2c58df1b53a',
+              '0x0000000000000000000000004beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+              '0x0000000000000000000000002faeb0760d4230ef2ac21496bb4f0b47d634fd4c',
+            ],
+          },
+        ],
+      })),
+    }
+    const appendEvent = vi.fn()
+
+    await expect(
+      assertRelayPart1LandedSelfFunded({
+        resolution: { transactionHash: BUNDLE_TX, userOperationHash: null },
+        publicClient: publicClient as never,
+        fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+        appendEvent,
+      }),
+    ).rejects.toThrow(/USDC paymaster/)
+
+    expect(appendEvent).toHaveBeenCalledWith(
+      'relay_part1:landed_bundle_paymaster=0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c',
+    )
   })
 })

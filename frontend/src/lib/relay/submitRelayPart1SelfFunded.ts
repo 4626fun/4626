@@ -506,6 +506,7 @@ async function submitViaSendCallsSelfFunded(params: {
   await assertRelayPart1LandedSelfFunded({
     resolution,
     publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
     appendEvent: params.appendEvent,
   })
 
@@ -706,9 +707,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * Submit Relay Part 1 (Depository.depositNative) from a Base App self-auth CSW
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
- * Lane order matches the May 12 in-repo golden path (`67e90d9b3` /remove-owner):
- *   1. `wallet_sendCalls` with preview-bound Depository `depositNative` only
- *   2. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
+ * Lane order (Base App injects USDC paymaster on `wallet_sendCalls` today):
+ *   1. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
+ *   2. `wallet_sendCalls` with preview-bound Depository `depositNative` only
  *   3. Direct self-funded bundler UserOp when publicClient is available
  *
  * EntryPoint v0.6 self-fund path: when `paymasterAndData` is empty, `_validateAccountPrepayment`
@@ -731,7 +732,28 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   const allowBundlerFallback =
     params.allowBundlerFallback !== false && Boolean(params.publicClient)
 
+  if (!params.publicClient) {
+    throw new Error(
+      'Relay Part 1 requires an on-chain client to verify self-funded UserOps. Reload the page and retry Enable 4626 signing.',
+    )
+  }
+
   let lastError: unknown = null
+
+  try {
+    return await submitViaPreparedCallsSelfFunded({
+      ...params,
+      publicClient: params.publicClient,
+    })
+  } catch (preparedError) {
+    lastError = preparedError
+    if (isUserRejectedWalletAction(preparedError)) {
+      throw preparedError
+    }
+    params.appendEvent(
+      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
+    )
+  }
 
   try {
     return await submitViaSendCallsSelfFunded({
@@ -752,21 +774,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     )
   }
 
-  try {
-    return await submitViaPreparedCallsSelfFunded({
-      ...params,
-    })
-  } catch (preparedError) {
-    lastError = preparedError
-    if (isUserRejectedWalletAction(preparedError)) {
-      throw preparedError
-    }
-    params.appendEvent(
-      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
-    )
-  }
-
-  if (!allowBundlerFallback || !params.publicClient) {
+  if (!allowBundlerFallback) {
     throw lastError instanceof Error
       ? lastError
       : new Error(formatRelayPart1Error(lastError))

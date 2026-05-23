@@ -7,8 +7,8 @@ import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
 /** EntryPoint v0.6 `UserOperationEvent` — topic3 is paymaster. */
-const USER_OPERATION_EVENT_TOPIC =
-  '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a5a8e6ec1419f' as const
+export const ENTRY_POINT_USER_OPERATION_EVENT_TOPIC =
+  '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f' as const
 
 export type RelayPart1CallsResolution = {
   transactionHash: `0x${string}` | null
@@ -66,21 +66,28 @@ export async function readLandedUserOpPaymasterAddress(params: {
   }
 }
 
-async function readPaymasterFromBundleReceipt(params: {
+export async function readPaymasterFromBundleReceipt(params: {
   publicClient: PublicClient
   transactionHash: `0x${string}`
+  /** When set, only consider UserOperationEvent logs for this CSW sender (topic2). */
+  sender?: Address
 }): Promise<Address | null> {
   try {
     const receipt = await params.publicClient.getTransactionReceipt({
       hash: params.transactionHash,
     })
+    const senderLower = params.sender?.toLowerCase()
     for (const log of receipt.logs) {
       if (log.address.toLowerCase() !== ENTRY_POINT_V06_BASE.toLowerCase()) continue
-      if (log.topics[0]?.toLowerCase() !== USER_OPERATION_EVENT_TOPIC) continue
+      if (log.topics[0]?.toLowerCase() !== ENTRY_POINT_USER_OPERATION_EVENT_TOPIC) continue
+      if (senderLower) {
+        const logSender = log.topics[2]
+        if (!logSender || logSender.slice(-40).toLowerCase() !== senderLower.slice(2)) continue
+      }
       const paymasterTopic = log.topics[3]
       if (!paymasterTopic || paymasterTopic.length < 66) continue
       const paymaster = getAddress(`0x${paymasterTopic.slice(-40)}`)
-      if (paymaster.toLowerCase() === ZERO_ADDRESS) return null
+      if (paymaster.toLowerCase() === ZERO_ADDRESS) continue
       return paymaster
     }
   } catch {
@@ -96,8 +103,18 @@ async function readPaymasterFromBundleReceipt(params: {
 export async function assertRelayPart1LandedSelfFunded(params: {
   resolution: RelayPart1CallsResolution
   publicClient?: PublicClient
+  /** CSW sender — scopes on-chain UserOperationEvent paymaster reads. */
+  fundingCsw?: Address
   appendEvent: (row: string) => void
 }): Promise<void> {
+  const bundleTx =
+    params.resolution.transactionHash ??
+    (params.resolution.userOperationHash
+      ? await resolveBundleTxFromUserOperationHash({
+          userOperationHash: params.resolution.userOperationHash,
+        })
+      : null)
+
   let paymaster: Address | null = null
 
   if (params.resolution.userOperationHash) {
@@ -107,15 +124,32 @@ export async function assertRelayPart1LandedSelfFunded(params: {
     if (paymaster) {
       params.appendEvent(`relay_part1:landed_userop_paymaster=${paymaster}`)
     }
-  } else if (params.resolution.transactionHash && params.publicClient) {
-    paymaster = await readPaymasterFromBundleReceipt({
+  }
+
+  if (!paymaster && bundleTx && params.publicClient) {
+    const receiptPaymaster = await readPaymasterFromBundleReceipt({
       publicClient: params.publicClient,
-      transactionHash: params.resolution.transactionHash,
+      transactionHash: bundleTx,
+      sender: params.fundingCsw,
     })
-    if (paymaster) {
+    if (receiptPaymaster) {
+      paymaster = receiptPaymaster
       params.appendEvent(`relay_part1:landed_bundle_paymaster=${paymaster}`)
     }
-  } else {
+  }
+
+  if (!paymaster && !params.resolution.userOperationHash && bundleTx && !params.publicClient) {
+    throw new Error(
+      'Relay Part 1 landed but paymaster verification requires a public RPC client. Reload and retry Enable 4626 signing.',
+    )
+  }
+
+  if (
+    !paymaster &&
+    !params.resolution.userOperationHash &&
+    !bundleTx &&
+    !params.publicClient
+  ) {
     params.appendEvent('relay_part1:paymaster_check_skipped=no_user_op_or_public_client')
     return
   }
