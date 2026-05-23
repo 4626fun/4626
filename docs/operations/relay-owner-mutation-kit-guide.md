@@ -90,7 +90,11 @@ Live implementation: [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accou
    - **Self-auth CSW:** `wallet_sendCalls` with preview `userCall` ([`ownerMutationExecution.ts`](../../frontend/src/lib/relay/ownerMutationExecution.ts))
    - **External funder:** `eth_sendTransaction` with preview `userCall`
 3. Poll `GET /intents/status/v3?requestId=…` via `pollRelayStatusEndpoint`.
-4. Verify fill tx when available, then verify on-chain owner state.
+   - Poll id is **`orderId ?? requestId`** (must match the bytes32 bound to `depositNative`).
+   - If the primary id returns `unknown` and both ids differ, retry once with `requestId`.
+   - Treat Relay `unknown` as terminal (stale/wrong quote) — rebuild preview.
+   - During polling, short-circuit success when on-chain owner state already matches the mutation.
+4. Verify on-chain owner state (authoritative). Fill-tx selector checks are diagnostic only when verify fails.
 
 Bridge integrations may use `@relayprotocol/relay-kit-hooks`; 4626 owner mutations do not.
 
@@ -99,10 +103,10 @@ Bridge integrations may use `@relayprotocol/relay-kit-hooks`; 4626 owner mutatio
 After `executeQuote`, poll until success:
 
 - SDK / hook progress exposes `requestId` and `txHashes`
-- Fallback: `GET https://api.relay.link/intents/status/v3?requestId=…`
-- 4626 helper: `pollRelayStatusEndpoint` in [`removeOwnerHelpers.ts`](../../frontend/src/lib/removeOwner/removeOwnerHelpers.ts)
+- Fallback: `GET https://api.relay.link/intents/status/v3?requestId=…` using **`orderId ?? requestId`** from preview (same id embedded in `depositNative`)
+- 4626 helper: `pollRelayStatusEndpoint` + `resolveRelayStatusRequestId` in [`removeOwnerHelpers.ts`](../../frontend/src/lib/removeOwner/removeOwnerHelpers.ts)
 
-**Completion criteria for owner mutations:** Relay status success **and** on-chain owner slot changed (remove-owner verifies `ownerAtIndex`).
+**Completion criteria for owner mutations:** on-chain owner slot changed (`verifyMutation`). Relay status success is best-effort; if status stalls but on-chain verify passes, the flow still succeeds.
 
 ---
 

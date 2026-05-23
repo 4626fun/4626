@@ -37,6 +37,7 @@ import {
 import {
   extractRelayExecutionTxHash,
   pollRelayStatusEndpoint,
+  resolveRelayStatusRequestId,
 } from '../src/lib/removeOwner/removeOwnerHelpers.js'
 
 declare const process: {
@@ -242,16 +243,31 @@ async function main(): Promise<void> {
   })
   process.stdout.write(`[relay-add-owner] deposit_tx=${depositTxHash}\n`)
 
-  const statusEndpoint = `https://api.relay.link/intents/status/v3?requestId=${relay.requestId}`
-  const status = await pollRelayStatusEndpoint({
+  const statusRequestId = resolveRelayStatusRequestId(relay)
+  const statusEndpoint = `https://api.relay.link/intents/status/v3?requestId=${encodeURIComponent(statusRequestId)}`
+  process.stdout.write(`[relay-add-owner] status_request_id=${statusRequestId}\n`)
+  const verifyOwnerInstalled = async (): Promise<boolean> =>
+    (await publicClient.readContract({
+      address: csw,
+      abi: CSW_OWNER_READ_ABI,
+      functionName: 'isOwnerAddress',
+      args: [embedded],
+    })) as boolean
+
+  let status = await pollRelayStatusEndpoint({
     statusEndpoint,
     timeoutMs: 120_000,
     intervalMs: 2_000,
+    shouldShortCircuitSuccess: verifyOwnerInstalled,
     onTick: (message) => process.stdout.write(`[relay-add-owner] status.${message}\n`),
   })
 
   if (!status.done || !status.success) {
-    throw new Error(`Relay status incomplete: ${JSON.stringify(status.raw)}`)
+    if (await verifyOwnerInstalled()) {
+      process.stdout.write('[relay-add-owner] status=skipped_on_chain_verified\n')
+    } else {
+      throw new Error(`Relay status incomplete: ${JSON.stringify(status.raw)}`)
+    }
   }
 
   const fillTxHash = status.txHash ?? extractRelayExecutionTxHash(status.raw) ?? null

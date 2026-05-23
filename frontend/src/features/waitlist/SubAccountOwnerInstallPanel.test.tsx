@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
+import { getAddress } from 'viem'
+
 import { SubAccountOwnerInstallPanel } from './SubAccountOwnerInstallPanel'
 import {
   SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
@@ -17,6 +19,7 @@ const EMBED = '0xcccccccccccccccccccccccccccccccccccccccc'
 const fetchPreview = vi.fn()
 const handleAdd = vi.fn()
 const isBaseAppInAppContext = vi.fn()
+const useAddOwnerFlowMock = vi.fn()
 
 vi.mock('@/lib/flags/featureFlags', () => ({
   waitlistSubAccountFlowFlag: () => true,
@@ -35,19 +38,22 @@ vi.mock('@/lib/wallet/subAccountOwnerInstall', () => ({
 }))
 
 vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
-  useAddOwnerFlow: () => ({
-    preview: null,
-    previewLoading: false,
-    busy: false,
-    pageError: null,
-    pageNotice: null,
-    txHash: null,
-    eventLog: [],
-    lastErrorDetail: null,
-    isSelfAuthSession: true,
-    fetchPreview,
-    handleAdd,
-  }),
+  useAddOwnerFlow: (...args: unknown[]) => {
+    useAddOwnerFlowMock(...args)
+    return {
+      preview: null,
+      previewLoading: false,
+      busy: false,
+      pageError: null,
+      pageNotice: null,
+      txHash: null,
+      eventLog: [],
+      lastErrorDetail: null,
+      isSelfAuthSession: true,
+      fetchPreview,
+      handleAdd,
+    }
+  },
 }))
 
 vi.mock('@/hooks/useSubAccountSetup', () => ({
@@ -80,7 +86,27 @@ describe('SubAccountOwnerInstallPanel', () => {
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockReset()
     fetchPreview.mockReset()
     handleAdd.mockReset()
+    useAddOwnerFlowMock.mockReset()
     handleAdd.mockResolvedValue(true)
+  })
+
+  it('wires parent-funded Relay add-owner for the sub-account CSW', async () => {
+    vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(false)
+
+    renderPanel(
+      <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
+    )
+
+    await screen.findByText('Build Relay preview')
+
+    expect(useAddOwnerFlowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        canonicalCswAddress: getAddress(PARENT),
+        targetCswAddress: getAddress(SUB),
+        relayFundingCswAddress: getAddress(PARENT),
+        ownerSignerAddress: getAddress(PARENT),
+      }),
+    )
   })
 
   it('shows Relay build preview when embedded EOA is not yet owner', async () => {

@@ -89,6 +89,47 @@ export function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`):
   return `https://api.relay.link/intents/status/v3?requestId=${encodeURIComponent(requestId)}`
 }
 
+/** Prefer orderId — it is the bytes32 bound to depositNative for request-bound deposits. */
+export function resolveRelayStatusRequestId(
+  relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
+): `0x${string}` {
+  return (relay.orderId ?? relay.requestId) as `0x${string}`
+}
+
+export type ParsedRelayIntentStatus = {
+  statusText: string
+  success: boolean
+  done: boolean
+  txHash: `0x${string}` | null
+}
+
+export function parseRelayIntentStatus(raw: unknown): ParsedRelayIntentStatus {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+  const statusText = String(obj?.status ?? obj?.state ?? '').trim().toLowerCase()
+  const txCandidate = obj?.txHash ?? obj?.transactionHash ?? obj?.executionTxHash ?? null
+  const txHash =
+    typeof txCandidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txCandidate)
+      ? (txCandidate as `0x${string}`)
+      : extractRelayExecutionTxHash(raw)
+  const success =
+    obj?.success === true ||
+    statusText === 'success' ||
+    statusText === 'completed' ||
+    statusText === 'executed' ||
+    statusText === 'fulfilled'
+  const done =
+    success ||
+    statusText === 'failed' ||
+    statusText === 'failure' ||
+    statusText === 'error' ||
+    statusText === 'cancelled' ||
+    statusText === 'canceled' ||
+    statusText === 'reverted' ||
+    statusText === 'refund' ||
+    statusText === 'unknown'
+  return { statusText, success, done, txHash }
+}
+
 export function normalizeRelayStatusEndpoint(rawEndpoint: string | null, requestId: `0x${string}`): string {
   const fallback = buildRelayStatusEndpointFromRequestId(requestId)
   const trimmed = typeof rawEndpoint === 'string' ? rawEndpoint.trim() : ''
@@ -139,6 +180,8 @@ export async function pollRelayStatusEndpoint(params: {
   timeoutMs?: number
   intervalMs?: number
   onTick?: (message: string) => void
+  /** When true (e.g. on-chain owner already installed), stop polling early as success. */
+  shouldShortCircuitSuccess?: () => Promise<boolean>
 }): Promise<RelayStatusCheckResult> {
   const timeoutMs = params.timeoutMs ?? 90_000
   const intervalMs = params.intervalMs ?? 2_000
@@ -148,39 +191,31 @@ export async function pollRelayStatusEndpoint(params: {
   let lastTxHash: `0x${string}` | null = null
   while (Date.now() - start < timeoutMs) {
     attempt += 1
+    if (params.shouldShortCircuitSuccess) {
+      try {
+        if (await params.shouldShortCircuitSuccess()) {
+          params.onTick?.(`status_poll.attempt=${attempt} short_circuit=on_chain_verified`)
+          return { done: true, success: true, txHash: lastTxHash, raw: lastRaw }
+        }
+      } catch {
+        /* keep polling */
+      }
+    }
     try {
       const response = await fetch(params.statusEndpoint, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       })
       const raw = await response.json().catch(() => null)
-      const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
-      const statusText = String(obj?.status ?? obj?.state ?? '').trim().toLowerCase()
-      const txCandidate = obj?.txHash ?? obj?.transactionHash ?? obj?.executionTxHash ?? null
-      const txHash =
-        typeof txCandidate === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txCandidate)
-          ? (txCandidate as `0x${string}`)
-          : null
-      const success =
-        obj?.success === true ||
-        statusText === 'success' ||
-        statusText === 'completed' ||
-        statusText === 'executed' ||
-        statusText === 'fulfilled'
-      const done =
-        success ||
-        statusText === 'failed' ||
-        statusText === 'error' ||
-        statusText === 'cancelled' ||
-        statusText === 'reverted'
-
+      const parsed = parseRelayIntentStatus(raw)
       lastRaw = raw
-      const extractedFillTxHash = extractRelayExecutionTxHash(raw)
-      lastTxHash = txHash ?? extractedFillTxHash
+      lastTxHash = parsed.txHash ?? lastTxHash
       params.onTick?.(
-        `status_poll.attempt=${attempt} status=${statusText || 'unknown'} tx=${lastTxHash ?? 'n/a'}`,
+        `status_poll.attempt=${attempt} status=${parsed.statusText || 'unknown'} tx=${lastTxHash ?? 'n/a'}`,
       )
-      if (done) return { done: true, success, txHash: lastTxHash, raw }
+      if (parsed.done) {
+        return { done: true, success: parsed.success, txHash: lastTxHash, raw }
+      }
     } catch {
       params.onTick?.(`status_poll.attempt=${attempt} status=fetch_error`)
     }
@@ -316,6 +351,13 @@ export function extractRelayExecutionTxHash(raw: unknown): `0x${string}` | null 
           : null
     if (hash) return hash
   }
+
+  const inTxHashes = Array.isArray(obj.inTxHashes) ? obj.inTxHashes : []
+  for (const tx of inTxHashes) {
+    const hash = asEvmTxHash(tx)
+    if (hash) return hash
+  }
+
   const steps = Array.isArray(obj.steps) ? obj.steps : []
   for (const step of steps) {
     if (!step || typeof step !== 'object') continue
@@ -432,5 +474,17 @@ export function mapRemoveOwnerSubmissionError(params: {
       ' Re-open the owner list to rebuild preview state, confirm the same owner is still at that index, and fund the CSW if needed.'
     )
   }
+
+  if (
+    normalized.includes('does not recognize this quote requestid') ||
+    normalized.includes('err_relay_status_incomplete:unknown')
+  ) {
+    return 'Relay lost track of this quote. Tap Rebuild preview, then submit again without waiting on a stale preview.'
+  }
+
+  if (normalized.includes('relay owner mutation did not complete')) {
+    return 'Relay has not finished executing this owner change yet. Wait one minute, use Recheck, and only rebuild the preview if on-chain signing is still missing.'
+  }
+
   return null
 }

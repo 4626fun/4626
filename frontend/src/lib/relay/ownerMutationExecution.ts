@@ -12,6 +12,7 @@ import {
   formatCompactEth,
   normalizeRelayStatusEndpoint,
   pollRelayStatusEndpoint,
+  resolveRelayStatusRequestId,
   validatePreviewRelayUserCallIsNativeDepository,
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
@@ -169,8 +170,10 @@ export async function executeOwnerMutationViaRelay(
     }
   }
 
-  const statusEndpoint = normalizeRelayStatusEndpoint(null, relay.requestId)
+  const statusRequestId = resolveRelayStatusRequestId(relay)
+  let statusEndpoint = normalizeRelayStatusEndpoint(null, statusRequestId)
   appendEvent(`relay:preview_request_id=${relay.requestId}`)
+  appendEvent(`relay:status_request_id=${statusRequestId}`)
   appendEvent(`relay:user_call_to=${relay.userCall.to}`)
   appendEvent(`relay:user_call_value=${relay.userCall.value}`)
   appendEvent(`relay:user_call_selector=${relay.userCall.data.slice(0, 10)}`)
@@ -200,6 +203,7 @@ export async function executeOwnerMutationViaRelay(
       telemetryPrefix: 'csw_wallet_sendcalls',
       appendEvent,
     })
+    onTxHash(executeTxHash)
   } else {
     executeTxHash = await submitExternalFunderRelayDeposit({
       walletClient: params.walletClient,
@@ -209,16 +213,56 @@ export async function executeOwnerMutationViaRelay(
     onTxHash(executeTxHash)
   }
 
-  const status = await pollRelayStatusEndpoint({
-    statusEndpoint,
-    timeoutMs: 120_000,
-    intervalMs: 2_000,
-    onTick: (message) => appendEvent(`relay_status.${message}`),
-  })
+  const pollStatus = async (endpoint: string) =>
+    pollRelayStatusEndpoint({
+      statusEndpoint: endpoint,
+      timeoutMs: 120_000,
+      intervalMs: 2_000,
+      shouldShortCircuitSuccess: params.verifyMutation,
+      onTick: (message) => appendEvent(`relay_status.${message}`),
+    })
+
+  let status = await pollStatus(statusEndpoint)
+  const primaryStatusLabel = String(
+    (status.raw as Record<string, unknown> | null)?.status ?? '',
+  )
+    .trim()
+    .toLowerCase()
+  if (
+    primaryStatusLabel === 'unknown' &&
+    relay.orderId &&
+    relay.requestId &&
+    relay.orderId.toLowerCase() !== relay.requestId.toLowerCase()
+  ) {
+    appendEvent(`relay:status_retry_with_request_id=${relay.requestId}`)
+    statusEndpoint = normalizeRelayStatusEndpoint(null, relay.requestId)
+    appendEvent(`relay:status_endpoint=${statusEndpoint}`)
+    status = await pollStatus(statusEndpoint)
+  }
+
   if (!status.done || !status.success) {
-    appendEvent('relay_status.result=failed_or_timeout')
+    const verifiedOnChain = await params.verifyMutation()
+    if (verifiedOnChain) {
+      appendEvent('relay_status.result=timeout_or_failed_but_on_chain_verified')
+      const fillTxHash =
+        extractRelayExecutionTxHash(status.raw) ?? status.txHash ?? executeTxHash
+      if (fillTxHash) onTxHash(fillTxHash)
+      return { txHash: fillTxHash ?? executeTxHash! }
+    }
+
+    const statusLabel = String(
+      (status.raw as Record<string, unknown> | null)?.status ?? 'unknown',
+    )
+      .trim()
+      .toLowerCase()
+    appendEvent(`relay_status.result=failed_or_timeout status=${statusLabel || 'unknown'}`)
+    if (statusLabel === 'unknown') {
+      throw new Error(
+        'Relay does not recognize this quote requestId. Rebuild the preview and submit again without waiting.',
+      )
+    }
     throw new Error(
-      `ERR_RELAY_STATUS_INCOMPLETE:${String((status.raw as Record<string, unknown> | null)?.status ?? 'unknown')}`,
+      `Relay owner mutation did not complete (${statusLabel || 'timeout'}). If your wallet was charged, wait a minute and verify on-chain before retrying.`,
     )
   }
 
@@ -231,6 +275,12 @@ export async function executeOwnerMutationViaRelay(
   }
   onTxHash(fillTxHash)
 
+  const mutationVerified = await params.verifyMutation()
+  if (mutationVerified) {
+    appendEvent('relay_execution.mutation_verified=ok')
+    return { txHash: fillTxHash }
+  }
+
   if (publicClient) {
     const relayExecutionTx = await publicClient.getTransaction({ hash: fillTxHash })
     const relayInput = String(relayExecutionTx.input ?? '').toLowerCase()
@@ -242,27 +292,22 @@ export async function executeOwnerMutationViaRelay(
       appendEvent('relay_execution.selector_chain=skipped_non_fill_tx')
     } else {
       if (!relayInput.startsWith(RELAY_MULTICALL_SELECTOR)) {
-        throw new Error(
-          `Relay fill tx selector mismatch (expected ${RELAY_MULTICALL_SELECTOR}, got ${relayInput.slice(0, 10) || 'n/a'}).`,
+        appendEvent(
+          `relay_execution.selector_chain=missing_multicall expected=${RELAY_MULTICALL_SELECTOR}`,
         )
-      }
-      if (!relayInput.includes(EXECUTE_WITHOUT_CHAIN_ID_SELECTOR.slice(2))) {
-        throw new Error(
-          `Relay fill tx missing executeWithoutChainIdValidation selector (${EXECUTE_WITHOUT_CHAIN_ID_SELECTOR}).`,
+      } else if (!relayInput.includes(EXECUTE_WITHOUT_CHAIN_ID_SELECTOR.slice(2))) {
+        appendEvent(
+          `relay_execution.selector_chain=missing_execute_without_chain_id=${EXECUTE_WITHOUT_CHAIN_ID_SELECTOR}`,
         )
+      } else if (!relayInput.includes(params.mutationSelector.slice(2))) {
+        appendEvent(
+          `relay_execution.selector_chain=missing_mutation_selector=${params.mutationSelector}`,
+        )
+      } else {
+        appendEvent('relay_execution.selector_chain=ok')
       }
-      if (!relayInput.includes(params.mutationSelector.slice(2))) {
-        throw new Error(`Relay fill tx missing mutation selector (${params.mutationSelector}).`)
-      }
-      appendEvent('relay_execution.selector_chain=ok')
     }
   }
 
-  const mutationVerified = await params.verifyMutation()
-  if (!mutationVerified) {
-    throw new Error('Relay reported success, but the on-chain owner mutation did not apply.')
-  }
-  appendEvent('relay_execution.mutation_verified=ok')
-
-  return { txHash: fillTxHash }
+  throw new Error('Relay reported success, but the on-chain owner mutation did not apply.')
 }
