@@ -63,6 +63,17 @@ export type DebankWalletPortfolioBatch = {
   results: Record<string, DebankWalletPortfolio | null>
 }
 
+export type TrayPortfolioSource = 'debank' | 'base-etherscan'
+
+/** Unified tray snapshot (DeBank or Base/etherscan fallback). */
+export type AccountTrayPortfolio = DebankWalletPortfolio
+
+export type AccountTrayPortfolioBatch = {
+  asOf: number
+  results: Record<string, AccountTrayPortfolio | null>
+  sources: Record<string, TrayPortfolioSource | null>
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { headers: { Accept: 'application/json' } })
   if (!res.ok) {
@@ -174,4 +185,43 @@ export async function fetchDebankWalletPortfolioBatch(params: {
 
   if (Object.keys(results).length === 0) return null
   return { asOf: asOf || Date.now(), results }
+}
+
+/** Account tray: DeBank lite first, Base Etherscan fallback — single request. */
+export async function fetchAccountTrayPortfolioBatch(params: {
+  addresses: string[]
+  topTokenCount?: number
+}): Promise<AccountTrayPortfolioBatch | null> {
+  const { addresses, topTokenCount } = params
+  if (!addresses || addresses.length === 0) return null
+
+  const normalized = normalizeAddresses(addresses)
+  if (normalized.list.length === 0) return null
+
+  const batches = chunk(normalized.list, 5)
+  const results: Record<string, AccountTrayPortfolio | null> = {}
+  const sources: Record<string, TrayPortfolioSource | null> = {}
+  let asOf = 0
+
+  for (const group of batches) {
+    try {
+      const qs = new URLSearchParams({ ids: group.join(',') })
+      if (typeof topTokenCount === 'number' && topTokenCount > 0) {
+        qs.set('topTokens', String(Math.min(topTokenCount, 100)))
+      }
+      const envelope = await fetchJson<ApiEnvelope<AccountTrayPortfolioBatch>>(
+        `/api/wallet/trayPortfolio?${qs.toString()}`,
+      )
+      const data = envelope.data ?? null
+      if (!data) continue
+      asOf = Math.max(asOf, typeof data.asOf === 'number' ? data.asOf : 0)
+      for (const [k, v] of Object.entries(data.results ?? {})) results[k.toLowerCase()] = v
+      for (const [k, v] of Object.entries(data.sources ?? {})) sources[k.toLowerCase()] = v
+    } catch {
+      continue
+    }
+  }
+
+  if (Object.keys(results).length === 0) return null
+  return { asOf: asOf || Date.now(), results, sources }
 }

@@ -29,7 +29,7 @@
     "smoke:a11y": "tsx scripts/a11y-smoke.ts",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview --config vite.config.ts",
-    "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out public",
+    "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out public && node scripts/sync-static-favicon-head.mjs",
     "generate:social-preview": "node scripts/generate-social-preview.mjs",
     "generate:brand-assets:static": "pnpm generate:social-preview && pnpm generate:brand-icons",
     "report:footprint": "node scripts/report-footprint.mjs",

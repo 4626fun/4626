@@ -144,6 +144,15 @@ describe('public manifest assets', () => {
     }
   })
 
+  it('keeps the marketing homepage immersive shell on the canonical favicon kit', () => {
+    const immersiveHtml = readFileSync(path.join(publicRoot, 'immersive/index.html'), 'utf8')
+
+    expect(immersiveHtml).toContain(TAB_ICON_32)
+    expect(immersiveHtml).toContain('/favicon.ico')
+    expect(immersiveHtml).not.toContain('rel="mask-icon"')
+    expect(immersiveHtml).not.toContain('app-tab-icon-32.png?v=9')
+  })
+
   it('points Base mini-app manifest iconUrl at the 200px domain icon asset', () => {
     const manifest = JSON.parse(readFileSync(farcasterManifestPath, 'utf8')) as {
       miniapp?: { iconUrl?: string; splashImageUrl?: string; version?: string }
@@ -151,7 +160,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('3')
+    expect(manifest.miniapp?.version).toBe('4')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

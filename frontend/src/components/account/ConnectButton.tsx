@@ -16,7 +16,7 @@ import {
 } from '@/components/account/trayEvents'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { fetchDebankTotalBalanceBatch, fetchDebankWalletPortfolioBatch } from '@/lib/debank/client'
+import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
@@ -25,7 +25,7 @@ import {
 } from '@/components/account/CanonicalIdentityCard'
 import {
   buildTrayAssetHoldings,
-  buildTrayHoldings,
+  buildTrayHoldingsFromPortfolios,
   buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
   buildTrayZoraHoldings,
@@ -388,46 +388,38 @@ export function ConnectButton({
     () => zoraTokenWalletSources.map((wallet) => wallet.address.toLowerCase()).sort().join(','),
     [zoraTokenWalletSources],
   )
-  const trayBalancesQuery = useQuery({
-    queryKey: ['account-tray', 'debank-total-balance', trayWalletKey],
+  const trayPortfolioQuery = useQuery({
+    queryKey: ['account-tray', 'wallet-portfolio', trayWalletKey],
     enabled: auth.hasSession && trayWalletSources.length > 0,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
-      const result = await fetchDebankTotalBalanceBatch({
+      const batch = await fetchAccountTrayPortfolioBatch({
         addresses: trayWalletSources.map((wallet) => wallet.address),
-      })
-      return result?.results ?? null
-    },
-  })
-  const trayHoldings = useMemo(
-    () =>
-      buildTrayHoldings({
-        wallets: trayWalletSources,
-        debankResults: trayBalancesQuery.data ?? null,
-      }),
-    [trayBalancesQuery.data, trayWalletSources],
-  )
-  const trayPortfolioQuery = useQuery({
-    queryKey: ['account-tray', 'debank-wallet-portfolio', zoraTokenWalletKey],
-    enabled: auth.hasSession && zoraTokenWalletSources.length > 0,
-    staleTime: 60_000,
-    retry: 0,
-    queryFn: async () => {
-      const batch = await fetchDebankWalletPortfolioBatch({
-        addresses: zoraTokenWalletSources.map((wallet) => wallet.address),
         topTokenCount: 50,
       })
-      return batch?.results ?? null
+      return batch
     },
   })
+  const trayPortfolioResults = useMemo(
+    () => trayPortfolioQuery.data?.results ?? null,
+    [trayPortfolioQuery.data],
+  )
+  const trayHoldings = useMemo(
+    () =>
+      buildTrayHoldingsFromPortfolios({
+        wallets: trayWalletSources,
+        portfolios: trayPortfolioResults,
+      }),
+    [trayPortfolioResults, trayWalletSources],
+  )
   const trayTokenRows = useMemo(
     () =>
       buildTrayTokenRowsFromPortfolios({
         wallets: zoraTokenWalletSources,
-        portfolios: trayPortfolioQuery.data ?? null,
+        portfolios: trayPortfolioResults,
       }),
-    [trayPortfolioQuery.data, zoraTokenWalletSources],
+    [trayPortfolioResults, zoraTokenWalletSources],
   )
   const trayTokenAddressesKey = useMemo(
     () => collectZoraLookupAddresses(trayTokenRows).join(','),
@@ -463,7 +455,20 @@ export function ConnectButton({
     () => buildTrayZoraHoldings(trayTokenRows, trayZoraTokensQuery.data ?? {}),
     [trayTokenRows, trayZoraTokensQuery.data],
   )
-  const trayHoldingsLoading = trayPortfolioQuery.isLoading || trayBalancesQuery.isLoading
+  const trayPortfolioSourceNote = useMemo(() => {
+    const sources = trayPortfolioQuery.data?.sources
+    if (!sources) return null
+    const values = Object.values(sources).filter(Boolean)
+    if (values.length === 0) return null
+    if (values.every((s) => s === 'base-etherscan')) {
+      return 'Balances from Base (Etherscan). DeFi positions and other chains are not included.'
+    }
+    if (values.some((s) => s === 'base-etherscan')) {
+      return 'Some wallets use Base-only balance data (Etherscan fallback).'
+    }
+    return null
+  }, [trayPortfolioQuery.data?.sources])
+  const trayHoldingsLoading = trayPortfolioQuery.isLoading
   const trayZoraTokensLoading = trayPortfolioQuery.isLoading || trayZoraTokensQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
   const trayPointsLookupWallet = useMemo(() => {
@@ -666,6 +671,7 @@ export function ConnectButton({
                   loading={trayHoldingsLoading}
                   holdings={trayHoldingsList}
                   holdingsLoading={trayPortfolioQuery.isLoading}
+                  portfolioSourceNote={trayPortfolioSourceNote}
                   zoraTokens={trayZoraTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
@@ -825,6 +831,7 @@ export function ConnectButton({
                   loading={trayHoldingsLoading}
                   holdings={trayHoldingsList}
                   holdingsLoading={trayPortfolioQuery.isLoading}
+                  portfolioSourceNote={trayPortfolioSourceNote}
                   zoraTokens={trayZoraTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
@@ -986,6 +993,7 @@ function RelayTrayPortfolioModule(props: {
   loading: boolean
   holdings: TrayAssetHolding[]
   holdingsLoading: boolean
+  portfolioSourceNote?: string | null
   zoraTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
 }) {
@@ -1003,6 +1011,9 @@ function RelayTrayPortfolioModule(props: {
           {formatUsdValue(props.aggregateUsd)}
         </div>
         <div className="mt-1 text-[10px] text-zinc-500 truncate">{props.activeNetworkLabel}</div>
+        {props.portfolioSourceNote ? (
+          <div className="mt-1.5 text-[10px] leading-snug text-zinc-500">{props.portfolioSourceNote}</div>
+        ) : null}
 
         <div className="mt-3 flex items-center gap-2 border-b border-white/8 pb-1">
           {(['tokens', 'activity'] as const).map((value) => (

@@ -249,6 +249,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/debank/totalBalanceBatch': () => import('./api/_handlers/debank/_totalBalanceBatch'),
         '/api/debank/tokenList': () => import('./api/_handlers/debank/_tokenList'),
         '/api/debank/walletPortfolioBatch': () => import('./api/_handlers/debank/_walletPortfolioBatch'),
+        '/api/wallet/trayPortfolio': () => import('./api/_handlers/wallet/_trayPortfolio'),
         '/api/status/protocolReport': () => import('./api/_handlers/status/_protocolReport'),
         '/api/status/vaultReport': () => import('./api/_handlers/status/_vaultReport'),
         '/api/auth/admin': () => import('./api/_handlers/auth/_admin'),

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildTrayAssetHoldings,
   buildTrayHoldings,
+  buildTrayHoldingsFromPortfolios,
   buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
   parseDebankToken,
@@ -34,6 +35,27 @@ describe('buildTrayWalletSources', () => {
         externalEoaAddress: external,
       }),
     ).toHaveLength(2)
+  })
+})
+
+describe('buildTrayHoldingsFromPortfolios', () => {
+  it('maps unified portfolio snapshots into network totals', () => {
+    const wallet = { kind: 'canonical' as const, address: CSW, label: '4626 CSW' }
+    const holdings = buildTrayHoldingsFromPortfolios({
+      wallets: [wallet],
+      portfolios: {
+        [CSW.toLowerCase()]: {
+          address: CSW,
+          totalUsdValue: 12,
+          topTokens: [],
+          activeChains: [{ id: 'base', name: 'Base', usdValue: 12 }],
+          protocols: [],
+          asOf: Date.now(),
+        },
+      },
+    })
+    expect(holdings.aggregateUsd).toBe(12)
+    expect(holdings.rows[0]?.networkId).toBe('base')
   })
 })
 

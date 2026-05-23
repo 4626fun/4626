@@ -64,6 +64,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'debank/totalBalanceBatch': () => import('./debank/_totalBalanceBatch.js'),
   'debank/tokenList': () => import('./debank/_tokenList.js'),
   'debank/walletPortfolioBatch': () => import('./debank/_walletPortfolioBatch.js'),
+  'wallet/trayPortfolio': () => import('./wallet/_trayPortfolio.js'),
   'deploy/v2/session/cancel': () => import('./deploy/v2/session/_cancel.js'),
   'deploy/v2/session/create': () => import('./deploy/v2/session/_create.js'),
   'deploy/v2/session/dry-run': () => import('./deploy/v2/session/_dryRun.js'),

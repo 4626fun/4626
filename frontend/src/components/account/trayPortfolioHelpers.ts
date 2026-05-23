@@ -1,4 +1,4 @@
-import type { DebankPortfolioToken, DebankToken, DebankWalletPortfolio } from '@/lib/debank/client'
+import type { AccountTrayPortfolio, DebankPortfolioToken, DebankToken } from '@/lib/debank/client'
 
 export type TrayWalletKind = 'canonical' | 'external'
 
@@ -159,6 +159,35 @@ export function parseDebankToken(token: DebankToken): {
     amount,
     usdValue,
   }
+}
+
+/** Build network totals from unified tray portfolio snapshots (DeBank or Base/etherscan). */
+export function buildTrayHoldingsFromPortfolios(params: {
+  wallets: TrayWalletSource[]
+  portfolios: Record<string, AccountTrayPortfolio | null> | null
+}): ReturnType<typeof buildTrayHoldings> {
+  const debankResults: Record<string, { totalUsdValue: number; chains: Array<{ id: string; name?: string; logoUrl?: string; usdValue: number }> } | null> =
+    {}
+
+  for (const wallet of params.wallets) {
+    const key = wallet.address.toLowerCase()
+    const portfolio = params.portfolios?.[key]
+    if (!portfolio) {
+      debankResults[key] = null
+      continue
+    }
+    debankResults[key] = {
+      totalUsdValue: portfolio.totalUsdValue,
+      chains: (portfolio.activeChains ?? []).map((chain) => ({
+        id: chain.id,
+        name: chain.name,
+        logoUrl: chain.logoUrl,
+        usdValue: chain.usdValue,
+      })),
+    }
+  }
+
+  return buildTrayHoldings({ wallets: params.wallets, debankResults })
 }
 
 export function buildTrayHoldings(params: {
@@ -350,7 +379,7 @@ export function portfolioTokenToDebankToken(token: DebankPortfolioToken): Debank
 /** Flatten server wallet portfolios into tray token rows (DeBank all_token_list). */
 export function buildTrayTokenRowsFromPortfolios(params: {
   wallets: TrayWalletSource[]
-  portfolios: Record<string, DebankWalletPortfolio | null> | null
+  portfolios: Record<string, AccountTrayPortfolio | null> | null
 }): TrayWalletTokenRow[] {
   const out: TrayWalletTokenRow[] = []
   for (const wallet of params.wallets) {
