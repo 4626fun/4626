@@ -6,18 +6,16 @@ import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
-import {
-  ENTRY_POINT_V06_BASE,
-  GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI,
-} from '@/lib/wallet/cswOwnerAbi'
+import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
+import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
-  signCswUserOpHashViaTypedDataV4,
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
   getUserOpHashWithoutChainIdLocal,
+  preflightOwnerKeyMismatch,
   unwrapDoubleHexEncodedHash,
   type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
@@ -206,7 +204,8 @@ async function assertSelfFundedPrefundBudget(params: {
   params.appendEvent(`relay_part1:prefund_native_wei=${nativeWei.toString(10)}`)
   params.appendEvent(`relay_part1:prefund_entrypoint_deposit_wei=${entryPointDepositWei.toString(10)}`)
 
-  const gasReserveWei = GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI
+  const gasReserveWei = await resolveRelayPart1UserOpGasReserveWei(params.publicClient)
+  params.appendEvent(`relay_part1:prefund_gas_reserve_wei=${gasReserveWei.toString(10)}`)
   const requiredWei = params.depositWei + gasReserveWei
 
   if (nativeWei < params.depositWei) {
@@ -226,6 +225,17 @@ async function assertSelfFundedPrefundBudget(params: {
 
 function formatRelayPart1Error(error: unknown): string {
   return getWalletErrorMessage(error)
+}
+
+function isUserRejectedWalletAction(error: unknown): boolean {
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return (
+    message.includes('user rejected') ||
+    message.includes('user denied') ||
+    message.includes('request rejected') ||
+    message.includes('action_rejected') ||
+    message.includes('rejected the request')
+  )
 }
 
 /**
@@ -261,6 +271,63 @@ async function ensureSelfAuthWalletAuthorized(params: {
   }
 }
 
+async function resolvePreparedCallsSignHash(params: {
+  preparedUserOpRaw: unknown
+  signatureRequestHash: Hex
+  chainId: number
+  signAfterPaymasterStrip: boolean
+  appendEvent: (row: string) => void
+}): Promise<Hex> {
+  if (!params.signAfterPaymasterStrip) {
+    return unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+  }
+  const resolved = resolveSelfFundedSignHashAfterPaymasterStrip({
+    preparedUserOp: params.preparedUserOpRaw,
+    signatureRequestHash: params.signatureRequestHash,
+    chainId: params.chainId,
+  })
+  params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${resolved.mode}`)
+  return resolved.hash
+}
+
+async function signSelfAuthPreparedUserOpHash(params: {
+  walletRequest: WalletRequest
+  fundingCsw: `0x${string}`
+  hashToSign: Hex
+  appendEvent: (row: string) => void
+}): Promise<{ signature: Hex; preparedCallsSignerAddress: `0x${string}` | null }> {
+  params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
+  const signature = (await params.walletRequest({
+    method: 'personal_sign',
+    params: [params.hashToSign, params.fundingCsw],
+  })) as Hex
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+
+  let preparedCallsSignerAddress: `0x${string}` | null = null
+  try {
+    const guardOutcome = await preflightOwnerKeyMismatch({
+      walletRequest: params.walletRequest,
+      sender: params.fundingCsw,
+      hashToSign: params.hashToSign,
+      signature,
+      sessionKind: 'self_auth',
+    })
+    if (
+      (guardOutcome.kind === 'ok' || guardOutcome.kind === 'skipped_self_auth_session_key') &&
+      guardOutcome.parsedOwnerAddress
+    ) {
+      preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
+      params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+    }
+  } catch {
+    /* fail open — Base App webauthn payloads use sender address */
+  }
+
+  return { signature, preparedCallsSignerAddress }
+}
+
 async function sendSignedPreparedUserOp(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -269,23 +336,32 @@ async function sendSignedPreparedUserOp(params: {
     chainId?: string
     userOp: Record<string, string>
   }
-  hashToSign: Hex
+  preparedUserOpRaw: unknown
+  signatureRequestHash: Hex
+  signAfterPaymasterStrip: boolean
   chainId: number
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
-  params.appendEvent('relay_part1:sign_mode=eth_signTypedData_v4')
-  const signature = await signCswUserOpHashViaTypedDataV4({
-    walletRequest: params.walletRequest,
-    smartWallet: params.fundingCsw,
-    signerAddress: params.fundingCsw,
+  const hashToSign = await resolvePreparedCallsSignHash({
+    preparedUserOpRaw: params.preparedUserOpRaw,
+    signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
-    userOpHash: params.hashToSign,
+    signAfterPaymasterStrip: params.signAfterPaymasterStrip,
+    appendEvent: params.appendEvent,
+  })
+
+  const { signature, preparedCallsSignerAddress } = await signSelfAuthPreparedUserOpHash({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    hashToSign,
+    appendEvent: params.appendEvent,
   })
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.fundingCsw,
     signature,
+    signerAddress: preparedCallsSignerAddress,
     mode: 'auto',
   })
 
@@ -361,8 +437,7 @@ function resolveBundlerUrl(): string {
   return resolveCdpPaymasterUrl(bundlerEnv) || '/api/paymaster'
 }
 
-function buildSelfFundedPrepareCapabilities(depositWei: bigint): Record<string, unknown> {
-  const gasReserveWei = GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI
+function buildSelfFundedPrepareCapabilities(depositWei: bigint, gasReserveWei: bigint): Record<string, unknown> {
   const requiredWei = depositWei + gasReserveWei
   return {
     // EIP-5792: optional paymaster must not block the request; omit URL so we
@@ -505,7 +580,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
   }
 
   const depositWei = BigInt(params.userCall.value)
-  const prepareCapabilities = buildSelfFundedPrepareCapabilities(depositWei)
+  const gasReserveWei = await resolveRelayPart1UserOpGasReserveWei(params.publicClient ?? null)
+  params.appendEvent(`relay_part1:prepare_required_gas_reserve_wei=${gasReserveWei.toString(10)}`)
+  const prepareCapabilities = buildSelfFundedPrepareCapabilities(depositWei, gasReserveWei)
 
   const prepareResult = (await params.walletRequest({
     method: 'wallet_prepareCalls',
@@ -544,6 +621,34 @@ async function submitViaPreparedCallsSelfFunded(params: {
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
 
+    params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
+    let stripError: unknown = null
+    try {
+      const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
+      params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
+
+      return await sendSignedPreparedUserOp({
+        walletRequest: params.walletRequest,
+        fundingCsw: params.fundingCsw,
+        prepareResult: {
+          type: prepareResult.type,
+          chainId: prepareResult.chainId,
+          userOp: serializeUserOpForPreparedCallsSend(strippedOp),
+        },
+        preparedUserOpRaw: prepareResult.userOp,
+        signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+        signAfterPaymasterStrip: true,
+        chainId: params.chainId,
+        chainIdHex,
+        appendEvent: params.appendEvent,
+      })
+    } catch (error) {
+      stripError = error
+      params.appendEvent(
+        `relay_part1:strip_paymaster_error=${formatRelayPart1Error(error).slice(0, 220)}`,
+      )
+    }
+
     if (params.publicClient) {
       try {
         return await submitViaBundlerSelfFunded({
@@ -560,30 +665,8 @@ async function submitViaPreparedCallsSelfFunded(params: {
       }
     }
 
-    params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
-    try {
-      const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
-      const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
-      params.appendEvent('relay_part1:strip_paymaster_sign_mode=prepare_session_hash')
-      params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
-
-      return await sendSignedPreparedUserOp({
-        walletRequest: params.walletRequest,
-        fundingCsw: params.fundingCsw,
-        prepareResult: {
-          type: prepareResult.type,
-          chainId: prepareResult.chainId,
-          userOp: serializeUserOpForPreparedCallsSend(strippedOp),
-        },
-        hashToSign,
-        chainId: params.chainId,
-        chainIdHex,
-        appendEvent: params.appendEvent,
-      })
-    } catch (stripError) {
-      params.appendEvent(
-        `relay_part1:strip_paymaster_error=${formatRelayPart1Error(stripError).slice(0, 220)}`,
-      )
+    if (stripError) {
+      throw stripError
     }
 
     params.appendEvent('relay_part1:warn send_calls_blocked_paymaster_injected')
@@ -594,7 +677,6 @@ async function submitViaPreparedCallsSelfFunded(params: {
 
   params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
 
-  const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
   return await sendSignedPreparedUserOp({
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
@@ -603,7 +685,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
       chainId: prepareResult.chainId,
       userOp: serializeUserOpForPreparedCallsSend(parseWalletPreparedUserOpV06(prepareResult.userOp)),
     },
-    hashToSign,
+    preparedUserOpRaw: prepareResult.userOp,
+    signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+    signAfterPaymasterStrip: false,
     chainId: params.chainId,
     chainIdHex,
     appendEvent: params.appendEvent,
@@ -614,15 +698,14 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * Submit Relay Part 1 (Depository.depositNative) from a Base App self-auth CSW
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
+ * Lane order matches the May 12 in-repo golden path (`67e90d9b3` /remove-owner):
+ *   1. `wallet_sendCalls` with preview-bound Depository `depositNative` only
+ *   2. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
+ *   3. Direct self-funded bundler UserOp when publicClient is available
+ *
  * EntryPoint v0.6 self-fund path: when `paymasterAndData` is empty, `_validateAccountPrepayment`
  * sets `missingAccountFunds = requiredPrefund - (nativeBalance + EntryPoint.deposits[sender])`
- * and the CSW `payPrefund` modifier tops up EntryPoint from native ETH. No paymaster
- * `validatePaymasterUserOp` / `postOp` runs.
- *
- * `wallet_sendCalls` in Base App can auto-attach Coinbase's USDC paymaster even
- * when the dapp omits paymasterService. When Base App injects paymasterAndData
- * on prepareCalls, prefer direct self-funded bundler UserOp, then strip+prepared
- * send, then wallet_sendCalls last (may still attach paymaster and stall Part 2).
+ * and the CSW `payPrefund` modifier tops up EntryPoint from native ETH.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -631,49 +714,60 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   chainId: number
   publicClient?: PublicClient
   /**
-   * When Base App injects paymasterAndData on wallet_prepareCalls, fall back to a
-   * direct self-funded bundler UserOp (paymasterAndData = 0x). Requires publicClient.
+   * When prepare/sendCalls lanes fail, fall back to a direct self-funded bundler
+   * UserOp (paymasterAndData = 0x). Requires publicClient.
    */
   allowBundlerFallback?: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   const allowBundlerFallback =
     params.allowBundlerFallback !== false && Boolean(params.publicClient)
+
+  let lastError: unknown = null
+
+  try {
+    return await submitViaSendCallsSelfFunded({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      userCall: params.userCall,
+      chainId: params.chainId,
+      appendEvent: params.appendEvent,
+    })
+  } catch (sendCallsError) {
+    lastError = sendCallsError
+    if (isUserRejectedWalletAction(sendCallsError)) {
+      throw sendCallsError
+    }
+    params.appendEvent(
+      `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
+    )
+  }
+
   try {
     return await submitViaPreparedCallsSelfFunded({
       ...params,
     })
   } catch (preparedError) {
-    const preparedMessage = formatRelayPart1Error(preparedError)
-    if (
-      preparedMessage.includes('USDC paymaster') ||
-      preparedMessage.includes('stalls Relay Part 2')
-    ) {
+    lastError = preparedError
+    if (isUserRejectedWalletAction(preparedError)) {
       throw preparedError
     }
-    params.appendEvent(`relay_part1:prepare_calls_error=${preparedMessage.slice(0, 220)}`)
-    try {
-      return await submitViaSendCallsSelfFunded({
-        walletRequest: params.walletRequest,
-        fundingCsw: params.fundingCsw,
-        userCall: params.userCall,
-        chainId: params.chainId,
-        appendEvent: params.appendEvent,
-      })
-    } catch (sendCallsError) {
-      params.appendEvent(
-        `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
-      )
-    }
-    if (!allowBundlerFallback || !params.publicClient) {
-      throw preparedError
-    }
-    return await submitViaBundlerSelfFunded({
-      walletRequest: params.walletRequest,
-      fundingCsw: params.fundingCsw,
-      userCall: params.userCall,
-      publicClient: params.publicClient,
-      appendEvent: params.appendEvent,
-    })
+    params.appendEvent(
+      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
+    )
   }
+
+  if (!allowBundlerFallback || !params.publicClient) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(formatRelayPart1Error(lastError))
+  }
+
+  return await submitViaBundlerSelfFunded({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    userCall: params.userCall,
+    publicClient: params.publicClient,
+    appendEvent: params.appendEvent,
+  })
 }

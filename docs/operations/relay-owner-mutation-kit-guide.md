@@ -52,7 +52,7 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 4626 replicates Part 1 by:
 
 1. Server `/quote/v2` with `user = depositor` (CSW for self-auth), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`, **`originChainId = destinationChainId = 8453`**, `tradeType = EXACT_OUTPUT`.
-2. Client submits preview **`userCall`** = Depository `depositNative` (`0x49290c1c`) via Base App **`wallet_prepareCalls` → `wallet_sendPreparedCalls`** with **no paymaster URL** (not `wallet_sendCalls`, which can attach Coinbase USDC sponsorship). When Base App still injects `paymasterAndData`, the client **strips it to `0x`**, recomputes the self-funded UserOp digest, re-signs with `personal_sign`, and submits the stripped UserOp (no on-chain USDC paymaster).
+2. Client submits preview **`userCall`** = Depository `depositNative` (`0x49290c1c`) via Base App **`wallet_sendCalls` first** (May 12 golden path). If sendCalls fails, fall back to **`wallet_prepareCalls` → strip injected paymaster → `wallet_sendPreparedCalls`**, then direct self-funded bundler UserOp when needed. Do not attach a paymaster URL for Part 1 — Relay Part 2 stalls when Base App injects USDC sponsorship on the deposit UserOp.
 3. Poll `/intents/status/v3` with `orderId ?? requestId`; verify on-chain `isOwnerAddress(embeddedEoa)`.
 
 Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `submitRelayPart1SelfFunded.ts`.

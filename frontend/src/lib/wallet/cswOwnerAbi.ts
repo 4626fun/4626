@@ -22,7 +22,7 @@ export const GOLDEN_RELAY_PART1_PROBE_CSW =
  */
 export const CSW_EXECUTE_BATCH_SELECTOR = '0x34fcd5be' as const
 
-/** Golden Part 1 internal tx #1: CSW → EntryPoint v0.6 UserOp prefund. */
+/** May 5 golden Part 1 EntryPoint prefund — RPC-failure fallback only; live paths use `relayPart1GasReserve`. */
 export const GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI = 85_989_948_096n
 
 /** EntryPoint v0.6 — deterministic on Base and all EVM chains. */

@@ -1,13 +1,13 @@
 import { encodeFunctionData, type Address, type Hex } from 'viem'
 
 import {
-  GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI,
+  resolveRelayPart1UserOpGasReserveWei,
+} from '../../../src/lib/relay/relayPart1GasReserve.js'
+import {
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
   ENTRY_POINT_V06_BASE,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
-
-const USER_OP_GAS_BUFFER_UNITS = 400_000n
 const ENTRY_POINT_V06 = ENTRY_POINT_V06_BASE
 
 const CSW_EXECUTE_BATCH_ABI = [
@@ -46,7 +46,7 @@ export type RelayDepositSimulation = {
   funderBalanceWei: string
   depositWei: string
   gasBufferWei: string
-  /** Present for CSW self-auth: golden Part 1 EntryPoint prefund reference. */
+  /** Live Part 1 UserOp gas reserve estimate (`gasPrice × buffer`). */
   entryPointPrefundWei?: string
 }
 
@@ -140,9 +140,9 @@ export async function simulateRelayDepositUserCall(params: {
     address: params.funderAddress,
   })
 
-  const [funderBalanceWei, gasPrice, entryPointDepositWei] = await Promise.all([
+  const [funderBalanceWei, gasReserveWei, entryPointDepositWei] = await Promise.all([
     params.publicClient.getBalance({ address: params.funderAddress }),
-    params.publicClient.getGasPrice(),
+    resolveRelayPart1UserOpGasReserveWei(params.publicClient),
     funderIsSmartWallet && typeof params.publicClient.readContract === 'function'
       ? params.publicClient
           .readContract({
@@ -156,16 +156,8 @@ export async function simulateRelayDepositUserCall(params: {
       : Promise.resolve(0n),
   ])
 
-  const gasBufferWei = gasPrice * USER_OP_GAS_BUFFER_UNITS
-  const entryPointPrefundWei = funderIsSmartWallet
-    ? GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI
-    : 0n
-  const gasReserveWei = funderIsSmartWallet
-    ? (entryPointPrefundWei > gasBufferWei ? entryPointPrefundWei : gasBufferWei)
-    : gasBufferWei
-
   // Depository value must come from CSW native balance. Gas can draw from native
-  // and/or the CSW's EntryPoint deposit bucket (golden Part 1 internal tx #1).
+  // and/or the CSW's EntryPoint.depositTo balance.
   const combinedGasBudget = funderBalanceWei + entryPointDepositWei
   const requiredWei = depositWei + gasReserveWei
 
@@ -176,7 +168,7 @@ export async function simulateRelayDepositUserCall(params: {
       funderBalanceWei: funderBalanceWei.toString(10),
       depositWei: depositWei.toString(10),
       gasBufferWei: gasReserveWei.toString(10),
-      entryPointPrefundWei: entryPointPrefundWei > 0n ? entryPointPrefundWei.toString(10) : undefined,
+      entryPointPrefundWei: funderIsSmartWallet ? gasReserveWei.toString(10) : undefined,
     }
   }
 
@@ -187,7 +179,7 @@ export async function simulateRelayDepositUserCall(params: {
       funderBalanceWei: funderBalanceWei.toString(10),
       depositWei: depositWei.toString(10),
       gasBufferWei: gasReserveWei.toString(10),
-      entryPointPrefundWei: entryPointPrefundWei > 0n ? entryPointPrefundWei.toString(10) : undefined,
+      entryPointPrefundWei: funderIsSmartWallet ? gasReserveWei.toString(10) : undefined,
     }
   }
 
@@ -218,7 +210,7 @@ export async function simulateRelayDepositUserCall(params: {
       funderBalanceWei: funderBalanceWei.toString(10),
       depositWei: depositWei.toString(10),
       gasBufferWei: gasReserveWei.toString(10),
-      entryPointPrefundWei: entryPointPrefundWei > 0n ? entryPointPrefundWei.toString(10) : undefined,
+      entryPointPrefundWei: funderIsSmartWallet ? gasReserveWei.toString(10) : undefined,
     }
   } catch (error) {
     return {
@@ -227,7 +219,7 @@ export async function simulateRelayDepositUserCall(params: {
       funderBalanceWei: funderBalanceWei.toString(10),
       depositWei: depositWei.toString(10),
       gasBufferWei: gasReserveWei.toString(10),
-      entryPointPrefundWei: entryPointPrefundWei > 0n ? entryPointPrefundWei.toString(10) : undefined,
+      entryPointPrefundWei: funderIsSmartWallet ? gasReserveWei.toString(10) : undefined,
     }
   }
 }

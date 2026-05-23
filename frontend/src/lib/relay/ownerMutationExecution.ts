@@ -21,7 +21,7 @@ import {
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import { validateGoldenCswDepositoryPart1UserCall } from '@/lib/relay/goldenRelayPart1Shape'
 import { notifyRelaySolverAfterPart1Deposit } from '@/lib/relay/notifyRelaySolverDeposit'
-import { GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI } from '@/lib/wallet/cswOwnerAbi'
+import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
@@ -173,7 +173,9 @@ export async function executeOwnerMutationViaRelay(
     const latestCswBalanceWei = await publicClient.getBalance({ address: fundingCswAddress })
     appendEvent(`precheck:funding_csw=${fundingCswAddress}`)
     appendEvent(`precheck:funding_csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
-    const requiredWithGasReserve = requiredDepositWei + GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI
+    const gasReserveWei = await resolveRelayPart1UserOpGasReserveWei(publicClient)
+    appendEvent(`precheck:gas_reserve_wei=${gasReserveWei.toString(10)}`)
+    const requiredWithGasReserve = requiredDepositWei + gasReserveWei
     if (requiredDepositWei > 0n && latestCswBalanceWei < requiredDepositWei) {
       const walletLabel = fundingFromParentWallet ? 'Main Base wallet' : 'Smart wallet'
       const targetHint = fundingFromParentWallet
