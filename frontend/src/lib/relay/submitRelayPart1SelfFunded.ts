@@ -1,4 +1,5 @@
 import { createWalletClient, custom, getAddress, type Address, type Hex, type PublicClient } from 'viem'
+import { entryPoint06Address, getUserOperationHash } from 'viem/account-abstraction'
 import { base } from 'viem/chains'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
@@ -14,7 +15,11 @@ import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
 } from '@/lib/wallet/onboardingWalletPrepared'
-import { unwrapDoubleHexEncodedHash } from '@/lib/wallet/onboardingWalletReplayable'
+import {
+  getUserOpHashWithoutChainIdLocal,
+  unwrapDoubleHexEncodedHash,
+  type V06UserOpFields,
+} from '@/lib/wallet/onboardingWalletReplayable'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 
@@ -50,6 +55,133 @@ export function parseEntryPointPaymasterAddress(paymasterAndData: Hex | null | u
 
 export function userOpHasPaymaster(userOp: unknown): boolean {
   return parseEntryPointPaymasterAddress(readPreparedUserOpPaymasterAndData(userOp)) != null
+}
+
+function parseHexBigInt(value: unknown, label: string): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.trunc(value))
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return 0n
+    return trimmed.startsWith('0x') ? BigInt(trimmed) : BigInt(trimmed)
+  }
+  throw new Error(`Prepared userOp field ${label} is missing or invalid.`)
+}
+
+function parseHexData(value: unknown, label: string, fallback?: `0x${string}`): `0x${string}` {
+  if (typeof value === 'string' && value.startsWith('0x')) return value as `0x${string}`
+  if (fallback !== undefined) return fallback
+  throw new Error(`Prepared userOp field ${label} is missing or invalid.`)
+}
+
+/** Normalize wallet_prepareCalls `userOp` into typed v0.6 fields. */
+export function parseWalletPreparedUserOpV06(raw: unknown): V06UserOpFields {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('wallet_prepareCalls returned an invalid userOp payload.')
+  }
+  const record = raw as Record<string, unknown>
+  return {
+    sender: getAddress(String(record.sender)),
+    nonce: parseHexBigInt(record.nonce, 'nonce'),
+    initCode: parseHexData(record.initCode ?? record.init_code, 'initCode', '0x'),
+    callData: parseHexData(record.callData ?? record.call_data, 'callData'),
+    callGasLimit: parseHexBigInt(record.callGasLimit ?? record.call_gas_limit, 'callGasLimit'),
+    verificationGasLimit: parseHexBigInt(
+      record.verificationGasLimit ?? record.verification_gas_limit,
+      'verificationGasLimit',
+    ),
+    preVerificationGas: parseHexBigInt(
+      record.preVerificationGas ?? record.pre_verification_gas,
+      'preVerificationGas',
+    ),
+    maxFeePerGas: parseHexBigInt(record.maxFeePerGas ?? record.max_fee_per_gas, 'maxFeePerGas'),
+    maxPriorityFeePerGas: parseHexBigInt(
+      record.maxPriorityFeePerGas ?? record.max_priority_fee_per_gas,
+      'maxPriorityFeePerGas',
+    ),
+    paymasterAndData: parseHexData(
+      record.paymasterAndData ?? record.paymaster_and_data,
+      'paymasterAndData',
+      '0x',
+    ),
+    signature: parseHexData(record.signature, 'signature', '0x'),
+  }
+}
+
+export function stripUserOpPaymaster(op: V06UserOpFields): V06UserOpFields {
+  return { ...op, paymasterAndData: '0x', signature: '0x' }
+}
+
+function serializeUserOpForPreparedCallsSend(op: V06UserOpFields): Record<string, string> {
+  return {
+    sender: op.sender,
+    nonce: `0x${op.nonce.toString(16)}`,
+    initCode: op.initCode,
+    callData: op.callData,
+    callGasLimit: `0x${op.callGasLimit.toString(16)}`,
+    verificationGasLimit: `0x${op.verificationGasLimit.toString(16)}`,
+    preVerificationGas: `0x${op.preVerificationGas.toString(16)}`,
+    maxFeePerGas: `0x${op.maxFeePerGas.toString(16)}`,
+    maxPriorityFeePerGas: `0x${op.maxPriorityFeePerGas.toString(16)}`,
+    paymasterAndData: op.paymasterAndData,
+    signature: op.signature,
+  }
+}
+
+function computeUserOpHashWithChainId(op: V06UserOpFields, chainId: number): `0x${string}` {
+  return getUserOperationHash({
+    chainId,
+    entryPointAddress: entryPoint06Address,
+    entryPointVersion: '0.6',
+    userOperation: {
+      sender: op.sender,
+      nonce: op.nonce,
+      initCode: op.initCode,
+      callData: op.callData,
+      callGasLimit: op.callGasLimit,
+      verificationGasLimit: op.verificationGasLimit,
+      preVerificationGas: op.preVerificationGas,
+      maxFeePerGas: op.maxFeePerGas,
+      maxPriorityFeePerGas: op.maxPriorityFeePerGas,
+      paymasterAndData: op.paymasterAndData,
+      signature: op.signature,
+    },
+  })
+}
+
+/**
+ * Base App signs `signatureRequest.hash` for the prepared userOp. When we strip
+ * paymasterAndData, recompute the digest with the same hash domain prepare used.
+ */
+export function resolveSelfFundedSignHashAfterPaymasterStrip(params: {
+  preparedUserOp: unknown
+  signatureRequestHash: Hex
+  chainId: number
+}): { hash: Hex; mode: string } {
+  const parsed = parseWalletPreparedUserOpV06(params.preparedUserOp)
+  const requestHash = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+  const stripped = stripUserOpPaymaster(parsed)
+
+  const withChainIdPrepared = computeUserOpHashWithChainId(parsed, params.chainId)
+  if (withChainIdPrepared.toLowerCase() === requestHash.toLowerCase()) {
+    return {
+      hash: computeUserOpHashWithChainId(stripped, params.chainId),
+      mode: 'entrypoint_v06_chain',
+    }
+  }
+
+  const withoutChainIdPrepared = getUserOpHashWithoutChainIdLocal(parsed, ENTRY_POINT_V06_BASE)
+  if (withoutChainIdPrepared.toLowerCase() === requestHash.toLowerCase()) {
+    return {
+      hash: getUserOpHashWithoutChainIdLocal(stripped, ENTRY_POINT_V06_BASE),
+      mode: 'entrypoint_v06_no_chain',
+    }
+  }
+
+  return {
+    hash: computeUserOpHashWithChainId(stripped, params.chainId),
+    mode: 'entrypoint_v06_chain_unmatched_prepare_hash',
+  }
 }
 
 async function assertSelfFundedPrefundBudget(params: {
@@ -126,6 +258,74 @@ async function ensureSelfAuthWalletAuthorized(params: {
       `Base App wallet is not authorized for signing. Re-open 4626 inside Base App and approve the wallet connection, then retry. (${formatRelayPart1Error(requestError)})`,
     )
   }
+}
+
+async function sendSignedPreparedUserOp(params: {
+  walletRequest: WalletRequest
+  fundingCsw: `0x${string}`
+  prepareResult: {
+    type?: string
+    chainId?: string
+    userOp: Record<string, string>
+  }
+  hashToSign: Hex
+  chainIdHex: `0x${string}`
+  appendEvent: (row: string) => void
+}): Promise<`0x${string}`> {
+  const signature = (await params.walletRequest({
+    method: 'personal_sign',
+    params: [params.hashToSign, getAddress(params.fundingCsw)],
+  })) as Hex
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.fundingCsw,
+    signature,
+    mode: 'auto',
+  })
+
+  const sendResult = await params.walletRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [
+      {
+        version: '1.0',
+        type: params.prepareResult.type ?? 'user-operation-v06',
+        data: params.prepareResult.userOp,
+        chainId: params.prepareResult.chainId ?? params.chainIdHex,
+        signature: signaturePayload,
+      },
+    ],
+  })
+
+  const callsId = extractWalletCallsId(sendResult)
+  if (!callsId) {
+    throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+  }
+  params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
+
+  const resolution = await waitForCallsTxHash({
+    walletRequest: params.walletRequest,
+    callBundleId: callsId,
+    timeoutMs: 90_000,
+    intervalMs: 1_500,
+    onTelemetry: (event) => {
+      try {
+        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+        params.appendEvent(`relay_part1.prepared_status.${event.step}: ${detail.slice(0, 320)}`)
+      } catch {
+        params.appendEvent(`relay_part1.prepared_status.${event.step}: <unloggable>`)
+      }
+    },
+  })
+
+  const txHash = resolution.transactionHash ?? resolution.userOperationHash
+  if (!txHash) {
+    throw new Error('wallet_sendPreparedCalls completed without a transaction or UserOp hash.')
+  }
+  params.appendEvent(`relay_part1:prepared_tx=${txHash}`)
+  return txHash
 }
 
 function extractWalletCallsId(sendResult: unknown): string | null {
@@ -207,7 +407,6 @@ async function submitViaPreparedCallsSelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   chainId: number
   publicClient?: PublicClient
-  allowBundlerFallback: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}`
@@ -266,77 +465,46 @@ async function submitViaPreparedCallsSelfFunded(params: {
       readPreparedUserOpPaymasterAndData(prepareResult.userOp),
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
-    if (params.allowBundlerFallback && params.publicClient) {
-      return await submitViaBundlerSelfFunded({
-        walletRequest: params.walletRequest,
-        fundingCsw: params.fundingCsw,
-        userCall: params.userCall,
-        publicClient: params.publicClient,
-        appendEvent: params.appendEvent,
-      })
-    }
-    throw new Error(
-      'Base App prepared a paymaster-sponsored UserOp (non-empty paymasterAndData). Part 1 must use EntryPoint self-fund (paymasterAndData = 0x). Re-open in Base App, confirm Base Mainnet, and retry.',
-    )
+    params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
+
+    const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
+    const { hash: hashToSign, mode } = resolveSelfFundedSignHashAfterPaymasterStrip({
+      preparedUserOp: prepareResult.userOp,
+      signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+      chainId: params.chainId,
+    })
+    params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${mode}`)
+    params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
+
+    return await sendSignedPreparedUserOp({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      prepareResult: {
+        type: prepareResult.type,
+        chainId: prepareResult.chainId,
+        userOp: serializeUserOpForPreparedCallsSend(strippedOp),
+      },
+      hashToSign,
+      chainIdHex,
+      appendEvent: params.appendEvent,
+    })
   }
 
   params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
 
   const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
-  const signature = (await params.walletRequest({
-    method: 'personal_sign',
-    params: [hashToSign, getAddress(params.fundingCsw)],
-  })) as Hex
-  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
-    throw new Error('personal_sign did not return a valid signature.')
-  }
-
-  const signaturePayload = buildSendPreparedCallsSignaturePayload({
-    sender: params.fundingCsw,
-    signature,
-    mode: 'auto',
-  })
-
-  const sendResult = await params.walletRequest({
-    method: 'wallet_sendPreparedCalls',
-    params: [
-      {
-        version: '1.0',
-        type: prepareResult.type ?? 'user-operation-v06',
-        data: prepareResult.userOp,
-        chainId: prepareResult.chainId ?? chainIdHex,
-        signature: signaturePayload,
-      },
-    ],
-  })
-
-  const callsId = extractWalletCallsId(sendResult)
-  if (!callsId) {
-    throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
-  }
-  params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
-
-  const resolution = await waitForCallsTxHash({
+  return await sendSignedPreparedUserOp({
     walletRequest: params.walletRequest,
-    callBundleId: callsId,
-    timeoutMs: 90_000,
-    intervalMs: 1_500,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.prepared_status.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.prepared_status.${event.step}: <unloggable>`)
-      }
+    fundingCsw: params.fundingCsw,
+    prepareResult: {
+      type: prepareResult.type,
+      chainId: prepareResult.chainId,
+      userOp: serializeUserOpForPreparedCallsSend(parseWalletPreparedUserOpV06(prepareResult.userOp)),
     },
+    hashToSign,
+    chainIdHex,
+    appendEvent: params.appendEvent,
   })
-
-  const txHash = resolution.transactionHash ?? resolution.userOperationHash
-  if (!txHash) {
-    throw new Error('wallet_sendPreparedCalls completed without a transaction or UserOp hash.')
-  }
-  params.appendEvent(`relay_part1:prepared_tx=${txHash}`)
-  return txHash
 }
 
 /**
@@ -349,9 +517,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * `validatePaymasterUserOp` / `postOp` runs.
  *
  * `wallet_sendCalls` in Base App can auto-attach Coinbase's USDC paymaster even
- * when the dapp omits paymasterService. This lane uses wallet_prepareCalls with
- * no paymaster URL and falls back to a direct self-funded bundler UserOp when
- * the wallet still injects paymasterAndData (Base App default on 2026-05).
+ * when the dapp omits paymasterService. When Base App still injects paymasterAndData,
+ * strip it client-side, re-sign the self-funded digest, and submit via
+ * wallet_sendPreparedCalls (no USDC paymaster on-chain).
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -371,7 +539,6 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   try {
     return await submitViaPreparedCallsSelfFunded({
       ...params,
-      allowBundlerFallback,
     })
   } catch (preparedError) {
     params.appendEvent(`relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`)

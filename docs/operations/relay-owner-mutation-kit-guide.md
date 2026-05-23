@@ -52,7 +52,7 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 4626 replicates Part 1 by:
 
 1. Server `/quote/v2` with `user = depositor` (CSW for self-auth), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`, **`originChainId = destinationChainId = 8453`**, `tradeType = EXACT_OUTPUT`.
-2. Client submits preview **`userCall`** = Depository `depositNative` (`0x49290c1c`) via Base App **`wallet_prepareCalls` → `wallet_sendPreparedCalls`** with **no paymaster URL** (not `wallet_sendCalls`, which can attach Coinbase USDC sponsorship). Falls back to a direct self-funded ERC-4337 UserOp (`skipPaymaster: true`) when the wallet still injects `paymasterAndData`.
+2. Client submits preview **`userCall`** = Depository `depositNative` (`0x49290c1c`) via Base App **`wallet_prepareCalls` → `wallet_sendPreparedCalls`** with **no paymaster URL** (not `wallet_sendCalls`, which can attach Coinbase USDC sponsorship). When Base App still injects `paymasterAndData`, the client **strips it to `0x`**, recomputes the self-funded UserOp digest, re-signs with `personal_sign`, and submits the stripped UserOp (no on-chain USDC paymaster).
 3. Poll `/intents/status/v3` with `orderId ?? requestId`; verify on-chain `isOwnerAddress(embeddedEoa)`.
 
 Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `submitRelayPart1SelfFunded.ts`.
