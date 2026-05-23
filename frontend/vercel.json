@@ -211,16 +211,16 @@
       "continue": true
     },
     {
-      "src": "/assets/(favicon-brand\\.ico|base-app-icon-1024\\.png|base-miniapp-icon-200\\.png|domain-bar-icon-(32|180)\\.png|app-tab-icon-(32|180)\\.png|favicon-\\d+x\\d+\\.png|apple-touch-icon\\.png|android-chrome-(192x192|512x512)\\.png|maskable-icon-(192x192|512x512)\\.png|mstile-150x150\\.png)",
+      "src": "/assets/(.*)",
       "headers": {
-        "cache-control": "public, max-age=3600, must-revalidate"
+        "cache-control": "public, max-age=31536000, immutable"
       },
       "continue": true
     },
     {
-      "src": "/assets/(.*)",
+      "src": "/assets/(favicon-brand\\.ico|base-app-icon-1024\\.png|base-miniapp-icon(?:-v\\d+)?-200\\.png|domain-bar-icon(?:-v\\d+)?-(32|180)\\.png|app-tab-icon-(32|180)\\.png|favicon-\\d+x\\d+\\.png|apple-touch-icon\\.png|android-chrome-(192x192|512x512)\\.png|maskable-icon-(192x192|512x512)\\.png|mstile-150x150\\.png)",
       "headers": {
-        "cache-control": "public, max-age=31536000, immutable"
+        "cache-control": "public, max-age=3600, must-revalidate"
       },
       "continue": true
     },

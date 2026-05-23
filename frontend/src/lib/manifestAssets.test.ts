@@ -173,7 +173,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('5')
+    expect(manifest.miniapp?.version).toBe('6')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

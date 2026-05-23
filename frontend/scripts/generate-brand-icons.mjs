@@ -25,9 +25,9 @@ const rootCompatibilityCopies = [
   ['assets/favicon.svg', 'favicon.svg'],
   ['assets/apple-touch-icon.png', 'apple-touch-icon.png'],
   ['assets/apple-touch-icon.png', 'apple-touch-icon-precomposed.png'],
-  ['assets/domain-bar-icon-32.png', 'favicon-32x32.png'],
+  ['assets/domain-bar-icon-v13-32.png', 'favicon-32x32.png'],
   ['assets/favicon-16x16.png', 'favicon-16x16.png'],
-  ['assets/base-miniapp-icon-200.png', 'icon.png'],
+  ['assets/base-miniapp-icon-v13-200.png', 'icon.png'],
   ['assets/logo-mark-1024.png', 'logo.png'],
   ['assets/og-image.png', 'og.png'],
 ]
@@ -41,16 +41,16 @@ const PNG_DERIVATIVES = [
   { size: 16, file: 'assets/favicon-16x16.png' },
   { size: 32, file: 'assets/favicon-32x32.png' },
   { size: 32, file: 'assets/app-tab-icon-32.png' },
-  { size: 32, file: 'assets/domain-bar-icon-32.png' },
+  { size: 32, file: 'assets/domain-bar-icon-v13-32.png' },
   { size: 48, file: 'assets/favicon-48x48.png' },
   { size: 64, file: 'assets/favicon-64x64.png' },
   { size: 180, file: 'assets/apple-touch-icon.png' },
   { size: 180, file: 'assets/app-tab-icon-180.png' },
-  { size: 180, file: 'assets/domain-bar-icon-180.png' },
+  { size: 180, file: 'assets/domain-bar-icon-v13-180.png' },
   { size: 192, file: 'assets/android-chrome-192x192.png' },
   { size: 512, file: 'assets/android-chrome-512x512.png' },
   { size: 150, file: 'assets/mstile-150x150.png' },
-  { size: 200, file: 'assets/base-miniapp-icon-200.png' },
+  { size: 200, file: 'assets/base-miniapp-icon-v13-200.png' },
 ]
 
 const MASKABLE_DERIVATIVES = [
@@ -114,7 +114,7 @@ async function regeneratePngDerivatives(outDir, sourcePath) {
     await writeSquareIcon(sourcePath, outPath, size, { maskableSafeZone: true })
   }
 
-  await writeFaviconIco(outDir, path.join(outDir, 'assets/domain-bar-icon-32.png'))
+  await writeFaviconIco(outDir, path.join(outDir, 'assets/domain-bar-icon-v13-32.png'))
 }
 
 async function syncCompatibilityAssets(outDir, copies, label) {
