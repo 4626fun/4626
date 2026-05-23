@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { forwardRef, useRef, type ReactNode } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -16,9 +16,11 @@ type CreatorScrollBridgeProps = {
   className?: string
   animate?: boolean
   caption?: ReactNode
+  centerContent?: ReactNode
 }
 
-const BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
+const DEFAULT_BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
+const STATS_BRIDGE_HEIGHT_CLASS = 'min-h-[180vh] md:min-h-[220vh]'
 
 const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
   void: 'bg-black',
@@ -68,15 +70,22 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
   )
 }
 
-export function CreatorScrollBridge({
-  tone = 'void',
-  className,
-  animate = true,
-  caption,
-}: CreatorScrollBridgeProps) {
+export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridgeProps>(function CreatorScrollBridge(
+  { tone = 'void', className, animate = true, caption, centerContent },
+  forwardedRef,
+) {
   const bridgeRef = useRef<HTMLDivElement>(null)
   const hintRef = useRef<HTMLDivElement>(null)
   const captionRef = useRef<HTMLDivElement>(null)
+
+  const setBridgeRef = (node: HTMLDivElement | null) => {
+    bridgeRef.current = node
+    if (typeof forwardedRef === 'function') {
+      forwardedRef(node)
+    } else if (forwardedRef) {
+      forwardedRef.current = node
+    }
+  }
 
   useGSAP(
     () => {
@@ -85,7 +94,7 @@ export function CreatorScrollBridge({
 
       const cleanups: Array<() => void> = []
 
-      if (hintRef.current) {
+      if (hintRef.current && !centerContent) {
         if (!animate || reducedMotion) {
           gsap.set(hintRef.current, { opacity: reducedMotion ? 0.4 : 0.35 })
         } else {
@@ -139,18 +148,20 @@ export function CreatorScrollBridge({
         cleanups.forEach((cleanup) => cleanup())
       }
     },
-    { scope: bridgeRef, dependencies: [animate, tone, caption] },
+    { scope: bridgeRef, dependencies: [animate, tone, caption, centerContent] },
   )
 
   const showStarfield = tone === 'void' || tone === 'void-to-lime'
+  const bridgeHeightClass = centerContent ? STATS_BRIDGE_HEIGHT_CLASS : DEFAULT_BRIDGE_HEIGHT_CLASS
 
   return (
     <div
-      ref={bridgeRef}
-      aria-hidden={!caption}
+      ref={setBridgeRef}
+      data-creator-bridge=""
+      aria-hidden={!caption && !centerContent}
       className={cn(
         'relative left-1/2 w-screen -translate-x-1/2 overflow-clip',
-        BRIDGE_HEIGHT_CLASS,
+        bridgeHeightClass,
         BASE_BG[tone],
         className,
       )}
@@ -188,28 +199,49 @@ export function CreatorScrollBridge({
               {caption}
             </div>
           </div>
-        ) : (
+        ) : centerContent ? null : (
           <div className="flex-1" />
         )}
 
-        <div className="flex flex-1 items-center justify-center pb-[min(18vh,160px)]">
-          <div ref={hintRef} className="flex flex-col items-center gap-2.5 opacity-0">
-            <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              className="text-zinc-600"
-              aria-hidden
-            >
-              <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+        {centerContent ? (
+          <div className="flex flex-1 flex-col items-center justify-center py-10 sm:py-14">
+            {centerContent}
+            <div ref={hintRef} className="mt-10 sm:mt-14 flex flex-col items-center gap-2.5 opacity-35">
+              <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                className="text-zinc-600"
+                aria-hidden
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center pb-[min(18vh,160px)]">
+            <div ref={hintRef} className="flex flex-col items-center gap-2.5 opacity-0">
+              <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                className="text-zinc-600"
+                aria-hidden
+              >
+                <path d="M12 5v14M19 12l-7 7-7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
-}
+})

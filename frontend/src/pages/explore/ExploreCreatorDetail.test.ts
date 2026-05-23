@@ -41,6 +41,17 @@ vi.mock('@/components/explore/EthosPageAmbience', () => ({
   EthosBlurOrbs: () => null,
 }))
 
+vi.mock('@/components/explore/CreatorImmersiveStatsBeat', () => ({
+  CreatorImmersiveStatsBeat: () =>
+    React.createElement(
+      'div',
+      { 'data-testid': 'creator-immersive-stats-beat' },
+      React.createElement('span', null, '24H volume'),
+      React.createElement('span', null, 'Market cap'),
+      React.createElement('span', null, 'Ethos score'),
+    ),
+}))
+
 vi.mock('@/components/explore/ExploreEthosRefreshButton', () => ({
   ExploreEthosRefreshButton: () => null,
 }))
@@ -165,5 +176,8 @@ describe('ExploreCreatorDetail', () => {
     expect(html).toContain('Latest swaps from the highest-liquidity pool')
     expect(html).toContain('$125.00')
     expect(html).toContain('Message Creator')
+    expect(html).toContain('data-testid="creator-immersive-stats-beat"')
+    expect(html).toContain('24H volume')
+    expect(html).toContain('Market cap')
   })
 })

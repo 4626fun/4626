@@ -15,6 +15,8 @@ import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/componen
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
+import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
+import { buildCreatorStats, toStatsRailItems } from '@/components/explore/creatorStatsModel'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -25,7 +27,6 @@ import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 import { cn } from '@/lib/shared/utils'
 import {
-  formatDateLabel,
   formatShortAddress,
   formatTimestamp,
   formatTokenAmount,
@@ -585,8 +586,9 @@ export function ExploreCreatorDetail() {
   const [timelineDragging, setTimelineDragging] = useState(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
   const heroSectionRef = useRef<HTMLElement | null>(null)
+  const statsBridgeRef = useRef<HTMLDivElement | null>(null)
   const sceneSectionRef = useRef<HTMLElement | null>(null)
-  const timelineSectionRef = useRef<HTMLElement | null>(null)
+  const timelineSectionRef = useRef<HTMLDivElement | null>(null)
   const timelineBodyRef = useRef<HTMLDivElement | null>(null)
   const timelineScrollerRef = useRef<HTMLDivElement | null>(null)
   const timelineCameraActiveRef = useRef(false)
@@ -957,11 +959,6 @@ export function ExploreCreatorDetail() {
   const handle = profile?.handle || coin?.creatorProfile?.handle
   const bio = profile?.bio
   const website = profile?.website
-  const marketCap = formatNumber(coin?.marketCap)
-  const volume24h = formatNumber(coin?.volume24h)
-  const totalVolume = formatNumber(coin?.totalVolume)
-  const holders = coin?.uniqueHolders ? coin.uniqueHolders.toLocaleString() : '-'
-  const createdAt = formatDateLabel(coin?.createdAt)
   const totalCoinsCreated = createdCoins.length
   const creatorChatAddress = resolveCreatorSmartWalletAddress(profile, creatorAddress || coin?.payoutRecipientAddress || null)
 
@@ -972,14 +969,45 @@ export function ExploreCreatorDetail() {
     serverEthosLevel: coin?.ethosLevel,
   })
   const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
-  const ethosStatDisplay =
-    ethosHasPositiveScore && ethosScoreValue != null
-      ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false })
-      : '—'
+
+  const creatorStats = useMemo(
+    () =>
+      buildCreatorStats({
+        volume24h: coin?.volume24h,
+        totalVolume: coin?.totalVolume,
+        marketCap: coin?.marketCap,
+        uniqueHolders: coin?.uniqueHolders ?? null,
+        ethosScore: ethosScoreValue,
+        ethosHasPositiveScore,
+        ethosAccentClass: ethosTheme.accentTextClass,
+        coinsCreated: totalCoinsCreated,
+        createdAt: coin?.createdAt,
+        volumeWindow,
+        ethosFooter:
+          typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
+            <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
+          ) : null,
+      }),
+    [
+      coin?.volume24h,
+      coin?.totalVolume,
+      coin?.marketCap,
+      coin?.uniqueHolders,
+      coin?.createdAt,
+      ethosScoreValue,
+      ethosHasPositiveScore,
+      ethosTheme.accentTextClass,
+      totalCoinsCreated,
+      volumeWindow,
+      creatorAddress,
+    ],
+  )
+
+  const sceneStatsRail = useMemo(() => toStatsRailItems(creatorStats), [creatorStats])
   const heroCoin = coin ?? ({
     address: tokenAddress ?? '',
     creatorAddress: creatorAddress ?? undefined,
-    creatorProfile: coin?.creatorProfile ?? (profile?.handle ? { handle: profile.handle } : undefined),
+    creatorProfile: profile?.handle ? { handle: profile.handle } : undefined,
   } as ZoraCoin)
   const copyButtonProps = {
     title: 'Copy address',
@@ -1096,28 +1124,6 @@ export function ExploreCreatorDetail() {
     : activeTrayCoinAddress
       ? `https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`
       : 'https://app.uniswap.org'
-  const heroStats = [
-    { value: volumeWindow === '24h' ? volume24h : totalVolume, label: volumeWindow === '24h' ? '24H volume' : 'All-time volume', toneClass: 'text-white' },
-    { value: marketCap, label: 'Market cap', toneClass: 'text-white' },
-    { value: holders, label: 'Holders', toneClass: 'text-white' },
-    {
-      value: ethosStatDisplay,
-      label: 'Ethos score',
-      toneClass: ethosHasPositiveScore ? ethosTheme.accentTextClass : 'text-zinc-500',
-      footer:
-        typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
-          <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
-        ) : null,
-    },
-    { value: totalCoinsCreated, label: 'Coins created', toneClass: 'text-white' },
-    {
-      value: createdAt,
-      label: 'Created',
-      toneClass: 'text-white',
-      valueClassName: 'whitespace-nowrap text-2xl xl:text-[1.65rem] tracking-normal',
-    },
-  ] as const
-
   return (
     <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden">
       <PremiumCursor enabled={showCursor} />
@@ -1128,23 +1134,11 @@ export function ExploreCreatorDetail() {
       />
       <EthosPageAmbience theme={ethosTheme} />
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pb-0">
-        {/* Hero + content-coins scene share a spanning stats rail on desktop */}
         <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
-          <div className="hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-30 w-52 xl:w-60 pointer-events-none">
-            <CreatorStatsRail
-              stats={heroStats}
-              align="end"
-              className="sticky top-24 pointer-events-auto border-l border-white/10 pl-8 pr-2 pt-24 pb-24 overflow-visible [mask-image:linear-gradient(to_bottom,black_0%,black_88%,transparent_100%)]"
-              valueClassName="text-3xl xl:text-4xl"
-            />
-          </div>
-
-          <div className="pointer-events-none hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-20 w-px bg-gradient-to-b from-white/5 via-white/10 to-transparent" />
-
         {/* Recreated hero scene */}
         <section
           ref={heroSectionRef}
-          className={cn('relative overflow-hidden bg-black lg:pr-60 xl:pr-64', CREATOR_HERO_MIN_HEIGHT_CLASS)}
+          className={cn('relative overflow-hidden bg-black', CREATOR_HERO_MIN_HEIGHT_CLASS)}
         >
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
@@ -1272,22 +1266,40 @@ export function ExploreCreatorDetail() {
                 ) : null}
               </div>
 
-              <CreatorStatsRail
-                stats={heroStats}
-                className="lg:hidden mt-10 pt-8 border-t border-white/10"
-                valueClassName="text-2xl sm:text-3xl"
-              />
             </div>
           </motion.div>
         </section>
 
-        <CreatorScrollBridge tone="void" animate={allowParallax} />
+        <CreatorScrollBridge
+          ref={statsBridgeRef}
+          tone="void"
+          animate={allowParallax}
+          centerContent={
+            <CreatorImmersiveStatsBeat
+              stats={creatorStats}
+              animate={allowParallax}
+              isLoading={isLoading}
+              volumeWindow={volumeWindow}
+              onVolumeWindowChange={setVolumeWindow}
+              scrollTriggerRef={statsBridgeRef}
+            />
+          }
+        />
 
         <section
           ref={sceneSectionRef}
           className="relative min-h-[calc(100dvh-3.5rem)] h-[calc(100dvh-3.5rem)] overflow-hidden lg:pr-60 xl:pr-64"
           onWheelCapture={onSceneSectionWheelCapture}
         >
+          <div className="hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-30 w-48 xl:w-56 pointer-events-none">
+            <CreatorStatsRail
+              stats={sceneStatsRail}
+              align="end"
+              className="sticky top-24 pointer-events-auto border-l border-white/10 pl-6 pr-2 pt-8 pb-16 overflow-visible [mask-image:linear-gradient(to_bottom,black_0%,black_88%,transparent_100%)]"
+              valueClassName="text-2xl xl:text-3xl"
+            />
+          </div>
+          <div className="pointer-events-none hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-20 w-px bg-gradient-to-b from-white/5 via-white/10 to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
