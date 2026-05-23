@@ -10,6 +10,53 @@ const RELAY_QUOTE_OUTPUT_MULTIPLIER = 6n
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 const RELAY_ROUTER_MULTICALL_SELECTOR = '0xcd6e13f7'
 
+type RelayUserCallCandidate = {
+  userCall: OwnerMutationRelayFlow['userCall']
+  userCallSource: OwnerMutationRelayFlow['userCallSource']
+}
+
+/**
+ * Prefer RelayDepository.depositNative (May 5 golden reference Part 1) over
+ * RelayRouter.multicall when paymentDetails are available. Same-chain EXACT_OUTPUT
+ * quotes often echo the quoted output wei as userTransaction.value (~2.88e12 on
+ * recent Base blocks) while paymentDetails.amount includes solver fees (~1.89e13).
+ * Submitting the underfunded router path lands a UserOp but Relay never fills
+ * addOwnerAddress (see basescan 0xdfec2946… vs working 0xa6b54357…).
+ */
+export function selectOwnerMutationRelayUserCall(params: {
+  userTransaction: {
+    to: `0x${string}`
+    data: `0x${string}`
+    value: string
+  } | null
+  builtUserCallFromPaymentDetails: OwnerMutationRelayFlow['userCall'] | null
+}): RelayUserCallCandidate | null {
+  const quoteTx =
+    params.userTransaction &&
+    typeof params.userTransaction.value === 'string' &&
+    /^[1-9][0-9]*$/.test(params.userTransaction.value) &&
+    typeof params.userTransaction.data === 'string' &&
+    params.userTransaction.data.startsWith(RELAY_ROUTER_MULTICALL_SELECTOR)
+      ? {
+          userCall: {
+            to: params.userTransaction.to,
+            data: params.userTransaction.data,
+            value: `0x${BigInt(params.userTransaction.value).toString(16)}` as `0x${string}`,
+          },
+          userCallSource: 'quote_tx' as const,
+        }
+      : null
+
+  if (params.builtUserCallFromPaymentDetails) {
+    return {
+      userCall: params.builtUserCallFromPaymentDetails,
+      userCallSource: 'built_from_payment_details',
+    }
+  }
+
+  return quoteTx
+}
+
 export type OwnerMutationRelayFlow = {
   requestId: `0x${string}`
   orderId: `0x${string}` | null
@@ -249,41 +296,20 @@ export async function buildOwnerMutationRelayFlow(
       rawSnippet: e.raw == null ? null : JSON.stringify(e.raw).slice(0, 1600),
     }
 
-    if (
-      e.requestId &&
-      e.userTransaction &&
-      typeof e.userTransaction.value === 'string' &&
-      /^[1-9][0-9]*$/.test(e.userTransaction.value) &&
-      typeof e.userTransaction.data === 'string' &&
-      e.userTransaction.data.startsWith(RELAY_ROUTER_MULTICALL_SELECTOR)
-    ) {
-      return {
-        ok: true,
-        relay: {
-          requestId: e.requestId,
-          orderId: requestBoundDepositId,
-          paymentDetails,
-          userCall: {
-            to: e.userTransaction.to,
-            data: e.userTransaction.data,
-            value: `0x${BigInt(e.userTransaction.value).toString(16)}` as `0x${string}`,
-          },
-          userCallSource: 'quote_tx',
-          feeUsd: e.feeUsd,
-        },
-        diagnostics,
-      }
-    }
+    const selectedUserCall = selectOwnerMutationRelayUserCall({
+      userTransaction: e.userTransaction,
+      builtUserCallFromPaymentDetails,
+    })
 
-    if (e.requestId && builtUserCallFromPaymentDetails) {
+    if (e.requestId && selectedUserCall) {
       return {
         ok: true,
         relay: {
           requestId: e.requestId,
           orderId: requestBoundDepositId,
           paymentDetails,
-          userCall: builtUserCallFromPaymentDetails,
-          userCallSource: 'built_from_payment_details',
+          userCall: selectedUserCall.userCall,
+          userCallSource: selectedUserCall.userCallSource,
           feeUsd: e.feeUsd,
         },
         diagnostics,
