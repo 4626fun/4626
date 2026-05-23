@@ -21,6 +21,7 @@ const {
   getMostValuableTrendsMock,
   getNewTrendsMock,
   getTopVolumeTrends24hMock,
+  getCoinMock,
 } = vi.hoisted(() => ({
   requireServerKeyMock: vi.fn(),
   sdkSetApiKeyMock: vi.fn(),
@@ -39,6 +40,7 @@ const {
   getMostValuableTrendsMock: vi.fn(),
   getNewTrendsMock: vi.fn(),
   getTopVolumeTrends24hMock: vi.fn(),
+  getCoinMock: vi.fn(),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
@@ -89,6 +91,7 @@ vi.mock('@zoralabs/coins-sdk', () => ({
   getMostValuableTrends: getMostValuableTrendsMock,
   getNewTrends: getNewTrendsMock,
   getTopVolumeTrends24h: getTopVolumeTrends24hMock,
+  getCoin: getCoinMock,
 }))
 
 describe('GET /api/zora/explore', () => {
@@ -151,6 +154,72 @@ describe('GET /api/zora/explore', () => {
     expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1650)
     expect(res.body?.data?.edges?.[0]?.node?.ethosScoreSource).toBe('owner_class_csw')
     expect(loadCreatorEthosProjectionByAddressesMock).toHaveBeenCalled()
+  })
+
+  it('enriches Ethos-sorted projection rows with Zora coin media', async () => {
+    getCoinMock.mockResolvedValue({
+      data: {
+        zora20Token: {
+          name: 'jesse',
+          symbol: 'jesse',
+          marketCap: '1200000',
+          volume24h: '5400',
+          uniqueHolders: 999,
+          mediaContent: {
+            previewImage: { small: 'https://example.com/jesse.png' },
+          },
+          creatorProfile: {
+            handle: 'jessepollak',
+            avatar: { previewImage: { small: 'https://example.com/jesse-avatar.png' } },
+          },
+        },
+      },
+    })
+
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ')
+        if (query.includes('to_regclass')) {
+          return { rows: [{ has_projection: true }] }
+        }
+        if (query.includes('creator_ethos_projection')) {
+          return {
+            rows: [
+              {
+                creator_address: '0x0000000000000000000000000000000000000abc',
+                coin_address: '0x0000000000000000000000000000000000000123',
+                twitter_username: 'jessepollak',
+                zora_handle: 'jessepollak',
+                created_at: '2025-01-01T00:00:00Z',
+                market_cap_usd: '1000',
+                volume_24h_usd: '100',
+                ethos_score: 1979,
+                ethos_level: 'reputable',
+                ethos_score_source: 'creator_ethos_projection',
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'GET',
+      query: { list: 'TOP_VOLUME_CREATORS_24H', sort: 'ETHOS_SCORE', count: '20' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getCoinMock).toHaveBeenCalledWith({
+      address: '0x0000000000000000000000000000000000000123',
+      chain: 8453,
+    })
+    expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('jesse')
+    expect(res.body?.data?.edges?.[0]?.node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse.png')
+    expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1979)
   })
 
   it.each([

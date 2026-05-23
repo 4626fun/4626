@@ -95,10 +95,10 @@ export function PoolRow({
   const canToggleFees = typeof onToggleFees === 'function'
 
   return (
-    <>
+    <div className="group explore-table-row-wrap">
     <Link
       to={detailPath}
-      className="group explore-table-row explore-table-grid items-center text-xs cursor-pointer"
+      className="explore-table-row explore-table-grid items-center text-xs cursor-pointer"
       style={{ gridTemplateColumns }}
     >
       {/* Rank */}
@@ -108,10 +108,6 @@ export function PoolRow({
 
       {/* Content Name */}
       <div className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
-        <div
-          className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
-          aria-hidden="true"
-        />
         <div className="flex items-center gap-2 min-w-0 justify-start">
           {avatarUrl ? (
             <img src={avatarUrl} alt={name} className="w-7 h-7 rounded-lg object-cover shrink-0" />
@@ -216,7 +212,7 @@ export function PoolRow({
         </div>
       </div>
     ) : null}
-    </>
+    </div>
   )
 }
 
@@ -325,7 +321,7 @@ export function PoolRowSkeleton() {
   const stickyCellClass = 'sticky z-10 explore-table-sticky-cell'
 
   return (
-    <div className="explore-table-grid items-center" style={{ gridTemplateColumns }}>
+    <div className="explore-table-row explore-table-grid items-center" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
       </div>

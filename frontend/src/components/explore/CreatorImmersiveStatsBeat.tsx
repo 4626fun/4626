@@ -284,7 +284,7 @@ export function CreatorImmersiveStatsBeat({
         className={cn(
           useScrollReveal
             ? 'relative min-h-[12rem] sm:min-h-[14rem] lg:min-h-[16rem] lg:pr-16'
-            : 'flex flex-col items-center gap-12 sm:gap-14',
+            : 'flex flex-col items-center gap-16 sm:gap-[4.5rem]',
         )}
       >
         {isLoading ? (
@@ -301,11 +301,11 @@ export function CreatorImmersiveStatsBeat({
                   cellRefs.current[index] = el
                 }}
                 className={cn(
-                  'flex flex-col items-center gap-3 sm:gap-4 min-w-0 w-full',
+                  'flex flex-col items-center gap-3.5 sm:gap-5 min-w-0 w-full',
                   useScrollReveal && 'absolute inset-x-0 top-1/2 lg:max-w-none',
                 )}
               >
-                <p className="font-serif font-normal text-[clamp(3rem,11vw,7.5rem)] leading-[1.02] tracking-[-0.02em] m-0">
+                <p className="font-serif font-normal text-[clamp(3.25rem,12vw,8.25rem)] leading-[1.02] tracking-[-0.02em] m-0">
                   <span
                     ref={(el) => {
                       valueRefs.current[index] = el

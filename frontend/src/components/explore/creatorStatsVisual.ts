@@ -25,9 +25,9 @@ const SLOT_SCROLL_ENTER_SHARE = 0.1
 const SLOT_SCROLL_HOLD_SHARE = 0.84
 
 const STACK_GAP_PX = 96
-const FINALE_ROW_GAP_PX = 58
+const FINALE_ROW_GAP_PX = 76
 const REVEALED_SCALE = 0.72
-const FINALE_SCALE = 0.46
+const FINALE_SCALE = 0.54
 const PAST_BLUR_MIN_PX = 3
 const PAST_BLUR_STEP_PX = 2
 const PAST_OPACITY_STEP = 0.08
@@ -281,7 +281,7 @@ export function creatorStatsStackMinHeightPx(scrollProgress: number, total: numb
   if (total <= 0) return 128
 
   if (scrollProgress >= CREATOR_STATS_FINALE_START) {
-    return Math.max(420, total * FINALE_ROW_GAP_PX + 112)
+    return Math.max(480, total * FINALE_ROW_GAP_PX + 128)
   }
 
   const slotCursor = revealSlotCursor(scrollProgress, total)

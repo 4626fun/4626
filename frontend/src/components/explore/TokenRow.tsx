@@ -196,10 +196,10 @@ export function TokenRow({
   })()
 
   return (
-    <>
+    <div className="group explore-table-row-wrap">
       <Link
         to={detailPath}
-        className="group explore-table-row explore-table-grid items-center text-xs cursor-pointer"
+        className="explore-table-row explore-table-grid items-center text-xs cursor-pointer"
         style={{ gridTemplateColumns }}
       >
         {/* Rank */}
@@ -215,10 +215,6 @@ export function TokenRow({
           className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`}
           style={{ left: stickyLeft.name }}
         >
-          <div
-            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-[var(--trust-page-bg)] opacity-80"
-            aria-hidden="true"
-          />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
             <CreatorEthosAvatar
               coin={coin}
@@ -375,7 +371,7 @@ export function TokenRow({
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }
 
@@ -465,13 +461,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
               style={isSticky ? { left } : undefined}
             >
               {c.id === 'name' ? (
-                <>
-                  <div
-                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-[var(--trust-page-bg)] opacity-80"
-                    aria-hidden="true"
-                  />
-                  <span className="explore-token-header-label">{label}</span>
-                </>
+                <span className="explore-token-header-label">{label}</span>
               ) : null}
               {c.id !== 'name' ? label : null}
             </div>
@@ -490,7 +480,7 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
   const stickyCellClass = 'sticky z-10 explore-table-sticky-cell'
 
   return (
-    <div className="explore-table-grid items-center" style={{ gridTemplateColumns }}>
+    <div className="explore-table-row explore-table-grid items-center" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
       </div>

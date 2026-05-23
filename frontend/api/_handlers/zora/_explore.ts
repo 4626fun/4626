@@ -196,22 +196,6 @@ function buildCreatorProfileFromExploreRow(
   return undefined
 }
 
-function canServeExploreRowFromDb(
-  row: Pick<ExploreDbListingRow, 'market_cap_usd' | 'volume_24h_usd' | 'zora_handle' | 'twitter_username'>,
-): boolean {
-  const hasMetrics =
-    toFiniteNumberOrNull(row.market_cap_usd) != null || toFiniteNumberOrNull(row.volume_24h_usd) != null
-  const hasIdentity =
-    (typeof row.zora_handle === 'string' && row.zora_handle.trim().length > 0) ||
-    (typeof row.twitter_username === 'string' && row.twitter_username.trim().length > 0)
-  return hasMetrics && hasIdentity
-}
-
-function shouldSkipExploreGetCoin(usingProjectionRows: boolean, row: ExploreDbListingRow): boolean {
-  if (usingProjectionRows) return true
-  return canServeExploreRowFromDb(row)
-}
-
 type EthosSortedCreatorRow = ExploreDbListingRow & {
   ethos_score?: number | string | null
   ethos_level?: string | null
@@ -235,27 +219,22 @@ async function assembleEthosSortedCreatorResponse(params: {
   ) => { score: number | null; level: string | null; source: string | null }
 }) {
   let coinDetails = new Map<string, any>()
-  if (params.key) {
-    const rowsNeedingCoinDetail = params.pageRows.filter(
-      (row) => !shouldSkipExploreGetCoin(params.usingProjectionRows, row),
-    )
-    if (rowsNeedingCoinDetail.length > 0) {
-      try {
-        const sdk: any = await import('@zoralabs/coins-sdk')
-        sdk.setApiKey(params.key)
-        const responses = await Promise.allSettled(
-          rowsNeedingCoinDetail.map((row) => sdk.getCoin({ address: row.coin_address, chain: 8453 })),
-        )
-        responses.forEach((result, index) => {
-          if (result.status !== 'fulfilled') return
-          const row = rowsNeedingCoinDetail[index]
-          if (!row) return
-          const token = result.value?.data?.zora20Token
-          if (token) coinDetails.set(row.coin_address.toLowerCase(), token)
-        })
-      } catch {
-        coinDetails = new Map()
-      }
+  if (params.key && params.pageRows.length > 0) {
+    try {
+      const sdk: any = await import('@zoralabs/coins-sdk')
+      sdk.setApiKey(params.key)
+      const responses = await Promise.allSettled(
+        params.pageRows.map((row) => sdk.getCoin({ address: row.coin_address, chain: 8453 })),
+      )
+      responses.forEach((result, index) => {
+        if (result.status !== 'fulfilled') return
+        const row = params.pageRows[index]
+        if (!row) return
+        const token = result.value?.data?.zora20Token
+        if (token) coinDetails.set(row.coin_address.toLowerCase(), token)
+      })
+    } catch {
+      coinDetails = new Map()
     }
   }
 
