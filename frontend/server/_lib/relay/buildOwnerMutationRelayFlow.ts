@@ -5,26 +5,16 @@ import {
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
-  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
+  MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import { getRelayQuote } from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-/** Matches getQuote originGasOverhead for owner-mutation quotes. */
-const RELAY_QUOTE_ORIGIN_GAS_OVERHEAD = 300_000
-/**
- * Gas limit from golden Part 2 solver fill
- * (0xa9a06340…, block 45600637 — same block as Part 1 deposit 0xa6b54357…).
- */
-const GOLDEN_RELAY_SOLVER_EXECUTION_GAS_LIMIT = 2_617_448
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 const RELAY_ROUTER_MULTICALL_SELECTOR = '0xcd6e13f7'
 const RELAY_ROUTER_BASE = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
-/** Broken 0xdfec2946… Part 1 deposit — solver fill never fired (~2.88e12 wei). */
-const MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI = 8_000_000_000_000n
-
 type RelayUserCallCandidate = {
   userCall: OwnerMutationRelayFlow['userCall']
   isDepositoryDepositNative: boolean
@@ -95,6 +85,19 @@ export function selectOwnerMutationRelayUserCall(params: {
 
   if (quoteTx) return quoteTx
 
+  if (params.builtUserCallFromPaymentDetails) {
+    const built = params.builtUserCallFromPaymentDetails
+    if (
+      built.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase() &&
+      built.data.slice(0, 10).toLowerCase() === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR
+    ) {
+      return {
+        userCall: built,
+        isDepositoryDepositNative: true,
+      }
+    }
+  }
+
   return null
 }
 
@@ -103,6 +106,8 @@ export function validateSelectedOwnerMutationRelayUserCall(params: {
   selected: RelayUserCallCandidate
   /** For Depository.depositNative Part 1, depositor must equal the funding CSW. */
   expectedDepositor?: `0x${string}` | null
+  /** Authoritative Part 1 deposit from Relay `protocol.v2.paymentDetails.amount`. */
+  paymentDetailsAmountWei?: string | null
 }): string | null {
   let valueWei: bigint
   try {
@@ -113,14 +118,26 @@ export function validateSelectedOwnerMutationRelayUserCall(params: {
   if (valueWei < MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI) {
     return `relay deposit ${valueWei.toString()} wei is below minimum ${MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI.toString()} wei (underfunded quotes skip Part 2 solver fill)`
   }
-  if (valueWei < GOLDEN_RELAY_PART1_DEPOSIT_WEI) {
-    return `relay deposit ${valueWei.toString()} wei is below golden Part 1 minimum ${GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString()} wei (tx 0xa6b54357…)`
-  }
 
   const selector = params.selected.userCall.data.slice(0, 10).toLowerCase()
   const isDepositoryNativeDeposit =
     selector === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
     params.selected.userCall.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase()
+
+  if (params.paymentDetailsAmountWei) {
+    let authoritativeWei: bigint
+    try {
+      authoritativeWei = BigInt(params.paymentDetailsAmountWei)
+    } catch {
+      return 'paymentDetails.amount is not valid wei'
+    }
+    if (authoritativeWei > 0n && valueWei < authoritativeWei) {
+      return `relay deposit ${valueWei.toString()} wei is below Relay paymentDetails.amount ${authoritativeWei.toString()} wei`
+    }
+    if (isDepositoryNativeDeposit && valueWei !== authoritativeWei) {
+      return `relay depository deposit ${valueWei.toString()} wei must match Relay paymentDetails.amount ${authoritativeWei.toString()} wei`
+    }
+  }
 
   if (isDepositoryNativeDeposit) {
     try {
@@ -198,7 +215,6 @@ export type BuildOwnerMutationRelayFlowParams = {
       data: `0x${string}`
       value?: bigint
     }) => Promise<bigint>
-    getGasPrice: () => Promise<bigint>
   }
   cswAddress: `0x${string}`
   relayQuoteUser: `0x${string}`
@@ -267,32 +283,22 @@ async function deriveRelayQuoteTxsGasLimit(params: {
 }
 
 /**
- * Relay `/quote/v2` EXACT_OUTPUT echoes `amount` as the Part 1 deposit wei. Golden
- * Part 1 deposited ~1.887e13 wei (~0.00001887 ETH) on block 45600637; underfunded
- * quotes around ~2.88e12 wei never triggered the Part 2 solver fill (0xdfec2946…).
+ * Relay `/quote/v2` `amount` for owner mutations: EXACT_OUTPUT destination value
+ * (typically `"0"` wei on `txs[0].value`). Relay prices the Part 1 deposit in
+ * `protocol.v2.paymentDetails.amount` — that response field is authoritative.
+ *
+ * Ops may override the request `amount` via `RELAY_*_QUOTE_OUTPUT_WEI` for
+ * debugging only; production should rely on Relay's quoted deposit.
  */
-export async function resolveRelayQuoteOutputWei(params: {
-  publicClient: BuildOwnerMutationRelayFlowParams['publicClient']
-  relayQuoteTxsGasLimit: number
+export function resolveRelayQuoteRequestAmount(params: {
+  destinationTxValueWei?: string
   envKey: string
-}): Promise<string> {
+}): string {
   const configured = (process.env[params.envKey] ?? '').trim()
-  if (/^[1-9][0-9]*$/.test(configured)) return configured
-  const gasPrice = await params.publicClient.getGasPrice()
-  const totalGasUnits =
-    BigInt(params.relayQuoteTxsGasLimit) +
-    BigInt(RELAY_QUOTE_ORIGIN_GAS_OVERHEAD) +
-    BigInt(GOLDEN_RELAY_SOLVER_EXECUTION_GAS_LIMIT)
-  const derived = gasPrice * totalGasUnits
-  const withHeadroom = derived + derived / 50n
-  if (withHeadroom <= 0n) {
-    throw new Error('Could not derive relay quote input wei; derived amount is zero.')
-  }
-  // Golden add-owner Part 1 uses EXACT_OUTPUT = 18871666861048 → same wei on Depository deposit.
-  if (params.envKey === 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI') {
-    return (withHeadroom >= GOLDEN_RELAY_PART1_DEPOSIT_WEI ? withHeadroom : GOLDEN_RELAY_PART1_DEPOSIT_WEI).toString(10)
-  }
-  return withHeadroom.toString(10)
+  if (/^[0-9]+$/.test(configured)) return configured
+  const destinationValue = (params.destinationTxValueWei ?? '0').trim()
+  if (/^[0-9]+$/.test(destinationValue)) return destinationValue
+  return '0'
 }
 
 export async function buildOwnerMutationRelayFlow(
@@ -304,9 +310,9 @@ export async function buildOwnerMutationRelayFlow(
     cswAddress: params.cswAddress,
     data: params.mutationCalldata,
   })
-  const relayQuoteOutputWei = await resolveRelayQuoteOutputWei({
-    publicClient: params.publicClient,
-    relayQuoteTxsGasLimit,
+  const destinationTxValueWei = '0'
+  const relayQuoteRequestAmount = resolveRelayQuoteRequestAmount({
+    destinationTxValueWei,
     envKey: params.relayQuoteOutputWeiEnvKey ?? 'RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI',
   })
 
@@ -326,7 +332,7 @@ export async function buildOwnerMutationRelayFlow(
         },
       ],
       txsGasLimit: relayQuoteTxsGasLimit,
-      amount: relayQuoteOutputWei,
+      amount: relayQuoteRequestAmount,
     })
 
     if (!quote.ok) {
@@ -417,6 +423,7 @@ export async function buildOwnerMutationRelayFlow(
         requestBoundDepositId,
         selected: selectedUserCall,
         expectedDepositor: selectedUserCall.isDepositoryDepositNative ? params.relayQuoteUser : null,
+        paymentDetailsAmountWei: paymentDetails?.amount ?? null,
       })
       if (validationError) {
         return {

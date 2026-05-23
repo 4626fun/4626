@@ -116,7 +116,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAddressString(body.user)) {
     return res.status(400).json({ success: false, error: 'user must be the CSW address' } satisfies ApiEnvelope<never>)
   }
-  const amountRaw = typeof body.amount === 'string' && body.amount.trim() ? body.amount.trim() : valueRaw
+  const amountRaw =
+    typeof body.amount === 'string' && body.amount.trim() !== ''
+      ? body.amount.trim()
+      : '0'
   if (!/^[0-9]+$/.test(amountRaw)) {
     return res.status(400).json({ success: false, error: 'amount must be a decimal integer string' } satisfies ApiEnvelope<never>)
   }

@@ -11,7 +11,6 @@ import {
   GOLDEN_RELAY_PART1_PROBE_CSW,
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
-  RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 
 const CSW = GOLDEN_RELAY_PART1_PROBE_CSW
@@ -46,13 +45,27 @@ describe('validateGoldenCswDepositoryPart1UserCall', () => {
     })
   })
 
-  it('accepts live Relay quotes above the golden floor', () => {
+  it('accepts live Relay quotes above the minimum floor', () => {
     const higherDeposit = GOLDEN_RELAY_PART1_DEPOSIT_WEI + 5_000_000_000n
     expect(
       validateGoldenCswDepositoryPart1UserCall({
         userCall: {
           ...goldenUserCall,
           value: higherDeposit.toString(10),
+        },
+        fundingCsw: CSW,
+        orderId: ORDER_ID,
+      }),
+    ).toBeNull()
+  })
+
+  it('accepts runtime deposits below golden when above the broken-tx floor', () => {
+    const runtimeDeposit = 12_000_000_000_000n
+    expect(
+      validateGoldenCswDepositoryPart1UserCall({
+        userCall: {
+          ...goldenUserCall,
+          value: runtimeDeposit.toString(10),
         },
         fundingCsw: CSW,
         orderId: ORDER_ID,

@@ -1,7 +1,7 @@
 import { decodeFunctionData, getAddress } from 'viem'
 
 import {
-  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
+  MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
@@ -52,10 +52,8 @@ export function validateGoldenCswDepositoryPart1UserCall(params: {
   if (valueWei <= 0n) {
     return 'Part 1 call value must be non-zero'
   }
-  // Historical floor from block 45600637 — underfunded quotes skip Part 2 solver fill.
-  // Higher deposits from live Relay quotes (gas price moves) are valid.
-  if (valueWei < GOLDEN_RELAY_PART1_DEPOSIT_WEI) {
-    return `Part 1 deposit ${valueWei.toString()} wei is below golden minimum ${GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString()} wei`
+  if (valueWei < MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI) {
+    return `Part 1 deposit ${valueWei.toString()} wei is below minimum ${MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI.toString()} wei (underfunded quotes skip Part 2 solver fill)`
   }
 
   try {

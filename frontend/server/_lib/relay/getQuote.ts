@@ -49,15 +49,14 @@ export type GetRelayQuoteParams = {
   /** Destination chain id. For same-chain Base flows this is 8453. */
   destinationChainId: number
   /**
-   * Amount in the smallest origin-chain unit (wei for ETH). When tradeType is
-   * EXACT_OUTPUT this is the amount Relay's solver must deliver to the
-   * destination. The depositor pays slightly more (the quote includes fees).
+   * Swap base amount in wei. For owner-mutation EXACT_OUTPUT quotes this should
+   * match `txs[0].value` (typically `"0"`). Relay prices the Part 1 deposit in
+   * `protocol.v2.paymentDetails.amount` — that response field is authoritative.
    */
   amount: string
   /**
-   * Currently always 'EXACT_OUTPUT' for owner-mutation flows: we know exactly
-   * how much value (typically 0 wei) the destination call needs, and let Relay
-   * compute the deposit amount including its fees.
+   * Owner mutations use `EXACT_OUTPUT` with zero destination value so Relay
+   * computes the native deposit for the wrapped CSW mutation call.
    */
   tradeType?: 'EXACT_INPUT' | 'EXACT_OUTPUT'
   /** Array of destination calls. For owner mutations this is the one mutation call. */

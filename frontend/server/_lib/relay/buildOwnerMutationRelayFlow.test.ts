@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, afterEach } from 'vitest'
 import { encodeFunctionData } from 'viem'
 
 import {
+  resolveRelayQuoteRequestAmount,
   selectOwnerMutationRelayUserCall,
   validateSelectedOwnerMutationRelayUserCall,
 } from './buildOwnerMutationRelayFlow.js'
@@ -12,6 +13,33 @@ import {
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const ROUTER = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
+
+describe('resolveRelayQuoteRequestAmount', () => {
+  const envKey = 'RELAY_TEST_QUOTE_REQUEST_AMOUNT'
+
+  afterEach(() => {
+    delete process.env[envKey]
+  })
+
+  it('defaults to destination tx value zero for Relay EXACT_OUTPUT quotes', () => {
+    expect(
+      resolveRelayQuoteRequestAmount({
+        destinationTxValueWei: '0',
+        envKey,
+      }),
+    ).toBe('0')
+  })
+
+  it('uses ops env override when configured', () => {
+    process.env[envKey] = '12000000000000'
+    expect(
+      resolveRelayQuoteRequestAmount({
+        destinationTxValueWei: '0',
+        envKey,
+      }),
+    ).toBe('12000000000000')
+  })
+})
 
 describe('selectOwnerMutationRelayUserCall', () => {
   const routerMulticallData =
@@ -177,7 +205,7 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
     ).toBeNull()
   })
 
-  it('rejects sub-golden deposits that clear the broken-tx floor but miss Part 2 fill', () => {
+  it('rejects deposit below Relay paymentDetails.amount', () => {
     const selected = selectOwnerMutationRelayUserCall({
       userTransaction: {
         to: ROUTER,
@@ -192,7 +220,29 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
       validateSelectedOwnerMutationRelayUserCall({
         requestBoundDepositId: orderId,
         selected: selected!,
+        paymentDetailsAmountWei: '18871666861048',
       }),
-    ).toMatch(/below golden Part 1 minimum/)
+    ).toMatch(/below Relay paymentDetails.amount/)
+  })
+
+  it('accepts runtime-scale deposits quoted by Relay paymentDetails', () => {
+    const runtimeDeposit = '12000000000000'
+    const selected = selectOwnerMutationRelayUserCall({
+      userTransaction: {
+        to: ROUTER,
+        data: `0xcd6e13f7${'0'.repeat(120)}${orderId.slice(2)}` as `0x${string}`,
+        value: runtimeDeposit,
+      },
+      builtUserCallFromPaymentDetails: null,
+      preferDepositoryDepositNative: false,
+    })
+    expect(selected).not.toBeNull()
+    expect(
+      validateSelectedOwnerMutationRelayUserCall({
+        requestBoundDepositId: orderId,
+        selected: selected!,
+        paymentDetailsAmountWei: runtimeDeposit,
+      }),
+    ).toBeNull()
   })
 })

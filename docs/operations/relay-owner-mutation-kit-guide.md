@@ -97,7 +97,7 @@ This is the critical difference from bridge/swap demos.
 | `originChainId` / `destinationChainId` | `8453` (same-chain Base) | Often different chains |
 | `originCurrency` / `destinationCurrency` | `0x000…000` (native ETH) | Token addresses |
 | `tradeType` | **`EXACT_OUTPUT`** | Often `EXACT_INPUT` |
-| `amount` | **Quote request hint** (`resolveRelayQuoteOutputWei`: gas-derived, floored at golden minimum). **Authoritative Part 1 deposit** = `protocol.v2.paymentDetails.amount` from Relay response. Optional ops override: `RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI` / `RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI`. `RELAY_API_KEY` is auth only — it does not set deposit wei. | Input amount |
+| `amount` | **`"0"`** — EXACT_OUTPUT destination value (`txs[0].value`). Relay prices Part 1 in `protocol.v2.paymentDetails.amount` (authoritative). Ops debug override: `RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI` / `RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI`. | Input amount |
 | `txs[0].to` | CSW | Router / bridge target |
 | `txs[0].data` | `executeWithoutChainIdValidation([mutationCalldata])` | Bridge calldata |
 | `txs[0].value` | `"0"` | May be non-zero |

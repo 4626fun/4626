@@ -2,8 +2,11 @@
 export const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
 export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c' as const
 
-/** Golden Part 1 Relay deposit (tx 0xa6b54357…, block 45600637). */
+/** May 5 golden Part 1 deposit — regression fixture only (tx 0xa6b54357…, block 45600637). */
 export const GOLDEN_RELAY_PART1_DEPOSIT_WEI = 18_871_666_861_048n
+
+/** Broken Part 1 (~2.88e12 wei, tx 0xdfec2946…) never triggered Part 2 solver fill. */
+export const MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI = 8_000_000_000_000n
 
 /** May 5 2026 golden Part 1 order id (probe CSW 0x4bea…). */
 export const GOLDEN_RELAY_PART1_ORDER_ID =
