@@ -90,7 +90,7 @@ contract OperationalWiring is Script {
     address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
     address constant VRF_CONSUMER = 0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x2414b595c4f18532A5836B6e2E6d536832c572e8;
+    address constant SOLANA_BRIDGE_ADAPTER = 0x700b4BBAf965c013123bAd02a6562FBa487aC0f1;
     address constant VRF_COORDINATOR = 0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634;
 
     // Uniswap V4 Tax Hook (processes swaps)

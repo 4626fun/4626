@@ -58,6 +58,7 @@ import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE3_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
   normalizeCreatorVaultBatcherAddress,
 } from '@/config/contracts.defaults'
@@ -130,7 +131,6 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-const SPLIT_PHASE1_PHASE3_HELPER = addr('7e4b2dd557bA62FD1Dd5f72CBf5FFAAaaB8A468c')
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')

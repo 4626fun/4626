@@ -66,7 +66,7 @@ contract DeployLotteryManagerCreate2V2 is Script {
 
     // Swap entrypoints that should be allowed to create lottery entries.
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
-    address constant SOLANA_BRIDGE_ADAPTER = 0x2414b595c4f18532A5836B6e2E6d536832c572e8;
+    address constant SOLANA_BRIDGE_ADAPTER = 0x700b4BBAf965c013123bAd02a6562FBa487aC0f1;
     // Legacy adapter address (safe to keep authorized).
     address constant SOLANA_BRIDGE_ADAPTER_LEGACY = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
 

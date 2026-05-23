@@ -21,6 +21,7 @@ univ4_helper="0xD7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b"
 utils_helper="0x158C9925BbC53295675a1b0BB489c7Cfba2cfa73"
 
 deprecated_batchers='0x56E8527Bf0824155e1556aED5740366f248B68ca|0x32403a647e73e04ae42b02bdd1ade9c88698fd0c|0xe3F9490CfD6bd3D68010405d18Bf772C167E7178|0xcDbEeB764df9878ebAFbf101cc818370f703bC4F|0x004684670d284EF607E1B2424fcf8ccBda8ef828|0x271Ab2C53D79d52ddB14506a44133Fe3FA395332'
+deprecated_solana_adapters='0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00'
 
 rg -F 'Current Live Infrastructure (`v1.11.1` protocol contract release target)' "$ADDRESSES_DOC" >/dev/null
 rg -F "CreatorRegistry | \`$registry\`" "$ADDRESSES_DOC" >/dev/null
@@ -58,6 +59,20 @@ rg -F "VAULT_ACT_BATCHER = $activation_batcher;" "$SEED_REGISTRY" >/dev/null
 
 if rg "$deprecated_batchers" "$DEFAULTS" "$SEED_REGISTRY" >/dev/null; then
   echo "active deploy defaults still reference a deprecated creator-vault batcher" >&2
+  exit 1
+fi
+
+stale_adapter_hits="$(
+  rg "$deprecated_solana_adapters" \
+    frontend/src frontend/server frontend/api kpr/script kpr/scripts script \
+    --glob '!**/*.test.ts' \
+    --glob '!docs/**' \
+    --glob '!deployments/**' \
+    2>/dev/null || true
+)"
+if [[ -n "$stale_adapter_hits" ]]; then
+  echo "active code still references a deprecated SolanaBridgeAdapter address:" >&2
+  echo "$stale_adapter_hits" >&2
   exit 1
 fi
 

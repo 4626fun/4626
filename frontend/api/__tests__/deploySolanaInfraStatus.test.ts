@@ -95,7 +95,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -143,7 +143,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -199,7 +199,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':
@@ -260,7 +260,7 @@ describe('deploy solana infra status handler', () => {
         readContract: vi.fn(async (args: any) => {
           switch (args.functionName) {
             case 'solanaBridgeAdapter':
-              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+              return '0x700b4BBAf965c013123bAd02a6562FBa487aC0f1'
             case 'solanaDestination':
               return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
             case 'owner':

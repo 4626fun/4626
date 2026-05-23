@@ -56,7 +56,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const KPR_ROOT = resolve(__dirname, '../../..');
 const REPO_ROOT = resolve(KPR_ROOT, '..');
 const DEFAULT_ORIGIN = 'https://4626.fun';
-const DEFAULT_BATCHER = '0x004684670d284EF607E1B2424fcf8ccBda8ef828';
+const DEFAULT_BATCHER = '0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8';
 const DEFAULT_EXPECTED_SOLANA_AMOUNT = '1000000000';
 
 function loadBootstrapEnv(): void {
