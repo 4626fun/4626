@@ -3,6 +3,7 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
+import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
@@ -82,6 +83,7 @@ export function RootRouter() {
 
   return (
     <>
+      <AppCanvas />
       {shouldRouteAppHostRootToMarketing ? (
         <AppHostRedirect target={marketingHomeTarget} />
       ) : shouldRouteToApp ? (

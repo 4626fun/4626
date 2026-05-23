@@ -29,7 +29,6 @@ import {
   Leaderboard,
 } from './app/lazyRoutes'
 import { AdminLayout } from './components/layout/AdminLayout'
-import { AppCanvas } from './components/layout/AppCanvas'
 import { Layout } from './components/layout/Layout'
 
 export {
@@ -110,7 +109,6 @@ function App() {
       <Route
         element={
           <>
-            <AppCanvas />
             <HostGuard />
             <Outlet />
           </>

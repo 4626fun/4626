@@ -69,7 +69,7 @@ describe('public manifest assets', () => {
     }
 
     expect(manifest.scope).toBe('/')
-    expect(manifest.theme_color).toBe('#020204')
+    expect(manifest.theme_color).toBe('#000000')
 
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
@@ -89,14 +89,14 @@ describe('public manifest assets', () => {
     expect(marketingHtml).not.toContain('rel="mask-icon"')
     expect(marketingHtml).not.toContain('image/svg+xml')
     expect(marketingHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
-    expect(marketingHtml).toContain('<meta name="theme-color" content="#020204" />')
+    expect(marketingHtml).toContain('<meta name="theme-color" content="#000000" />')
 
     expect(appHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${APP_SHELL_TAB_ICON_32}" />`)
     expect(appHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APP_SHELL_TAB_ICON_180}" />`)
     expect(appHtml).not.toContain('rel="shortcut icon"')
     expect(appHtml).not.toContain('rel="mask-icon"')
     expect(appHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
-    expect(appHtml).toContain('<meta name="theme-color" content="#020204" />')
+    expect(appHtml).toContain('<meta name="theme-color" content="#000000" />')
   })
 
   it('keeps shell-level social assets aligned with their intended surfaces', () => {

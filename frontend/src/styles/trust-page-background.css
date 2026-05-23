@@ -9,8 +9,7 @@
 
 .app-canvas-bg,
 .app-loading-root::before,
-body[data-trust-page]::before,
-html.dark body::before {
+body[data-trust-page]::before {
   background-color: var(--trust-page-bg);
   background-image:
     linear-gradient(180deg, rgba(255, 255, 255, 0.002) 0%, transparent 14%, transparent 88%, rgba(0, 0, 0, 0.78) 100%),
@@ -29,7 +28,8 @@ html.dark body::before {
 .app-canvas-bg {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  /* z-index 0 (not -1): iOS/mobile Safari paints negative fixed layers behind body and drops grain. */
+  z-index: 0;
   pointer-events: none;
 }
 
@@ -45,8 +45,7 @@ html.dark body::before {
   pointer-events: none;
 }
 
-body[data-trust-page]::before,
-html.dark body::before {
+body[data-trust-page]::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -55,11 +54,18 @@ html.dark body::before {
 }
 
 body[data-trust-page],
+html.dark,
 html.dark body {
   background-color: var(--trust-page-bg);
 }
 
 /* Shells stay transparent so every route shows the same programmatic canvas. */
+html.dark #root {
+  position: relative;
+  z-index: 1;
+  background-color: transparent;
+}
+
 html.dark #root,
 html.dark .vault-shell,
 html.dark main {
@@ -67,17 +73,14 @@ html.dark main {
 }
 
 @media (max-width: 768px) {
-  .app-canvas-bg {
+  /* Keep grain/grid fixed on mobile — absolute body::before only covered the first screen on iOS. */
+  .app-canvas-bg,
+  body[data-trust-page]::before {
     position: fixed;
     inset: 0;
-    min-height: auto;
-  }
-
-  body[data-trust-page]::before,
-  html.dark body::before {
-    position: absolute;
-    inset: 0;
-    min-height: 100%;
+    width: 100%;
+    height: 100%;
+    min-height: 100dvh;
   }
 }
 
