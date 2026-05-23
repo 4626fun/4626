@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/Button'
 import { RemoveOwnerStatusCards } from '@/features/accountSetup/removeOwner/RemoveOwnerStatusCards'
 import {
   formatRelayDepositEth,
-  relayQuoteLooksEchoedExactOutput,
   resolveOwnerMutationPhase,
+  resolveRelayPreviewBlockReason,
   resolveRelayPreviewStepOneStatus,
   resolveRelayRequiredDepositWei,
   resolveRelaySubmitStepTwoStatus,
@@ -66,6 +66,7 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
   const requiredDepositEth =
     requiredDepositWei !== null ? formatRelayDepositEth(requiredDepositWei) : null
   const stepOneStatus = resolveRelayPreviewStepOneStatus({ previewLoading, preview })
+  const previewBlockReason = resolveRelayPreviewBlockReason(preview)
   const stepTwoStatus = resolveRelaySubmitStepTwoStatus({ stepOne: stepOneStatus, txHash, busy })
   const phase = resolveOwnerMutationPhase({
     stepOne: stepOneStatus,
@@ -109,9 +110,13 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
       {phase === 'preview' ? (
         <div className="space-y-3">
           {preview && stepOneStatus === 'blocked' ? (
-            <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100">
-              Preview loaded but is not actionable yet. Check simulation, Relay quote, and deposit
-              amount below, then rebuild.
+            <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100 space-y-2">
+              <p>
+                Preview loaded but is not actionable yet. Fix the blocker below, then rebuild.
+              </p>
+              {previewBlockReason ? (
+                <p className="font-mono text-[11px] leading-relaxed text-amber-50/90">{previewBlockReason}</p>
+              ) : null}
             </div>
           ) : null}
           {previewDetails}
@@ -146,11 +151,6 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
                 <span className="ml-2 opacity-80">({requiredDepositWei.toString()} wei)</span>
               ) : null}
             </div>
-            {relayQuoteLooksEchoedExactOutput(preview, requiredDepositWei) ? (
-              <div className="mt-2 text-[10px] opacity-85">
-                Relay echoed the quoted exact deposit amount for this same-chain route.
-              </div>
-            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button

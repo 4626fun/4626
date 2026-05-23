@@ -26,12 +26,20 @@ Bridge/swap examples in the Privy sample (`EXACT_INPUT`, cross-chain ETH) are **
 
 ## Golden reference transactions (Base mainnet)
 
-Successful **add embedded EOA owner** via Relay on block **45600637** (May 5, 2026). Both txs landed in the same block.
+Successful **add embedded EOA owner** via Relay on block **45600637** (May 5, 2026). Part 1 and Part 2 landed in the same block.
 
-| Part | Tx hash | Role |
+| Part | Hash | Role |
 | --- | --- | --- |
-| **1 — User deposit** | [0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3](https://basescan.org/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3) | CSW submits Relay router `multicall` via Base App `wallet_sendCalls`; embeds `depositNative(depositor=CSW, orderId=…)` |
-| **2 — Solver fill** | [0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36](https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36) | Relay solver → router `multicall` → `EntryPoint.handleOps` → CSW `executeWithoutChainIdValidation` → **`addOwnerAddress(newOwner)`** |
+| **1 — User deposit (UserOp)** | [0xa6b54357…b4c3](https://basescan.org/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3) | CSW UserOp → `executeBatch` → `Depository.depositNative(depositor=CSW, orderId=0x8cc58ae3…797a)` with **18871666861048 wei** (reference at block 45600637; live quotes may be higher) |
+| **1 — Bundle wrapper** | [0x34edd28…2aadf](https://basescan.org/tx/0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf) | Outer Base bundle tx that includes the UserOp (what some wallets/explorers label separately from the AA hash) |
+| **2 — Solver fill** | [0xa9a06340…9a36](https://basescan.org/tx/0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36) | Relay solver → `EntryPoint.handleOps` → CSW `executeWithoutChainIdValidation` → **`addOwnerAddress(newOwner)`** |
+
+**Basescan internal txs (Part 1 UserOp `0xa6b54357…`):**
+
+1. CSW → EntryPoint v0.6 — ~**85989948096 wei** (UserOp gas prefund)
+2. CSW → Relay Depository `0x4cd00e38…` — **18871666861048 wei** + `depositNative` calldata
+
+**Relay explorer presentation:** Even though `originChainId` and `destinationChainId` are both **8453**, Relay's intent UI labels this a **same-chain cross-chain transaction** (~**0.000019 ETH** native on Base → **0 ETH** destination leg on Base). That is expected for Relay call-execution / intent settlement — not a bridge to another chain.
 
 Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 
@@ -41,10 +49,10 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 - Event: `AddOwner` with new owner EOA at owner index 33
 - Paymaster: `0x0` on the destination UserOp (self-funded)
 
-4626 replicates this by:
+4626 replicates Part 1 by:
 
-1. Server `/quote/v2` with `user = depositor` (CSW for self-auth, parent CSW for sub-account, EOA for external funder), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`.
-2. Client submits preview `userCall` (router multicall when quote returns `0xcd6e13f7`).
+1. Server `/quote/v2` with `user = depositor` (CSW for self-auth), `recipient = mutation CSW`, wrapped `executeWithoutChainIdValidation(addOwnerAddress(embeddedEoa))`, **`originChainId = destinationChainId = 8453`**, `tradeType = EXACT_OUTPUT`.
+2. Client submits preview **`userCall`** = Depository `depositNative` (`0x49290c1c`) via Base App `wallet_sendCalls` (not router multicall on the CSW lane).
 3. Poll `/intents/status/v3` with `orderId ?? requestId`; verify on-chain `isOwnerAddress(embeddedEoa)`.
 
 Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `cswSendCalls.ts`.
@@ -89,7 +97,7 @@ This is the critical difference from bridge/swap demos.
 | `originChainId` / `destinationChainId` | `8453` (same-chain Base) | Often different chains |
 | `originCurrency` / `destinationCurrency` | `0x000…000` (native ETH) | Token addresses |
 | `tradeType` | **`EXACT_OUTPUT`** | Often `EXACT_INPUT` |
-| `amount` | Relay deposit wei (from server preview / paymentDetails) | Input amount |
+| `amount` | **Quote request hint** (`resolveRelayQuoteOutputWei`: gas-derived, floored at golden minimum). **Authoritative Part 1 deposit** = `protocol.v2.paymentDetails.amount` from Relay response. Optional ops override: `RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI` / `RELAY_REMOVE_OWNER_QUOTE_OUTPUT_WEI`. `RELAY_API_KEY` is auth only — it does not set deposit wei. | Input amount |
 | `txs[0].to` | CSW | Router / bridge target |
 | `txs[0].data` | `executeWithoutChainIdValidation([mutationCalldata])` | Bridge calldata |
 | `txs[0].value` | `"0"` | May be non-zero |

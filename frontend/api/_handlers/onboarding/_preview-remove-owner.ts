@@ -23,6 +23,7 @@ import {
 import { base } from 'viem/chains'
 import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
+import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
 
 import { CSW_OWNER_ABI } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
@@ -58,14 +59,10 @@ type RelayFlow = {
     amount: string
   } | null
   /**
-   * The single transaction the user must sign + submit. Goes to RelayRouterV3
-   * (e.g. 0xb92fe925…fff4f on Base), which internally multicalls into
-   * RelayDepository.depositNative(user, requestId) + cleanupNative. The user
-   * never signs the destination mutation — Relay handles that off-chain.
+   * Part 1 deposit the user submits. CSW self-auth uses Depository.depositNative
+   * (Base App wraps as executeBatch). External EOA funders use Relay router multicall.
    */
   userCall: Eip5792Call
-  /** Whether userCall came directly from quote tx data or was locally built. */
-  userCallSource: 'quote_tx' | 'built_from_payment_details'
   /** Relay's USD-decimal quoted fee, informational. */
   feeUsd: string | null
 }
@@ -98,6 +95,13 @@ type RemoveOwnerPreviewResponse = {
       removeLastOwner: { ok: boolean; error: string | null }
     }
     relayQuoteError: string | null
+    relayDepositSimulation: {
+      ok: boolean
+      error: string | null
+      funderBalanceWei: string
+      depositWei: string
+      gasBufferWei: string
+    } | null
     relayQuoteDiagnostics: {
       requestId: `0x${string}` | null
       orderId: `0x${string}` | null
@@ -315,6 +319,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
+    let relayDepositSimulation: RemoveOwnerPreviewResponse['preflight']['relayDepositSimulation'] = null
     let relayQuoteDiagnostics: RemoveOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
     const relayQuote = await buildOwnerMutationRelayFlow({
       publicClient,
@@ -327,6 +332,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     relayQuoteDiagnostics = relayQuote.diagnostics
     if (relayQuote.ok) {
       relay = relayQuote.relay
+      relayDepositSimulation = await simulateRelayDepositUserCall({
+        publicClient,
+        funderAddress: connectedAddress,
+        userCall: relay.userCall,
+      })
+      if (!relayDepositSimulation.ok) {
+        relayQuoteError = relayDepositSimulation.error
+        relay = null
+      }
     } else {
       relayQuoteError = relayQuote.error
     }
@@ -359,6 +373,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           removeLastOwner: removeLastOwnerSimulation,
         },
         relayQuoteError,
+        relayDepositSimulation,
         relayQuoteDiagnostics,
       },
     }

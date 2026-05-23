@@ -7,16 +7,27 @@
  * Why this lane exists:
  *
  * Owner-mutation Relay deposits (Part 1) are submitted from Base App via
- * `wallet_sendCalls` with the preview-bound Relay router `multicall`
- * (`0xcd6e13f7`) calldata from `/quote/v2`. Golden reference (block 45600637):
+ * `wallet_sendCalls` with the preview-bound Depository `depositNative`
+ * call (`0x49290c1c` → Relay Depository 0x4cd00e38…). Base App wraps it as
+ * CSW `executeBatch`, producing two internal transfers in the AA bundle:
+ *   1. CSW → EntryPoint v0.6 (~85989948096 wei UserOp prefund)
+ *   2. CSW → Relay Depository (18871666861048 wei + depositNative calldata)
+ * Golden reference (block 45600637):
  *
- *   - Part 1 (user deposit): 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3
- *   - Part 2 (solver fill):  0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
+ *   - Part 1 UserOp (AA hash): 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3
+ *   - Part 1 bundle tx:        0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf
+ *   - Part 2 (solver fill):    0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
+ *
+ * Relay's intent explorer labels same-chain call-execution (8453→8453) as a
+ * "same chain cross chain transaction" (~0.000019 ETH on Base). That UI shape is
+ * expected even though no bridge leaves Base.
  *
  * Base App wraps the deposit in a UserOp internally; Relay's solver submits
  * the destination `handleOps` + `executeWithoutChainIdValidation` mutation in
  * the same block. On the dapp side we pass EIP-5792 `{ to, data, value }`
- * from the server preview and poll `wallet_getCallsStatus` for the tx hash.
+ * from the server preview and poll `wallet_getCallsStatus` for the bundle tx
+ * hash (often 0x34edd28…). Tenderly also surfaces the UserOp hash (0xa6b54357…)
+ * for the same Part 1 — see goldenRelayPart1Shape.ts.
  *
  * Do not use bare CSW self-call `eth_sendTransaction` for owner mutations from
  * third-party dapps (reverts or blocked). See relay-owner-mutation-kit-guide.md.
@@ -61,9 +72,10 @@ export type SubmitViaSendCallsParams = {
   csw: `0x${string}`
   /**
    * Ordered list of calls to dispatch in this single wallet_sendCalls. Relay
-   * owner mutations pass exactly one entry: router `multicall` from the preview
-   * (`0xcd6e13f7` → RelayDepository deposit + cleanup). Relay's solver submits
-   * the destination `addOwnerAddress` fill separately (Part 2).
+   * owner mutations pass exactly one entry: Depository `depositNative` from the
+   * preview (`0x49290c1c`, value = golden Part 1 deposit wei). Base App wraps
+   * this as CSW `executeBatch`. Relay's solver submits the destination
+   * `addOwnerAddress` fill separately (Part 2).
    */
   calls: SendCallsCall[]
   /** Target chain id. Currently Base mainnet (8453). */
@@ -248,7 +260,11 @@ export type WaitForCallsTxHashParams = {
  */
 export async function waitForCallsTxHash(
   params: WaitForCallsTxHashParams,
-): Promise<{ transactionHash: `0x${string}` | null; rawStatus: unknown }> {
+): Promise<{
+  transactionHash: `0x${string}` | null
+  userOperationHash: `0x${string}` | null
+  rawStatus: unknown
+}> {
   const emit = (event: CswSendCallsTelemetry) => {
     try {
       params.onTelemetry?.(event)
@@ -284,21 +300,25 @@ export async function waitForCallsTxHash(
           error: error instanceof Error ? error.message : String(error ?? ''),
         },
       })
-      return { transactionHash: null, rawStatus: { error } }
+      return { transactionHash: null, userOperationHash: null, rawStatus: { error } }
     }
 
-    const txHash = extractFirstTransactionHash(raw)
+    const { transactionHash, userOperationHash } = extractCallsStatusHashes(raw)
     emit({
       step: 'status_poll',
       detail: {
         pollCount,
-        txHashFound: txHash != null,
+        txHashFound: transactionHash != null,
+        userOpHashFound: userOperationHash != null,
         rawStatus: summarizeCallsStatus(raw),
       },
     })
-    if (txHash) {
-      emit({ step: 'status_resolved', detail: { transactionHash: txHash } })
-      return { transactionHash: txHash, rawStatus: raw }
+    if (transactionHash || userOperationHash) {
+      emit({
+        step: 'status_resolved',
+        detail: { transactionHash, userOperationHash },
+      })
+      return { transactionHash, userOperationHash, rawStatus: raw }
     }
 
     await new Promise((resolve) => setTimeout(resolve, interval))
@@ -312,30 +332,54 @@ export async function waitForCallsTxHash(
       lastStatus: summarizeCallsStatus(lastRaw),
     },
   })
-  return { transactionHash: null, rawStatus: lastRaw }
+  return { transactionHash: null, userOperationHash: null, rawStatus: lastRaw }
 }
 
-/**
- * Pull the first valid 32-byte hex `transactionHash` we can find on a
- * `wallet_getCallsStatus` response. Returns null when no receipt has one yet.
- */
-function extractFirstTransactionHash(raw: unknown): `0x${string}` | null {
-  if (!raw || typeof raw !== 'object') return null
+function extractCallsStatusHashes(raw: unknown): {
+  transactionHash: `0x${string}` | null
+  userOperationHash: `0x${string}` | null
+} {
+  if (!raw || typeof raw !== 'object') {
+    return { transactionHash: null, userOperationHash: null }
+  }
   const obj = raw as Record<string, unknown>
-  const receipts = obj.receipts
-  if (!Array.isArray(receipts)) return null
+  const receipts = Array.isArray(obj.receipts) ? obj.receipts : []
+  let transactionHash: `0x${string}` | null = null
+  let userOperationHash: `0x${string}` | null = null
+
   for (const r of receipts) {
     if (!r || typeof r !== 'object') continue
     const rec = r as Record<string, unknown>
-    const candidate = rec.transactionHash
-    if (
-      typeof candidate === 'string' &&
-      /^0x[0-9a-fA-F]{64}$/.test(candidate)
-    ) {
-      return candidate as `0x${string}`
+    if (!transactionHash && isTxHash(rec.transactionHash)) {
+      transactionHash = rec.transactionHash as `0x${string}`
+    }
+    for (const key of ['userOperationHash', 'userOpHash', 'userOperationReceiptHash'] as const) {
+      if (!userOperationHash && isTxHash(rec[key])) {
+        userOperationHash = rec[key] as `0x${string}`
+      }
     }
   }
-  return null
+
+  if (!userOperationHash) {
+    for (const key of ['userOperationHash', 'userOpHash'] as const) {
+      if (isTxHash(obj[key])) {
+        userOperationHash = obj[key] as `0x${string}`
+      }
+    }
+  }
+
+  return { transactionHash, userOperationHash }
+}
+
+function isTxHash(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
+
+/**
+ * @deprecated Prefer extractCallsStatusHashes for bundle + UserOp hash pairs.
+ */
+function extractFirstTransactionHash(raw: unknown): `0x${string}` | null {
+  return extractCallsStatusHashes(raw).transactionHash
 }
 
 /**

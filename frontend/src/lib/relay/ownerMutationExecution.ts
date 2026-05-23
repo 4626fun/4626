@@ -15,6 +15,8 @@ import {
   resolveRelayStatusRequestId,
   validatePreviewRelayUserCallIsNativeDepository,
 } from '@/lib/removeOwner/removeOwnerHelpers'
+import { validateGoldenCswDepositoryPart1UserCall } from '@/lib/relay/goldenRelayPart1Shape'
+import { GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI } from '@/lib/wallet/cswOwnerAbi'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
@@ -77,10 +79,13 @@ async function submitSelfAuthViaSendCalls(params: {
       }
     },
   })
-  if (!resolution.transactionHash) {
+  if (!resolution.transactionHash && !resolution.userOperationHash) {
     throw new Error('ERR_SEND_CALLS_STATUS_NO_TX_HASH')
   }
-  return resolution.transactionHash
+  if (resolution.userOperationHash) {
+    params.appendEvent(`${params.telemetryPrefix}:user_op_hash=${resolution.userOperationHash}`)
+  }
+  return resolution.transactionHash ?? resolution.userOperationHash!
 }
 
 async function submitExternalFunderRelayDeposit(params: {
@@ -127,6 +132,26 @@ export async function executeOwnerMutationViaRelay(
     throw new Error(`Relay preview guard failed: ${relayGuard}.`)
   }
 
+  if (params.isSelfAuthSession) {
+    const goldenShapeError = validateGoldenCswDepositoryPart1UserCall({
+      userCall: relay.userCall,
+      fundingCsw: fundingCswAddress,
+      orderId: relay.orderId ?? relay.requestId,
+    })
+    if (goldenShapeError) {
+      throw new Error(
+        `Part 1 UserOp would not match the golden CSW executeBatch → Depository.depositNative shape: ${goldenShapeError}. Rebuild preview.`,
+      )
+    }
+    appendEvent(
+      `relay:golden_part1_shape=ok executeBatch_inner=${JSON.stringify({
+        target: relay.userCall.to,
+        value: BigInt(relay.userCall.value).toString(10),
+        selector: relay.userCall.data.slice(0, 10),
+      })}`,
+    )
+  }
+
   const requiredDepositWei = BigInt(relay.userCall.value)
   appendEvent(`precheck:required_deposit_wei=${requiredDepositWei.toString(10)}`)
 
@@ -134,6 +159,7 @@ export async function executeOwnerMutationViaRelay(
     const latestCswBalanceWei = await publicClient.getBalance({ address: fundingCswAddress })
     appendEvent(`precheck:funding_csw=${fundingCswAddress}`)
     appendEvent(`precheck:funding_csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
+    const requiredWithGasReserve = requiredDepositWei + GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI
     if (requiredDepositWei > 0n && latestCswBalanceWei < requiredDepositWei) {
       const walletLabel = fundingFromParentWallet ? 'Main Base wallet' : 'Smart wallet'
       const targetHint = fundingFromParentWallet
@@ -141,6 +167,11 @@ export async function executeOwnerMutationViaRelay(
         : ' Fund the smart wallet and retry.'
       throw new Error(
         `${walletLabel} balance (${formatCompactEth(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatCompactEth(requiredDepositWei)} ETH).${targetHint}`,
+      )
+    }
+    if (latestCswBalanceWei < requiredWithGasReserve) {
+      appendEvent(
+        `precheck:warn native balance below deposit+entrypoint_prefund (${requiredWithGasReserve.toString(10)} wei); EntryPoint deposit may cover gas`,
       )
     }
   }
@@ -177,7 +208,6 @@ export async function executeOwnerMutationViaRelay(
   appendEvent(`relay:user_call_to=${relay.userCall.to}`)
   appendEvent(`relay:user_call_value=${relay.userCall.value}`)
   appendEvent(`relay:user_call_selector=${relay.userCall.data.slice(0, 10)}`)
-  appendEvent(`relay:user_call_source=${relay.userCallSource}`)
   appendEvent(`relay:order_id=${relay.orderId ?? 'n/a'}`)
   if (relay.paymentDetails) {
     appendEvent(`relay:payment_depository=${relay.paymentDetails.depository}`)

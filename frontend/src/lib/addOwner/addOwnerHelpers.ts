@@ -1,5 +1,8 @@
 import { apiFetch } from '@/lib/api/apiBase'
-import type { OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
+import type {
+  OwnerMutationRelayDepositSimulation,
+  OwnerMutationRelayFlow,
+} from '@/lib/relay/ownerMutationTypes'
 
 export type AddOwnerPreview = {
   txRequest: {
@@ -22,6 +25,7 @@ export type AddOwnerPreview = {
       error: string | null
     }
     relayQuoteError: string | null
+    relayDepositSimulation: OwnerMutationRelayDepositSimulation | null
     relayQuoteDiagnostics: {
       requestId: `0x${string}` | null
       orderId: `0x${string}` | null

@@ -179,7 +179,6 @@ async function main(): Promise<void> {
           requestId: relay.requestId,
           orderId: relay.orderId,
           userCall: relay.userCall,
-          userCallSource: relay.userCallSource,
           feeUsd: relay.feeUsd,
           paymentDetails: relay.paymentDetails,
         },

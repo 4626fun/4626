@@ -16,7 +16,6 @@ export type OwnerMutationRelayFlow = {
     amount: string
   } | null
   userCall: OwnerMutationEip5792Call
-  userCallSource: 'quote_tx' | 'built_from_payment_details'
   feeUsd: string | null
 }
 
@@ -39,6 +38,14 @@ export type OwnerMutationRelayQuoteDiagnostics = {
   rawSnippet: string | null
 }
 
+export type OwnerMutationRelayDepositSimulation = {
+  ok: boolean
+  error: string | null
+  funderBalanceWei: string
+  depositWei: string
+  gasBufferWei: string
+}
+
 export type OwnerMutationPreviewBase = {
   txRequest: {
     chainId: 8453
@@ -50,6 +57,7 @@ export type OwnerMutationPreviewBase = {
   relay: OwnerMutationRelayFlow | null
   preflight: {
     relayQuoteError: string | null
+    relayDepositSimulation: OwnerMutationRelayDepositSimulation | null
     relayQuoteDiagnostics: OwnerMutationRelayQuoteDiagnostics | null
     simulation: {
       ok: boolean

@@ -7,13 +7,13 @@ import {
 } from '@/lib/relay/ownerMutationPreviewHelpers'
 
 describe('ownerMutationPreviewHelpers', () => {
-  it('keeps step 1 blocked until preview simulation, relay, and deposit are all actionable', () => {
+  it('keeps step 1 blocked until relay quote and deposit preflight are actionable', () => {
     expect(
       resolveRelayPreviewStepOneStatus({
         previewLoading: false,
         preview: {
-          relay: { userCall: { value: '0x1' }, paymentDetails: { amount: '1' } },
-          preflight: { simulation: { ok: false } },
+          relay: null,
+          preflight: { simulation: { ok: false, error: 'execution reverted' } },
         },
       }),
     ).toBe('blocked')
@@ -43,7 +43,35 @@ describe('ownerMutationPreviewHelpers', () => {
         previewLoading: false,
         preview: {
           relay: { userCall: { value: '0x64' }, paymentDetails: { amount: '100' } },
-          preflight: { simulation: { ok: true } },
+          preflight: {
+            simulation: { ok: true },
+            relayDepositSimulation: { ok: false, error: 'reverted' },
+          },
+        },
+      }),
+    ).toBe('blocked')
+
+    expect(
+      resolveRelayPreviewStepOneStatus({
+        previewLoading: false,
+        preview: {
+          relay: { userCall: { value: '0x64' }, paymentDetails: { amount: '100' } },
+          preflight: { simulation: { ok: true }, relayDepositSimulation: { ok: true } },
+        },
+      }),
+    ).toBe('done')
+  })
+
+  it('allows step 1 when Relay quote + deposit preflight pass even if bare mutation simulation failed', () => {
+    expect(
+      resolveRelayPreviewStepOneStatus({
+        previewLoading: false,
+        preview: {
+          relay: { userCall: { value: '0x64' }, paymentDetails: { amount: '100' } },
+          preflight: {
+            simulation: { ok: false, error: 'execution reverted' },
+            relayDepositSimulation: { ok: true },
+          },
         },
       }),
     ).toBe('done')

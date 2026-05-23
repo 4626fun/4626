@@ -8,10 +8,14 @@
  *
  * Why this exists (2026-05-11):
  *
- * The May 5 owner[3] add (UserOp 0xa9a06340…9a36, tx 0xa6b54357…b4c3) was a
- * two-part Relay flow that landed in the same Base block 45,600,637:
- *   PART 1 — CSW.executeBatch → RelayDepository.depositNative(self, id=0x8cc5…797a)
+ * The May 5 owner[3] add (UserOp 0xa9a06340…9a36, bundle 0x34edd28…2aadf) was a
+ * two-part Relay **same-chain intent** (originChainId = destinationChainId = 8453)
+ * that landed in block 45,600,637:
+ *   PART 1 — CSW UserOp → executeBatch → RelayDepository.depositNative(self, id=0x8cc5…797a)
  *   PART 2 — CSW.executeWithoutChainIdValidation → addOwnerAddress(...)
+ *
+ * Relay's explorer may still label Part 1 as a "same chain cross chain transaction"
+ * (~0.000019 ETH on Base). That is intent-settlement UI, not an L2 bridge.
  *
  * The depository orderId 0x8cc5…797a is produced by Relay's solver as part of a
  * /quote response (steps[].requestId OR protocol.v2.orderId, depending on
@@ -224,9 +228,9 @@ function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
  *   - the single user transaction (the deposit tx the wallet must submit)
  *   - fee info for display
  *
- * The user transaction comes from steps[0].items[0].data and represents the
- * complete Part 1 of the two-part flow (deposit-to-RelayRouter, which the
- * router multicalls into RelayDepository.depositNative + cleanupNative).
+ * The user transaction comes from steps[0].items[0].data when Relay returns a
+ * router multicall for EOA funders. CSW self-auth Part 1 ignores that step and
+ * builds Depository.depositNative from protocol.v2 paymentDetails instead.
  */
 export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
   const extract: RelayQuoteExtract = {

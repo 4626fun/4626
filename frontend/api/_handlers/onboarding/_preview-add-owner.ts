@@ -27,6 +27,7 @@ import {
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
+import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
 import { ADD_OWNER_ADDRESS_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const PREVIEW_ADD_OWNER_BODY_MAX_BYTES = 8 * 1024
@@ -47,7 +48,6 @@ type RelayFlow = {
     amount: string
   } | null
   userCall: Eip5792Call
-  userCallSource: 'quote_tx' | 'built_from_payment_details'
   feeUsd: string | null
 }
 
@@ -68,6 +68,13 @@ type AddOwnerPreviewResponse = {
       error: string | null
     }
     relayQuoteError: string | null
+    relayDepositSimulation: {
+      ok: boolean
+      error: string | null
+      funderBalanceWei: string
+      depositWei: string
+      gasBufferWei: string
+    } | null
     relayQuoteDiagnostics: {
       requestId: `0x${string}` | null
       orderId: `0x${string}` | null
@@ -269,6 +276,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           alreadyOwner: true,
           simulation: { ok: true, error: null },
           relayQuoteError: null,
+          relayDepositSimulation: null,
           relayQuoteDiagnostics: null,
         },
       }
@@ -294,6 +302,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           alreadyOwner: true,
           simulation: { ok: true, error: null },
           relayQuoteError: null,
+          relayDepositSimulation: null,
           relayQuoteDiagnostics: null,
         },
       }
@@ -318,6 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
+    let relayDepositSimulation: AddOwnerPreviewResponse['preflight']['relayDepositSimulation'] = null
     let relayQuoteDiagnostics: AddOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
     const relayQuoteUser =
       connectedIsParentFundingSubAccount || isSubAccountTarget
@@ -340,6 +350,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteDiagnostics = relayQuote.diagnostics
       if (relayQuote.ok) {
         relay = relayQuote.relay
+        relayDepositSimulation = await simulateRelayDepositUserCall({
+          publicClient,
+          funderAddress: relayQuoteUser,
+          userCall: relay.userCall,
+        })
+        if (!relayDepositSimulation.ok) {
+          relayQuoteError = relayDepositSimulation.error
+          relay = null
+        }
       } else {
         relayQuoteError = relayQuote.error
       }
@@ -357,6 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         alreadyOwner: false,
         simulation,
         relayQuoteError,
+        relayDepositSimulation,
         relayQuoteDiagnostics,
       },
     }

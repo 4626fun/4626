@@ -1,7 +1,13 @@
-import { encodeFunctionData } from 'viem'
+import { encodeFunctionData, decodeFunctionData, getAddress, type Hex } from 'viem'
 
 import { encodeExecuteWithoutChainIdValidation } from '../../../src/lib/wallet/cswOwnerMutationEncode.js'
-import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import {
+  RELAY_DEPOSITORY_ABI,
+  RELAY_DEPOSITORY_BASE,
+  RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
+  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
+} from '../../../src/lib/wallet/cswOwnerAbi.js'
+import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import { getRelayQuote } from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
@@ -21,16 +27,22 @@ const MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI = 8_000_000_000_000n
 
 type RelayUserCallCandidate = {
   userCall: OwnerMutationRelayFlow['userCall']
-  userCallSource: OwnerMutationRelayFlow['userCallSource']
+  isDepositoryDepositNative: boolean
 }
 
 /**
- * Golden Part 1 (0xa6b54357…, block 45600637) submits Relay router `multicall`
- * (`0xcd6e13f7`) via Base App `wallet_sendCalls`. Part 2 (0xa9a06340…) is the
- * solver fill that emits `AddOwner`. Prefer the quoted router multicall when its
- * deposit value is fully funded; fall back to a request-bound Depository
- * `depositNative` only when Relay echoes an underfunded router value (broken
- * 0xdfec2946… used ~2.88e12 wei instead of ~1.89e13).
+ * Golden Part 1 (0xa6b54357… / AA hash A6B54357…, block 45600637):
+ * CSW UserOp → executeBatch → RelayDepository.depositNative(depositor=CSW, id=orderId)
+ * with value 18871666861048 wei. Base App `wallet_sendCalls` wraps a single depository
+ * call into that executeBatch shape. The AA bundle produces two internal transfers:
+ *   1. CSW → EntryPoint v0.6 (~85989948096 wei prefund for gas)
+ *   2. CSW → Relay Depository (18871666861048 wei + depositNative calldata)
+ *
+ * External EOA funders still submit Relay router `multicall` (`0xcd6e13f7`) via
+ * `eth_sendTransaction`. Part 2 (0xa9a06340…) is the solver fill that emits AddOwner.
+ *
+ * Relay intent UI (8453→8453) may label Part 1 as a "same chain cross chain
+ * transaction" (~0.000019 ETH). Bundle tx 0x34edd28… wraps UserOp 0xa6b54357….
  */
 export function selectOwnerMutationRelayUserCall(params: {
   userTransaction: {
@@ -39,7 +51,22 @@ export function selectOwnerMutationRelayUserCall(params: {
     value: string
   } | null
   builtUserCallFromPaymentDetails: OwnerMutationRelayFlow['userCall'] | null
+  /** CSW self-auth lane: mimic golden executeBatch → Depository.depositNative Part 1. */
+  preferDepositoryDepositNative?: boolean
 }): RelayUserCallCandidate | null {
+  if (params.preferDepositoryDepositNative && params.builtUserCallFromPaymentDetails) {
+    const built = params.builtUserCallFromPaymentDetails
+    if (
+      built.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase() &&
+      built.data.slice(0, 10).toLowerCase() === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR
+    ) {
+      return {
+        userCall: built,
+        isDepositoryDepositNative: true,
+      }
+    }
+  }
+
   const quoteTx =
     params.userTransaction &&
     typeof params.userTransaction.value === 'string' &&
@@ -53,7 +80,7 @@ export function selectOwnerMutationRelayUserCall(params: {
             data: params.userTransaction.data,
             value: `0x${BigInt(params.userTransaction.value).toString(16)}` as `0x${string}`,
           },
-          userCallSource: 'quote_tx' as const,
+          isDepositoryDepositNative: false,
         }
       : null
 
@@ -63,19 +90,10 @@ export function selectOwnerMutationRelayUserCall(params: {
     if (quotedWei >= builtWei) {
       return quoteTx
     }
-    return {
-      userCall: params.builtUserCallFromPaymentDetails,
-      userCallSource: 'built_from_payment_details',
-    }
+    return null
   }
 
   if (quoteTx) return quoteTx
-  if (params.builtUserCallFromPaymentDetails) {
-    return {
-      userCall: params.builtUserCallFromPaymentDetails,
-      userCallSource: 'built_from_payment_details',
-    }
-  }
 
   return null
 }
@@ -83,6 +101,8 @@ export function selectOwnerMutationRelayUserCall(params: {
 export function validateSelectedOwnerMutationRelayUserCall(params: {
   requestBoundDepositId: `0x${string}` | null
   selected: RelayUserCallCandidate
+  /** For Depository.depositNative Part 1, depositor must equal the funding CSW. */
+  expectedDepositor?: `0x${string}` | null
 }): string | null {
   let valueWei: bigint
   try {
@@ -93,7 +113,39 @@ export function validateSelectedOwnerMutationRelayUserCall(params: {
   if (valueWei < MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI) {
     return `relay deposit ${valueWei.toString()} wei is below minimum ${MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI.toString()} wei (underfunded quotes skip Part 2 solver fill)`
   }
-  if (params.requestBoundDepositId) {
+  if (valueWei < GOLDEN_RELAY_PART1_DEPOSIT_WEI) {
+    return `relay deposit ${valueWei.toString()} wei is below golden Part 1 minimum ${GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString()} wei (tx 0xa6b54357…)`
+  }
+
+  const selector = params.selected.userCall.data.slice(0, 10).toLowerCase()
+  const isDepositoryNativeDeposit =
+    selector === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
+    params.selected.userCall.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase()
+
+  if (isDepositoryNativeDeposit) {
+    try {
+      const decoded = decodeFunctionData({
+        abi: RELAY_DEPOSITORY_ABI,
+        data: params.selected.userCall.data,
+      })
+      if (decoded.functionName !== 'depositNative') {
+        return 'relay depository call must be depositNative'
+      }
+      const [depositor, depositId] = decoded.args as [`0x${string}`, `0x${string}`]
+      if (params.expectedDepositor) {
+        if (getAddress(depositor) !== getAddress(params.expectedDepositor)) {
+          return `depositNative depositor must be funding CSW (${params.expectedDepositor}), got ${depositor}`
+        }
+      }
+      if (params.requestBoundDepositId) {
+        if (depositId.toLowerCase() !== params.requestBoundDepositId.toLowerCase()) {
+          return 'depositNative id must match request-bound Relay order id'
+        }
+      }
+    } catch {
+      return 'relay depository depositNative calldata could not be decoded'
+    }
+  } else if (params.requestBoundDepositId) {
     const idNeedle = params.requestBoundDepositId.slice(2).toLowerCase()
     if (!params.selected.userCall.data.toLowerCase().includes(idNeedle)) {
       return 'relay user call calldata does not embed the request-bound deposit id'
@@ -116,7 +168,6 @@ export type OwnerMutationRelayFlow = {
     data: `0x${string}`
     value: `0x${string}`
   }
-  userCallSource: 'quote_tx' | 'built_from_payment_details'
   feeUsd: string | null
 }
 
@@ -179,6 +230,17 @@ function parseDecimalWei(value: unknown): bigint | null {
   }
 }
 
+async function relayFunderIsDeployedContract(params: {
+  publicClient: BuildOwnerMutationRelayFlowParams['publicClient'] & {
+    getBytecode?: (args: { address: `0x${string}` }) => Promise<Hex | undefined>
+  }
+  address: `0x${string}`
+}): Promise<boolean> {
+  if (typeof params.publicClient.getBytecode !== 'function') return false
+  const bytecode = await params.publicClient.getBytecode({ address: params.address }).catch(() => undefined)
+  return Boolean(bytecode && bytecode !== '0x')
+}
+
 async function deriveRelayQuoteTxsGasLimit(params: {
   publicClient: BuildOwnerMutationRelayFlowParams['publicClient']
   cswAddress: `0x${string}`
@@ -225,6 +287,10 @@ export async function resolveRelayQuoteOutputWei(params: {
   const withHeadroom = derived + derived / 50n
   if (withHeadroom <= 0n) {
     throw new Error('Could not derive relay quote input wei; derived amount is zero.')
+  }
+  // Golden add-owner Part 1 uses EXACT_OUTPUT = 18871666861048 → same wei on Depository deposit.
+  if (params.envKey === 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI') {
+    return (withHeadroom >= GOLDEN_RELAY_PART1_DEPOSIT_WEI ? withHeadroom : GOLDEN_RELAY_PART1_DEPOSIT_WEI).toString(10)
   }
   return withHeadroom.toString(10)
 }
@@ -301,18 +367,7 @@ export async function buildOwnerMutationRelayFlow(
         ? {
             to: depositoryFromPaymentDetails,
             data: encodeFunctionData({
-              abi: [
-                {
-                  type: 'function',
-                  name: 'depositNative',
-                  stateMutability: 'payable',
-                  inputs: [
-                    { name: 'depositor', type: 'address' },
-                    { name: 'id', type: 'bytes32' },
-                  ],
-                  outputs: [],
-                },
-              ] as const,
+              abi: RELAY_DEPOSITORY_ABI,
               functionName: 'depositNative',
               args: [params.relayQuoteUser, requestBoundDepositId],
             }),
@@ -336,21 +391,52 @@ export async function buildOwnerMutationRelayFlow(
       rawSnippet: e.raw == null ? null : JSON.stringify(e.raw).slice(0, 1600),
     }
 
+    const preferDepositoryDepositNative = await relayFunderIsDeployedContract({
+      publicClient: params.publicClient,
+      address: params.relayQuoteUser,
+    })
+
     const selectedUserCall = selectOwnerMutationRelayUserCall({
       userTransaction: e.userTransaction,
       builtUserCallFromPaymentDetails,
+      preferDepositoryDepositNative,
     })
 
-    if (e.requestId && selectedUserCall) {
+    if (!selectedUserCall) {
+      return {
+        ok: false,
+        error: preferDepositoryDepositNative
+          ? 'Relay quote missing usable protocol.v2 paymentDetails for CSW Depository.depositNative Part 1.'
+          : 'Relay quote missing a funded router multicall or usable protocol.v2 paymentDetails.',
+        diagnostics,
+      }
+    }
+
+    if (e.requestId) {
       const validationError = validateSelectedOwnerMutationRelayUserCall({
         requestBoundDepositId,
         selected: selectedUserCall,
+        expectedDepositor: selectedUserCall.isDepositoryDepositNative ? params.relayQuoteUser : null,
       })
       if (validationError) {
         return {
           ok: false,
           error: validationError,
           diagnostics,
+        }
+      }
+      if (selectedUserCall.isDepositoryDepositNative) {
+        const goldenShapeError = validateGoldenCswDepositoryPart1UserCall({
+          userCall: selectedUserCall.userCall,
+          fundingCsw: params.relayQuoteUser,
+          orderId: requestBoundDepositId,
+        })
+        if (goldenShapeError) {
+          return {
+            ok: false,
+            error: goldenShapeError,
+            diagnostics,
+          }
         }
       }
       return {
@@ -360,7 +446,6 @@ export async function buildOwnerMutationRelayFlow(
           orderId: requestBoundDepositId,
           paymentDetails,
           userCall: selectedUserCall.userCall,
-          userCallSource: selectedUserCall.userCallSource,
           feeUsd: e.feeUsd,
         },
         diagnostics,
@@ -369,7 +454,7 @@ export async function buildOwnerMutationRelayFlow(
 
     return {
       ok: false,
-      error: 'Relay quote missing a valid user transaction and usable protocol.v2 paymentDetails.',
+      error: 'Relay quote missing request id.',
       diagnostics,
     }
   } catch (error) {

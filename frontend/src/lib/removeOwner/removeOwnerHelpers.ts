@@ -3,6 +3,7 @@ import { formatEther, type PublicClient } from 'viem'
 import { apiFetch } from '@/lib/api/apiBase'
 import type {
   OwnerMutationEip5792Call,
+  OwnerMutationRelayDepositSimulation,
   OwnerMutationRelayFlow,
   OwnerMutationRelayQuoteDiagnostics,
 } from '@/lib/relay/ownerMutationTypes'
@@ -51,6 +52,7 @@ export type RemoveOwnerPreview = {
       removeLastOwner: { ok: boolean; error: string | null }
     }
     relayQuoteError: string | null
+    relayDepositSimulation: OwnerMutationRelayDepositSimulation | null
     relayQuoteDiagnostics: OwnerMutationRelayQuoteDiagnostics | null
   }
 }
@@ -514,11 +516,11 @@ export function mapRemoveOwnerSubmissionError(params: {
         ? ` Current CSW balance: ${formatCompactEth(params.latestCswBalanceWei)} ETH.`
         : ''
     return (
-      'Coinbase Wallet could not simulate this remove-owner UserOp. ' +
-      'This usually means the targeted owner slot changed, the signer context is stale, or the CSW does not have enough ETH for Relay deposit.' +
+      'Coinbase Wallet could not simulate this owner-change UserOp. ' +
+      'This usually means the Relay deposit would revert, the signer context is stale, or the funding wallet does not have enough ETH for the Relay deposit plus gas.' +
       depositHint +
       balanceHint +
-      ' Re-open the owner list to rebuild preview state, confirm the same owner is still at that index, and fund the CSW if needed.'
+      ' Rebuild preview, confirm Base Mainnet, fund the funding smart wallet if needed, then retry.'
     )
   }
 
