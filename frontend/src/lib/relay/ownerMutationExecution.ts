@@ -7,7 +7,11 @@ import {
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import { submitSelfAuthRelayPart1SelfFunded } from '@/lib/relay/submitRelayPart1SelfFunded'
-import { findExistingRelayPart1DepositTx, persistRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
+import {
+  decodeDepositoryDepositNativeOrderId,
+  findExistingRelayPart1DepositTx,
+  persistRelayPart1DepositTx,
+} from '@/lib/relay/relayPart1DepositLookup'
 import {
   extractRelayExecutionTxHash,
   formatCompactEth,
@@ -21,6 +25,7 @@ import {
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import { validateGoldenCswDepositoryPart1UserCall } from '@/lib/relay/goldenRelayPart1Shape'
 import { notifyRelaySolverAfterPart1Deposit } from '@/lib/relay/notifyRelaySolverDeposit'
+import { ensureRelayIndexablePart1TxHash } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
@@ -218,6 +223,10 @@ export async function executeOwnerMutationViaRelay(
   }
 
   const indexRequestIds = resolveRelayIndexRequestIds(relay)
+  const depositOrderId = decodeDepositoryDepositNativeOrderId(relay.userCall.data)
+  if (depositOrderId?.orderId) {
+    appendEvent(`relay:deposit_native_order_id=${depositOrderId.orderId}`)
+  }
   const statusRequestId = resolveRelayStatusRequestId(relay)
   const statusFallbackRequestId = resolveRelayStatusFallbackRequestId(relay)
   const statusEndpoints = resolveRelayStatusEndpoints(relay)
@@ -291,6 +300,13 @@ export async function executeOwnerMutationViaRelay(
   }
 
   if (executeTxHash) {
+    executeTxHash = await ensureRelayIndexablePart1TxHash({
+      depositTxHash: executeTxHash,
+      publicClient,
+      fundingCsw: fundingCswAddress,
+      orderId: boundOrderId,
+      appendEvent,
+    })
     persistRelayPart1DepositTx({ orderId: boundOrderId, txHash: executeTxHash })
   }
 
@@ -339,10 +355,11 @@ export async function executeOwnerMutationViaRelay(
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
       statusEndpoint: endpoint,
-      timeoutMs: 180_000,
+      timeoutMs: 300_000,
       intervalMs: 2_000,
       shouldShortCircuitSuccess: params.verifyMutation,
       onWaiting: reindexWhileWaiting,
+      waitingReindexEvery: 2,
       onTick: (message) => appendEvent(`relay_status.${message}`),
     })
 

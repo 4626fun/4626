@@ -2,11 +2,14 @@ import { createWalletClient, custom, getAddress, type Address, type Hex, type Pu
 import { entryPoint06Address, getUserOperationHash } from 'viem/account-abstraction'
 import { base } from 'viem/chains'
 
-import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
+import {
+  resolveRelayBundlerUrl,
+  resolveRelayPart1DepositTxHash,
+} from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
 import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
 import {
@@ -399,10 +402,10 @@ async function sendSignedPreparedUserOp(params: {
     },
   })
 
-  const txHash = resolution.transactionHash ?? resolution.userOperationHash
-  if (!txHash) {
-    throw new Error('wallet_sendPreparedCalls completed without a transaction or UserOp hash.')
-  }
+  const txHash = await resolveRelayPart1DepositTxHash({
+    resolution,
+    appendEvent: params.appendEvent,
+  })
   params.appendEvent(`relay_part1:prepared_tx=${txHash}`)
   return txHash
 }
@@ -431,10 +434,7 @@ function createWalletRequestClient(walletRequest: WalletRequest) {
 }
 
 function resolveBundlerUrl(): string {
-  const bundlerEnv =
-    (import.meta.env.VITE_CDP_BUNDLER_URL as string | undefined) ??
-    (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)
-  return resolveCdpPaymasterUrl(bundlerEnv) || '/api/paymaster'
+  return resolveRelayBundlerUrl()
 }
 
 function buildSelfFundedPrepareCapabilities(depositWei: bigint, gasReserveWei: bigint): Record<string, unknown> {
@@ -457,6 +457,7 @@ async function submitViaSendCallsSelfFunded(params: {
   fundingCsw: `0x${string}`
   userCall: OwnerMutationEip5792Call
   chainId: number
+  publicClient?: PublicClient
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=send_calls_self_funded')
@@ -501,10 +502,10 @@ async function submitViaSendCallsSelfFunded(params: {
     },
   })
 
-  const txHash = resolution.transactionHash ?? resolution.userOperationHash
-  if (!txHash) {
-    throw new Error('wallet_sendCalls completed without a transaction or UserOp hash.')
-  }
+  const txHash = await resolveRelayPart1DepositTxHash({
+    resolution,
+    appendEvent: params.appendEvent,
+  })
   params.appendEvent(`relay_part1:send_calls_tx=${txHash}`)
   return txHash
 }
@@ -731,6 +732,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
       fundingCsw: params.fundingCsw,
       userCall: params.userCall,
       chainId: params.chainId,
+      publicClient: params.publicClient,
       appendEvent: params.appendEvent,
     })
   } catch (sendCallsError) {

@@ -104,14 +104,13 @@ export function resolveRelayStatusEndpoints(
     if (!endpoints.includes(endpoint)) endpoints.push(endpoint)
   }
 
-  if (relay.orderId && relay.requestId.toLowerCase() !== relay.orderId.toLowerCase()) {
-    push(buildRelayStatusEndpointFromOrderId(relay.orderId))
-    push(buildRelayStatusEndpointFromRequestId(relay.requestId))
-    return endpoints
-  }
-
+  // Depository Part 1 binds depositNative(id) to the quote request id. Relay
+  // `/intents/status/v3?requestId=` tracks deposit+fill progress; `?orderId=` often
+  // returns `unknown` for the same hex on same-chain call-execution quotes.
   push(buildRelayStatusEndpointFromRequestId(relay.requestId))
-  if (relay.orderId) {
+  if (relay.orderId && relay.orderId.toLowerCase() !== relay.requestId.toLowerCase()) {
+    push(buildRelayStatusEndpointFromOrderId(relay.orderId))
+  } else if (relay.orderId) {
     push(buildRelayStatusEndpointFromOrderId(relay.orderId))
   }
   return endpoints
@@ -141,7 +140,7 @@ export function resolveRelayIndexRequestIds(
 export function resolveRelayStatusRequestId(
   relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
 ): `0x${string}` {
-  return relay.requestId
+  return relay.orderId ?? relay.requestId
 }
 
 /** Secondary poll id when primary returns `unknown` and ids differ. */

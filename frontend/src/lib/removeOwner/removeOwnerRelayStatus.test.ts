@@ -31,8 +31,12 @@ describe('removeOwner relay status helpers', () => {
     } as Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>
 
     expect(resolveRelayIndexRequestIds(relay)).toEqual([relay.orderId, relay.requestId])
-    expect(resolveRelayStatusRequestId(relay)).toBe(relay.requestId)
+    expect(resolveRelayStatusRequestId(relay)).toBe(relay.orderId)
     expect(resolveRelayStatusFallbackRequestId(relay)).toBe(relay.requestId)
+    expect(resolveRelayStatusEndpoints(relay)).toEqual([
+      'https://api.relay.link/intents/status/v3?requestId=0x1111111111111111111111111111111111111111111111111111111111111111',
+      'https://api.relay.link/intents/status/v3?orderId=0x2222222222222222222222222222222222222222222222222222222222222222',
+    ])
   })
 
   it('falls back to requestId when orderId is missing', () => {

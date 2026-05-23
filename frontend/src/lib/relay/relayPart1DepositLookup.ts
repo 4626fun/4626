@@ -6,6 +6,7 @@ import {
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
+import { resolveBundleTxFromUserOperationHash } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 
 /** Relay Depository `NativeDeposit` / depositNative success log (Base mainnet). */
 export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_LOG_TOPIC =
@@ -137,6 +138,22 @@ export async function findExistingRelayPart1DepositTx(params: {
         orderId: boundOrderId,
       })
       if (verified) return hint
+    } catch {
+      /* may be UserOp hash — try bundler resolution below */
+    }
+
+    try {
+      const bundleTx = await resolveBundleTxFromUserOperationHash({
+        userOperationHash: hint,
+      })
+      if (!bundleTx) continue
+      const verified = await verifyRelayPart1DepositTxHint({
+        publicClient: params.publicClient,
+        txHash: bundleTx,
+        fundingCsw: params.fundingCsw,
+        orderId: boundOrderId,
+      })
+      if (verified) return bundleTx
     } catch {
       /* fail open — try next hint or proceed to fresh Part 1 */
     }
