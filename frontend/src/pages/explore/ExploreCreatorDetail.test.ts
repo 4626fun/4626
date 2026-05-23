@@ -52,10 +52,6 @@ vi.mock('@/components/explore/CreatorImmersiveStatsBeat', () => ({
     ),
 }))
 
-vi.mock('@/components/explore/ExploreEthosRefreshButton', () => ({
-  ExploreEthosRefreshButton: () => null,
-}))
-
 vi.mock('@/lib/zora/client', () => ({
   fetchZoraCoin: vi.fn(async () => ({
     address: '0x1111111111111111111111111111111111111111',

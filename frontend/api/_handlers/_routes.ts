@@ -52,8 +52,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'creator-allowlist': () => import('./creator-access/_allowlist.js'),
   'creator-access/request': () => import('./creator-access/_request.js'),
-  'creator/ethos/refresh': () => import('./creator/ethos/_refresh.js'),
-  'creator/ethos/refresh-config': () => import('./creator/ethos/_config.js'),
   'creator/strategy/activate': () => import('./creator/strategy/_activate.js'),
   'creator/strategy/list': () => import('./creator/strategy/_list.js'),
   'creator/strategy/x402-activate': () => import('./creator/strategy/_x402-activate.js'),

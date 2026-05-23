@@ -13,7 +13,6 @@ import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { ExploreHeroImageReveal } from '@/components/explore/ExploreHeroImageReveal'
 import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
-import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
@@ -822,10 +821,6 @@ export function ExploreCreatorDetail() {
         coinsCreated: totalCoinsCreated,
         createdAt: coin?.createdAt,
         volumeWindow,
-        ethosFooter:
-          typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
-            <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
-          ) : null,
       }),
     [
       coin?.volume24h,
@@ -838,7 +833,6 @@ export function ExploreCreatorDetail() {
       ethosTheme.accentTextClass,
       totalCoinsCreated,
       volumeWindow,
-      creatorAddress,
     ],
   )
 

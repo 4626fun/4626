@@ -22,7 +22,6 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { EthosScorePill, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
-import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 
 type TokenRowProps = {
   rank: number
@@ -243,15 +242,7 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
 
         {/* Ethos */}
-        <div
-          className="flex flex-col items-center px-3 py-2"
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-          role="presentation"
-        >
+        <div className="flex items-center justify-center px-3 py-2">
           {ethosHasPositiveScore ? (
             <EthosScorePill
               score={ethosScoreValue}
@@ -262,9 +253,6 @@ export function TokenRow({
           ) : (
             <span className="tabular-nums text-zinc-500">—</span>
           )}
-          {typeof coin.creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(coin.creatorAddress) ? (
-            <ExploreEthosRefreshButton creatorAddress={coin.creatorAddress} />
-          ) : null}
         </div>
 
         {/* Market cap */}

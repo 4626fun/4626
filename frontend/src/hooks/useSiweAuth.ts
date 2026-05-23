@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { useConnectWallet, useLogin, usePrivy, useActiveWallet } from '@privy-io/react-auth'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
+import {
+  usePrivyConnectWalletFromContext,
+  usePrivySetActiveWalletFromContext,
+} from '@/lib/privy/walletHooksContext'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { BASE_ACCOUNT_WALLET_LOGIN_LIST } from '@/lib/privy/clientAppearance'
@@ -422,22 +426,6 @@ async function readPrivyAccessTokenWithRetry(
   return null
 }
 
-function useSafeActiveWalletHook() {
-  try {
-    return useActiveWallet() as { setActiveWallet?: (wallet: unknown) => Promise<unknown> }
-  } catch {
-    return { setActiveWallet: undefined }
-  }
-}
-
-function useSafeConnectWalletHook() {
-  try {
-    return useConnectWallet() as { connectWallet?: (options: Record<string, unknown>) => Promise<unknown> }
-  } catch {
-    return { connectWallet: undefined }
-  }
-}
-
 function useSafePrivyHook() {
   try {
     return usePrivy() as any
@@ -469,8 +457,8 @@ export function useSiweAuth() {
   const { signMessageAsync } = useSignMessage()
   const privyAny = useSafePrivyHook()
   const { login } = useSafeLoginHook()
-  const { connectWallet } = useSafeConnectWalletHook()
-  const { setActiveWallet } = useSafeActiveWalletHook()
+  const connectWallet = usePrivyConnectWalletFromContext()
+  const setActiveWallet = usePrivySetActiveWalletFromContext()
   const privyReady = Boolean(privyAny?.ready)
   const privyAuthenticated = Boolean(privyAny?.authenticated)
   const getPrivyAccessToken: (() => Promise<string | null>) | null =

@@ -200,6 +200,16 @@
     @apply grid w-max max-w-none;
   }
 
+  .explore-activity-grid {
+    grid-template-columns: 80px 220px 112px 100px 120px 44px;
+  }
+
+  @media (max-width: 639px) {
+    .explore-activity-grid {
+      grid-template-columns: 64px 180px 88px 88px;
+    }
+  }
+
   .vault-hover-lift {
     transition:
       transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
@@ -793,12 +803,14 @@ body {
 /* Tablet/mobile: keep Explore tables scrollable (show all columns) */
 @media (max-width: 1024px) {
   #explore-creators-body,
-  #explore-content-body {
+  #explore-content-body,
+  #explore-transactions-body {
     overflow-x: auto;
   }
 
   #explore-creators-body .w-max,
-  #explore-content-body .w-max {
+  #explore-content-body .w-max,
+  #explore-transactions-body .w-max {
     min-width: max-content;
   }
 

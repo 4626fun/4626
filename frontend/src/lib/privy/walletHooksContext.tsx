@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
-import { useWallets } from '@privy-io/react-auth'
+import { useActiveWallet, useConnectWallet, useWallets } from '@privy-io/react-auth'
 
 type ConnectedWalletLike = {
   address?: string
@@ -9,9 +9,14 @@ type ConnectedWalletLike = {
   provider?: unknown
 }
 
+type ConnectWalletFn = ReturnType<typeof useConnectWallet>['connectWallet']
+type SetActiveWalletFn = ReturnType<typeof useActiveWallet>['setActiveWallet']
+
 type PrivyWalletHooksSnapshot = {
   wallets: ConnectedWalletLike[]
   ready: boolean
+  connectWallet?: ConnectWalletFn
+  setActiveWallet?: SetActiveWalletFn
 }
 
 const EMPTY_SNAPSHOT: PrivyWalletHooksSnapshot = { wallets: [], ready: false }
@@ -27,12 +32,28 @@ export function usePrivyWalletsFromContext(): ConnectedWalletLike[] {
   return usePrivyWalletsSnapshot().wallets
 }
 
+/** Privy wallet action hooks bridged once inside `PrivyProvider`. */
+export function usePrivyConnectWalletFromContext(): ConnectWalletFn | undefined {
+  return usePrivyWalletsSnapshot().connectWallet
+}
+
+export function usePrivySetActiveWalletFromContext(): SetActiveWalletFn | undefined {
+  return usePrivyWalletsSnapshot().setActiveWallet
+}
+
 /** Must render as a direct descendant of `PrivyProvider`. */
 function PrivyWalletHooksBridge(props: { children: ReactNode }) {
   const { wallets, ready } = useWallets()
+  const { connectWallet } = useConnectWallet()
+  const { setActiveWallet } = useActiveWallet()
   const value = useMemo(
-    () => ({ wallets: wallets as ConnectedWalletLike[], ready }),
-    [ready, wallets],
+    () => ({
+      wallets: wallets as ConnectedWalletLike[],
+      ready,
+      connectWallet,
+      setActiveWallet,
+    }),
+    [connectWallet, ready, setActiveWallet, wallets],
   )
   return <PrivyWalletHooksContext.Provider value={value}>{props.children}</PrivyWalletHooksContext.Provider>
 }

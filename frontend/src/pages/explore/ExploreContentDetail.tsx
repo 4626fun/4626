@@ -18,7 +18,6 @@ import { MetricChartPlot } from '@/components/explore/MetricChartPlot'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { EthosBlurOrbs, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
-import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { cn } from '@/lib/shared/utils'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
@@ -787,9 +786,6 @@ export function ExploreContentDetail() {
                           {creatorHandle ? `@${creatorHandle}` : 'Unknown creator'}
                           {ethosTheme.isActive ? ` · ${ethosTheme.levelLabel}` : ''}
                         </span>
-                        {typeof creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(creatorAddress) ? (
-                          <ExploreEthosRefreshButton creatorAddress={creatorAddress} />
-                        ) : null}
                       </div>
                     </div>
                   </div>
