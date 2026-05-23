@@ -1,11 +1,7 @@
     <meta charset="UTF-8" />
-    <!-- Favicons: absolute PNG-first stack for Base App in-app browser caches. -->
-    <link rel="icon" href="{{APP_SHELL_FAVICON_32_URL}}" type="image/png" sizes="32x32" />
-    <link rel="icon" href="{{APP_SHELL_FAVICON_16_URL}}" type="image/png" sizes="16x16" />
-    <link rel="icon" href="{{APP_SHELL_FAVICON_ICO_URL}}" sizes="any" />
-    <link rel="shortcut icon" href="/favicon.ico" />
+    <!-- Single PNG favicon stack on the app origin (Base Build verification host). -->
+    <link rel="icon" type="image/png" sizes="32x32" href="{{APP_SHELL_FAVICON_32_URL}}" />
     <link rel="apple-touch-icon" sizes="180x180" href="{{APP_SHELL_APPLE_TOUCH_URL}}" />
-    <link rel="mask-icon" href="{{SAFARI_PINNED_TAB_PATH}}" color="{{BRAND_BLUE}}" />
     <meta name="msapplication-TileColor" content="{{MS_TILE_COLOR}}" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />

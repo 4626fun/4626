@@ -17,28 +17,25 @@ const trustPagePaths = [
   path.join(publicRoot, 'security/index.html'),
   path.join(publicRoot, 'terms/index.html'),
 ]
-const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
 const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {
   brandAssetVersion?: number
   assets?: {
-    faviconIco?: string
-    faviconSvg?: string
+    favicon32?: string
     appleTouchIcon?: string
   }
 }
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
-const FAVICON_ANY = `${siteConfig.assets?.faviconIco ?? '/assets/favicon.ico'}?v=${BRAND_ASSET_VERSION}`
-const FAVICON_SVG = `${siteConfig.assets?.faviconSvg ?? '/assets/favicon.svg'}?v=${BRAND_ASSET_VERSION}`
-const APPLE_TOUCH = `${siteConfig.assets?.appleTouchIcon ?? '/assets/apple-touch-icon.png'}?v=${BRAND_ASSET_VERSION}`
+const TAB_ICON_32 = `${siteConfig.assets?.favicon32 ?? '/assets/app-tab-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
+const TAB_ICON_180 = `${siteConfig.assets?.appleTouchIcon ?? '/assets/app-tab-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
 const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}`
 const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
-const MASKABLE_192 = `/assets/maskable-icon-192x192.png?v=${BRAND_ASSET_VERSION}`
-const MASKABLE_512 = `/assets/maskable-icon-512x512.png?v=${BRAND_ASSET_VERSION}`
 const OG_SOCIAL_IMAGE_URL = `https://4626.fun/assets/og-image.png?v=${BRAND_ASSET_VERSION}`
 const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
 const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
 const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? '/assets/base-app-icon-1024.png'}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_TAB_ICON_32 = `https://app.4626.fun${siteConfig.assets?.favicon32 ?? '/assets/app-tab-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
+const APP_SHELL_TAB_ICON_180 = `https://app.4626.fun${siteConfig.assets?.appleTouchIcon ?? '/assets/app-tab-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -72,27 +69,28 @@ describe('public manifest assets', () => {
 
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ src: ANDROID_192, sizes: '192x192' }),
-        expect.objectContaining({ src: ANDROID_512, sizes: '512x512' }),
-        expect.objectContaining({ src: MASKABLE_192, purpose: 'maskable' }),
-        expect.objectContaining({ src: MASKABLE_512, purpose: 'maskable' }),
+        expect.objectContaining({ src: ANDROID_192, sizes: '192x192', purpose: 'any' }),
+        expect.objectContaining({ src: ANDROID_512, sizes: '512x512', purpose: 'any' }),
       ]),
     )
+    expect(manifest.icons?.some((icon) => icon.purpose === 'maskable')).toBe(false)
   })
 
   it('keeps install metadata aligned in both HTML entry points', () => {
     const marketingHtml = readFileSync(marketingHtmlPath, 'utf8')
     const appHtml = readFileSync(appHtmlPath, 'utf8')
 
-    expect(marketingHtml).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any" />`)
-    expect(marketingHtml).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}" />`)
-    expect(marketingHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}" />`)
+    expect(marketingHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON_32}" />`)
+    expect(marketingHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${TAB_ICON_180}" />`)
+    expect(marketingHtml).not.toContain('rel="mask-icon"')
+    expect(marketingHtml).not.toContain('image/svg+xml')
     expect(marketingHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
     expect(marketingHtml).toContain('<meta name="theme-color" content="#020204" />')
 
-    expect(appHtml).toContain(`<link rel="icon" href="https://app.4626.fun/assets/favicon-32x32.png?v=${BRAND_ASSET_VERSION}" type="image/png" sizes="32x32" />`)
-    expect(appHtml).toContain(`<link rel="icon" href="https://app.4626.fun/assets/favicon-brand.ico?v=${BRAND_ASSET_VERSION}" sizes="any" />`)
-    expect(appHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="https://app.4626.fun/assets/apple-touch-icon.png?v=${BRAND_ASSET_VERSION}" />`)
+    expect(appHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${APP_SHELL_TAB_ICON_32}" />`)
+    expect(appHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APP_SHELL_TAB_ICON_180}" />`)
+    expect(appHtml).not.toContain('rel="shortcut icon"')
+    expect(appHtml).not.toContain('rel="mask-icon"')
     expect(appHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
     expect(appHtml).toContain('<meta name="theme-color" content="#020204" />')
   })
@@ -126,6 +124,7 @@ describe('public manifest assets', () => {
 
     expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_HERO_URL}" />`)
     expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_HERO_URL}" />`)
+    expect(telegramLinkHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON_32}" />`)
     expect(telegramLinkHtml).not.toContain('app-hero.png?v=6')
   })
 
@@ -133,9 +132,7 @@ describe('public manifest assets', () => {
     for (const htmlPath of trustPagePaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain(`<link rel="icon" href="${FAVICON_ANY}" sizes="any">`)
-      expect(html).toContain(`<link rel="icon" type="image/svg+xml" href="${FAVICON_SVG}">`)
-      expect(html).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APPLE_TOUCH}">`)
+      expect(html).toContain('/assets/favicon-brand.ico')
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
     }
   })

@@ -20,11 +20,11 @@ type CreatorScrollBridgeProps = {
 }
 
 const DEFAULT_BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
-const STATS_BRIDGE_HEIGHT_CLASS = 'min-h-[180vh] md:min-h-[220vh]'
+const STATS_BRIDGE_HEIGHT_CLASS = 'h-[240vh] md:h-[280vh]'
 
 const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
-  void: 'bg-black',
-  'void-to-lime': 'bg-black',
+  void: 'bg-transparent',
+  'void-to-lime': 'bg-transparent',
   'lime-to-void': 'bg-[#d9df72]',
 }
 
@@ -37,8 +37,12 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
   if (tone === 'void') {
     return (
       <>
-        <div className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-black via-black/55 to-transparent')} />
-        <div className={cn(edge, 'bottom-0 h-[min(20vh,180px)] bg-gradient-to-t from-black via-black/50 to-transparent')} />
+        <div
+          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_55%,transparent)] to-transparent')}
+        />
+        <div
+          className={cn(edge, 'bottom-0 h-[min(20vh,180px)] bg-gradient-to-t from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_50%,transparent)] to-transparent')}
+        />
       </>
     )
   }
@@ -46,7 +50,9 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
   if (tone === 'void-to-lime') {
     return (
       <>
-        <div className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-black via-black/50 to-transparent')} />
+        <div
+          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_50%,transparent)] to-transparent')}
+        />
         <div
           className={cn(edge, 'bottom-0 h-[min(22vh,200px)]')}
           style={{
@@ -65,7 +71,7 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
           background: `linear-gradient(to bottom, ${lime} 0%, rgba(${limeRgb},0.55) 32%, rgba(9,9,11,0.12) 68%, transparent 100%)`,
         }}
       />
-      <div className={cn(edge, 'bottom-0 h-[min(22vh,200px)] bg-gradient-to-t from-black via-zinc-950/70 to-transparent')} />
+      <div className={cn(edge, 'bottom-0 h-[min(22vh,200px)] bg-gradient-to-t from-[var(--explore-canvas,#010101)] via-zinc-950/70 to-transparent')} />
     </>
   )
 }
@@ -75,6 +81,7 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
   forwardedRef,
 ) {
   const bridgeRef = useRef<HTMLDivElement>(null)
+  const pinRef = useRef<HTMLDivElement>(null)
   const hintRef = useRef<HTMLDivElement>(null)
   const captionRef = useRef<HTMLDivElement>(null)
 
@@ -160,7 +167,8 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
       data-creator-bridge=""
       aria-hidden={!caption && !centerContent}
       className={cn(
-        'relative left-1/2 w-screen -translate-x-1/2 overflow-clip',
+        // Full-bleed without transform — transform breaks position:sticky (homepage uses margin breakout).
+        'relative left-1/2 w-screen max-w-[100vw] -ml-[50vw] overflow-clip',
         bridgeHeightClass,
         BASE_BG[tone],
         className,
@@ -168,25 +176,48 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
     >
       {showStarfield ? (
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.28]"
+          className="pointer-events-none absolute inset-0 z-0"
+          aria-hidden
           style={{
-            backgroundImage: `
-              radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.45) 50%, transparent 51%),
-              radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.32) 50%, transparent 51%),
-              radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.4) 50%, transparent 51%),
-              radial-gradient(1px 1px at 30% 80%, rgba(255,255,255,0.28) 50%, transparent 51%)
-            `,
-            backgroundSize: '220px 220px',
             WebkitMaskImage:
-              'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
-            maskImage: 'linear-gradient(to bottom, transparent 0%, black 16%, black 84%, transparent 100%)',
+              'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
+            maskImage: 'linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%)',
           }}
-        />
+        >
+          <div
+            className="absolute inset-[-10%] opacity-[0.35]"
+            style={{
+              backgroundImage: `
+                radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.45) 50%, transparent 51%),
+                radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.32) 50%, transparent 51%),
+                radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.4) 50%, transparent 51%),
+                radial-gradient(1px 1px at 30% 80%, rgba(255,255,255,0.28) 50%, transparent 51%)
+              `,
+              backgroundSize: '220px 220px',
+            }}
+          />
+          <div
+            className="absolute inset-[-10%] opacity-[0.22]"
+            style={{
+              backgroundImage: `
+                radial-gradient(1.5px 1.5px at 25% 25%, rgba(220,215,255,0.55) 50%, transparent 51%),
+                radial-gradient(1.5px 1.5px at 75% 65%, rgba(220,215,255,0.45) 50%, transparent 51%)
+              `,
+              backgroundSize: '360px 360px',
+            }}
+          />
+        </div>
       ) : null}
 
       <BridgeEdgeFades tone={tone} />
 
-      <div className="sticky top-0 flex h-screen flex-col">
+      <div
+        ref={pinRef}
+        className={cn(
+          'sticky top-0 flex h-screen w-full flex-col',
+          centerContent && 'items-center justify-center',
+        )}
+      >
         {caption ? (
           <div className="flex flex-1 items-end px-6 pb-10 sm:px-10 sm:pb-14 lg:px-16 lg:pb-16">
             <div
@@ -204,7 +235,7 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
         )}
 
         {centerContent ? (
-          <div className="flex flex-1 flex-col items-center justify-center py-10 sm:py-14">
+          <div className="relative z-[2] flex flex-1 flex-col items-center justify-center px-5 sm:px-8 py-10 sm:py-14 text-center">
             {centerContent}
             <div ref={hintRef} className="mt-10 sm:mt-14 flex flex-col items-center gap-2.5 opacity-35">
               <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>

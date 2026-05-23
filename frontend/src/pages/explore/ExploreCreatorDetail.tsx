@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
@@ -15,8 +15,9 @@ import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/componen
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
+import { ExplorePageCanvas } from '@/components/explore/ExplorePageCanvas'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
-import { buildCreatorStats, toStatsRailItems } from '@/components/explore/creatorStatsModel'
+import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
 import { InfiniteContentGallery3D } from '@/components/explore/InfiniteContentGallery3D'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { requestOpenChat } from '@/lib/chat/openChat'
@@ -217,48 +218,6 @@ function getContentCoinAssetUrl(coin: ZoraCoin): string | undefined {
       coin.mediaContent?.previewImage?.small ||
       coin.mediaContent?.originalUri
   )
-}
-
-function getSceneCardEntrance(index: number) {
-  const patterns = [
-    {
-      gsapFrom: { opacity: 0, x: -56, y: 40, rotation: -6, scale: 0.9, filter: 'blur(9px)' },
-      hover: { y: -8, rotate: -1.1, scale: 1.015 },
-      duration: 0.78,
-      delay: 0.04 * index,
-    },
-    {
-      gsapFrom: { opacity: 0, x: 54, y: 54, rotation: 5, scale: 0.88, filter: 'blur(10px)' },
-      hover: { y: -10, rotate: 1.2, scale: 1.02 },
-      duration: 0.83,
-      delay: 0.05 * index,
-    },
-    {
-      gsapFrom: { opacity: 0, y: 80, rotationX: 12, scale: 0.86, filter: 'blur(7px)' },
-      hover: { y: -7, scale: 1.014 },
-      duration: 0.72,
-      delay: 0.06 * index,
-    },
-    {
-      gsapFrom: { opacity: 0, x: -36, y: -24, rotation: -4, scale: 0.92, filter: 'blur(8px)' },
-      hover: { y: -9, rotate: -0.9, scale: 1.018 },
-      duration: 0.76,
-      delay: 0.03 * index,
-    },
-    {
-      gsapFrom: { opacity: 0, x: 26, y: -40, rotation: 4, scale: 0.9, filter: 'blur(8px)' },
-      hover: { y: -8, rotate: 0.8, scale: 1.016 },
-      duration: 0.7,
-      delay: 0.045 * index,
-    },
-    {
-      gsapFrom: { opacity: 0, x: 0, y: 72, rotation: 0, scale: 0.84, filter: 'blur(10px)' },
-      hover: { y: -10, scale: 1.02 },
-      duration: 0.8,
-      delay: 0.05 * index,
-    },
-  ] as const
-  return patterns[index % patterns.length] ?? patterns[0]
 }
 
 function ActionAddressHint({
@@ -531,45 +490,6 @@ function resolveCreatorSmartWalletAddress(
   return null
 }
 
-function CreatorStatsRail({
-  stats,
-  className,
-  valueClassName,
-  align = 'start',
-}: {
-  stats: ReadonlyArray<{
-    value: string | number
-    label: string
-    toneClass: string
-    footer?: ReactNode
-    valueClassName?: string
-  }>
-  className?: string
-  valueClassName?: string
-  align?: 'start' | 'end'
-}) {
-  return (
-    <aside className={cn('flex flex-col gap-6 sm:gap-7 overflow-visible', align === 'end' && 'items-end text-right', className)}>
-      {stats.map((stat) => (
-        <div key={stat.label} className="flex flex-col gap-1.5 overflow-visible min-w-0 max-w-full">
-          <span
-            className={cn(
-              'font-semibold tabular-nums overflow-visible',
-              valueClassName,
-              stat.valueClassName,
-              stat.toneClass,
-            )}
-          >
-            {stat.value}
-          </span>
-          <span className="text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px]">{stat.label}</span>
-          {stat.footer ? <div className={cn(align === 'end' && 'flex justify-end')}>{stat.footer}</div> : null}
-        </div>
-      ))}
-    </aside>
-  )
-}
-
 export function ExploreCreatorDetail() {
   const params = useParams()
   const chain = String(params.chain ?? '').trim()
@@ -583,20 +503,12 @@ export function ExploreCreatorDetail() {
   const [isContentSwapTrayOpen, setIsContentSwapTrayOpen] = useState(false)
   const [activeContentCoin, setActiveContentCoin] = useState<ZoraCoin | null>(null)
   const [sceneActiveCoin, setSceneActiveCoin] = useState<ZoraCoin | null>(null)
-  const [timelineDragging, setTimelineDragging] = useState(false)
   const heroRef = useRef<HTMLDivElement | null>(null)
   const heroSectionRef = useRef<HTMLElement | null>(null)
   const statsBridgeRef = useRef<HTMLDivElement | null>(null)
   const sceneSectionRef = useRef<HTMLElement | null>(null)
   const timelineSectionRef = useRef<HTMLDivElement | null>(null)
   const timelineBodyRef = useRef<HTMLDivElement | null>(null)
-  const timelineScrollerRef = useRef<HTMLDivElement | null>(null)
-  const timelineCameraActiveRef = useRef(false)
-  const timelineDragRef = useRef<{ active: boolean; startX: number; scrollLeft: number }>({
-    active: false,
-    startX: 0,
-    scrollLeft: 0,
-  })
 
   const tokenAddress = isAddress(tokenAddressRaw) ? getAddress(tokenAddressRaw) : null
 
@@ -835,59 +747,19 @@ export function ExploreCreatorDetail() {
           gsap.set(heroSectionRef.current, { clearProps: 'opacity,visibility' })
         })
       }
-      if (sceneSectionRef.current && allowParallax) {
-        const sceneCards = gsap.utils.toArray<HTMLElement>('[data-scene-card]', sceneSectionRef.current)
-        if (sceneCards.length > 0) {
-          gsap.set(sceneCards, { transformPerspective: 1000, willChange: 'transform,opacity,filter' })
-          const timeline = gsap.timeline({
-            defaults: { ease: 'power3.out' },
-            scrollTrigger: {
-              trigger: sceneSectionRef.current,
-              start: 'top 78%',
-              end: 'bottom 55%',
-              scrub: 0.8,
-            },
-          })
-          sceneCards.forEach((card, index) => {
-            const entrance = getSceneCardEntrance(index)
-            timeline.fromTo(
-              card,
-              entrance.gsapFrom,
-              {
-                opacity: 1,
-                x: 0,
-                y: 0,
-                rotation: 0,
-                rotationX: 0,
-                scale: 1,
-                filter: 'blur(0px)',
-                duration: entrance.duration,
-              },
-              entrance.delay,
-            )
-          })
-          cleanups.push(() => {
-            timeline.scrollTrigger?.kill()
-            timeline.kill()
-            gsap.set(sceneCards, { clearProps: 'all' })
-          })
-        }
-      }
-      if (timelineSectionRef.current && timelineBodyRef.current && timelineScrollerRef.current && allowParallax) {
+      if (timelineSectionRef.current && timelineBodyRef.current && allowParallax) {
         const section = timelineSectionRef.current
         const sectionBody = timelineBodyRef.current
-        const scroller = timelineScrollerRef.current
-        const maxTimelineScrollLeft = () => Math.max(0, scroller.scrollWidth - scroller.clientWidth)
 
-        gsap.set(sectionBody, { x: '16vw', autoAlpha: 0.8, willChange: 'transform,opacity' })
+        gsap.set(sectionBody, { y: 28, autoAlpha: 0.82, willChange: 'transform,opacity' })
         const introTween = gsap.to(sectionBody, {
-          x: '0vw',
+          y: 0,
           autoAlpha: 1,
           ease: 'power3.out',
           scrollTrigger: {
             trigger: section,
             start: 'top 88%',
-            end: 'top 52%',
+            end: 'top 58%',
             scrub: 0.9,
           },
         })
@@ -896,30 +768,6 @@ export function ExploreCreatorDetail() {
           introTween.kill()
           gsap.set(sectionBody, { clearProps: 'all' })
         })
-
-        if (window.innerWidth >= 1024 && maxTimelineScrollLeft() > 0) {
-          timelineCameraActiveRef.current = true
-          const panDistance = maxTimelineScrollLeft() + window.innerHeight * 0.55
-          const panTween = gsap.to(scroller, {
-            scrollLeft: () => maxTimelineScrollLeft(),
-            ease: 'none',
-            scrollTrigger: {
-              trigger: section,
-              start: 'top top',
-              end: () => `+=${Math.max(window.innerHeight * 1.1, panDistance)}`,
-              pin: true,
-              pinSpacing: true,
-              scrub: 1,
-              anticipatePin: 1,
-              invalidateOnRefresh: true,
-            },
-          })
-          cleanups.push(() => {
-            timelineCameraActiveRef.current = false
-            panTween.scrollTrigger?.kill()
-            panTween.kill()
-          })
-        }
       }
       return () => {
         cleanups.forEach((cleanup) => cleanup())
@@ -1003,7 +851,6 @@ export function ExploreCreatorDetail() {
     ],
   )
 
-  const sceneStatsRail = useMemo(() => toStatsRailItems(creatorStats), [creatorStats])
   const heroCoin = coin ?? ({
     address: tokenAddress ?? '',
     creatorAddress: creatorAddress ?? undefined,
@@ -1063,49 +910,6 @@ export function ExploreCreatorDetail() {
     setIsContentSwapTrayOpen(false)
     setIsContentTrayOpen(false)
   }
-  const onTimelinePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    const container = timelineScrollerRef.current
-    if (!container) return
-    timelineDragRef.current = {
-      active: true,
-      startX: event.clientX,
-      scrollLeft: container.scrollLeft,
-    }
-    setTimelineDragging(true)
-    container.setPointerCapture(event.pointerId)
-  }
-  const onTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!timelineDragRef.current.active) return
-    const container = timelineScrollerRef.current
-    if (!container) return
-    const delta = event.clientX - timelineDragRef.current.startX
-    container.scrollLeft = timelineDragRef.current.scrollLeft - delta
-  }
-  const onTimelinePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    const container = timelineScrollerRef.current
-    timelineDragRef.current.active = false
-    setTimelineDragging(false)
-    if (container) {
-      const step = window.innerWidth >= 640 ? 340 : 280
-      const snapped = Math.round(container.scrollLeft / step) * step
-      container.scrollTo({ left: snapped, behavior: 'smooth' })
-    }
-    if (container?.hasPointerCapture(event.pointerId)) {
-      container.releasePointerCapture(event.pointerId)
-    }
-  }
-  const onTimelinePointerCancel = () => {
-    timelineDragRef.current.active = false
-    setTimelineDragging(false)
-  }
-  const onTimelineWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    const container = timelineScrollerRef.current
-    if (!container) return
-    if (timelineCameraActiveRef.current) return
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
-    event.preventDefault()
-    container.scrollBy({ left: event.deltaY * 0.85, behavior: 'smooth' })
-  }
   const onSceneSectionWheelCapture = (event: React.WheelEvent<HTMLElement>) => {
     // Keep wheel interactions scoped to the scene while hovered.
     event.preventDefault()
@@ -1125,7 +929,8 @@ export function ExploreCreatorDetail() {
       ? `https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`
       : 'https://app.uniswap.org'
   return (
-    <div className="relative min-h-screen bg-zinc-950 text-white overflow-hidden">
+    <div className="relative min-h-screen text-white">
+      <ExplorePageCanvas />
       <PremiumCursor enabled={showCursor} />
       <PageMeta
         title={displayName !== 'Creator' ? `${displayName} (${symbol})` : 'Creator Detail'}
@@ -1134,11 +939,11 @@ export function ExploreCreatorDetail() {
       />
       <EthosPageAmbience theme={ethosTheme} />
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 pb-0">
-        <div className="relative left-1/2 right-1/2 w-screen -translate-x-1/2">
+        <div className="relative left-1/2 w-screen max-w-[100vw] -ml-[50vw]">
         {/* Recreated hero scene */}
         <section
           ref={heroSectionRef}
-          className={cn('relative overflow-hidden bg-black', CREATOR_HERO_MIN_HEIGHT_CLASS)}
+          className={cn('relative overflow-hidden bg-transparent', CREATOR_HERO_MIN_HEIGHT_CLASS)}
         >
           {heroBackgroundImage ? (
             <div className="absolute inset-0 pointer-events-none">
@@ -1288,109 +1093,89 @@ export function ExploreCreatorDetail() {
 
         <section
           ref={sceneSectionRef}
-          className="relative min-h-[calc(100dvh-3.5rem)] h-[calc(100dvh-3.5rem)] overflow-hidden lg:pr-60 xl:pr-64"
+          className="relative flex flex-col min-h-[calc(100dvh-3.5rem)] overflow-hidden"
           onWheelCapture={onSceneSectionWheelCapture}
         >
-          <div className="hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-30 w-48 xl:w-56 pointer-events-none">
-            <CreatorStatsRail
-              stats={sceneStatsRail}
-              align="end"
-              className="sticky top-24 pointer-events-auto border-l border-white/10 pl-6 pr-2 pt-8 pb-16 overflow-visible [mask-image:linear-gradient(to_bottom,black_0%,black_88%,transparent_100%)]"
-              valueClassName="text-2xl xl:text-3xl"
-            />
-          </div>
-          <div className="pointer-events-none hidden lg:block absolute inset-y-0 right-4 xl:right-8 2xl:right-12 z-20 w-px bg-gradient-to-b from-white/5 via-white/10 to-transparent" />
           <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
           <div className="pointer-events-none absolute inset-0 bg-black/28" />
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:linear-gradient(to_right,rgba(255,255,255,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.08)_1px,transparent_1px)] [background-size:90px_90px]" />
           <EthosBlurOrbs theme={ethosTheme} />
 
-          {imageBasedSceneCoins.length > 0 ? (
-            <div
-              data-scene-card
-              className="absolute inset-0 z-10 overflow-hidden bg-black/45 backdrop-blur-[1px]"
-            >
-              <InfiniteContentGallery3D
-                coins={imageBasedSceneCoins}
-                onSelect={openContentTray}
-                onActiveCoinChange={setSceneActiveCoin}
-                interactive
-                cameraZ={7.2}
-                cameraFov={46}
-                planeScale={1.02}
-                laneSpacing={2.7}
-                className="absolute inset-0 min-h-0"
-              />
-              <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
-              <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
-
-              <div className="absolute inset-0 z-20 flex flex-col pointer-events-none">
-                <div className="flex flex-1 flex-col justify-between px-4 pt-6 pb-28 sm:px-8 sm:pt-8 sm:pb-32 lg:pr-64 xl:pr-72">
-                  <div className="lg:col-span-7 flex flex-col justify-between min-h-[42vh] sm:min-h-[48vh] lg:min-h-[52vh] max-w-4xl">
-                    <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
-                      <span className="w-10 sm:w-12 h-px bg-white/30" />
-                      Collections
-                    </span>
-                    <h2 className="text-[clamp(3rem,11vw,7.5rem)] font-semibold tracking-tight leading-[0.88]">
-                      Content
-                      <br />
-                      <span className="text-white/35">coins.</span>
-                    </h2>
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
-                <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
-                  Top content volume
-                </div>
-                <div className="space-y-1.5">
-                  {topVolumeContentCoins.map((coin, index) => {
-                    const isActiveInScene =
-                      Boolean(sceneActiveCoin?.address) &&
-                      coin.address?.toLowerCase() === sceneActiveCoin?.address?.toLowerCase()
-                    return (
-                      <button
-                        key={coin.address || coin.id || `top-volume-${index}`}
-                        type="button"
-                        onClick={() => openContentTray(coin)}
-                        className={cn(
-                          'w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
-                          isActiveInScene
-                            ? 'bg-cyan-400/15 text-white border-l-2 border-cyan-300'
-                            : 'text-zinc-200 hover:text-white hover:bg-white/5',
-                        )}
-                      >
-                        <span className="truncate">
-                          <span className={cn('font-mono mr-2', isActiveInScene ? 'text-cyan-200' : 'text-zinc-500')}>
-                            {String(index + 1).padStart(2, '0')}
-                          </span>
-                          {coin.name || coin.symbol || 'Untitled'}
-                        </span>
-                        <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="absolute inset-0 rounded-3xl bg-zinc-900/50 backdrop-blur p-10 text-center text-zinc-500 flex items-center justify-center">
-              No visual content coins available to render the scene yet.
-            </div>
-          )}
-        </section>
-
-        <CreatorScrollBridge
-          tone="void-to-lime"
-          animate={allowParallax}
-          caption={
-            <p className="text-sm sm:text-base lg:text-lg leading-relaxed">
+          <div className="relative z-30 px-4 sm:px-8 pt-6 sm:pt-8 pb-5 sm:pb-6 max-w-4xl pointer-events-none">
+            <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500">
+              <span className="w-10 sm:w-12 h-px bg-white/30" />
+              Collections
+            </span>
+            <h2 className="mt-4 text-[clamp(2.5rem,8vw,5.5rem)] font-semibold tracking-tight leading-[0.9]">
+              Content
+              <span className="text-white/35"> coins.</span>
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm sm:text-base leading-relaxed text-zinc-400">
               A live collection built from {displayName}&apos;s highest-activity coins — ordered by volume, surfaced as a
               visual scene.
             </p>
-          }
-        />
+          </div>
+
+          <div className="relative flex-1 min-h-[52vh] sm:min-h-[58vh]">
+            {imageBasedSceneCoins.length > 0 ? (
+              <div className="absolute inset-0 z-10 overflow-hidden bg-black/45 backdrop-blur-[1px]">
+                <InfiniteContentGallery3D
+                  coins={imageBasedSceneCoins}
+                  onSelect={openContentTray}
+                  onActiveCoinChange={setSceneActiveCoin}
+                  interactive
+                  cameraZ={7.2}
+                  cameraFov={46}
+                  planeScale={1.02}
+                  laneSpacing={2.7}
+                  className="absolute inset-0 min-h-0"
+                />
+                <div className="pointer-events-none absolute inset-0 z-10 bg-linear-to-b from-black/12 via-transparent to-black/38" />
+                <div className="pointer-events-none absolute inset-0 z-10 bg-[radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.22),transparent_38%),radial-gradient(circle_at_82%_72%,rgba(59,130,246,0.2),transparent_42%)]" />
+
+                <div className="absolute left-4 bottom-4 z-20 w-[min(92vw,420px)] border border-white/15 bg-black/65 backdrop-blur-md p-3 sm:p-4 pointer-events-auto">
+                  <div className="text-[10px] sm:text-[11px] font-mono uppercase tracking-[1.8px] text-zinc-400 mb-2">
+                    Top content volume
+                  </div>
+                  <div className="space-y-1.5">
+                    {topVolumeContentCoins.map((coin, index) => {
+                      const isActiveInScene =
+                        Boolean(sceneActiveCoin?.address) &&
+                        coin.address?.toLowerCase() === sceneActiveCoin?.address?.toLowerCase()
+                      return (
+                        <button
+                          key={coin.address || coin.id || `top-volume-${index}`}
+                          type="button"
+                          onClick={() => openContentTray(coin)}
+                          className={cn(
+                            'w-full flex items-center justify-between gap-3 text-left text-xs sm:text-sm transition-colors rounded-md px-2 py-1.5 -mx-2',
+                            isActiveInScene
+                              ? 'bg-cyan-400/15 text-white border-l-2 border-cyan-300'
+                              : 'text-zinc-200 hover:text-white hover:bg-white/5',
+                          )}
+                        >
+                          <span className="truncate">
+                            <span className={cn('font-mono mr-2', isActiveInScene ? 'text-cyan-200' : 'text-zinc-500')}>
+                              {String(index + 1).padStart(2, '0')}
+                            </span>
+                            {coin.name || coin.symbol || 'Untitled'}
+                          </span>
+                          <span className="font-mono text-zinc-300 shrink-0">{formatNumber(coin.totalVolume)}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center rounded-3xl bg-zinc-900/50 backdrop-blur p-10 text-center text-zinc-500">
+                No visual content coins available to render the scene yet.
+              </div>
+            )}
+          </div>
+        </section>
+
+        <CreatorScrollBridge tone="void-to-lime" animate={allowParallax} />
         </div>
 
         <div
@@ -1415,27 +1200,19 @@ export function ExploreCreatorDetail() {
                 <div className="lg:col-span-4 flex lg:justify-end">
                   <div className="inline-flex items-center gap-3 border border-black/20 bg-white/65 px-4 py-2 text-[11px] font-mono uppercase tracking-[1.8px]">
                     <span className="w-8 h-8 rounded-full bg-white border border-black/20 inline-flex items-center justify-center text-[10px]">
-                      DRAG
+                      ↓
                     </span>
-                    Swipe or drag horizontally
+                    Scroll the vertical archive
                   </div>
                 </div>
               </div>
             </div>
 
-            <div
-              ref={timelineScrollerRef}
-              className={`overflow-x-auto scrollbar-hide select-none scroll-smooth snap-x snap-mandatory pl-[10vw] sm:pl-[14vw] lg:pl-[18vw] pr-2 sm:pr-4 ${timelineDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-              onPointerDown={onTimelinePointerDown}
-              onPointerMove={onTimelinePointerMove}
-              onPointerUp={onTimelinePointerUp}
-              onPointerLeave={onTimelinePointerCancel}
-              onPointerCancel={onTimelinePointerCancel}
-              onWheel={onTimelineWheel}
-            >
-              <div className="flex min-w-max">
+            <div className="relative mx-auto max-w-3xl px-2 sm:px-4 pb-4">
+              <div className="pointer-events-none absolute left-[1.125rem] sm:left-6 top-2 bottom-2 w-px bg-black/15" aria-hidden />
+              <div className="flex flex-col gap-8 sm:gap-10">
                 {timelineCoins.length === 0 ? (
-                  <div className="px-8 py-10 text-sm text-zinc-700">No content coins available for timeline yet.</div>
+                  <div className="pl-10 sm:pl-14 py-10 text-sm text-zinc-700">No content coins available for timeline yet.</div>
                 ) : (
                   timelineCoins.map((coin, idx) => {
                     const image = getContentCoinAssetUrl(coin)
@@ -1445,29 +1222,39 @@ export function ExploreCreatorDetail() {
                         key={coin.address || coin.id || `timeline-${idx}`}
                         type="button"
                         onClick={() => openContentTray(coin)}
-                        className={`w-[280px] sm:w-[340px] p-6 text-left hover:bg-black/5 transition-all duration-300 snap-start ${
-                          idx === 0 ? 'ml-2 sm:ml-4 lg:ml-10' : ''
-                        } ${
-                          idx === timelineCoins.length - 1 ? 'mr-8 sm:mr-12 lg:mr-16' : ''
-                        } ${
-                          idx % 3 === 1 ? 'sm:translate-y-10' : idx % 3 === 2 ? 'sm:-translate-y-6' : ''
-                        }`}
+                        className="group relative w-full pl-10 sm:pl-14 text-left transition-colors hover:bg-black/[0.04] rounded-xl py-2 sm:py-3 -mx-2 px-2 sm:mx-0 sm:px-0"
                       >
-                        <div className="text-5xl sm:text-6xl font-semibold tracking-tight leading-none mb-5">{monthDay}</div>
-                        {image ? (
-                          <div className="w-full aspect-[4/3] bg-white/80 overflow-hidden mb-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
-                            <img src={image} alt={coin.name || coin.symbol || 'Content coin'} className="w-full h-full object-cover" />
+                        <span
+                          className="pointer-events-none absolute left-[0.6875rem] sm:left-[1.375rem] top-8 sm:top-9 h-3.5 w-3.5 -translate-x-1/2 rounded-full border-2 border-black/25 bg-white shadow-[0_0_0_4px_rgba(217,223,114,0.55)] transition-transform group-hover:scale-110"
+                          aria-hidden
+                        />
+                        <div className="grid gap-5 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:gap-6">
+                          <div className="text-4xl sm:text-5xl font-semibold tracking-tight leading-none text-zinc-900">
+                            {monthDay}
                           </div>
-                        ) : (
-                          <div className="w-full aspect-[4/3] bg-white/60 mb-4 flex items-center justify-center text-zinc-500">
-                            <ImageIcon className="w-5 h-5" />
+                          <div className="min-w-0">
+                            {image ? (
+                              <div className="w-full aspect-[4/3] max-w-md bg-white/80 overflow-hidden mb-4 shadow-[0_10px_28px_rgba(0,0,0,0.12)]">
+                                <img
+                                  src={image}
+                                  alt={coin.name || coin.symbol || 'Content coin'}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-full max-w-md aspect-[4/3] bg-white/60 mb-4 flex items-center justify-center text-zinc-500">
+                                <ImageIcon className="w-5 h-5" />
+                              </div>
+                            )}
+                            <div className="text-lg font-medium leading-tight">{coin.name || coin.symbol || 'Untitled'}</div>
+                            <div className="mt-2 text-xs font-mono uppercase tracking-[1.4px] text-zinc-700">
+                              {coin.symbol || '???'}
+                            </div>
+                            <p className="mt-3 text-xs sm:text-sm text-zinc-800 leading-relaxed line-clamp-4">
+                              {(coin.description || 'Open tray for full content context.').trim()}
+                            </p>
                           </div>
-                        )}
-                        <div className="text-lg font-medium leading-tight">{coin.name || coin.symbol || 'Untitled'}</div>
-                        <div className="mt-2 text-xs font-mono uppercase tracking-[1.4px] text-zinc-700">{coin.symbol || '???'}</div>
-                        <p className="mt-3 text-xs text-zinc-800 leading-relaxed line-clamp-3">
-                          {(coin.description || 'Open tray for full content context.').trim()}
-                        </p>
+                        </div>
                       </button>
                     )
                   })
@@ -1487,7 +1274,7 @@ export function ExploreCreatorDetail() {
             transition={{ duration: 0.4 }}
             className="space-y-8 sm:space-y-10"
           >
-            <section className="relative bg-black overflow-hidden">
+            <section className="relative bg-transparent overflow-hidden">
               <div className="pointer-events-none absolute inset-0 opacity-10">
                 {[...Array(5)].map((_, i) => (
                   <div key={`tabs-grid-h-${i}`} className="absolute h-px bg-white/40 left-0 right-0" style={{ top: `${16.6 * (i + 1)}%` }} />
@@ -1543,7 +1330,7 @@ export function ExploreCreatorDetail() {
             {/* Chart Tab */}
             {activeTab === 'chart' && (
               <>
-                <section className="relative -mt-8 sm:-mt-10 bg-black overflow-hidden">
+                <section className="relative -mt-8 sm:-mt-10 bg-transparent overflow-hidden">
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-fuchsia-500/10" />
                   <div className="relative px-6 sm:px-8 pt-2 pb-6">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -1580,7 +1367,7 @@ export function ExploreCreatorDetail() {
                   </div>
                 </section>
 
-                <section className="-mt-8 sm:-mt-10 bg-black overflow-hidden">
+                <section className="-mt-8 sm:-mt-10 bg-transparent overflow-hidden">
                   <div className="px-6 sm:px-8 pt-2 pb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <span className="inline-flex items-center gap-3 text-[11px] sm:text-xs font-mono uppercase tracking-[2px] text-zinc-500 mb-3">
@@ -1700,7 +1487,7 @@ export function ExploreCreatorDetail() {
 
             {/* Content Coins Tab */}
             {activeTab === 'coins' && (
-              <section className="bg-black overflow-hidden">
+              <section className="bg-transparent overflow-hidden">
                 <div className="px-6 sm:px-8 py-6">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -1792,7 +1579,7 @@ export function ExploreCreatorDetail() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.2 }}
-                className="relative bg-black overflow-hidden"
+                className="relative bg-transparent overflow-hidden"
               >
                 <div className="pointer-events-none absolute inset-y-0 left-0 w-[2px] bg-linear-to-b from-cyan-300/80 via-white/60 to-fuchsia-300/80" />
                 <div className="px-6 sm:px-8 py-6 sm:py-7">

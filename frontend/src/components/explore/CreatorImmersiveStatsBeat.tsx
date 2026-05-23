@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useGSAP } from '@gsap/react'
@@ -26,11 +26,30 @@ type CreatorImmersiveStatsBeatProps = {
 
 function StatSkeleton() {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="h-10 sm:h-12 lg:h-14 w-28 sm:w-32 bg-white/8 rounded animate-pulse" />
-      <div className="h-3 w-20 bg-white/5 rounded animate-pulse" />
+    <div className="flex flex-col items-center gap-4 w-full">
+      <div className="h-12 sm:h-16 w-40 sm:w-48 bg-white/8 rounded animate-pulse" />
+      <div className="h-3 w-28 bg-white/5 rounded animate-pulse" />
     </div>
   )
+}
+
+/** Crossfading slots — adjacent stats overlap so scroll never hits an empty frame. */
+function statSlotProgress(scrollProgress: number, index: number, total: number): number {
+  if (total <= 0) return 1
+  const slotSize = 1 / total
+  const fade = Math.min(slotSize * 0.22, 0.09)
+
+  const visibleStart = index === 0 ? 0 : index * slotSize - fade * 0.45
+  const visibleEnd = index === total - 1 ? 1 : (index + 1) * slotSize + fade * 0.45
+  const peakStart = index * slotSize + (index === 0 ? fade * 0.15 : fade * 0.35)
+  const peakEnd = (index + 1) * slotSize - (index === total - 1 ? fade * 0.15 : fade * 0.35)
+
+  if (scrollProgress <= visibleStart || scrollProgress >= visibleEnd) return 0
+  if (scrollProgress >= peakStart && scrollProgress <= peakEnd) return 1
+  if (scrollProgress < peakStart) {
+    return gsap.utils.clamp(0, 1, gsap.utils.mapRange(visibleStart, peakStart, 0, 1, scrollProgress))
+  }
+  return gsap.utils.clamp(0, 1, gsap.utils.mapRange(peakEnd, visibleEnd, 1, 0, scrollProgress))
 }
 
 export function CreatorImmersiveStatsBeat({
@@ -42,156 +61,192 @@ export function CreatorImmersiveStatsBeat({
   scrollTriggerRef,
   className,
 }: CreatorImmersiveStatsBeatProps) {
-  const gridRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const eyebrowRef = useRef<HTMLDivElement>(null)
   const cellRefs = useRef<Array<HTMLDivElement | null>>([])
   const valueRefs = useRef<Array<HTMLSpanElement | null>>([])
-  const tweenStateRef = useRef<Array<{ val: number }>>([])
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const update = () => setPrefersReducedMotion(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+
+  const useScrollReveal = animate && !isLoading && !prefersReducedMotion
 
   useEffect(() => {
     cellRefs.current = cellRefs.current.slice(0, stats.length)
     valueRefs.current = valueRefs.current.slice(0, stats.length)
-    tweenStateRef.current = stats.map(() => ({ val: 0 }))
   }, [stats])
 
   useGSAP(
     () => {
-      const triggerEl = scrollTriggerRef?.current ?? gridRef.current?.closest('[data-creator-bridge]')
-      if (!gridRef.current || !triggerEl) return
+      const triggerEl = scrollTriggerRef?.current ?? rootRef.current?.closest('[data-creator-bridge]')
+      if (!rootRef.current || !triggerEl || stats.length === 0) return
 
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const shouldAnimate = animate && !reducedMotion && !isLoading
 
-      const cleanups: Array<() => void> = []
+      const applyStatFrame = (scrollProgress: number) => {
+        if (eyebrowRef.current) {
+          const eyebrowProgress = gsap.utils.clamp(0, 1, gsap.utils.mapRange(0, 0.06, 0, 1, scrollProgress))
+          gsap.set(eyebrowRef.current, {
+            opacity: eyebrowProgress,
+            y: 8 * (1 - eyebrowProgress),
+          })
+        }
 
-      if (!shouldAnimate) {
         stats.forEach((stat, index) => {
           const cell = cellRefs.current[index]
           const valueEl = valueRefs.current[index]
-          if (cell) gsap.set(cell, { opacity: 1, y: 0, filter: 'blur(0px)' })
+          if (!cell) return
+
+          const eased = gsap.parseEase('power3.out')(statSlotProgress(scrollProgress, index, stats.length))
+
+          gsap.set(cell, {
+            opacity: eased,
+            y: 28 * (1 - eased),
+            filter: `blur(${8 * (1 - eased)}px)`,
+            pointerEvents: eased > 0.45 ? 'auto' : 'none',
+            zIndex: eased > 0.05 ? index + 1 : index,
+          })
+
+          if (!valueEl) return
+
+          if (
+            (stat.kind === 'currency' || stat.kind === 'integer') &&
+            stat.raw != null &&
+            Number.isFinite(stat.raw)
+          ) {
+            valueEl.textContent = formatAnimatedStatValue(stat.kind, stat.raw * eased)
+          } else {
+            valueEl.textContent = stat.display
+          }
+        })
+      }
+
+      if (!shouldAnimate) {
+        if (eyebrowRef.current) gsap.set(eyebrowRef.current, { opacity: 1, y: 0 })
+        stats.forEach((stat, index) => {
+          const cell = cellRefs.current[index]
+          const valueEl = valueRefs.current[index]
+          if (cell) gsap.set(cell, { opacity: 1, y: 0, filter: 'blur(0px)', position: 'relative' })
           if (valueEl) valueEl.textContent = stat.display
         })
         return
       }
 
+      if (eyebrowRef.current) gsap.set(eyebrowRef.current, { opacity: 0, y: 8 })
       stats.forEach((stat, index) => {
         const cell = cellRefs.current[index]
-        const valueEl = valueRefs.current[index]
-        if (!cell) return
-
-        gsap.set(cell, { opacity: 0, y: 28, filter: 'blur(8px)', willChange: 'transform,opacity,filter' })
-
-        const entranceTween = gsap.to(cell, {
-          opacity: 1,
-          y: 0,
-          filter: 'blur(0px)',
-          ease: 'power3.out',
-          scrollTrigger: {
-            trigger: triggerEl,
-            start: 'top 75%',
-            end: 'center center',
-            scrub: 0.85,
-          },
-        })
-        cleanups.push(() => {
-          entranceTween.scrollTrigger?.kill()
-          entranceTween.kill()
-        })
-
-        if (
-          valueEl &&
-          (stat.kind === 'currency' || stat.kind === 'integer') &&
-          stat.raw != null &&
-          Number.isFinite(stat.raw)
-        ) {
-          const state = { val: 0 }
-          tweenStateRef.current[index] = state
-          const countTween = gsap.to(state, {
-            val: stat.raw,
-            ease: 'power3.out',
-            snap: stat.kind === 'integer' ? { val: 1 } : undefined,
-            scrollTrigger: {
-              trigger: triggerEl,
-              start: 'top 70%',
-              end: 'center center',
-              scrub: 0.85,
-            },
-            onUpdate: () => {
-              if (valueEl) {
-                valueEl.textContent = formatAnimatedStatValue(stat.kind, state.val)
-              }
-            },
-          })
-          cleanups.push(() => {
-            countTween.scrollTrigger?.kill()
-            countTween.kill()
-          })
-        } else if (valueEl) {
-          valueEl.textContent = stat.display
+        if (cell) {
+          gsap.set(cell, { opacity: 0, y: 28, filter: 'blur(8px)', willChange: 'transform,opacity,filter' })
         }
       })
 
+      const master = ScrollTrigger.create({
+        trigger: triggerEl,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: 0.55,
+        onUpdate: (self) => {
+          applyStatFrame(self.progress)
+        },
+      })
+
+      applyStatFrame(master.progress)
+
       return () => {
-        cleanups.forEach((cleanup) => cleanup())
+        master.kill()
       }
     },
-    { dependencies: [stats, animate, isLoading, scrollTriggerRef], scope: gridRef },
+    { dependencies: [stats, animate, isLoading, scrollTriggerRef, prefersReducedMotion], scope: rootRef },
   )
 
   return (
     <div
-      ref={gridRef}
-      className={cn(
-        'w-full max-w-5xl mx-auto px-4 sm:px-8 pointer-events-auto',
-        className,
-      )}
+      ref={rootRef}
+      className={cn('w-full max-w-3xl mx-auto px-4 sm:px-6 pointer-events-auto text-center', className)}
       aria-label="Creator statistics"
     >
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-10 sm:gap-x-10 sm:gap-y-12 lg:gap-y-14">
-        {isLoading
-          ? Array.from({ length: 6 }).map((_, index) => (
-              <StatSkeleton key={`skeleton-${index}`} />
-            ))
-          : stats.map((stat, index) => {
-              const isVolumeToggle = stat.id === 'volume' && stat.toggleable && onVolumeWindowChange
+      <div
+        ref={eyebrowRef}
+        className={cn(
+          'inline-flex items-center gap-3.5 text-[11px] font-medium uppercase tracking-[0.32em] text-[rgba(220,200,160,0.55)] mb-8 sm:mb-10',
+          !useScrollReveal && 'opacity-100',
+        )}
+      >
+        <span className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[rgba(220,200,160,0.55)] to-transparent" />
+        <span>On-chain metrics</span>
+        <span className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent via-[rgba(220,200,160,0.55)] to-transparent" />
+      </div>
 
-              return (
-                <div
-                  key={stat.id}
-                  ref={(el) => {
-                    cellRefs.current[index] = el
-                  }}
-                  className="flex flex-col gap-2 sm:gap-2.5 min-w-0"
-                >
+      <div
+        className={cn(
+          useScrollReveal
+            ? 'relative min-h-[8rem] sm:min-h-[9rem] lg:min-h-[10rem]'
+            : 'flex flex-col items-center gap-12 sm:gap-14',
+        )}
+      >
+        {isLoading ? (
+          <StatSkeleton />
+        ) : (
+          stats.map((stat, index) => {
+            const isVolumeToggle = stat.id === 'volume' && stat.toggleable && onVolumeWindowChange
+            const valueUsesGradient = stat.id !== 'ethos' || stat.display === '—'
+
+            return (
+              <div
+                key={stat.id}
+                ref={(el) => {
+                  cellRefs.current[index] = el
+                }}
+                className={cn(
+                  'flex flex-col items-center gap-4 sm:gap-5 min-w-0 w-full',
+                  useScrollReveal && 'absolute inset-x-0 top-0',
+                )}
+              >
+                <p className="font-serif font-normal text-[clamp(2.75rem,10vw,6.25rem)] leading-[1.05] tracking-[-0.02em] m-0">
                   <span
                     ref={(el) => {
                       valueRefs.current[index] = el
                     }}
                     className={cn(
-                      'font-semibold tabular-nums text-4xl sm:text-5xl lg:text-6xl leading-none',
-                      stat.toneClass,
+                      'tabular-nums inline-block',
+                      valueUsesGradient
+                        ? 'bg-gradient-to-b from-[#F5F8FF] to-[#8F98AE] bg-clip-text text-transparent'
+                        : stat.toneClass,
                       stat.valueClassName,
                     )}
                   >
                     {stat.display}
                   </span>
-                  {isVolumeToggle ? (
-                    <button
-                      type="button"
-                      onClick={() => onVolumeWindowChange(volumeWindow === '24h' ? 'all' : '24h')}
-                      className="text-left text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px] hover:text-zinc-200 transition-colors underline-offset-4 hover:underline"
-                      title="Toggle 24H vs all-time volume"
-                    >
-                      {stat.label}
-                    </button>
-                  ) : (
-                    <span className="text-[11px] sm:text-xs text-zinc-400 font-mono uppercase tracking-[2px]">
-                      {stat.label}
-                    </span>
-                  )}
-                  {stat.footer ? <div className="mt-0.5">{stat.footer}</div> : null}
-                </div>
-              )
-            })}
+                </p>
+
+                {isVolumeToggle ? (
+                  <button
+                    type="button"
+                    onClick={() => onVolumeWindowChange(volumeWindow === '24h' ? 'all' : '24h')}
+                    className="text-[11px] sm:text-xs text-zinc-400/90 font-mono uppercase tracking-[0.22em] hover:text-zinc-200 transition-colors underline-offset-4 hover:underline"
+                    title="Toggle 24H vs all-time volume"
+                  >
+                    {stat.label}
+                  </button>
+                ) : (
+                  <span className="text-[11px] sm:text-xs text-zinc-400/90 font-mono uppercase tracking-[0.22em]">
+                    {stat.label}
+                  </span>
+                )}
+
+                {stat.footer ? <div className="mt-1 flex justify-center">{stat.footer}</div> : null}
+              </div>
+            )
+          })
+        )}
       </div>
     </div>
   )

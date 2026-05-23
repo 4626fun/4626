@@ -185,6 +185,21 @@
     overflow-x: clip;
   }
 
+  /* Explore immersive pages: match app vault shell, slightly darker + fine grain. */
+  .explore-page-canvas {
+    background-color: var(--explore-canvas, #010101);
+  }
+
+  .explore-page-canvas::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.42;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.28 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
   .bv-panel {
     @apply rounded-2xl border backdrop-blur-xl;
     border-color: rgb(var(--vault-border-strong) / 0.6);
@@ -548,6 +563,7 @@
 /* Dark */
 html.dark {
   --vault-bg: 2 2 2;            /* #020202 */
+  --explore-canvas: #010101;    /* slightly darker than vault shell for white type */
   --vault-card: 10 10 10;       /* #0A0A0A */
   --vault-card-raised: 15 16 20; /* #0F1014 */
   --vault-border: 31 31 31;     /* #1F1F1F */

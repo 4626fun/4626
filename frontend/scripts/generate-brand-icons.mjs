@@ -33,9 +33,11 @@ const docsBrandCopies = [
 const PNG_DERIVATIVES = [
   { size: 16, file: 'assets/favicon-16x16.png' },
   { size: 32, file: 'assets/favicon-32x32.png' },
+  { size: 32, file: 'assets/app-tab-icon-32.png' },
   { size: 48, file: 'assets/favicon-48x48.png' },
   { size: 64, file: 'assets/favicon-64x64.png' },
   { size: 180, file: 'assets/apple-touch-icon.png' },
+  { size: 180, file: 'assets/app-tab-icon-180.png' },
   { size: 192, file: 'assets/android-chrome-192x192.png' },
   { size: 512, file: 'assets/android-chrome-512x512.png' },
   { size: 150, file: 'assets/mstile-150x150.png' },
@@ -71,18 +73,8 @@ async function writeSquareIcon(source, outPath, size, { maskableSafeZone = false
     return
   }
 
-  const inset = Math.floor((size - innerSize) / 2)
-  await sharp({
-    create: {
-      width: size,
-      height: size,
-      channels: 4,
-      background: { r: 0, g: 0, b: 0, alpha: 1 },
-    },
-  })
-    .composite([{ input: resized, left: inset, top: inset }])
-    .png()
-    .toFile(outPath)
+  // Keep maskable assets aligned with the full-bleed tab icon (no blue bezel safe-zone inset).
+  await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
 }
 
 async function regeneratePngDerivatives(outDir, sourcePath) {
