@@ -146,6 +146,8 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 
 **Self-auth (Base App CSW):** `user = recipient = CSW`, `explicitDeposit: true`, submit preview-bound `userCall` via Base Account SDK `wallet_sendCalls` (not relay-kit `executeQuote` — same manual deposit lane as remove-owner).
 
+**Sub-account track:** mutation `recipient` is the app sub-account CSW, but Relay deposit `user` / depositor is the **parent custody CSW** (where ETH usually lives). Client self-auth signs with the parent wallet via `wallet_sendCalls`.
+
 **External funder:** `user = funder EOA`, `recipient = CSW`; submit preview `userCall` via `eth_sendTransaction`.
 
 **When add-owner should NOT use Relay parent-CSW mutation:**
@@ -212,7 +214,7 @@ See [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) and [`buildOwn
 ## Recommended next steps
 
 1. **Keep server-preview + manual deposit as the canonical lane** for add-owner and remove-owner — it matches [Privy relay-client.ts](https://github.com/relayprotocol/relay-wallet-provider-examples/blob/main/privy/src/app/actions/relay-client.ts) and Relay call-execution docs.
-2. **Monitor counterfactual sub-account funding** — self-auth Relay deposits require the CSW to hold enough native ETH for the quoted deposit; counterfactual wallets may need a first-fund/deploy path before owner install succeeds.
+2. **Sub-account Relay deposits fund from the parent CSW** — counterfactual app wallets often have 0 ETH; preview quotes use `relayQuoteUser = parentCswAddress` while mutation still targets the sub-account.
 3. **Do not** route waitlist Base App users through parent-CSW `addOwnerAddress` when sub-account flag is on.
 4. **Retire** user-facing dependence on `/api/relay/execute` (legacy handleOps) once all owner-mutation surfaces stay on deposit + solver fill.
 5. **Optional:** If same-chain quotes succeed but destination ops stall, try `forceSolverExecution: true` on `/quote/v2` (Relay docs: forces solver execution for same-chain swap requests; evaluate for call-execution if needed).

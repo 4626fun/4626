@@ -145,7 +145,8 @@ function SubAccountOwnerInstallPanelContent(
   const relayOwnerFlow = useAddOwnerFlow({
     canonicalCswAddress: parent,
     targetCswAddress: subAccount,
-    ownerSignerAddress: subAccount,
+    relayFundingCswAddress: parent,
+    ownerSignerAddress: parent,
     enabled: canRender && inBaseApp && !embeddedOwnerOnSubAccount,
   })
 
@@ -205,7 +206,8 @@ function SubAccountOwnerInstallPanelContent(
         </div>
         {ownerCheck === 'unknown' ? (
           <p className="text-xs leading-relaxed text-zinc-400">
-            Your app wallet is not deployed on Base yet. Relay will deploy it when you submit the deposit.
+            Your app wallet is not deployed on Base yet. Relay deploys it when you submit — the small
+            deposit is paid from your main Base smart wallet.
           </p>
         ) : null}
         {needsBaseAppHost ? (
@@ -351,7 +353,8 @@ function SubAccountOwnerInstallPanelContent(
       {contextHint}
       {ownerCheck === 'unknown' && inBaseApp ? (
         <p className="text-xs leading-relaxed text-zinc-400">
-          Your app wallet is not deployed on Base yet. Relay will deploy it when you submit the deposit.
+          Your app wallet is not deployed on Base yet. Relay deploys it when you submit — the small
+          deposit is paid from your main Base smart wallet.
         </p>
       ) : null}
       {primaryAction}

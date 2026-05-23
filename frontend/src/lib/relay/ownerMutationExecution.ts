@@ -22,7 +22,10 @@ export type ExecuteOwnerMutationViaRelayParams = {
   relay: OwnerMutationRelayFlow
   mutationCalldata: `0x${string}`
   mutationSelector: `0x${string}`
+  /** CSW that receives the on-chain owner mutation. */
   cswAddress: `0x${string}`
+  /** CSW that pays the Relay deposit in self-auth mode (defaults to `cswAddress`). */
+  fundingCswAddress?: `0x${string}`
   publicClient: PublicClient | undefined
   walletClient: OwnerMutationWalletLike
   walletRequest: WalletRequest | undefined
@@ -114,6 +117,9 @@ export async function executeOwnerMutationViaRelay(
   params: ExecuteOwnerMutationViaRelayParams,
 ): Promise<{ txHash: `0x${string}` }> {
   const { relay, cswAddress, publicClient, appendEvent, onTxHash } = params
+  const fundingCswAddress = params.fundingCswAddress ?? cswAddress
+  const fundingFromParentWallet =
+    fundingCswAddress.toLowerCase() !== cswAddress.toLowerCase()
 
   const relayGuard = validatePreviewRelayUserCallIsNativeDepository({ relay })
   if (relayGuard) {
@@ -124,11 +130,16 @@ export async function executeOwnerMutationViaRelay(
   appendEvent(`precheck:required_deposit_wei=${requiredDepositWei.toString(10)}`)
 
   if (params.isSelfAuthSession && publicClient) {
-    const latestCswBalanceWei = await publicClient.getBalance({ address: cswAddress })
-    appendEvent(`precheck:csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
+    const latestCswBalanceWei = await publicClient.getBalance({ address: fundingCswAddress })
+    appendEvent(`precheck:funding_csw=${fundingCswAddress}`)
+    appendEvent(`precheck:funding_csw_balance_wei=${latestCswBalanceWei.toString(10)}`)
     if (requiredDepositWei > 0n && latestCswBalanceWei < requiredDepositWei) {
+      const walletLabel = fundingFromParentWallet ? 'Main Base wallet' : 'Smart wallet'
+      const targetHint = fundingFromParentWallet
+        ? ' Fund your main Base smart wallet (not the app wallet) and retry.'
+        : ' Fund the smart wallet and retry.'
       throw new Error(
-        `Canonical CSW balance (${formatCompactEth(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatCompactEth(requiredDepositWei)} ETH). Fund the CSW and retry.`,
+        `${walletLabel} balance (${formatCompactEth(latestCswBalanceWei)} ETH) is below required Relay deposit (${formatCompactEth(requiredDepositWei)} ETH).${targetHint}`,
       )
     }
   }
@@ -179,9 +190,10 @@ export async function executeOwnerMutationViaRelay(
       throw new Error('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
     }
     appendEvent('relay_execute:self_auth_route=preview_user_call_send_calls')
+    appendEvent(`relay_execute:funding_csw=${fundingCswAddress}`)
     executeTxHash = await submitSelfAuthViaSendCalls({
       walletRequest: params.walletRequest,
-      cswAddress,
+      cswAddress: fundingCswAddress,
       calls: [relay.userCall],
       // Single native deposit call — atomic bundling can fail Base App simulation.
       atomicRequired: false,

@@ -228,11 +228,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const connectedIsCswSelf = connectedAddress.toLowerCase() === cswAddress.toLowerCase()
+    const connectedIsParentFundingSubAccount =
+      isSubAccountTarget && connectedAddress.toLowerCase() === parentCswAddress.toLowerCase()
     const publicClient = createPublicClient({
       chain: base,
       transport: http(resolveBaseRpcUrl()),
     })
-    if (!connectedIsCswSelf) {
+    if (!connectedIsCswSelf && !connectedIsParentFundingSubAccount) {
       const connectedIsOwner = await isOwnerIfDeployed(publicClient, cswAddress, connectedAddress)
       if (connectedIsOwner !== true) {
         return res.status(403).json({
@@ -302,10 +304,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let relay: RelayFlow | null = null
     let relayQuoteError: string | null = null
     let relayQuoteDiagnostics: AddOwnerPreviewResponse['preflight']['relayQuoteDiagnostics'] = null
+    const relayQuoteUser = isSubAccountTarget ? parentCswAddress : connectedAddress
     const relayQuote = await buildOwnerMutationRelayFlow({
       publicClient,
       cswAddress,
-      relayQuoteUser: connectedAddress,
+      relayQuoteUser,
       mutationCalldata: txRequest.data,
       relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
     })

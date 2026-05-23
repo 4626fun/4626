@@ -26,6 +26,8 @@ type UseAddOwnerFlowParams = {
   canonicalCswAddress: string | null | undefined
   /** When set, owner mutation targets this CSW (sub-account) instead of `canonicalCswAddress`. */
   targetCswAddress?: string | null | undefined
+  /** When set, self-auth Relay deposit is paid from this CSW (e.g. parent custody wallet for sub-account track). */
+  relayFundingCswAddress?: string | null | undefined
   ownerSignerAddress: string | null | undefined
   privyExternalOwnerWallet?: unknown
   enabled?: boolean
@@ -35,12 +37,14 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   const {
     canonicalCswAddress,
     targetCswAddress,
+    relayFundingCswAddress,
     ownerSignerAddress,
     privyExternalOwnerWallet,
     enabled = true,
   } = params
 
   const mutationCswAddress = targetCswAddress ?? canonicalCswAddress
+  const fundingCswAddress = relayFundingCswAddress ?? mutationCswAddress
   const { getAccessToken } = usePrivy()
   const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
@@ -58,11 +62,12 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   const [lastErrorDetail, setLastErrorDetail] = useState<AddOwnerErrorDetail | null>(null)
 
   const isSelfAuthSession = useMemo(() => {
-    if (!mutationCswAddress || !ownerSignerAddress) return false
-    return ownerSignerAddress.toLowerCase() === mutationCswAddress.toLowerCase()
-  }, [mutationCswAddress, ownerSignerAddress])
+    if (!fundingCswAddress || !ownerSignerAddress) return false
+    return ownerSignerAddress.toLowerCase() === fundingCswAddress.toLowerCase()
+  }, [fundingCswAddress, ownerSignerAddress])
 
-  const selfAuthWalletLabel = targetCswAddress ? 'app wallet' : 'canonical smart wallet'
+  const selfAuthWalletLabel =
+    targetCswAddress && relayFundingCswAddress ? 'main Base wallet' : targetCswAddress ? 'app wallet' : 'canonical smart wallet'
 
   const appendEvent = useMemo(
     () =>
@@ -178,11 +183,16 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
 
     let requiredDepositWei: bigint | null = null
-    const latestCswBalanceWei: bigint | null = null
+    let latestCswBalanceWei: bigint | null = null
 
     try {
       if (activePreview.relay?.userCall?.value) {
         requiredDepositWei = BigInt(activePreview.relay.userCall.value)
+      }
+      if (isSelfAuthSession && publicClient && fundingCswAddress) {
+        latestCswBalanceWei = await publicClient.getBalance({
+          address: fundingCswAddress as `0x${string}`,
+        })
       }
 
       const walletRequest = resolveOwnerMutationSessionWalletRequest({
@@ -199,6 +209,10 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       const result = await executeAddOwnerViaRelay({
         preview: activePreview,
         cswAddress: mutationCswAddress as `0x${string}`,
+        fundingCswAddress:
+          fundingCswAddress && fundingCswAddress !== mutationCswAddress
+            ? (fundingCswAddress as `0x${string}`)
+            : undefined,
         publicClient,
         walletClient,
         walletRequest,
@@ -247,6 +261,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     baseAccountSdk,
     enabled,
     fetchPreview,
+    fundingCswAddress,
     isSelfAuthSession,
     mutationCswAddress,
     ownerSignerAddress,

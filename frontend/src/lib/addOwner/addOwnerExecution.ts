@@ -13,6 +13,7 @@ type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<u
 export type ExecuteAddOwnerViaRelayParams = {
   preview: AddOwnerPreview
   cswAddress: `0x${string}`
+  fundingCswAddress?: `0x${string}`
   publicClient: PublicClient | undefined
   walletClient: OwnerMutationWalletLike
   walletRequest: WalletRequest | undefined
@@ -48,6 +49,7 @@ export async function executeAddOwnerViaRelay(
     mutationCalldata: preview.txRequest.data,
     mutationSelector: ADD_OWNER_ADDRESS_SELECTOR,
     cswAddress,
+    fundingCswAddress: params.fundingCswAddress,
     publicClient,
     walletClient: params.walletClient,
     walletRequest: params.walletRequest,
