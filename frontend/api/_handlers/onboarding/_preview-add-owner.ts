@@ -353,21 +353,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         mutationCalldata: txRequest.data,
         relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
         relaySource: '4626-add-owner',
+        requireDepositoryDepositNative: true,
       })
       relayQuoteDiagnostics = relayQuote.diagnostics
       if (relayQuote.ok) {
         relay = relayQuote.relay
-        if (
-          relay &&
-          relayQuoteUser.toLowerCase() === parentCswAddress.toLowerCase()
-        ) {
+        if (relay) {
           const goldenShapeError = validateGoldenCswDepositoryPart1UserCall({
             userCall: relay.userCall,
-            fundingCsw: parentCswAddress,
+            fundingCsw: relayQuoteUser,
             orderId: relay.orderId ?? relay.requestId,
           })
           if (goldenShapeError) {
-            relayQuoteError = `Parent CSW Relay Part 1 must match the May 5 golden executeBatch → Depository.depositNative shape: ${goldenShapeError}`
+            relayQuoteError = `CSW Relay Part 1 must be native ETH Depository.depositNative only: ${goldenShapeError}`
             relay = null
           }
         }

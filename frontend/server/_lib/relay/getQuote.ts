@@ -31,10 +31,48 @@ import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
 export const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
+/** Base mainnet USDC — owner-mutation Part 1 must never use this lane. */
+export const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const
 
 export function isNativeRelayCurrency(address: unknown): boolean {
   if (typeof address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(address)) return false
   return address.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
+}
+
+export function relayQuoteCurrencyInAddress(extract: RelayQuoteExtract): `0x${string}` | null {
+  const rawObj =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!rawObj) return null
+  const details = rawObj.details as Record<string, unknown> | undefined
+  const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+  const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+  return asAddress(currencyInObj?.address ?? null)
+}
+
+export function relayQuoteCurrencyInSymbol(extract: RelayQuoteExtract): string | null {
+  const rawObj =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!rawObj) return null
+  const details = rawObj.details as Record<string, unknown> | undefined
+  const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+  const currencyInObj = currencyIn?.currency as Record<string, unknown> | undefined
+  const symbol = currencyInObj?.symbol
+  return typeof symbol === 'string' && symbol.trim() ? symbol.trim() : null
+}
+
+/** True when Relay quoted ERC-20 / USDC input for Part 1 (must fail closed for add-owner). */
+export function relayQuoteUsesNonNativeInput(extract: RelayQuoteExtract): boolean {
+  const currencyInAddress = relayQuoteCurrencyInAddress(extract)
+  if (!currencyInAddress) return false
+  return !isNativeRelayCurrency(currencyInAddress)
+}
+
+export function resolveNonNativeRelayQuoteError(extract: RelayQuoteExtract): string | null {
+  if (!relayQuoteUsesNonNativeInput(extract)) return null
+  const symbol = relayQuoteCurrencyInSymbol(extract)
+  const address = relayQuoteCurrencyInAddress(extract)
+  const label = symbol ?? address ?? 'ERC-20'
+  return `Relay quoted non-native Part 1 currency (${label}). Owner mutations require native ETH Depository.depositNative only — rebuild preview.`
 }
 
 export type RelayDestinationCall = {
@@ -229,6 +267,8 @@ function parsePositiveDecimalWei(value: unknown): bigint | null {
  * Depository.depositNative with native value only.
  */
 export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigint | null {
+  if (relayQuoteUsesNonNativeInput(extract)) return null
+
   const raw = extract.raw
   const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
   const protocolV2 = rawObj?.protocol as Record<string, unknown> | undefined
@@ -237,7 +277,8 @@ export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigin
 
   if (
     extract.paymentDetails?.amount &&
-    isNativeRelayCurrency(extract.paymentDetails.currency)
+    (extract.paymentDetails.currency == null ||
+      isNativeRelayCurrency(extract.paymentDetails.currency))
   ) {
     const wei = parsePositiveDecimalWei(extract.paymentDetails.amount)
     if (wei) return wei
@@ -251,12 +292,6 @@ export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigin
     if (wei) return wei
   }
 
-  const userTxValue = extract.userTransaction?.value
-  if (userTxValue) {
-    const wei = parsePositiveDecimalWei(userTxValue)
-    if (wei) return wei
-  }
-
   if (rawObj) {
     const details = rawObj.details as Record<string, unknown> | undefined
     const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
@@ -265,6 +300,11 @@ export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigin
     if (currencyInAddress && isNativeRelayCurrency(currencyInAddress)) {
       for (const key of ['amount', 'minimumAmount'] as const) {
         const wei = parsePositiveDecimalWei(currencyIn?.[key])
+        if (wei) return wei
+      }
+      const userTxValue = extract.userTransaction?.value
+      if (userTxValue) {
+        const wei = parsePositiveDecimalWei(userTxValue)
         if (wei) return wei
       }
     }

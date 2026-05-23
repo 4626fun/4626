@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   extractFromRelayQuoteResponse,
+  relayQuoteUsesNonNativeInput,
+  resolveNonNativeRelayQuoteError,
   resolveQuotedNativeDepositWei,
 } from './getQuote.js'
 
@@ -100,7 +102,7 @@ describe('resolveQuotedNativeDepositWei', () => {
               data: {
                 to: '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f',
                 data: '0xcd6e13f7',
-                value: '0',
+                value: '1000000',
                 chainId: 8453,
               },
             },
@@ -110,11 +112,13 @@ describe('resolveQuotedNativeDepositWei', () => {
       details: {
         currencyIn: {
           amount: '1000000',
-          currency: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+          currency: { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC' },
         },
       },
       protocol: { v2: { paymentDetails: null } },
     })
+    expect(relayQuoteUsesNonNativeInput(extract)).toBe(true)
+    expect(resolveNonNativeRelayQuoteError(extract)).toMatch(/USDC/)
     expect(resolveQuotedNativeDepositWei(extract)).toBeNull()
   })
 })

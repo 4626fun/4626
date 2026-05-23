@@ -172,6 +172,7 @@ export function normalizeRelayStatusEndpoint(rawEndpoint: string | null, request
 
 export function validatePreviewRelayUserCallIsNativeDepository(
   preview: { relay?: OwnerMutationRelayFlow | null } | null,
+  options?: { depositoryOnly?: boolean },
 ): string | null {
   const userCall = preview?.relay?.userCall
   if (!userCall) return 'missing relay user call in preview'
@@ -196,6 +197,12 @@ export function validatePreviewRelayUserCallIsNativeDepository(
   const isDepositoryNativeDeposit =
     selector === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
     target === RELAY_DEPOSITORY_BASE.toLowerCase()
+  if (options?.depositoryOnly) {
+    if (!isDepositoryNativeDeposit) {
+      return `CSW self-auth Part 1 must be native ETH Depository.depositNative (${RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR}); Relay router/USDC paths are not allowed`
+    }
+    return null
+  }
   if (!isRouterMulticall && !isDepositoryNativeDeposit) {
     return `relay user call must be RelayRouter multicall (${RELAY_MULTICALL_SELECTOR}) or RelayDepository.depositNative (${RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR})`
   }

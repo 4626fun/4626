@@ -78,6 +78,20 @@ describe('selectOwnerMutationRelayUserCall', () => {
     expect(selected?.userCall.value).toBe('0x1129e6ffe3f8')
   })
 
+  it('never falls back to router multicall for CSW self-auth when depository call is missing', () => {
+    const selected = selectOwnerMutationRelayUserCall({
+      userTransaction: {
+        to: ROUTER,
+        data: routerMulticallData,
+        value: '18871666861048',
+      },
+      builtUserCallFromPaymentDetails: null,
+      preferDepositoryDepositNative: true,
+    })
+
+    expect(selected).toBeNull()
+  })
+
   it('prefers router multicall for external EOA funders when fully funded', () => {
     const selected = selectOwnerMutationRelayUserCall({
       userTransaction: {
@@ -352,6 +366,7 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
       relayQuoteUser: CSW,
       mutationCalldata,
       relaySource: '4626-add-owner',
+      requireDepositoryDepositNative: true,
     })
 
     expect(result.ok).toBe(true)

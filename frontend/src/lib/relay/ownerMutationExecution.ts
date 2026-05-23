@@ -188,7 +188,10 @@ export async function executeOwnerMutationViaRelay(
   const fundingFromParentWallet =
     fundingCswAddress.toLowerCase() !== cswAddress.toLowerCase()
 
-  const relayGuard = validatePreviewRelayUserCallIsNativeDepository({ relay })
+  const relayGuard = validatePreviewRelayUserCallIsNativeDepository(
+    { relay },
+    { depositoryOnly: params.isSelfAuthSession },
+  )
   if (relayGuard) {
     throw new Error(`Relay preview guard failed: ${relayGuard}.`)
   }

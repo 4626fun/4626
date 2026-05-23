@@ -9,7 +9,13 @@ import {
   GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
-import { getRelayQuote, isNativeRelayCurrency, NATIVE_CURRENCY, resolveQuotedNativeDepositWei } from './getQuote.js'
+import {
+  getRelayQuote,
+  isNativeRelayCurrency,
+  NATIVE_CURRENCY,
+  resolveNonNativeRelayQuoteError,
+  resolveQuotedNativeDepositWei,
+} from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
@@ -44,17 +50,21 @@ export function selectOwnerMutationRelayUserCall(params: {
   /** CSW self-auth lane: mimic golden executeBatch → Depository.depositNative Part 1. */
   preferDepositoryDepositNative?: boolean
 }): RelayUserCallCandidate | null {
-  if (params.preferDepositoryDepositNative && params.builtUserCallFromPaymentDetails) {
-    const built = params.builtUserCallFromPaymentDetails
-    if (
-      built.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase() &&
-      built.data.slice(0, 10).toLowerCase() === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR
-    ) {
-      return {
-        userCall: built,
-        isDepositoryDepositNative: true,
+  if (params.preferDepositoryDepositNative) {
+    if (params.builtUserCallFromPaymentDetails) {
+      const built = params.builtUserCallFromPaymentDetails
+      if (
+        built.to.toLowerCase() === RELAY_DEPOSITORY_BASE.toLowerCase() &&
+        built.data.slice(0, 10).toLowerCase() === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR
+      ) {
+        return {
+          userCall: built,
+          isDepositoryDepositNative: true,
+        }
       }
     }
+    // CSW self-auth: never fall back to Relay router multicall (may embed USDC swap legs).
+    return null
   }
 
   const quoteTx =
@@ -222,6 +232,11 @@ export type BuildOwnerMutationRelayFlowParams = {
   relayQuoteOutputWeiEnvKey?: string
   /** Relay dashboard source tag (e.g. `4626-add-owner`, `4626-remove-owner`). */
   relaySource?: string
+  /**
+   * Add-owner / CSW self-auth: Part 1 must stay Depository.depositNative with native
+   * ETH — never Relay router multicall (USDC swap routes).
+   */
+  requireDepositoryDepositNative?: boolean
 }
 
 export type BuildOwnerMutationRelayFlowResult =
@@ -358,6 +373,7 @@ export async function buildOwnerMutationRelayFlow(
     }
 
     let e = quote.extract
+    let nonNativeQuoteError = resolveNonNativeRelayQuoteError(e)
     let resolvedDepositWei = resolveQuotedNativeDepositWei(e)
     if (resolvedDepositWei == null && relayQuoteRequestAmount === '0') {
       const retryQuote = await getRelayQuote({
@@ -365,12 +381,35 @@ export async function buildOwnerMutationRelayFlow(
         amount: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
       })
       if (retryQuote.ok) {
+        nonNativeQuoteError = resolveNonNativeRelayQuoteError(retryQuote.extract)
         const retryDepositWei = resolveQuotedNativeDepositWei(retryQuote.extract)
-        if (retryDepositWei != null) {
+        if (retryDepositWei != null && !nonNativeQuoteError) {
           quote = retryQuote
           e = retryQuote.extract
           resolvedDepositWei = retryDepositWei
         }
+      }
+    }
+
+    if (nonNativeQuoteError) {
+      return {
+        ok: false,
+        error: nonNativeQuoteError,
+        diagnostics: {
+          requestId: e.requestId,
+          orderId: e.orderId ?? e.requestId,
+          paymentDetails: null,
+          userTransaction: e.userTransaction
+            ? {
+                to: e.userTransaction.to,
+                value: e.userTransaction.value,
+                chainId: e.userTransaction.chainId,
+                dataSelector: e.userTransaction.data.slice(0, 10) ?? null,
+              }
+            : null,
+          feeUsd: e.feeUsd,
+          rawSnippet: e.raw == null ? null : JSON.stringify(e.raw).slice(0, 1600),
+        },
       }
     }
 
@@ -418,10 +457,12 @@ export async function buildOwnerMutationRelayFlow(
       rawSnippet: e.raw == null ? null : JSON.stringify(e.raw).slice(0, 1600),
     }
 
-    const preferDepositoryDepositNative = await relayFunderIsDeployedContract({
-      publicClient: params.publicClient,
-      address: params.relayQuoteUser,
-    })
+    const preferDepositoryDepositNative =
+      params.requireDepositoryDepositNative === true ||
+      (await relayFunderIsDeployedContract({
+        publicClient: params.publicClient,
+        address: params.relayQuoteUser,
+      }))
 
     const selectedUserCall = selectOwnerMutationRelayUserCall({
       userTransaction: e.userTransaction,
