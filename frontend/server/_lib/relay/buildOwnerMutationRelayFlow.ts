@@ -6,9 +6,16 @@ import { getRelayQuote } from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
-const RELAY_QUOTE_OUTPUT_MULTIPLIER = 6n
+/** Matches getQuote originGasOverhead for owner-mutation quotes. */
+const RELAY_QUOTE_ORIGIN_GAS_OVERHEAD = 300_000
+/**
+ * Gas limit from golden Part 2 solver fill
+ * (0xa9a06340…, block 45600637 — same block as Part 1 deposit 0xa6b54357…).
+ */
+const GOLDEN_RELAY_SOLVER_EXECUTION_GAS_LIMIT = 2_617_448
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
 const RELAY_ROUTER_MULTICALL_SELECTOR = '0xcd6e13f7'
+const RELAY_ROUTER_BASE = '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f' as const
 
 type RelayUserCallCandidate = {
   userCall: OwnerMutationRelayFlow['userCall']
@@ -16,12 +23,12 @@ type RelayUserCallCandidate = {
 }
 
 /**
- * Prefer RelayDepository.depositNative (May 5 golden reference Part 1) over
- * RelayRouter.multicall when paymentDetails are available. Same-chain EXACT_OUTPUT
- * quotes often echo the quoted output wei as userTransaction.value (~2.88e12 on
- * recent Base blocks) while paymentDetails.amount includes solver fees (~1.89e13).
- * Submitting the underfunded router path lands a UserOp but Relay never fills
- * addOwnerAddress (see basescan 0xdfec2946… vs working 0xa6b54357…).
+ * Golden Part 1 (0xa6b54357…, block 45600637) submits Relay router `multicall`
+ * (`0xcd6e13f7`) via Base App `wallet_sendCalls`. Part 2 (0xa9a06340…) is the
+ * solver fill that emits `AddOwner`. Prefer the quoted router multicall when its
+ * deposit value is fully funded; fall back to a request-bound Depository
+ * `depositNative` only when Relay echoes an underfunded router value (broken
+ * 0xdfec2946… used ~2.88e12 wei instead of ~1.89e13).
  */
 export function selectOwnerMutationRelayUserCall(params: {
   userTransaction: {
@@ -36,7 +43,8 @@ export function selectOwnerMutationRelayUserCall(params: {
     typeof params.userTransaction.value === 'string' &&
     /^[1-9][0-9]*$/.test(params.userTransaction.value) &&
     typeof params.userTransaction.data === 'string' &&
-    params.userTransaction.data.startsWith(RELAY_ROUTER_MULTICALL_SELECTOR)
+    params.userTransaction.data.startsWith(RELAY_ROUTER_MULTICALL_SELECTOR) &&
+    params.userTransaction.to.toLowerCase() === RELAY_ROUTER_BASE.toLowerCase()
       ? {
           userCall: {
             to: params.userTransaction.to,
@@ -47,6 +55,19 @@ export function selectOwnerMutationRelayUserCall(params: {
         }
       : null
 
+  if (quoteTx && params.builtUserCallFromPaymentDetails) {
+    const quotedWei = BigInt(quoteTx.userCall.value)
+    const builtWei = BigInt(params.builtUserCallFromPaymentDetails.value)
+    if (quotedWei >= builtWei) {
+      return quoteTx
+    }
+    return {
+      userCall: params.builtUserCallFromPaymentDetails,
+      userCallSource: 'built_from_payment_details',
+    }
+  }
+
+  if (quoteTx) return quoteTx
   if (params.builtUserCallFromPaymentDetails) {
     return {
       userCall: params.builtUserCallFromPaymentDetails,
@@ -54,7 +75,7 @@ export function selectOwnerMutationRelayUserCall(params: {
     }
   }
 
-  return quoteTx
+  return null
 }
 
 export type OwnerMutationRelayFlow = {
@@ -159,7 +180,12 @@ async function deriveRelayQuoteTxsGasLimit(params: {
   }
 }
 
-async function resolveRelayQuoteOutputWei(params: {
+/**
+ * Relay `/quote/v2` EXACT_OUTPUT echoes `amount` as the Part 1 deposit wei. Golden
+ * Part 1 deposited ~1.887e13 wei (~0.00001887 ETH) on block 45600637; underfunded
+ * quotes around ~2.88e12 wei never triggered the Part 2 solver fill (0xdfec2946…).
+ */
+export async function resolveRelayQuoteOutputWei(params: {
   publicClient: BuildOwnerMutationRelayFlowParams['publicClient']
   relayQuoteTxsGasLimit: number
   envKey: string
@@ -167,12 +193,16 @@ async function resolveRelayQuoteOutputWei(params: {
   const configured = (process.env[params.envKey] ?? '').trim()
   if (/^[1-9][0-9]*$/.test(configured)) return configured
   const gasPrice = await params.publicClient.getGasPrice()
-  const gasLimit = BigInt(params.relayQuoteTxsGasLimit)
-  const derived = gasPrice * gasLimit * RELAY_QUOTE_OUTPUT_MULTIPLIER
-  if (derived <= 0n) {
+  const totalGasUnits =
+    BigInt(params.relayQuoteTxsGasLimit) +
+    BigInt(RELAY_QUOTE_ORIGIN_GAS_OVERHEAD) +
+    BigInt(GOLDEN_RELAY_SOLVER_EXECUTION_GAS_LIMIT)
+  const derived = gasPrice * totalGasUnits
+  const withHeadroom = derived + derived / 50n
+  if (withHeadroom <= 0n) {
     throw new Error('Could not derive relay quote input wei; derived amount is zero.')
   }
-  return derived.toString(10)
+  return withHeadroom.toString(10)
 }
 
 export async function buildOwnerMutationRelayFlow(
@@ -228,14 +258,13 @@ export async function buildOwnerMutationRelayFlow(
     const requestBoundDepositId = e.orderId ?? e.requestId
     const paymentDetails =
       e.paymentDetails &&
-      e.paymentDetails.depository &&
       e.paymentDetails.currency &&
       e.paymentDetails.currency.toLowerCase() === NATIVE_CURRENCY &&
       e.paymentDetails.amount &&
       /^[1-9][0-9]*$/.test(e.paymentDetails.amount)
         ? {
-            chainId: e.paymentDetails.chainId,
-            depository: e.paymentDetails.depository,
+            chainId: e.paymentDetails.chainId ?? 8453,
+            depository: (e.paymentDetails.depository ?? RELAY_DEPOSITORY_BASE) as `0x${string}`,
             currency: e.paymentDetails.currency,
             amount: e.paymentDetails.amount,
           }

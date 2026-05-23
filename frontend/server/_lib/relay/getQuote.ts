@@ -23,6 +23,7 @@
  */
 
 import { logger } from '../../../packages/server-core/src/index.js'
+import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
 const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000'
@@ -313,11 +314,19 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
       currencyInAddress.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
     ) {
       extract.paymentDetails = {
-        chainId: extract.paymentDetails?.chainId ?? null,
-        depository: extract.paymentDetails?.depository ?? null,
+        chainId: extract.paymentDetails?.chainId ?? 8453,
+        depository: extract.paymentDetails?.depository ?? RELAY_DEPOSITORY_BASE,
         currency: extract.paymentDetails?.currency ?? currencyInAddress,
         amount: amountFromCurrencyIn,
       }
+    }
+  }
+
+  if (extract.paymentDetails?.amount && !extract.paymentDetails.depository) {
+    extract.paymentDetails = {
+      ...extract.paymentDetails,
+      chainId: extract.paymentDetails.chainId ?? 8453,
+      depository: RELAY_DEPOSITORY_BASE,
     }
   }
 

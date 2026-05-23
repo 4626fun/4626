@@ -7,8 +7,8 @@
  * Why this lane exists:
  *
  * Owner-mutation Relay deposits (Part 1) are submitted from Base App via
- * `wallet_sendCalls` with preview-bound `depositNative` calldata to Relay
- * Depository (`0x4cD00E38…`). Golden reference (block 45600637):
+ * `wallet_sendCalls` with the preview-bound Relay router `multicall`
+ * (`0xcd6e13f7`) calldata from `/quote/v2`. Golden reference (block 45600637):
  *
  *   - Part 1 (user deposit): 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3
  *   - Part 2 (solver fill):  0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
@@ -61,8 +61,9 @@ export type SubmitViaSendCallsParams = {
   csw: `0x${string}`
   /**
    * Ordered list of calls to dispatch in this single wallet_sendCalls. Relay
-   * owner mutations pass exactly one entry: `depositNative` → RelayDepository.
-   * Relay's solver submits the destination `addOwnerAddress` fill separately.
+   * owner mutations pass exactly one entry: router `multicall` from the preview
+   * (`0xcd6e13f7` → RelayDepository deposit + cleanup). Relay's solver submits
+   * the destination `addOwnerAddress` fill separately (Part 2).
    */
   calls: SendCallsCall[]
   /** Target chain id. Currently Base mainnet (8453). */
