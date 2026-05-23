@@ -509,7 +509,8 @@ export function mapRemoveOwnerSubmissionError(params: {
   if (
     normalized.includes('insufficient funds') ||
     normalized.includes('not enough funds') ||
-    normalized.includes('error generating transaction')
+    normalized.includes('error generating transaction') ||
+    normalized.includes('error generating message')
   ) {
     const balanceCoversDeposit =
       params.latestCswBalanceWei !== null &&
