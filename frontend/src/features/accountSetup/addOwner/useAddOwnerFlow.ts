@@ -241,6 +241,8 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         isSelfAuthSession,
         appendEvent,
         onTxHash: setTxHash,
+        part1DepositTxHint:
+          txHash && /^0x[0-9a-fA-F]{64}$/.test(txHash) ? (txHash as `0x${string}`) : null,
       })
 
       setPageNotice(`4626 signing enabled via Relay (execution tx ${result.txHash.slice(0, 10)}…).`)
@@ -295,6 +297,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     setErrorDetail,
     signingBlockedReason,
     signingReady,
+    txHash,
     wagmiWalletClient,
   ])
 

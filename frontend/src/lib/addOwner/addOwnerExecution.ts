@@ -20,6 +20,7 @@ export type ExecuteAddOwnerViaRelayParams = {
   isSelfAuthSession: boolean
   appendEvent: (row: string) => void
   onTxHash: (txHash: string) => void
+  part1DepositTxHint?: `0x${string}` | null
 }
 
 export async function executeAddOwnerViaRelay(
@@ -56,6 +57,7 @@ export async function executeAddOwnerViaRelay(
     isSelfAuthSession: params.isSelfAuthSession,
     appendEvent,
     onTxHash,
+    part1DepositTxHint: params.part1DepositTxHint,
     precheckMutation: async () => {
       if (!publicClient) return
       if (!preview.preflight.simulation.ok) {

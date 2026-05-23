@@ -7,7 +7,7 @@ import {
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import { submitSelfAuthRelayPart1SelfFunded } from '@/lib/relay/submitRelayPart1SelfFunded'
-import { findExistingRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
+import { findExistingRelayPart1DepositTx, persistRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
 import {
   extractRelayExecutionTxHash,
   formatCompactEth,
@@ -42,6 +42,8 @@ export type ExecuteOwnerMutationViaRelayParams = {
   onTxHash: (txHash: string) => void
   verifyMutation: () => Promise<boolean>
   precheckMutation?: () => Promise<void>
+  /** Reuse a prior Part 1 bundle tx for this quote (retry after waiting). */
+  part1DepositTxHint?: `0x${string}` | null
 }
 
 async function submitExternalFunderRelayDeposit(params: {
@@ -239,17 +241,24 @@ export async function executeOwnerMutationViaRelay(
 
   const boundOrderId = (relay.orderId ?? relay.requestId) as `0x${string}`
   if (publicClient) {
-    const existingPart1Tx = await findExistingRelayPart1DepositTx({
-      publicClient,
-      fundingCsw: fundingCswAddress,
-      userCall: relay.userCall,
-      orderId: boundOrderId,
-    })
-    if (existingPart1Tx) {
-      executeTxHash = existingPart1Tx
-      appendEvent(`relay_part1:skip_existing_deposit tx=${existingPart1Tx}`)
-      appendEvent(`relay_part1:skip_order_id=${boundOrderId}`)
-      onTxHash(existingPart1Tx)
+    try {
+      const existingPart1Tx = await findExistingRelayPart1DepositTx({
+        publicClient,
+        fundingCsw: fundingCswAddress,
+        userCall: relay.userCall,
+        orderId: boundOrderId,
+        txHint: params.part1DepositTxHint,
+      })
+      if (existingPart1Tx) {
+        executeTxHash = existingPart1Tx
+        appendEvent(`relay_part1:skip_existing_deposit tx=${existingPart1Tx}`)
+        appendEvent(`relay_part1:skip_order_id=${boundOrderId}`)
+        onTxHash(existingPart1Tx)
+      }
+    } catch (lookupError: unknown) {
+      const message =
+        lookupError instanceof Error ? lookupError.message : String(lookupError ?? 'lookup failed')
+      appendEvent(`relay_part1:deposit_lookup_skipped reason=${message.slice(0, 180)}`)
     }
   }
 
@@ -277,6 +286,10 @@ export async function executeOwnerMutationViaRelay(
       })
       onTxHash(executeTxHash)
     }
+  }
+
+  if (executeTxHash) {
+    persistRelayPart1DepositTx({ orderId: boundOrderId, txHash: executeTxHash })
   }
 
   await waitForBundleDepositReceipt({

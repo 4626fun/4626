@@ -11,7 +11,7 @@ import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_LOG_TOPIC =
   '0x8032066556caf3967d8fec4ad22a2d9e1e9576556b2903a0fcd5b1fd201e3477' as const
 
-const DEPOSIT_LOG_SCAN_BLOCK_WINDOW = 500_000n
+const RELAY_PART1_TX_STORAGE_PREFIX = '4626:relay_part1_tx:'
 
 export function decodeDepositoryDepositNativeOrderId(
   data: Hex,
@@ -41,15 +41,78 @@ function depositorFromDepositoryLogData(data: Hex): `0x${string}` | null {
   return (`0x${word.slice(24)}`) as `0x${string}`
 }
 
+function relayPart1StorageKey(orderId: `0x${string}`): string {
+  return `${RELAY_PART1_TX_STORAGE_PREFIX}${orderId.toLowerCase()}`
+}
+
+export { relayPart1StorageKey }
+
+export function readPersistedRelayPart1DepositTx(
+  orderId: `0x${string}` | null | undefined,
+): `0x${string}` | null {
+  if (!orderId || typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(relayPart1StorageKey(orderId))
+    if (typeof raw === 'string' && /^0x[0-9a-fA-F]{64}$/.test(raw)) {
+      return raw as `0x${string}`
+    }
+  } catch {
+    /* ignore storage failures in WebView */
+  }
+  return null
+}
+
+export function persistRelayPart1DepositTx(params: {
+  orderId: `0x${string}`
+  txHash: `0x${string}`
+}): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(relayPart1StorageKey(params.orderId), params.txHash)
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Single-receipt check — safe through `/api/rpc` (no wide eth_getLogs scans). */
+export async function verifyRelayPart1DepositTxHint(params: {
+  publicClient: PublicClient
+  txHash: `0x${string}`
+  fundingCsw: `0x${string}`
+  orderId: `0x${string}`
+}): Promise<boolean> {
+  const receipt = await params.publicClient.getTransactionReceipt({ hash: params.txHash })
+  if (receipt.status !== 'success') return false
+
+  const targetOrderId = params.orderId.toLowerCase()
+  const targetDepositor = params.fundingCsw.toLowerCase()
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== RELAY_DEPOSITORY_BASE.toLowerCase()) continue
+    const topic0 = log.topics[0]?.toLowerCase()
+    if (topic0 !== RELAY_DEPOSITORY_NATIVE_DEPOSIT_LOG_TOPIC.toLowerCase()) continue
+    const logOrderId = orderIdFromDepositoryLogData(log.data)
+    const logDepositor = depositorFromDepositoryLogData(log.data)
+    if (!logOrderId || !logDepositor) continue
+    if (logOrderId.toLowerCase() !== targetOrderId) continue
+    if (logDepositor.toLowerCase() !== targetDepositor) continue
+    return true
+  }
+
+  return false
+}
+
 /**
- * Returns an existing Part 1 bundle tx when this quote's order id was already
- * deposited by the funding CSW (prevents repeat wallet prompts on stale previews).
+ * Reuse a prior Part 1 deposit for this quote order id when we already recorded
+ * the bundle tx (session hint or caller-supplied hint). Avoids eth_getLogs scans
+ * that fail on `/api/rpc` upstream block-range limits.
  */
 export async function findExistingRelayPart1DepositTx(params: {
   publicClient: PublicClient
   fundingCsw: `0x${string}`
   userCall: OwnerMutationEip5792Call
   orderId: `0x${string}` | null | undefined
+  txHint?: `0x${string}` | null | undefined
 }): Promise<`0x${string}` | null> {
   const decoded =
     decodeDepositoryDepositNativeOrderId(params.userCall.data) ??
@@ -59,25 +122,24 @@ export async function findExistingRelayPart1DepositTx(params: {
   if (!decoded) return null
   if (decoded.depositor.toLowerCase() !== params.fundingCsw.toLowerCase()) return null
 
-  const targetOrderId = decoded.orderId.toLowerCase()
-  const latestBlock = await params.publicClient.getBlockNumber()
-  const fromBlock =
-    latestBlock > DEPOSIT_LOG_SCAN_BLOCK_WINDOW ? latestBlock - DEPOSIT_LOG_SCAN_BLOCK_WINDOW : 0n
+  const boundOrderId = decoded.orderId
+  const candidateHints = [
+    params.txHint ?? null,
+    readPersistedRelayPart1DepositTx(boundOrderId),
+  ].filter((value): value is `0x${string}` => Boolean(value))
 
-  const logs = await params.publicClient.getLogs({
-    address: RELAY_DEPOSITORY_BASE,
-    topics: [RELAY_DEPOSITORY_NATIVE_DEPOSIT_LOG_TOPIC],
-    fromBlock,
-    toBlock: 'latest',
-  })
-
-  for (const log of logs) {
-    const logOrderId = orderIdFromDepositoryLogData(log.data)
-    const logDepositor = depositorFromDepositoryLogData(log.data)
-    if (!logOrderId || !logDepositor) continue
-    if (logOrderId.toLowerCase() !== targetOrderId) continue
-    if (logDepositor.toLowerCase() !== params.fundingCsw.toLowerCase()) continue
-    if (log.transactionHash) return log.transactionHash
+  for (const hint of candidateHints) {
+    try {
+      const verified = await verifyRelayPart1DepositTxHint({
+        publicClient: params.publicClient,
+        txHash: hint,
+        fundingCsw: params.fundingCsw,
+        orderId: boundOrderId,
+      })
+      if (verified) return hint
+    } catch {
+      /* fail open — try next hint or proceed to fresh Part 1 */
+    }
   }
 
   return null
