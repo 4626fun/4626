@@ -226,12 +226,6 @@ export async function buildOwnerMutationRelayFlow(
 
     const e = quote.extract
     const requestBoundDepositId = e.orderId ?? e.requestId
-    const quotedUserValue =
-      e.userTransaction &&
-      typeof e.userTransaction.value === 'string' &&
-      /^[1-9][0-9]*$/.test(e.userTransaction.value)
-        ? e.userTransaction.value
-        : null
     const paymentDetails =
       e.paymentDetails &&
       e.paymentDetails.depository &&
@@ -245,14 +239,7 @@ export async function buildOwnerMutationRelayFlow(
             currency: e.paymentDetails.currency,
             amount: e.paymentDetails.amount,
           }
-        : requestBoundDepositId && quotedUserValue
-          ? {
-              chainId: 8453,
-              depository: RELAY_DEPOSITORY_BASE,
-              currency: NATIVE_CURRENCY,
-              amount: quotedUserValue,
-            }
-          : null
+        : null
 
     const paymentAmountWei = parseDecimalWei(paymentDetails?.amount ?? null)
     const depositoryFromPaymentDetails = paymentDetails?.depository ?? null

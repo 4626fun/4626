@@ -4,8 +4,9 @@
  * React hook that orchestrates the sub-account setup flow:
  *   - Finds the Base Account (CSW) wallet and the Privy embedded wallet
  *   - Creates or retrieves a sub-account
- *   - Installs the embedded EOA as an on-chain owner of the sub-account
  *   - Configures the embedded wallet as the sub-account signer
+ *
+ * On-chain owner install is handled separately via Relay (`useAddOwnerFlow`).
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -14,7 +15,6 @@ import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import type { Address } from 'viem'
 import {
   provisionSubAccount,
-  confirmSubAccountEmbeddedOwner,
   finalizeSubAccountSigner,
   resolveSubAccountSetupContext,
   type SubAccountSetupStageEvent,
@@ -288,27 +288,6 @@ export function useSubAccountSetup() {
     })
   }, [onStageEvent, runWithGuard])
 
-  const confirmEmbeddedOwner = useCallback(
-    async (addresses: {
-      parentAddress: Address
-      subAccountAddress: Address
-      provider: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
-    }) => {
-      return runWithGuard(async (bundle) => {
-        const ownerResult = await confirmSubAccountEmbeddedOwner({
-          provider: addresses.provider,
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-          embeddedEoaAddress: bundle.embeddedWallet.address as Address,
-          onStageEvent,
-        })
-        setState((prev) => ({ ...prev, isSettingUp: false }))
-        return ownerResult
-      })
-    },
-    [onStageEvent, runWithGuard],
-  )
-
   const finalizeSigner = useCallback(
     async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
       return runWithGuard(async (bundle) => {
@@ -342,74 +321,6 @@ export function useSubAccountSetup() {
       })
     },
     [onStageEvent, runWithGuard, setActiveWallet],
-  )
-
-  const installSubAccountOwnerOnly = useCallback(
-    async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
-      return runWithGuard(async (bundle) => {
-        const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
-        const ctx = await resolveSubAccountSetupContext(walletBundle)
-
-        await finalizeSubAccountSigner({
-          ...walletBundle,
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-        })
-
-        const registered = await registerBaseAppSubAccountLink({
-          parentAddress: addresses.parentAddress,
-          subAccountAddress: addresses.subAccountAddress,
-          embeddedEoaAddress: ctx.embeddedAddress,
-        })
-        if (!registered.ok) {
-          throw new Error(registered.message)
-        }
-
-        let ownerResult: {
-          alreadyOwner: boolean
-          transactionHash: `0x${string}` | null
-          onChainOwnerInstalled: boolean
-          onChainOwnerWarning: string | null
-        } = {
-          alreadyOwner: false,
-          transactionHash: null,
-          onChainOwnerInstalled: false,
-          onChainOwnerWarning: null,
-        }
-
-        try {
-          const installed = await confirmSubAccountEmbeddedOwner({
-            provider: ctx.provider,
-            parentAddress: addresses.parentAddress,
-            subAccountAddress: addresses.subAccountAddress,
-            embeddedEoaAddress: ctx.embeddedAddress,
-            onStageEvent,
-          })
-          ownerResult = {
-            alreadyOwner: installed.alreadyOwner,
-            transactionHash: installed.transactionHash,
-            onChainOwnerInstalled: true,
-            onChainOwnerWarning: null,
-          }
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          ownerResult.onChainOwnerWarning = message
-        }
-
-        setState((prev) => ({
-          ...prev,
-          subAccountAddress: addresses.subAccountAddress,
-          parentAddress: addresses.parentAddress,
-          isSettingUp: false,
-        }))
-
-        return {
-          registered: true,
-          ...ownerResult,
-        }
-      })
-    },
-    [onStageEvent, runWithGuard],
   )
 
   const getLastSetupError = useCallback(() => lastSetupErrorRef.current ?? state.error, [state.error])
@@ -447,8 +358,6 @@ export function useSubAccountSetup() {
 
   return {
     provisionSubAccount: provision,
-    confirmSubAccountEmbeddedOwner: confirmEmbeddedOwner,
-    installSubAccountOwnerOnly,
     linkSubAccountWithoutOwnerInstall,
     finalizeSubAccountSigner: finalizeSigner,
     subAccountAddress: state.subAccountAddress,

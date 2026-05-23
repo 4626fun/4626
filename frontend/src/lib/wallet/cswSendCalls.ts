@@ -7,8 +7,8 @@
  * Why this lane exists:
  *
  * Owner-mutation Relay deposits (Part 1) are submitted from Base App via
- * `wallet_sendCalls` with the preview-bound router `multicall` calldata from
- * `/quote/v2`. Golden reference (block 45600637):
+ * `wallet_sendCalls` with preview-bound `depositNative` calldata to Relay
+ * Depository (`0x4cD00E38…`). Golden reference (block 45600637):
  *
  *   - Part 1 (user deposit): 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3
  *   - Part 2 (solver fill):  0xa9a06340a7725063f1dd9b0a29af6c72f4fbfe3a408b28dd28e2fd2db7649a36
@@ -60,15 +60,9 @@ export type SubmitViaSendCallsParams = {
   /** The CSW address (used as `from` in the EIP-5792 payload). */
   csw: `0x${string}`
   /**
-   * Ordered list of calls to dispatch in this single wallet_sendCalls. For
-   * the two-part Relay owner-mutation flow this is exactly 2 entries:
-   *
-   *   [0] depositNative → RelayDepository (Part 1, pre-fund)
-   *   [1] removeOwnerAtIndex → CSW          (Part 2, mutation)
-   *
-   * EIP-5792 wallets either bundle both into one UserOp's executeBatch OR
-   * submit them as two sequential UserOps in the same block; either is
-   * fine because the on-chain outcome matches the May 5 reference flow.
+   * Ordered list of calls to dispatch in this single wallet_sendCalls. Relay
+   * owner mutations pass exactly one entry: `depositNative` → RelayDepository.
+   * Relay's solver submits the destination `addOwnerAddress` fill separately.
    */
   calls: SendCallsCall[]
   /** Target chain id. Currently Base mainnet (8453). */
