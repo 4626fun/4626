@@ -83,6 +83,19 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(csp).toContain('https://*.mypinata.cloud')
     expect(csp).toContain('https://4626.fun')
     expect(csp).toContain('https://pinata.4626.fun')
+    expect(csp).toContain('https://res.cloudinary.com')
+  })
+
+  it('allows Base App Cloudinary avatar fetches in the app CSP', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{ headers?: Record<string, string> }>
+    }
+    const csp = (parsed.routes ?? [])
+      .map((route) => route.headers?.['content-security-policy'] ?? '')
+      .find((value) => value.includes('connect-src'))
+
+    expect(csp).toContain('https://res.cloudinary.com')
   })
 
   it('rewrites branded IPFS paths on 4626.fun through the Pinata gateway', async () => {
