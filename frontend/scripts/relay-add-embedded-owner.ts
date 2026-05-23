@@ -49,7 +49,7 @@ declare const process: {
 }
 
 const DEFAULT_CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
-const DEFAULT_EMBEDDED = '0xfB11237C0D82520832fc0Dc52Feb8eb5E2e81A4b'
+const DEFAULT_EMBEDDED = '0x1b77A85C5dCf6302FF60265F615F99030b5Bc475'
 const DEFAULT_RPC = process.env.BASE_RPC_URL?.trim() || 'https://mainnet.base.org'
 
 function usage(): void {

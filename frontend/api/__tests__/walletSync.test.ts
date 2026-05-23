@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { classifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
+import { classifyLinkedAccounts, extractPrivyEmbeddedEoaAddress } from '../../server/_lib/wallet/walletMapping.ts'
 import { syncUserWallets } from '../../server/_lib/wallet/walletSync.ts'
 import { canonicalWalletSchemaReadyResult } from './helpers'
 
@@ -155,6 +155,60 @@ describe('wallet mapping + sync', () => {
     const classified = classifyLinkedAccounts(user as any)
     expect(classified.embeddedEoa?.address).toBe(embedded)
     expect(classified.embeddedEoa?.address).not.toBe(privySmartWallet)
+  })
+
+  it('excludes Privy server-managed agent wallets from embedded EOA resolution', () => {
+    const loginEmbedded = '0x1b77a85c5dcf6302ff60265f615f99030b5bc475'
+    const agentWallet = '0xfb11237c0d82520832fc0dc52feb8eb5e2e81a4b'
+    const user = {
+      id: 'did:privy:server-wallet-exclude',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          address: loginEmbedded,
+          walletClientType: 'privy',
+          latest_verified_at: '2026-05-01T00:00:00.000Z',
+        },
+        {
+          type: 'wallet',
+          address: agentWallet,
+          walletClientType: 'privy',
+          policy_ids: ['4626-prod-autoprovision-example'],
+          latest_verified_at: '2026-05-20T00:00:00.000Z',
+        },
+      ],
+    }
+
+    expect(extractPrivyEmbeddedEoaAddress(user as any)).toBe(loginEmbedded)
+    const classified = classifyLinkedAccounts(user as any)
+    expect(classified.embeddedEoa?.address).toBe(loginEmbedded)
+  })
+
+  it('prefers the most recently used login embedded EOA when multiple exist', () => {
+    const olderEmbedded = '0xb2aad65a5402714bf428a66731ae62ba5c45cac0'
+    const newerEmbedded = '0x1b77a85c5dcf6302ff60265f615f99030b5bc475'
+    const user = {
+      id: 'did:privy:multi-embedded',
+      linkedAccounts: [
+        {
+          type: 'wallet',
+          embeddedWallets: [
+            {
+              address: olderEmbedded,
+              walletClientType: 'embedded_privy_wallet',
+              latest_verified_at: '2026-03-01T00:00:00.000Z',
+            },
+            {
+              address: newerEmbedded,
+              walletClientType: 'embedded_privy_wallet',
+              latest_verified_at: '2026-05-01T00:00:00.000Z',
+            },
+          ],
+        },
+      ],
+    }
+
+    expect(extractPrivyEmbeddedEoaAddress(user as any)).toBe(newerEmbedded)
   })
 
   it('syncUserWallets writes profile + wallet graph rows', async () => {

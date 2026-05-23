@@ -188,6 +188,70 @@ function collectEmbeddedWalletRecordsFromUser(user: unknown): Record<string, unk
   return embeddedRecords
 }
 
+function parseTimestampMs(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 1_000_000_000_000 ? value : value * 1000
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const parsed = Date.parse(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  return null
+}
+
+function extractWalletRecencyMs(record: Record<string, unknown>): number {
+  const candidates = [
+    record.latest_verified_at,
+    record.latestVerifiedAt,
+    record.last_used_at,
+    record.lastUsedAt,
+    record.connected_at,
+    record.connectedAt,
+    record.verified_at,
+    record.verifiedAt,
+    record.updated_at,
+    record.updatedAt,
+    record.created_at,
+    record.createdAt,
+  ]
+  let best = 0
+  for (const candidate of candidates) {
+    const ms = parseTimestampMs(candidate)
+    if (ms !== null && ms > best) best = ms
+  }
+  return best
+}
+
+function isPrivyServerManagedWalletRecord(value: unknown): boolean {
+  const record = normalizedWalletRecord(value)
+  if (!record) return false
+  const policyIds = record.policy_ids ?? record.policyIds
+  if (Array.isArray(policyIds) && policyIds.some((id) => typeof id === 'string' && id.trim())) {
+    return true
+  }
+  const ownerId = normalizePrivyText(record.owner_id ?? record.ownerId)
+  const configuredOwnerId = normalizePrivyText(import.meta.env?.VITE_PRIVY_WALLET_OWNER_ID ?? '')
+  if (ownerId && configuredOwnerId && ownerId === configuredOwnerId) return true
+  return false
+}
+
+function collectServerManagedWalletAddressesFromUser(user: unknown): Set<string> {
+  const addresses = new Set<string>()
+  for (const wallet of extractPrivyWalletsFromUser(user)) {
+    if (!isPrivyServerManagedWalletRecord(wallet)) continue
+    const address = normalizeAddressOrNull(wallet.address)
+    if (address) addresses.add(address.toLowerCase())
+  }
+  for (const wallet of collectEmbeddedWalletRecordsFromUser(user)) {
+    if (!isPrivyServerManagedWalletRecord(wallet)) continue
+    const address = normalizeAddressOrNull(wallet.address)
+    if (address) addresses.add(address.toLowerCase())
+  }
+  return addresses
+}
+
 export function pickPrivyEmbeddedEoaAddressFromWallets(
   wallets: unknown,
   excludedWalletAddresses: readonly string[] = [],
@@ -198,29 +262,59 @@ export function pickPrivyEmbeddedEoaAddressFromWallets(
       .filter((value): value is string => Boolean(value)),
   )
   const entries = Array.isArray(wallets) ? wallets : []
+  const candidates: Array<{ address: Address; recencyMs: number }> = []
+
   for (const wallet of entries) {
     if (!isEmbeddedEthereumWalletRecord(wallet)) continue
     if (isSmartWalletLikeRecord(wallet)) continue
-    const address = normalizeAddressOrNull((wallet as Record<string, unknown>).address)
+    if (isPrivyServerManagedWalletRecord(wallet)) continue
+    const record = wallet as Record<string, unknown>
+    const address = normalizeAddressOrNull(record.address)
     if (!address || excluded.has(address.toLowerCase())) continue
-    return address
+    candidates.push({ address, recencyMs: extractWalletRecencyMs(record) })
   }
-  return null
+
+  if (candidates.length === 0) return null
+  candidates.sort((a, b) => b.recencyMs - a.recencyMs)
+  return candidates[0]?.address ?? null
 }
 
 export function pickPrivyEmbeddedEoaAddressFromUser(user: unknown): Address | null {
   const smartWalletAddresses = collectSmartWalletAddressesFromUser(user)
-  const excluded = Array.from(smartWalletAddresses)
+  const serverManagedAddresses = collectServerManagedWalletAddressesFromUser(user)
+  const excluded = Array.from(new Set([...smartWalletAddresses, ...serverManagedAddresses]))
+  const candidates: Array<{ address: Address; recencyMs: number; fromNested: boolean }> = []
 
   for (const wallet of collectEmbeddedWalletRecordsFromUser(user)) {
     if (isSmartWalletLikeRecord(wallet)) continue
+    if (isPrivyServerManagedWalletRecord(wallet)) continue
     const address = normalizeAddressOrNull(wallet.address)
-    if (!address || smartWalletAddresses.has(address.toLowerCase())) continue
-    return address
+    if (!address || smartWalletAddresses.has(address.toLowerCase()) || serverManagedAddresses.has(address.toLowerCase())) {
+      continue
+    }
+    candidates.push({ address, recencyMs: extractWalletRecencyMs(wallet), fromNested: true })
   }
 
-  const walletCandidates = extractPrivyWalletsFromUser(user)
-  return pickPrivyEmbeddedEoaAddressFromWallets(walletCandidates, excluded)
+  for (const wallet of extractPrivyWalletsFromUser(user)) {
+    if (!isEmbeddedEthereumWalletRecord(wallet)) continue
+    if (isSmartWalletLikeRecord(wallet)) continue
+    if (isPrivyServerManagedWalletRecord(wallet)) continue
+    const address = normalizeAddressOrNull(wallet.address)
+    if (!address || smartWalletAddresses.has(address.toLowerCase()) || serverManagedAddresses.has(address.toLowerCase())) {
+      continue
+    }
+    candidates.push({ address, recencyMs: extractWalletRecencyMs(wallet), fromNested: false })
+  }
+
+  if (candidates.length === 0) {
+    return pickPrivyEmbeddedEoaAddressFromWallets(extractPrivyWalletsFromUser(user), excluded)
+  }
+
+  candidates.sort((a, b) => {
+    if (b.recencyMs !== a.recencyMs) return b.recencyMs - a.recencyMs
+    return Number(b.fromNested) - Number(a.fromNested)
+  })
+  return candidates[0]?.address ?? null
 }
 
 type CreateWalletFn = (() => Promise<unknown>) | null

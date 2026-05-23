@@ -13,7 +13,13 @@ import {
 } from './executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
-import { classifyLinkedAccounts, extractPrivyEmbeddedEoaAddress, collectPrivySmartWalletAddresses, type PrivyUserLike } from './walletMapping.js'
+import {
+  classifyLinkedAccounts,
+  collectPrivyServerManagedWalletAddresses,
+  collectPrivySmartWalletAddresses,
+  extractPrivyEmbeddedEoaAddress,
+  type PrivyUserLike,
+} from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -548,12 +554,14 @@ export function resolveConfirmOwnerCanonicalCsw(params: {
 function rejectNonEmbeddedOwnerCandidate(params: {
   address: string | null
   smartWalletAddresses: Set<string>
+  serverManagedWalletAddresses: Set<string>
   canonicalCswAddress?: string | null
   baseSubAccountAddress?: string | null
 }): string | null {
   const normalized = normalizeAddress(params.address)
   if (!normalized) return null
   if (params.smartWalletAddresses.has(normalized)) return null
+  if (params.serverManagedWalletAddresses.has(normalized)) return null
   const canonical = normalizeAddress(params.canonicalCswAddress ?? null)
   if (canonical && normalized === canonical) return null
   const subAccount = normalizeAddress(params.baseSubAccountAddress ?? null)
@@ -569,9 +577,11 @@ export async function getPrivyEmbeddedEOA(params: {
   baseSubAccountAddress?: string | null
 }): Promise<string> {
   const smartWalletAddresses = collectPrivySmartWalletAddresses(params.privyUser)
+  const serverManagedWalletAddresses = collectPrivyServerManagedWalletAddresses(params.privyUser)
   const extracted = rejectNonEmbeddedOwnerCandidate({
     address: extractPrivyEmbeddedEoaAddress(params.privyUser),
     smartWalletAddresses,
+    serverManagedWalletAddresses,
     canonicalCswAddress: params.canonicalCswAddress,
     baseSubAccountAddress: params.baseSubAccountAddress,
   })
@@ -587,6 +597,7 @@ export async function getPrivyEmbeddedEOA(params: {
   const persisted = rejectNonEmbeddedOwnerCandidate({
     address: normalizeAddress(row?.primary_embedded_eoa) ?? normalizeAddress(row?.embedded_wallet),
     smartWalletAddresses,
+    serverManagedWalletAddresses,
     canonicalCswAddress: params.canonicalCswAddress,
     baseSubAccountAddress: params.baseSubAccountAddress,
   })
