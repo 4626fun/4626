@@ -439,32 +439,6 @@ export async function buildOwnerMutationRelayFlow(
           }
         }
       }
-      // #region agent log
-      fetch('http://127.0.0.1:7706/ingest/3a1085e1-3d80-4358-aa04-a03ce8273573', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '637030' },
-        body: JSON.stringify({
-          sessionId: '637030',
-          location: 'buildOwnerMutationRelayFlow.ts:quote-ok',
-          message: 'relay_quote_built',
-          hypothesisId: 'H1-shape-order-bind',
-          timestamp: Date.now(),
-          runId: 'pre-fix',
-          data: {
-            relayQuoteUser: params.relayQuoteUser,
-            cswAddress: params.cswAddress,
-            orderId: requestBoundDepositId,
-            requestId: e.requestId,
-            paymentAmount: paymentDetails?.amount ?? null,
-            userCallTo: selectedUserCall.userCall.to,
-            userCallValue: BigInt(selectedUserCall.userCall.value).toString(10),
-            userCallSelector: selectedUserCall.userCall.data.slice(0, 10),
-            isDepositoryDepositNative: selectedUserCall.isDepositoryDepositNative,
-            quoteOutputWeiRequested: relayQuoteOutputWei,
-          },
-        }),
-      }).catch(() => {})
-      // #endregion
       return {
         ok: true,
         relay: {

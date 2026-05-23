@@ -21,35 +21,6 @@ import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWa
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 
-/** Debug session 637030 — post-Part-1 relay pipeline. */
-function debugRelayLog(
-  location: string,
-  message: string,
-  data: Record<string, unknown>,
-  hypothesisId: string,
-): void {
-  // #region agent log
-  fetch('http://127.0.0.1:7706/ingest/3a1085e1-3d80-4358-aa04-a03ce8273573', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '637030' },
-    body: JSON.stringify({
-      sessionId: '637030',
-      location,
-      message,
-      data,
-      hypothesisId,
-      timestamp: Date.now(),
-      runId: 'pre-fix',
-    }),
-  }).catch(() => {})
-  // #endregion
-}
-
-function depositIdFromUserCallData(data: string): string | null {
-  if (data.length < 138) return null
-  return `0x${data.slice(74, 138).toLowerCase()}`
-}
-
 export type ExecuteOwnerMutationViaRelayParams = {
   relay: OwnerMutationRelayFlow
   mutationCalldata: `0x${string}`
@@ -245,25 +216,6 @@ export async function executeOwnerMutationViaRelay(
   }
   appendEvent(`relay:status_endpoint=${statusEndpoint}`)
 
-  debugRelayLog(
-    'ownerMutationExecution.ts:execute-entry',
-    'relay_execute_start',
-    {
-      isSelfAuthSession: params.isSelfAuthSession,
-      cswAddress,
-      fundingCswAddress,
-      userCallTo: relay.userCall.to,
-      userCallValue: BigInt(relay.userCall.value).toString(10),
-      userCallSelector: relay.userCall.data.slice(0, 10),
-      depositIdFromCalldata: depositIdFromUserCallData(relay.userCall.data),
-      orderId: relay.orderId ?? null,
-      requestId: relay.requestId,
-      statusRequestId,
-      paymentAmount: relay.paymentDetails?.amount ?? null,
-    },
-    'H1-shape-order-bind',
-  )
-
   let executeTxHash: `0x${string}` | null = null
 
   if (params.isSelfAuthSession) {
@@ -290,17 +242,6 @@ export async function executeOwnerMutationViaRelay(
     })
     onTxHash(executeTxHash)
   }
-
-  debugRelayLog(
-    'ownerMutationExecution.ts:post-part1',
-    'part1_submitted',
-    {
-      executeTxHash,
-      isSelfAuthSession: params.isSelfAuthSession,
-      depositIdFromCalldata: depositIdFromUserCallData(relay.userCall.data),
-    },
-    'H2-part1-submitted',
-  )
 
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
@@ -329,32 +270,8 @@ export async function executeOwnerMutationViaRelay(
     status = await pollStatus(statusEndpoint)
   }
 
-  debugRelayLog(
-    'ownerMutationExecution.ts:post-status-poll',
-    'relay_status_result',
-    {
-      statusDone: status.done,
-      statusSuccess: status.success,
-      statusLabel: String((status.raw as Record<string, unknown> | null)?.status ?? ''),
-      statusTxHash: status.txHash,
-      executeTxHash,
-      statusEndpoint,
-    },
-    'H3-relay-status',
-  )
-
   if (!status.done || !status.success) {
     const verifiedOnChain = await params.verifyMutation()
-    debugRelayLog(
-      'ownerMutationExecution.ts:status-fail-verify',
-      'status_failed_onchain_check',
-      {
-        verifiedOnChain,
-        statusLabel: String((status.raw as Record<string, unknown> | null)?.status ?? 'unknown'),
-        executeTxHash,
-      },
-      'H4-onchain-owner',
-    )
     if (verifiedOnChain) {
       appendEvent('relay_status.result=timeout_or_failed_but_on_chain_verified')
       const fillTxHash =
@@ -389,17 +306,6 @@ export async function executeOwnerMutationViaRelay(
   onTxHash(fillTxHash)
 
   const mutationVerified = await params.verifyMutation()
-  debugRelayLog(
-    'ownerMutationExecution.ts:post-verify',
-    'mutation_verified',
-    {
-      mutationVerified,
-      fillTxHash,
-      executeTxHash,
-      mutationSelector: params.mutationSelector,
-    },
-    'H4-onchain-owner',
-  )
   if (mutationVerified) {
     appendEvent('relay_execution.mutation_verified=ok')
     return { txHash: fillTxHash }
