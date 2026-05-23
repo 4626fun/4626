@@ -6,10 +6,10 @@ import {
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
   MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
-  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import {
+  deriveRelayOwnerMutationDepositQuoteSeedWei,
   getRelayQuote,
   isNativeRelayCurrency,
   NATIVE_CURRENCY,
@@ -225,6 +225,9 @@ export type BuildOwnerMutationRelayFlowParams = {
       data: `0x${string}`
       value?: bigint
     }) => Promise<bigint>
+    getGasPrice?: () => Promise<bigint>
+  } & {
+    getBytecode?: (args: { address: `0x${string}` }) => Promise<Hex | undefined>
   }
   cswAddress: `0x${string}`
   relayQuoteUser: `0x${string}`
@@ -301,9 +304,8 @@ async function deriveRelayQuoteTxsGasLimit(params: {
  * Relay `/quote/v2` `amount` for owner mutations: EXACT_OUTPUT destination value
  * (typically `"0"` wei on `txs[0].value`). When Relay returns
  * `protocol.v2.paymentDetails.amount`, that field is authoritative when currency
- * is native ETH. When it does not, we re-quote with a golden-scale native seed
- * amount and resolve the deposit via `resolveQuotedNativeDepositWei` (native
- * ETH only — USDC / ERC-20 currencyIn is rejected).
+ * is native ETH. When it does not, we re-quote using a live native seed derived
+ * from the zero-quote `fees.gas` signal (and live `gasPrice` as fallback).
  *
  * Ops may override the request `amount` via `RELAY_*_QUOTE_OUTPUT_WEI` for
  * debugging only.
@@ -376,9 +378,17 @@ export async function buildOwnerMutationRelayFlow(
     let nonNativeQuoteError = resolveNonNativeRelayQuoteError(e)
     let resolvedDepositWei = resolveQuotedNativeDepositWei(e)
     if (resolvedDepositWei == null && relayQuoteRequestAmount === '0') {
+      const gasPriceWei =
+        typeof params.publicClient.getGasPrice === 'function'
+          ? await params.publicClient.getGasPrice().catch(() => null)
+          : null
+      const depositQuoteSeed = deriveRelayOwnerMutationDepositQuoteSeedWei({
+        zeroQuoteExtract: e,
+        gasPriceWei,
+      })
       const retryQuote = await getRelayQuote({
         ...quoteParamsBase,
-        amount: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+        amount: depositQuoteSeed.toString(),
       })
       if (retryQuote.ok) {
         nonNativeQuoteError = resolveNonNativeRelayQuoteError(retryQuote.extract)

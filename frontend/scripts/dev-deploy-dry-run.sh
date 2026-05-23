@@ -207,6 +207,19 @@ fi
 if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
+
+# Dry-run pre-bundles a large Privy/wagmi graph. WSL boxes often OOM-kill esbuild
+# when a second Vite dev server is already running — give Node headroom and retry
+# transient esbuild service deaths during optimizeDeps.
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
+
+is_transient_vite_esbuild_failure() {
+  local log_file="$1"
+  grep -Eq \
+    'The service was stopped|The service is no longer running|write EPIPE|Error during dependency optimization|JavaScript heap out of memory|FATAL ERROR: .*heap' \
+    "$log_file"
+}
+
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 ALLOW_DEV_PORT_FALLBACK="${DEPLOY_DRY_RUN_ALLOW_PORT_FALLBACK:-0}"
 ORIG_DEV_PORT="$DEV_PORT"
@@ -230,6 +243,9 @@ if port_in_use "$DEV_PORT"; then
   fi
 fi
 export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
+if [[ "$DEV_PORT" == "5174" ]] && port_in_use 5173; then
+  echo "Warning: port 5173 is already in use (likely pnpm dev). Stop it before deploy dry-run to avoid esbuild OOM during dependency optimization." >&2
+fi
 APP_ORIGIN="${APP_ORIGIN:-http://localhost:${DEV_PORT}}"
 VITE_APP_ORIGIN="${VITE_APP_ORIGIN:-http://localhost:${DEV_PORT}}"
 if [[ -n "${APP_ORIGIN:-}" ]]; then
@@ -278,7 +294,7 @@ fi
 echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
 cd "$FRONTEND_DIR"
 VITE_BOOTSTRAP_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-vite-bootstrap.log"
-MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-2}"
+MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-3}"
 vite_attempt=0
 
 while true; do
@@ -296,13 +312,16 @@ while true; do
 
   if [[ "$vite_attempt" -gt "$MAX_VITE_EPIPE_RETRIES" ]]; then
     echo "Vite exited with code ${vite_exit_code} after ${MAX_VITE_EPIPE_RETRIES} retry attempts."
+    if is_transient_vite_esbuild_failure "$VITE_BOOTSTRAP_LOG_FILE"; then
+      echo "Recent esbuild failure (often memory pressure). Stop other Vite dev servers, then retry." >&2
+    fi
     exit "$vite_exit_code"
   fi
 
-  if grep -q "The service was stopped: write EPIPE" "$VITE_BOOTSTRAP_LOG_FILE"; then
-    echo "Detected transient Vite/esbuild EPIPE during dependency optimization; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
+  if is_transient_vite_esbuild_failure "$VITE_BOOTSTRAP_LOG_FILE"; then
+    echo "Detected transient Vite/esbuild failure during dependency optimization; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
     rm -rf "$FRONTEND_DIR/node_modules/.vite"
-    sleep 1
+    sleep 2
     continue
   fi
 

@@ -27,10 +27,22 @@
  */
 
 import { logger } from '../../../packages/server-core/src/index.js'
-import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import {
+  MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
+  RELAY_DEPOSITORY_BASE,
+} from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
 export const NATIVE_CURRENCY = '0x0000000000000000000000000000000000000000' as const
+/** Forwarded on owner-mutation `/quote/v2` requests (Relay pricing hint). */
+export const RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD = 300_000
+/**
+ * When EXACT_OUTPUT `amount` is `"0"`, Relay omits native `paymentDetails` but still
+ * returns `fees.gas.amount`. Empirical Base mainnet owner-mutation ratio ≈127× (May 2026).
+ */
+export const RELAY_OWNER_MUTATION_FEES_GAS_TO_DEPOSIT_MULTIPLIER = 127n
+/** Fallback seed when `fees.gas` is absent: `gasPrice × overhead × multiplier`. */
+export const RELAY_OWNER_MUTATION_DEPOSIT_QUOTE_GAS_MULTIPLIER = 10n
 /** Base mainnet USDC — owner-mutation Part 1 must never use this lane. */
 export const BASE_USDC = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' as const
 
@@ -261,6 +273,43 @@ function parsePositiveDecimalWei(value: unknown): bigint | null {
   }
 }
 
+function resolveRelayQuoteFeesGasWei(extract: RelayQuoteExtract): bigint | null {
+  const raw =
+    extract.raw && typeof extract.raw === 'object' ? (extract.raw as Record<string, unknown>) : null
+  if (!raw) return null
+  const fees = raw.fees as Record<string, unknown> | undefined
+  const gas = fees?.gas as Record<string, unknown> | undefined
+  return parsePositiveDecimalWei(gas?.amount ?? gas?.minimumAmount)
+}
+
+/**
+ * Relay EXACT_OUTPUT owner-mutation quotes with `amount: "0"` do not return native
+ * `paymentDetails`. A follow-up quote must pass a positive native seed; Relay echoes
+ * that seed back as the Part 1 deposit. Derive the seed from the zero-quote fee signal
+ * (preferred) or live `gasPrice × originGasOverhead`.
+ */
+export function deriveRelayOwnerMutationDepositQuoteSeedWei(params: {
+  zeroQuoteExtract: RelayQuoteExtract
+  gasPriceWei?: bigint | null
+}): bigint {
+  const candidates: bigint[] = [MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI]
+
+  const feesGasWei = resolveRelayQuoteFeesGasWei(params.zeroQuoteExtract)
+  if (feesGasWei != null) {
+    candidates.push(feesGasWei * RELAY_OWNER_MUTATION_FEES_GAS_TO_DEPOSIT_MULTIPLIER)
+  }
+
+  if (params.gasPriceWei != null && params.gasPriceWei > 0n) {
+    candidates.push(
+      params.gasPriceWei *
+        BigInt(RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD) *
+        RELAY_OWNER_MUTATION_DEPOSIT_QUOTE_GAS_MULTIPLIER,
+    )
+  }
+
+  return candidates.reduce((max, value) => (value > max ? value : max))
+}
+
 /**
  * Resolves the native ETH Part 1 deposit Relay expects for owner-mutation quotes.
  * Rejects USDC/ERC-20 currencyIn or paymentDetails — Part 1 must stay
@@ -480,7 +529,7 @@ export async function getRelayQuote(
     explicitDeposit: true,
     // Match relay-kit owner-mutation examples: sponsor solver fees where configured.
     subsidizeFees: true,
-    originGasOverhead: 300_000,
+    originGasOverhead: RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD,
     ...(params.source ? { source: params.source } : {}),
     txs: params.txs.map((tx) => ({
       to: tx.to,

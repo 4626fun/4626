@@ -12,6 +12,7 @@ import {
   RATE_LIMITS,
   logger,
 } from '../../../packages/server-core/src/index.js'
+import { RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD } from '../../../server/_lib/relay/getQuote.js'
 
 const RELAY_QUOTE_BODY_MAX_BYTES = 262_144
 const RELAY_QUOTE_URL = 'https://api.relay.link/quote/v2'
@@ -160,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     tradeType: 'EXACT_OUTPUT',
     explicitDeposit: true,
     subsidizeFees: true,
-    originGasOverhead: 300_000,
+    originGasOverhead: RELAY_OWNER_MUTATION_ORIGIN_GAS_OVERHEAD,
     source: '4626-owner-mutation',
     txs: [{ to: body.to, data: body.data, value: valueRaw }],
   }

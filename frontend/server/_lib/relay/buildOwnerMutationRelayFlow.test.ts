@@ -12,7 +12,6 @@ import {
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
-  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 vi.mock('./getQuote.js', async (importOriginal) => {
@@ -271,16 +270,20 @@ describe('validateSelectedOwnerMutationRelayUserCall', () => {
   })
 })
 
-describe('buildOwnerMutationRelayFlow golden re-quote', () => {
+describe('buildOwnerMutationRelayFlow deposit re-quote', () => {
   const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
   const OWNER = '0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0' as const
   const requestId = `0x${'aa'.repeat(32)}` as const
+  const zeroQuoteFeesGas = '148913182984'
+  const expectedDepositSeed = (
+    BigInt(zeroQuoteFeesGas) * 127n
+  ).toString()
 
   afterEach(() => {
     mockedGetRelayQuote.mockReset()
   })
 
-  it('re-quotes with golden native seed when amount=0 quote has no deposit', async () => {
+  it('re-quotes with live fees.gas-derived seed when amount=0 quote has no deposit', async () => {
     const mutationCalldata = encodeFunctionData({
       abi: [
         {
@@ -318,9 +321,15 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
           currency: { address: '0x0000000000000000000000000000000000000000' },
         },
       },
+      fees: {
+        gas: {
+          amount: zeroQuoteFeesGas,
+          minimumAmount: zeroQuoteFeesGas,
+        },
+      },
     }
 
-    const goldenQuoteRaw = {
+    const pricedQuoteRaw = {
       steps: [
         {
           kind: 'transaction',
@@ -330,7 +339,7 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
               data: {
                 to: '0xb92fe925dc43a0ecde6c8b1a2709c170ec4fff4f',
                 data: '0xcd6e13f7',
-                value: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+                value: expectedDepositSeed,
                 chainId: 8453,
               },
             },
@@ -339,7 +348,7 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
       ],
       details: {
         currencyIn: {
-          amount: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+          amount: expectedDepositSeed,
           currency: { address: '0x0000000000000000000000000000000000000000' },
         },
       },
@@ -354,7 +363,7 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        extract: (await import('./getQuote.js')).extractFromRelayQuoteResponse(goldenQuoteRaw),
+        extract: (await import('./getQuote.js')).extractFromRelayQuoteResponse(pricedQuoteRaw),
       })
 
     const result = await buildOwnerMutationRelayFlow({
@@ -371,12 +380,10 @@ describe('buildOwnerMutationRelayFlow golden re-quote', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.relay.paymentDetails?.amount).toBe(GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString())
+    expect(result.relay.paymentDetails?.amount).toBe(expectedDepositSeed)
     expect(result.relay.userCall.to).toBe(RELAY_DEPOSITORY_BASE)
     expect(result.relay.userCall.data.slice(0, 10)).toBe(RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR)
     expect(mockedGetRelayQuote).toHaveBeenCalledTimes(2)
-    expect(mockedGetRelayQuote.mock.calls[1]?.[0]?.amount).toBe(
-      GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
-    )
+    expect(mockedGetRelayQuote.mock.calls[1]?.[0]?.amount).toBe(expectedDepositSeed)
   })
 })
