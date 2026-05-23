@@ -16,6 +16,7 @@ import {
   validatePreviewRelayUserCallIsNativeDepository,
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import { validateGoldenCswDepositoryPart1UserCall } from '@/lib/relay/goldenRelayPart1Shape'
+import { notifyRelaySolverAfterPart1Deposit } from '@/lib/relay/notifyRelaySolverDeposit'
 import { GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI } from '@/lib/wallet/cswOwnerAbi'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
@@ -117,6 +118,33 @@ async function submitExternalFunderRelayDeposit(params: {
   })
   params.appendEvent(`relay_execute:external_send_transaction=tx_hash=${txHash}`)
   return txHash
+}
+
+async function wakeRelaySolverAfterPart1Deposit(params: {
+  depositTxHash: `0x${string}`
+  requestId: `0x${string}`
+  userCall: OwnerMutationEip5792Call
+  appendEvent: (row: string) => void
+}): Promise<void> {
+  params.appendEvent('relay_notify:start')
+  try {
+    const result = await notifyRelaySolverAfterPart1Deposit({
+      chainId: base.id,
+      depositTxHash: params.depositTxHash,
+      requestId: params.requestId,
+      userCall: params.userCall,
+      referrer: '4626-owner-mutation',
+    })
+    params.appendEvent(
+      `relay_notify:index=${result.indexed} same_chain_single=${result.sameChainSingle}`,
+    )
+    for (const warning of result.warnings) {
+      params.appendEvent(`relay_notify:warn=${warning.slice(0, 260)}`)
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error ?? 'notify failed')
+    params.appendEvent(`relay_notify:error=${message.slice(0, 260)}`)
+  }
 }
 
 export async function executeOwnerMutationViaRelay(
@@ -242,6 +270,13 @@ export async function executeOwnerMutationViaRelay(
     })
     onTxHash(executeTxHash)
   }
+
+  await wakeRelaySolverAfterPart1Deposit({
+    depositTxHash: executeTxHash,
+    requestId: statusRequestId,
+    userCall: relay.userCall,
+    appendEvent,
+  })
 
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
