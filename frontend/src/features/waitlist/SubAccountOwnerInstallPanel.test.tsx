@@ -35,6 +35,14 @@ vi.mock('@/lib/wallet/inAppBrowser', () => ({
 
 vi.mock('@/lib/wallet/subAccountOwnerInstall', () => ({
   readEmbeddedOwnerOnSubAccount: vi.fn(),
+  createBaseSubAccountReadClient: vi.fn(() => ({
+    getBytecode: vi.fn().mockResolvedValue('0x1234'),
+  })),
+}))
+
+vi.mock('@/lib/wallet/subAccountDeploy', () => ({
+  readSubAccountIsDeployed: vi.fn().mockResolvedValue(true),
+  deployCounterfactualSubAccount: vi.fn(),
 }))
 
 vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
@@ -59,6 +67,8 @@ vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
 vi.mock('@/hooks/useSubAccountSetup', () => ({
   useSubAccountSetup: () => ({
     embeddedWallet: { address: EMBED },
+    deploySubAccountOnChain: vi.fn(),
+    isSettingUp: false,
   }),
 }))
 
@@ -176,14 +186,16 @@ describe('SubAccountOwnerInstallPanel', () => {
     expect(screen.queryByText('Build Relay preview')).toBeNull()
   })
 
-  it('keeps install actionable when owner read is unknown/null', async () => {
+  it('shows deploy first when owner read is unknown and app wallet is counterfactual', async () => {
+    const { readSubAccountIsDeployed } = await import('@/lib/wallet/subAccountDeploy')
+    vi.mocked(readSubAccountIsDeployed).mockResolvedValue(false)
     vi.mocked(readEmbeddedOwnerOnSubAccount).mockResolvedValue(null)
 
     renderPanel(
       <SubAccountOwnerInstallPanel parentAddress={PARENT} subAccountAddress={SUB} embeddedEoaAddress={EMBED} />,
     )
 
-    expect(await screen.findByText('Build Relay preview')).toBeTruthy()
-    expect(screen.queryByText(/Could not verify signing status/i)).toBeNull()
+    expect(await screen.findByTestId('sub-account-deploy-button')).toBeTruthy()
+    expect(screen.queryByText('Build Relay preview')).toBeNull()
   })
 })

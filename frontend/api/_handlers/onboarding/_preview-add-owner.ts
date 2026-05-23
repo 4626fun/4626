@@ -67,6 +67,7 @@ type AddOwnerPreviewResponse = {
       ok: boolean
       error: string | null
     }
+    counterfactualSubAccount: boolean
     relayQuoteError: string | null
     relayDepositSimulation: {
       ok: boolean
@@ -278,6 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           relayQuoteError: null,
           relayDepositSimulation: null,
           relayQuoteDiagnostics: null,
+          counterfactualSubAccount: false,
         },
       }
       return res.status(200).json({
@@ -304,6 +306,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           relayQuoteError: null,
           relayDepositSimulation: null,
           relayQuoteDiagnostics: null,
+          counterfactualSubAccount: false,
         },
       }
       return res.status(200).json({
@@ -318,7 +321,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       isSubAccountTarget && (subAccountBytecode == null || subAccountBytecode === '0x')
 
     const simulation = counterfactualSubAccount
-      ? { ok: true, error: null }
+      ? {
+          ok: false,
+          error: 'App wallet not deployed on Base Mainnet (no contract bytecode). Deploy the app wallet first.',
+        }
       : await simulateAddOwnerCall({
           publicClient,
           cswAddress,
@@ -337,7 +343,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : connectedAddress
     if (counterfactualSubAccount) {
       relayQuoteError =
-        'App wallet is not deployed on Base yet. Finish Connect Base App first, then rebuild Enable 4626 signing. Relay cannot addOwnerAddress on a counterfactual app wallet.'
+        'App wallet is not deployed on Base Mainnet yet. In Base App, tap Deploy app wallet, approve the prompt, then rebuild Enable 4626 signing. Relay cannot addOwnerAddress until the app wallet has on-chain bytecode.'
     } else {
       const relayQuote = await buildOwnerMutationRelayFlow({
         publicClient,
@@ -375,6 +381,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ownerToAdd,
         alreadyOwner: false,
         simulation,
+        counterfactualSubAccount,
         relayQuoteError,
         relayDepositSimulation,
         relayQuoteDiagnostics,

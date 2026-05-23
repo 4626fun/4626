@@ -25,6 +25,7 @@ export type AddOwnerPreview = {
       error: string | null
     }
     relayQuoteError: string | null
+    counterfactualSubAccount?: boolean
     relayDepositSimulation: OwnerMutationRelayDepositSimulation | null
     relayQuoteDiagnostics: {
       requestId: `0x${string}` | null

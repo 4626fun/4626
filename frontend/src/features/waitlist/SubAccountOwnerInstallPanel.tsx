@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown } from 'lucide-react'
 import { getAddress, isAddress, type Address } from 'viem'
 
@@ -10,6 +10,8 @@ import { useSubAccountSetup, type SubAccountSetupControls } from '@/hooks/useSub
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { readSubAccountIsDeployed } from '@/lib/wallet/subAccountDeploy'
+import { createBaseSubAccountReadClient } from '@/lib/wallet/subAccountOwnerInstall'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
 import {
@@ -20,7 +22,10 @@ import {
 } from './subAccountOwnerInstallMessages'
 import { useEmbeddedOwnerOnSubAccount } from './useEmbeddedOwnerOnSubAccount'
 
-export type SubAccountOwnerInstallSetup = Pick<SubAccountSetupControls, 'embeddedWallet'>
+export type SubAccountOwnerInstallSetup = Pick<
+  SubAccountSetupControls,
+  'embeddedWallet' | 'deploySubAccountOnChain' | 'isSettingUp'
+>
 
 type SubAccountOwnerInstallPanelProps = {
   parentAddress: string | null | undefined
@@ -98,7 +103,16 @@ export function SubAccountOwnerInstallPanel(props: SubAccountOwnerInstallPanelPr
 
 function SubAccountOwnerInstallPanelWithSetup(props: SubAccountOwnerInstallPanelProps) {
   const setup = useSubAccountSetup()
-  return <SubAccountOwnerInstallPanelContent {...props} setup={setup} />
+  return (
+    <SubAccountOwnerInstallPanelContent
+      {...props}
+      setup={{
+        embeddedWallet: setup.embeddedWallet,
+        deploySubAccountOnChain: setup.deploySubAccountOnChain,
+        isSettingUp: setup.isSettingUp,
+      }}
+    />
+  )
 }
 
 function SubAccountOwnerInstallPanelContent(
@@ -119,19 +133,47 @@ function SubAccountOwnerInstallPanelContent(
   const subAccount = normalizeAddress(subAccountAddress)
   const embeddedFromProps = normalizeAddress(embeddedEoaAddress)
 
-  const { embeddedWallet } = setup
+  const { embeddedWallet, deploySubAccountOnChain, isSettingUp: setupBusy } = setup
 
   const embeddedEoa = embeddedFromProps ?? normalizeAddress(embeddedWallet?.address)
 
+  const publicClientRef = useRef(createBaseSubAccountReadClient())
+  const publicClient = publicClientRef.current
+
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [recheckBusy, setRecheckBusy] = useState(false)
+  const [deployBusy, setDeployBusy] = useState(false)
+  const [deployError, setDeployError] = useState<string | null>(null)
+  const [subAccountDeployed, setSubAccountDeployed] = useState<boolean | null>(null)
   const [baseAppLinkCopyState, setBaseAppLinkCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  const refreshSubAccountDeployed = useCallback(async () => {
+    if (!subAccount || !publicClient) {
+      setSubAccountDeployed(null)
+      return false
+    }
+    const deployed = await readSubAccountIsDeployed(publicClient, subAccount)
+    setSubAccountDeployed(deployed)
+    return deployed
+  }, [publicClient, subAccount])
 
   const inBaseApp = useMemo(() => isBaseAppInAppContext(), [])
   const needsBaseAppHost = !inBaseApp
 
   const canRender = subAccountFlowEnabled && Boolean(parent && subAccount && embeddedEoa)
   const baseAppSetupUrl = buildWaitlistSetupUrl('base-app')
+
+  useEffect(() => {
+    if (!canRender || !subAccount || !publicClient) return
+    let cancelled = false
+    void (async () => {
+      const deployed = await readSubAccountIsDeployed(publicClient, subAccount)
+      if (!cancelled) setSubAccountDeployed(deployed)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [canRender, publicClient, subAccount])
 
   const {
     status: ownerCheck,
@@ -150,8 +192,44 @@ function SubAccountOwnerInstallPanelContent(
     ownerSignerAddress: parent,
     privyEmbeddedEoaAddress: embeddedEoa,
     preferFundingCswSelfAuth: true,
-    enabled: canRender && inBaseApp && !embeddedOwnerOnSubAccount,
+    enabled:
+      canRender &&
+      inBaseApp &&
+      !embeddedOwnerOnSubAccount &&
+      (subAccountDeployed === true || ownerCheck === 'not-owner'),
   })
+
+  const needsDeploy = subAccountDeployed === false
+
+  const handleDeploySubAccount = useCallback(async () => {
+    if (!parent || !subAccount || !deploySubAccountOnChain) return
+    setDeployBusy(true)
+    setDeployError(null)
+    try {
+      const result = await deploySubAccountOnChain({
+        parentAddress: parent,
+        subAccountAddress: subAccount,
+      })
+      if (!result?.deployed) {
+        throw new Error(
+          'Deploy request submitted, but the app wallet is not visible on Base yet. Wait a few seconds and tap Recheck.',
+        )
+      }
+      setSubAccountDeployed(true)
+      await refreshOwnerCheck()
+      await relayOwnerFlow.fetchPreview()
+    } catch (error) {
+      setDeployError(error instanceof Error ? error.message : 'Failed to deploy app wallet.')
+    } finally {
+      setDeployBusy(false)
+    }
+  }, [
+    deploySubAccountOnChain,
+    parent,
+    refreshOwnerCheck,
+    relayOwnerFlow,
+    subAccount,
+  ])
 
   const handleRelaySubmit = useCallback(async () => {
     const ok = await relayOwnerFlow.handleAdd()
@@ -163,11 +241,54 @@ function SubAccountOwnerInstallPanelContent(
   const handleRecheck = useCallback(async () => {
     setRecheckBusy(true)
     try {
+      await refreshSubAccountDeployed()
       await refreshOwnerCheck()
     } finally {
       setRecheckBusy(false)
     }
-  }, [refreshOwnerCheck])
+  }, [refreshOwnerCheck, refreshSubAccountDeployed])
+
+  const deployActionPanel =
+    needsDeploy && inBaseApp && deploySubAccountOnChain ? (
+      <div className="space-y-3" data-testid="sub-account-deploy-panel">
+        <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
+          {SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE}
+        </div>
+        {deployError ? (
+          <p className="text-xs leading-relaxed text-rose-300/90" role="alert">
+            {deployError}
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          variant="primary"
+          className="w-full"
+          disabled={deployBusy || setupBusy}
+          data-testid="sub-account-deploy-button"
+          onClick={() => void handleDeploySubAccount()}
+        >
+          {deployBusy || setupBusy ? 'Deploying app wallet…' : 'Deploy app wallet'}
+        </Button>
+      </div>
+    ) : null
+
+  const relayActionPanel =
+    inBaseApp && !needsDeploy && (subAccountDeployed === true || ownerCheck === 'not-owner') ? (
+      <AddOwnerActionPanel
+        previewLoading={relayOwnerFlow.previewLoading}
+        preview={relayOwnerFlow.preview}
+        busy={relayOwnerFlow.busy}
+        isSelfAuthSession={relayOwnerFlow.isSelfAuthSession}
+        handleAdd={handleRelaySubmit}
+        onBuildPreview={() => void relayOwnerFlow.fetchPreview()}
+        onRebuildPreview={() => void relayOwnerFlow.fetchPreview()}
+        txHash={relayOwnerFlow.txHash}
+        pageNotice={relayOwnerFlow.pageNotice}
+        pageError={relayOwnerFlow.pageError}
+        lastErrorDetail={relayOwnerFlow.lastErrorDetail}
+        eventLog={relayOwnerFlow.eventLog}
+      />
+    ) : null
 
   if (!canRender) return null
 
@@ -207,11 +328,6 @@ function SubAccountOwnerInstallPanelContent(
         <div className="rounded-lg border border-amber-400/25 bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-100/90">
           {SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE}
         </div>
-        {ownerCheck === 'unknown' ? (
-          <p className="text-xs leading-relaxed text-zinc-400">
-            {SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE}
-          </p>
-        ) : null}
         {needsBaseAppHost ? (
           <Button
             type="button"
@@ -225,20 +341,10 @@ function SubAccountOwnerInstallPanelContent(
             Open Base App setup
           </Button>
         ) : (
-          <AddOwnerActionPanel
-            previewLoading={relayOwnerFlow.previewLoading}
-            preview={relayOwnerFlow.preview}
-            busy={relayOwnerFlow.busy}
-            isSelfAuthSession={relayOwnerFlow.isSelfAuthSession}
-            handleAdd={handleRelaySubmit}
-            onBuildPreview={() => void relayOwnerFlow.fetchPreview()}
-            onRebuildPreview={() => void relayOwnerFlow.fetchPreview()}
-            txHash={relayOwnerFlow.txHash}
-            pageNotice={relayOwnerFlow.pageNotice}
-            pageError={relayOwnerFlow.pageError}
-            lastErrorDetail={relayOwnerFlow.lastErrorDetail}
-            eventLog={relayOwnerFlow.eventLog}
-          />
+          <>
+            {deployActionPanel}
+            {relayActionPanel}
+          </>
         )}
         <SubAccountOwnerInstallRecovery
           inBaseApp={inBaseApp}
@@ -249,24 +355,7 @@ function SubAccountOwnerInstallPanelContent(
     )
   }
 
-  const relayActionPanel = inBaseApp ? (
-    <AddOwnerActionPanel
-      previewLoading={relayOwnerFlow.previewLoading}
-      preview={relayOwnerFlow.preview}
-      busy={relayOwnerFlow.busy}
-      isSelfAuthSession={relayOwnerFlow.isSelfAuthSession}
-      handleAdd={handleRelaySubmit}
-      onBuildPreview={() => void relayOwnerFlow.fetchPreview()}
-      onRebuildPreview={() => void relayOwnerFlow.fetchPreview()}
-      txHash={relayOwnerFlow.txHash}
-      pageNotice={relayOwnerFlow.pageNotice}
-      pageError={relayOwnerFlow.pageError}
-      lastErrorDetail={relayOwnerFlow.lastErrorDetail}
-      eventLog={relayOwnerFlow.eventLog}
-    />
-  ) : null
-
-  const recoveryVisible = needsBaseAppHost || Boolean(relayOwnerFlow.pageError)
+  const recoveryVisible = needsBaseAppHost || Boolean(relayOwnerFlow.pageError) || Boolean(deployError)
 
   const primaryAction = needsBaseAppHost ? (
     <div className="space-y-2">
@@ -307,9 +396,12 @@ function SubAccountOwnerInstallPanelContent(
         </p>
       ) : null}
     </div>
-  ) : relayActionPanel ? (
-    relayActionPanel
-  ) : null
+  ) : (
+    <>
+      {deployActionPanel}
+      {relayActionPanel}
+    </>
+  )
 
   const contextHint = needsBaseAppHost ? (
     <p className="text-xs leading-relaxed text-amber-200/90" role="status">
@@ -353,11 +445,6 @@ function SubAccountOwnerInstallPanelContent(
       </ol>
 
       {contextHint}
-      {ownerCheck === 'unknown' && inBaseApp ? (
-        <p className="text-xs leading-relaxed text-zinc-400">
-          {SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE}
-        </p>
-      ) : null}
       {primaryAction}
       {recoveryBlock}
 

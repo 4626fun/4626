@@ -14,11 +14,12 @@ import { useBaseAccountSdk, useConnectWallet, useActiveWallet, toViemAccount } f
 import { usePrivyWalletsFromContext } from '@/lib/privy/walletHooksContext'
 import type { Address } from 'viem'
 import {
-  provisionSubAccount,
   finalizeSubAccountSigner,
+  provisionSubAccount,
   resolveSubAccountSetupContext,
   type SubAccountSetupStageEvent,
 } from '@/lib/wallet/subAccountSetup'
+import { deployCounterfactualSubAccount } from '@/lib/wallet/subAccountDeploy'
 import { registerBaseAppSubAccountLink } from '@/lib/wallet/subAccountBaseAppRegister'
 
 type SubAccountSetupState = {
@@ -356,10 +357,45 @@ export function useSubAccountSetup() {
     [onStageEvent, runWithGuard],
   )
 
+  const deploySubAccountOnChain = useCallback(
+    async (addresses: { parentAddress: Address; subAccountAddress: Address }) => {
+      return runWithGuard(async (bundle) => {
+        const walletBundle = buildWalletBundle({ ...bundle, onStageEvent })
+        await finalizeSubAccountSigner({
+          ...walletBundle,
+          parentAddress: addresses.parentAddress,
+          subAccountAddress: addresses.subAccountAddress,
+        })
+
+        const result = await deployCounterfactualSubAccount({
+          baseAccountSdk: bundle.baseAccountSdk,
+          subAccountAddress: addresses.subAccountAddress,
+        })
+
+        setState((prev) => ({
+          ...prev,
+          subAccountAddress: addresses.subAccountAddress,
+          parentAddress: addresses.parentAddress,
+          isSettingUp: false,
+        }))
+
+        if (!result.deployed) {
+          throw new Error(
+            'Base App submitted the deploy request, but the app wallet bytecode is not visible on Base yet. Wait a few seconds and tap Recheck.',
+          )
+        }
+
+        return result
+      })
+    },
+    [onStageEvent, runWithGuard],
+  )
+
   return {
     provisionSubAccount: provision,
     linkSubAccountWithoutOwnerInstall,
     finalizeSubAccountSigner: finalizeSigner,
+    deploySubAccountOnChain,
     subAccountAddress: state.subAccountAddress,
     parentAddress: state.parentAddress,
     isSettingUp: state.isSettingUp,
