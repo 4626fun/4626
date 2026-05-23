@@ -111,13 +111,16 @@ export async function _submitOwnerViaSendCalls(
     }
   }
 
-  // Sanity check: the wallet must be connected as the CSW (or as an owner)
-  // for EIP-5792 to authorize the call against the CSW account.
+  // Base App returns 4100 if wallet_sendCalls runs before eth_requestAccounts.
   let accounts: string[] = []
   try {
-    accounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
+    accounts = (await params.walletRequest({ method: 'eth_requestAccounts' })) as string[]
   } catch {
-    /* fall through */
+    try {
+      accounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
+    } catch {
+      /* fall through */
+    }
   }
 
   const cswLower = params.csw.toLowerCase()

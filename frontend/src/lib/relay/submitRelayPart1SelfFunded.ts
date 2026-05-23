@@ -382,6 +382,11 @@ async function submitViaSendCallsSelfFunded(params: {
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=send_calls_self_funded')
+  await ensureSelfAuthWalletAuthorized({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
   const { callBundleId } = await _submitOwnerViaSendCalls({
     walletRequest: params.walletRequest,
     csw: params.fundingCsw,
