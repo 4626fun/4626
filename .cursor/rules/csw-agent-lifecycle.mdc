@@ -42,9 +42,10 @@ This file covers **server-side** delegation for the XMTP agent, ERC-8004 identit
 
 ### 2. Privy Server Wallet Creation (server action)
 - `createAgentWallet()` creates a Privy-managed EOA via the Privy Wallet API.
-- This wallet is owned by `PRIVY_WALLET_OWNER_ID` (key quorum) and optionally constrained by `PRIVY_WALLET_POLICY_ID`.
-- File: `frontend/server/_lib/privyWalletApi.ts`
-- Env: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
+- This wallet is owned by `PRIVY_WALLET_OWNER_ID` (key quorum **4626 Server Agent Owner**) and constrained by `PRIVY_WALLET_POLICY_ID` (**4626 Agent Wallet Policy**).
+- **Do not confuse** server agent wallets with login embedded EOAs — see `docs/operations/privy-wallet-lanes.md`.
+- File: `frontend/server/_lib/wallet/privyWalletApi.ts`
+- Env: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`, `PRIVY_WALLET_POLICY_ID`
 
 ### 3. Owner Delegation (account setup / first-use)
 - Waitlist account setup must not explicitly create a Base sub-account. User-initiated sponsored frontend execution defaults to the canonical parent CSW + Privy embedded-owner path.

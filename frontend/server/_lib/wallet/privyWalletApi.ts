@@ -79,7 +79,7 @@ function getPrivyAuth(): { appId: string; appSecret: string } {
 }
 
 function getPrivyOwnerId(): string {
-  // This should be the key quorum ID (preferred) or owner id configured in Privy.
+  // Key quorum for server agent wallets — dashboard label: "4626 Server Agent Owner".
   return requireEnv('PRIVY_WALLET_OWNER_ID')
 }
 
