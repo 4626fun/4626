@@ -1,4 +1,4 @@
-import { recoverAddress } from 'viem'
+import { getAddress, recoverAddress, type Hex } from 'viem'
 
 import {
   classifyWebAuthnOwnerSignature,
@@ -241,6 +241,56 @@ async function pollWalletCallsStatusForTxHash(params: {
     message: 'wallet_sendCalls status is still pending.',
   })
   throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
+}
+
+/** Coinbase Smart Wallet EIP-712 envelope for ERC-4337 UserOp hashes (Base App self-auth). */
+export const CSW_USER_OP_EIP712_TYPES = {
+  CoinbaseSmartWalletMessage: [{ name: 'hash', type: 'bytes32' }],
+} as const
+
+export function buildCswUserOpTypedDataPayload(params: {
+  smartWallet: `0x${string}`
+  chainId: number
+  userOpHash: Hex
+}) {
+  return {
+    domain: {
+      name: 'Coinbase Smart Wallet',
+      version: '1',
+      chainId: params.chainId,
+      verifyingContract: getAddress(params.smartWallet),
+    },
+    types: CSW_USER_OP_EIP712_TYPES,
+    primaryType: 'CoinbaseSmartWalletMessage' as const,
+    message: { hash: params.userOpHash },
+  }
+}
+
+/**
+ * Base App self-auth CSW signing for prepared UserOps. Prefer this over
+ * `personal_sign` — Coinbase Wallet often rejects raw-hash personal_sign in-app.
+ */
+export async function signCswUserOpHashViaTypedDataV4(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  smartWallet: `0x${string}`
+  /** Self-auth passkey sessions sign with the CSW address as the typed-data account. */
+  signerAddress: `0x${string}`
+  chainId: number
+  userOpHash: Hex
+}): Promise<Hex> {
+  const typedData = buildCswUserOpTypedDataPayload({
+    smartWallet: params.smartWallet,
+    chainId: params.chainId,
+    userOpHash: params.userOpHash,
+  })
+  const signature = (await params.walletRequest({
+    method: 'eth_signTypedData_v4',
+    params: [getAddress(params.signerAddress), JSON.stringify(typedData)],
+  })) as Hex
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error('eth_signTypedData_v4 did not return a valid signature.')
+  }
+  return signature
 }
 
 export function buildSendPreparedCallsSignaturePayload(input: {

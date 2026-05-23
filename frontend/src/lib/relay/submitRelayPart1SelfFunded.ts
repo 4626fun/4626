@@ -14,6 +14,7 @@ import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSe
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
+  signCswUserOpHashViaTypedDataV4,
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
   getUserOpHashWithoutChainIdLocal,
@@ -269,16 +270,18 @@ async function sendSignedPreparedUserOp(params: {
     userOp: Record<string, string>
   }
   hashToSign: Hex
+  chainId: number
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
-  const signature = (await params.walletRequest({
-    method: 'personal_sign',
-    params: [params.hashToSign, getAddress(params.fundingCsw)],
-  })) as Hex
-  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
-    throw new Error('personal_sign did not return a valid signature.')
-  }
+  params.appendEvent('relay_part1:sign_mode=eth_signTypedData_v4')
+  const signature = await signCswUserOpHashViaTypedDataV4({
+    walletRequest: params.walletRequest,
+    smartWallet: params.fundingCsw,
+    signerAddress: params.fundingCsw,
+    chainId: params.chainId,
+    userOpHash: params.hashToSign,
+  })
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.fundingCsw,
@@ -467,8 +470,8 @@ async function submitViaBundlerSelfFunded(params: {
     ],
     skipPaymaster: true,
     retryOnPrefund: false,
-    useTypedDataSigning: false,
-    userOpSignMode: 'signMessage',
+    useTypedDataSigning: true,
+    userOpSignMode: 'auto',
   })
   params.appendEvent(`relay_part1:bundler_tx=${result.transactionHash}`)
   return result.transactionHash
@@ -557,8 +560,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
 
     params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
     const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
-    // Base App personal_sign only accepts the digest from this prepareCalls session.
-    // Recomputed self-funded digests fail with "error generating message".
+    // Base App eth_signTypedData_v4 only accepts the digest from this prepareCalls session.
     const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
     params.appendEvent('relay_part1:strip_paymaster_sign_mode=prepare_session_hash')
     params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
@@ -572,6 +574,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
         userOp: serializeUserOpForPreparedCallsSend(strippedOp),
       },
       hashToSign,
+      chainId: params.chainId,
       chainIdHex,
       appendEvent: params.appendEvent,
     })
@@ -589,6 +592,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
       userOp: serializeUserOpForPreparedCallsSend(parseWalletPreparedUserOpV06(prepareResult.userOp)),
     },
     hashToSign,
+    chainId: params.chainId,
     chainIdHex,
     appendEvent: params.appendEvent,
   })

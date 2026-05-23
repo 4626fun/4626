@@ -10,6 +10,7 @@ import {
   submitSelfAuthRelayPart1SelfFunded,
   userOpHasPaymaster,
 } from '@/lib/relay/submitRelayPart1SelfFunded'
+import { buildCswUserOpTypedDataPayload } from '@/lib/wallet/onboardingWalletPrepared'
 
 vi.mock('@/lib/aa/coinbaseErc4337', () => ({
   sendCoinbaseSmartWalletUserOperation: vi.fn(),
@@ -91,6 +92,18 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       preparedHash.mode,
     )
   })
+
+  it('builds Coinbase Smart Wallet typed data for UserOp hash signing', () => {
+    const payload = buildCswUserOpTypedDataPayload({
+      smartWallet: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      chainId: 8453,
+      userOpHash: '0x' + 'ab'.repeat(32),
+    })
+    expect(payload.primaryType).toBe('CoinbaseSmartWalletMessage')
+    expect(payload.domain.name).toBe('Coinbase Smart Wallet')
+    expect(payload.domain.chainId).toBe(8453)
+    expect(payload.message.hash).toBe('0x' + 'ab'.repeat(32))
+  })
 })
 
 describe('submitSelfAuthRelayPart1SelfFunded', () => {
@@ -111,7 +124,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           userOp: { ...SAMPLE_USER_OP, paymasterAndData: '0x' },
         }
       }
-      if (args.method === 'personal_sign') {
+      if (args.method === 'eth_signTypedData_v4') {
         return '0x' + '11'.repeat(65)
       }
       if (args.method === 'wallet_sendPreparedCalls') {
@@ -215,7 +228,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           },
         }
       }
-      if (args.method === 'personal_sign') {
+      if (args.method === 'eth_signTypedData_v4') {
         return '0x' + '22'.repeat(130)
       }
       if (args.method === 'wallet_sendPreparedCalls') {
@@ -248,7 +261,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
     expect(sendCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:strip_paymaster_sign_mode=prepare_session_hash')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=eth_signTypedData_v4')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:prepared_userop_paymaster=0x0')
   })
 
