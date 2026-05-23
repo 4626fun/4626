@@ -3,6 +3,7 @@ import type {
   OwnerMutationRelayDepositSimulation,
   OwnerMutationRelayFlow,
 } from '@/lib/relay/ownerMutationTypes'
+import { validatePreviewRelayUserCallIsNativeDepository } from '@/lib/removeOwner/removeOwnerHelpers'
 
 export type AddOwnerPreview = {
   txRequest: {
@@ -48,6 +49,25 @@ export type AddOwnerPreview = {
   }
 }
 
+/**
+ * Add-owner is native ETH Depository.depositNative only — never Relay router multicall / USDC.
+ * Fail closed client-side if a stale or misconfigured preview slips through.
+ */
+export function sanitizeAddOwnerRelayPreview(preview: AddOwnerPreview): AddOwnerPreview {
+  if (preview.preflight.alreadyOwner || !preview.relay) return preview
+  const guard = validatePreviewRelayUserCallIsNativeDepository(preview, { depositoryOnly: true })
+  if (!guard) return preview
+  return {
+    ...preview,
+    relay: null,
+    calls: [],
+    preflight: {
+      ...preview.preflight,
+      relayQuoteError: preview.preflight.relayQuoteError ?? guard,
+    },
+  }
+}
+
 export async function fetchAddOwnerPreview(params: {
   connectedAddress: string
   /** When set, add-owner targets this CSW (e.g. app sub-account) instead of the canonical parent CSW. */
@@ -77,5 +97,5 @@ export async function fetchAddOwnerPreview(params: {
   if (!res.ok || !json?.success || !json.data) {
     throw new Error(json?.error ?? `preview-add-owner failed (${res.status})`)
   }
-  return json.data
+  return sanitizeAddOwnerRelayPreview(json.data)
 }

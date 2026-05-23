@@ -163,6 +163,8 @@ async function main(): Promise<void> {
     relayQuoteUser: funder,
     mutationCalldata: txRequest.data,
     relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
+    relaySource: '4626-add-owner',
+    requireDepositoryDepositNative: true,
   })
 
   if (!relayQuote.ok) {
