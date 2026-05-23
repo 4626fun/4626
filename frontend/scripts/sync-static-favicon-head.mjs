@@ -14,12 +14,16 @@ const siteConfigPath = path.join(frontendRoot, 'shared/site-config.json')
 
 const siteConfig = JSON.parse(await fs.readFile(siteConfigPath, 'utf8'))
 const version = Number(siteConfig.brandAssetVersion ?? 3)
+const favicon16 = `${siteConfig.assets?.favicon16 ?? '/assets/favicon-16x16.png'}?v=${version}`
 const favicon32 = `${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${version}`
 const appleTouch = `${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${version}`
 
 const canonicalBlock = [
+  '    <link rel="icon" type="image/png" sizes="16x16" href="' + favicon16 + '" />',
   '    <link rel="icon" type="image/png" sizes="32x32" href="' + favicon32 + '" />',
+  '    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />',
   '    <link rel="apple-touch-icon" sizes="180x180" href="' + appleTouch + '" />',
+  '    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />',
   '    <link rel="icon" href="/favicon.ico" sizes="any" />',
 ].join('\n')
 

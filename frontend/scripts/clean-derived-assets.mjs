@@ -11,8 +11,6 @@ const buildDir = path.resolve(root, 'build')
 const derivedPublicAssets = [
   'app-hero.png',
   'app-icon.png',
-  'favicon-16x16.png',
-  'favicon-32x32.png',
   'icon-192-maskable.png',
   'icon-192.png',
   'icon-512.png',

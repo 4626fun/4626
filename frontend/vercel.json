@@ -190,6 +190,13 @@
       "dest": "https://pinata.4626.fun/ipfs/$1"
     },
     {
+      "src": "/(favicon\\.ico|icon\\.png|favicon-16x16\\.png|favicon-32x32\\.png|apple-touch-icon\\.png|apple-touch-icon-precomposed\\.png)",
+      "headers": {
+        "cache-control": "public, max-age=3600, must-revalidate"
+      },
+      "continue": true
+    },
+    {
       "src": "/favicon.ico",
       "headers": {
         "cache-control": "public, max-age=3600, must-revalidate"

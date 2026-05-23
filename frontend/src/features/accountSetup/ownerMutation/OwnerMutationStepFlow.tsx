@@ -33,6 +33,9 @@ type OwnerMutationStepFlowProps = {
   alreadyComplete?: boolean
   alreadyCompleteMessage?: string
   waitingMessage?: string | null
+  waitingForRelayFill?: boolean
+  flowComplete?: boolean
+  onRecheck?: () => void
   showBuildPreviewButton?: boolean
   onBuildPreview: () => void
   onSubmit: () => void
@@ -55,6 +58,9 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
     alreadyComplete = false,
     alreadyCompleteMessage,
     waitingMessage,
+    waitingForRelayFill = false,
+    flowComplete = false,
+    onRecheck,
     showBuildPreviewButton = true,
     onBuildPreview,
     onSubmit,
@@ -67,11 +73,19 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
     requiredDepositWei !== null ? formatRelayDepositEth(requiredDepositWei) : null
   const stepOneStatus = resolveRelayPreviewStepOneStatus({ previewLoading, preview })
   const previewBlockReason = resolveRelayPreviewBlockReason(preview)
-  const stepTwoStatus = resolveRelaySubmitStepTwoStatus({ stepOne: stepOneStatus, txHash, busy })
+  const stepTwoStatus = resolveRelaySubmitStepTwoStatus({
+    stepOne: stepOneStatus,
+    txHash,
+    busy,
+    flowComplete,
+    waitingForRelayFill,
+  })
   const phase = resolveOwnerMutationPhase({
     stepOne: stepOneStatus,
     stepTwo: stepTwoStatus,
     alreadyComplete,
+    flowComplete,
+    waitingForRelayFill,
   })
   const laneLabel =
     mutation === 'add'
@@ -97,7 +111,9 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
               : 'Select an owner slot above, then build the Relay quote. Nothing submits until step 2.'
             : phase === 'submit'
               ? 'Approve the Relay deposit in your wallet. 4626 only marks success after on-chain confirmation.'
-              : alreadyCompleteMessage ?? 'Owner mutation completed.'}
+              : phase === 'waiting'
+                ? 'Part 1 deposit is recorded. Recheck polls Relay for Part 2 without asking you to sign the deposit again.'
+                : alreadyCompleteMessage ?? 'Owner mutation completed.'}
         </p>
       </div>
 
@@ -137,6 +153,41 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
           ) : previewLoading ? (
             <div className="text-xs text-zinc-400">Building Relay preview…</div>
           ) : null}
+        </div>
+      ) : null}
+
+      {phase === 'waiting' ? (
+        <div className="space-y-3">
+          {previewDetails}
+          <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100 space-y-2">
+            <p>
+              Relay received your Part 1 deposit. Part 2 (on-chain owner install) can take up to a few
+              minutes. Use Recheck — do not rebuild preview unless Relay says the quote is unknown.
+            </p>
+            {txHash ? (
+              <p className="font-mono text-[11px] break-all text-amber-50/90">
+                Part 1 tx: {txHash}
+              </p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {onRecheck ? (
+              <Button type="button" variant="primary" disabled={busy} loading={busy} onClick={onRecheck}>
+                {busy ? 'Rechecking Relay…' : 'Recheck Part 2'}
+              </Button>
+            ) : null}
+            {onRebuildPreview ? (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={previewLoading || busy}
+                onClick={onRebuildPreview}
+              >
+                Rebuild preview
+              </Button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -181,7 +232,7 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
         </div>
       ) : null}
 
-      {phase === 'complete' && !alreadyComplete ? (
+      {phase === 'complete' && (flowComplete || alreadyComplete) ? (
         <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100">
           {pageNotice ?? 'Relay flow completed.'}
         </div>

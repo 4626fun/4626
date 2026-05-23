@@ -40,6 +40,9 @@ export function AddOwnerPage() {
     pageError,
     pageNotice,
     txHash,
+    part1TxHash,
+    flowComplete,
+    waitingForRelayFill,
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
@@ -47,6 +50,7 @@ export function AddOwnerPage() {
     signingBlockedReason,
     fetchPreview,
     handleAdd,
+    handleRecheck,
   } = useAddOwnerFlow({
     canonicalCswAddress,
     ownerSignerAddress,
@@ -186,9 +190,12 @@ export function AddOwnerPage() {
                     busy={busy}
                     isSelfAuthSession={isSelfAuthSession}
                     handleAdd={onAddSuccess}
+                    handleRecheck={() => void handleRecheck()}
                     onBuildPreview={() => void fetchPreview()}
                     onRebuildPreview={() => void fetchPreview()}
                     txHash={txHash}
+                    flowComplete={flowComplete}
+                    waitingForRelayFill={waitingForRelayFill}
                     pageNotice={pageNotice}
                     pageError={pageError}
                     lastErrorDetail={lastErrorDetail}

@@ -199,9 +199,12 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
           busy={addOwnerFlow.busy}
           isSelfAuthSession={addOwnerFlow.isSelfAuthSession}
           handleAdd={handleInlineSubmit}
+          handleRecheck={() => void addOwnerFlow.handleRecheck()}
           onBuildPreview={() => void addOwnerFlow.fetchPreview()}
           onRebuildPreview={() => void addOwnerFlow.fetchPreview()}
           txHash={addOwnerFlow.txHash}
+          flowComplete={addOwnerFlow.flowComplete}
+          waitingForRelayFill={addOwnerFlow.waitingForRelayFill}
           pageNotice={addOwnerFlow.pageNotice}
           pageError={addOwnerFlow.pageError}
           lastErrorDetail={addOwnerFlow.lastErrorDetail}

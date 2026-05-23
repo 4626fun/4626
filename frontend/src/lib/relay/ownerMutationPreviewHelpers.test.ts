@@ -77,7 +77,7 @@ describe('ownerMutationPreviewHelpers', () => {
     ).toBe('done')
   })
 
-  it('marks step 2 done only after a tx hash lands', () => {
+  it('marks step 2 done only after the full Relay flow completes', () => {
     expect(
       resolveRelaySubmitStepTwoStatus({
         stepOne: 'done',
@@ -99,6 +99,24 @@ describe('ownerMutationPreviewHelpers', () => {
         stepOne: 'done',
         txHash: '0xabc',
         busy: false,
+      }),
+    ).toBe('ready')
+
+    expect(
+      resolveRelaySubmitStepTwoStatus({
+        stepOne: 'done',
+        txHash: '0xabc',
+        busy: false,
+        waitingForRelayFill: true,
+      }),
+    ).toBe('ready')
+
+    expect(
+      resolveRelaySubmitStepTwoStatus({
+        stepOne: 'done',
+        txHash: '0xabc',
+        busy: false,
+        flowComplete: true,
       }),
     ).toBe('done')
   })
@@ -122,7 +140,16 @@ describe('ownerMutationPreviewHelpers', () => {
       resolveOwnerMutationPhase({
         stepOne: 'done',
         stepTwo: 'done',
+        flowComplete: true,
       }),
     ).toBe('complete')
+
+    expect(
+      resolveOwnerMutationPhase({
+        stepOne: 'done',
+        stepTwo: 'ready',
+        waitingForRelayFill: true,
+      }),
+    ).toBe('waiting')
   })
 })

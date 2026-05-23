@@ -153,6 +153,19 @@ describe('public manifest assets', () => {
     expect(immersiveHtml).not.toContain('app-tab-icon-32.png?v=9')
   })
 
+  it('ships root auto-discovery favicon paths for Base App domain bar', () => {
+    for (const relativePath of [
+      'favicon.ico',
+      'favicon-16x16.png',
+      'favicon-32x32.png',
+      'apple-touch-icon.png',
+      'apple-touch-icon-precomposed.png',
+      'icon.png',
+    ]) {
+      expect(existsSync(path.join(publicRoot, relativePath))).toBe(true)
+    }
+  })
+
   it('points Base mini-app manifest iconUrl at the 200px domain icon asset', () => {
     const manifest = JSON.parse(readFileSync(farcasterManifestPath, 'utf8')) as {
       miniapp?: { iconUrl?: string; splashImageUrl?: string; version?: string }
@@ -160,7 +173,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('4')
+    expect(manifest.miniapp?.version).toBe('5')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

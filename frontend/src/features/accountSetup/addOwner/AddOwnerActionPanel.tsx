@@ -18,9 +18,12 @@ type AddOwnerActionPanelProps = {
   busy: boolean
   isSelfAuthSession: boolean
   handleAdd: () => Promise<boolean | void>
+  handleRecheck?: () => Promise<boolean | void>
   onBuildPreview: () => void
   onRebuildPreview: () => void
   txHash: string | null
+  flowComplete?: boolean
+  waitingForRelayFill?: boolean
   pageNotice: string | null
   pageError: string | null
   lastErrorDetail: LastErrorDetail | null
@@ -103,9 +106,12 @@ export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
     busy,
     isSelfAuthSession,
     handleAdd,
+    handleRecheck,
     onBuildPreview,
     onRebuildPreview,
     txHash,
+    flowComplete,
+    waitingForRelayFill,
     pageNotice,
     pageError,
     lastErrorDetail,
@@ -130,8 +136,11 @@ export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
       pageError={pageError}
       lastErrorDetail={lastErrorDetail}
       eventLog={eventLog}
+      flowComplete={flowComplete}
+      waitingForRelayFill={waitingForRelayFill}
       onBuildPreview={onBuildPreview}
       onSubmit={() => void handleAdd()}
+      onRecheck={handleRecheck ? () => void handleRecheck() : undefined}
       onRebuildPreview={onRebuildPreview}
       previewDetails={preview ? <AddOwnerPreviewDetails preview={preview} /> : null}
     />

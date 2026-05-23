@@ -82,8 +82,13 @@ export function resolveRelaySubmitStepTwoStatus(params: {
   stepOne: RelayFlowStepStatus
   txHash: string | null
   busy: boolean
+  /** True only after Relay Part 2 + on-chain mutation verification succeed. */
+  flowComplete?: boolean
+  /** Part 1 deposit landed but Relay Part 2 is still pending. */
+  waitingForRelayFill?: boolean
 }): RelayFlowStepStatus {
-  if (params.txHash) return 'done'
+  if (params.flowComplete) return 'done'
+  if (params.waitingForRelayFill) return 'ready'
   if (params.stepOne !== 'done') return 'blocked'
   if (params.busy) return 'ready'
   return 'ready'
@@ -97,8 +102,11 @@ export function resolveOwnerMutationPhase(params: {
   stepOne: RelayFlowStepStatus
   stepTwo: RelayFlowStepStatus
   alreadyComplete?: boolean
-}): 'preview' | 'submit' | 'complete' {
-  if (params.alreadyComplete || params.stepTwo === 'done') return 'complete'
+  flowComplete?: boolean
+  waitingForRelayFill?: boolean
+}): 'preview' | 'submit' | 'waiting' | 'complete' {
+  if (params.alreadyComplete || params.flowComplete || params.stepTwo === 'done') return 'complete'
+  if (params.waitingForRelayFill) return 'waiting'
   if (params.stepOne === 'done') return 'submit'
   return 'preview'
 }

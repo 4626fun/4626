@@ -253,6 +253,13 @@ function SubAccountOwnerInstallPanelContent(
     }
   }, [refreshOwnerCheck, refreshSubAccountDeployed])
 
+  const handleRecheckRelay = useCallback(async () => {
+    const ok = await relayOwnerFlow.handleRecheck()
+    if (!ok) return
+    await refreshOwnerCheck()
+    onSuccess?.()
+  }, [onSuccess, refreshOwnerCheck, relayOwnerFlow])
+
   const deployActionPanel =
     needsDeploy && inBaseApp && deploySubAccountOnChain ? (
       <div className="space-y-3" data-testid="sub-account-deploy-panel">
@@ -288,9 +295,12 @@ function SubAccountOwnerInstallPanelContent(
         busy={relayOwnerFlow.busy}
         isSelfAuthSession={relayOwnerFlow.isSelfAuthSession}
         handleAdd={handleRelaySubmit}
+        handleRecheck={() => void handleRecheckRelay()}
         onBuildPreview={() => void relayOwnerFlow.fetchPreview()}
         onRebuildPreview={() => void relayOwnerFlow.fetchPreview()}
         txHash={relayOwnerFlow.txHash}
+        flowComplete={relayOwnerFlow.flowComplete}
+        waitingForRelayFill={relayOwnerFlow.waitingForRelayFill}
         pageNotice={relayOwnerFlow.pageNotice}
         pageError={relayOwnerFlow.pageError}
         lastErrorDetail={relayOwnerFlow.lastErrorDetail}
