@@ -487,6 +487,16 @@ export function mapRemoveOwnerSubmissionError(params: {
         : ''
   const normalized = message.toLowerCase()
 
+  if (
+    normalized.includes("must call 'eth_requestaccounts'") ||
+    normalized.includes('must call "eth_requestaccounts"') ||
+    normalized.includes('not been authorized by the user')
+  ) {
+    return (
+      'Base App wallet session is not authorized for signing. Re-open https://4626.fun/waitlist?setup=base-app inside Base App, approve the wallet connection when prompted, then retry Submit Relay add.'
+    )
+  }
+
   const depositHint =
     params.requiredDepositWei && params.requiredDepositWei > 0n
       ? ` Required relay deposit: ${formatCompactEth(params.requiredDepositWei)} ETH.`

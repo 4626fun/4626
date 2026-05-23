@@ -28,6 +28,9 @@ describe('submitRelayPart1SelfFunded helpers', () => {
 describe('submitSelfAuthRelayPart1SelfFunded', () => {
   it('uses prepare_calls lane when userOp has no paymaster', async () => {
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
       if (args.method === 'wallet_prepareCalls') {
         return {
           type: 'user-operation-v06',
@@ -65,6 +68,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(walletRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_requestAccounts' }),
+    )
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_prepareCalls' }),
     )

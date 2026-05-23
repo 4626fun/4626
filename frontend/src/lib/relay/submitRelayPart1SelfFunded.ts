@@ -3,6 +3,7 @@ import { base } from 'viem/chains'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 import {
   ENTRY_POINT_V06_BASE,
@@ -90,16 +91,40 @@ async function assertSelfFundedPrefundBudget(params: {
   }
 }
 
-function buildSelfFundedPrepareCapabilities(chainId: number): Record<string, unknown> {
-  const chainIdHex = `0x${chainId.toString(16)}` as const
-  // Do not pass a paymaster URL. Optional=true keeps the batch valid on wallets
-  // that treat missing paymasterService as "use default sponsor".
-  return {
-    paymasterService: {
-      [chainIdHex]: {
-        optional: true,
-      },
-    },
+function formatRelayPart1Error(error: unknown): string {
+  return getWalletErrorMessage(error)
+}
+
+/**
+ * Base App returns 4100 ("Must call eth_requestAccounts before other methods")
+ * when prepare/sign RPC runs before the in-app wallet session is authorized.
+ */
+async function ensureSelfAuthWalletAuthorized(params: {
+  walletRequest: WalletRequest
+  fundingCsw: `0x${string}`
+  appendEvent: (row: string) => void
+}): Promise<void> {
+  try {
+    const accounts = (await params.walletRequest({ method: 'eth_requestAccounts' })) as string[]
+    const normalized = accounts.map((account) => account.toLowerCase())
+    params.appendEvent(`relay_part1:authorized_accounts=${accounts.length}`)
+    if (!normalized.includes(params.fundingCsw.toLowerCase())) {
+      params.appendEvent('relay_part1:warn funding_csw_not_in_authorized_accounts')
+    }
+  } catch (requestError) {
+    let fallbackAccounts: string[] = []
+    try {
+      fallbackAccounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
+    } catch {
+      /* ignore */
+    }
+    if (fallbackAccounts.length > 0) {
+      params.appendEvent(`relay_part1:authorized_accounts=${fallbackAccounts.length}`)
+      return
+    }
+    throw new Error(
+      `Base App wallet is not authorized for signing. Re-open 4626 inside Base App and approve the wallet connection, then retry. (${formatRelayPart1Error(requestError)})`,
+    )
   }
 }
 
@@ -176,11 +201,18 @@ async function submitViaPreparedCallsSelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   chainId: number
   publicClient?: PublicClient
+  allowBundlerFallback: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}`
   const valueHex = normalizePreparedCallValueToHex(params.userCall.value)
   params.appendEvent('relay_part1:lane=prepare_calls_self_funded')
+
+  await ensureSelfAuthWalletAuthorized({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
 
   if (params.publicClient) {
     await assertSelfFundedPrefundBudget({
@@ -205,7 +237,8 @@ async function submitViaPreparedCallsSelfFunded(params: {
             value: valueHex,
           },
         ],
-        capabilities: buildSelfFundedPrepareCapabilities(params.chainId),
+        // Omit paymasterService entirely — any URL (even optional) can trigger
+        // Coinbase's default USDC sponsor on Base App.
       },
     ],
   })) as {
@@ -227,7 +260,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
       readPreparedUserOpPaymasterAndData(prepareResult.userOp),
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
-    if (params.publicClient) {
+    if (params.allowBundlerFallback && params.publicClient) {
       return await submitViaBundlerSelfFunded({
         walletRequest: params.walletRequest,
         fundingCsw: params.fundingCsw,
@@ -237,7 +270,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
       })
     }
     throw new Error(
-      'Base App prepared a paymaster-sponsored UserOp (non-empty paymasterAndData). Part 1 must use EntryPoint self-fund (paymasterAndData = 0x). Fund native ETH / EntryPoint deposit and retry.',
+      'Base App prepared a paymaster-sponsored UserOp (non-empty paymasterAndData). Part 1 must use EntryPoint self-fund (paymasterAndData = 0x). Re-open in Base App, confirm Base Mainnet, and retry.',
     )
   }
 
@@ -320,15 +353,25 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   chainId: number
   publicClient?: PublicClient
+  /**
+   * Base App self-auth must stay on wallet_prepareCalls — the direct bundler lane
+   * uses a viem wallet client with the CSW as `account`, which Base App rejects
+   * with "Must call eth_requestAccounts" / unauthorized signer errors.
+   */
+  allowBundlerFallback?: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
+  const allowBundlerFallback = params.allowBundlerFallback === true
   try {
-    return await submitViaPreparedCallsSelfFunded(params)
+    return await submitViaPreparedCallsSelfFunded({
+      ...params,
+      allowBundlerFallback,
+    })
   } catch (preparedError) {
-    if (!params.publicClient) throw preparedError
-    const message =
-      preparedError instanceof Error ? preparedError.message : String(preparedError ?? 'prepare_calls_failed')
-    params.appendEvent(`relay_part1:prepare_calls_error=${message.slice(0, 220)}`)
+    params.appendEvent(`relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`)
+    if (!allowBundlerFallback || !params.publicClient) {
+      throw preparedError
+    }
     return await submitViaBundlerSelfFunded({
       walletRequest: params.walletRequest,
       fundingCsw: params.fundingCsw,
