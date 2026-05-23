@@ -207,6 +207,47 @@ function normalizePaymentDetailsCandidate(
   }
 }
 
+function parsePositiveDecimalWei(value: unknown): bigint | null {
+  if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) return null
+  try {
+    const wei = BigInt(value)
+    return wei > 0n ? wei : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Resolves the native Part 1 deposit Relay expects for owner-mutation quotes.
+ * Prefer `protocol.v2.paymentDetails.amount` when present; otherwise fall back to
+ * positive `details.currencyIn.amount` or step transaction value.
+ */
+export function resolveQuotedNativeDepositWei(extract: RelayQuoteExtract): bigint | null {
+  const raw = extract.raw
+  const rawObj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+  const protocolV2 = rawObj?.protocol as Record<string, unknown> | undefined
+  const paymentFromProtocol = (protocolV2?.v2 as Record<string, unknown> | undefined)
+    ?.paymentDetails as Record<string, unknown> | undefined
+
+  const candidates: unknown[] = [
+    extract.paymentDetails?.amount,
+    paymentFromProtocol?.amount,
+    extract.userTransaction?.value,
+  ]
+
+  if (rawObj) {
+    const details = rawObj.details as Record<string, unknown> | undefined
+    const currencyIn = details?.currencyIn as Record<string, unknown> | undefined
+    candidates.push(currencyIn?.amount, currencyIn?.minimumAmount)
+  }
+
+  for (const candidate of candidates) {
+    const wei = parsePositiveDecimalWei(candidate)
+    if (wei) return wei
+  }
+  return null
+}
+
 function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
   if (!raw || typeof raw !== 'object') return null
   const objects = collectCandidateObjects(raw)
@@ -216,7 +257,9 @@ function findPaymentDetailsInRaw(raw: unknown): RelayPaymentDetails | null {
     )
     if (!keyHit) continue
     const normalized = normalizePaymentDetailsCandidate(obj)
-    if (normalized?.amount && normalized.depository) return normalized
+    if (normalized?.amount && normalized.depository && parsePositiveDecimalWei(normalized.amount)) {
+      return normalized
+    }
   }
   return null
 }
@@ -289,7 +332,7 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
 
       const paymentRaw = v2.paymentDetails as Record<string, unknown> | undefined
       const normalized = normalizePaymentDetailsCandidate(paymentRaw)
-      if (normalized) {
+      if (normalized && parsePositiveDecimalWei(normalized.amount)) {
         extract.paymentDetails = normalized
       }
     }
@@ -313,6 +356,7 @@ export function extractFromRelayQuoteResponse(raw: unknown): RelayQuoteExtract {
     const amountFromCurrencyIn = asDecimalString(currencyIn?.amount)
     if (
       amountFromCurrencyIn &&
+      parsePositiveDecimalWei(amountFromCurrencyIn) &&
       currencyInAddress &&
       currencyInAddress.toLowerCase() === NATIVE_CURRENCY.toLowerCase()
     ) {

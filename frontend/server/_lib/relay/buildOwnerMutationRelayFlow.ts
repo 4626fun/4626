@@ -6,9 +6,10 @@ import {
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
   MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
+  GOLDEN_RELAY_PART1_DEPOSIT_WEI,
 } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
-import { getRelayQuote } from './getQuote.js'
+import { getRelayQuote, resolveQuotedNativeDepositWei } from './getQuote.js'
 
 const DEFAULT_RELAY_QUOTE_GAS_LIMIT = 250_000n
 const RELAY_QUOTE_MIN_GAS_LIMIT = 80_000n
@@ -284,11 +285,13 @@ async function deriveRelayQuoteTxsGasLimit(params: {
 
 /**
  * Relay `/quote/v2` `amount` for owner mutations: EXACT_OUTPUT destination value
- * (typically `"0"` wei on `txs[0].value`). Relay prices the Part 1 deposit in
- * `protocol.v2.paymentDetails.amount` — that response field is authoritative.
+ * (typically `"0"` wei on `txs[0].value`). When Relay returns
+ * `protocol.v2.paymentDetails.amount`, that field is authoritative; when it
+ * does not, we re-quote with a golden-scale seed amount and resolve the deposit
+ * from `details.currencyIn.amount` / step value via `resolveQuotedNativeDepositWei`.
  *
  * Ops may override the request `amount` via `RELAY_*_QUOTE_OUTPUT_WEI` for
- * debugging only; production should rely on Relay's quoted deposit.
+ * debugging only.
  */
 export function resolveRelayQuoteRequestAmount(params: {
   destinationTxValueWei?: string
@@ -317,12 +320,12 @@ export async function buildOwnerMutationRelayFlow(
   })
 
   try {
-    const quote = await getRelayQuote({
+    const quoteParamsBase = {
       user: params.relayQuoteUser,
       recipient: params.cswAddress,
       originChainId: 8453,
       destinationChainId: 8453,
-      tradeType: 'EXACT_OUTPUT',
+      tradeType: 'EXACT_OUTPUT' as const,
       source: params.relaySource ?? '4626-owner-mutation',
       txs: [
         {
@@ -332,6 +335,10 @@ export async function buildOwnerMutationRelayFlow(
         },
       ],
       txsGasLimit: relayQuoteTxsGasLimit,
+    }
+
+    let quote = await getRelayQuote({
+      ...quoteParamsBase,
       amount: relayQuoteRequestAmount,
     })
 
@@ -350,23 +357,35 @@ export async function buildOwnerMutationRelayFlow(
       }
     }
 
-    const e = quote.extract
+    let e = quote.extract
+    let resolvedDepositWei = resolveQuotedNativeDepositWei(e)
+    if (resolvedDepositWei == null && relayQuoteRequestAmount === '0') {
+      const retryQuote = await getRelayQuote({
+        ...quoteParamsBase,
+        amount: GOLDEN_RELAY_PART1_DEPOSIT_WEI.toString(),
+      })
+      if (retryQuote.ok) {
+        const retryDepositWei = resolveQuotedNativeDepositWei(retryQuote.extract)
+        if (retryDepositWei != null) {
+          quote = retryQuote
+          e = retryQuote.extract
+          resolvedDepositWei = retryDepositWei
+        }
+      }
+    }
+
     const requestBoundDepositId = e.orderId ?? e.requestId
     const paymentDetails =
-      e.paymentDetails &&
-      e.paymentDetails.currency &&
-      e.paymentDetails.currency.toLowerCase() === NATIVE_CURRENCY &&
-      e.paymentDetails.amount &&
-      /^[1-9][0-9]*$/.test(e.paymentDetails.amount)
+      resolvedDepositWei && requestBoundDepositId
         ? {
-            chainId: e.paymentDetails.chainId ?? 8453,
-            depository: (e.paymentDetails.depository ?? RELAY_DEPOSITORY_BASE) as `0x${string}`,
-            currency: e.paymentDetails.currency,
-            amount: e.paymentDetails.amount,
+            chainId: e.paymentDetails?.chainId ?? 8453,
+            depository: (e.paymentDetails?.depository ?? RELAY_DEPOSITORY_BASE) as `0x${string}`,
+            currency: (e.paymentDetails?.currency ?? NATIVE_CURRENCY) as `0x${string}`,
+            amount: resolvedDepositWei.toString(),
           }
         : null
 
-    const paymentAmountWei = parseDecimalWei(paymentDetails?.amount ?? null)
+    const paymentAmountWei = resolvedDepositWei ?? parseDecimalWei(paymentDetails?.amount ?? null)
     const depositoryFromPaymentDetails = paymentDetails?.depository ?? null
     const builtUserCallFromPaymentDetails =
       requestBoundDepositId && paymentDetails && paymentAmountWei && depositoryFromPaymentDetails
@@ -412,8 +431,8 @@ export async function buildOwnerMutationRelayFlow(
       return {
         ok: false,
         error: preferDepositoryDepositNative
-          ? 'Relay quote missing usable protocol.v2 paymentDetails for CSW Depository.depositNative Part 1.'
-          : 'Relay quote missing a funded router multicall or usable protocol.v2 paymentDetails.',
+          ? 'Relay quote did not return a usable native Part 1 deposit for CSW Depository.depositNative (paymentDetails absent or zero).'
+          : 'Relay quote missing a funded router multicall or usable native Part 1 deposit.',
         diagnostics,
       }
     }
