@@ -179,6 +179,10 @@ export function shouldForceBaseAppConnectStep(params: {
     emailVerified: boolean
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
+  /** When false after probe settles, reopen connect-base-app to finish Relay owner install. */
+  signingStepComplete?: boolean
+  /** When true, defer forcing until on-chain owner probes finish. */
+  signingProbePending?: boolean
 }): boolean {
   const setup = String(params.setupIntent ?? '')
     .trim()
@@ -186,7 +190,10 @@ export function shouldForceBaseAppConnectStep(params: {
   if (setup !== 'base-app') return false
   if (params.subAccountFlowEnabled !== true) return false
   if (!params.account.emailVerified) return false
-  return !isSubAccountExecutionReady(params.account.accountSignals)
+  if (!isSubAccountExecutionReady(params.account.accountSignals)) return true
+  if (params.signingProbePending === true) return false
+  if (params.signingStepComplete === true) return false
+  return true
 }
 
 /**
@@ -233,7 +240,7 @@ export function resolveWaitlistStep(params: {
 
   const track = account.accountSignals?.executionTrack
   const hasSubAccount = hasRegisteredSubAccountExecution(track)
-  const signingReady =
+  const subAccountLinkReady =
     subAccountFlowEnabled === true
       ? isSubAccountExecutionReady(account.accountSignals)
       : isWaitlistSubAccountLinkReady(account)
@@ -263,7 +270,7 @@ export function resolveWaitlistStep(params: {
     embeddedEoaAvailable === true &&
     hasCanonicalCsw &&
     Boolean(subAccountAddress) &&
-    !signingReady
+    !subAccountLinkReady
 
   // Base App path: provision a new sub-account or finish owner install on an existing one.
   if (shouldOfferSubAccountStep || shouldRecoverSubAccountOwner) {
@@ -271,7 +278,7 @@ export function resolveWaitlistStep(params: {
   }
 
   // Verified email — wallet setup lives on the done workspace, not the auth gate.
-  if (!signingReady) return 'done'
+  if (!subAccountLinkReady) return 'done'
 
   return 'done'
 }

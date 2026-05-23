@@ -1,9 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAddress, isAddress, type Address } from 'viem'
 
+import type { CanonicalOwnerCheckStatus } from '@/lib/uniswap/canonicalSignerGate'
 import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
 
 export type EmbeddedOwnerOnSubAccountStatus = 'idle' | 'checking' | 'owner' | 'not-owner' | 'unknown'
+
+export function mapEmbeddedOwnerStatusToCanonicalCheckStatus(
+  status: EmbeddedOwnerOnSubAccountStatus,
+): CanonicalOwnerCheckStatus {
+  if (status === 'checking' || status === 'idle') return 'pending'
+  if (status === 'owner') return 'owner'
+  if (status === 'not-owner') return 'not-owner'
+  return 'unknown'
+}
 
 function normalizeAddress(value: string | null | undefined): Address | null {
   if (typeof value !== 'string') return null
@@ -26,12 +36,15 @@ async function resolveEmbeddedOwnerStatus(
 }
 
 export function useEmbeddedOwnerOnSubAccount(params: {
-  subAccountAddress: string | null | undefined
+  /** App-wallet or parent CSW address to probe. */
+  cswAddress?: string | null | undefined
+  /** @deprecated Prefer `cswAddress`. Kept for call-site clarity on sub-account probes. */
+  subAccountAddress?: string | null | undefined
   embeddedEoaAddress: string | null | undefined
   enabled?: boolean
 }) {
   const enabled = params.enabled !== false
-  const subAccount = normalizeAddress(params.subAccountAddress)
+  const subAccount = normalizeAddress(params.cswAddress ?? params.subAccountAddress)
   const embeddedEoa = normalizeAddress(params.embeddedEoaAddress)
   const canCheck = enabled && Boolean(subAccount && embeddedEoa)
 

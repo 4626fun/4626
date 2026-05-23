@@ -33,23 +33,35 @@ export function useWaitlistSigningStepComplete(params: {
       executionTrack === 'none-yet' ||
       executionTrack === 'legacy-owner-install')
 
-  const { isOwner: parentEmbeddedOwnerOnChain, refresh: refreshParentEmbeddedOwner } =
-    useEmbeddedOwnerOnSubAccount({
-      subAccountAddress: params.canonicalCswAddress,
-      embeddedEoaAddress,
-      enabled: shouldProbeParentEmbeddedOwner,
-    })
+  const {
+    isOwner: parentEmbeddedOwnerOnChain,
+    refresh: refreshParentEmbeddedOwner,
+    status: parentEmbeddedOwnerStatus,
+  } = useEmbeddedOwnerOnSubAccount({
+    cswAddress: params.canonicalCswAddress,
+    embeddedEoaAddress,
+    enabled: shouldProbeParentEmbeddedOwner,
+  })
 
   const persistedSubAccountAddress = resolveSubAccountAddress({
     baseSubAccount: params.baseSubAccount ?? null,
     accountSignals: params.accountSignals,
   })
 
-  const { isOwner: subAccountEmbeddedOwnerOnChain } = useEmbeddedOwnerOnSubAccount({
-    subAccountAddress: persistedSubAccountAddress,
+  const {
+    isOwner: subAccountEmbeddedOwnerOnChain,
+    status: subAccountEmbeddedOwnerStatus,
+  } = useEmbeddedOwnerOnSubAccount({
+    cswAddress: persistedSubAccountAddress,
     embeddedEoaAddress,
     enabled: subAccountFlowEnabled && Boolean(persistedSubAccountAddress && embeddedEoaAddress),
   })
+
+  const signingProbePending =
+    subAccountFlowEnabled && Boolean(persistedSubAccountAddress)
+      ? subAccountEmbeddedOwnerStatus === 'checking' || subAccountEmbeddedOwnerStatus === 'idle'
+      : shouldProbeParentEmbeddedOwner &&
+        (parentEmbeddedOwnerStatus === 'checking' || parentEmbeddedOwnerStatus === 'idle')
 
   const signingStepComplete = params.accountSignals
     ? isWaitlistStepTwoSigningComplete({
@@ -63,6 +75,7 @@ export function useWaitlistSigningStepComplete(params: {
   return {
     embeddedEoaAddress,
     signingStepComplete,
+    signingProbePending,
     parentEmbeddedOwnerOnChain,
     refreshParentEmbeddedOwner,
     persistedSubAccountAddress,

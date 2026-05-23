@@ -63,6 +63,8 @@ export type GetRelayQuoteParams = {
    * solver uses, ~250k is sufficient for a removeOwner mutation.
    */
   txsGasLimit?: number
+  /** Relay dashboard source tag for attribution (optional). */
+  source?: string
 }
 
 /**
@@ -344,10 +346,12 @@ export async function getRelayQuote(
     destinationCurrency: NATIVE_CURRENCY,
     amount: params.amount,
     tradeType: params.tradeType ?? 'EXACT_OUTPUT',
-    // explicitDeposit=true ensures the quote produces a depositNative step
-    // (rather than a direct transfer), which is what the CSW needs to call
-    // for Part 1 of the owner-mutation flow.
+    // CSW / smart-wallet deposits require explicit depository flow (Relay v2).
     explicitDeposit: true,
+    // Match relay-kit owner-mutation examples: sponsor solver fees where configured.
+    subsidizeFees: true,
+    originGasOverhead: 300_000,
+    ...(params.source ? { source: params.source } : {}),
     txs: params.txs.map((tx) => ({
       to: tx.to,
       data: tx.data,

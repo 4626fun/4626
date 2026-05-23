@@ -193,14 +193,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (targetOverride.toLowerCase() === parentCswAddress.toLowerCase()) {
         cswAddress = targetOverride
       } else {
-        const registeredSub = bootstrap.baseSubAccount.address
-        if (!registeredSub || !bootstrap.baseSubAccount.registered) {
+        const persistedSub = bootstrap.baseSubAccount.address?.trim()
+        if (!persistedSub) {
           return res.status(403).json({
             success: false,
             error: 'Sub-account is not registered for this account.',
           } satisfies ApiEnvelope<never>)
         }
-        const allowedSub = getAddress(registeredSub) as Address
+        const allowedSub = getAddress(persistedSub) as Address
         if (targetOverride.toLowerCase() !== allowedSub.toLowerCase()) {
           return res.status(403).json({
             success: false,

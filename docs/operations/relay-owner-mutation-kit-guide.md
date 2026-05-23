@@ -16,7 +16,7 @@ Related runbooks:
 
 | Product | Repo / package | Use in 4626 |
 |---------|------------------|-------------|
-| **Relay Settlement** | `@relayprotocol/relay-sdk`, `@relayprotocol/relay-kit-hooks` | Owner mutation funding + execution (`/quote/v2`, `executeQuote`) |
+| **Relay Settlement** | `@relayprotocol/relay-sdk` (server legacy execute proxy only) | Owner mutation funding + execution via `/quote/v2` + manual deposit |
 | **Relay wallet examples** | [relay-wallet-provider-examples](https://github.com/relayprotocol/relay-wallet-provider-examples) | Reference for Privy + quote + step execution |
 | **Relay Vaults** | [relay-vaults](https://github.com/relayprotocol/relay-vaults) | ERC-4626 LP pools — **not** used for owner add/remove |
 
@@ -45,22 +45,11 @@ sequenceDiagram
     API-->>App: success txHashes
 ```
 
-### 1. Create Relay client (once per surface)
+### 1. Server quote (4626 pattern)
 
-4626 pattern — [`frontend/src/lib/removeOwner/removeOwnerRelayClient.ts`](../../frontend/src/lib/removeOwner/removeOwnerRelayClient.ts):
+Production flows do **not** create a browser Relay SDK client. Server preview handlers call [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) via [`buildOwnerMutationRelayFlow.ts`](../../frontend/server/_lib/relay/buildOwnerMutationRelayFlow.ts) and return a preview-bound `relay.userCall`.
 
-```typescript
-import { createClient, MAINNET_RELAY_API } from '@relayprotocol/relay-sdk'
-import { base } from 'viem/chains'
-
-export const relayClient = createClient({
-  baseApiUrl: MAINNET_RELAY_API,
-  source: '4626-remove-owner', // use a distinct source per route
-  chains: [/* Base chain descriptor with viemChain: base */],
-})
-```
-
-The Privy example uses server actions for `getQuote` / `getStatus` instead of relay-kit-hooks; both are valid. **4626 remove-owner uses relay-kit-hooks** (`useQuote`) which wraps the same `/quote/v2` + step execution.
+The Privy example uses server actions for `getQuote` / `getStatus` plus manual deposit step iteration. **4626 matches that pattern.**
 
 ### 2. Build the quote body (owner mutation shape)
 
@@ -77,46 +66,33 @@ This is the critical difference from bridge/swap demos.
 | `txs[0].to` | CSW | Router / bridge target |
 | `txs[0].data` | `executeWithoutChainIdValidation([mutationCalldata])` | Bridge calldata |
 | `txs[0].value` | `"0"` | May be non-zero |
-| `subsidizeFees` | `true` (remove-owner) | Optional |
-| `explicitDeposit` | `true` (server `/api/relay/quote`) | Context-dependent |
+| `explicitDeposit` | **`true`** (CSW / smart-wallet lane) | `false` for EOAs |
+| `subsidizeFees` | **`true`** (solver sponsorship when configured) | Optional |
+| `originGasOverhead` | **`300_000`** | Optional |
 
 **Inner mutation calldata** must use the replay-safe wrapper:
 
 ```typescript
-import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
+import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/cswOwnerMutationEncode'
 
 const wrappedData = encodeExecuteWithoutChainIdValidation(rawMutationCalldata)
 // rawMutationCalldata = addOwnerAddress(eoa) or removeOwnerAtIndex(i)
 ```
 
-Live implementation: [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) `relayQuoteOptions`.
+Live implementation: [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) + [`useAddOwnerFlow.ts`](../../frontend/src/features/accountSetup/addOwner/useAddOwnerFlow.ts).
 
 ### 3. Fetch quote + execute
 
-**Client (relay-kit-hooks — preferred for wallet-connected flows):**
+**4626 production pattern (matches Privy manual `executeQuote`):**
 
-```typescript
-import { useQuote } from '@relayprotocol/relay-kit-hooks'
+1. Server preview calls `POST /quote/v2` via [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) and returns `relay.userCall` + `requestId`.
+2. Client submits that **exact** deposit transaction:
+   - **Self-auth CSW:** `wallet_sendCalls` with preview `userCall` ([`ownerMutationExecution.ts`](../../frontend/src/lib/relay/ownerMutationExecution.ts))
+   - **External funder:** `eth_sendTransaction` with preview `userCall`
+3. Poll `GET /intents/status/v3?requestId=…` via `pollRelayStatusEndpoint`.
+4. Verify fill tx when available, then verify on-chain owner state.
 
-const { data: quote, executeQuote, refetch } = useQuote(
-  relayClient,
-  walletClient,
-  relayQuoteOptions,
-  undefined,
-  undefined,
-  { enabled: Boolean(relayQuoteOptions), retry: false },
-)
-
-// On submit:
-await executeQuote((progress) => { /* log step progress */ })
-```
-
-This mirrors the Privy example’s manual `executeQuote({ quote, makeWalletClient, … })` in [`relay-client.ts`](https://github.com/relayprotocol/relay-wallet-provider-examples/blob/main/privy/src/app/actions/relay-client.ts) — relay-kit-hooks automates step iteration (signature + transaction items).
-
-**Server preview (before client execute):**
-
-- `POST /api/wallet/remove-owner/preview` (or equivalent) builds mutation calldata + calls shared [`getQuote`](../../frontend/server/_lib/relay/getQuote.ts).
-- Preview returns `requestId`, `paymentDetails.depository`, `paymentDetails.amount`, and guarded `userCall`.
+Bridge integrations may use `@relayprotocol/relay-kit-hooks`; 4626 owner mutations do not.
 
 ### 4. Poll intent status
 
@@ -147,39 +123,42 @@ Coinbase in-app browser often **cannot** complete the funder lane reliably; reco
 
 ## Execution lanes in 4626 today
 
-### Remove-owner — relay-kit ✅ (reference implementation)
+### Remove-owner — Relay preview + execute ✅ (reference implementation)
 
 | File | Role |
 |------|------|
-| [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) | `useQuote` + `executeQuote` |
-| [`removeOwnerExecution.ts`](../../frontend/src/lib/removeOwner/removeOwnerExecution.ts) | Preflight, self-auth vs external funder branching |
-| [`/api/relay/quote`](../../frontend/api/_handlers/relay/_quote.ts) | Server proxy to `/quote/v2` |
-| [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) | Shared quote parser for preview |
+| [`useRemoveOwnerFlow.ts`](../../frontend/src/features/accountSetup/removeOwner/useRemoveOwnerFlow.ts) | Server preview + `executeRemoveOwnerViaRelay` |
+| [`removeOwnerExecution.ts`](../../frontend/src/lib/removeOwner/removeOwnerExecution.ts) | Delegates to shared `executeOwnerMutationViaRelay` |
+| [`buildOwnerMutationRelayFlow.ts`](../../frontend/server/_lib/relay/buildOwnerMutationRelayFlow.ts) | Server `/quote/v2` with `explicitDeposit` + wrapped mutation |
+| [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) | Shared Relay quote parser |
+| [`/api/relay/quote`](../../frontend/api/_handlers/relay/_quote.ts) | Legacy deposit-discovery proxy |
 
-**External funder lane:** `executeQuote` from relay-kit-hooks.
+**Note:** Server-bound preview quotes + manual deposit submission, then `/intents/status/v3` polling.
 
-**Self-auth lane** (connected wallet **is** the CSW): skip `executeQuote`; submit `depositNative(csw, requestId)` via `wallet_sendCalls` using preview-bound `paymentDetails` (see `executeRemoveOwnerViaRelay`).
-
-### Add-owner — prepared calls primary (not relay-kit today)
+### Add-owner — Relay preview + execute ✅ (same kit as remove-owner)
 
 | Surface | Lane | Relay? |
 |---------|------|--------|
-| [`/add-owner`](../../frontend/src/pages/AddOwner.tsx) | Base App `wallet_sendCalls` or `onEnable4626Signing` → `sendPreparedOwnerTx` | No |
-| Waitlist / account setup | `prepare-add-privy-owner` + prepared calls | No |
+| [`/add-owner`](../../frontend/src/pages/AddOwner.tsx) | `useAddOwnerFlow` → server preview → `executeAddOwnerViaRelay` | Yes |
+| Waitlist sub-account (`SubAccountOwnerInstallPanel`, `WaitlistConnectBaseApp`) | Same `useAddOwnerFlow` with `targetCswAddress = subAccount` | Yes |
+| Legacy prepared calls | `prepare-add-privy-owner` + `sendPreparedOwnerTx` where still wired | No |
 | Legacy replayable | `onboardingWalletReplayable` → `/api/relay/execute` (handleOps) | Yes, **legacy** |
 
-**When add-owner should use relay-kit:** Same conditions as remove-owner — user has an **external EOA funder** and needs Relay to sponsor the CSW `executeWithoutChainIdValidation(addOwnerAddress(...))` destination op. Reuse the remove-owner quote shape with `addOwnerAddress` calldata instead of `removeOwnerAtIndex`.
+**Self-auth (Base App CSW):** `user = recipient = CSW`, `explicitDeposit: true`, submit preview-bound `userCall` via Base Account SDK `wallet_sendCalls` (not relay-kit `executeQuote` — same manual deposit lane as remove-owner).
 
-**When add-owner should NOT use relay-kit:**
+**External funder:** `user = funder EOA`, `recipient = CSW`; submit preview `userCall` via `eth_sendTransaction`.
 
-- Base App CSW self-auth with working `wallet_sendCalls` / prepared calls
-- Populations covered by sub-account track (`WAITLIST_SUBACCOUNT_FLOW_ENABLED`) — parent `addOwnerAddress` from third-party dapps is blocked for Base App CSWs ([owner-mutation-decision-2026-05.md](../owner-mutation-decision-2026-05.md))
+**When add-owner should NOT use Relay parent-CSW mutation:**
+
+- Sub-account track users where product policy blocks third-party parent `addOwnerAddress` ([owner-mutation-decision-2026-05.md](../owner-mutation-decision-2026-05.md)) — Relay targets the **sub-account CSW**, not the parent.
 
 ### Legacy `/api/relay/execute` — avoid for product UX
 
 [`onboardingWalletReplayable.ts`](../../frontend/src/lib/wallet/onboardingWalletReplayable.ts) builds signed `EntryPoint.handleOps` UserOps and posts to `/api/relay/execute` (`/execute/call`). This was the March-9 recovery path.
 
-**Do not** use as the default user-facing lane when relay-kit `executeQuote` + deposit flow is available. Keep for diagnostics / dev probes only.
+**Do not** use as the default user-facing lane when server preview + deposit flow is available. Keep for diagnostics / dev probes only.
+
+Ops script for canonical deposit lane: [`scripts/relay-add-embedded-owner.ts`](../../frontend/scripts/relay-add-embedded-owner.ts).
 
 ---
 
@@ -202,10 +181,9 @@ Optional: register app source strings (`4626-remove-owner`, future `4626-add-own
 From [relay-wallet-provider-examples/privy](https://github.com/relayprotocol/relay-wallet-provider-examples/tree/main/privy):
 
 1. **Auth:** Privy + `@privy-io/wagmi` — 4626 already uses this on app routes.
-2. **Wallet client:** `useWalletClient()` must reflect the **funder** EOA, not the CSW display address.
-3. **Chain switch:** Privy example’s `makeWalletClient(chain)` switches before each step — relay-kit-hooks handles this when `viemChain` is set on the Relay chain descriptor.
-4. **Signing steps:** Bridge quotes may include EIP-712 signature steps; owner-mutation same-chain native deposits are usually **transaction-only** steps. If Relay returns a signature step, relay-kit-hooks / `executeQuote` handles it.
-5. **Status polling:** After execute, poll `/intents/status/v3` until `success` or terminal failure.
+2. **Wallet client:** `useWalletClient()` must reflect the **funder** EOA for external-funder lanes, or Base Account SDK for self-auth CSW.
+3. **Signing steps:** Owner-mutation same-chain native deposits are usually **transaction-only** steps.
+4. **Status polling:** After deposit submit, poll `/intents/status/v3` until `success` or terminal failure.
 
 ---
 
@@ -214,60 +192,27 @@ From [relay-wallet-provider-examples/privy](https://github.com/relayprotocol/rel
 Use this when adding relay-backed add-owner or similar:
 
 - [ ] Server preview builds raw CSW mutation calldata (`addOwnerAddress` / `removeOwnerAtIndex`)
-- [ ] Wrap with `encodeExecuteWithoutChainIdValidation`
-- [ ] Fetch Relay quote with `user=funder`, `recipient=csw`, `tradeType=EXACT_OUTPUT`
+- [ ] Wrap with `encodeExecuteWithoutChainIdValidation` from [`cswOwnerMutationEncode.ts`](../../frontend/src/lib/wallet/cswOwnerMutationEncode.ts)
+- [ ] Fetch Relay quote with `user=funder`, `recipient=csw`, `tradeType=EXACT_OUTPUT`, `explicitDeposit=true`
 - [ ] Return `requestId`, `paymentDetails`, and simulation preflight from preview API
-- [ ] Client: `createClient` + `useQuote` + `executeQuote` (external funder)
-- [ ] Client self-auth branch: `depositNative` via `wallet_sendCalls` bound to preview `requestId`
+- [ ] Client self-auth: submit preview `userCall` via Base Account SDK `wallet_sendCalls`
+- [ ] Client external funder: submit preview `userCall` via `eth_sendTransaction`
 - [ ] Poll intent status; verify **on-chain owner slot** changed
 - [ ] Do not use `/api/relay/execute` + hand-built `handleOps` for default UX
 - [ ] Gate Base App CSW users to sub-account track when product policy requires it
 
 ---
 
-## Quick reference — copy/paste quote skeleton
+## Quick reference — quote payload fields
 
-```typescript
-import type { paths } from '@relayprotocol/relay-sdk'
-import { encodeExecuteWithoutChainIdValidation } from '@/lib/wallet/onboardingWalletReplayable'
-
-type RelayQuoteBody = paths['/quote/v2']['post']['requestBody']['content']['application/json']
-
-function buildOwnerMutationQuoteOptions(params: {
-  funderAddress: `0x${string}`
-  cswAddress: `0x${string}`
-  mutationCalldata: `0x${string}`
-  depositAmountWei: string // decimal string from preview.relay.paymentDetails.amount
-}): RelayQuoteBody {
-  return {
-    user: params.funderAddress,
-    recipient: params.cswAddress,
-    originChainId: 8453,
-    destinationChainId: 8453,
-    originCurrency: '0x0000000000000000000000000000000000000000',
-    destinationCurrency: '0x0000000000000000000000000000000000000000',
-    tradeType: 'EXACT_OUTPUT',
-    amount: params.depositAmountWei,
-    originGasOverhead: 300000,
-    subsidizeFees: true,
-    txs: [
-      {
-        to: params.cswAddress,
-        data: encodeExecuteWithoutChainIdValidation(params.mutationCalldata),
-        value: '0',
-      },
-    ],
-  }
-}
-```
-
-Shared module: [`frontend/src/lib/relay/ownerMutationRelayKit.ts`](../../frontend/src/lib/relay/ownerMutationRelayKit.ts).
+See [`getQuote.ts`](../../frontend/server/_lib/relay/getQuote.ts) and [`buildOwnerMutationRelayFlow.ts`](../../frontend/server/_lib/relay/buildOwnerMutationRelayFlow.ts). Wrap helper: [`cswOwnerMutationEncode.ts`](../../frontend/src/lib/wallet/cswOwnerMutationEncode.ts).
 
 ---
 
 ## Recommended next steps
 
-1. **Keep `/remove-owner` as the relay-kit reference** — it already matches Privy example + relay-kit docs.
-2. **Add relay-kit lane to `/add-owner`** for external-EOA funders only (mirror remove-owner); keep prepared-calls / sendCalls for passkey self-auth.
+1. **Keep server-preview + manual deposit as the canonical lane** for add-owner and remove-owner — it matches [Privy relay-client.ts](https://github.com/relayprotocol/relay-wallet-provider-examples/blob/main/privy/src/app/actions/relay-client.ts) and Relay call-execution docs.
+2. **Monitor counterfactual sub-account funding** — self-auth Relay deposits require the CSW to hold enough native ETH for the quoted deposit; counterfactual wallets may need a first-fund/deploy path before owner install succeeds.
 3. **Do not** route waitlist Base App users through parent-CSW `addOwnerAddress` when sub-account flag is on.
-4. **Retire** user-facing dependence on `/api/relay/execute` once add-owner uses the same deposit + `executeQuote` path.
+4. **Retire** user-facing dependence on `/api/relay/execute` (legacy handleOps) once all owner-mutation surfaces stay on deposit + solver fill.
+5. **Optional:** If same-chain quotes succeed but destination ops stall, try `forceSolverExecution: true` on `/quote/v2` (Relay docs: forces solver execution for same-chain swap requests; evaluate for call-execution if needed).

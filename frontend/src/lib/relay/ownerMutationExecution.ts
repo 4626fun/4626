@@ -1,13 +1,14 @@
 import { type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
-import type { OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
+import type { OwnerMutationEip5792Call, OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
 import {
   EXECUTE_WITHOUT_CHAIN_ID_SELECTOR,
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import { _submitOwnerViaSendCalls, waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 import {
+  extractRelayExecutionTxHash,
   formatCompactEth,
   normalizeRelayStatusEndpoint,
   pollRelayStatusEndpoint,
@@ -16,12 +17,6 @@ import {
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
-
-type Eip5792Call = {
-  to: `0x${string}`
-  data: `0x${string}`
-  value: `0x${string}`
-}
 
 export type ExecuteOwnerMutationViaRelayParams = {
   relay: OwnerMutationRelayFlow
@@ -41,7 +36,7 @@ export type ExecuteOwnerMutationViaRelayParams = {
 async function submitSelfAuthViaSendCalls(params: {
   walletRequest: WalletRequest
   cswAddress: `0x${string}`
-  calls: Eip5792Call[]
+  calls: OwnerMutationEip5792Call[]
   atomicRequired?: boolean
   telemetryPrefix: string
   appendEvent: (row: string) => void
@@ -86,7 +81,7 @@ async function submitSelfAuthViaSendCalls(params: {
 
 async function submitExternalFunderRelayDeposit(params: {
   walletClient: OwnerMutationWalletLike
-  userCall: Eip5792Call
+  userCall: OwnerMutationEip5792Call
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   if (typeof params.walletClient.sendTransaction !== 'function') {
@@ -215,32 +210,40 @@ export async function executeOwnerMutationViaRelay(
     )
   }
 
-  const verifiedRelayTxHash = status.txHash ?? executeTxHash
-  if (!verifiedRelayTxHash) {
+  const fillTxHash =
+    extractRelayExecutionTxHash(status.raw) ?? status.txHash ?? executeTxHash
+  if (!fillTxHash) {
     throw new Error(
       'Relay reported success but no execution tx hash was surfaced by status or deposit submission.',
     )
   }
-  onTxHash(verifiedRelayTxHash)
+  onTxHash(fillTxHash)
 
   if (publicClient) {
-    const relayExecutionTx = await publicClient.getTransaction({ hash: verifiedRelayTxHash })
+    const relayExecutionTx = await publicClient.getTransaction({ hash: fillTxHash })
     const relayInput = String(relayExecutionTx.input ?? '').toLowerCase()
     appendEvent(`relay_execution.tx_selector=${relayInput.slice(0, 10) || 'n/a'}`)
-    if (!relayInput.startsWith(RELAY_MULTICALL_SELECTOR)) {
-      throw new Error(
-        `Relay fill tx selector mismatch (expected ${RELAY_MULTICALL_SELECTOR}, got ${relayInput.slice(0, 10) || 'n/a'}).`,
-      )
+    const looksLikeFillTx =
+      relayInput.startsWith(RELAY_MULTICALL_SELECTOR) ||
+      relayInput.includes(EXECUTE_WITHOUT_CHAIN_ID_SELECTOR.slice(2))
+    if (!looksLikeFillTx) {
+      appendEvent('relay_execution.selector_chain=skipped_non_fill_tx')
+    } else {
+      if (!relayInput.startsWith(RELAY_MULTICALL_SELECTOR)) {
+        throw new Error(
+          `Relay fill tx selector mismatch (expected ${RELAY_MULTICALL_SELECTOR}, got ${relayInput.slice(0, 10) || 'n/a'}).`,
+        )
+      }
+      if (!relayInput.includes(EXECUTE_WITHOUT_CHAIN_ID_SELECTOR.slice(2))) {
+        throw new Error(
+          `Relay fill tx missing executeWithoutChainIdValidation selector (${EXECUTE_WITHOUT_CHAIN_ID_SELECTOR}).`,
+        )
+      }
+      if (!relayInput.includes(params.mutationSelector.slice(2))) {
+        throw new Error(`Relay fill tx missing mutation selector (${params.mutationSelector}).`)
+      }
+      appendEvent('relay_execution.selector_chain=ok')
     }
-    if (!relayInput.includes(EXECUTE_WITHOUT_CHAIN_ID_SELECTOR.slice(2))) {
-      throw new Error(
-        `Relay fill tx missing executeWithoutChainIdValidation selector (${EXECUTE_WITHOUT_CHAIN_ID_SELECTOR}).`,
-      )
-    }
-    if (!relayInput.includes(params.mutationSelector.slice(2))) {
-      throw new Error(`Relay fill tx missing mutation selector (${params.mutationSelector}).`)
-    }
-    appendEvent('relay_execution.selector_chain=ok')
   }
 
   const mutationVerified = await params.verifyMutation()
@@ -249,5 +252,5 @@ export async function executeOwnerMutationViaRelay(
   }
   appendEvent('relay_execution.mutation_verified=ok')
 
-  return { txHash: verifiedRelayTxHash }
+  return { txHash: fillTxHash }
 }

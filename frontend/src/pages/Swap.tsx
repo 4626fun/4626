@@ -46,7 +46,8 @@ import {
 } from '@/lib/uniswap/liquidityApi'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
-import { useEmbeddedOwnerOnSubAccount } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
+import { useEmbeddedOwnerOnSubAccount, mapEmbeddedOwnerStatusToCanonicalCheckStatus } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
+import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -195,15 +196,6 @@ async function fetchSwapCreatorCoinOptions(params: {
 }
 
 type QuoteShape = Record<string, unknown>
-const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
 
 let warnedSwapPrivyHookFailure = false
 let canonicalSessionAutoRefreshAttemptedGlobal = false
@@ -880,14 +872,10 @@ export function Swap() {
     embeddedEoaAddress: privyEmbeddedEoaAddress,
     enabled: subAccountTrack && Boolean(baseSubAccountAddress && privyEmbeddedEoaAddress),
   })
-  const subAccountOwnerCheckStatus = useMemo<CanonicalOwnerCheckStatus>(() => {
-    if (subAccountEmbeddedOwnerStatus === 'checking' || subAccountEmbeddedOwnerStatus === 'idle') {
-      return 'pending'
-    }
-    if (subAccountEmbeddedOwnerStatus === 'owner') return 'owner'
-    if (subAccountEmbeddedOwnerStatus === 'not-owner') return 'not-owner'
-    return 'unknown'
-  }, [subAccountEmbeddedOwnerStatus])
+  const subAccountOwnerCheckStatus = useMemo(
+    () => mapEmbeddedOwnerStatusToCanonicalCheckStatus(subAccountEmbeddedOwnerStatus),
+    [subAccountEmbeddedOwnerStatus],
+  )
   const subAccountRuntime = useSwapSubAccountRuntime({
     enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
     canonicalAddress,
@@ -996,21 +984,22 @@ export function Swap() {
 
   const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
     queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
-    enabled: Boolean(canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
+    enabled: Boolean(
+      !subAccountTrack &&
+        canonicalAddress &&
+        privyEmbeddedEoaAddress &&
+        publicClient &&
+        swapChainId === BASE_CHAIN_ID,
+    ),
     staleTime: 10_000,
     queryFn: async () => {
       if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return false
-      try {
-        const isOwner = (await (publicClient as any).readContract({
-          address: canonicalAddress as Address,
-          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [privyEmbeddedEoaAddress as Address],
-        })) as boolean
-        return isOwner === true
-      } catch {
-        return false
-      }
+      const installed = await readIsOwnerAddressIfDeployed({
+        publicClient,
+        cswAddress: canonicalAddress as Address,
+        ownerAddress: privyEmbeddedEoaAddress as Address,
+      })
+      return installed === true
     },
   })
 
@@ -1209,6 +1198,7 @@ export function Swap() {
         'base-sub-account-missing',
         'base-sub-account-invalid',
         'base-sub-account-provider-missing',
+        'embedded-wallet-not-owner',
       ]),
     [],
   )
@@ -1224,6 +1214,7 @@ export function Swap() {
     const needsSubAccountSetup =
       subAccountFlowEnabled &&
       (executionTrack === 'none-yet' ||
+        canonicalSignerGate.code === 'embedded-wallet-not-owner' ||
         (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
     if (needsSubAccountSetup) {
       window.location.assign(buildWaitlistSetupUrl('base-app'))

@@ -156,6 +156,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     amount: amountRaw,
     tradeType: 'EXACT_OUTPUT',
     explicitDeposit: true,
+    subsidizeFees: true,
+    originGasOverhead: 300_000,
+    source: '4626-owner-mutation',
     txs: [{ to: body.to, data: body.data, value: valueRaw }],
   }
 

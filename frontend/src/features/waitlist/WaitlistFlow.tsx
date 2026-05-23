@@ -30,6 +30,7 @@ import {
   shouldForceBaseAppConnectStep,
   shouldForceOwnerInstallSetupStep,
 } from './waitlistFlowState'
+import { useWaitlistSigningStepComplete } from './useWaitlistSigningStepComplete'
 import {
   writePersistedSubAccountConnectOverlay,
 } from './waitlistSubAccountConnectCache'
@@ -384,6 +385,18 @@ export function WaitlistFlow(props: {
     [subAccountStepCompletedAccountKey],
   )
 
+  const setupIntent = searchParams.get('setup')
+  const ownerInstallRequested = setupIntent?.trim().toLowerCase() === 'owner-install'
+  const { signingStepComplete, signingProbePending } = useWaitlistSigningStepComplete({
+    accountSignals: account?.accountSignals,
+    baseSubAccount: account?.baseSubAccount ?? null,
+    canonicalCswAddress:
+      typeof account?.accountSignals?.canonicalCswAddress === 'string'
+        ? account.accountSignals.canonicalCswAddress
+        : null,
+    ownerInstallRequested,
+  })
+
   useEffect(() => {
     const setup = searchParams.get('setup')
     if (!subAccountFlowEnabled || !account?.emailVerified) return
@@ -402,6 +415,8 @@ export function WaitlistFlow(props: {
         setupIntent: setup,
         subAccountFlowEnabled,
         account,
+        signingStepComplete,
+        signingProbePending,
       })
     ) {
       setStep('connect-base-app')
@@ -420,6 +435,8 @@ export function WaitlistFlow(props: {
     embeddedEoaAddress,
     resolveSubAccountStepCompleted,
     searchParams,
+    signingProbePending,
+    signingStepComplete,
     subAccountFlowEnabled,
   ])
 

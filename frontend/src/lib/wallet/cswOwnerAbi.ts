@@ -1,5 +1,6 @@
 /** Relay Protocol native depository on Base mainnet. */
 export const RELAY_DEPOSITORY_BASE = '0x4cd00e387622c35bddb9b4c962c136462338bc31' as const
+export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c' as const
 
 export const CSW_OWNER_READ_ABI = [
   {

@@ -1,41 +1,21 @@
 import { formatEther, type PublicClient } from 'viem'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import type {
+  OwnerMutationEip5792Call,
+  OwnerMutationRelayFlow,
+  OwnerMutationRelayQuoteDiagnostics,
+} from '@/lib/relay/ownerMutationTypes'
 import {
   CSW_OWNER_READ_ABI,
   RELAY_DEPOSITORY_BASE,
+  RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
+  RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 
 export { RELAY_DEPOSITORY_BASE } from '@/lib/wallet/cswOwnerAbi'
 export { CSW_OWNER_ABI, CSW_OWNER_READ_ABI, RELAY_DEPOSITORY_ABI } from '@/lib/wallet/cswOwnerAbi'
-
-/** One EIP-5792 call. Shape matches what the backend preview returns. */
-export type Eip5792Call = {
-  to: `0x${string}`
-  data: `0x${string}`
-  value: `0x${string}`
-}
-
-/** Relay-orchestrated submission metadata for remove-owner. */
-export type PreviewRelayFlow = {
-  requestId: `0x${string}`
-  orderId: `0x${string}` | null
-  paymentDetails: {
-    chainId: number | null
-    depository: `0x${string}`
-    currency: `0x${string}`
-    amount: string
-  } | null
-  userCall: Eip5792Call
-  userCallSource: 'quote_tx' | 'built_from_payment_details'
-  feeUsd: string | null
-}
-
-export type RelayQuoteExecutePayload = {
-  requestId: `0x${string}`
-  txValueWei: string
-  statusEndpoint: string | null
-}
+export type { OwnerMutationEip5792Call, OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
 
 export type RelayStatusCheckResult = {
   done: boolean
@@ -53,8 +33,8 @@ export type RemoveOwnerPreview = {
     value: '0x0'
   }
   /** EIP-5792 calls from preview; Relay path submits the deposit userCall. */
-  calls: Eip5792Call[]
-  relay: PreviewRelayFlow | null
+  calls: OwnerMutationEip5792Call[]
+  relay: OwnerMutationRelayFlow | null
   preflight: {
     selectedFunction: 'removeOwnerAtIndex' | 'removeLastOwner'
     selectedBy: 'heuristic' | 'simulation'
@@ -71,24 +51,7 @@ export type RemoveOwnerPreview = {
       removeLastOwner: { ok: boolean; error: string | null }
     }
     relayQuoteError: string | null
-    relayQuoteDiagnostics: {
-      requestId: `0x${string}` | null
-      orderId: `0x${string}` | null
-      paymentDetails: {
-        chainId: number | null
-        depository: `0x${string}` | null
-        currency: `0x${string}` | null
-        amount: string | null
-      } | null
-      userTransaction: {
-        to: `0x${string}`
-        value: string
-        chainId: number
-        dataSelector: string | null
-      } | null
-      feeUsd: string | null
-      rawSnippet: string | null
-    } | null
+    relayQuoteDiagnostics: OwnerMutationRelayQuoteDiagnostics | null
   }
 }
 
@@ -135,61 +98,8 @@ export function normalizeRelayStatusEndpoint(rawEndpoint: string | null, request
   return fallback
 }
 
-export function extractExecuteQuotePayload(raw: unknown): RelayQuoteExecutePayload | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-  let requestId: `0x${string}` | null = null
-  let txValueWei: string | null = null
-  let statusEndpoint: string | null = null
-
-  const steps = Array.isArray(obj.steps) ? obj.steps : []
-  for (const step of steps) {
-    if (!step || typeof step !== 'object') continue
-    const stepObj = step as Record<string, unknown>
-    if (!requestId && typeof stepObj.requestId === 'string' && /^0x[0-9a-fA-F]{64}$/.test(stepObj.requestId)) {
-      requestId = stepObj.requestId as `0x${string}`
-    }
-    if (!statusEndpoint && stepObj.check && typeof stepObj.check === 'object') {
-      const endpoint = (stepObj.check as Record<string, unknown>).endpoint
-      if (typeof endpoint === 'string' && endpoint.trim()) statusEndpoint = endpoint
-    }
-    if (txValueWei) continue
-    const items = Array.isArray(stepObj.items) ? stepObj.items : []
-    for (const item of items) {
-      if (!item || typeof item !== 'object') continue
-      const data = (item as Record<string, unknown>).data
-      if (!data || typeof data !== 'object') continue
-      const value = (data as Record<string, unknown>).value
-      if (typeof value === 'string' && /^[0-9]+$/.test(value)) {
-        txValueWei = value
-        break
-      }
-      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-        txValueWei = Math.trunc(value).toString(10)
-        break
-      }
-    }
-  }
-
-  if (!requestId) {
-    const protocol = obj.protocol
-    if (protocol && typeof protocol === 'object') {
-      const v2 = (protocol as Record<string, unknown>).v2
-      if (v2 && typeof v2 === 'object') {
-        const orderId = (v2 as Record<string, unknown>).orderId
-        if (typeof orderId === 'string' && /^0x[0-9a-fA-F]{64}$/.test(orderId)) {
-          requestId = orderId as `0x${string}`
-        }
-      }
-    }
-  }
-
-  if (!requestId || !txValueWei) return null
-  return { requestId, txValueWei, statusEndpoint }
-}
-
 export function validatePreviewRelayUserCallIsNativeDepository(
-  preview: { relay?: PreviewRelayFlow | null } | null,
+  preview: { relay?: OwnerMutationRelayFlow | null } | null,
 ): string | null {
   const userCall = preview?.relay?.userCall
   if (!userCall) return 'missing relay user call in preview'
@@ -207,6 +117,15 @@ export function validatePreviewRelayUserCallIsNativeDepository(
   }
   if (valueWei <= 0n) {
     return 'value must be non-zero native ETH'
+  }
+  const selector = userCall.data.slice(0, 10).toLowerCase()
+  const target = userCall.to.toLowerCase()
+  const isRouterMulticall = selector === RELAY_MULTICALL_SELECTOR
+  const isDepositoryNativeDeposit =
+    selector === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
+    target === RELAY_DEPOSITORY_BASE.toLowerCase()
+  if (!isRouterMulticall && !isDepositoryNativeDeposit) {
+    return `relay user call must be RelayRouter multicall (${RELAY_MULTICALL_SELECTOR}) or RelayDepository.depositNative (${RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR})`
   }
   return null
 }
@@ -256,9 +175,12 @@ export async function pollRelayStatusEndpoint(params: {
         statusText === 'reverted'
 
       lastRaw = raw
-      lastTxHash = txHash
-      params.onTick?.(`status_poll.attempt=${attempt} status=${statusText || 'unknown'} tx=${txHash ?? 'n/a'}`)
-      if (done) return { done: true, success, txHash, raw }
+      const extractedFillTxHash = extractRelayExecutionTxHash(raw)
+      lastTxHash = txHash ?? extractedFillTxHash
+      params.onTick?.(
+        `status_poll.attempt=${attempt} status=${statusText || 'unknown'} tx=${lastTxHash ?? 'n/a'}`,
+      )
+      if (done) return { done: true, success, txHash: lastTxHash, raw }
     } catch {
       params.onTick?.(`status_poll.attempt=${attempt} status=fetch_error`)
     }
@@ -367,16 +289,32 @@ export function toRelayAmountDecimal(value: string | null | undefined): string |
   return null
 }
 
+function asEvmTxHash(value: unknown): `0x${string}` | null {
+  if (typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)) {
+    return value as `0x${string}`
+  }
+  return null
+}
+
 export function extractRelayExecutionTxHash(raw: unknown): `0x${string}` | null {
   if (!raw || typeof raw !== 'object') return null
   const obj = raw as Record<string, unknown>
+
+  const outTxHashes = Array.isArray(obj.outTxHashes) ? obj.outTxHashes : []
+  for (const tx of outTxHashes) {
+    const hash = asEvmTxHash(tx)
+    if (hash) return hash
+  }
+
   const txHashes = Array.isArray(obj.txHashes) ? obj.txHashes : []
   for (const tx of txHashes) {
-    if (!tx || typeof tx !== 'object') continue
-    const txHash = (tx as Record<string, unknown>).txHash
-    if (typeof txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(txHash)) {
-      return txHash as `0x${string}`
-    }
+    const hash =
+      typeof tx === 'string'
+        ? asEvmTxHash(tx)
+        : tx && typeof tx === 'object'
+          ? asEvmTxHash((tx as Record<string, unknown>).txHash)
+          : null
+    if (hash) return hash
   }
   const steps = Array.isArray(obj.steps) ? obj.steps : []
   for (const step of steps) {

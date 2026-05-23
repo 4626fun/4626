@@ -254,7 +254,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe(true)
   })
 
-  it('does not force connect-base-app when setup=base-app but signing is already ready', () => {
+  it('does not force connect-base-app when setup=base-app and on-chain signing is complete', () => {
     expect(
       shouldForceBaseAppConnectStep({
         setupIntent: 'base-app',
@@ -270,6 +270,51 @@ describe('resolveWaitlistStep', () => {
             },
           },
         },
+        signingStepComplete: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('forces connect-base-app when setup=base-app, link exists, but on-chain signing is incomplete', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            baseSubAccount: {
+              address: '0xabc0000000000000000000000000000000000001',
+              registered: true,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+        signingStepComplete: false,
+        signingProbePending: false,
+      }),
+    ).toBe(true)
+  })
+
+  it('defers connect-base-app force while signing probe is pending', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            baseSubAccount: {
+              address: '0xabc0000000000000000000000000000000000001',
+              registered: true,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+        signingStepComplete: false,
+        signingProbePending: true,
       }),
     ).toBe(false)
   })

@@ -14,6 +14,7 @@ import {
 import { base } from 'viem/chains'
 
 import { detectSignatureShape, type SignatureShape } from './signatureShape'
+import { encodeExecuteWithoutChainIdValidation } from './cswOwnerMutationEncode'
 
 export const ENTRY_POINT_V06_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as const
 const REPLAYABLE_NONCE_KEY = 8453n
@@ -539,23 +540,7 @@ export async function preflightOwnerKeyMismatch(params: {
   }
 }
 
-export function encodeExecuteWithoutChainIdValidation(
-  innerCallData: `0x${string}`,
-): `0x${string}` {
-  return encodeFunctionData({
-    abi: [
-      {
-        type: 'function',
-        name: 'executeWithoutChainIdValidation',
-        inputs: [{ name: 'calls', type: 'bytes[]' }],
-        outputs: [],
-        stateMutability: 'payable',
-      },
-    ] as const,
-    functionName: 'executeWithoutChainIdValidation',
-    args: [[innerCallData]],
-  })
-}
+export { encodeExecuteWithoutChainIdValidation } from './cswOwnerMutationEncode'
 
 export async function prepareReplayableOwnerUserOpForExternalSignature(params: {
   csw: `0x${string}`

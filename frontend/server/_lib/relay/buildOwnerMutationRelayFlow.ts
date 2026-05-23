@@ -1,5 +1,6 @@
 import { encodeFunctionData } from 'viem'
 
+import { encodeExecuteWithoutChainIdValidation } from '../../../src/lib/wallet/cswOwnerMutationEncode.js'
 import { RELAY_DEPOSITORY_BASE } from '../../../src/lib/wallet/cswOwnerAbi.js'
 import { getRelayQuote } from './getQuote.js'
 
@@ -74,22 +75,6 @@ export type BuildOwnerMutationRelayFlowResult =
       diagnostics: OwnerMutationRelayQuoteDiagnostics | null
     }
 
-function encodeExecuteWithoutChainIdValidation(innerCallData: `0x${string}`): `0x${string}` {
-  return encodeFunctionData({
-    abi: [
-      {
-        type: 'function',
-        name: 'executeWithoutChainIdValidation',
-        inputs: [{ name: 'calls', type: 'bytes[]' }],
-        outputs: [],
-        stateMutability: 'payable',
-      },
-    ] as const,
-    functionName: 'executeWithoutChainIdValidation',
-    args: [[innerCallData]],
-  })
-}
-
 function parseDecimalWei(value: unknown): bigint | null {
   if (typeof value !== 'string' || !/^[1-9][0-9]*$/.test(value)) return null
   try {
@@ -163,6 +148,7 @@ export async function buildOwnerMutationRelayFlow(
       originChainId: 8453,
       destinationChainId: 8453,
       tradeType: 'EXACT_OUTPUT',
+      source: '4626-owner-mutation',
       txs: [
         {
           to: params.cswAddress,
