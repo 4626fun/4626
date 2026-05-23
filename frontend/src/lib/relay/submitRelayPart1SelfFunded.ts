@@ -7,6 +7,7 @@ import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
 import {
+  assertRelayPart1LandedSelfFunded,
   resolveRelayBundlerUrl,
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
@@ -500,6 +501,12 @@ async function submitViaSendCallsSelfFunded(params: {
         params.appendEvent(`relay_part1.send_calls_status.${event.step}: <unloggable>`)
       }
     },
+  })
+
+  await assertRelayPart1LandedSelfFunded({
+    resolution,
+    publicClient: params.publicClient,
+    appendEvent: params.appendEvent,
   })
 
   const txHash = await resolveRelayPart1DepositTxHash({

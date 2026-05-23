@@ -1,8 +1,14 @@
-import { type Hex, http, type PublicClient } from 'viem'
+import { type Address, type Hex, getAddress, http, type PublicClient } from 'viem'
 import { createBundlerClient } from 'viem/account-abstraction'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { verifyRelayPart1DepositTxHint } from '@/lib/relay/relayPart1DepositLookup'
+import { ENTRY_POINT_V06_BASE } from '@/lib/wallet/cswOwnerAbi'
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const
+/** EntryPoint v0.6 `UserOperationEvent` — topic3 is paymaster. */
+const USER_OPERATION_EVENT_TOPIC =
+  '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a5a8e6ec1419f' as const
 
 export type RelayPart1CallsResolution = {
   transactionHash: `0x${string}` | null
@@ -37,6 +43,90 @@ export async function resolveBundleTxFromUserOperationHash(params: {
     /* fall through — caller may retry or surface a clearer error */
   }
   return null
+}
+
+/** Read paymaster from a landed UserOp via bundler receipt (null = self-funded). */
+export async function readLandedUserOpPaymasterAddress(params: {
+  userOperationHash: Hex
+  bundlerUrl?: string
+}): Promise<Address | null> {
+  const bundlerUrl = params.bundlerUrl ?? resolveRelayBundlerUrl()
+  try {
+    const bundlerClient = createBundlerClient({
+      transport: http(bundlerUrl),
+    })
+    const receipt = await bundlerClient.getUserOperationReceipt({
+      hash: params.userOperationHash,
+    })
+    const paymaster = receipt?.paymaster
+    if (!paymaster || paymaster.toLowerCase() === ZERO_ADDRESS) return null
+    return getAddress(paymaster)
+  } catch {
+    return null
+  }
+}
+
+async function readPaymasterFromBundleReceipt(params: {
+  publicClient: PublicClient
+  transactionHash: `0x${string}`
+}): Promise<Address | null> {
+  try {
+    const receipt = await params.publicClient.getTransactionReceipt({
+      hash: params.transactionHash,
+    })
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() !== ENTRY_POINT_V06_BASE.toLowerCase()) continue
+      if (log.topics[0]?.toLowerCase() !== USER_OPERATION_EVENT_TOPIC) continue
+      const paymasterTopic = log.topics[3]
+      if (!paymasterTopic || paymasterTopic.length < 66) continue
+      const paymaster = getAddress(`0x${paymasterTopic.slice(-40)}`)
+      if (paymaster.toLowerCase() === ZERO_ADDRESS) return null
+      return paymaster
+    }
+  } catch {
+    /* fall through */
+  }
+  return null
+}
+
+/**
+ * Reject Part 1 when Base App landed a paymaster-sponsored UserOp — Relay Part 2
+ * stalls unless paymaster is zero (golden Part 1 / Part 2 shape).
+ */
+export async function assertRelayPart1LandedSelfFunded(params: {
+  resolution: RelayPart1CallsResolution
+  publicClient?: PublicClient
+  appendEvent: (row: string) => void
+}): Promise<void> {
+  let paymaster: Address | null = null
+
+  if (params.resolution.userOperationHash) {
+    paymaster = await readLandedUserOpPaymasterAddress({
+      userOperationHash: params.resolution.userOperationHash,
+    })
+    if (paymaster) {
+      params.appendEvent(`relay_part1:landed_userop_paymaster=${paymaster}`)
+    }
+  } else if (params.resolution.transactionHash && params.publicClient) {
+    paymaster = await readPaymasterFromBundleReceipt({
+      publicClient: params.publicClient,
+      transactionHash: params.resolution.transactionHash,
+    })
+    if (paymaster) {
+      params.appendEvent(`relay_part1:landed_bundle_paymaster=${paymaster}`)
+    }
+  } else {
+    params.appendEvent('relay_part1:paymaster_check_skipped=no_user_op_or_public_client')
+    return
+  }
+
+  if (paymaster) {
+    throw new Error(
+      'Base App submitted this deposit with a USDC paymaster. Relay Part 2 (addOwnerAddress) requires a self-funded UserOp (paymaster = 0). Retrying with prepare/bundler…',
+    )
+  }
+
+  params.appendEvent('relay_part1:landed_userop_paymaster=0x0')
 }
 
 export async function resolveRelayPart1DepositTxHash(params: {

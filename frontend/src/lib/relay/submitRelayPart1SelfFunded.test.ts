@@ -16,6 +16,18 @@ vi.mock('@/lib/aa/coinbaseErc4337', () => ({
   sendCoinbaseSmartWalletUserOperation: vi.fn(),
 }))
 
+const mockGetUserOperationReceipt = vi.fn()
+
+vi.mock('viem/account-abstraction', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem/account-abstraction')>()
+  return {
+    ...actual,
+    createBundlerClient: vi.fn(() => ({
+      getUserOperationReceipt: mockGetUserOperationReceipt,
+    })),
+  }
+})
+
 const mockSubmitOwnerViaSendCalls = vi.fn()
 
 vi.mock('@/lib/wallet/cswSendCalls', async (importOriginal) => {
@@ -110,6 +122,11 @@ describe('submitRelayPart1SelfFunded helpers', () => {
 describe('submitSelfAuthRelayPart1SelfFunded', () => {
   beforeEach(() => {
     mockSubmitOwnerViaSendCalls.mockReset()
+    mockGetUserOperationReceipt.mockReset()
+    mockGetUserOperationReceipt.mockResolvedValue({
+      paymaster: undefined,
+      receipt: { transactionHash: '0x' + 'aa'.repeat(32) },
+    })
   })
 
   it('uses send_calls lane first when wallet_sendCalls succeeds (May 12 golden path)', async () => {
@@ -147,6 +164,83 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       expect.objectContaining({ method: 'wallet_prepareCalls' }),
     )
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=send_calls_self_funded')
+  })
+
+  it('falls back when sendCalls lands with a paymaster-sponsored UserOp', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
+      transactionHash: '0x' + 'dd'.repeat(32),
+      userOperationHash: '0x' + 'bb'.repeat(32),
+    } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
+
+    mockGetUserOperationReceipt.mockResolvedValue({
+      paymaster: '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c',
+      receipt: { transactionHash: '0x' + 'aa'.repeat(32) },
+    })
+
+    mockSubmitOwnerViaSendCalls.mockResolvedValue({ callBundleId: 'bundle-paymaster' })
+
+    const walletRequest = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_getCallsStatus') {
+        const params = (args as { params?: unknown[] }).params
+        const id = params?.[0] as { id?: string } | undefined
+        if (id?.id === 'prepared-after-paymaster-reject') {
+          return {
+            status: 200,
+            receipts: [{ transactionHash: '0x' + 'cc'.repeat(32) }],
+          }
+        }
+        return {
+          status: 200,
+          receipts: [
+            {
+              transactionHash: '0x' + 'aa'.repeat(32),
+              userOperationHash: '0x' + 'bb'.repeat(32),
+            },
+          ],
+        }
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x' + '11'.repeat(32) },
+          userOp: SAMPLE_USER_OP,
+        }
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        return { id: 'prepared-after-paymaster-reject' }
+      }
+      if (args.method === 'personal_sign') {
+        return '0x' + '22'.repeat(65)
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '18871666861048',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+    })
+
+    expect(mockSubmitOwnerViaSendCalls).toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith(
+      'relay_part1:landed_userop_paymaster=0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c',
+    )
+    expect(walletRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_prepareCalls' }),
+    )
+    expect(sendCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
   })
 
   it('falls back to prepare+bundler when sendCalls fails and prepare injects paymaster', async () => {
