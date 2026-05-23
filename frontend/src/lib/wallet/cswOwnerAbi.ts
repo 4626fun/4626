@@ -5,6 +5,20 @@ export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c' as const
 /** Golden Part 1 Relay deposit (tx 0xa6b54357…, block 45600637). */
 export const GOLDEN_RELAY_PART1_DEPOSIT_WEI = 18_871_666_861_048n
 
+/** May 5 2026 golden Part 1 order id (probe CSW 0x4bea…). */
+export const GOLDEN_RELAY_PART1_ORDER_ID =
+  '0x8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a' as const
+
+/** Probe / reference parent CSW from the May 5 golden add-owner trace. */
+export const GOLDEN_RELAY_PART1_PROBE_CSW =
+  '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
+
+/**
+ * Coinbase Smart Wallet `executeBatch` selector — Base App wraps Part 1
+ * `wallet_sendCalls` into EntryPoint → CSW.executeBatch([Depository deposit]).
+ */
+export const CSW_EXECUTE_BATCH_SELECTOR = '0x34fcd5be' as const
+
 /** Golden Part 1 internal tx #1: CSW → EntryPoint v0.6 UserOp prefund. */
 export const GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI = 85_989_948_096n
 

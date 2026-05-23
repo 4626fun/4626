@@ -48,8 +48,6 @@ export function resolveSubAccountAddress(params: {
 export function isWaitlistSubAccountLinkReady(account: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
-  /** Sub-account link registered (DB/bootstrap), not on-chain owner or swap operability. */
-  if (isSubAccountExecutionReady(account.accountSignals)) return true
   return hasLegacyOwnerInstallSigning(account.accountSignals)
 }
 
@@ -61,18 +59,8 @@ function isLegacyParentOwnerSigningReady(params: {
   return params.parentEmbeddedOwnerOnChain === true
 }
 
-/** Sub-account track is swap-ready only when the embedded EOA is an on-chain owner of the app wallet. */
-function isSubAccountSigningOperable(params: {
-  accountSignals?: WaitlistAccountWithCanonical['accountSignals']
-  subAccountEmbeddedOwnerOnChain?: boolean
-}): boolean {
-  if (!isSubAccountExecutionReady(params.accountSignals)) return false
-  return params.subAccountEmbeddedOwnerOnChain === true
-}
-
 /**
- * Waitlist step 2 completion — track-aware.
- * Desktop owner-install (`?setup=owner-install`) must not complete from sub-account registration alone.
+ * Waitlist step 2 completion — parent CSW embedded owner on-chain.
  */
 export function isWaitlistStepTwoSigningComplete(params: {
   ownerInstallRequested: boolean
@@ -80,19 +68,10 @@ export function isWaitlistStepTwoSigningComplete(params: {
   parentEmbeddedOwnerOnChain?: boolean
   subAccountEmbeddedOwnerOnChain?: boolean
 }): boolean {
-  const { ownerInstallRequested, accountSignals, parentEmbeddedOwnerOnChain, subAccountEmbeddedOwnerOnChain } =
-    params
-  if (ownerInstallRequested) {
-    return isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })
-  }
-  if (isSubAccountExecutionReady(accountSignals)) {
-    return isSubAccountSigningOperable({
-      accountSignals,
-      subAccountEmbeddedOwnerOnChain,
-    })
-  }
-  if (isLegacyParentOwnerSigningReady({ accountSignals, parentEmbeddedOwnerOnChain })) return true
-  return false
+  return isLegacyParentOwnerSigningReady({
+    accountSignals: params.accountSignals,
+    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+  })
 }
 
 export function shouldShowParentCswAddOwnerPanel(params: {
@@ -103,18 +82,11 @@ export function shouldShowParentCswAddOwnerPanel(params: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
-  if (params.ownerInstallRequested) {
-    return !isLegacyParentOwnerSigningReady({
-      accountSignals: params.accountSignals,
-      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-    })
-  }
-  return (
-    !params.signingStepComplete &&
-    params.executionTrack !== 'sub-account' &&
-    params.executionTrack !== 'migration-pending' &&
-    !params.preferBaseAppSubAccountSetup
-  )
+  if (params.signingStepComplete) return false
+  return !isLegacyParentOwnerSigningReady({
+    accountSignals: params.accountSignals,
+    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+  })
 }
 
 export type WaitlistSubAccountConnectOverlay = {
@@ -172,28 +144,17 @@ type CanonicalBootstrapResult = {
  * reopen the connect step even if the user previously tapped "Skip for now".
  * Swap and account-setup surfaces deep-link here so users can finish later.
  */
-export function shouldForceBaseAppConnectStep(params: {
+export function shouldForceBaseAppConnectStep(_params: {
   setupIntent: string | null | undefined
   subAccountFlowEnabled?: boolean
   account: {
     emailVerified: boolean
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   }
-  /** When false after probe settles, reopen connect-base-app to finish Relay owner install. */
   signingStepComplete?: boolean
-  /** When true, defer forcing until on-chain owner probes finish. */
   signingProbePending?: boolean
 }): boolean {
-  const setup = String(params.setupIntent ?? '')
-    .trim()
-    .toLowerCase()
-  if (setup !== 'base-app') return false
-  if (params.subAccountFlowEnabled !== true) return false
-  if (!params.account.emailVerified) return false
-  if (!isSubAccountExecutionReady(params.account.accountSignals)) return true
-  if (params.signingProbePending === true) return false
-  if (params.signingStepComplete === true) return false
-  return true
+  return false
 }
 
 /**
@@ -225,7 +186,7 @@ export function resolveWaitlistStep(params: {
   subAccountStepCompleted?: boolean
   setupIntent?: string | null
 }): WaitlistStep {
-  const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted, setupIntent } = params
+  const { account, subAccountFlowEnabled, subAccountStepCompleted, setupIntent } = params
   if (!account.emailVerified) return 'auth'
 
   if (
@@ -238,48 +199,12 @@ export function resolveWaitlistStep(params: {
     return 'done'
   }
 
-  const track = account.accountSignals?.executionTrack
-  const hasSubAccount = hasRegisteredSubAccountExecution(track)
-  const subAccountLinkReady =
-    subAccountFlowEnabled === true
-      ? isSubAccountExecutionReady(account.accountSignals)
-      : isWaitlistSubAccountLinkReady(account)
-  const hasCanonicalCsw = Boolean(
-    typeof account.accountSignals?.canonicalCswAddress === 'string' &&
-      account.accountSignals.canonicalCswAddress.trim(),
-  )
-
   // Session-local completion: stay on done while bootstrap catches up.
   if (subAccountStepCompleted === true) {
     return 'done'
   }
 
-  const subAccountAddress = resolveSubAccountAddress({
-    baseSubAccount: account.baseSubAccount ?? null,
-    accountSignals: account.accountSignals,
-  })
-
-  const shouldOfferSubAccountStep =
-    subAccountFlowEnabled === true &&
-    embeddedEoaAvailable === true &&
-    !hasSubAccount &&
-    hasCanonicalCsw
-
-  const shouldRecoverSubAccountOwner =
-    subAccountFlowEnabled === true &&
-    embeddedEoaAvailable === true &&
-    hasCanonicalCsw &&
-    Boolean(subAccountAddress) &&
-    !subAccountLinkReady
-
-  // Base App path: provision a new sub-account or finish owner install on an existing one.
-  if (shouldOfferSubAccountStep || shouldRecoverSubAccountOwner) {
-    return 'connect-base-app'
-  }
-
-  // Verified email — wallet setup lives on the done workspace, not the auth gate.
-  if (!subAccountLinkReady) return 'done'
-
+  // Verified email — parent CSW owner install lives on the done workspace.
   return 'done'
 }
 

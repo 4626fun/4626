@@ -21,11 +21,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { SubAccountOwnerInstallPanel } from '@/features/waitlist/SubAccountOwnerInstallPanel'
-import {
-  isSubAccountExecutionReady,
-  shouldShowParentCswAddOwnerPanel,
-} from '@/features/waitlist/waitlistFlowState'
+import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -237,11 +233,7 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
-  const preferBaseAppSubAccountSetup =
-    subAccountFlowEnabled &&
-    Boolean(canonicalCswAddress) &&
-    executionTrack === 'none-yet' &&
-    !ownerInstallPathActive
+  const preferBaseAppSubAccountSetup = false
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
@@ -250,27 +242,10 @@ export function AccountSetupWorkspaceView(props: {
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
   })
-  const subAccountOwnerInstallPanel =
-    !ownerInstallPathActive &&
-    !showParentCswAddOwnerPanel &&
-    subAccountFlowEnabled &&
-    hasPrivyProviderContext &&
-    canonicalCswAddress &&
-    persistedSubAccountAddress ? (
-      <SubAccountOwnerInstallPanel
-        showHeader={false}
-        parentAddress={canonicalCswAddress}
-        subAccountAddress={persistedSubAccountAddress}
-        linkRegistered={isSubAccountExecutionReady(me.accountSignals)}
-      />
-    ) : null
+  const subAccountOwnerInstallPanel = null
   const stepTwoDoneSubtitle = signingStepComplete
-    ? ownerInstallPathActive
-      ? 'Embedded signer installed on your parent smart wallet'
-      : executionTrack === 'sub-account' || executionTrack === 'migration-pending'
-        ? 'App wallet owner approved on-chain'
-        : 'Signing enabled on your canonical wallet'
-    : 'Approve 4626 signing on your app wallet'
+    ? 'Embedded signer installed on your parent smart wallet'
+    : 'Enable 4626 signing on your parent smart wallet'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase

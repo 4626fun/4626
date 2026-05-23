@@ -272,7 +272,7 @@ describe('buildAccountsMePayload', () => {
     })
   })
 
-  it("classifies an account as 'sub-account' when a distinct sub-account is persisted and the embedded EOA is not a CSW owner", async () => {
+  it('classifies an account as none-yet when a distinct sub-account is persisted but parent owner is not confirmed', async () => {
     const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
     const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
     const SUB_ACCOUNT = '0x00000000000000000000000000000000000000cc'
@@ -387,7 +387,7 @@ describe('buildAccountsMePayload', () => {
       privyUser: null,
     })
 
-    expect(payload.accountSignals.executionTrack).toBe('sub-account')
+    expect(payload.accountSignals.executionTrack).toBe('none-yet')
     expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
     expect(payload.accountSignals.baseSubAccount).toEqual({
       address: SUB_ACCOUNT,
@@ -514,7 +514,7 @@ describe('buildAccountsMePayload', () => {
       privyUser: null,
     })
 
-    expect(payload.accountSignals.executionTrack).toBe('sub-account')
+    expect(payload.accountSignals.executionTrack).toBe('none-yet')
     expect(payload.accountSignals.baseSubAccount).toEqual({
       address: SUB_ACCOUNT,
       isDistinctFromCsw: true,

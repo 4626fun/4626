@@ -7,13 +7,15 @@ import {
 } from './goldenRelayPart1Shape'
 import {
   GOLDEN_RELAY_PART1_DEPOSIT_WEI,
+  GOLDEN_RELAY_PART1_ORDER_ID,
+  GOLDEN_RELAY_PART1_PROBE_CSW,
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
+  RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 
-const CSW = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF' as const
-const ORDER_ID =
-  '0x8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a' as const
+const CSW = GOLDEN_RELAY_PART1_PROBE_CSW
+const ORDER_ID = GOLDEN_RELAY_PART1_ORDER_ID
 
 describe('validateGoldenCswDepositoryPart1UserCall', () => {
   const goldenData = encodeFunctionData({
@@ -56,6 +58,30 @@ describe('validateGoldenCswDepositoryPart1UserCall', () => {
         orderId: ORDER_ID,
       }),
     ).toBeNull()
+  })
+
+  it('accepts the exact May 5 Tenderly inner executeBatch call (probe CSW deposit)', () => {
+    const may5Calldata =
+      '0x49290c1c0000000000000000000000004beabd0afbcc2f0440cdef1c3c745d43fae704ef8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a' as const
+    const may5UserCall = {
+      to: RELAY_DEPOSITORY_BASE,
+      data: may5Calldata,
+      value: '18871666861048',
+    }
+
+    expect(
+      validateGoldenCswDepositoryPart1UserCall({
+        userCall: may5UserCall,
+        fundingCsw: CSW,
+        orderId: ORDER_ID,
+      }),
+    ).toBeNull()
+
+    expect(describeGoldenPart1ExecuteBatchInnerCall(may5UserCall)).toEqual({
+      target: getAddress(RELAY_DEPOSITORY_BASE),
+      value: '18871666861048',
+      data: may5Calldata,
+    })
   })
 
   it('rejects router targets', () => {

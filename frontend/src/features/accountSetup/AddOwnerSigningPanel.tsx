@@ -87,6 +87,8 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     ownerSignerAddress,
     privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
+    // Parent CSW self-auth: Base App wraps preview userCall as executeBatch → depositNative (May 5 golden).
+    preferFundingCswSelfAuth: true,
     enabled: inlineRelay && canRunAddOwnerFlow,
   })
 

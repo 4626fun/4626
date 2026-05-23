@@ -3,38 +3,25 @@
  *
  * Canonical architecture reference: `docs/4626-connection-methods.md`.
  *
- * Two observable signals determine which track an account is on:
+ * User-initiated frontend execution routes through the **parent CSW**
+ * (`profiles.csw_address`) only. The Privy embedded EOA must be installed as
+ * a direct owner on that wallet (`legacy-owner-install`); sponsored swaps use
+ * `canonical4337` with the parent as ERC-4337 sender.
  *
- *   1. Does the user have a real, distinct sub-account persisted in
- *      `profiles.base_sub_account`? A "real" sub-account means the persisted
- *      address is NOT equal to the parent CSW — legacy accounts sometimes
- *      have that column mirroring the CSW address as a backfill, which is
- *      not a real sub-account.
- *
- *   2. Is the user's Privy embedded EOA installed as a direct owner of the
- *      parent CSW? This is the legacy owner-install model (pre-sub-account
- *      migration). Current architecture does NOT install the embedded EOA
- *      as a direct CSW owner on the user-initiated track; it routes signing
- *      through the sub-account via `setToOwnerAccount()` instead.
+ * A persisted `profiles.base_sub_account` / arch-b CIEC row may still exist
+ * for audit or future app-scoped work, but it does **not** select the
+ * execution track. Sub-account / `migration-pending` tracks are dormant.
  *
  * Possible tracks:
  *
- *   - `sub-account`            — real sub-account persisted, embedded EOA NOT
- *                                an owner. The clean new-model shape.
- *   - `legacy-owner-install`   — embedded EOA IS an owner, no real sub-account.
- *                                The pre-migration shape. Still fully functional.
- *   - `migration-pending`      — both signals present. Legacy account that
- *                                subsequently set up a sub-account. Functional
- *                                on either path; the app should prefer the
- *                                sub-account and can optionally clean up the
- *                                direct ownership later.
- *   - `none-yet`               — neither signal. New user who has authenticated
- *                                but has not completed activation.
+ *   - `legacy-owner-install` — embedded EOA is a direct owner of the parent CSW.
+ *   - `none-yet`             — parent CSW known but embedded owner not confirmed.
+ *
+ * `sub-account` and `migration-pending` remain in the union for typed API
+ * compatibility but are not returned by `resolveExecutionTrack`.
  *
  * Server-side agent / deploy-session delegation is a separate, orthogonal
- * track defined in `.cursor/rules/csw-agent-lifecycle.mdc`. It does not
- * appear in this classifier; this is strictly the user-initiated frontend
- * execution track.
+ * track defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
  */
 
 const EVM_ADDRESS_RE = /^0x[a-f0-9]{40}$/
@@ -98,11 +85,8 @@ export function summarizeBaseSubAccount(input: BaseSubAccountInput): BaseSubAcco
 }
 
 export function resolveExecutionTrack(input: ExecutionTrackInput): ExecutionTrack {
-  const subAccount = summarizeBaseSubAccount(input)
-  const legacyOwnerInstall = input.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
-
-  if (subAccount.registered && legacyOwnerInstall) return 'migration-pending'
-  if (subAccount.registered) return 'sub-account'
-  if (legacyOwnerInstall) return 'legacy-owner-install'
+  if (input.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) {
+    return 'legacy-owner-install'
+  }
   return 'none-yet'
 }

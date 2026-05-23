@@ -37,7 +37,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('routes verified Base App users to connect-base-app before legacy owner install when flag is on', () => {
+  it('routes verified Base App users to the setup workspace (parent CSW owner install) when flag is on', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -53,7 +53,7 @@ describe('resolveWaitlistStep', () => {
         embeddedEoaAvailable: true,
         subAccountStepCompleted: false,
       }),
-    ).toBe('connect-base-app')
+    ).toBe('done')
   })
 
   it('keeps verified-but-unapproved accounts on the setup workspace when signer install is incomplete and sub-account flow is off', () => {
@@ -121,7 +121,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('Track C2 — routes to connect-base-app when a sub-account address exists but signing is incomplete', () => {
+  it('parent CSW execution — stays on done when a sub-account address exists but parent signing is incomplete', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -143,7 +143,7 @@ describe('resolveWaitlistStep', () => {
         embeddedEoaAvailable: true,
         subAccountStepCompleted: false,
       }),
-    ).toBe('connect-base-app')
+    ).toBe('done')
   })
 
   it('Track C2 — routes to done when sub-account execution track is already registered', () => {
@@ -238,7 +238,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('forces connect-base-app when setup=base-app deep link is present and signing is incomplete', () => {
+  it('does not force connect-base-app (parent CSW execution only)', () => {
     expect(
       shouldForceBaseAppConnectStep({
         setupIntent: 'base-app',
@@ -251,7 +251,7 @@ describe('resolveWaitlistStep', () => {
           },
         },
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
   it('does not force connect-base-app when setup=base-app and on-chain signing is complete', () => {
@@ -275,7 +275,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe(false)
   })
 
-  it('forces connect-base-app when setup=base-app, link exists, but on-chain signing is incomplete', () => {
+  it('does not force connect-base-app when setup=base-app and signing is incomplete', () => {
     expect(
       shouldForceBaseAppConnectStep({
         setupIntent: 'base-app',
@@ -294,10 +294,10 @@ describe('resolveWaitlistStep', () => {
         signingStepComplete: false,
         signingProbePending: false,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 
-  it('defers connect-base-app force while signing probe is pending', () => {
+  it('does not force connect-base-app while signing probe is pending', () => {
     expect(
       shouldForceBaseAppConnectStep({
         setupIntent: 'base-app',
@@ -353,12 +353,21 @@ describe('resolveWaitlistStep', () => {
     ).toBe('done')
   })
 
-  it('treats registered baseSubAccount as link-ready even when executionTrack lags', () => {
+  it('treats parent embedded owner as link-ready, not sub-account registration alone', () => {
     expect(
       isWaitlistSubAccountLinkReady({
         accountSignals: {
           executionTrack: 'none-yet',
           baseSubAccount: { address: '0xabc', registered: true, isDistinctFromCsw: true },
+        },
+      }),
+    ).toBe(false)
+
+    expect(
+      isWaitlistSubAccountLinkReady({
+        accountSignals: {
+          executionTrack: 'legacy-owner-install',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
         },
       }),
     ).toBe(true)
@@ -385,7 +394,7 @@ describe('resolveWaitlistStep', () => {
     )
     expect(merged.accountSignals.executionTrack).toBe('sub-account')
     expect(merged.baseSubAccount).toBe('0x00000000000000000000000000000000000000dd')
-    expect(isWaitlistSubAccountLinkReady(merged)).toBe(true)
+    expect(isWaitlistSubAccountLinkReady(merged)).toBe(false)
   })
 })
 
@@ -518,12 +527,22 @@ describe('isWaitlistStepTwoSigningComplete', () => {
     ).toBe(false)
   })
 
-  it('completes sub-account registration when embedded EOA is on-chain owner of the sub-account', () => {
+  it('does not complete signing from sub-account on-chain owner without parent CSW owner', () => {
     expect(
       isWaitlistStepTwoSigningComplete({
         ownerInstallRequested: false,
         accountSignals: subAccountReadySignals,
         subAccountEmbeddedOwnerOnChain: true,
+      }),
+    ).toBe(false)
+  })
+
+  it('completes signing when embedded EOA is on-chain owner of the parent CSW', () => {
+    expect(
+      isWaitlistStepTwoSigningComplete({
+        ownerInstallRequested: false,
+        accountSignals: subAccountReadySignals,
+        parentEmbeddedOwnerOnChain: true,
       }),
     ).toBe(true)
   })
@@ -544,17 +563,18 @@ describe('isWaitlistStepTwoSigningComplete', () => {
 })
 
 describe('shouldShowParentCswAddOwnerPanel', () => {
-  it('keeps parent add-owner visible during desktop owner-install even when sub-account is registered', () => {
+  it('shows parent add-owner until parent embedded owner is confirmed on-chain', () => {
     expect(
       shouldShowParentCswAddOwnerPanel({
         ownerInstallRequested: true,
         signingStepComplete: false,
-        executionTrack: 'sub-account',
+        executionTrack: 'none-yet',
         preferBaseAppSubAccountSetup: false,
         accountSignals: {
-          executionTrack: 'sub-account',
+          executionTrack: 'none-yet',
           privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
         },
+        parentEmbeddedOwnerOnChain: false,
       }),
     ).toBe(true)
   })

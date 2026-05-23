@@ -28,6 +28,7 @@ import {
 import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
 import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
+import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import { ADD_OWNER_ADDRESS_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 const PREVIEW_ADD_OWNER_BODY_MAX_BYTES = 8 * 1024
@@ -356,14 +357,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       relayQuoteDiagnostics = relayQuote.diagnostics
       if (relayQuote.ok) {
         relay = relayQuote.relay
-        relayDepositSimulation = await simulateRelayDepositUserCall({
-          publicClient,
-          funderAddress: relayQuoteUser,
-          userCall: relay.userCall,
-        })
-        if (!relayDepositSimulation.ok) {
-          relayQuoteError = relayDepositSimulation.error
-          relay = null
+        if (
+          relay &&
+          relayQuoteUser.toLowerCase() === parentCswAddress.toLowerCase()
+        ) {
+          const goldenShapeError = validateGoldenCswDepositoryPart1UserCall({
+            userCall: relay.userCall,
+            fundingCsw: parentCswAddress,
+            orderId: relay.orderId ?? relay.requestId,
+          })
+          if (goldenShapeError) {
+            relayQuoteError = `Parent CSW Relay Part 1 must match the May 5 golden executeBatch → Depository.depositNative shape: ${goldenShapeError}`
+            relay = null
+          }
+        }
+        if (relay) {
+          relayDepositSimulation = await simulateRelayDepositUserCall({
+            publicClient,
+            funderAddress: relayQuoteUser,
+            userCall: relay.userCall,
+          })
+          if (!relayDepositSimulation.ok) {
+            relayQuoteError = relayDepositSimulation.error
+            relay = null
+          }
         }
       } else {
         relayQuoteError = relayQuote.error

@@ -26,12 +26,7 @@ export function useWaitlistSigningStepComplete(params: {
 }) {
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const { embeddedEoaAddress } = useEnsurePrivyEmbeddedWallet()
-  const executionTrack = params.accountSignals?.executionTrack
-  const shouldProbeParentEmbeddedOwner =
-    Boolean(params.canonicalCswAddress && embeddedEoaAddress) &&
-    (params.ownerInstallRequested ||
-      executionTrack === 'none-yet' ||
-      executionTrack === 'legacy-owner-install')
+  const shouldProbeParentEmbeddedOwner = Boolean(params.canonicalCswAddress && embeddedEoaAddress)
 
   const {
     isOwner: parentEmbeddedOwnerOnChain,
@@ -58,10 +53,8 @@ export function useWaitlistSigningStepComplete(params: {
   })
 
   const signingProbePending =
-    subAccountFlowEnabled && Boolean(persistedSubAccountAddress)
-      ? subAccountEmbeddedOwnerStatus === 'checking' || subAccountEmbeddedOwnerStatus === 'idle'
-      : shouldProbeParentEmbeddedOwner &&
-        (parentEmbeddedOwnerStatus === 'checking' || parentEmbeddedOwnerStatus === 'idle')
+    shouldProbeParentEmbeddedOwner &&
+    (parentEmbeddedOwnerStatus === 'checking' || parentEmbeddedOwnerStatus === 'idle')
 
   const signingStepComplete = params.accountSignals
     ? isWaitlistStepTwoSigningComplete({

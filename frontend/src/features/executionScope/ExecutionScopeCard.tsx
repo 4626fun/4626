@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { ExternalLink, ShieldOff, RefreshCw } from 'lucide-react'
 
 import { CopyableAddress } from '@/components/account/CopyableAddress'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
 import { useRevokeSubAccount } from './useRevokeSubAccount'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
@@ -33,13 +32,8 @@ export function ExecutionScopeCard() {
   const revoke = useRevokeSubAccount()
   const reprovision = useReprovisionSubAccount()
   const ownerCheck = useCswOwnerSigner()
-  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
-  const ownerInstallHref = subAccountFlowEnabled
-    ? buildWaitlistSetupUrl('base-app')
-    : buildWaitlistSetupUrl('owner-install')
-  const ownerInstallLabel = subAccountFlowEnabled
-    ? 'Connect Base App sub-account'
-    : 'Open owner-install flow'
+  const ownerInstallHref = buildWaitlistSetupUrl('owner-install')
+  const ownerInstallLabel = 'Enable 4626 signing on parent wallet'
   const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const onRevokeClick = async () => {

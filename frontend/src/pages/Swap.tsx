@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, parseUnits, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
@@ -44,7 +44,6 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { useEmbeddedOwnerOnSubAccount, mapEmbeddedOwnerStatusToCanonicalCheckStatus } from '@/features/waitlist/useEmbeddedOwnerOnSubAccount'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
@@ -601,7 +600,6 @@ function LpPositionCard(props: {
 // ─── Main page ──────────────────────────────────────────────────────────────
 
 export function Swap() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -1190,7 +1188,6 @@ export function Swap() {
   }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
-  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const canonicalSetupGateCodes = useMemo(
     () =>
       new Set([
@@ -1203,32 +1200,14 @@ export function Swap() {
     [],
   )
   const needsCanonicalSetupAction =
-    executionMode === 'canonical' &&
-    subAccountFlowEnabled &&
-    canonicalSetupGateCodes.has(canonicalSignerGate.code)
+    executionMode === 'canonical' && canonicalSetupGateCodes.has(canonicalSignerGate.code)
   const canonicalSetupActionLabel =
     canonicalSignerGate.code === 'base-sub-account-provider-missing'
       ? 'Reconnect Base App'
       : 'Enable 4626 signing'
   const handleEnableCanonicalSigning = useCallback(() => {
-    const needsSubAccountSetup =
-      subAccountFlowEnabled &&
-      (executionTrack === 'none-yet' ||
-        canonicalSignerGate.code === 'embedded-wallet-not-owner' ||
-        (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
-    if (needsSubAccountSetup) {
-      window.location.assign(buildWaitlistSetupUrl('base-app'))
-      return
-    }
-    navigate('/accounts?setup=owner-install')
-  }, [
-    canonicalSignerGate.code,
-    executionTrack,
-    navigate,
-    subAccountFlowEnabled,
-    subAccountRuntime.ready,
-    subAccountTrack,
-  ])
+    window.location.assign(buildWaitlistSetupUrl('owner-install'))
+  }, [])
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&

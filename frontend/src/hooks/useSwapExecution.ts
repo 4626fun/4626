@@ -1246,11 +1246,7 @@ export function useSwapExecution(params: {
     }
     if (!params.executionReady) {
       setError(
-        params.executionTrack === 'none-yet'
-          ? 'Swap signer is not ready yet. Open /waitlist?setup=base-app and complete "Enable 4626 signing".'
-          : params.executionTrack === 'sub-account' || params.executionTrack === 'migration-pending'
-            ? 'Swap signer is not ready yet. Open 4626 in Base App, finish Enable 4626 signing on /waitlist?setup=base-app, then return here.'
-            : 'Swap signer is not ready yet. Finish wallet setup and try again.',
+        'Swap signer is not ready yet. Open /waitlist?setup=owner-install and complete Enable 4626 signing on your parent smart wallet.',
       )
       return
     }
@@ -1405,7 +1401,6 @@ export function useSwapExecution(params: {
     syncPermitRequirement,
     signPermitIfRequired,
     params.executionAddress,
-    params.executionTrack,
     params.executionReady,
     swapDebugEnabled,
     swapSessionGate,
