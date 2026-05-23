@@ -246,7 +246,6 @@ export async function executeOwnerMutationViaRelay(
       userCall: relay.userCall,
       chainId: base.id,
       publicClient,
-      allowBundlerFallback: false,
       appendEvent,
     })
     onTxHash(executeTxHash)

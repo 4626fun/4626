@@ -137,9 +137,9 @@ function extractWalletCallsId(sendResult: unknown): string | null {
   return null
 }
 
-function createSelfAuth4337WalletClient(walletRequest: WalletRequest, account: Address) {
+/** Transport-only client — do not set `account`; Base App rejects CSW-as-account before auth. */
+function createWalletRequestClient(walletRequest: WalletRequest) {
   return createWalletClient({
-    account,
     chain: base,
     transport: custom({
       request: async (request) =>
@@ -166,20 +166,25 @@ async function submitViaBundlerSelfFunded(params: {
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=bundler_self_funded')
+  await ensureSelfAuthWalletAuthorized({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
   await assertSelfFundedPrefundBudget({
     publicClient: params.publicClient,
     fundingCsw: params.fundingCsw,
     depositWei: BigInt(params.userCall.value),
     appendEvent: params.appendEvent,
   })
-  const walletClient = createSelfAuth4337WalletClient(params.walletRequest, params.fundingCsw)
+  const walletClient = createWalletRequestClient(params.walletRequest)
   const result = await sendCoinbaseSmartWalletUserOperation({
     publicClient: params.publicClient as any,
     walletClient: walletClient as any,
     bundlerUrl: resolveBundlerUrl(),
     smartWallet: params.fundingCsw,
+    // Self-auth Base App signs via passkey against the CSW address (personal_sign [hash, csw]).
     ownerAddress: params.fundingCsw,
-    ownerIndexOverride: 0,
     calls: [
       {
         to: getAddress(params.userCall.to),
@@ -189,7 +194,8 @@ async function submitViaBundlerSelfFunded(params: {
     ],
     skipPaymaster: true,
     retryOnPrefund: false,
-    useTypedDataSigning: true,
+    useTypedDataSigning: false,
+    userOpSignMode: 'signMessage',
   })
   params.appendEvent(`relay_part1:bundler_tx=${result.transactionHash}`)
   return result.transactionHash
@@ -345,7 +351,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * `wallet_sendCalls` in Base App can auto-attach Coinbase's USDC paymaster even
  * when the dapp omits paymasterService. This lane uses wallet_prepareCalls with
  * no paymaster URL and falls back to a direct self-funded bundler UserOp when
- * the wallet still injects paymasterAndData.
+ * the wallet still injects paymasterAndData (Base App default on 2026-05).
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -354,14 +360,14 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   chainId: number
   publicClient?: PublicClient
   /**
-   * Base App self-auth must stay on wallet_prepareCalls — the direct bundler lane
-   * uses a viem wallet client with the CSW as `account`, which Base App rejects
-   * with "Must call eth_requestAccounts" / unauthorized signer errors.
+   * When Base App injects paymasterAndData on wallet_prepareCalls, fall back to a
+   * direct self-funded bundler UserOp (paymasterAndData = 0x). Requires publicClient.
    */
   allowBundlerFallback?: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
-  const allowBundlerFallback = params.allowBundlerFallback === true
+  const allowBundlerFallback =
+    params.allowBundlerFallback !== false && Boolean(params.publicClient)
   try {
     return await submitViaPreparedCallsSelfFunded({
       ...params,

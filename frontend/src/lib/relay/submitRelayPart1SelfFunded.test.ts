@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import {
   parseEntryPointPaymasterAddress,
   readPreparedUserOpPaymasterAndData,
@@ -10,6 +11,12 @@ import {
 vi.mock('@/lib/aa/coinbaseErc4337', () => ({
   sendCoinbaseSmartWalletUserOperation: vi.fn(),
 }))
+
+const mockPublicClient = {
+  getBalance: vi.fn(async () => 10_000_000_000_000_000n),
+  readContract: vi.fn(async () => 500_000_000_000_000n),
+  chain: { id: 8453 },
+}
 
 describe('submitRelayPart1SelfFunded helpers', () => {
   it('detects empty paymasterAndData as self-funded (EntryPoint paymaster=0)', () => {
@@ -78,5 +85,54 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       expect.objectContaining({ method: 'wallet_sendCalls' }),
     )
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:prepared_userop_paymaster=0x0')
+  })
+
+  it('falls back to bundler when prepare_calls injects paymasterAndData', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValueOnce({
+      userOpHash: '0x' + 'bb'.repeat(32),
+      transactionHash: '0x' + 'cc'.repeat(32),
+    })
+
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0xabc123' },
+          userOp: {
+            paymasterAndData:
+              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+          },
+        }
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '18871666861048',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as any,
+      appendEvent,
+    })
+
+    expect(txHash).toBe('0x' + 'cc'.repeat(32))
+    expect(sendCoinbaseSmartWalletUserOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        skipPaymaster: true,
+        useTypedDataSigning: false,
+        userOpSignMode: 'signMessage',
+      }),
+    )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
   })
 })
