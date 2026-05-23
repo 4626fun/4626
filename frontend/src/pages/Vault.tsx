@@ -794,7 +794,7 @@ export function Vault() {
       )}
 
       {/* Stats */}
-      <section className="cinematic-section bg-zinc-950/20">
+      <section className="cinematic-section bg-transparent">
         <div className="max-w-[1400px] mx-auto px-4 sm:px-6">
           {canManageVault || isAuctionActive ? (
             <div className="vault-surface vault-hover-lift overflow-hidden">

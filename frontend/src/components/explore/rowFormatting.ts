@@ -114,6 +114,13 @@ export function formatMarketCapDeltaPercent(
   return formatDeltaPercentValue(percent)
 }
 
+export function getMarketCapDeltaToneClass(change: { text: string; positive: boolean }): string {
+  if (change.text === '-' || change.text === '0%' || change.text === '+0%') {
+    return 'text-zinc-400'
+  }
+  return change.positive ? 'text-emerald-400/90' : 'text-rose-400/90'
+}
+
 export function buildGroupSpans(columns: ExploreTableColumn[]) {
   const out: Array<{ id: string; label: string; start: number; end: number }> = []
   for (const group of EXPLORE_TABLE_GROUPS) {

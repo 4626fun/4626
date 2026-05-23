@@ -23,7 +23,7 @@
 }
 
 html.dark {
-  --vault-bg: 2 2 2;
+  --vault-bg: var(--trust-page-bg-rgb, 0 0 0);
   --vault-card: 10 10 10;
   --vault-card-raised: 15 16 20;
   --vault-border: 31 31 31;

@@ -114,6 +114,10 @@ export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
 
   const alreadyOwner = preview?.preflight.alreadyOwner === true
 
+  if (alreadyOwner) {
+    return null
+  }
+
   return (
     <OwnerMutationStepFlow
       mutation="add"
@@ -126,8 +130,6 @@ export function AddOwnerActionPanel(props: AddOwnerActionPanelProps) {
       pageError={pageError}
       lastErrorDetail={lastErrorDetail}
       eventLog={eventLog}
-      alreadyComplete={alreadyOwner}
-      alreadyCompleteMessage="4626 signing is already enabled on this wallet."
       onBuildPreview={onBuildPreview}
       onSubmit={() => void handleAdd()}
       onRebuildPreview={onRebuildPreview}

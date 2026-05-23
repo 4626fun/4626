@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildCreatorStats, formatAnimatedStatValue } from './creatorStatsModel'
+import { buildCreatorStats, formatAnimatedStatValue, getDiceRollStatDisplay } from './creatorStatsModel'
 
 describe('creatorStatsModel', () => {
   it('builds stats with 24h volume and formatted currency', () => {
@@ -62,5 +62,26 @@ describe('creatorStatsModel', () => {
   it('formats animated currency and integer values during tween', () => {
     expect(formatAnimatedStatValue('currency', 11540)).toBe('$11.54K')
     expect(formatAnimatedStatValue('integer', 19817.6)).toBe('19,818')
+  })
+
+  it('dice-roll display settles on the final value at full focus', () => {
+    const stat = {
+      kind: 'currency' as const,
+      raw: 11540,
+      display: '$11.54K',
+    }
+    expect(getDiceRollStatDisplay(stat, 0.1, 0)).not.toBe('$11.54K')
+    expect(getDiceRollStatDisplay(stat, 1, 0)).toBe('$11.54K')
+  })
+
+  it('dice-roll display eases upward during the settle band', () => {
+    const stat = {
+      kind: 'integer' as const,
+      raw: 2890,
+      display: '2,890',
+    }
+    const mid = getDiceRollStatDisplay(stat, 0.75, 2)
+    expect(mid).not.toBe('2,890')
+    expect(getDiceRollStatDisplay(stat, 0.99, 2)).toBe('2,890')
   })
 })

@@ -45,7 +45,7 @@ export function AppLoadingState(props: AppLoadingStateProps = {}) {
 
   return (
     <div
-      className="app-loading-root fixed inset-0 z-[120] isolate overflow-hidden bg-[#05070b] text-zinc-100"
+      className="app-loading-root fixed inset-0 z-[120] isolate overflow-hidden text-zinc-100"
       data-loading-intent={intent}
       data-loading-pattern={config.pattern.id}
     >

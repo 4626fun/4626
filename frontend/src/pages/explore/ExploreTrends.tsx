@@ -94,9 +94,8 @@ export function ExploreTrends() {
     onLoadMore: fetchNextPage,
   })
 
-  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
     useExploreHorizontalTableSync({
-      headerId: 'explore-trends-header',
       bodyId: 'explore-trends-body',
     })
 
@@ -135,9 +134,7 @@ export function ExploreTrends() {
       table={
         <>
           <ExploreTableSurface
-            headerId="explore-trends-header"
             bodyId="explore-trends-body"
-            onHeaderScroll={handleHeaderScroll}
             onBodyScroll={handleBodyScroll}
             header={<PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />}
             body={

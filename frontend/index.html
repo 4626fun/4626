@@ -6,7 +6,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/assets/domain-bar-icon-32.png?v=11" />
     <link rel="apple-touch-icon" sizes="180x180" href="/assets/domain-bar-icon-180.png?v=11" />
     <link rel="icon" href="/favicon.ico" sizes="any" />
-    <meta name="msapplication-TileColor" content="#020204" />
+    <meta name="msapplication-TileColor" content="#000000" />
     <meta name="msapplication-config" content="/browserconfig.xml" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="canonical" href="https://4626.fun/" />
@@ -42,11 +42,11 @@
     <meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />
     <meta
       name="fc:miniapp"
-      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=11","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-200.png?v=11","splashBackgroundColor":"#020204"}}}'
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=11","button":{"title":"Open 4626.fun","action":{"type":"launch_miniapp","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-200.png?v=11","splashBackgroundColor":"#000000"}}}'
     />
     <meta
       name="fc:frame"
-      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=11","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-200.png?v=11","splashBackgroundColor":"#020204"}}}'
+      content='{"version":"next","imageUrl":"https://4626.fun/assets/og-image.png?v=11","button":{"title":"Open 4626.fun","action":{"type":"launch_frame","name":"4626.fun","url":"https://4626.fun/","splashImageUrl":"https://4626.fun/assets/base-miniapp-icon-200.png?v=11","splashBackgroundColor":"#000000"}}}'
     />
     <meta
       name="talentapp:project_verification"
@@ -200,11 +200,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="theme-color" content="#020204" />
+    <meta name="theme-color" content="#000000" />
     <!-- Include credentials for protected preview deployments (e.g. Vercel auth) -->
     <link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />
     <style>
       :root {
+        --trust-page-bg: #000000;
+        --trust-page-bg-rgb: 0 0 0;
         --vault-bg: 248 250 252;
         --vault-card: 255 255 255;
         --vault-border: 226 232 240;
@@ -212,18 +214,33 @@
         --vault-subtext: 71 85 105;
       }
       html.dark {
-        --vault-bg: 2 2 2;
+        --vault-bg: var(--trust-page-bg-rgb);
         --vault-card: 10 10 10;
         --vault-border: 31 31 31;
         --vault-text: 237 237 237;
         --vault-subtext: 102 102 102;
       }
-      html, body {
-        background-color: rgb(var(--vault-bg)); /* Vault background */
-        color: rgb(var(--vault-text));
+      html, body, #root {
         margin: 0;
         padding: 0;
-        height: 100%;
+        min-height: 100dvh;
+      }
+      #root {
+        display: flex;
+        flex-direction: column;
+      }
+      html:not(.dark) body {
+        background-color: rgb(var(--vault-bg));
+        color: rgb(var(--vault-text));
+      }
+      html.dark body {
+        background-color: var(--trust-page-bg);
+        color: rgb(var(--vault-text));
+      }
+      html.dark #root,
+      html.dark .vault-shell,
+      html.dark main {
+        background-color: transparent;
       }
     </style>
   </head>

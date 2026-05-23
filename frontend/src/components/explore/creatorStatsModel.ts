@@ -55,6 +55,58 @@ export function formatAnimatedStatValue(kind: CreatorStatKind, value: number): s
   return String(value)
 }
 
+function diceRollHash(seed: number, tick: number): number {
+  const x = Math.sin(seed * 12.9898 + tick * 78.233) * 43758.5453
+  return x - Math.floor(x)
+}
+
+const DICE_ROLL_SETTLE_START = 0.58
+
+/**
+ * Scroll-scrubbed odometer: flickering pseudo-random values during enter, then ease to target.
+ * Deterministic from focus + stat index so scrub stays in sync.
+ */
+export function getDiceRollStatDisplay(
+  stat: Pick<CreatorStatItem, 'kind' | 'raw' | 'display'>,
+  focus: number,
+  statIndex: number,
+): string {
+  const clampedFocus = Math.max(0, Math.min(1, focus))
+  if (clampedFocus >= 0.985) return stat.display
+
+  if (stat.kind === 'date' || stat.kind === 'text') {
+    if (clampedFocus < 0.25) return '—'
+    if (clampedFocus < DICE_ROLL_SETTLE_START) {
+      const tick = Math.floor(clampedFocus * 18)
+      const chars = stat.display.split('')
+      return chars
+        .map((char, charIndex) => {
+          if (!/\d/.test(char)) return char
+          const roll = Math.floor(diceRollHash(statIndex * 31 + charIndex, tick) * 10)
+          return String(roll)
+        })
+        .join('')
+    }
+    return stat.display
+  }
+
+  const raw = stat.raw
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) {
+    return clampedFocus >= 0.5 ? stat.display : '—'
+  }
+
+  if (clampedFocus >= DICE_ROLL_SETTLE_START) {
+    const settleT = (clampedFocus - DICE_ROLL_SETTLE_START) / (1 - DICE_ROLL_SETTLE_START)
+    const eased = 1 - Math.pow(1 - settleT, 2.8)
+    return formatAnimatedStatValue(stat.kind, raw * eased)
+  }
+
+  const tick = Math.floor(clampedFocus * 28)
+  const flicker = diceRollHash(statIndex + raw * 0.017, tick)
+  const ceiling = raw * (0.08 + flicker * 0.92)
+  return formatAnimatedStatValue(stat.kind, ceiling)
+}
+
 export function buildCreatorStats(input: BuildCreatorStatsInput): CreatorStatItem[] {
   const volumeRaw =
     input.volumeWindow === '24h' ? parseNumber(input.volume24h) : parseNumber(input.totalVolume)

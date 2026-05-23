@@ -36,7 +36,7 @@ export function ExplorePageShell({
     return (
       <>
         <div className="mb-6">{subnav}</div>
-        <div className="vault-surface relative min-h-[280px] overflow-hidden">
+        <div className="explore-table-panel min-h-[280px]">
           <ExploreTableLoadingOverlay active={tablePending} label={tablePendingLabel} />
           {table}
         </div>
@@ -46,7 +46,7 @@ export function ExplorePageShell({
   }
 
   return (
-    <div className="relative min-h-screen pt-1 sm:pt-2">
+    <div className="relative w-full pt-1 sm:pt-2">
       {leading}
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         <motion.div
@@ -73,7 +73,7 @@ export function ExplorePageShell({
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface relative overflow-hidden"
+          className="explore-table-panel"
         >
           {table}
         </motion.div>

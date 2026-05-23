@@ -3,9 +3,8 @@ import type { ReactNode, UIEventHandler } from 'react'
 import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
 
 type ExploreTableSurfaceProps = {
-  headerId: string
+  /** Scroll container id — used for horizontal sync + mobile sticky collapse CSS. */
   bodyId: string
-  onHeaderScroll: UIEventHandler<HTMLDivElement>
   onBodyScroll: UIEventHandler<HTMLDivElement>
   header: ReactNode
   body: ReactNode
@@ -19,9 +18,7 @@ type ExploreTableSurfaceProps = {
 }
 
 export function ExploreTableSurface({
-  headerId,
   bodyId,
-  onHeaderScroll,
   onBodyScroll,
   header,
   body,
@@ -35,12 +32,6 @@ export function ExploreTableSurface({
 }: ExploreTableSurfaceProps) {
   return (
     <>
-      <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-        <div className="overflow-x-auto scrollbar-hide" id={headerId} data-scrolled="0" onScroll={onHeaderScroll}>
-          <div className="min-w-max">{header}</div>
-        </div>
-      </div>
-
       <ExploreHorizontalScrollArrows
         hasOverflow={hasHorizontalOverflow}
         canScrollLeft={canScrollLeft}
@@ -51,8 +42,16 @@ export function ExploreTableSurface({
         rightAriaLabel={rightAriaLabel}
       />
 
-      <div className="overflow-x-auto scrollbar-hide" id={bodyId} data-scrolled="0" onScroll={onBodyScroll}>
-        <div className="min-w-max">{body}</div>
+      <div
+        id={bodyId}
+        className="explore-table-scroll overflow-x-auto scrollbar-hide"
+        data-scrolled="0"
+        onScroll={onBodyScroll}
+      >
+        <div className="w-max min-w-0">
+          <div className="explore-table-sticky-bar sticky top-0 z-50 border-b border-white/8">{header}</div>
+          {body}
+        </div>
       </div>
     </>
   )

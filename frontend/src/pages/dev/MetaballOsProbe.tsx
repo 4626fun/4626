@@ -240,7 +240,7 @@ export function MetaballOsProbe() {
 
   return (
     <div
-      className="relative min-h-screen overflow-hidden bg-black text-white"
+      className="relative min-h-0 w-full overflow-hidden bg-transparent text-white"
       onPointerMove={(event) => {
         const x = clamp01(event.clientX / Math.max(window.innerWidth, 1))
         const y = clamp01(event.clientY / Math.max(window.innerHeight, 1))
@@ -255,7 +255,7 @@ export function MetaballOsProbe() {
 
       <canvas ref={canvasRef} className="absolute inset-0" />
 
-      <div className="relative z-20 flex min-h-screen items-center justify-center px-4 py-12">
+      <div className="relative z-20 flex min-h-[calc(100dvh-2rem)] items-center justify-center px-4 py-12">
         <div
           className="relative w-[min(92vw,980px)] overflow-hidden border border-white/20 bg-black/45 shadow-[0_0_100px_rgba(164,214,197,0.18)] transition-all duration-700"
           style={{

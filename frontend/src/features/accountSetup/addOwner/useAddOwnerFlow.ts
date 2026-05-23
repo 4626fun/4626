@@ -131,9 +131,6 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       })
       if (requestId !== previewRequestIdRef.current) return null
       setPreview(data)
-      if (data.preflight.alreadyOwner) {
-        setPageNotice('4626 signing is already enabled on this wallet.')
-      }
       return data
     } catch (err: unknown) {
       if (requestId !== previewRequestIdRef.current) return null
@@ -282,6 +279,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         fundingCswAddress: fundingCswAddress,
       })
       setPageError(mapped ?? getWalletErrorMessage(err))
+      setTxHash(null)
       return false
     } finally {
       setBusy(false)

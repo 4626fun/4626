@@ -147,10 +147,8 @@ export function Leaderboard() {
   }, [data])
 
   return (
-    <section className="relative min-h-[calc(100vh-0px)] overflow-hidden bg-vault-bg text-white">
+    <section className="relative min-h-0 overflow-hidden bg-transparent text-white">
       <PageMeta title={META.leaderboard.title} description={META.leaderboard.description} canonicalPath="/leaderboard" />
-
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-56 bg-gradient-to-b from-brand-primary/10 to-transparent" aria-hidden />
 
       <div className="relative mx-auto max-w-3xl px-4 sm:px-6 py-10 sm:py-14">
         <header className="mb-8 sm:mb-10">

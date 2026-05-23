@@ -35,7 +35,7 @@ export function AuctionBid() {
   const ccaStrategy = resolveCcaStrategyFromRouteParam(address)
 
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-0 w-full bg-transparent">
       <PageMeta title={META.auctionBid.title} description={META.auctionBid.description} canonicalPath={`/auction/${address ?? ''}`} />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">

@@ -14,12 +14,13 @@ import {
   formatFeeAmount,
   formatMarketCapDeltaPercent,
   getCoinFeeStatus,
+  getMarketCapDeltaToneClass,
   shortAddress,
 } from './rowFormatting'
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { getEthosScorePalette, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { EthosScorePill, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 
@@ -116,9 +117,9 @@ export function TokenRow({
       : '3% fee (Legacy - before June 2025)'
 
   const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
-  const ethosPalette = getEthosScorePalette(ethosScore?.score ?? null, ethosScore?.level ?? null)
   const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
   const ethosHasPositiveScore = ethosScoreValue != null && ethosScoreValue > 0
+  const deltaToneClass = getMarketCapDeltaToneClass(change)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,
@@ -134,7 +135,7 @@ export function TokenRow({
 
   // Sticky identity cells stay flat so rows read like Uniswap's continuous list.
   const stickyCellClass =
-    'sticky bg-vault-bg/45 backdrop-blur-sm group-hover:bg-white/[0.025]'
+    'sticky explore-table-sticky-cell'
 
   const canToggleFees = typeof onToggleFees === 'function'
 
@@ -198,12 +199,12 @@ export function TokenRow({
     <>
       <Link
         to={detailPath}
-        className="group grid items-center text-xs hover:bg-white/[0.025] transition-colors cursor-pointer min-w-max"
+        className="group explore-table-row explore-table-grid items-center text-xs cursor-pointer"
         style={{ gridTemplateColumns }}
       >
         {/* Rank */}
         <span
-          className={`${stickyCellClass} z-20 text-zinc-700 tabular-nums px-3 py-2 text-center sm:text-right`}
+          className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
           style={{ left: stickyLeft.rank }}
         >
           {rank}
@@ -215,7 +216,7 @@ export function TokenRow({
           style={{ left: stickyLeft.name }}
         >
           <div
-            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
+            className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-[var(--trust-page-bg)] opacity-80"
             aria-hidden="true"
           />
           <div className="flex items-center gap-2.5 min-w-0 justify-start">
@@ -255,9 +256,16 @@ export function TokenRow({
           onKeyDown={(event) => event.stopPropagation()}
           role="presentation"
         >
-          <span className={`tabular-nums ${ethosHasPositiveScore ? ethosPalette.textClass : 'text-zinc-700'}`}>
-            {ethosHasPositiveScore ? ethosScoreValue.toLocaleString(undefined, { useGrouping: false }) : '—'}
-          </span>
+          {ethosHasPositiveScore ? (
+            <EthosScorePill
+              score={ethosScoreValue}
+              level={ethosScore?.level}
+              compact
+              className="rounded-md px-1.5 py-0 text-[11px]"
+            />
+          ) : (
+            <span className="tabular-nums text-zinc-500">—</span>
+          )}
           {typeof coin.creatorAddress === 'string' && /^0x[a-fA-F0-9]{40}$/.test(coin.creatorAddress) ? (
             <ExploreEthosRefreshButton creatorAddress={coin.creatorAddress} />
           ) : null}
@@ -267,7 +275,7 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>
 
         {/* Δ 24H */}
-        <span className={`tabular-nums px-3 py-2 text-center ${change.positive ? 'text-emerald-300' : 'text-rose-300'}`}>
+        <span className={`tabular-nums px-3 py-2 text-center ${deltaToneClass}`}>
           {change.text}
         </span>
 
@@ -306,13 +314,13 @@ export function TokenRow({
         </div>
 
         {/* Payout To */}
-        <span className={`truncate px-3 py-2 text-center app-meta-value ${payoutResolved ? 'text-zinc-200' : 'text-zinc-400'}`} title={payoutTitle}>
+        <span className={`truncate px-3 py-2 text-center app-meta-value ${payoutResolved ? 'text-zinc-200' : 'text-zinc-300'}`} title={payoutTitle}>
           {payoutDisplay}
         </span>
       </Link>
       {isExpanded ? (
-        <div className="app-meta-value bg-vault-bg/40 min-w-max text-zinc-400">
-          <div className="grid" style={{ gridTemplateColumns }}>
+        <div className="app-meta-value min-w-max border-b border-white/8 text-zinc-400">
+          <div className="explore-table-grid" style={{ gridTemplateColumns }}>
             <div
               className="px-3 py-3"
               style={{
@@ -378,13 +386,13 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
   const stickyLeft = getStickyLeftMap(columns)
   const groupSpans = buildGroupSpans(columns)
 
-  const stickyHeaderCellClass = 'sticky z-50 bg-vault-bg/95'
-  const stickyGroupClass = 'sticky z-40 bg-vault-bg/95'
+  const stickyHeaderCellClass = 'sticky z-50 explore-table-sticky-cell'
+  const stickyGroupClass = 'sticky z-40 explore-table-sticky-cell'
 
   return (
-    <div className="bg-vault-bg border-b border-white/8">
+    <div className="explore-table-header-shell">
       {/* Group labels */}
-      <div className="grid" style={{ gridTemplateColumns }}>
+      <div className="explore-table-grid" style={{ gridTemplateColumns }}>
         {groupSpans.map((g) => {
           const slice = columns.slice(g.start, g.end + 1)
           const hasSticky = slice.some((c) => c.sticky)
@@ -408,7 +416,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
       </div>
 
       {/* Column labels */}
-      <div className="grid text-[10px] text-zinc-500 font-medium" style={{ gridTemplateColumns }}>
+      <div className="explore-table-grid text-[10px] text-zinc-500 font-medium" style={{ gridTemplateColumns }}>
         {columns.map((c) => {
           const isSticky = Boolean(c.sticky)
           const left = isSticky ? stickyLeft[c.id] : undefined
@@ -459,7 +467,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
               {c.id === 'name' ? (
                 <>
                   <div
-                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-zinc-950 opacity-80"
+                    className="pointer-events-none absolute right-0 top-0 h-full w-8 bg-linear-to-r from-transparent to-[var(--trust-page-bg)] opacity-80"
                     aria-hidden="true"
                   />
                   <span className="explore-token-header-label">{label}</span>
@@ -479,16 +487,16 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
   const columns = getExploreColumns({ variant: 'creators', timeframe: '1d', collapseIdentity })
   const gridTemplateColumns = getGridTemplateColumns(columns)
   const stickyLeft = getStickyLeftMap(columns)
-  const stickyCellClass = 'sticky z-10 bg-vault-bg/45 backdrop-blur-sm'
+  const stickyCellClass = 'sticky z-10 explore-table-sticky-cell'
 
   return (
-    <div className="grid items-center min-w-max" style={{ gridTemplateColumns }}>
+    <div className="explore-table-grid items-center" style={{ gridTemplateColumns }}>
       <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
         <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
       </div>
       <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
-          <div className="w-7 h-7 rounded-full bg-zinc-800 animate-pulse" />
+          <div className="h-9 w-9 rounded-full bg-zinc-800 animate-pulse sm:h-10 sm:w-10" />
           <div className="space-y-1 explore-token-name">
             <div className="h-3 w-24 bg-white/8 rounded animate-pulse" />
             <div className="h-2 w-12 bg-white/8 rounded animate-pulse" />

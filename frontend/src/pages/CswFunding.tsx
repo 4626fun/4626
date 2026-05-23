@@ -224,7 +224,7 @@ export function CswFundingPage() {
   const fmt = (wei: bigint | null) => (wei == null ? '\u2014' : `${formatEther(wei)} ETH`)
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <PageMeta
         title="CSW funding"
         description="Diagnose and top up your canonical Coinbase Smart Wallet's funding sources on Base: native balance, EntryPoint deposit, and RelayDepository balance."

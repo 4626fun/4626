@@ -6,7 +6,7 @@ import { FaqAccordion } from '@/components/ui/Accordion'
 import { Button } from '@/components/ui/Button'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { getHostMode, getMarketingBaseUrl, isCurrentWindowUrl } from '@/lib/env/host'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 
 type FaqItem = {
@@ -609,7 +609,9 @@ export function Faq() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (getHostMode() !== 'app') return
-    window.location.replace(`${getMarketingBaseUrl()}/faq`)
+    const target = `${getMarketingBaseUrl()}/faq`
+    if (isCurrentWindowUrl(target)) return
+    window.location.replace(target)
   }, [])
 
   const [query, setQuery] = useState('')

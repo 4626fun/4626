@@ -368,9 +368,8 @@ export function ExploreTransactions() {
         />
       }
       table={
-        <div className="overflow-hidden rounded-2xl bg-vault-card/35">
-          {/* Sticky header */}
-          <div className="hidden sm:block sticky top-24 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
+        <div className="overflow-hidden bg-transparent">
+          <div className="hidden sm:block explore-table-sticky-bar sticky top-24 z-50 border-b border-white/8">
             <ActivityTableHeader timeframe={currentTimeFilter} />
           </div>
 

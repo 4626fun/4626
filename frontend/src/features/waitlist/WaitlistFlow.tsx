@@ -4,10 +4,10 @@ import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { Button } from '@/components/ui/Button'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
-import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import {
   getMarketingWaitlistEntryUrl,
   isWaitlistStartAuthSearchParam,
@@ -256,7 +256,7 @@ function WaitlistAuthStep(props: {
       animate={motionEnabled ? { opacity: 1 } : false}
       exit={motionEnabled ? { opacity: 0, y: -6 } : undefined}
       transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
-      className="relative py-4 sm:py-6"
+      className="relative flex min-h-[calc(100dvh-2rem)] flex-col justify-center py-4 sm:py-6"
     >
       <div className="relative z-10 mx-auto w-full max-w-md text-center">
         <div
@@ -448,7 +448,7 @@ export function WaitlistFlow(props: {
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
 
-  const wrapClass = 'mx-auto w-full max-w-5xl'
+  const wrapClass = 'mx-auto w-full max-w-5xl px-4 py-6 sm:py-8'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const waitlistRecoveryUrl = useMemo(() => getMarketingWaitlistEntryUrl(), [])
@@ -1000,6 +1000,7 @@ export function WaitlistFlow(props: {
 
   const authUi = deriveWaitlistAuthUi()
   const authVisibleError = error === SESSION_FINALIZING_RETRY_MESSAGE ? null : error
+  const showAuthBootstrapLoader = step === 'auth' && busy && !authVisibleError
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })
@@ -1080,7 +1081,15 @@ export function WaitlistFlow(props: {
   ])
 
   return (
-    <section id={sectionId} className={wrapClass}>
+    <>
+      {showAuthBootstrapLoader ? (
+        <AppLoadingState
+          intent="session"
+          labelOverride={authUi.busyLabel}
+          srStatusOverride={authUi.busyLabel}
+        />
+      ) : null}
+      <section id={sectionId} className={wrapClass} aria-hidden={showAuthBootstrapLoader ? true : undefined}>
       {disableHeroMotion ? (
         step === 'auth' ? (
           <WaitlistAuthStep
@@ -1177,5 +1186,6 @@ export function WaitlistFlow(props: {
         </AnimatePresence>
       )}
     </section>
+    </>
   )
 }

@@ -11,11 +11,11 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
+import { ExploreHeroImageReveal } from '@/components/explore/ExploreHeroImageReveal'
 import { EthosBlurOrbs, EthosHeroScoreWash, EthosPageAmbience } from '@/components/explore/EthosPageAmbience'
 import { ExploreEthosRefreshButton } from '@/components/explore/ExploreEthosRefreshButton'
 import { useCreatorEthosPageTheme } from '@/components/explore/ethosPageTheme'
 import { CREATOR_PAGE_LIME, CreatorScrollBridge } from '@/components/explore/CreatorScrollBridge'
-import { ExplorePageCanvas } from '@/components/explore/ExplorePageCanvas'
 import { CreatorImmersiveStatsBeat } from '@/components/explore/CreatorImmersiveStatsBeat'
 import { CreatorContentTimeline } from '@/components/explore/CreatorContentTimeline'
 import { buildCreatorStats } from '@/components/explore/creatorStatsModel'
@@ -920,8 +920,7 @@ export function ExploreCreatorDetail() {
       ? `https://app.uniswap.org/explore/tokens/base/${activeTrayCoinAddress}`
       : 'https://app.uniswap.org'
   return (
-    <div className="relative min-h-screen text-white">
-      <ExplorePageCanvas />
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <PremiumCursor enabled={showCursor} />
       <PageMeta
         title={displayName !== 'Creator' ? `${displayName} (${symbol})` : 'Creator Detail'}
@@ -937,12 +936,17 @@ export function ExploreCreatorDetail() {
           className={cn('relative overflow-hidden bg-transparent', CREATOR_HERO_MIN_HEIGHT_CLASS)}
         >
           {heroBackgroundImage ? (
-            <div className="absolute inset-0 pointer-events-none">
-              <img src={heroBackgroundImage} alt={`${symbol} creator coin logo`} className="w-full h-full object-cover opacity-65" />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/45 to-black/25" />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/58" />
-              <EthosHeroScoreWash theme={ethosTheme} />
-            </div>
+            <ExploreHeroImageReveal
+              src={heroBackgroundImage}
+              alt={`${symbol} creator coin logo`}
+              overlays={
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/72 via-black/45 to-black/25" />
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/58" />
+                  <EthosHeroScoreWash theme={ethosTheme} />
+                </>
+              }
+            />
           ) : null}
           <div className="absolute inset-0 opacity-15 pointer-events-none">
             {[...Array(7)].map((_, i) => (
@@ -981,7 +985,7 @@ export function ExploreCreatorDetail() {
             ref={heroRef}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
+            transition={{ duration: 0.7, delay: heroBackgroundImage ? 0.38 : 0.1, ease: [0.16, 1, 0.3, 1] }}
             className={cn(
               'relative px-6 sm:px-8 lg:px-12 pb-14 sm:pb-20 flex flex-col justify-end',
               CREATOR_HERO_MIN_HEIGHT_CLASS,

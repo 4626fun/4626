@@ -1,10 +1,21 @@
 @import "tailwindcss";
+@import "./styles/trust-page-background.css";
 @config "../tailwind.config.js";
 
 @layer base {
   html {
     position: relative;
-    scrollbar-gutter: stable;
+  }
+
+  html,
+  body,
+  #root {
+    min-height: 100dvh;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
   }
 
   html.telegram-link-html-lock {
@@ -15,15 +26,16 @@
   }
 
   body {
-    @apply bg-vault-bg text-vault-text antialiased font-sans;
+    @apply text-vault-text antialiased font-sans;
     font-weight: 300;
     position: relative;
-    min-height: 100vh;
-    background-image:
-      radial-gradient(58% 42% at 15% -8%, rgba(0, 0, 255, 0.16), transparent 72%),
-      radial-gradient(46% 30% at 82% -4%, rgba(30, 89, 255, 0.12), transparent 74%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.015), rgba(0, 0, 0, 0));
-    background-attachment: fixed;
+    background-color: transparent;
+  }
+
+  html.dark #root,
+  html.dark .vault-shell,
+  html.dark main {
+    background-color: transparent;
   }
 
   body.telegram-link-body-lock {
@@ -84,16 +96,7 @@
 
   /* Creator Vaults Brand Kit utilities */
   .noise-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 35;
-    opacity: 0.028;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-    mix-blend-mode: soft-light;
+    display: none;
   }
 
   .border-glass {
@@ -153,6 +156,45 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.05);
   }
 
+  /* Explore list tables: flat on the shared canvas — no card gradient (avoids row banding). */
+  .explore-table-panel {
+    @apply relative overflow-visible bg-transparent;
+  }
+
+  .explore-table-sticky-bar {
+    background: color-mix(in srgb, var(--trust-page-bg) 72%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+
+  .explore-table-sticky-cell {
+    background: color-mix(in srgb, var(--trust-page-bg) 80%, transparent);
+  }
+
+  .group:hover .explore-table-sticky-cell {
+    background: color-mix(in srgb, var(--trust-page-bg) 62%, transparent);
+  }
+
+  .group:hover .explore-table-row {
+    background: rgb(255 255 255 / 0.025);
+  }
+
+  .explore-table-row {
+    @apply transition-colors;
+  }
+
+  .explore-table-header-shell {
+    @apply w-max max-w-none border-b border-white/8 bg-transparent;
+  }
+
+  .explore-table-scroll {
+    @apply w-full;
+  }
+
+  .explore-table-grid {
+    @apply grid w-max max-w-none;
+  }
+
   .vault-hover-lift {
     transition:
       transform 220ms cubic-bezier(0.22, 0.61, 0.36, 1),
@@ -185,19 +227,9 @@
     overflow-x: clip;
   }
 
-  /* Explore immersive pages: match app vault shell, slightly darker + fine grain. */
+  /* Explore immersive pages inherit the shared trust-page body background. */
   .explore-page-canvas {
-    background-color: var(--explore-canvas, #010101);
-  }
-
-  .explore-page-canvas::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    opacity: 0.42;
-    mix-blend-mode: overlay;
-    pointer-events: none;
-    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.28 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    display: none;
   }
 
   .bv-panel {
@@ -562,8 +594,8 @@
 
 /* Dark */
 html.dark {
-  --vault-bg: 2 2 2;            /* #020202 */
-  --explore-canvas: #010101;    /* slightly darker than vault shell for white type */
+  --vault-bg: var(--trust-page-bg-rgb);
+  --explore-canvas: var(--trust-page-bg);
   --vault-card: 10 10 10;       /* #0A0A0A */
   --vault-card-raised: 15 16 20; /* #0F1014 */
   --vault-border: 31 31 31;     /* #1F1F1F */
@@ -755,28 +787,21 @@ body {
 
 /* Tablet/mobile: keep Explore tables scrollable (show all columns) */
 @media (max-width: 1024px) {
-  #explore-creators-header,
-  #explore-content-header {
-    display: block;
-  }
-
   #explore-creators-body,
   #explore-content-body {
     overflow-x: auto;
   }
 
-  #explore-creators-body > .min-w-max,
-  #explore-content-body > .min-w-max {
+  #explore-creators-body .w-max,
+  #explore-content-body .w-max {
     min-width: max-content;
   }
 
-  /* Hide token name when the table is horizontally scrolled to improve column visibility. */
   #explore-creators-body[data-scrolled="1"] .explore-token-name,
   #explore-content-body[data-scrolled="1"] .explore-token-name {
     display: none;
   }
 
-  /* Collapse sticky identity cell width while scrolling right on mobile. */
   #explore-creators-body[data-scrolled="1"] .explore-sticky-name-cell,
   #explore-content-body[data-scrolled="1"] .explore-sticky-name-cell {
     width: 56px;
@@ -785,21 +810,21 @@ body {
     overflow: hidden;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-sticky-name-header-cell,
-  #explore-content-header[data-scrolled="1"] .explore-sticky-name-header-cell {
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-name-header-cell,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-name-header-cell {
     width: 56px;
     max-width: 56px;
     min-width: 56px;
     overflow: hidden;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-token-header-label,
-  #explore-content-header[data-scrolled="1"] .explore-token-header-label {
+  #explore-creators-body[data-scrolled="1"] .explore-token-header-label,
+  #explore-content-body[data-scrolled="1"] .explore-token-header-label {
     display: none;
   }
 
-  #explore-creators-header[data-scrolled="1"] .explore-sticky-identity-group-header,
-  #explore-content-header[data-scrolled="1"] .explore-sticky-identity-group-header {
+  #explore-creators-body[data-scrolled="1"] .explore-sticky-identity-group-header,
+  #explore-content-body[data-scrolled="1"] .explore-sticky-identity-group-header {
     width: 104px;
     max-width: 104px;
     min-width: 104px;

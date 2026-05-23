@@ -199,6 +199,11 @@ function SubAccountOwnerInstallPanelContent(
       (subAccountDeployed === true || ownerCheck === 'not-owner'),
   })
 
+  useEffect(() => {
+    if (!relayOwnerFlow.preview?.preflight.alreadyOwner) return
+    void refreshOwnerCheck()
+  }, [relayOwnerFlow.preview?.preflight.alreadyOwner, refreshOwnerCheck])
+
   const needsDeploy = subAccountDeployed === false
 
   const handleDeploySubAccount = useCallback(async () => {
@@ -273,7 +278,10 @@ function SubAccountOwnerInstallPanelContent(
     ) : null
 
   const relayActionPanel =
-    inBaseApp && !needsDeploy && (subAccountDeployed === true || ownerCheck === 'not-owner') ? (
+    inBaseApp &&
+    !needsDeploy &&
+    relayOwnerFlow.preview?.preflight.alreadyOwner !== true &&
+    (subAccountDeployed === true || ownerCheck === 'not-owner') ? (
       <AddOwnerActionPanel
         previewLoading={relayOwnerFlow.previewLoading}
         preview={relayOwnerFlow.preview}

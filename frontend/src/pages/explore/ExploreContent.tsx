@@ -95,9 +95,8 @@ export function ExploreContent() {
     onLoadMore: fetchNextPage,
   })
 
-  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
     useExploreHorizontalTableSync({
-      headerId: 'explore-content-header',
       bodyId: 'explore-content-body',
     })
 
@@ -136,9 +135,7 @@ export function ExploreContent() {
       table={
         <>
           <ExploreTableSurface
-            headerId="explore-content-header"
             bodyId="explore-content-body"
-            onHeaderScroll={handleHeaderScroll}
             onBodyScroll={handleBodyScroll}
             header={<PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />}
             body={

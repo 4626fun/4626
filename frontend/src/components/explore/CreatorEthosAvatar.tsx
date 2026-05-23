@@ -47,8 +47,8 @@ export function CreatorSocialEthosBadge({
 
   const badgeClassName =
     size === 'lg'
-      ? 'absolute -bottom-1 left-1/2 z-10 -translate-x-1/2 scale-[1.12] origin-bottom'
-      : 'absolute bottom-1 left-1/2 z-10 -translate-x-1/2'
+      ? 'absolute -bottom-1.5 left-1/2 z-10 -translate-x-1/2 scale-[1.12] origin-bottom'
+      : 'absolute -bottom-0.5 left-1/2 z-10 -translate-x-1/2'
 
   if (ethosScore) {
     return (
@@ -100,13 +100,16 @@ export function CreatorEthosAvatar({
   const isLarge = size === 'lg'
   const wrapperClass = isLarge
     ? 'relative h-12 w-12 shrink-0 sm:h-16 sm:w-16'
-    : 'relative h-10 w-10 shrink-0 sm:h-11 sm:w-11'
+    : 'relative h-11 w-11 shrink-0 sm:h-12 sm:w-12'
   const imageClass = isLarge
     ? cn('h-full w-full rounded-full object-cover', ringClass)
-    : cn('mx-auto h-7 w-7 rounded-full object-cover sm:h-8 sm:w-8', ringClass)
+    : cn('mx-auto block h-9 w-9 rounded-full object-cover sm:h-10 sm:w-10', ringClass)
   const placeholderClass = isLarge
     ? cn('flex h-full w-full items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800', ringClass)
-    : cn('mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-8 sm:w-8', ringClass)
+    : cn(
+        'mx-auto flex h-9 w-9 items-center justify-center rounded-full bg-linear-to-br from-zinc-700 to-zinc-800 sm:h-10 sm:w-10',
+        ringClass,
+      )
 
   const label = fallbackLabel ?? coin.symbol ?? coin.name ?? '?'
   const initials = label.slice(0, 2).toUpperCase()

@@ -845,7 +845,7 @@ class DeployVaultErrorBoundary extends Component<
       const userMessage = sanitizeDeployVaultError(this.state.error)
       const showRawForDev = import.meta.env.DEV && this.state.error?.message
       return (
-        <div className="vault-shell min-h-screen bg-vault-bg text-white">
+        <div className="vault-shell min-h-0 bg-transparent text-white">
           <section className="max-w-[1400px] mx-auto px-6 py-16">
             <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
             <div className="vault-surface vault-hover-lift p-8 space-y-4">
@@ -884,7 +884,7 @@ export function DeployVault() {
 
   if (privyClientStatus === 'loading') {
     return (
-      <div className="vault-shell min-h-screen bg-vault-bg text-white">
+      <div className="vault-shell min-h-0 bg-transparent text-white">
         <section className="max-w-[1400px] mx-auto px-6 py-16">
           <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
           <div className="vault-surface vault-hover-lift p-8 space-y-3">
@@ -901,7 +901,7 @@ export function DeployVault() {
   // Privy is used for auth/session - if disabled, show setup hint.
   if (privyClientStatus === 'disabled') {
     return (
-      <div className="vault-shell min-h-screen bg-vault-bg text-white">
+      <div className="vault-shell min-h-0 bg-transparent text-white">
         <section className="max-w-[1400px] mx-auto px-6 py-16">
           <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
           <div className="vault-surface vault-hover-lift p-8 space-y-3">

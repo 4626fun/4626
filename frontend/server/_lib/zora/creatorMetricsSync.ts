@@ -178,6 +178,43 @@ async function fetchCountCandidate(sdk: any, list: ExploreList, pageSize: number
   return count
 }
 
+async function ensureCreatorMetricsStateColumns(db: Db): Promise<void> {
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS last_hot_refresh_at TIMESTAMPTZ;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_creators_total BIGINT;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_market_cap_usd NUMERIC(38, 12);`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_volume_24h_usd NUMERIC(38, 12);`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_fees_24h_usd NUMERIC(38, 12);`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_totals_at TIMESTAMPTZ;`
+}
+
+async function ensureCreatorMetricsConstraints(db: Db): Promise<void> {
+  await db.sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_id_check'
+      ) THEN
+        ALTER TABLE creator_metrics_state
+          ADD CONSTRAINT creator_metrics_state_id_check CHECK (id = 1);
+      END IF;
+    END $$;
+  `
+  await db.sql`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_sync_status_check'
+      ) THEN
+        ALTER TABLE creator_metrics_state
+          ADD CONSTRAINT creator_metrics_state_sync_status_check
+          CHECK (sync_status IN ('idle', 'running', 'error'));
+      END IF;
+    END $$;
+  `
+}
+
 export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
   if (creatorMetricsSchemaEnsured) return
   if (creatorMetricsSchemaEnsurePromise) return creatorMetricsSchemaEnsurePromise
@@ -191,16 +228,13 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
         to_regclass('public.creator_metrics_daily_snapshots') IS NOT NULL AS has_daily;
     `
     const status = preflight.rows?.[0] ?? {}
-    if (
+    const tablesExist =
       Boolean(status.has_creator_coins) &&
       Boolean(status.has_creators) &&
       Boolean(status.has_state) &&
       Boolean(status.has_daily)
-    ) {
-      creatorMetricsSchemaEnsured = true
-      return
-    }
 
+    if (!tablesExist) {
     await db.sql`
       CREATE TABLE IF NOT EXISTS creator_coins (
         coin_address TEXT PRIMARY KEY,
@@ -255,14 +289,6 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
         cached_totals_at TIMESTAMPTZ
       );
     `
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS last_hot_refresh_at TIMESTAMPTZ;`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_creators_total BIGINT;`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_market_cap_usd NUMERIC(38, 12);`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_volume_24h_usd NUMERIC(38, 12);`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_fees_24h_usd NUMERIC(38, 12);`
-    await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_totals_at TIMESTAMPTZ;`
 
     await db.sql`
       CREATE TABLE IF NOT EXISTS creator_metrics_daily_snapshots (
@@ -275,30 +301,11 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
       );
     `
     await db.sql`CREATE INDEX IF NOT EXISTS creator_metrics_daily_snapshots_day_idx ON creator_metrics_daily_snapshots (day DESC);`
+    }
 
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_id_check'
-        ) THEN
-          ALTER TABLE creator_metrics_state
-            ADD CONSTRAINT creator_metrics_state_id_check CHECK (id = 1);
-        END IF;
-      END $$;
-    `
-    await db.sql`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'creator_metrics_state_sync_status_check'
-        ) THEN
-          ALTER TABLE creator_metrics_state
-            ADD CONSTRAINT creator_metrics_state_sync_status_check
-            CHECK (sync_status IN ('idle', 'running', 'error'));
-        END IF;
-      END $$;
-    `
+    // Existing deployments may have base tables from SQL migrations but miss later columns.
+    await ensureCreatorMetricsStateColumns(db)
+    await ensureCreatorMetricsConstraints(db)
     await db.sql`INSERT INTO creator_metrics_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`
     creatorMetricsSchemaEnsured = true
   })()

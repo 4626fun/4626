@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { getHostMode, getMarketingBaseUrl, isCurrentWindowUrl } from '@/lib/env/host'
 import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
@@ -53,7 +53,9 @@ export function FaqHowItWorks() {
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (getHostMode() !== 'app') return
-    window.location.replace(`${getMarketingBaseUrl()}/faq/how-it-works`)
+    const target = `${getMarketingBaseUrl()}/faq/how-it-works`
+    if (isCurrentWindowUrl(target)) return
+    window.location.replace(target)
   }, [])
   const howToSchema = useMemo(
     () => ({

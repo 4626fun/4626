@@ -1,0 +1,49 @@
+/* Shared canvas layers — keep layer rules in sync with frontend/src/styles/trust-page-background.css */
+@import url('/canvas-tokens.css');
+
+:root {
+  --trust-page-grid-line: rgba(255, 255, 255, 0.01);
+  --trust-page-grid-size: 120px;
+  --trust-page-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.18' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+}
+
+body[data-trust-page]::before,
+html.dark body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--trust-page-bg);
+  background-image:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.002) 0%, transparent 14%, transparent 88%, rgba(0, 0, 0, 0.78) 100%),
+    radial-gradient(ellipse 68% 40% at 50% 0%, rgba(255, 255, 255, 0.003), transparent 68%),
+    linear-gradient(var(--trust-page-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--trust-page-grid-line) 1px, transparent 1px),
+    var(--trust-page-grain);
+  background-size:
+    100% 100%,
+    100% 100%,
+    var(--trust-page-grid-size) var(--trust-page-grid-size),
+    var(--trust-page-grid-size) var(--trust-page-grid-size),
+    200px 200px;
+}
+
+body[data-trust-page],
+html.dark body {
+  background-color: var(--trust-page-bg);
+}
+
+@media (max-width: 768px) {
+  body[data-trust-page]::before,
+  html.dark body::before {
+    position: absolute;
+    inset: 0;
+    min-height: 100%;
+  }
+}
+
+body.telegram-link-body-lock::before,
+body.baseapp-scroll-lock::before {
+  position: absolute;
+}

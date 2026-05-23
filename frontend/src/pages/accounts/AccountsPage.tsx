@@ -31,7 +31,7 @@ export function AccountsPage(props: {
   const { busyProvider, me, privyAuthed } = controller
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <PageMeta
         title="Accounts"
         description="Advanced account settings, linked identities, recovery tools, and canonical Coinbase Smart Wallet setup."

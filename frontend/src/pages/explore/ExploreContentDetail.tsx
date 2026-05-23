@@ -268,7 +268,7 @@ function MetricChart({
 
   if (points.length === 0) {
     return (
-      <div className="flex h-[320px] items-center justify-center rounded-xl border border-white/8 bg-vault-bg text-sm text-zinc-600">
+      <div className="flex h-[320px] items-center justify-center rounded-xl border border-white/8 bg-transparent text-sm text-zinc-600">
         No historical pool data
       </div>
     )
@@ -325,7 +325,7 @@ function MetricChart({
           breakdown) so the ticks naturally align with the plot area
           regardless of which metric is active. */}
       <div className="grid grid-cols-[1fr_auto] items-stretch gap-1">
-        <div className="flex h-[420px] flex-col rounded-xl border border-white/8 bg-vault-bg p-4">
+        <div className="flex h-[420px] flex-col rounded-xl border border-white/8 bg-transparent p-4">
           <div className="flex items-baseline justify-between gap-3">
             <div className="flex items-baseline gap-2">
               <span
@@ -650,7 +650,7 @@ export function ExploreContentDetail() {
   const loading = coinLoading || poolsLoading
 
   return (
-    <div className="relative min-h-screen bg-black overflow-hidden">
+    <div className="relative min-h-0 w-full overflow-hidden bg-transparent">
       <EthosPageAmbience theme={ethosTheme} />
       <PageMeta
         title={`${name} (${symbol})`}

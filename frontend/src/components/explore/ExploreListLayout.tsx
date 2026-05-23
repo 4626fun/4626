@@ -14,7 +14,7 @@ export function ExploreListLayout() {
   useExploreListTabScrollReset()
 
   return (
-    <div className="relative min-h-screen pt-1 sm:pt-2">
+    <div className="relative w-full pt-1 sm:pt-2">
       <PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore/creators" />
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
         <header className="mb-4 sm:mb-6">

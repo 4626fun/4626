@@ -52,7 +52,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const chatStatusMessage = setupComplete ? waitlistChatStatusMessage(waitlistChatStatus) : null
 
   return (
-    <div className="mx-auto w-full max-w-[640px] space-y-6">
+    <>
       <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}
@@ -100,6 +100,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         </button>
       }
     />
-    </div>
+    </>
   )
 }

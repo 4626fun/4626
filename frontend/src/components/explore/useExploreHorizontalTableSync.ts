@@ -9,13 +9,12 @@ type ExploreHorizontalControls = {
 }
 
 type UseExploreHorizontalTableSyncParams = {
-  headerId: string
+  /** Single horizontal scroll container (ExploreTableSurface bodyId). */
   bodyId: string
   onControlsChange?: (controls: ExploreHorizontalControls) => void
 }
 
 export function useExploreHorizontalTableSync({
-  headerId,
   bodyId,
   onControlsChange,
 }: UseExploreHorizontalTableSyncParams) {
@@ -39,17 +38,17 @@ export function useExploreHorizontalTableSync({
   )
 
   useEffect(() => {
-    const body = document.getElementById(bodyId)
-    if (!body) return
+    const scrollEl = document.getElementById(bodyId)
+    if (!scrollEl) return
 
-    const handleResize = () => updateControls(body)
+    const handleResize = () => updateControls(scrollEl)
     handleResize()
     window.addEventListener('resize', handleResize)
 
     let observer: ResizeObserver | null = null
     if (typeof ResizeObserver !== 'undefined') {
       observer = new ResizeObserver(handleResize)
-      observer.observe(body)
+      observer.observe(scrollEl)
     }
 
     return () => {
@@ -58,47 +57,27 @@ export function useExploreHorizontalTableSync({
     }
   }, [bodyId, updateControls])
 
-  const handleHeaderScroll = useCallback(
-    (e: UIEvent<HTMLDivElement>) => {
-      const header = e.currentTarget
-      const body = document.getElementById(bodyId)
-      const scrolled = header.scrollLeft > 0
-      updateControls(header)
-      header.dataset.scrolled = scrolled ? '1' : '0'
-      if (body) {
-        body.scrollLeft = header.scrollLeft
-        body.dataset.scrolled = scrolled ? '1' : '0'
-      }
-    },
-    [bodyId, updateControls],
-  )
-
   const handleBodyScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
-      const body = e.currentTarget
-      const header = document.getElementById(headerId)
-      const scrolled = body.scrollLeft > 0
-      updateControls(body)
-      if (header) {
-        header.scrollLeft = body.scrollLeft
-        header.dataset.scrolled = scrolled ? '1' : '0'
-      }
-      body.dataset.scrolled = scrolled ? '1' : '0'
+      const scrollEl = e.currentTarget
+      const scrolled = scrollEl.scrollLeft > 0
+      updateControls(scrollEl)
+      scrollEl.dataset.scrolled = scrolled ? '1' : '0'
     },
-    [headerId, updateControls],
+    [updateControls],
   )
 
   const handleArrowClick = useCallback(
     (direction: ScrollDirection, stops: number[]) => {
-      const body = document.getElementById(bodyId)
-      if (!body) return
+      const scrollEl = document.getElementById(bodyId)
+      if (!scrollEl) return
 
-      const maxLeft = Math.max(0, body.scrollWidth - body.clientWidth)
-      const currentLeft = body.scrollLeft
+      const maxLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth)
+      const currentLeft = scrollEl.scrollLeft
 
       if (direction === 'right') {
         const nextStop = stops.find((stop) => stop > currentLeft + 1) ?? maxLeft
-        body.scrollTo({ left: Math.min(maxLeft, nextStop), behavior: 'smooth' })
+        scrollEl.scrollTo({ left: Math.min(maxLeft, nextStop), behavior: 'smooth' })
         return
       }
 
@@ -110,7 +89,7 @@ export function useExploreHorizontalTableSync({
           break
         }
       }
-      body.scrollTo({ left: Math.max(0, prevStop), behavior: 'smooth' })
+      scrollEl.scrollTo({ left: Math.max(0, prevStop), behavior: 'smooth' })
     },
     [bodyId],
   )
@@ -119,7 +98,6 @@ export function useExploreHorizontalTableSync({
     hasHorizontalOverflow,
     canScrollLeft,
     canScrollRight,
-    handleHeaderScroll,
     handleBodyScroll,
     handleArrowClick,
   }

@@ -229,7 +229,7 @@ export function ExploreTableLoadingOverlay({
 
   return (
     <div
-      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-vault-bg/75 backdrop-blur-[2px]"
+      className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/30 backdrop-blur-[1px]"
       aria-busy="true"
       aria-live="polite"
     >

@@ -29,6 +29,7 @@ import {
   Leaderboard,
 } from './app/lazyRoutes'
 import { AdminLayout } from './components/layout/AdminLayout'
+import { AppCanvas } from './components/layout/AppCanvas'
 import { Layout } from './components/layout/Layout'
 
 export {
@@ -74,7 +75,7 @@ function NotFoundPage() {
     appCta.href.startsWith('http://') || appCta.href.startsWith('https://')
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <div className="max-w-3xl mx-auto px-6 py-16">
         <div className="text-[10px] uppercase tracking-[0.24em] text-zinc-500 mb-4">4626</div>
         <div className="card rounded-xl p-8 space-y-4">
@@ -109,6 +110,7 @@ function App() {
       <Route
         element={
           <>
+            <AppCanvas />
             <HostGuard />
             <Outlet />
           </>

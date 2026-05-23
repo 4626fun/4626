@@ -181,27 +181,15 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
         </div>
       ) : null}
 
-      {phase === 'complete' ? (
+      {phase === 'complete' && !alreadyComplete ? (
         <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100">
-          {alreadyCompleteMessage ?? pageNotice ?? 'Relay flow completed.'}
-          {txHash ? (
-            <div className="mt-2 break-all">
-              <a
-                href={`https://basescan.org/tx/${txHash}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono underline"
-              >
-                {txHash}
-              </a>
-            </div>
-          ) : null}
+          {pageNotice ?? 'Relay flow completed.'}
         </div>
       ) : null}
 
       <RemoveOwnerStatusCards
-        txHash={phase === 'complete' ? txHash : null}
-        pageNotice={pageNotice}
+        txHash={phase === 'complete' && !alreadyComplete ? txHash : null}
+        pageNotice={alreadyComplete ? null : pageNotice}
         pageError={pageError}
         lastErrorDetail={lastErrorDetail}
         eventLog={eventLog}

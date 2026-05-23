@@ -197,7 +197,7 @@ export function ExploreVaults() {
         <>
           <div className="overflow-x-auto scrollbar-hide">
             <table className="w-full min-w-[1080px] text-sm">
-              <thead className="sticky top-0 z-20 border-b border-white/8 bg-vault-bg/95 backdrop-blur">
+              <thead className="explore-table-sticky-bar sticky top-0 z-20 border-b border-white/8">
                 <tr className="text-left text-[11px] uppercase tracking-[0.16em] text-zinc-500">
                   <th className="px-3 py-3 font-medium">#</th>
                   <th className="px-3 py-3 font-medium">Vault</th>

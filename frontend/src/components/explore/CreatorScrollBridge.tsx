@@ -20,7 +20,7 @@ type CreatorScrollBridgeProps = {
 }
 
 const DEFAULT_BRIDGE_HEIGHT_CLASS = 'min-h-[240vh] md:min-h-[280vh]'
-const STATS_BRIDGE_HEIGHT_CLASS = 'h-[240vh] md:h-[280vh]'
+const STATS_BRIDGE_HEIGHT_CLASS = 'h-[820vh] md:h-[920vh]'
 
 const BASE_BG: Record<CreatorScrollBridgeTone, string> = {
   void: 'bg-transparent',
@@ -38,10 +38,10 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
     return (
       <>
         <div
-          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_55%,transparent)] to-transparent')}
+          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,var(--trust-page-bg))] via-[color-mix(in_srgb,var(--explore-canvas,var(--trust-page-bg))_55%,transparent)] to-transparent')}
         />
         <div
-          className={cn(edge, 'bottom-0 h-[min(20vh,180px)] bg-gradient-to-t from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_50%,transparent)] to-transparent')}
+          className={cn(edge, 'bottom-0 h-[min(20vh,180px)] bg-gradient-to-t from-[var(--explore-canvas,var(--trust-page-bg))] via-[color-mix(in_srgb,var(--explore-canvas,var(--trust-page-bg))_50%,transparent)] to-transparent')}
         />
       </>
     )
@@ -51,7 +51,7 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
     return (
       <>
         <div
-          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,#010101)] via-[color-mix(in_srgb,var(--explore-canvas,#010101)_50%,transparent)] to-transparent')}
+          className={cn(edge, 'top-0 h-[min(18vh,160px)] bg-gradient-to-b from-[var(--explore-canvas,var(--trust-page-bg))] via-[color-mix(in_srgb,var(--explore-canvas,var(--trust-page-bg))_50%,transparent)] to-transparent')}
         />
         <div
           className={cn(edge, 'bottom-0 h-[min(22vh,200px)]')}
@@ -71,7 +71,7 @@ function BridgeEdgeFades({ tone }: { tone: CreatorScrollBridgeTone }) {
           background: `linear-gradient(to bottom, ${lime} 0%, rgba(${limeRgb},0.55) 32%, rgba(9,9,11,0.12) 68%, transparent 100%)`,
         }}
       />
-      <div className={cn(edge, 'bottom-0 h-[min(22vh,200px)] bg-gradient-to-t from-[var(--explore-canvas,#010101)] via-zinc-950/70 to-transparent')} />
+      <div className={cn(edge, 'bottom-0 h-[min(22vh,200px)] bg-gradient-to-t from-[var(--explore-canvas,var(--trust-page-bg))] via-zinc-950/70 to-transparent')} />
     </>
   )
 }
@@ -235,7 +235,7 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
         )}
 
         {centerContent ? (
-          <div className="relative z-[2] flex flex-1 flex-col items-center justify-center px-5 sm:px-8 py-10 sm:py-14 text-center">
+          <div className="relative z-[2] flex flex-1 w-full flex-col items-center justify-center px-4 sm:px-10 lg:px-16 py-10 sm:py-14 text-center">
             {centerContent}
             <div ref={hintRef} className="mt-10 sm:mt-14 flex flex-col items-center gap-2.5 opacity-35">
               <span className="text-[10px] font-mono uppercase tracking-[0.32em] text-zinc-500">Scroll</span>

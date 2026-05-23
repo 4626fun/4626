@@ -26,7 +26,7 @@ const MECHANIC_ROWS = [
 
 export function DistributeCcaLaunch() {
   return (
-    <div className="relative min-h-screen">
+    <div className="relative min-h-0 w-full bg-transparent">
       <PageMeta
         title="CCA Launch Distribution · 4626.fun"
         description={`${CCA_AMOUNT} ${SHARE_TOKEN} (${CCA_PERCENT} of the minted supply) is allocated to a weekly Uniswap CCA auction for market price discovery.`}

@@ -513,9 +513,8 @@ export function ExploreCreators() {
     setCollapseIdentity(overflow && !atLeftEdge && window.innerWidth <= 1024)
   }, [])
 
-  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleBodyScroll, handleArrowClick } =
     useExploreHorizontalTableSync({
-      headerId: 'explore-creators-header',
       bodyId: 'explore-creators-body',
       onControlsChange: onHorizontalControlsChange,
     })
@@ -562,9 +561,7 @@ export function ExploreCreators() {
       table={
         <>
           <ExploreTableSurface
-            headerId="explore-creators-header"
             bodyId="explore-creators-body"
-            onHeaderScroll={handleHeaderScroll}
             onBodyScroll={handleBodyScroll}
             header={
               <TokenTableHeader

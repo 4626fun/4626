@@ -1,11 +1,15 @@
 import fs from 'node:fs'
 
+import { resolveCanvasTokens } from './canvasTokens.mjs'
+
 const SHARED_SITE_META = JSON.parse(
   fs.readFileSync(new URL('../shared/site-meta.json', import.meta.url), 'utf8'),
 )
 const SHARED_SITE_CONFIG = JSON.parse(
   fs.readFileSync(new URL('../shared/site-config.json', import.meta.url), 'utf8'),
 )
+
+const CANVAS_TOKENS = resolveCanvasTokens(SHARED_SITE_CONFIG)
 
 function trimTrailingSlash(url) {
   return String(url).replace(/\/+$/, '')
@@ -176,4 +180,6 @@ export const HTML_SHELL_TEMPLATE_VARS = {
   TALENTAPP_PROJECT_VERIFICATION: HTML_SHELL_CONFIG.talentappProjectVerification,
   MINIAPP_LAUNCH_NAME: HTML_SHELL_CONFIG.miniappLaunchName,
   MINIAPP_SPLASH_BACKGROUND_COLOR: HTML_SHELL_CONFIG.miniappSplashBackgroundColor,
+  CANVAS_BG: CANVAS_TOKENS.bg,
+  CANVAS_BG_RGB: CANVAS_TOKENS.bgRgb,
 }

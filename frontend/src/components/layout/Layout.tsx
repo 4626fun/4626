@@ -124,9 +124,11 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
   const [mobileWalletUsd, setMobileWalletUsd] = useState<number | null>(null)
   const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
+  const isWaitlistSurface = isMarketingWaitlistEntryLocation(location)
+  const showWaitlistFocusedShell = isWaitlistSurface
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
-  const showTopNavBar = true
+  const showTopNavBar = !showWaitlistFocusedShell
   const showAccountMode =
     interactive &&
     hostMode !== 'marketing' &&
@@ -136,7 +138,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       location.pathname.startsWith('/accounts') ||
       location.pathname.startsWith('/status')
     )
-  const baseItems = publicMode || hostMode === 'marketing' ? navItemsPublic : navItems
+  const baseItems = publicMode || hostMode === 'marketing' || isWaitlistSurface ? navItemsPublic : navItems
   const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
   const shouldEnableChat = interactive && chatEnabled && hostMode === 'app'
 
@@ -164,7 +166,11 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   }, [])
 
   const hideMobileNavForMarketingHost = hostMode === 'marketing'
-  const hideMobileNav = isMobileChatOverlayActive || hideMobileNavForBaseApp || hideMobileNavForMarketingHost
+  const hideMobileNav =
+    isMobileChatOverlayActive ||
+    hideMobileNavForBaseApp ||
+    hideMobileNavForMarketingHost ||
+    isWaitlistSurface
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -264,16 +270,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
   }, [])
 
   return (
-    <div className="vault-shell min-h-screen flex flex-col bg-vault-bg">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -left-36 -top-40 h-104 w-104 rounded-full bg-brand-primary/16 blur-[120px] motion-safe:animate-float" />
-        <div
-          className="absolute -right-44 top-8 h-96 w-96 rounded-full bg-blue-400/10 blur-[120px] motion-safe:animate-float"
-          style={{ animationDelay: '700ms' }}
-        />
-        <div className="absolute inset-0 bg-[radial-gradient(120%_70%_at_50%_-10%,rgba(255,255,255,0.06),transparent_62%)]" />
-      </div>
-      <div aria-hidden="true" className="noise-overlay" />
+    <div className={`vault-shell relative flex min-h-0 flex-1 flex-col bg-transparent ${showWaitlistFocusedShell ? 'min-h-dvh' : ''}`}>
       {showTopNavBar ? <VaultNavBar interactive={interactive} /> : null}
       {showAccountMode ? (
         <Suspense fallback={null}>
@@ -292,7 +289,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       {shouldEnableChat ? (
         <XmtpChatProvider>
           {/* Main */}
-          <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+          <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
             <Suspense fallback={<AppLoadingState intent="page" />}>
               <Outlet />
             </Suspense>
@@ -304,7 +301,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
           </Suspense>
         </XmtpChatProvider>
       ) : (
-        <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+        <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
           <Suspense fallback={<AppLoadingState intent="page" />}>
             <Outlet />
           </Suspense>

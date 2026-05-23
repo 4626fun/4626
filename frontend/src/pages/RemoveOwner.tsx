@@ -57,7 +57,7 @@ export function RemoveOwnerPage() {
   })
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-0 w-full bg-transparent text-white">
       <PageMeta
         title="Remove owner"
         description="Remove an owner from your canonical Coinbase Smart Wallet via Relay two-leg execution with strict completion checks."

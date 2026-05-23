@@ -75,10 +75,10 @@ export default function AuctionDemo() {
   }, [currentPrice])
 
   return (
-    <div className="min-h-screen flex flex-col bg-black">
+    <div className="relative min-h-0 w-full flex flex-col bg-transparent text-white">
       <main className="flex-1">
         {/* Editorial Hero (CCA-like) */}
-        <section className="cinematic-section bg-black">
+        <section className="cinematic-section bg-transparent">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14 sm:py-20">
             <div className="flex flex-col gap-8">
               <div className="text-sm text-zinc-500">Continuous Clearing Auctions</div>
@@ -114,7 +114,7 @@ export default function AuctionDemo() {
         </section>
 
         {/* Benefits (CCA-like) */}
-        <section className="cinematic-section bg-black border-t border-white/10">
+        <section className="cinematic-section bg-transparent border-t border-white/10">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14">
             <h2 className="headline text-3xl sm:text-4xl tracking-tight mb-10">
               A better way to distribute your token
@@ -162,7 +162,7 @@ export default function AuctionDemo() {
         </section>
 
         {/* How it works (CCA-like) */}
-        <section className="cinematic-section bg-black border-t border-white/10">
+        <section className="cinematic-section bg-transparent border-t border-white/10">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-14">
             <div className="text-xs tracking-wider text-zinc-500 mb-4">HOW IT WORKS</div>
             <h2 className="headline text-3xl sm:text-4xl tracking-tight mb-10">
@@ -193,7 +193,7 @@ export default function AuctionDemo() {
         </section>
 
         {/* Demo section */}
-        <section id="demo" className="cinematic-section bg-black border-t border-white/10">
+        <section id="demo" className="cinematic-section bg-transparent border-t border-white/10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-14">
             <div className="flex items-end justify-between gap-6 mb-8">
               <div className="max-w-3xl">
@@ -267,7 +267,7 @@ export default function AuctionDemo() {
         </section>
 
         {/* Bottom CTA (CCA-like) */}
-        <section className="cinematic-section bg-black border-t border-white/10">
+        <section className="cinematic-section bg-transparent border-t border-white/10">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
             <div className="bg-black/40 border border-white/10 rounded-2xl p-8 sm:p-10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
               <div>
