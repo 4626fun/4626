@@ -81,14 +81,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const parsed = await readJsonBody<NotifyDepositBody>(req, BODY_MAX_BYTES)
-  if (!parsed.ok) {
-    return res
-      .status(parsed.status)
-      .json({ success: false, error: parsed.error } satisfies ApiEnvelope<never>)
+  let body: NotifyDepositBody
+  try {
+    const parsed = await readJsonBody<NotifyDepositBody>(req, { maxBytes: BODY_MAX_BYTES })
+    if (!parsed || typeof parsed !== 'object') {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid JSON body',
+      } satisfies ApiEnvelope<never>)
+    }
+    body = parsed
+  } catch {
+    return res.status(400).json({
+      success: false,
+      error: 'Invalid JSON body',
+    } satisfies ApiEnvelope<never>)
   }
 
-  const body = parsed.body
   const chainId =
     typeof body.chainId === 'number' && Number.isFinite(body.chainId)
       ? Math.trunc(body.chainId)
@@ -128,16 +137,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const referrer =
     typeof body.referrer === 'string' && body.referrer.trim() ? body.referrer.trim().slice(0, 64) : undefined
 
-  const result = await notifyRelaySolverDeposit({
-    chainId,
-    depositTxHash: body.depositTxHash,
-    indexRequestIds: indexRequestIds.length > 0 ? indexRequestIds : undefined,
-    userCall,
-    referrer,
-  })
+  try {
+    const result = await notifyRelaySolverDeposit({
+      chainId,
+      depositTxHash: body.depositTxHash,
+      indexRequestIds: indexRequestIds.length > 0 ? indexRequestIds : undefined,
+      userCall,
+      referrer,
+    })
 
-  return res.status(200).json({
-    success: true,
-    data: result,
-  } satisfies ApiEnvelope<typeof result>)
+    return res.status(200).json({
+      success: true,
+      data: result,
+    } satisfies ApiEnvelope<typeof result>)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to notify Relay solver'
+    return res.status(500).json({
+      success: false,
+      error: message,
+    } satisfies ApiEnvelope<never>)
+  }
 }
