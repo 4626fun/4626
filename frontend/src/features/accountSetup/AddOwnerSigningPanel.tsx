@@ -8,6 +8,7 @@ import type { useAccountSetupController } from '@/features/accountSetup/useAccou
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
+import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
 
 type AccountSetupController = ReturnType<typeof useAccountSetupController>
 
@@ -59,10 +60,16 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     )
   }, [cswOwnersState.owners, privyEmbeddedEoaAddress])
 
-  const isSelfAuthSession = useMemo(() => {
-    if (!canonicalCswAddress || !ownerSignerAddress) return false
-    return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
-  }, [canonicalCswAddress, ownerSignerAddress])
+  const signerContext = useMemo(
+    () =>
+      resolveOwnerMutationSignerContext({
+        canonicalCswAddress,
+        connectedAddress: ownerSignerAddress,
+        privyEmbeddedEoaAddress,
+      }),
+    [canonicalCswAddress, ownerSignerAddress, privyEmbeddedEoaAddress],
+  )
+  const isSelfAuthSession = signerContext.isSelfAuthSession
 
   const passkeyOnlyOwnerInstallBlocked =
     requiresBaseAppForOwnerInstall &&
@@ -73,11 +80,12 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
   const canRunAddOwnerFlow =
     installedAsOwner !== true &&
     !passkeyOnlyOwnerInstallBlocked &&
-    (connectedOwnerReady || isSelfAuthSession || Boolean(connectedOnchainEoaOwner))
+    (signerContext.signingReady || connectedOwnerReady || Boolean(connectedOnchainEoaOwner))
 
   const addOwnerFlow = useAddOwnerFlow({
     canonicalCswAddress,
     ownerSignerAddress,
+    privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
     enabled: inlineRelay && canRunAddOwnerFlow,
   })

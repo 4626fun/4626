@@ -14,6 +14,7 @@ import {
   resolveOwnerMutationSessionWalletRequest,
   resolveOwnerMutationWallet,
 } from '@/lib/relay/resolveOwnerMutationWallet'
+import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
 
 export type AddOwnerErrorDetail = {
   revertReason: string | null
@@ -29,7 +30,10 @@ type UseAddOwnerFlowParams = {
   /** When set, self-auth Relay deposit is paid from this CSW (e.g. parent custody wallet for sub-account track). */
   relayFundingCswAddress?: string | null | undefined
   ownerSignerAddress: string | null | undefined
+  privyEmbeddedEoaAddress?: string | null | undefined
   privyExternalOwnerWallet?: unknown
+  /** Sub-account panel: parent CSW pays deposit via self-auth even outside Base App WebView. */
+  preferFundingCswSelfAuth?: boolean
   enabled?: boolean
 }
 
@@ -39,12 +43,39 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     targetCswAddress,
     relayFundingCswAddress,
     ownerSignerAddress,
+    privyEmbeddedEoaAddress,
     privyExternalOwnerWallet,
+    preferFundingCswSelfAuth = false,
     enabled = true,
   } = params
 
   const mutationCswAddress = targetCswAddress ?? canonicalCswAddress
   const fundingCswAddress = relayFundingCswAddress ?? mutationCswAddress
+  const signerContext = useMemo(
+    () =>
+      resolveOwnerMutationSignerContext({
+        canonicalCswAddress,
+        fundingCswAddress,
+        connectedAddress: ownerSignerAddress,
+        privyEmbeddedEoaAddress,
+        preferFundingCswSelfAuth,
+      }),
+    [
+      canonicalCswAddress,
+      fundingCswAddress,
+      ownerSignerAddress,
+      preferFundingCswSelfAuth,
+      privyEmbeddedEoaAddress,
+    ],
+  )
+  const relayConnectedAddress = signerContext.relayConnectedAddress
+  const isSelfAuthSession = signerContext.isSelfAuthSession
+  const signingReady = signerContext.signingReady
+  const signingBlockedReason = signerContext.blockedReason
+
+  const selfAuthWalletLabel =
+    targetCswAddress && relayFundingCswAddress ? 'main Base wallet' : targetCswAddress ? 'app wallet' : 'canonical smart wallet'
+
   const { getAccessToken } = usePrivy()
   const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
@@ -61,14 +92,6 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<AddOwnerErrorDetail | null>(null)
 
-  const isSelfAuthSession = useMemo(() => {
-    if (!fundingCswAddress || !ownerSignerAddress) return false
-    return ownerSignerAddress.toLowerCase() === fundingCswAddress.toLowerCase()
-  }, [fundingCswAddress, ownerSignerAddress])
-
-  const selfAuthWalletLabel =
-    targetCswAddress && relayFundingCswAddress ? 'main Base wallet' : targetCswAddress ? 'app wallet' : 'canonical smart wallet'
-
   const appendEvent = useMemo(
     () =>
       import.meta.env.DEV
@@ -78,11 +101,12 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   )
 
   const fetchPreview = useCallback(async () => {
-    if (!enabled || !mutationCswAddress || !ownerSignerAddress) {
+    if (!enabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
       setPageError(
-        isSelfAuthSession
-          ? `Connect your ${selfAuthWalletLabel} in Base App first.`
-          : 'Connect an on-chain CSW owner wallet first.',
+        signingBlockedReason ??
+          (isSelfAuthSession
+            ? `Connect your ${selfAuthWalletLabel} in Base App first.`
+            : 'Connect an on-chain CSW owner wallet first.'),
       )
       return null
     }
@@ -101,7 +125,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         throw new Error('Missing Privy auth token. Sign in and retry.')
       }
       const data = await fetchAddOwnerPreview({
-        connectedAddress: ownerSignerAddress,
+        connectedAddress: relayConnectedAddress,
         targetCswAddress: targetCswAddress ?? undefined,
         headers: { 'X-Privy-Token': token },
       })
@@ -125,8 +149,10 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     getAccessToken,
     isSelfAuthSession,
     mutationCswAddress,
-    ownerSignerAddress,
+    relayConnectedAddress,
     selfAuthWalletLabel,
+    signingBlockedReason,
+    signingReady,
     targetCswAddress,
   ])
 
@@ -140,11 +166,12 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
   }, [])
 
   const handleAdd = useCallback(async () => {
-    if (!enabled || !mutationCswAddress || !ownerSignerAddress) {
+    if (!enabled || !mutationCswAddress || !signingReady || !relayConnectedAddress) {
       setPageError(
-        isSelfAuthSession
-          ? `Connect your ${selfAuthWalletLabel} in Base App first.`
-          : 'Connect an on-chain CSW owner wallet first.',
+        signingBlockedReason ??
+          (isSelfAuthSession
+            ? `Connect your ${selfAuthWalletLabel} in Base App first.`
+            : 'Connect an on-chain CSW owner wallet first.'),
       )
       return false
     }
@@ -159,8 +186,9 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
 
     const walletClient = await resolveOwnerMutationWallet({
       wagmiWalletClient: wagmiWalletClient,
-      ownerSignerAddress,
+      ownerSignerAddress: relayConnectedAddress,
       privyExternalOwnerWallet,
+      isSelfAuthSession,
     })
     if (!walletClient) {
       setPageError(
@@ -250,6 +278,8 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         error: err,
         requiredDepositWei,
         latestCswBalanceWei,
+        isSelfAuthSession,
+        fundingCswAddress: fundingCswAddress,
       })
       setPageError(mapped ?? getWalletErrorMessage(err))
       return false
@@ -264,12 +294,14 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     fundingCswAddress,
     isSelfAuthSession,
     mutationCswAddress,
-    ownerSignerAddress,
     preview,
     privyExternalOwnerWallet,
     publicClient,
+    relayConnectedAddress,
     selfAuthWalletLabel,
     setErrorDetail,
+    signingBlockedReason,
+    signingReady,
     wagmiWalletClient,
   ])
 
@@ -283,6 +315,8 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
+    signingReady,
+    signingBlockedReason,
     fetchPreview,
     handleAdd,
   }

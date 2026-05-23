@@ -325,19 +325,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         : connectedIsCswSelf
           ? cswAddress
           : connectedAddress
-    const relayQuote = await buildOwnerMutationRelayFlow({
-      publicClient,
-      cswAddress,
-      relayQuoteUser,
-      mutationCalldata: txRequest.data,
-      relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
-      relaySource: '4626-add-owner',
-    })
-    relayQuoteDiagnostics = relayQuote.diagnostics
-    if (relayQuote.ok) {
-      relay = relayQuote.relay
+    if (counterfactualSubAccount) {
+      relayQuoteError =
+        'App wallet is not deployed on Base yet. Finish Connect Base App first, then rebuild Enable 4626 signing. Relay cannot addOwnerAddress on a counterfactual app wallet.'
     } else {
-      relayQuoteError = relayQuote.error
+      const relayQuote = await buildOwnerMutationRelayFlow({
+        publicClient,
+        cswAddress,
+        relayQuoteUser,
+        mutationCalldata: txRequest.data,
+        relayQuoteOutputWeiEnvKey: 'RELAY_ADD_OWNER_QUOTE_OUTPUT_WEI',
+        relaySource: '4626-add-owner',
+      })
+      relayQuoteDiagnostics = relayQuote.diagnostics
+      if (relayQuote.ok) {
+        relay = relayQuote.relay
+      } else {
+        relayQuoteError = relayQuote.error
+      }
     }
 
     // Relay-only lane: never fall back to bare CSW addOwnerAddress in `calls`.

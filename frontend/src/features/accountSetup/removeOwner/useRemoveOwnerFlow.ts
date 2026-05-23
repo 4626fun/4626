@@ -18,6 +18,7 @@ import {
   resolveOwnerMutationSessionWalletRequest,
   resolveOwnerMutationWallet,
 } from '@/lib/relay/resolveOwnerMutationWallet'
+import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
 
 export type RemoveOwnerErrorDetail = {
   revertReason: string | null
@@ -29,11 +30,30 @@ export type RemoveOwnerErrorDetail = {
 type UseRemoveOwnerFlowParams = {
   canonicalCswAddress: string | null | undefined
   ownerSignerAddress: string | null | undefined
+  privyEmbeddedEoaAddress?: string | null | undefined
   privyExternalOwnerWallet?: unknown
 }
 
 export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
-  const { canonicalCswAddress, ownerSignerAddress, privyExternalOwnerWallet } = params
+  const {
+    canonicalCswAddress,
+    ownerSignerAddress,
+    privyEmbeddedEoaAddress,
+    privyExternalOwnerWallet,
+  } = params
+  const signerContext = useMemo(
+    () =>
+      resolveOwnerMutationSignerContext({
+        canonicalCswAddress,
+        connectedAddress: ownerSignerAddress,
+        privyEmbeddedEoaAddress,
+      }),
+    [canonicalCswAddress, ownerSignerAddress, privyEmbeddedEoaAddress],
+  )
+  const relayConnectedAddress = signerContext.relayConnectedAddress
+  const isSelfAuthSession = signerContext.isSelfAuthSession
+  const signingReady = signerContext.signingReady
+  const signingBlockedReason = signerContext.blockedReason
   const { baseAccountSdk } = useBaseAccountSdk()
   const { data: wagmiWalletClient } = useWalletClient()
   const wagmiPublicClient = usePublicClient({ chainId: base.id })
@@ -50,11 +70,6 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
   const [txHash, setTxHash] = useState<string | null>(null)
   const [eventLog, setEventLog] = useState<string[]>([])
   const [lastErrorDetail, setLastErrorDetail] = useState<RemoveOwnerErrorDetail | null>(null)
-
-  const isSelfAuthSession = useMemo(() => {
-    if (!canonicalCswAddress || !ownerSignerAddress) return false
-    return ownerSignerAddress.toLowerCase() === canonicalCswAddress.toLowerCase()
-  }, [canonicalCswAddress, ownerSignerAddress])
 
   const appendEvent = useMemo(
     () =>
@@ -86,8 +101,11 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
 
   const fetchPreview = useCallback(
     async (index: number) => {
-      if (!canonicalCswAddress || !ownerSignerAddress) {
-        setPageError('Connect a wallet that owns this CSW (or the CSW itself) first.')
+      if (!canonicalCswAddress || !signingReady || !relayConnectedAddress) {
+        setPageError(
+          signingBlockedReason ??
+            'Connect your Base smart wallet or an external owner wallet first.',
+        )
         return
       }
       const requestId = ++previewRequestIdRef.current
@@ -100,7 +118,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
       try {
         const data = await fetchRemoveOwnerPreview({
           cswAddress: canonicalCswAddress,
-          connectedAddress: ownerSignerAddress,
+          connectedAddress: relayConnectedAddress,
           ownerIndex: index,
         })
         if (requestId !== previewRequestIdRef.current) return
@@ -114,7 +132,7 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         }
       }
     },
-    [canonicalCswAddress, ownerSignerAddress],
+    [canonicalCswAddress, relayConnectedAddress, signingBlockedReason, signingReady],
   )
 
   const handleSelectIndex = useCallback(
@@ -135,15 +153,18 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
   }, [])
 
   const handleRemove = useCallback(async () => {
-    if (!preview || !canonicalCswAddress || !ownerSignerAddress || selectedIndex === null) {
-      setPageError('Connect your wallet and select an owner index first.')
+    if (!preview || !canonicalCswAddress || !signingReady || !relayConnectedAddress || selectedIndex === null) {
+      setPageError(
+        signingBlockedReason ?? 'Connect your wallet and select an owner index first.',
+      )
       return
     }
 
     const walletClient = await resolveOwnerMutationWallet({
       wagmiWalletClient: wagmiWalletClient,
-      ownerSignerAddress,
+      ownerSignerAddress: relayConnectedAddress,
       privyExternalOwnerWallet,
+      isSelfAuthSession,
     })
     if (!walletClient) {
       setPageError(
@@ -173,6 +194,11 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     try {
       if (preview.relay?.userCall?.value) {
         requiredDepositWei = BigInt(preview.relay.userCall.value)
+      }
+      if (isSelfAuthSession && publicClient && canonicalCswAddress) {
+        latestCswBalanceWei = await publicClient.getBalance({
+          address: canonicalCswAddress as `0x${string}`,
+        })
       }
 
       const walletRequest = resolveOwnerMutationSessionWalletRequest({
@@ -232,6 +258,8 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
         error: err,
         requiredDepositWei,
         latestCswBalanceWei,
+        isSelfAuthSession,
+        fundingCswAddress: canonicalCswAddress,
       })
       setPageError(mapped ?? getWalletErrorMessage(err))
     } finally {
@@ -242,12 +270,14 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     baseAccountSdk,
     canonicalCswAddress,
     isSelfAuthSession,
-    ownerSignerAddress,
     preview,
     privyExternalOwnerWallet,
     publicClient,
+    relayConnectedAddress,
     selectedIndex,
     setErrorDetail,
+    signingBlockedReason,
+    signingReady,
     wagmiWalletClient,
   ])
 
@@ -263,6 +293,8 @@ export function useRemoveOwnerFlow(params: UseRemoveOwnerFlowParams) {
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
+    signingReady,
+    signingBlockedReason,
     handleSelectIndex,
     handleRemove,
   }

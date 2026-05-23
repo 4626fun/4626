@@ -16,6 +16,9 @@ export const SUB_ACCOUNT_IN_BASE_APP_HINT =
 export const SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE =
   'Your 4626 signer is linked, but Base App still needs to approve one on-chain owner transaction on your app wallet before swaps can run. Tap Enable 4626 signing again and approve the prompt.'
 
+export const SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE =
+  'Your app wallet is not deployed on Base yet. Finish Connect Base App first so the app wallet exists on-chain, then rebuild Enable 4626 signing. Relay owner install cannot apply addOwnerAddress to a counterfactual wallet.'
+
 export const SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE =
   'Base App could not validate the smart-wallet signature for the on-chain owner step (AA23). Force-close 4626 in Base App, reopen this page, confirm Base Mainnet is selected, then tap Enable 4626 signing again.'
 

@@ -26,6 +26,8 @@ vi.mock('@/features/accountSetup/addOwner/useAddOwnerFlow', () => ({
     eventLog: [],
     lastErrorDetail: null,
     isSelfAuthSession: false,
+    signingReady: true,
+    signingBlockedReason: null,
     fetchPreview: vi.fn(),
     handleAdd: vi.fn(),
   }),
@@ -56,6 +58,7 @@ describe('AddOwnerPage', () => {
       ownerSignerAddress: null,
       activeExternalOwnerWallet: null,
       privyWallets: [],
+      connectOwnerWallet: vi.fn(),
     }
     renderPage()
     expect(screen.getByText(/Sign in to install/i)).toBeTruthy()
@@ -76,6 +79,7 @@ describe('AddOwnerPage', () => {
           walletClientType: 'privy',
         },
       ],
+      connectOwnerWallet: vi.fn(),
     }
     renderPage()
     expect(screen.getByText(/Step 1 of 2/i)).toBeTruthy()
@@ -92,6 +96,7 @@ describe('AddOwnerPage', () => {
       ownerSignerAddress: null,
       activeExternalOwnerWallet: null,
       privyWallets: [],
+      connectOwnerWallet: vi.fn(),
     }
     renderPage()
     expect(screen.getByText(/No canonical Coinbase Smart Wallet is linked yet/i)).toBeTruthy()

@@ -14,6 +14,7 @@ import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { SubAccountOwnerInstallRecovery } from './SubAccountOwnerInstallRecovery'
 import {
   SUB_ACCOUNT_IN_BASE_APP_HINT,
+  SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE,
   SUB_ACCOUNT_SIGNER_LINKED_ONCHAIN_OWNER_PENDING_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
@@ -147,6 +148,8 @@ function SubAccountOwnerInstallPanelContent(
     targetCswAddress: subAccount,
     relayFundingCswAddress: parent,
     ownerSignerAddress: parent,
+    privyEmbeddedEoaAddress: embeddedEoa,
+    preferFundingCswSelfAuth: true,
     enabled: canRender && inBaseApp && !embeddedOwnerOnSubAccount,
   })
 
@@ -206,8 +209,7 @@ function SubAccountOwnerInstallPanelContent(
         </div>
         {ownerCheck === 'unknown' ? (
           <p className="text-xs leading-relaxed text-zinc-400">
-            Your app wallet is not deployed on Base yet. Relay deploys it when you submit — the small
-            deposit is paid from your main Base smart wallet.
+            {SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE}
           </p>
         ) : null}
         {needsBaseAppHost ? (
@@ -353,8 +355,7 @@ function SubAccountOwnerInstallPanelContent(
       {contextHint}
       {ownerCheck === 'unknown' && inBaseApp ? (
         <p className="text-xs leading-relaxed text-zinc-400">
-          Your app wallet is not deployed on Base yet. Relay deploys it when you submit — the small
-          deposit is paid from your main Base smart wallet.
+          {SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE}
         </p>
       ) : null}
       {primaryAction}

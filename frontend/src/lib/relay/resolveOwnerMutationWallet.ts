@@ -53,9 +53,14 @@ export async function resolveOwnerMutationWallet(params: {
   wagmiWalletClient: OwnerMutationWalletLike | null | undefined
   ownerSignerAddress: string | null | undefined
   privyExternalOwnerWallet?: unknown
+  isSelfAuthSession?: boolean
 }): Promise<OwnerMutationWalletLike | null> {
-  const { wagmiWalletClient, ownerSignerAddress, privyExternalOwnerWallet } = params
+  const { wagmiWalletClient, ownerSignerAddress, privyExternalOwnerWallet, isSelfAuthSession } = params
   if (!ownerSignerAddress) return null
+
+  if (isSelfAuthSession) {
+    return { account: ownerSignerAddress as Address }
+  }
 
   if (walletMatchesSigner(wagmiWalletClient, ownerSignerAddress) && wagmiWalletClient) {
     return wagmiWalletClient
@@ -72,7 +77,10 @@ export async function resolveOwnerMutationWallet(params: {
     }
   }
 
-  if (wagmiWalletClient?.sendTransaction || wagmiWalletClient?.request) {
+  if (
+    walletMatchesSigner(wagmiWalletClient, ownerSignerAddress) &&
+    (wagmiWalletClient?.sendTransaction || wagmiWalletClient?.request)
+  ) {
     return wagmiWalletClient
   }
 
@@ -106,6 +114,7 @@ export function resolveOwnerMutationSessionWalletRequest(params: {
     return resolveSelfAuthSendCallsRequest({
       wagmiWalletClient: params.wagmiWalletClient,
       baseAccountSdk: params.baseAccountSdk,
+      ownerSignerAddress: resolveWalletAccountAddress(params.walletClient),
     })
   }
   return resolveOwnerMutationWalletRequest(params.walletClient)
@@ -114,6 +123,8 @@ export function resolveOwnerMutationSessionWalletRequest(params: {
 export function resolveSelfAuthSendCallsRequest(params: {
   wagmiWalletClient: OwnerMutationWalletLike | null | undefined
   baseAccountSdk?: SelfAuthWalletRequestProvider | null
+  /** When set, only fall back to wagmi if its active account matches this CSW. */
+  ownerSignerAddress?: string | null
 }): ((args: { method: string; params?: unknown[] }) => Promise<unknown>) | undefined {
   const sdk = params.baseAccountSdk
   if (sdk && typeof sdk.getProvider === 'function') {
@@ -123,8 +134,14 @@ export function resolveSelfAuthSendCallsRequest(params: {
         return async (args) => await sdkProvider.request!(args)
       }
     } catch {
-      /* fall through to wagmi / injected provider */
+      /* fall through to matched wagmi provider only */
     }
   }
-  return resolveOwnerMutationWalletRequest(params.wagmiWalletClient)
+  if (
+    params.ownerSignerAddress &&
+    walletMatchesSigner(params.wagmiWalletClient, params.ownerSignerAddress)
+  ) {
+    return resolveOwnerMutationWalletRequest(params.wagmiWalletClient)
+  }
+  return undefined
 }

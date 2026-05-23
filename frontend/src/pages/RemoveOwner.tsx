@@ -7,6 +7,7 @@ import { RemoveOwnerActionPanel } from '@/features/accountSetup/removeOwner/Remo
 import { RemoveOwnerOwnerSlotsCard } from '@/features/accountSetup/removeOwner/RemoveOwnerOwnerSlotsCard'
 import { useRemoveOwnerFlow } from '@/features/accountSetup/removeOwner/useRemoveOwnerFlow'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 
 export function RemoveOwnerPage() {
@@ -18,7 +19,16 @@ export function RemoveOwnerPage() {
     login,
     ownerSignerAddress,
     activeExternalOwnerWallet,
+    privyWallets,
+    connectOwnerWallet,
   } = controller
+
+  const privyEmbeddedEoaAddress = useMemo(() => {
+    const candidates = (Array.isArray(privyWallets) ? privyWallets : []) as Array<Record<string, unknown>>
+    const found = pickPrivyEmbeddedEoaWallet(candidates)
+    const address = found?.address
+    return typeof address === 'string' ? address.toLowerCase() : null
+  }, [privyWallets])
 
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
   const externalUrl = useMemo(() => externalBrowserUrlFor('/remove-owner'), [])
@@ -35,11 +45,14 @@ export function RemoveOwnerPage() {
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
+    signingReady,
+    signingBlockedReason,
     handleSelectIndex,
     handleRemove,
   } = useRemoveOwnerFlow({
     canonicalCswAddress,
     ownerSignerAddress,
+    privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
   })
 
@@ -135,6 +148,20 @@ export function RemoveOwnerPage() {
               </div>
             ) : (
               <>
+                {!signingReady ? (
+                  <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 text-sm space-y-3">
+                    <p className="text-zinc-300">
+                      {signingBlockedReason ??
+                        'Connect your Base smart wallet or an external owner wallet before selecting an owner to remove.'}
+                    </p>
+                    <Button type="button" variant="primary" onClick={() => void connectOwnerWallet()}>
+                      Connect owner wallet
+                    </Button>
+                  </div>
+                ) : null}
+
+                {signingReady ? (
+                  <>
                 <RemoveOwnerOwnerSlotsCard
                   canonicalCswAddress={canonicalCswAddress as `0x${string}`}
                   ownerSignerAddress={(ownerSignerAddress as `0x${string}` | null) ?? null}
@@ -156,6 +183,8 @@ export function RemoveOwnerPage() {
                   lastErrorDetail={lastErrorDetail}
                   eventLog={eventLog}
                 />
+                  </>
+                ) : null}
               </>
             )}
           </div>

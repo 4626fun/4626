@@ -43,11 +43,14 @@ export function AddOwnerPage() {
     eventLog,
     lastErrorDetail,
     isSelfAuthSession,
+    signingReady,
+    signingBlockedReason,
     fetchPreview,
     handleAdd,
   } = useAddOwnerFlow({
     canonicalCswAddress,
     ownerSignerAddress,
+    privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
   })
 
@@ -163,11 +166,11 @@ export function AddOwnerPage() {
                       </dd>
                     </div>
                   </dl>
-                  {!ownerSignerAddress ? (
+                  {!signingReady ? (
                     <div className="rounded-xl border border-white/10 bg-black/30 p-4 text-sm space-y-3">
                       <p className="text-zinc-300">
-                        Connect a wallet that owns this CSW (or the CSW itself in Base App) before
-                        building the Relay preview.
+                        {signingBlockedReason ??
+                          'Connect a wallet that owns this CSW (or open this page in Base App with your smart wallet) before building the Relay preview.'}
                       </p>
                       <Button type="button" variant="primary" onClick={() => void connectOwnerWallet()}>
                         Connect owner wallet
@@ -176,7 +179,7 @@ export function AddOwnerPage() {
                   ) : null}
                 </div>
 
-                {ownerSignerAddress ? (
+                {signingReady ? (
                   <AddOwnerActionPanel
                     previewLoading={previewLoading}
                     preview={preview}

@@ -438,6 +438,8 @@ export function mapRemoveOwnerSubmissionError(params: {
   error: unknown
   requiredDepositWei: bigint | null
   latestCswBalanceWei: bigint | null
+  isSelfAuthSession?: boolean
+  fundingCswAddress?: string | null
 }): string | null {
   const message =
     params.error instanceof Error
@@ -446,6 +448,51 @@ export function mapRemoveOwnerSubmissionError(params: {
         ? params.error
         : ''
   const normalized = message.toLowerCase()
+
+  const depositHint =
+    params.requiredDepositWei && params.requiredDepositWei > 0n
+      ? ` Required relay deposit: ${formatCompactEth(params.requiredDepositWei)} ETH.`
+      : ''
+  const balanceHint =
+    params.latestCswBalanceWei !== null
+      ? ` Smart wallet balance: ${formatCompactEth(params.latestCswBalanceWei)} ETH.`
+      : ''
+
+  if (
+    normalized.includes('insufficient funds') ||
+    normalized.includes('not enough funds') ||
+    normalized.includes('error generating transaction')
+  ) {
+    const balanceCoversDeposit =
+      params.latestCswBalanceWei !== null &&
+      params.requiredDepositWei !== null &&
+      params.requiredDepositWei > 0n &&
+      params.latestCswBalanceWei >= params.requiredDepositWei
+
+    if (params.isSelfAuthSession && balanceCoversDeposit) {
+      return (
+        'Base App reported insufficient funds, but your smart wallet balance covers the Relay deposit.' +
+        depositHint +
+        balanceHint +
+        ' Re-open this page inside Base App, confirm Base Mainnet is selected, and retry. If it persists, rebuild the preview and submit again without switching to an embedded-signer connection.'
+      )
+    }
+
+    if (params.isSelfAuthSession) {
+      return (
+        'Relay deposit must be paid from your Coinbase Smart Wallet inside Base App.' +
+        depositHint +
+        balanceHint +
+        ' Fund the smart wallet on Base Mainnet, then rebuild the preview and retry.'
+      )
+    }
+
+    return (
+      'Relay deposit must be paid from the connected external owner wallet, not the smart wallet custody address.' +
+      depositHint +
+      ' Connect the owner wallet that holds ETH on Base, fund that wallet if needed, rebuild the preview, and retry.'
+    )
+  }
 
   if (normalized.includes('networkid must be provided and not empty')) {
     return (
