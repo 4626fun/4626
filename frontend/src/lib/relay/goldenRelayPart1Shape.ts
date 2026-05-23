@@ -5,7 +5,7 @@ import {
   RELAY_DEPOSITORY_ABI,
   RELAY_DEPOSITORY_BASE,
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
-} from '@/lib/wallet/cswOwnerAbi'
+} from '../wallet/cswOwnerAbi'
 
 /** Tenderly UserOp reference: 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3 */
 export const GOLDEN_RELAY_PART1_USER_OP_HASH =
