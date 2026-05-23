@@ -4,6 +4,7 @@ import {
   parseRelayIntentStatus,
   pollRelayStatusEndpoint,
   resolveRelayIndexRequestIds,
+  resolveRelayStatusEndpoints,
   resolveRelayStatusFallbackRequestId,
   resolveRelayStatusRequestId,
   mapRemoveOwnerSubmissionError,
@@ -11,14 +12,26 @@ import {
 import type { OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
 
 describe('removeOwner relay status helpers', () => {
-  it('uses order id for status polling and indexes both ids when they differ', () => {
+  it('builds status endpoints with requestId first when ids match', () => {
+    const relay = {
+      requestId: '0x1111111111111111111111111111111111111111111111111111111111111111',
+      orderId: '0x1111111111111111111111111111111111111111111111111111111111111111',
+    } as Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>
+
+    expect(resolveRelayStatusEndpoints(relay)).toEqual([
+      'https://api.relay.link/intents/status/v3?requestId=0x1111111111111111111111111111111111111111111111111111111111111111',
+      'https://api.relay.link/intents/status/v3?orderId=0x1111111111111111111111111111111111111111111111111111111111111111',
+    ])
+  })
+
+  it('indexes both ids when they differ and polls requestId first', () => {
     const relay = {
       requestId: '0x1111111111111111111111111111111111111111111111111111111111111111',
       orderId: '0x2222222222222222222222222222222222222222222222222222222222222222',
     } as Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>
 
     expect(resolveRelayIndexRequestIds(relay)).toEqual([relay.orderId, relay.requestId])
-    expect(resolveRelayStatusRequestId(relay)).toBe(relay.orderId)
+    expect(resolveRelayStatusRequestId(relay)).toBe(relay.requestId)
     expect(resolveRelayStatusFallbackRequestId(relay)).toBe(relay.requestId)
   })
 

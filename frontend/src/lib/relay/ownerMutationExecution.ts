@@ -7,12 +7,14 @@ import {
   RELAY_MULTICALL_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import { submitSelfAuthRelayPart1SelfFunded } from '@/lib/relay/submitRelayPart1SelfFunded'
+import { findExistingRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
 import {
   extractRelayExecutionTxHash,
   formatCompactEth,
   normalizeRelayStatusEndpoint,
   pollRelayStatusEndpoint,
   resolveRelayIndexRequestIds,
+  resolveRelayStatusEndpoints,
   resolveRelayStatusFallbackRequestId,
   resolveRelayStatusRequestId,
   validatePreviewRelayUserCallIsNativeDepository,
@@ -214,7 +216,8 @@ export async function executeOwnerMutationViaRelay(
   const indexRequestIds = resolveRelayIndexRequestIds(relay)
   const statusRequestId = resolveRelayStatusRequestId(relay)
   const statusFallbackRequestId = resolveRelayStatusFallbackRequestId(relay)
-  let statusEndpoint = normalizeRelayStatusEndpoint(null, statusRequestId)
+  const statusEndpoints = resolveRelayStatusEndpoints(relay)
+  let statusEndpoint = statusEndpoints[0] ?? normalizeRelayStatusEndpoint(null, statusRequestId)
   appendEvent(`relay:preview_request_id=${relay.requestId}`)
   appendEvent(`relay:index_request_ids=${indexRequestIds.join(',') || 'tx_only'}`)
   appendEvent(`relay:status_request_id=${statusRequestId}`)
@@ -234,40 +237,58 @@ export async function executeOwnerMutationViaRelay(
 
   let executeTxHash: `0x${string}` | null = null
 
-  if (params.isSelfAuthSession) {
-    if (!params.walletRequest) {
-      throw new Error('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
-    }
-    appendEvent('relay_execute:self_auth_route=preview_user_call_self_funded')
-    appendEvent(`relay_execute:funding_csw=${fundingCswAddress}`)
-    executeTxHash = await submitSelfAuthRelayPart1SelfFunded({
-      walletRequest: params.walletRequest,
+  const boundOrderId = (relay.orderId ?? relay.requestId) as `0x${string}`
+  if (publicClient) {
+    const existingPart1Tx = await findExistingRelayPart1DepositTx({
+      publicClient,
       fundingCsw: fundingCswAddress,
       userCall: relay.userCall,
-      chainId: base.id,
-      publicClient,
-      appendEvent,
+      orderId: boundOrderId,
     })
-    onTxHash(executeTxHash)
-  } else {
-    executeTxHash = await submitExternalFunderRelayDeposit({
-      walletClient: params.walletClient,
-      userCall: relay.userCall,
-      appendEvent,
-    })
-    onTxHash(executeTxHash)
+    if (existingPart1Tx) {
+      executeTxHash = existingPart1Tx
+      appendEvent(`relay_part1:skip_existing_deposit tx=${existingPart1Tx}`)
+      appendEvent(`relay_part1:skip_order_id=${boundOrderId}`)
+      onTxHash(existingPart1Tx)
+    }
   }
+
+  if (!executeTxHash) {
+    if (params.isSelfAuthSession) {
+      if (!params.walletRequest) {
+        throw new Error('Connected wallet does not support JSON-RPC request(). Reconnect and try again.')
+      }
+      appendEvent('relay_execute:self_auth_route=preview_user_call_self_funded')
+      appendEvent(`relay_execute:funding_csw=${fundingCswAddress}`)
+      executeTxHash = await submitSelfAuthRelayPart1SelfFunded({
+        walletRequest: params.walletRequest,
+        fundingCsw: fundingCswAddress,
+        userCall: relay.userCall,
+        chainId: base.id,
+        publicClient,
+        appendEvent,
+      })
+      onTxHash(executeTxHash)
+    } else {
+      executeTxHash = await submitExternalFunderRelayDeposit({
+        walletClient: params.walletClient,
+        userCall: relay.userCall,
+        appendEvent,
+      })
+      onTxHash(executeTxHash)
+    }
+  }
+
+  await waitForBundleDepositReceipt({
+    publicClient,
+    depositTxHash: executeTxHash,
+    appendEvent,
+  })
 
   let notifyResult = await wakeRelaySolverAfterPart1Deposit({
     depositTxHash: executeTxHash,
     indexRequestIds,
     userCall: relay.userCall,
-    appendEvent,
-  })
-
-  await waitForBundleDepositReceipt({
-    publicClient,
-    depositTxHash: executeTxHash,
     appendEvent,
   })
 
@@ -280,23 +301,56 @@ export async function executeOwnerMutationViaRelay(
       userCall: relay.userCall,
       appendEvent,
     })
+  } else {
+    appendEvent('relay_notify:reindex_after_receipt')
+    await new Promise((resolve) => setTimeout(resolve, 2_000))
+    await wakeRelaySolverAfterPart1Deposit({
+      depositTxHash: executeTxHash,
+      indexRequestIds,
+      userCall: relay.userCall,
+      appendEvent,
+    })
+  }
+
+  const reindexWhileWaiting = async () => {
+    await wakeRelaySolverAfterPart1Deposit({
+      depositTxHash: executeTxHash!,
+      indexRequestIds,
+      userCall: relay.userCall,
+      appendEvent,
+    })
   }
 
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
       statusEndpoint: endpoint,
-      timeoutMs: 120_000,
+      timeoutMs: 180_000,
       intervalMs: 2_000,
       shouldShortCircuitSuccess: params.verifyMutation,
+      onWaiting: reindexWhileWaiting,
       onTick: (message) => appendEvent(`relay_status.${message}`),
     })
 
   let status = await pollStatus(statusEndpoint)
-  const primaryStatusLabel = String(
+  let primaryStatusLabel = String(
     (status.raw as Record<string, unknown> | null)?.status ?? '',
   )
     .trim()
     .toLowerCase()
+
+  for (let endpointIndex = 1; endpointIndex < statusEndpoints.length; endpointIndex += 1) {
+    if (status.done && status.success) break
+    if (primaryStatusLabel !== 'unknown') break
+    statusEndpoint = statusEndpoints[endpointIndex]!
+    appendEvent(`relay:status_retry_with_endpoint=${statusEndpoint}`)
+    status = await pollStatus(statusEndpoint)
+    primaryStatusLabel = String(
+      (status.raw as Record<string, unknown> | null)?.status ?? '',
+    )
+      .trim()
+      .toLowerCase()
+  }
+
   if (primaryStatusLabel === 'unknown' && statusFallbackRequestId) {
     appendEvent(`relay:status_retry_with_fallback_id=${statusFallbackRequestId}`)
     statusEndpoint = normalizeRelayStatusEndpoint(null, statusFallbackRequestId)
@@ -327,7 +381,7 @@ export async function executeOwnerMutationViaRelay(
     }
     if (statusLabel === 'waiting') {
       throw new Error(
-        'Relay received the Part 1 deposit but has not submitted Part 2 (addOwnerAddress) yet. Rebuild preview and retry, or wait a minute and use Recheck. If this keeps happening after a successful deposit, contact support with the deposit tx hash and preview requestId from the event log.',
+        'Relay received the Part 1 deposit but has not submitted Part 2 (addOwnerAddress) yet. Tap Recheck in a minute — your deposit is recorded. If this persists, rebuild preview and retry Enable 4626 signing (use a fresh quote; paymaster-sponsored Part 1 deposits can stall the solver).',
       )
     }
     throw new Error(

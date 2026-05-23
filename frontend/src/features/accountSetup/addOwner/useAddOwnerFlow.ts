@@ -173,10 +173,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       return false
     }
 
-    let activePreview = preview
-    if (!activePreview) {
-      activePreview = await fetchPreview()
-    }
+    let activePreview = await fetchPreview()
     if (!activePreview || activePreview.preflight.alreadyOwner) {
       return activePreview?.preflight.alreadyOwner === true
     }
@@ -279,7 +276,6 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         fundingCswAddress: fundingCswAddress,
       })
       setPageError(mapped ?? getWalletErrorMessage(err))
-      setTxHash(null)
       return false
     } finally {
       setBusy(false)
@@ -292,7 +288,6 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     fundingCswAddress,
     isSelfAuthSession,
     mutationCswAddress,
-    preview,
     privyExternalOwnerWallet,
     publicClient,
     relayConnectedAddress,

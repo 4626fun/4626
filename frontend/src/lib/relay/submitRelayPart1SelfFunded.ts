@@ -544,40 +544,52 @@ async function submitViaPreparedCallsSelfFunded(params: {
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
 
-    try {
-      return await submitViaSendCallsSelfFunded({
-        walletRequest: params.walletRequest,
-        fundingCsw: params.fundingCsw,
-        userCall: params.userCall,
-        chainId: params.chainId,
-        appendEvent: params.appendEvent,
-      })
-    } catch (sendCallsError) {
-      params.appendEvent(
-        `relay_part1:send_calls_fallback_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
-      )
+    if (params.publicClient) {
+      try {
+        return await submitViaBundlerSelfFunded({
+          walletRequest: params.walletRequest,
+          fundingCsw: params.fundingCsw,
+          userCall: params.userCall,
+          publicClient: params.publicClient,
+          appendEvent: params.appendEvent,
+        })
+      } catch (bundlerError) {
+        params.appendEvent(
+          `relay_part1:bundler_fallback_error=${formatRelayPart1Error(bundlerError).slice(0, 220)}`,
+        )
+      }
     }
 
     params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
-    const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
-    // Base App eth_signTypedData_v4 only accepts the digest from this prepareCalls session.
-    const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
-    params.appendEvent('relay_part1:strip_paymaster_sign_mode=prepare_session_hash')
-    params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
+    try {
+      const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
+      const hashToSign = unwrapDoubleHexEncodedHash(prepareResult.signatureRequest.hash as Hex)
+      params.appendEvent('relay_part1:strip_paymaster_sign_mode=prepare_session_hash')
+      params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
 
-    return await sendSignedPreparedUserOp({
-      walletRequest: params.walletRequest,
-      fundingCsw: params.fundingCsw,
-      prepareResult: {
-        type: prepareResult.type,
-        chainId: prepareResult.chainId,
-        userOp: serializeUserOpForPreparedCallsSend(strippedOp),
-      },
-      hashToSign,
-      chainId: params.chainId,
-      chainIdHex,
-      appendEvent: params.appendEvent,
-    })
+      return await sendSignedPreparedUserOp({
+        walletRequest: params.walletRequest,
+        fundingCsw: params.fundingCsw,
+        prepareResult: {
+          type: prepareResult.type,
+          chainId: prepareResult.chainId,
+          userOp: serializeUserOpForPreparedCallsSend(strippedOp),
+        },
+        hashToSign,
+        chainId: params.chainId,
+        chainIdHex,
+        appendEvent: params.appendEvent,
+      })
+    } catch (stripError) {
+      params.appendEvent(
+        `relay_part1:strip_paymaster_error=${formatRelayPart1Error(stripError).slice(0, 220)}`,
+      )
+    }
+
+    params.appendEvent('relay_part1:warn send_calls_blocked_paymaster_injected')
+    throw new Error(
+      'Base App injected a USDC paymaster for this deposit. That path stalls Relay Part 2 (addOwnerAddress). Tap Rebuild preview, then retry Enable 4626 signing so we can submit a self-funded UserOp instead.',
+    )
   }
 
   params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
@@ -608,9 +620,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * `validatePaymasterUserOp` / `postOp` runs.
  *
  * `wallet_sendCalls` in Base App can auto-attach Coinbase's USDC paymaster even
- * when the dapp omits paymasterService. When Base App still injects paymasterAndData
- * on prepareCalls, fall back to wallet_sendCalls (golden Part 1 shape), then strip
- * paymasterAndData and sign with the original prepareCalls digest (not a recomputed hash).
+ * when the dapp omits paymasterService. When Base App injects paymasterAndData
+ * on prepareCalls, prefer direct self-funded bundler UserOp, then strip+prepared
+ * send, then wallet_sendCalls last (may still attach paymaster and stall Part 2).
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -632,7 +644,14 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
       ...params,
     })
   } catch (preparedError) {
-    params.appendEvent(`relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`)
+    const preparedMessage = formatRelayPart1Error(preparedError)
+    if (
+      preparedMessage.includes('USDC paymaster') ||
+      preparedMessage.includes('stalls Relay Part 2')
+    ) {
+      throw preparedError
+    }
+    params.appendEvent(`relay_part1:prepare_calls_error=${preparedMessage.slice(0, 220)}`)
     try {
       return await submitViaSendCallsSelfFunded({
         walletRequest: params.walletRequest,

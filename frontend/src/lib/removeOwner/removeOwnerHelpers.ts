@@ -91,6 +91,32 @@ export function buildRelayStatusEndpointFromRequestId(requestId: `0x${string}`):
   return `https://api.relay.link/intents/status/v3?requestId=${encodeURIComponent(requestId)}`
 }
 
+export function buildRelayStatusEndpointFromOrderId(orderId: `0x${string}`): string {
+  return `https://api.relay.link/intents/status/v3?orderId=${encodeURIComponent(orderId)}`
+}
+
+/** Status poll URLs in priority order (Relay v3 uses different query keys). */
+export function resolveRelayStatusEndpoints(
+  relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
+): string[] {
+  const endpoints: string[] = []
+  const push = (endpoint: string) => {
+    if (!endpoints.includes(endpoint)) endpoints.push(endpoint)
+  }
+
+  if (relay.orderId && relay.requestId.toLowerCase() !== relay.orderId.toLowerCase()) {
+    push(buildRelayStatusEndpointFromOrderId(relay.orderId))
+    push(buildRelayStatusEndpointFromRequestId(relay.requestId))
+    return endpoints
+  }
+
+  push(buildRelayStatusEndpointFromRequestId(relay.requestId))
+  if (relay.orderId) {
+    push(buildRelayStatusEndpointFromOrderId(relay.orderId))
+  }
+  return endpoints
+}
+
 /** Unique Relay ids to pass as optional hints on POST /transactions/index. */
 export function resolveRelayIndexRequestIds(
   relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
@@ -108,14 +134,14 @@ export function resolveRelayIndexRequestIds(
 }
 
 /**
- * Primary status poll id — prefer on-chain `depositNative` order id when present.
- * Relay binds explicit-deposit Part 1 to protocol.v2.orderId; steps[].requestId
- * can differ and returns `unknown` when polled alone.
+ * Primary status poll id for logging — prefer quote `requestId` (steps id).
+ * Use {@link resolveRelayStatusEndpoints} for polling; Relay v3 treats
+ * `?orderId=` and `?requestId=` differently even when hex values match.
  */
 export function resolveRelayStatusRequestId(
   relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
 ): `0x${string}` {
-  return (relay.orderId ?? relay.requestId) as `0x${string}`
+  return relay.requestId
 }
 
 /** Secondary poll id when primary returns `unknown` and ids differ. */
@@ -220,13 +246,18 @@ export async function pollRelayStatusEndpoint(params: {
   onTick?: (message: string) => void
   /** When true (e.g. on-chain owner already installed), stop polling early as success. */
   shouldShortCircuitSuccess?: () => Promise<boolean>
+  /** Re-wake Relay solver while status stays `waiting` (every 4th poll by default). */
+  onWaiting?: (attempt: number) => Promise<void>
+  waitingReindexEvery?: number
 }): Promise<RelayStatusCheckResult> {
   const timeoutMs = params.timeoutMs ?? 90_000
   const intervalMs = params.intervalMs ?? 2_000
+  const waitingReindexEvery = params.waitingReindexEvery ?? 4
   const start = Date.now()
   let attempt = 0
   let lastRaw: unknown = null
   let lastTxHash: `0x${string}` | null = null
+  let lastStatusText = ''
   while (Date.now() - start < timeoutMs) {
     attempt += 1
     if (params.shouldShortCircuitSuccess) {
@@ -248,9 +279,25 @@ export async function pollRelayStatusEndpoint(params: {
       const parsed = parseRelayIntentStatus(raw)
       lastRaw = raw
       lastTxHash = parsed.txHash ?? lastTxHash
+      lastStatusText = parsed.statusText
       params.onTick?.(
         `status_poll.attempt=${attempt} status=${parsed.statusText || 'unknown'} tx=${lastTxHash ?? 'n/a'}`,
       )
+      if (
+        params.onWaiting &&
+        parsed.statusText === 'waiting' &&
+        attempt % waitingReindexEvery === 0
+      ) {
+        params.onTick?.(`status_poll.attempt=${attempt} waiting_reindex=start`)
+        try {
+          await params.onWaiting(attempt)
+          params.onTick?.(`status_poll.attempt=${attempt} waiting_reindex=done`)
+        } catch (reindexError: unknown) {
+          const message =
+            reindexError instanceof Error ? reindexError.message : String(reindexError ?? 'failed')
+          params.onTick?.(`status_poll.attempt=${attempt} waiting_reindex=warn:${message.slice(0, 180)}`)
+        }
+      }
       if (parsed.done) {
         return { done: true, success: parsed.success, txHash: lastTxHash, raw }
       }
@@ -259,6 +306,9 @@ export async function pollRelayStatusEndpoint(params: {
     }
     await sleep(intervalMs)
   }
+  params.onTick?.(
+    `status_poll.timeout last_status=${lastStatusText || 'unknown'} tx=${lastTxHash ?? 'n/a'}`,
+  )
   return { done: false, success: false, txHash: lastTxHash, raw: lastRaw }
 }
 

@@ -154,6 +154,20 @@ export async function notifyRelaySolverDeposit(
         message: attempt.result.message,
       })),
     })
+  } else if (indexIds.length > 0) {
+    const txOnlyResult = await postRelayUpstream({
+      path: '/transactions/index',
+      body: {
+        txHash: params.depositTxHash,
+        chainId: String(chainId),
+        referrer,
+      },
+    })
+    if (!txOnlyResult.ok) {
+      warnings.push(
+        `transactions/index(tx_only) failed (${txOnlyResult.status || 'network'}): ${txOnlyResult.message}`,
+      )
+    }
   }
 
   let sameChainSingle = false
