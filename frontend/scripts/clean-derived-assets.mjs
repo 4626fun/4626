@@ -10,15 +10,9 @@ const buildDir = path.resolve(root, 'build')
 
 const derivedPublicAssets = [
   'app-hero.png',
-  'app-icon.png',
   'icon-192-maskable.png',
-  'icon-192.png',
-  'icon-512.png',
-  'miniapp-hero.png',
-  'miniapp-icon.png',
   'miniapp-splash.png',
   'pwa-512-maskable.png',
-  'pwa-512.png',
   'screenshot-deploy.png',
   'screenshot-explore.png',
   'screenshot-portrait.png',

@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * Regenerate favicon/PWA PNG derivatives from the canonical Base App icon.
+ * Regenerate favicon/PWA PNG derivatives from the canonical opaque app mark.
  *
- * Source of truth: public/assets/base-app-icon-1024.png (white 4 on black).
+ * Source of truth: public/assets/logo-mark-opaque-1024.png (white 4 on rounded black tile).
  * Versioned filenames come from shared/site-config.json so Base App cannot reuse
  * stale cache entries keyed only by path (query strings are often ignored).
+ *
+ * Also restores legacy root paths (app-icon.png, pwa-512.png, …) that Base App and
+ * older crawlers may still fetch instead of /favicon.ico.
  *
  * Usage:
  *   node scripts/generate-brand-icons.mjs --out public
@@ -76,6 +79,13 @@ function buildDerivativePlan(siteConfig) {
     [miniappIcon, 'icon.png'],
     ['assets/logo-mark-1024.png', 'logo.png'],
     ['assets/og-image.png', 'og.png'],
+    // Legacy Base App / PWA paths that must stay real PNGs (not SPA HTML fallthrough).
+    ['assets/base-app-icon-1024.png', 'app-icon.png'],
+    ['assets/android-chrome-512x512.png', 'pwa-512.png'],
+    ['assets/android-chrome-512x512.png', 'icon-512.png'],
+    ['assets/android-chrome-192x192.png', 'icon-192.png'],
+    [miniappIcon, 'miniapp-icon.png'],
+    ['assets/og-image.png', 'miniapp-hero.png'],
   ]
 
   return { pngDerivatives, rootCompatibilityCopies, favicon32 }
@@ -183,7 +193,7 @@ async function main() {
   const siteConfig = await loadSiteConfig(root)
   const version = Number(siteConfig.brandAssetVersion ?? 3)
   const { pngDerivatives, rootCompatibilityCopies, favicon32 } = buildDerivativePlan(siteConfig)
-  const sourcePath = path.join(outDir, 'assets/base-app-icon-1024.png')
+  const sourcePath = path.join(outDir, 'assets/logo-mark-opaque-1024.png')
 
   if (!(await exists(sourcePath))) {
     // eslint-disable-next-line no-console
@@ -191,6 +201,10 @@ async function main() {
     process.exitCode = 1
     return
   }
+
+  // Keep square full-bleed and opaque tile exports aligned for agent-registration URLs.
+  await fs.copyFile(sourcePath, path.join(outDir, 'assets/base-app-icon-1024.png'))
+  await fs.copyFile(sourcePath, path.join(outDir, 'assets/logo-mark-1024.png'))
 
   await regeneratePngDerivatives(outDir, sourcePath, pngDerivatives, favicon32)
 
@@ -203,7 +217,7 @@ async function main() {
   await removeObsoleteVersionedIcons(outDir, version)
 
   // eslint-disable-next-line no-console
-  console.log(`regenerated favicon/PWA PNG derivatives from assets/base-app-icon-1024.png in ${outRel}`)
+  console.log(`regenerated favicon/PWA PNG derivatives from assets/logo-mark-opaque-1024.png in ${outRel}`)
   // eslint-disable-next-line no-console
   console.log('synced root compatibility icons and docs-site brand/favicon.svg + brand/logo.svg from canonical assets')
 }

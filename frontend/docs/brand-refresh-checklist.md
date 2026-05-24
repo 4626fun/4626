@@ -24,6 +24,8 @@ Generated outputs:
 
 Do not manually edit UI-derived PNGs unless you intentionally want to replace the generated output. For SEO brand-kit assets, replace the committed kit files directly and keep the source docs/tokens out of `public/`.
 
+**Base App exception:** `generate:brand-icons` intentionally restores legacy root PNGs (`app-icon.png`, `pwa-512.png`, `miniapp-icon.png`, `miniapp-hero.png`) so Base App and older crawlers get real icon bytes instead of SPA HTML. See `docs/operations/base-app-icon-refresh.md`.
+
 ## Recommended Workflow
 
 1. Back up or commit anything you want to keep.
@@ -37,8 +39,9 @@ pnpm -C frontend clean:derived-assets
 
 - Start from the current master in `assets/brand/master/` instead of from `tmp/` or old generated PNGs.
 - `public/assets/og-image.png` and `public/assets/twitter-card.png` for SEO/social cards.
-- `public/assets/favicon*`, `public/assets/apple-touch-icon.png`, `public/assets/android-chrome-*`, root `public/favicon.*`, `public/site.webmanifest`, and `public/browserconfig.xml` for install surfaces.
-Do not reintroduce root-level generated icon files such as `public/app-icon.png`, `public/miniapp-icon.png`, `public/pwa-512.png`, or `public/miniapp-hero.png`; route new surfaces to the canonical `public/assets/` files instead.
+- `public/assets/logo-mark-opaque-1024.png` is the canonical app-icon source (white 4 on rounded black tile).
+- `public/assets/favicon*`, `public/assets/apple-touch-icon.png`, `public/assets/android-chrome-*`, root `public/favicon.*`, legacy root `app-icon.png` / `pwa-512.png`, `public/site.webmanifest`, and `public/browserconfig.xml` for install surfaces.
+- Do not reintroduce ad hoc root-level icon files outside the brand-icons generator; route new surfaces to `public/assets/` or extend `generate-brand-icons.mjs`.
 
 4. Verify static brand-kit assets:
 

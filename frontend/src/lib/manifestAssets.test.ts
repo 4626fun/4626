@@ -164,8 +164,22 @@ describe('public manifest assets', () => {
       'apple-touch-icon.png',
       'apple-touch-icon-precomposed.png',
       'icon.png',
+      'app-icon.png',
+      'pwa-512.png',
+      'miniapp-icon.png',
     ]) {
       expect(existsSync(path.join(publicRoot, relativePath))).toBe(true)
+    }
+  })
+
+  it('ships legacy Base App icon paths as PNG bytes (not SPA HTML fallthrough)', () => {
+    for (const relativePath of ['app-icon.png', 'pwa-512.png', 'miniapp-icon.png']) {
+      const filePath = path.join(publicRoot, relativePath)
+      const bytes = readFileSync(filePath)
+      expect(bytes[0]).toBe(0x89)
+      expect(bytes[1]).toBe(0x50)
+      expect(bytes[2]).toBe(0x4e)
+      expect(bytes[3]).toBe(0x47)
     }
   })
 
@@ -176,7 +190,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('7')
+    expect(manifest.miniapp?.version).toBe('8')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

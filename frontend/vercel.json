@@ -190,7 +190,7 @@
       "dest": "https://pinata.4626.fun/ipfs/$1"
     },
     {
-      "src": "/(favicon\\.ico|icon\\.png|favicon-16x16\\.png|favicon-32x32\\.png|apple-touch-icon\\.png|apple-touch-icon-precomposed\\.png)",
+      "src": "/(favicon\\.ico|icon\\.png|favicon-16x16\\.png|favicon-32x32\\.png|apple-touch-icon\\.png|apple-touch-icon-precomposed\\.png|app-icon\\.png|pwa-512\\.png|miniapp-icon\\.png|miniapp-hero\\.png|icon-192\\.png|icon-512\\.png)",
       "headers": {
         "cache-control": "public, max-age=3600, must-revalidate"
       },
