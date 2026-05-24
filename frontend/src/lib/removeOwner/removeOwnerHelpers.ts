@@ -1,7 +1,7 @@
 import { formatEther, type PublicClient } from 'viem'
 
 import { apiFetch } from '@/lib/api/apiBase'
-import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { isBaseAppInAppContext, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import type {
   OwnerMutationEip5792Call,
   OwnerMutationRelayDepositSimulation,
@@ -703,6 +703,29 @@ export function mapRemoveOwnerSubmissionError(params: {
 
   if (normalized.includes('relay owner mutation did not complete')) {
     return 'Relay has not finished executing this owner change yet. Wait one minute, use Recheck, and only rebuild the preview if on-chain signing is still missing.'
+  }
+
+  if (
+    normalized.includes('did not validate on-chain') ||
+    normalized.includes('signature verification failed for the relay deposit') ||
+    normalized.includes('onchain_sig_preflight=invalid') ||
+    normalized.includes('skip_submit_invalid_onchain_sig')
+  ) {
+    const externalUrl = externalBrowserUrlFor('/waitlist?setup=owner-install')
+    if (params.isSelfAuthSession && isBaseAppInAppContext()) {
+      return (
+        'Base App returned a deposit signature your smart wallet rejected on-chain. ' +
+        'Rebuild the preview and retry once inside Base App. ' +
+        `If it keeps failing, open ${externalUrl} in Chrome or Safari and retry Enable 4626 signing there.`
+      )
+    }
+    if (params.isSelfAuthSession) {
+      return (
+        'The wallet returned a deposit signature your smart wallet rejected on-chain. ' +
+        'Rebuild the preview, confirm Base Mainnet, and retry once. ' +
+        `If you are in a wallet in-app browser, open ${externalUrl} in Chrome or Safari instead.`
+      )
+    }
   }
 
   return null

@@ -454,7 +454,6 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
     expect(walletRequest).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendCalls' }),
@@ -506,7 +505,6 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
     expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_prepareCalls' }),
@@ -557,7 +555,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       parsedOwnerIndex: 2,
       bundlerOnly: true,
     })
-    expect(methods).toEqual(['typed_data_v4_csw'])
+    expect(methods).toEqual(['typed_data_v4_csw', 'typed_data_v4_session_key'])
   })
 
   it('session-key Part 1 signs via eth_signTypedData_v4 after paymaster strip', async () => {
@@ -865,7 +863,6 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'eth_requestAccounts' }),
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
   })
 })

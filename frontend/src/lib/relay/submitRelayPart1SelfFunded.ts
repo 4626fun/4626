@@ -1,4 +1,13 @@
-import { decodeAbiParameters, getAddress, hashTypedData, recoverAddress, type Address, type Hex, type PublicClient } from 'viem'
+import {
+  decodeAbiParameters,
+  encodeAbiParameters,
+  getAddress,
+  hashTypedData,
+  recoverAddress,
+  type Address,
+  type Hex,
+  type PublicClient,
+} from 'viem'
 import {
   createBundlerClient,
   entryPoint06Address,
@@ -515,6 +524,7 @@ async function ensureSelfAuthWalletAuthorized(params: {
 
 type SelfAuthSignMethod =
   | 'typed_data_v4_csw'
+  | 'typed_data_v4_session_key'
   | 'personal_sign_data_address'
   | 'personal_sign_address_data'
   | 'eth_sign_address_data'
@@ -528,15 +538,77 @@ export function listSelfAuthSignMethods(params: {
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
   })
-  // Session-key Part 1 must use CSW EIP-712 (replaySafeHash). personal_sign over the raw
-  // EntryPoint digest cannot pass isValidSignature — it signs EIP-191, not replaySafeHash.
+  // Session-key Part 1 must use CSW EIP-712 (replaySafeHash). personal_sign cannot pass
+  // isValidSignature — it signs EIP-191 over the raw hash, not replaySafeHash.
   if (sessionKeyContext) {
-    return ['typed_data_v4_csw']
+    return ['typed_data_v4_csw', 'typed_data_v4_session_key']
   }
   const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
   return ['typed_data_v4_csw', ...ecdsaMethods]
+}
+
+/**
+ * Base App sometimes returns a SignatureWrapper with the wrong ownerIndex while the
+ * inner secp256k1 signature is valid for the session-key owner. Re-wrap when recovery
+ * matches ownerAtIndex(sessionKey).
+ */
+export async function repairSelfAuthSessionKeyWrapperSignature(params: {
+  signature: Hex
+  chainId: number
+  fundingCsw: `0x${string}`
+  userOpHash: Hex
+  expectedOwnerIndex: number
+  expectedOwnerAddress: `0x${string}`
+}): Promise<{ signature: Hex; repaired: boolean }> {
+  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
+  if (!wrapped || hexByteLength(wrapped.signatureData) !== 65) {
+    return { signature: params.signature, repaired: false }
+  }
+
+  const replaySafe = hashTypedData(
+    buildCswUserOpTypedDataPayload({
+      smartWallet: params.fundingCsw,
+      chainId: params.chainId,
+      userOpHash: params.userOpHash,
+    }),
+  )
+
+  let recovered: `0x${string}` | null = null
+  try {
+    recovered = await recoverAddress({ hash: replaySafe, signature: wrapped.signatureData })
+  } catch {
+    return { signature: params.signature, repaired: false }
+  }
+
+  if (recovered.toLowerCase() !== params.expectedOwnerAddress.toLowerCase()) {
+    return { signature: params.signature, repaired: false }
+  }
+
+  if (wrapped.ownerIndex === params.expectedOwnerIndex) {
+    return { signature: params.signature, repaired: false }
+  }
+
+  return {
+    signature: encodeAbiParameters(
+      [{ type: 'uint256' }, { type: 'bytes' }],
+      [BigInt(params.expectedOwnerIndex), wrapped.signatureData],
+    ) as Hex,
+    repaired: true,
+  }
+}
+
+function shouldAttemptSendCallsPart1Fallback(error: unknown): boolean {
+  if (isUserRejectedWalletAction(error)) return false
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return (
+    message.includes('signature verification failed') ||
+    message.includes('did not validate on-chain') ||
+    message.includes('isvalidsignature preflight') ||
+    message.includes('could not submit the relay deposit userop') ||
+    isBundlerSignatureRejectedError(error)
+  )
 }
 
 function hexByteLength(value: Hex): number {
@@ -553,7 +625,7 @@ async function preflightSelfAuthUserOpSignatureOnChain(params: {
   signature: Hex
   appendEvent: (row: string) => void
 }): Promise<boolean> {
-  if (params.signMethod !== 'typed_data_v4_csw') {
+  if (params.signMethod !== 'typed_data_v4_csw' && params.signMethod !== 'typed_data_v4_session_key') {
     params.appendEvent('relay_part1:onchain_sig_preflight=skip_non_typed_data')
     return false
   }
@@ -619,12 +691,16 @@ async function requestSelfAuthSignature(params: {
   chainId: number
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<Hex> {
-  if (params.method === 'typed_data_v4_csw') {
+  if (params.method === 'typed_data_v4_csw' || params.method === 'typed_data_v4_session_key') {
+    const sessionKeyAddress = params.ownerDiscovery?.ownerSignerAddress ?? null
+    const signerAddress =
+      params.method === 'typed_data_v4_session_key' && sessionKeyAddress
+        ? getAddress(sessionKeyAddress)
+        : params.fundingCsw
     return signCswUserOpHashViaTypedDataV4({
       walletRequest: params.walletRequest,
       smartWallet: params.fundingCsw,
-      // Base App self-auth always expects the CSW as the typed-data account param.
-      signerAddress: params.fundingCsw,
+      signerAddress,
       chainId: params.chainId,
       userOpHash: params.hashToSign,
     })
@@ -1072,14 +1148,30 @@ async function attemptPrepareNativeMirrorLane(params: {
   params.appendEvent('relay_part1:lane=prepared_calls_prepare_native')
   const hashToSign = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
   params.appendEvent('relay_part1:sign_hash_mode=prepare_signature_request_native_userop')
-  params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
+
+  const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+    sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+    ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+  })
 
   let signature: Hex
   try {
-    signature = (await params.walletRequest({
-      method: 'personal_sign',
-      params: [hashToSign, params.fundingCsw],
-    })) as Hex
+    if (sessionKeyOwner) {
+      params.appendEvent('relay_part1:sign_mode=typed_data_v4_csw')
+      signature = await signCswUserOpHashViaTypedDataV4({
+        walletRequest: params.walletRequest,
+        smartWallet: params.fundingCsw,
+        signerAddress: params.fundingCsw,
+        chainId: Number.parseInt(params.chainIdHex.slice(2), 16),
+        userOpHash: hashToSign,
+      })
+    } else {
+      params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
+      signature = (await params.walletRequest({
+        method: 'personal_sign',
+        params: [hashToSign, params.fundingCsw],
+      })) as Hex
+    }
   } catch (signError) {
     if (isUserRejectedWalletAction(signError)) {
       throw signError
@@ -1123,7 +1215,7 @@ async function attemptPrepareNativeMirrorLane(params: {
     /* optional */
   }
 
-  const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+  const sessionKeyOwnerResolved = isSelfAuthSessionKeyOwnerContext({
     sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
     ownerIndex: parsedOwnerIndex,
   })
@@ -1140,7 +1232,7 @@ async function attemptPrepareNativeMirrorLane(params: {
     signature,
     parsedOwnerIndex,
     preparedCallsSignerAddress,
-    sessionKeyOwner,
+    sessionKeyOwner: sessionKeyOwnerResolved,
     ownerDiscovery: params.ownerDiscovery,
     appendEvent: params.appendEvent,
   })
@@ -1185,6 +1277,7 @@ async function sendSignedPreparedUserOp(params: {
   const strippedUserOp = effectiveStrip
     ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
+  const strippedRawSendData = stripRawWalletPreparedUserOp(params.preparedUserOpRaw)
 
   let lastSignatureError: unknown = null
   let lastBundlerSignature: Hex | null = null
@@ -1249,6 +1342,22 @@ async function sendSignedPreparedUserOp(params: {
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
         ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
       })
+
+      const entryPointHash = computeUserOpHashWithChainId(input.userOp, params.chainId)
+      if (sessionKeyOwner && params.ownerDiscovery?.ownerSignerAddress) {
+        const repaired = await repairSelfAuthSessionKeyWrapperSignature({
+          signature,
+          chainId: params.chainId,
+          fundingCsw: params.fundingCsw,
+          userOpHash: entryPointHash,
+          expectedOwnerIndex: SELF_AUTH_SESSION_KEY_OWNER_INDEX,
+          expectedOwnerAddress: params.ownerDiscovery.ownerSignerAddress,
+        })
+        if (repaired.repaired) {
+          signature = repaired.signature
+          params.appendEvent('relay_part1:sig_wrapper_repaired=1')
+        }
+      }
 
       const onChainSignatureOk = await preflightSelfAuthUserOpSignatureOnChain({
         publicClient: params.publicClient,
@@ -1356,7 +1465,7 @@ async function sendSignedPreparedUserOp(params: {
       hashMode: candidate.mode,
       userOp: strippedUserOp,
       lane: 'prepared_calls_stripped_self_funded',
-      sendUserOpData: serializeUserOpForPreparedCallsSend(strippedUserOp),
+      sendUserOpData: effectiveStrip ? strippedRawSendData : params.preparedUserOpRaw,
     })
     if (strippedTx) {
       return strippedTx
@@ -1686,11 +1795,11 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *
  * Lane order (self-auth owner-install only):
  *   1. `wallet_prepareCalls` (self-funded capabilities)
- *   2. Sign prepare hash (typed data + ECDSA) against **native** prepared userOp
+ *   2. Sign prepare hash (typed data for session keys; ECDSA otherwise)
  *   3. Sign stripped-hash candidates against paymaster=0 userOp
  *   4. `wallet_sendPreparedCalls` for each pairing above
  *   5. `eth_sendUserOperation` via 4626 custom-owner bundler when prepared-calls reject
- * Never `wallet_sendCalls` — Base App re-injects USDC paymaster on that path.
+ *   6. `wallet_sendCalls` last-resort when signature validation fails (may re-inject paymaster)
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -1720,12 +1829,28 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     appendEvent: params.appendEvent,
   })
 
-  params.appendEvent('relay_part1:skip_send_calls_self_auth')
-
-  return await submitViaPreparedCallsSelfFunded({
-    ...params,
-    publicClient: params.publicClient,
-    ownerDiscovery,
-    customOwnerPolicyToken: params.customOwnerPolicyToken,
-  })
+  try {
+    return await submitViaPreparedCallsSelfFunded({
+      ...params,
+      publicClient: params.publicClient,
+      ownerDiscovery,
+      customOwnerPolicyToken: params.customOwnerPolicyToken,
+    })
+  } catch (preparedError) {
+    if (!shouldAttemptSendCallsPart1Fallback(preparedError)) {
+      throw preparedError
+    }
+    params.appendEvent(
+      `relay_part1:prepared_calls_failed=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
+    )
+    params.appendEvent('relay_part1:lane=send_calls_self_funded_fallback')
+    return await submitViaSendCallsSelfFunded({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      userCall: params.userCall,
+      chainId: params.chainId,
+      publicClient: params.publicClient,
+      appendEvent: params.appendEvent,
+    })
+  }
 }
