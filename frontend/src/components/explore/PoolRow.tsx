@@ -17,7 +17,6 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
 
 type PoolRowProps = {
-  rank: number
   coin: ZoraCoin
   timeframe?: string
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
@@ -33,7 +32,6 @@ type PoolTableHeaderProps = {
 }
 
 export function PoolRow({
-  rank,
   coin,
   timeframe = '1d',
   migratedCoins,
@@ -95,11 +93,6 @@ export function PoolRow({
       className="explore-table-row explore-table-grid items-center text-xs cursor-pointer"
       style={{ gridTemplateColumns }}
     >
-      {/* Rank */}
-      <span className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`} style={{ left: stickyLeft.rank }}>
-        {rank}
-      </span>
-
       {/* Content Name */}
       <div className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 min-w-0 justify-start">
@@ -306,9 +299,6 @@ export function PoolRowSkeleton() {
 
   return (
     <div className="explore-table-row explore-table-grid items-center" style={{ gridTemplateColumns }}>
-      <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
-        <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
-      </div>
       <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2 shadow-[6px_0_16px_-12px_rgba(0,0,0,0.9)]`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
           <div className="w-7 h-7 rounded-lg bg-zinc-800 animate-pulse" />
@@ -320,7 +310,7 @@ export function PoolRowSkeleton() {
       </div>
 
       {columns
-        .filter((c) => c.id !== 'rank' && c.id !== 'name')
+        .filter((c) => c.id !== 'name')
         .map((c) => (
           <div key={c.id} className="px-3 py-2">
             <div className={`h-3 bg-white/8 rounded animate-pulse ${c.align === 'right' ? 'ml-auto' : ''}`} style={{ width: c.widthPx > 100 ? 56 : 40 }} />

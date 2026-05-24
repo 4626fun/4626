@@ -604,7 +604,6 @@ export function ExploreCreators() {
                     return (
                       <TokenRow
                         key={coin.address || index}
-                        rank={index + 1}
                         coin={coin}
                         linkPrefix="/explore/creators"
                         timeframe={currentTimeFilter}

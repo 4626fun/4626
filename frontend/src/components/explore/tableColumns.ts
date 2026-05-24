@@ -5,7 +5,6 @@ export type ExploreSortKey = 'volume' | 'marketCap' | 'priceChange' | 'new' | 'e
 export type ExploreTableGroupId = 'identity' | 'market' | 'fees' | 'payout'
 
 export type ExploreTableColumnId =
-  | 'rank'
   | 'name'
   | 'holders'
   | 'ethosScore'
@@ -26,7 +25,7 @@ export type ExploreTableColumn = {
   align?: ExploreColumnAlign
   /** If set, clicking the header should map to this sort key. */
   sortKey?: ExploreSortKey
-  /** Sticky-left column (rank/name only). */
+  /** Sticky-left column (name only). */
   sticky?: boolean
 }
 
@@ -67,7 +66,6 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
 
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
-    { id: 'rank', label: '#', group: 'identity', widthPx: 48, align: 'right', sticky: true },
     {
       id: 'name',
       label: nameLabel,

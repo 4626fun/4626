@@ -25,7 +25,6 @@ import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
 
 type TokenRowProps = {
-  rank: number
   coin: ZoraCoin
   linkPrefix?: string
   timeframe?: string
@@ -63,7 +62,6 @@ function IdentityAddressChip({ address }: { address: string }) {
 }
 
 export function TokenRow({
-  rank,
   coin,
   linkPrefix = '/explore/creators',
   timeframe = '1d',
@@ -193,14 +191,6 @@ export function TokenRow({
         className="explore-table-row explore-table-grid items-center text-xs cursor-pointer"
         style={{ gridTemplateColumns }}
       >
-        {/* Rank */}
-        <span
-          className={`${stickyCellClass} z-20 text-zinc-500 tabular-nums px-3 py-2 text-center sm:text-right`}
-          style={{ left: stickyLeft.rank }}
-        >
-          {rank}
-        </span>
-
         {/* Token Name */}
         <div
           className={`${stickyCellClass} explore-sticky-name-cell relative z-30 px-3 py-2`}
@@ -437,9 +427,6 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
 
   return (
     <div className="explore-table-row explore-table-grid items-center" style={{ gridTemplateColumns }}>
-      <div className={`${stickyCellClass} px-3 py-2`} style={{ left: stickyLeft.rank }}>
-        <div className="h-3 w-6 bg-white/8 rounded animate-pulse ml-auto" />
-      </div>
       <div className={`${stickyCellClass} explore-sticky-name-cell px-3 py-2`} style={{ left: stickyLeft.name }}>
         <div className="flex items-center gap-2 justify-start">
           <div className="h-9 w-9 rounded-full bg-zinc-800 animate-pulse sm:h-10 sm:w-10" />
@@ -451,7 +438,7 @@ export function TokenRowSkeleton({ collapseIdentity = false }: { collapseIdentit
       </div>
 
       {columns
-        .filter((c) => c.id !== 'rank' && c.id !== 'name')
+        .filter((c) => c.id !== 'name')
         .map((c) => (
           <div key={c.id} className="px-3 py-2">
             <div className={`h-3 bg-white/8 rounded animate-pulse ${c.align === 'right' ? 'ml-auto' : ''}`} style={{ width: c.widthPx > 100 ? 56 : 40 }} />

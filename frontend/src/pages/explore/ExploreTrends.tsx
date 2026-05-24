@@ -152,7 +152,6 @@ export function ExploreTrends() {
                     return (
                       <PoolRow
                         key={coin.address || index}
-                        rank={index + 1}
                         coin={coin}
                         timeframe={currentTimeFilter}
                         migratedCoins={migratedCoins ?? undefined}
