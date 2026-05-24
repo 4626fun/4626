@@ -544,7 +544,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
   })
 
-  it('session-key Part 1 uses personal_sign before typed_data_v4 after paymaster strip', async () => {
+  it('session-key Part 1 uses typed_data_v4 before personal_sign after paymaster strip', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -569,16 +569,16 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           },
         }
       }
-      if (
-        args.method === 'personal_sign' ||
-        args.method === 'eth_sign' ||
-        args.method === 'eth_signTypedData_v4'
-      ) {
+      if (args.method === 'eth_signTypedData_v4') {
         signMethods.push(args.method)
-        if (args.method === 'eth_signTypedData_v4') {
-          throw new Error('Incorrect address')
-        }
         return wrapSelfAuthOwnerSignature(2)
+      }
+      if (args.method === 'personal_sign') {
+        signMethods.push(args.method)
+        return wrapSelfAuthOwnerSignature(2)
+      }
+      if (args.method === 'eth_sign') {
+        throw new Error('The requested method is not supported by this Ethereum provider.')
       }
       if (args.method === 'eth_call') {
         return mockOwnerAtIndexEthCall()
@@ -610,11 +610,11 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
     })
 
-    expect(txHash).toBe('0x' + 'aa'.repeat(32))
-    expect(signMethods[0]).toBe('personal_sign')
-    expect(signMethods.includes('eth_signTypedData_v4')).toBe(false)
+    expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(signMethods[0]).toBe('eth_signTypedData_v4')
+    expect(signMethods.includes('eth_sign')).toBe(false)
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_address')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
   })
 
   it('uses prepare-native mirror when prepare returns paymaster=0', async () => {

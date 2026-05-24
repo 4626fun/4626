@@ -512,13 +512,14 @@ function listSelfAuthSignMethods(params: {
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
   })
-  const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly || sessionKeyContext
-    ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
-    : ['personal_sign_data_address']
-  // Session-key Part 1 uses personal_sign(hash, CSW) in Base App; typed-data with a
-  // non-CSW account param triggers an "incorrect address" modal with no recovery path.
+  const ecdsaMethods: SelfAuthSignMethod[] = sessionKeyContext
+    ? ['personal_sign_data_address', 'personal_sign_address_data']
+    : params.bundlerOnly
+      ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
+      : ['personal_sign_data_address']
+  // Base App exposes eth_signTypedData_v4; eth_sign returns 4200 unsupported for session keys.
   if (sessionKeyContext) {
-    return [...ecdsaMethods, 'typed_data_v4_csw']
+    return ['typed_data_v4_csw', ...ecdsaMethods]
   }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
@@ -1161,6 +1162,27 @@ async function sendSignedPreparedUserOp(params: {
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
         ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
       })
+
+      if (sessionKeyOwner && params.customOwnerPolicyToken) {
+        try {
+          return await submitSignedPreparedUserOpViaBundler({
+            publicClient: params.publicClient,
+            fundingCsw: params.fundingCsw,
+            strippedUserOp: input.userOp,
+            signature,
+            appendEvent: params.appendEvent,
+            customOwnerPolicyToken: params.customOwnerPolicyToken,
+          })
+        } catch (bundlerError) {
+          if (isUserRejectedWalletAction(bundlerError)) {
+            throw bundlerError
+          }
+          params.appendEvent(
+            `relay_part1:prepared_bundler_primary_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
+          )
+          lastSignatureError = bundlerError
+        }
+      }
 
       try {
         const preparedCallsResult = await trySendPreparedCallsUserOp({
