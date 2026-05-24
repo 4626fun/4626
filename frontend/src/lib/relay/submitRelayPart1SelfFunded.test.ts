@@ -17,6 +17,7 @@ import {
   isSelfAuthPasskeyOwnerSignature,
   isSelfAuthReplaySafeSignHashMode,
   isSelfAuthSessionKeyEcdsaSignature,
+  preflightValidateUserOpStyleSignature,
   shouldRejectSelfAuthSignatureForSessionKeyLane,
   stripRawWalletPreparedUserOp,
   stripUserOpPaymaster,
@@ -289,14 +290,18 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
-  it('session-key prepared-calls signers skip ecrecover guesses', () => {
+  it('session-key prepared-calls signers prefer delegated session-key EOA', () => {
     const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
       parsedOwnerAddress: SESSION_KEY_OWNER,
       recoveredEip191Address: '0x87bEB08622dc13c7259dc9c9DD41CDc9d89A2C9b',
       recoveredRawAddress: '0xa57C36026Fe64284Bc45904fbe72685d897032ce',
       sessionKeyOwner: true,
     })
-    expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index'])
+    expect(candidates.map((candidate) => candidate.mode)).toEqual([
+      'recovered_session_key_eoa',
+      'recovered_session_key_eoa_eip191',
+      'owner_at_index',
+    ])
   })
 
   it('session-key prepared-calls signers include funding CSW fallback', () => {
@@ -630,7 +635,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(mockBundlerRequest).not.toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_prepare_native_paymaster_injected=1')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded_fallback')
   })
 
   it('does not fall back to wallet_sendCalls when paymaster strip signing is unauthorized', async () => {
@@ -690,11 +695,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         bundlerOnly: true,
         hashMode: 'csw_replay_safe_primary',
       }),
-    ).toEqual([
-      'typed_data_v4_csw',
-      'personal_sign_data_address',
-      'personal_sign_address_data',
-    ])
+    ).toEqual(['typed_data_v4_csw'])
     expect(
       listSelfAuthSignMethods({
         sessionKeyOwner: true,
@@ -703,13 +704,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         hashMode: 'csw_replay_safe_primary',
         sessionKeySignerAddress: SESSION_KEY_OWNER,
       }),
-    ).toEqual([
-      'typed_data_v4_csw',
-      'personal_sign_data_session_key',
-      'personal_sign_session_key_data',
-      'personal_sign_data_address',
-      'personal_sign_address_data',
-    ])
+    ).toEqual(['typed_data_v4_csw'])
     expect(
       listSelfAuthSignMethods({
         sessionKeyOwner: true,
@@ -811,7 +806,10 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_hash_mode=csw_replay_safe_primary')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_bundler_primary')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_prepared_calls_primary')
+    expect(walletRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
+    )
   })
 
   it('rejects passkey signatures in session-key Part 1 lane', async () => {
@@ -875,7 +873,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
   })
 
-  it('submits session-key Part 1 when isValidSignature preflight is advisory-invalid', async () => {
+  it('skips bundler when replaySafe session-key sig fails validateUserOp preflight', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -900,16 +898,18 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           signatureRequest: { hash: '0x' + '11'.repeat(32) },
           userOp: {
             ...SAMPLE_USER_OP,
-            paymasterAndData:
-              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+            paymasterAndData: '0x',
           },
         }
+      }
+      if (args.method === 'eth_signTypedData_v4') {
+        return wrapSelfAuthOwnerSignature(2)
       }
       if (args.method === 'personal_sign') {
         return wrapSelfAuthOwnerSignature(2)
       }
       if (args.method === 'wallet_sendPreparedCalls') {
-        return { id: 'prepared-advisory' }
+        throw new Error('failed to get packed signature: invalid request: signature.data.address = no matching signer found for account')
       }
       if (args.method === 'wallet_getCallsStatus') {
         return {
@@ -921,28 +921,25 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     const appendEvent = vi.fn()
-    const txHash = await submitSelfAuthRelayPart1SelfFunded({
-      walletRequest,
-      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
-      userCall: {
-        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
-        data: '0x49290c1c' + '0'.repeat(128),
-        value: '0x110dea8a3f8',
-      },
-      chainId: 8453,
-      publicClient: mockPublicClient as never,
-      appendEvent,
-      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
-    })
+    await expect(
+      submitSelfAuthRelayPart1SelfFunded({
+        walletRequest,
+        fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+        userCall: {
+          to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+          data: '0x49290c1c' + '0'.repeat(128),
+          value: '0x110dea8a3f8',
+        },
+        chainId: 8453,
+        publicClient: mockPublicClient as never,
+        appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+      }),
+    ).rejects.toThrow(/signature verification failed|Relay deposit signing was cancelled|did not validate on-chain|no matching signer/i)
 
-    expect(txHash).toBe('0x' + 'cc'.repeat(32))
-    expect(mockBundlerRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'eth_sendUserOperation' }),
-    )
-    expect(walletRequest).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
-    )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_bundler_primary')
+    expect(mockBundlerRequest).not.toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_prepared_calls_primary')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_validate_user_op_preflight=1')
     expect(appendEvent).toHaveBeenCalledWith(
       expect.stringContaining('relay_part1:onchain_sig_preflight=advisory_invalid_session_key'),
     )

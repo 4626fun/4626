@@ -2,6 +2,7 @@ import {
   decodeAbiParameters,
   encodeAbiParameters,
   getAddress,
+  hashMessage,
   hashTypedData,
   recoverAddress,
   type Address,
@@ -508,7 +509,7 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   recoveredEip191Address?: `0x${string}` | null
   resolvedOwnerAtIndexAddress?: `0x${string}` | null
   fundingCsw?: `0x${string}` | null
-  /** When true, only on-chain owner slot addresses — skip ecrecover guesses. */
+  /** When true, prefer delegated session-key EOA before ownerAtIndex bytes. */
   sessionKeyOwner?: boolean
 }): Array<{ address: `0x${string}`; mode: string }> {
   const candidates: Array<{ address: `0x${string}`; mode: string }> = []
@@ -519,15 +520,21 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
     candidates.push({ address: normalized, mode })
   }
 
+  if (params.sessionKeyOwner) {
+    // Base App session keys often sign with a delegated EOA that differs from
+    // ownerAtIndex(2) bytes — wallet_sendPreparedCalls must target that signer.
+    pushUnique(params.recoveredRawAddress, 'recovered_session_key_eoa')
+    pushUnique(params.recoveredEip191Address, 'recovered_session_key_eoa_eip191')
+    pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
+    pushUnique(params.parsedOwnerAddress, 'owner_at_index')
+    pushUnique(params.fundingCsw ?? null, 'funding_csw_session_key')
+    return candidates
+  }
+
   pushUnique(params.parsedOwnerAddress, 'owner_at_index')
   pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
-  if (params.sessionKeyOwner) {
-    pushUnique(params.fundingCsw ?? null, 'funding_csw_session_key')
-  }
-  if (!params.sessionKeyOwner) {
-    pushUnique(params.recoveredEip191Address, 'recovered_eip191')
-    pushUnique(params.recoveredRawAddress, 'recovered_raw')
-  }
+  pushUnique(params.recoveredEip191Address, 'recovered_eip191')
+  pushUnique(params.recoveredRawAddress, 'recovered_raw')
   return candidates
 }
 
@@ -693,14 +700,9 @@ export function listSelfAuthSignMethods(params: {
   })
   if (sessionKeyContext && params.hashMode && isSelfAuthReplaySafeSignHashMode(params.hashMode)) {
     // Coinbase guidance: sign replaySafe via CoinbaseSmartWalletMessage typed data.
-    // personal_sign on the replaySafe digest often surfaces misleading
-    // "Error generating message / not enough funds" in Base App.
-    const methods: SelfAuthSignMethod[] = ['typed_data_v4_csw']
-    if (params.sessionKeySignerAddress) {
-      methods.push('personal_sign_data_session_key', 'personal_sign_session_key_data')
-    }
-    methods.push('personal_sign_data_address', 'personal_sign_address_data')
-    return methods
+    // personal_sign on the replaySafe digest surfaces misleading funds errors and
+    // "Incorrect address" when the session-key delegated EOA is passed as signer.
+    return ['typed_data_v4_csw']
   }
   // EntryPoint-hash session-key lane: personal_sign only. eth_signTypedData_v4 on
   // non-replay-safe hashes can trigger an "Incorrect address" modal — see recipe doc.
@@ -796,9 +798,10 @@ async function alignSelfAuthSessionKeySignature(params: {
   preferredOwnerIndex: number
   preferredOwnerAddress: `0x${string}` | null
   appendEvent: (row: string) => void
-}): Promise<{ signature: Hex; ownerIndex: number | null }> {
+}): Promise<{ signature: Hex; ownerIndex: number | null; recoveredInnerSigner: `0x${string}` | null }> {
   let signature = params.signature
   let ownerIndex = parseSelfAuthOwnerIndexFromSignature(signature)
+  let recoveredInnerSigner: `0x${string}` | null = null
 
   if (ownerIndex == null && hexByteLength(signature) === 65) {
     signature = wrapBareSelfAuthOwnerSignature(signature, params.preferredOwnerIndex)
@@ -845,6 +848,9 @@ async function alignSelfAuthSessionKeySignature(params: {
         params.appendEvent(
           `relay_part1:onchain_sig_recovered=${recovered} owner_index=${wrapped.ownerIndex ?? 'n/a'}:${candidate.mode}`,
         )
+        if (candidate.mode === 'replay_safe_typed_data') {
+          recoveredInnerSigner = recovered
+        }
         const resolvedIndex = await resolveCswOwnerIndexForEoaAddress({
           publicClient: params.publicClient,
           fundingCsw: params.fundingCsw,
@@ -865,7 +871,7 @@ async function alignSelfAuthSessionKeySignature(params: {
     }
   }
 
-  return { signature, ownerIndex }
+  return { signature, ownerIndex, recoveredInnerSigner }
 }
 
 async function preflightSelfAuthUserOpSignatureOnChain(params: {
@@ -915,6 +921,65 @@ async function preflightSelfAuthUserOpSignatureOnChain(params: {
     }
   }
 
+  return false
+}
+
+/**
+ * Mirrors CoinbaseSmartWallet.validateUserOp: `_isValidSignature(userOpHash, sig)` uses the
+ * raw EntryPoint hash (no replaySafe wrap). ERC-1271 isValidSignature preflight can pass
+ * while validateUserOp still returns AA24 — gate bundler submits on this check.
+ */
+export async function preflightValidateUserOpStyleSignature(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  strippedUserOp: V06UserOpFields
+  chainId: number
+  signature: Hex
+  appendEvent: (row: string) => void
+}): Promise<boolean> {
+  const userOpHash = computeUserOpHashWithChainId(params.strippedUserOp, params.chainId)
+  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
+  if (!wrapped) {
+    params.appendEvent('relay_part1:validate_user_op_preflight=no_wrapper')
+    return false
+  }
+
+  if (hexByteLength(wrapped.signatureData) !== 65) {
+    params.appendEvent('relay_part1:validate_user_op_preflight=skipped_non_ecdsa')
+    return true
+  }
+
+  const ownerIndex = wrapped.ownerIndex ?? 0
+  const ownerAddress = await readCswOwnerAddressAtIndex({
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    ownerIndex,
+  })
+  if (!ownerAddress) {
+    params.appendEvent('relay_part1:validate_user_op_preflight=skipped_non_address_owner')
+    return true
+  }
+
+  const inner = wrapped.signatureData
+  const recoveryHashes: Array<{ hash: Hex; mode: string }> = [
+    { hash: userOpHash, mode: 'entrypoint_v06_chain' },
+    { hash: hashMessage({ raw: userOpHash }), mode: 'eip191_entrypoint' },
+  ]
+
+  for (const candidate of recoveryHashes) {
+    try {
+      const recovered = await recoverAddress({ hash: candidate.hash, signature: inner })
+      const ok = recovered.toLowerCase() === ownerAddress.toLowerCase()
+      params.appendEvent(
+        `relay_part1:validate_user_op_preflight=${ok ? 'ok' : 'mismatch'}:${candidate.mode} recovered=${recovered} owner=${ownerAddress}`,
+      )
+      if (ok) return true
+    } catch {
+      /* try next hash domain */
+    }
+  }
+
+  params.appendEvent('relay_part1:validate_user_op_preflight=invalid')
   return false
 }
 
@@ -1625,6 +1690,7 @@ async function sendSignedPreparedUserOp(params: {
       }
 
       const entryPointHash = entryPointUserOpHash
+      let alignedRecoveredInnerSigner: `0x${string}` | null = null
       const sukantoReplaySafeLane = sessionKeyOwner && isSelfAuthReplaySafeSignHashMode(input.hashMode)
       if (sukantoReplaySafeLane) {
         const preferredOwnerIndex =
@@ -1641,6 +1707,13 @@ async function sendSignedPreparedUserOp(params: {
           appendEvent: params.appendEvent,
         })
         signature = aligned.signature
+        alignedRecoveredInnerSigner = aligned.recoveredInnerSigner
+        if (alignedRecoveredInnerSigner) {
+          recoveredRawAddress = alignedRecoveredInnerSigner
+          params.appendEvent(
+            `relay_part1:session_key_delegated_signer=${alignedRecoveredInnerSigner}`,
+          )
+        }
         if (aligned.ownerIndex != null) {
           parsedOwnerIndex = aligned.ownerIndex
           sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
@@ -1675,11 +1748,78 @@ async function sendSignedPreparedUserOp(params: {
         )
       }
 
-      lastBundlerSignature = signature
+      const validateUserOpOk = await preflightValidateUserOpStyleSignature({
+        publicClient: params.publicClient,
+        fundingCsw: params.fundingCsw,
+        strippedUserOp: input.userOp,
+        chainId: params.chainId,
+        signature,
+        appendEvent: params.appendEvent,
+      })
+      if (validateUserOpOk) {
+        lastBundlerSignature = signature
+      } else {
+        params.appendEvent('relay_part1:skip_bundler_validate_user_op_preflight=1')
+      }
 
       const bypassSdkViaBundler =
+        validateUserOpOk &&
         sessionKeyOwner &&
         (isSelfAuthReplaySafeSignHashMode(input.hashMode) || sessionKeyEcdsaOk)
+
+      const submitPreparedCalls = async (laneSuffix: string): Promise<`0x${string}` | null> => {
+        try {
+          const preparedCallsResult = await trySendPreparedCallsUserOp({
+            walletRequest: params.walletRequest,
+            publicClient: params.publicClient,
+            fundingCsw: params.fundingCsw,
+            prepareResult: params.prepareResult,
+            chainIdHex: params.chainIdHex,
+            userOp: input.userOp,
+            sendUserOpData: input.sendUserOpData,
+            lane: `${input.lane}_${laneSuffix}`,
+            signature,
+            parsedOwnerIndex,
+            preparedCallsSignerAddress,
+            recoveredRawAddress: alignedRecoveredInnerSigner ?? recoveredRawAddress,
+            recoveredEip191Address,
+            sessionKeyOwner,
+            ownerDiscovery: params.ownerDiscovery,
+            appendEvent: params.appendEvent,
+          })
+          if (preparedCallsResult.ok) {
+            return preparedCallsResult.txHash
+          }
+          if (preparedCallsResult.signatureRejected) {
+            lastSignatureError = preparedCallsResult.error
+            params.appendEvent(
+              `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsResult.error).slice(0, 120)}`,
+            )
+          }
+        } catch (preparedCallsError) {
+          if (isUserRejectedWalletAction(preparedCallsError)) {
+            throw preparedCallsError
+          }
+          if (isPreparedCallsSignatureRejectedError(preparedCallsError)) {
+            lastSignatureError = preparedCallsError
+            params.appendEvent(
+              `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsError).slice(0, 120)}`,
+            )
+          } else {
+            throw preparedCallsError
+          }
+        }
+        return null
+      }
+
+      // Base App session keys: SDK packing with delegated EOA before raw bundler.
+      if (sukantoReplaySafeLane) {
+        params.appendEvent('relay_part1:lane=sukanto_prepared_calls_primary')
+        const preparedTx = await submitPreparedCalls('sukanto_prepared_primary')
+        if (preparedTx) {
+          return preparedTx
+        }
+      }
 
       if (bypassSdkViaBundler && params.customOwnerPolicyToken) {
         params.appendEvent('relay_part1:lane=sukanto_bundler_primary')
@@ -1703,49 +1843,12 @@ async function sendSignedPreparedUserOp(params: {
         }
       }
 
-      try {
-        const preparedCallsResult = await trySendPreparedCallsUserOp({
-          walletRequest: params.walletRequest,
-          publicClient: params.publicClient,
-          fundingCsw: params.fundingCsw,
-          prepareResult: params.prepareResult,
-          chainIdHex: params.chainIdHex,
-          userOp: input.userOp,
-          sendUserOpData: input.sendUserOpData,
-          lane: input.lane,
-          signature,
-          parsedOwnerIndex,
-          preparedCallsSignerAddress,
-          recoveredRawAddress,
-          recoveredEip191Address,
-          sessionKeyOwner,
-          ownerDiscovery: params.ownerDiscovery,
-          appendEvent: params.appendEvent,
-        })
-        if (preparedCallsResult.ok) {
-          return preparedCallsResult.txHash
-        }
-        if (preparedCallsResult.signatureRejected) {
-          lastSignatureError = preparedCallsResult.error
-          params.appendEvent(
-            `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsResult.error).slice(0, 120)}`,
-          )
-        }
-      } catch (preparedCallsError) {
-        if (isUserRejectedWalletAction(preparedCallsError)) {
-          throw preparedCallsError
-        }
-        if (isPreparedCallsSignatureRejectedError(preparedCallsError)) {
-          lastSignatureError = preparedCallsError
-          params.appendEvent(
-            `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsError).slice(0, 120)}`,
-          )
-        } else {
-          throw preparedCallsError
-        }
+      const preparedTx = await submitPreparedCalls('fallback')
+      if (preparedTx) {
+        return preparedTx
       }
 
-      if (params.customOwnerPolicyToken) {
+      if (params.customOwnerPolicyToken && validateUserOpOk) {
         try {
           return await submitSignedPreparedUserOpViaBundler({
             publicClient: params.publicClient,
@@ -1764,6 +1867,8 @@ async function sendSignedPreparedUserOp(params: {
           )
           lastSignatureError = bundlerError
         }
+      } else if (params.customOwnerPolicyToken && !validateUserOpOk) {
+        params.appendEvent('relay_part1:skip_bundler_inline_validate_user_op_preflight=1')
       }
 
       // Try the next sign method for this hash before advancing hash candidates.
