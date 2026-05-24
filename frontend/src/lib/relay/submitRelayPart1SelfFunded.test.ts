@@ -7,6 +7,7 @@ import {
   parseSelfAuthOwnerIndexFromSignature,
   parseWalletPreparedUserOpV06,
   readPreparedUserOpPaymasterAndData,
+  resolveSelfAuthPreparedCallsSignaturePayloadParams,
   resolveSelfFundedSignHashAfterPaymasterStrip,
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
@@ -120,6 +121,17 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     expect(parseSelfAuthOwnerIndexFromSignature(`0x${'22'.repeat(65)}`)).toBeNull()
   })
 
+  it('uses inner_secp256k1 payload mode for Base App session-key owner index 2', () => {
+    const wrapped = wrapSelfAuthOwnerSignature(2)
+    const resolved = resolveSelfAuthPreparedCallsSignaturePayloadParams({
+      signature: wrapped,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      preparedCallsSignerAddress: null,
+      parsedOwnerIndex: 2,
+    })
+    expect(resolved.mode).toBe('inner_secp256k1')
+  })
+
   it('builds Coinbase Smart Wallet typed data for UserOp hash signing', () => {
     const payload = buildCswUserOpTypedDataPayload({
       smartWallet: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
@@ -198,7 +210,62 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
   })
 
-  it('skips paymaster strip and uses bundler with discovered owner index', async () => {
+  it('strips paymaster and uses wallet_sendPreparedCalls when Base App injects paymaster', async () => {
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0xabc123' },
+          userOp: {
+            ...SAMPLE_USER_OP,
+            paymasterAndData:
+              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+          },
+        }
+      }
+      if (args.method === 'personal_sign') {
+        return wrapSelfAuthOwnerSignature(2)
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        return { id: 'prepared-strip-self-funded' }
+      }
+      if (args.method === 'wallet_getCallsStatus') {
+        return {
+          status: 200,
+          receipts: [{ transactionHash: '0x' + 'ee'.repeat(32) }],
+        }
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '18871666861048',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+    })
+
+    expect(txHash).toBe('0x' + 'ee'.repeat(32))
+    expect(sendCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+    expect(walletRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
+    )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:prepared_calls_signature_mode=inner_secp256k1')
+  })
+
+  it('falls back to bundler with discovered owner index when strip paymaster send fails', async () => {
     vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
       transactionHash: '0x' + 'cc'.repeat(32),
       userOperationHash: '0x' + 'bb'.repeat(32),
@@ -222,6 +289,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       }
       if (args.method === 'personal_sign') {
         return wrapSelfAuthOwnerSignature(2)
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        throw new Error('Invalid UserOp signature or paymaster signature')
       }
       throw new Error(`unexpected method ${args.method}`)
     })
@@ -248,12 +318,12 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         skipPaymaster: true,
       }),
     )
-    expect(walletRequest).not.toHaveBeenCalledWith(
+    expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_strip_paymaster_to_bundler=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_discover_owner_for_bundler')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:discovered_owner_index=2')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:strip_paymaster_fallback_to_bundler=1')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:parsed_owner_index=2')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:bundler_owner_index_override=2')
   })

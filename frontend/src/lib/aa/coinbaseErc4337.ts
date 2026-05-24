@@ -57,6 +57,10 @@ import {
   resetOwnerIndexCacheForTests,
 } from './coinbaseErc4337Owners'
 import { recordUserOpTelemetry, type UserOpTelemetrySample } from './coinbaseErc4337Telemetry'
+import {
+  hexByteLength,
+  parseCoinbaseSignatureWrapper,
+} from '@/lib/wallet/onboardingWalletReplayable'
 
 // ============================================================================
 // ENTRYPOINT v0.6 ENFORCEMENT
@@ -1044,6 +1048,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   retryWithTypedDataSigning?: boolean
   bypassOwnerIndexCache?: boolean
   ownerIndexOverride?: number
+  /** When true, skip owner index 0 during self-auth CSW probe (WebAuthn passkey slot). */
+  skipPasskeyOwnerSlotsInProbe?: boolean
   ownerApprovalContext?: {
     approvalRunId?: string | null
     stage?: string | null
@@ -1074,6 +1080,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     retryWithLowGasContractSigner = true,
     bypassOwnerIndexCache = false,
     ownerIndexOverride: ownerIndexOverrideRaw,
+    skipPasskeyOwnerSlotsInProbe = false,
     ownerApprovalContext,
   } = params
 
@@ -1420,6 +1427,48 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   const origSignUserOp = (baseAccount as any).signUserOperation?.bind(baseAccount)
   if (origSignUserOp) {
     ;(baseAccount as any).signUserOperation = async function (userOperation: any) {
+      if (ownerIsContract) {
+        try {
+          const userOpHash = getUserOperationHash({
+            chainId,
+            entryPointAddress: entryPoint06Address,
+            entryPointVersion: '0.6',
+            userOperation: {
+              ...userOperation,
+              sender: smartWallet,
+            },
+          })
+          const rawSig = (await owner.sign({ hash: userOpHash })) as Hex
+          const parsed = parseCoinbaseSignatureWrapper(rawSig)
+          if (
+            parsed &&
+            parsed.ownerIndex === ownerIndex &&
+            hexByteLength(rawSig) > 65
+          ) {
+            if (AA_DEBUG) {
+              logger.debug('[ERC-4337] signUserOperation: wallet returned pre-wrapped signature; using as-is', {
+                smartWallet,
+                ownerIndex,
+                signatureByteLength: hexByteLength(rawSig),
+              })
+            }
+            return rawSig
+          }
+        } catch (preWrappedProbeError: unknown) {
+          if (AA_DEBUG) {
+            const msg =
+              preWrappedProbeError instanceof Error
+                ? preWrappedProbeError.message
+                : String(preWrappedProbeError ?? '')
+            logger.debug('[ERC-4337] signUserOperation: pre-wrapped probe failed; falling back to viem wrap', {
+              smartWallet,
+              ownerIndex,
+              error: msg,
+            })
+          }
+        }
+      }
+
       const wrapped: Hex = await origSignUserOp(userOperation)
       // For contract-owner/self-auth flows, long signature payloads are expected.
       // Do not attempt "double-wrap" unwrapping here or we can strip a valid

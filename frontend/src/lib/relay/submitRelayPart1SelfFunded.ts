@@ -17,9 +17,11 @@ import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSe
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
+  type PreparedCallsSignaturePayloadMode,
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
   getUserOpHashWithoutChainIdLocal,
+  hexByteLength,
   parseCoinbaseSignatureWrapper,
   preflightOwnerKeyMismatch,
   unwrapDoubleHexEncodedHash,
@@ -52,6 +54,31 @@ class RelayPart1PrepareFallbackToBundler extends Error {
     this.name = 'RelayPart1PrepareFallbackToBundler'
     this.discovery = discovery
   }
+}
+
+/** Base App session-key lanes need inner ECDSA + on-chain owner address, not full wrapper passthrough. */
+export function resolveSelfAuthPreparedCallsSignaturePayloadParams(params: {
+  signature: Hex
+  fundingCsw: `0x${string}`
+  preparedCallsSignerAddress: `0x${string}` | null
+  parsedOwnerIndex: number | null
+}): { mode: PreparedCallsSignaturePayloadMode; signerAddress: `0x${string}` | null } {
+  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
+  const ownerIndex = wrapped?.ownerIndex ?? params.parsedOwnerIndex
+  if (ownerIndex === 2) {
+    return {
+      mode: 'inner_secp256k1',
+      signerAddress: params.preparedCallsSignerAddress,
+    }
+  }
+  if (
+    wrapped &&
+    hexByteLength(wrapped.signatureData) === 65 &&
+    params.preparedCallsSignerAddress
+  ) {
+    return { mode: 'inner_secp256k1', signerAddress: params.preparedCallsSignerAddress }
+  }
+  return { mode: 'auto', signerAddress: params.preparedCallsSignerAddress ?? params.fundingCsw }
 }
 
 function recordSelfAuthOwnerDiscovery(params: {
@@ -443,19 +470,33 @@ async function sendSignedPreparedUserOp(params: {
     appendEvent: params.appendEvent,
   })
 
-  const { signature, preparedCallsSignerAddress } = await signSelfAuthPreparedUserOpHash({
-    walletRequest: params.walletRequest,
+  const { signature, preparedCallsSignerAddress, parsedOwnerIndex } =
+    await signSelfAuthPreparedUserOpHash({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      hashToSign,
+      appendEvent: params.appendEvent,
+      ownerDiscovery: params.ownerDiscovery,
+    })
+
+  const signaturePayloadParams = resolveSelfAuthPreparedCallsSignaturePayloadParams({
+    signature,
     fundingCsw: params.fundingCsw,
-    hashToSign,
-    appendEvent: params.appendEvent,
-    ownerDiscovery: params.ownerDiscovery,
+    preparedCallsSignerAddress,
+    parsedOwnerIndex,
   })
+  if (signaturePayloadParams.mode === 'inner_secp256k1') {
+    params.appendEvent('relay_part1:prepared_calls_signature_mode=inner_secp256k1')
+    if (signaturePayloadParams.signerAddress) {
+      params.appendEvent(`relay_part1:prepared_calls_signer=${signaturePayloadParams.signerAddress}`)
+    }
+  }
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.fundingCsw,
     signature,
-    signerAddress: preparedCallsSignerAddress,
-    mode: 'auto',
+    signerAddress: signaturePayloadParams.signerAddress,
+    mode: signaturePayloadParams.mode,
   })
 
   const sendResult = await params.walletRequest({
@@ -543,8 +584,8 @@ function resolveBundlerUrl(): string {
 function buildSelfFundedPrepareCapabilities(depositWei: bigint, gasReserveWei: bigint): Record<string, unknown> {
   const requiredWei = depositWei + gasReserveWei
   return {
-    // EIP-5792: optional paymaster must not block the request; omit URL so we
-    // do not route through 4626/CDP sponsorship for Relay Part 1 deposits.
+    // wallet_prepareCalls expects an object capability, not a bare boolean (Base App Go RPC rejects `false`).
+    // Mark paymaster optional so prepare can proceed; strip injected paymaster before sendPreparedCalls.
     paymasterService: { optional: true },
     requiredFunds: [
       {
@@ -660,6 +701,8 @@ async function submitViaBundlerSelfFunded(params: {
     ownerIndexLookupAddress: params.ownerDiscovery?.ownerSignerAddress ?? undefined,
     ownerIndexOverride,
     bypassOwnerIndexCache: ownerIndexOverride != null,
+    // owner[0] is WebAuthn (keys.coinbase.com / dev.toshi RP) — never probe it for Base App session-key lanes.
+    skipPasskeyOwnerSlotsInProbe: ownerIndexOverride == null,
     calls: [
       {
         to: getAddress(params.userCall.to),
@@ -774,16 +817,48 @@ async function submitViaPreparedCallsSelfFunded(params: {
       readPreparedUserOpPaymasterAndData(prepareResult.userOp),
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
-    params.appendEvent('relay_part1:skip_strip_paymaster_to_bundler=1')
+    params.appendEvent('relay_part1:lane=prepare_strip_paymaster_self_funded')
 
-    const discovery = await discoverSelfAuthOwnerForBundler({
-      walletRequest: params.walletRequest,
-      fundingCsw: params.fundingCsw,
-      signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
-      ownerDiscovery: params.ownerDiscovery,
-      appendEvent: params.appendEvent,
-    })
-    throw new RelayPart1PrepareFallbackToBundler(discovery)
+    try {
+      const parsed = parseWalletPreparedUserOpV06(prepareResult.userOp)
+      const stripped = stripUserOpPaymaster(parsed)
+      return await sendSignedPreparedUserOp({
+        walletRequest: params.walletRequest,
+        fundingCsw: params.fundingCsw,
+        publicClient: params.publicClient!,
+        prepareResult: {
+          type: prepareResult.type,
+          chainId: prepareResult.chainId,
+          userOp: serializeUserOpForPreparedCallsSend(stripped),
+        },
+        preparedUserOpRaw: prepareResult.userOp,
+        signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+        signAfterPaymasterStrip: true,
+        chainId: params.chainId,
+        chainIdHex,
+        appendEvent: params.appendEvent,
+        ownerDiscovery: params.ownerDiscovery,
+      })
+    } catch (stripError) {
+      if (isUserRejectedWalletAction(stripError) || isNonCascadeRelayPart1Error(stripError)) {
+        throw stripError
+      }
+      params.appendEvent(
+        `relay_part1:strip_paymaster_send_error=${formatRelayPart1Error(stripError).slice(0, 220)}`,
+      )
+      params.appendEvent('relay_part1:strip_paymaster_fallback_to_bundler=1')
+
+      if (params.ownerDiscovery.ownerIndex == null) {
+        await discoverSelfAuthOwnerForBundler({
+          walletRequest: params.walletRequest,
+          fundingCsw: params.fundingCsw,
+          signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+          ownerDiscovery: params.ownerDiscovery,
+          appendEvent: params.appendEvent,
+        })
+      }
+      throw new RelayPart1PrepareFallbackToBundler(params.ownerDiscovery)
+    }
   }
 
   params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
@@ -813,8 +888,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *
  * Lane order for Base App self-auth (minimize passkey prompts):
  *   1. `wallet_prepareCalls` → self-funded `wallet_sendPreparedCalls` when paymaster=0
- *   2. When Base App injects paymaster: one discover-sign → self-funded bundler with owner index
- *   3. Direct self-funded bundler UserOp fallback (`skipPaymaster: true`)
+ *   2. When Base App injects paymaster: strip paymaster → `wallet_sendPreparedCalls` (inner secp256k1 for session-key owners)
+ *   3. When strip/send fails: discover-sign → self-funded bundler with owner index
+ *   4. Direct self-funded bundler UserOp fallback (`skipPaymaster: true`)
  *
  * `wallet_sendCalls` is intentionally omitted — Base App routes it through CDP paymaster,
  * which stalls Relay Part 2 (solver `addOwnerAddress`).
