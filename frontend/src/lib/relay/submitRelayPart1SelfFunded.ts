@@ -650,6 +650,24 @@ function isMisleadingWalletFundsSignError(error: unknown): boolean {
   )
 }
 
+/** CSW multi-owner validateUserOp requires `(ownerIndex, innerSig)` — bare 65-byte ECDSA reverts AA24. */
+export function ensureSelfAuthSessionKeyOwnerWrapper(params: {
+  signature: Hex
+  ownerIndex: number
+  sessionKeyOwner: boolean
+}): Hex {
+  if (!params.sessionKeyOwner) return params.signature
+  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
+  if (wrapped && hexByteLength(wrapped.signatureData) === 65) {
+    if (wrapped.ownerIndex === params.ownerIndex) return params.signature
+    return wrapBareSelfAuthOwnerSignature(wrapped.signatureData, params.ownerIndex)
+  }
+  if (hexByteLength(params.signature) === 65) {
+    return wrapBareSelfAuthOwnerSignature(params.signature, params.ownerIndex)
+  }
+  return params.signature
+}
+
 async function ensureSelfAuthWalletAuthorized(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -1391,13 +1409,27 @@ async function submitSignedPreparedUserOpViaBundler(params: {
   signature: Hex
   appendEvent: (row: string) => void
   customOwnerPolicyToken?: string | null
+  sessionKeyOwner?: boolean
+  ownerIndex?: number | null
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=prepared_bundler_self_funded')
+  if (userOpHasPaymaster(params.strippedUserOp)) {
+    throw new Error('Relay Part 1 bundler submit requires paymasterAndData=0x.')
+  }
+  const ownerIndex = params.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX
+  const signature = ensureSelfAuthSessionKeyOwnerWrapper({
+    signature: params.signature,
+    ownerIndex,
+    sessionKeyOwner: params.sessionKeyOwner ?? false,
+  })
+  if (params.sessionKeyOwner && !parseCoinbaseSignatureWrapper(signature)) {
+    throw new Error('Relay Part 1 session-key signature is missing owner-index wrapper.')
+  }
   const bundlerClient = createBundlerClient({
     client: params.publicClient as never,
     transport: buildRelayBundlerHttpTransport(params.customOwnerPolicyToken),
   })
-  const userOperation = toRpcUserOperation(params.strippedUserOp, params.signature)
+  const userOperation = toRpcUserOperation(params.strippedUserOp, signature)
   let userOpHash: Hex
   try {
     userOpHash = (await bundlerClient.request({
@@ -1733,6 +1765,16 @@ async function sendSignedPreparedUserOp(params: {
             ownerIndex: aligned.ownerIndex,
           })
         }
+        signature = ensureSelfAuthSessionKeyOwnerWrapper({
+          signature,
+          ownerIndex: parsedOwnerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX,
+          sessionKeyOwner,
+        })
+        if (!parseCoinbaseSignatureWrapper(signature)) {
+          params.appendEvent('relay_part1:skip_submit_unwrapped_session_key_sig=1')
+          lastSignatureError = new Error('Session-key signature missing owner-index wrapper')
+          continue
+        }
       }
 
       const onChainSignatureOk = await preflightSelfAuthUserOpSignatureOnChain({
@@ -1768,16 +1810,8 @@ async function sendSignedPreparedUserOp(params: {
         signature,
         appendEvent: params.appendEvent,
       })
-      const allowSessionKeyBundlerFallback =
-        sessionKeyOwner &&
-        sessionKeyEcdsaOk &&
-        parseCoinbaseSignatureWrapper(signature) != null &&
-        !isSelfAuthReplaySafeSignHashMode(input.hashMode)
-      if (validateUserOpOk || allowSessionKeyBundlerFallback) {
+      if (validateUserOpOk) {
         lastBundlerSignature = signature
-        if (!validateUserOpOk && allowSessionKeyBundlerFallback) {
-          params.appendEvent('relay_part1:session_key_bundler_despite_validate_user_op_preflight=1')
-        }
       } else {
         params.appendEvent('relay_part1:skip_bundler_validate_user_op_preflight=1')
       }
@@ -1791,8 +1825,18 @@ async function sendSignedPreparedUserOp(params: {
         continue
       }
 
+      const entrypointValidateUserOpMismatch =
+        !validateUserOpOk &&
+        !isSelfAuthReplaySafeSignHashMode(input.hashMode) &&
+        sessionKeyOwner &&
+        (onChainSignatureOk || sessionKeyEcdsaOk)
+      if (entrypointValidateUserOpMismatch) {
+        params.appendEvent('relay_part1:skip_prepared_calls_entrypoint_validate_user_op_mismatch=1')
+        continue
+      }
+
       const bypassSdkViaBundler =
-        (validateUserOpOk || allowSessionKeyBundlerFallback) &&
+        validateUserOpOk &&
         sessionKeyOwner &&
         (isSelfAuthReplaySafeSignHashMode(input.hashMode) || sessionKeyEcdsaOk)
 
@@ -1860,6 +1904,8 @@ async function sendSignedPreparedUserOp(params: {
             signature,
             appendEvent: params.appendEvent,
             customOwnerPolicyToken: params.customOwnerPolicyToken,
+            sessionKeyOwner,
+            ownerIndex: parsedOwnerIndex,
           })
         } catch (bundlerError) {
           if (isUserRejectedWalletAction(bundlerError)) {
@@ -1877,7 +1923,7 @@ async function sendSignedPreparedUserOp(params: {
         return preparedTx
       }
 
-      if (params.customOwnerPolicyToken && (validateUserOpOk || allowSessionKeyBundlerFallback)) {
+      if (params.customOwnerPolicyToken && validateUserOpOk) {
         try {
           return await submitSignedPreparedUserOpViaBundler({
             publicClient: params.publicClient,
@@ -1886,6 +1932,8 @@ async function sendSignedPreparedUserOp(params: {
             signature,
             appendEvent: params.appendEvent,
             customOwnerPolicyToken: params.customOwnerPolicyToken,
+            sessionKeyOwner,
+            ownerIndex: parsedOwnerIndex,
           })
         } catch (bundlerError) {
           if (isUserRejectedWalletAction(bundlerError)) {
@@ -1896,7 +1944,7 @@ async function sendSignedPreparedUserOp(params: {
           )
           lastSignatureError = bundlerError
         }
-      } else if (params.customOwnerPolicyToken && !validateUserOpOk && !allowSessionKeyBundlerFallback) {
+      } else if (params.customOwnerPolicyToken && !validateUserOpOk) {
         params.appendEvent('relay_part1:skip_bundler_inline_validate_user_op_preflight=1')
       }
 
@@ -1954,6 +2002,11 @@ async function sendSignedPreparedUserOp(params: {
         signature: lastBundlerSignature,
         appendEvent: params.appendEvent,
         customOwnerPolicyToken: params.customOwnerPolicyToken,
+        sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
+          sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+          ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+        }),
+        ownerIndex: params.ownerDiscovery?.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX,
       })
     } catch (bundlerError) {
       if (isUserRejectedWalletAction(bundlerError)) {

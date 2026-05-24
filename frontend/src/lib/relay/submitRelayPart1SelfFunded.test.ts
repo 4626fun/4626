@@ -10,6 +10,7 @@ import {
   readPreparedUserOpPaymasterAndData,
   buildSelfFundedRelayPrepareCapabilities,
   computeSelfAuthReplaySafeHash,
+  ensureSelfAuthSessionKeyOwnerWrapper,
   resolveSelfFundedSignHashAfterPaymasterStrip,
   listSelfAuthBundlerSignHashCandidates,
   listSelfAuthPreparedCallsSignaturePayloadModes,
@@ -25,6 +26,18 @@ import {
   userOpHasPaymaster,
 } from '@/lib/relay/submitRelayPart1SelfFunded'
 import { unwrapDoubleHexEncodedHash } from '@/lib/wallet/onboardingWalletReplayable'
+
+const mockRecoverAddress = vi.fn<
+  (args: { hash: Hex; signature: Hex }) => Promise<`0x${string}`>
+>()
+
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    recoverAddress: (args: { hash: Hex; signature: Hex }) => mockRecoverAddress(args),
+  }
+})
 
 function wrapSelfAuthOwnerSignature(ownerIndex: number): Hex {
   return encodeAbiParameters(
@@ -322,6 +335,16 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
+  it('wraps bare session-key ECDSA signatures with owner index 2', () => {
+    const bare = `0x${'ab'.repeat(65)}` as Hex
+    const wrapped = ensureSelfAuthSessionKeyOwnerWrapper({
+      signature: bare,
+      ownerIndex: 2,
+      sessionKeyOwner: true,
+    })
+    expect(parseSelfAuthOwnerIndexFromSignature(wrapped)).toBe(2)
+  })
+
   it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
       'inner_secp256k1',
@@ -450,6 +473,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
 
   beforeEach(() => {
     validateUserOpPreflightSpy.mockResolvedValue(true)
+    mockRecoverAddress.mockImplementation(async () => SESSION_KEY_OWNER)
     mockSubmitOwnerViaSendCalls.mockReset()
     mockSubmitOwnerViaSendCalls.mockRejectedValue(new Error('sendCalls unavailable in test'))
     mockPublicClient.readContract.mockReset()
@@ -745,12 +769,19 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('session-key Part 1 tries entrypoint hash before replaySafe after paymaster strip', async () => {
-    mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
+    mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string; args?: unknown[] }) => {
       if (args.functionName === 'ownerAtIndex') {
-        return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+        const ownerIndex = Number((args.args as bigint[] | undefined)?.[0] ?? 2)
+        if (ownerIndex === 2) {
+          return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+        }
+        return encodeAbiParameters([{ type: 'address' }], ['0x0000000000000000000000000000000000000001'])
+      }
+      if (args.functionName === 'ownerCount') {
+        return 4n
       }
       if (args.functionName === 'isValidSignature') {
-        return '0x1626ba7e'
+        return '0xffffffff'
       }
       return 500_000_000_000_000n
     })
@@ -882,7 +913,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('skips prepared-calls when replaySafe sig fails validateUserOp preflight', async () => {
-    validateUserOpPreflightSpy.mockResolvedValue(false)
+    mockRecoverAddress.mockImplementation(
+      async () => '0x0000000000000000000000000000000000000002' as const,
+    )
     mockBundlerRequest.mockImplementation(async (args: { method?: string }) => {
       if (args.method === 'eth_estimateUserOperationGas') {
         return {
@@ -927,6 +960,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       if (args.method === 'personal_sign') {
         return wrapSelfAuthOwnerSignature(2)
       }
+      if (args.method === 'eth_sign') {
+        return wrapSelfAuthOwnerSignature(2)
+      }
       if (args.method === 'wallet_sendPreparedCalls') {
         throw new Error('failed to get packed signature: invalid request: signature.data.address = no matching signer found for account')
       }
@@ -959,9 +995,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith(
       'relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1',
     )
-    expect(appendEvent).toHaveBeenCalledWith(
-      expect.stringContaining('relay_part1:session_key_bundler_despite_validate_user_op_preflight=1'),
-    )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_validate_user_op_preflight=1')
     expect(appendEvent).toHaveBeenCalledWith(
       expect.stringContaining('relay_part1:onchain_sig_preflight=advisory_invalid_session_key'),
     )
