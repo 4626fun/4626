@@ -189,6 +189,16 @@ function serializeUserOpForPreparedCallsSend(op: V06UserOpFields): Record<string
   }
 }
 
+/** Preserve Base App field encoding when resubmitting a prepared userOp. */
+function stripRawWalletPreparedUserOp(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw
+  return {
+    ...(raw as Record<string, unknown>),
+    paymasterAndData: '0x',
+    signature: '0x',
+  }
+}
+
 function computeUserOpHashWithChainId(op: V06UserOpFields, chainId: number): `0x${string}` {
   return getUserOperationHash({
     chainId,
@@ -453,6 +463,9 @@ function listSelfAuthSignMethods(params: {
     params.parsedOwnerIndex === 2
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
+  if (params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
+    return [...ecdsaMethods, 'typed_data_v4_csw']
+  }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
 
@@ -626,6 +639,8 @@ async function trySendPreparedCallsUserOp(params: {
   }
   chainIdHex: `0x${string}`
   userOp: V06UserOpFields
+  /** When set, forwarded verbatim as wallet_sendPreparedCalls `data` (Base App encoding). */
+  sendUserOpData?: unknown
   lane: string
   signature: Hex
   parsedOwnerIndex: number | null
@@ -662,7 +677,8 @@ async function trySendPreparedCallsUserOp(params: {
     resolvedOwnerAtIndexAddress,
   })
 
-  const userOpPayload = serializeUserOpForPreparedCallsSend(params.userOp)
+  const userOpPayload =
+    params.sendUserOpData ?? serializeUserOpForPreparedCallsSend(params.userOp)
   params.appendEvent(`relay_part1:lane=${params.lane}`)
 
   let lastSendError: unknown = null
@@ -868,6 +884,122 @@ async function pollPreparedCallsBundle(params: {
   return txHash
 }
 
+/**
+ * Mirror the working owner-install prepared-calls path: personal_sign the unwrapped
+ * prepare hash and submit the raw prepared userOp (no paymaster strip, no typed-data).
+ */
+async function attemptPrepareNativeMirrorLane(params: {
+  walletRequest: WalletRequest
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  prepareResult: {
+    type?: string
+    chainId?: string
+  }
+  preparedUserOpRaw: unknown
+  signatureRequestHash: Hex
+  chainIdHex: `0x${string}`
+  appendEvent: (row: string) => void
+  ownerDiscovery?: SelfAuthOwnerDiscovery
+}): Promise<`0x${string}` | null> {
+  if (userOpHasPaymaster(params.preparedUserOpRaw)) {
+    params.appendEvent('relay_part1:skip_prepare_native_paymaster_injected=1')
+    return null
+  }
+
+  params.appendEvent('relay_part1:lane=prepared_calls_prepare_native')
+  const hashToSign = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+  params.appendEvent('relay_part1:sign_hash_mode=prepare_signature_request_native_userop')
+  params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
+
+  let signature: Hex
+  try {
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.fundingCsw],
+    })) as Hex
+  } catch (signError) {
+    if (isUserRejectedWalletAction(signError)) {
+      throw signError
+    }
+    params.appendEvent(
+      `relay_part1:prepare_native_sign_error=${formatRelayPart1Error(signError).slice(0, 120)}`,
+    )
+    return null
+  }
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    return null
+  }
+
+  let preparedCallsSignerAddress: `0x${string}` | null =
+    params.ownerDiscovery?.ownerSignerAddress ?? null
+  try {
+    const guardOutcome = await preflightOwnerKeyMismatch({
+      walletRequest: params.walletRequest,
+      sender: params.fundingCsw,
+      hashToSign,
+      signature,
+      sessionKind: 'self_auth',
+    })
+    if (
+      (guardOutcome.kind === 'ok' || guardOutcome.kind === 'skipped_self_auth_session_key') &&
+      'parsedOwnerAddress' in guardOutcome &&
+      guardOutcome.parsedOwnerAddress
+    ) {
+      preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
+      params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+    }
+  } catch {
+    /* fail open — Base App webauthn/session-key payloads use sender address */
+  }
+
+  const signaturePayload = buildSendPreparedCallsSignaturePayload({
+    sender: params.fundingCsw,
+    signature,
+    signerAddress: preparedCallsSignerAddress,
+    mode: 'auto',
+  })
+
+  try {
+    const sendResult = await params.walletRequest({
+      method: 'wallet_sendPreparedCalls',
+      params: [
+        {
+          version: '1.0',
+          type: params.prepareResult.type ?? 'user-operation-v06',
+          data: params.preparedUserOpRaw,
+          chainId: params.prepareResult.chainId ?? params.chainIdHex,
+          signature: signaturePayload,
+        },
+      ],
+    })
+
+    const callsId = extractWalletCallsId(sendResult)
+    if (!callsId) {
+      throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+    }
+    params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
+    return await pollPreparedCallsBundle({
+      walletRequest: params.walletRequest,
+      publicClient: params.publicClient,
+      fundingCsw: params.fundingCsw,
+      callsId,
+      appendEvent: params.appendEvent,
+    })
+  } catch (sendError) {
+    if (isUserRejectedWalletAction(sendError)) {
+      throw sendError
+    }
+    params.appendEvent(
+      `relay_part1:prepare_native_send_error=${formatRelayPart1Error(sendError).slice(0, 180)}`,
+    )
+    if (isPreparedCallsSignatureRejectedError(sendError)) {
+      return null
+    }
+    throw sendError
+  }
+}
+
 async function sendSignedPreparedUserOp(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -905,9 +1037,6 @@ async function sendSignedPreparedUserOp(params: {
     ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
-  const originalUserOp = parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
-  const prepareHash = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
-
   let lastSignatureError: unknown = null
 
   const signMethodsFor = () =>
@@ -922,6 +1051,7 @@ async function sendSignedPreparedUserOp(params: {
     hashMode: string
     userOp: V06UserOpFields
     lane: string
+    sendUserOpData?: unknown
   }): Promise<`0x${string}` | null> => {
     params.appendEvent(`relay_part1:sign_hash_mode=${input.hashMode}`)
     for (const signMethod of signMethodsFor()) {
@@ -969,6 +1099,7 @@ async function sendSignedPreparedUserOp(params: {
           prepareResult: params.prepareResult,
           chainIdHex: params.chainIdHex,
           userOp: input.userOp,
+          sendUserOpData: input.sendUserOpData,
           lane: input.lane,
           signature,
           parsedOwnerIndex,
@@ -996,42 +1127,21 @@ async function sendSignedPreparedUserOp(params: {
         }
       }
 
-      if (sessionKeyOwner) {
-        params.appendEvent('relay_part1:skip_bundler_session_key_owner=1')
-        continue
-      }
-
-      try {
-        return await submitSignedPreparedUserOpViaBundler({
-          publicClient: params.publicClient,
-          fundingCsw: params.fundingCsw,
-          strippedUserOp: input.userOp,
-          signature,
-          appendEvent: params.appendEvent,
-          customOwnerPolicyToken: params.customOwnerPolicyToken,
-        })
-      } catch (bundlerError) {
-        if (isUserRejectedWalletAction(bundlerError)) {
-          throw bundlerError
-        }
-        if (isBundlerSignatureRejectedError(bundlerError)) {
-          lastSignatureError = bundlerError
-          params.appendEvent(
-            `relay_part1:prepared_bundler_error=${formatRelayPart1Error(bundlerError).slice(0, 120)}`,
-          )
-          continue
-        }
-        throw bundlerError
-      }
+      params.appendEvent('relay_part1:skip_bundler_self_auth=1')
     }
     return null
   }
 
-  const prepareNativeTx = await attemptPreparedCalls({
-    hashToSign: prepareHash,
-    hashMode: 'prepare_signature_request_native_userop',
-    userOp: originalUserOp,
-    lane: 'prepared_calls_prepare_native',
+  const prepareNativeTx = await attemptPrepareNativeMirrorLane({
+    walletRequest: params.walletRequest,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    prepareResult: params.prepareResult,
+    preparedUserOpRaw: params.preparedUserOpRaw,
+    signatureRequestHash: params.signatureRequestHash,
+    chainIdHex: params.chainIdHex,
+    appendEvent: params.appendEvent,
+    ownerDiscovery: params.ownerDiscovery,
   })
   if (prepareNativeTx) {
     return prepareNativeTx
@@ -1043,6 +1153,7 @@ async function sendSignedPreparedUserOp(params: {
       hashMode: candidate.mode,
       userOp: strippedUserOp,
       lane: 'prepared_calls_stripped_self_funded',
+      sendUserOpData: stripRawWalletPreparedUserOp(params.preparedUserOpRaw),
     })
     if (strippedTx) {
       return strippedTx
@@ -1326,7 +1437,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *   2. Sign prepare hash (typed data + ECDSA) against **native** prepared userOp
  *   3. Sign stripped-hash candidates against paymaster=0 userOp
  *   4. `wallet_sendPreparedCalls` for each pairing above
- *   5. `eth_sendUserOperation` via 4626 bundler only for non-session-key owners
+ *   Never `eth_sendUserOperation` — incompatible with Base App prepared UserOps.
  * Never `wallet_sendCalls` — Base App re-injects USDC paymaster on that path.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
