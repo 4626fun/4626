@@ -4,7 +4,7 @@
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts
- *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --audit-only
+ *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --release-lock
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --fast
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --force-full --max-pages 240
  */
@@ -54,6 +54,7 @@ function parseArgs(argv: string[]) {
   return {
     auditOnly: flags.has('audit-only'),
     repairOnly: flags.has('repair-only'),
+    releaseLock: flags.has('release-lock'),
     forceFull: flags.has('force-full'),
     fast: flags.has('fast'),
     maxPages: Number(map.get('max-pages') ?? ''),
@@ -203,6 +204,17 @@ async function main() {
     console.log('\n[repair] recomputeCreatorCounts')
     await recomputeCreatorCounts(db)
     console.log('\n[audit] after repair')
+    await auditDuplicates(db)
+    return
+  }
+
+  if (args.releaseLock) {
+    await db.sql`
+      UPDATE creator_metrics_state
+      SET sync_status = 'idle', sync_error = 'operator_released_stale_running_lock'
+      WHERE id = 1 AND sync_status = 'running'
+    `
+    console.log('\n[release-lock] cleared running sync lock if present')
     await auditDuplicates(db)
     return
   }
