@@ -7,14 +7,6 @@ import {
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '../wallet/cswOwnerAbi.js'
 
-/** Tenderly UserOp reference: 0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3 */
-export const GOLDEN_RELAY_PART1_USER_OP_HASH =
-  '0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3' as const
-
-/** Bundle tx wrapping the UserOp: 0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf */
-export const GOLDEN_RELAY_PART1_BUNDLE_TX_HASH =
-  '0x34edd28dd9611f4e06374dfe87645de4fc3fd94c83f96b5b1406c6ee10d2aadf' as const
-
 export type GoldenPart1UserCall = {
   to: `0x${string}`
   data: `0x${string}`
@@ -26,7 +18,7 @@ export type GoldenPart1UserCall = {
  *
  * EntryPoint → CSW.executeBatch([{ target: RelayDepository, value, data: depositNative }])
  *
- * See [Tenderly golden UserOp](https://dashboard.tenderly.co/Akita/cerberus/tx/0xa6b5435718a8969905a08093a7208dadefdf702602c63e3fd322d84db5f4b4c3).
+ * See `docs/operations/relay-owner-mutation-kit-guide.md` (golden Part 1 reference).
  */
 export function validateGoldenCswDepositoryPart1UserCall(params: {
   userCall: GoldenPart1UserCall
@@ -76,17 +68,4 @@ export function validateGoldenCswDepositoryPart1UserCall(params: {
   }
 
   return null
-}
-
-/** Single executeBatch entry shape shown in Tenderly decoded input. */
-export function describeGoldenPart1ExecuteBatchInnerCall(userCall: GoldenPart1UserCall): {
-  target: string
-  value: string
-  data: string
-} {
-  return {
-    target: getAddress(userCall.to),
-    value: BigInt(userCall.value).toString(10),
-    data: userCall.data,
-  }
 }

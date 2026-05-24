@@ -3,17 +3,23 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useState,
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
 
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { useReducedMotion, motion } from 'framer-motion'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { LOADING_INTENT_CONFIG } from '@/components/layout/appLoadingIntents'
+import { BASE_EASE, DURATION } from '@/components/brand/motion'
+import { cn } from '@/lib/shared/utils'
 
 const APP_LOADING_HEADLINE = LOADING_INTENT_CONFIG.page.headline
 const APP_LOADING_SR_STATUS = LOADING_INTENT_CONFIG.page.srStatus
+const APP_LOADING_SCROLL_LOCK_CLASS = 'app-loading-scroll-lock'
+/** Bridge brief gaps when sequential bootstrap registrars hand off. */
+const APP_LOADING_HIDE_DELAY_MS = 280
 
 type AppLoadingStore = {
   count: number
@@ -73,6 +79,71 @@ export function useOptionalAppLoadingActive(): boolean {
   )
 }
 
+function useStableLoadingVisibility(rawActive: boolean): boolean {
+  const [lingerVisible, setLingerVisible] = useState(rawActive)
+
+  useLayoutEffect(() => {
+    if (!rawActive) {
+      const hideId = window.setTimeout(() => setLingerVisible(false), APP_LOADING_HIDE_DELAY_MS)
+      return () => window.clearTimeout(hideId)
+    }
+
+    const showId = window.setTimeout(() => setLingerVisible(true), 0)
+    return () => window.clearTimeout(showId)
+  }, [rawActive])
+
+  if (rawActive) return true
+  return lingerVisible
+}
+
+function useAppLoadingScrollLock(locked: boolean) {
+  useLayoutEffect(() => {
+    if (typeof document === 'undefined' || !locked) return
+
+    const { documentElement, body } = document
+    documentElement.classList.add(APP_LOADING_SCROLL_LOCK_CLASS)
+    body.classList.add(APP_LOADING_SCROLL_LOCK_CLASS)
+
+    return () => {
+      documentElement.classList.remove(APP_LOADING_SCROLL_LOCK_CLASS)
+      body.classList.remove(APP_LOADING_SCROLL_LOCK_CLASS)
+    }
+  }, [locked])
+}
+
+/** True while bootstrap registrars are active or the overlay is finishing its hide delay. */
+export function useAppLoadingShellActive(): boolean {
+  const active = useOptionalAppLoadingActive()
+  const visible = useStableLoadingVisibility(active)
+  return active || visible
+}
+
+/**
+ * Full-screen bootstrap handoff: register the shared overlay and keep route
+ * content out of the document until the gate closes.
+ */
+export function AppLoadingBootstrapGate(props: { active: boolean; children: ReactNode }) {
+  const reduceMotion = useReducedMotion()
+
+  if (props.active) {
+    return <AppLoadingRegistrar />
+  }
+
+  return (
+    <motion.div
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={
+        reduceMotion
+          ? { duration: 0 }
+          : { duration: DURATION.standard, ease: BASE_EASE }
+      }
+    >
+      {props.children}
+    </motion.div>
+  )
+}
+
 /** Register a full-screen bootstrap load. Always renders one shared overlay copy. */
 export function AppLoadingRegistrar() {
   const store = useAppLoadingStore()
@@ -87,27 +158,31 @@ export function AppLoadingRegistrar() {
 
 export function AppLoadingOverlay() {
   const active = useOptionalAppLoadingActive()
+  const visible = useStableLoadingVisibility(active)
   const reduceMotion = useReducedMotion()
+  useAppLoadingScrollLock(active || visible)
+
+  if (!visible && !active) return null
 
   return (
-    <AnimatePresence>
-      {active ? (
-        <motion.div
-          key="app-loading-overlay"
-          className="fixed inset-0 z-[120]"
-          initial={false}
-          animate={{ opacity: 1 }}
-          exit={reduceMotion ? undefined : { opacity: 0 }}
-          transition={{ duration: reduceMotion ? 0 : 0.18, ease: [0.4, 0, 0.2, 1] }}
-        >
-          <AppLoadingState
-            intent="page"
-            labelOverride={APP_LOADING_HEADLINE}
-            srStatusOverride={APP_LOADING_SR_STATUS}
-            stabilizePattern
-          />
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+    <div
+      aria-hidden={!visible}
+      className={cn(
+        'fixed inset-0 z-[120] h-[100dvh] max-h-[100dvh] w-full overflow-hidden transition-opacity',
+        visible ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0',
+      )}
+      style={{
+        transitionDuration: reduceMotion ? '0ms' : '180ms',
+        transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)',
+      }}
+    >
+      <AppLoadingState
+        intent="page"
+        labelOverride={APP_LOADING_HEADLINE}
+        srStatusOverride={APP_LOADING_SR_STATUS}
+        stabilizePattern
+        fillContainer
+      />
+    </div>
   )
 }

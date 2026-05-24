@@ -20,7 +20,7 @@ import {
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { EthosScorePill, type EthosScoreValue } from '@/components/chat/EthosScorePill'
+import { type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
 
 type TokenRowProps = {
@@ -116,8 +116,6 @@ export function TokenRow({
       : '3% fee (Legacy - before June 2025)'
 
   const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
-  const ethosScoreValue = typeof ethosScore?.score === 'number' ? ethosScore.score : null
-  const ethosHasPositiveScore = ethosScoreValue != null && ethosScoreValue > 0
   const deltaToneClass = getMarketCapDeltaToneClass(change)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
@@ -240,20 +238,6 @@ export function TokenRow({
 
         {/* Holders */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{coin.uniqueHolders?.toLocaleString() || '-'}</span>
-
-        {/* Ethos */}
-        <div className="flex items-center justify-center px-3 py-2">
-          {ethosHasPositiveScore ? (
-            <EthosScorePill
-              score={ethosScoreValue}
-              level={ethosScore?.level}
-              compact
-              className="rounded-md px-1.5 py-0 text-[11px]"
-            />
-          ) : (
-            <span className="tabular-nums text-zinc-500">—</span>
-          )}
-        </div>
 
         {/* Market cap */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(marketCap)}</span>
@@ -412,8 +396,8 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
               <span title="Fee version: 1% (V4, after June 2025) or 3% (Legacy)">{c.label}</span>
             ) : c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
-            ) : c.id === 'ethosScore' ? (
-              <span title="Ethos Credibility Score derived from the creator social profile">Ethos</span>
+            ) : c.id === 'name' && c.sortKey === 'ethosScore' ? (
+              <span title="Sort by Ethos score (highest first). Score badge appears on the avatar.">{c.label}</span>
             ) : c.id === 'totalFees' ? (
               <span title="Total fees (volume × fee %)">{c.label}</span>
             ) : (

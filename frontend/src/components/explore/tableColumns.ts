@@ -62,7 +62,6 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
   const collapseIdentity = Boolean(opts.collapseIdentity)
   const centerMarket = opts.variant === 'creators'
   const holdersWidth = opts.variant === 'creators' ? 88 : 96
-  const ethosWidth = opts.variant === 'creators' ? 86 : 0
   const marketCapWidth = opts.variant === 'creators' ? 112 : 120
   const volumeWidth = opts.variant === 'creators' ? 112 : 120
   const deltaWidth = opts.variant === 'creators' ? 102 : 110
@@ -70,12 +69,17 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
     { id: 'rank', label: '#', group: 'identity', widthPx: 48, align: 'right', sticky: true },
-    { id: 'name', label: nameLabel, group: 'identity', widthPx: collapseIdentity ? 56 : 208, align: 'left', sticky: true },
+    {
+      id: 'name',
+      label: nameLabel,
+      group: 'identity',
+      widthPx: collapseIdentity ? 56 : 208,
+      align: 'left',
+      sticky: true,
+      ...(opts.variant === 'creators' ? { sortKey: 'ethosScore' as const } : {}),
+    },
 
     { id: 'holders', label: 'Holders', group: 'market', widthPx: holdersWidth, align: centerMarket ? 'center' : 'right' },
-    ...(opts.variant === 'creators'
-      ? [{ id: 'ethosScore' as const, label: 'Ethos', group: 'market' as const, widthPx: ethosWidth, align: 'center' as const, sortKey: 'ethosScore' as const }]
-      : []),
     { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },

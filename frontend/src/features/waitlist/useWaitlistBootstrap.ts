@@ -5,18 +5,7 @@ import { clearStoredWaitlistReferralCode } from '@/lib/auth/waitlistEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'
 
-import {
-  applyWaitlistSubAccountConnectOverlay,
-  mergeCanonicalWaitlistAccount,
-  resolveWaitlistStep,
-  isWaitlistSubAccountLinkReady,
-  type WaitlistStep,
-  type WaitlistSubAccountConnectOverlay,
-} from './waitlistFlowState'
-import {
-  clearPersistedSubAccountConnectOverlay,
-  readPersistedSubAccountConnectOverlay,
-} from './waitlistSubAccountConnectCache'
+import { mergeCanonicalWaitlistAccount, resolveWaitlistStep, type WaitlistStep } from './waitlistFlowState'
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'
 import {
   FLOW_TIMEOUT_MS,
@@ -30,11 +19,7 @@ import {
   readApiErrorMessage,
   withTimeout,
 } from './waitlistBootstrapUtils'
-import {
-  getSubAccountCompletionAccountKey,
-  type WaitlistAccountsSummary,
-  type WaitlistBootstrapResponse,
-} from './waitlistAccountTypes'
+import { type WaitlistAccountsSummary, type WaitlistBootstrapResponse } from './waitlistAccountTypes'
 
 type UseWaitlistBootstrapParams = {
   activeReferralCode: string | null
@@ -42,11 +27,6 @@ type UseWaitlistBootstrapParams = {
   ensureEmbeddedWallet: () => Promise<{ address: string }>
   getAccessToken: () => Promise<string | null>
   privyAuthed: boolean
-  subAccountFlowEnabled: boolean
-  subAccountStepCompletedAccountKey: string | null
-  setSubAccountStepCompletedAccountKey: (key: string | null) => void
-  subAccountStepCompletedAccountKeyRef: MutableRefObject<string | null>
-  subAccountConnectOverlayRef: MutableRefObject<WaitlistSubAccountConnectOverlay | null>
   setAccount: (account: WaitlistAccountsSummary | null) => void
   setStep: (step: WaitlistStep) => void
   setError: (message: string | null) => void
@@ -62,11 +42,6 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
     ensureEmbeddedWallet,
     getAccessToken,
     privyAuthed,
-    subAccountFlowEnabled,
-    subAccountStepCompletedAccountKey,
-    setSubAccountStepCompletedAccountKey,
-    subAccountStepCompletedAccountKeyRef,
-    subAccountConnectOverlayRef,
     setAccount,
     setStep,
     setError,
@@ -93,7 +68,6 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       bypassRecoveryCooldown?: boolean
     }): Promise<WaitlistAccountsSummary | null> => {
       let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
-      let embeddedEoaAddressForStep = embeddedEoaAddress
       const waitForTokenHydration = opts?.waitForTokenHydration === true
       const bypassRecoveryCooldown = opts?.bypassRecoveryCooldown === true
       const recoveryCooldownActive = recoveryRequiredBootstrapCooldownUntilRef.current > Date.now()
@@ -147,12 +121,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
             'Account sync',
           )
           if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-            const embeddedWallet = await withTimeout(
-              ensureEmbeddedWallet(),
-              FLOW_TIMEOUT_MS,
-              'Embedded wallet provisioning',
-            )
-            embeddedEoaAddressForStep = embeddedWallet.address
+            await withTimeout(ensureEmbeddedWallet(), FLOW_TIMEOUT_MS, 'Embedded wallet provisioning')
             canonicalization = await withTimeout(
               runCanonicalizationPipeline({ privyToken: token }),
               FLOW_TIMEOUT_MS,
@@ -206,31 +175,7 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         return null
       }
 
-      const bootstrappedAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
-      const accountCompletionKey = getSubAccountCompletionAccountKey(bootstrappedAccount)
-      if (!subAccountConnectOverlayRef.current && accountCompletionKey) {
-        const persistedOverlay = readPersistedSubAccountConnectOverlay(accountCompletionKey)
-        if (persistedOverlay) {
-          subAccountConnectOverlayRef.current = persistedOverlay
-          subAccountStepCompletedAccountKeyRef.current = accountCompletionKey
-          setSubAccountStepCompletedAccountKey(accountCompletionKey)
-        }
-      }
-      const subAccountStepCompleted = Boolean(
-        accountCompletionKey &&
-          (subAccountStepCompletedAccountKey === accountCompletionKey ||
-            subAccountStepCompletedAccountKeyRef.current === accountCompletionKey),
-      )
-
-      const nextAccount = applyWaitlistSubAccountConnectOverlay(
-        bootstrappedAccount,
-        subAccountConnectOverlayRef.current,
-        subAccountStepCompleted,
-      )
-      if (isWaitlistSubAccountLinkReady(nextAccount)) {
-        subAccountConnectOverlayRef.current = null
-        clearPersistedSubAccountConnectOverlay(getSubAccountCompletionAccountKey(nextAccount))
-      }
+      const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
       setAccount(nextAccount)
       finalizingAutoRetryCountRef.current = 0
       finalizingBackgroundRetryCountRef.current = 0
@@ -243,25 +188,11 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
         setError('Verify your email with 4626 to finish creating this account.')
         return nextAccount
       }
-      const embeddedEoaAvailable = Boolean(embeddedEoaAddressForStep)
-      const setupIntent =
-        typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search).get('setup')
-          : null
-      setStep(
-        resolveWaitlistStep({
-          account: nextAccount,
-          subAccountFlowEnabled,
-          embeddedEoaAvailable,
-          subAccountStepCompleted,
-          setupIntent,
-        }),
-      )
+      setStep(resolveWaitlistStep({ account: nextAccount }))
       return nextAccount
     },
     [
       activeReferralCode,
-      embeddedEoaAddress,
       ensureEmbeddedWallet,
       getAccessToken,
       privyAuthed,
@@ -269,11 +200,6 @@ export function useWaitlistBootstrap(params: UseWaitlistBootstrapParams) {
       setError,
       setRecoveryRequired,
       setStep,
-      setSubAccountStepCompletedAccountKey,
-      subAccountConnectOverlayRef,
-      subAccountFlowEnabled,
-      subAccountStepCompletedAccountKey,
-      subAccountStepCompletedAccountKeyRef,
       finalizingAutoRetryCountRef,
       finalizingBackgroundRetryCountRef,
     ],

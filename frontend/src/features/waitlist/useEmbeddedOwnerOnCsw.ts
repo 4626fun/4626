@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAddress, isAddress, type Address } from 'viem'
+import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
+import { base } from 'viem/chains'
 
 import type { CanonicalOwnerCheckStatus } from '@/lib/uniswap/canonicalSignerGate'
-import { readEmbeddedOwnerOnSubAccount } from '@/lib/wallet/subAccountOwnerInstall'
+import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 
-export type EmbeddedOwnerOnSubAccountStatus = 'idle' | 'checking' | 'owner' | 'not-owner' | 'unknown'
+export type EmbeddedOwnerOnCswStatus = 'idle' | 'checking' | 'owner' | 'not-owner' | 'unknown'
 
 export function mapEmbeddedOwnerStatusToCanonicalCheckStatus(
-  status: EmbeddedOwnerOnSubAccountStatus,
+  status: EmbeddedOwnerOnCswStatus,
 ): CanonicalOwnerCheckStatus {
   if (status === 'checking' || status === 'idle') return 'pending'
   if (status === 'owner') return 'owner'
@@ -22,46 +23,55 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   return getAddress(trimmed)
 }
 
+function createBaseCswReadClient() {
+  const rpcUrl =
+    (typeof import.meta !== 'undefined' &&
+      (import.meta.env.VITE_BASE_RPC_URL as string | undefined)?.trim()) ||
+    'https://mainnet.base.org'
+  return createPublicClient({
+    chain: base,
+    transport: http(rpcUrl),
+  })
+}
+
 async function resolveEmbeddedOwnerStatus(
-  subAccount: Address,
+  cswAddress: Address,
   embeddedEoa: Address,
-): Promise<Exclude<EmbeddedOwnerOnSubAccountStatus, 'idle' | 'checking'>> {
-  const isOwner = await readEmbeddedOwnerOnSubAccount({
-    subAccountAddress: subAccount,
-    embeddedEoaAddress: embeddedEoa,
+): Promise<Exclude<EmbeddedOwnerOnCswStatus, 'idle' | 'checking'>> {
+  const isOwner = await readIsOwnerAddressIfDeployed({
+    publicClient: createBaseCswReadClient(),
+    cswAddress,
+    ownerAddress: embeddedEoa,
   })
   if (isOwner === true) return 'owner'
   if (isOwner === false) return 'not-owner'
   return 'unknown'
 }
 
-export function useEmbeddedOwnerOnSubAccount(params: {
-  /** App-wallet or parent CSW address to probe. */
+export function useEmbeddedOwnerOnCsw(params: {
   cswAddress?: string | null | undefined
-  /** @deprecated Prefer `cswAddress`. Kept for call-site clarity on sub-account probes. */
-  subAccountAddress?: string | null | undefined
   embeddedEoaAddress: string | null | undefined
   enabled?: boolean
 }) {
   const enabled = params.enabled !== false
-  const subAccount = normalizeAddress(params.cswAddress ?? params.subAccountAddress)
+  const cswAddress = normalizeAddress(params.cswAddress)
   const embeddedEoa = normalizeAddress(params.embeddedEoaAddress)
-  const canCheck = enabled && Boolean(subAccount && embeddedEoa)
+  const canCheck = enabled && Boolean(cswAddress && embeddedEoa)
 
-  const [status, setStatus] = useState<EmbeddedOwnerOnSubAccountStatus>('idle')
+  const [status, setStatus] = useState<EmbeddedOwnerOnCswStatus>('idle')
 
   const refresh = useCallback(async () => {
-    if (!subAccount || !embeddedEoa) return
+    if (!cswAddress || !embeddedEoa) return
     setStatus('checking')
     try {
-      setStatus(await resolveEmbeddedOwnerStatus(subAccount, embeddedEoa))
+      setStatus(await resolveEmbeddedOwnerStatus(cswAddress, embeddedEoa))
     } catch {
       setStatus('unknown')
     }
-  }, [embeddedEoa, subAccount])
+  }, [cswAddress, embeddedEoa])
 
   useEffect(() => {
-    if (!canCheck || !subAccount || !embeddedEoa) return
+    if (!canCheck || !cswAddress || !embeddedEoa) return
 
     let cancelled = false
     void (async () => {
@@ -69,7 +79,7 @@ export function useEmbeddedOwnerOnSubAccount(params: {
       if (cancelled) return
       setStatus('checking')
       try {
-        const next = await resolveEmbeddedOwnerStatus(subAccount, embeddedEoa)
+        const next = await resolveEmbeddedOwnerStatus(cswAddress, embeddedEoa)
         if (!cancelled) setStatus(next)
       } catch {
         if (!cancelled) setStatus('unknown')
@@ -79,9 +89,9 @@ export function useEmbeddedOwnerOnSubAccount(params: {
     return () => {
       cancelled = true
     }
-  }, [canCheck, embeddedEoa, subAccount])
+  }, [canCheck, cswAddress, embeddedEoa])
 
-  const resolvedStatus: EmbeddedOwnerOnSubAccountStatus = canCheck ? status : 'idle'
+  const resolvedStatus: EmbeddedOwnerOnCswStatus = canCheck ? status : 'idle'
 
   return {
     status: resolvedStatus,

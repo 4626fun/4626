@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { isLocalXmtpStateInvalidError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
 
 describe('shouldFallbackToOriginalXmtpRecipient', () => {
   const original = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd' as const
@@ -48,5 +48,17 @@ describe('shouldFallbackToOriginalXmtpRecipient', () => {
         originalCanMessage: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('isLocalXmtpStateInvalidError', () => {
+  it('detects inbox validation and partial sync failures', () => {
+    expect(
+      isLocalXmtpStateInvalidError(
+        'InboxValidationFailed("f1cb93da12e9fb6935084c613638d4005e5c5fd91b02e9ef0355add7309ae673")',
+      ),
+    ).toBe(true)
+    expect(isLocalXmtpStateInvalidError('synced 12 messages, 3 failed 9 succeeded')).toBe(true)
+    expect(isLocalXmtpStateInvalidError('conversation_not_found')).toBe(false)
   })
 })

@@ -4,6 +4,7 @@ import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/fla
 import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
+import { AppLoadingBootstrapGate } from '@/components/layout/AppLoadingOverlay'
 import { createPrivyAppearance } from './clientAppearance'
 import { PrivyWalletHooksContextProvider } from './walletHooksContext'
 
@@ -182,7 +183,9 @@ export function PrivyClientProvider(props: {
     <PrivyClientContext.Provider value={ctx}>
       <PrivyProviderSafetyBoundary appId={appId} clientId={clientId} baseConfig={baseConfig} safeConfig={safeConfig}>
         <PrivyStatusObserver onStatus={handleRuntimeStatus} />
-        <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
+        <AppLoadingBootstrapGate active={runtimeStatus === 'loading'}>
+          <PrivyWalletHooksContextProvider enabled>{children}</PrivyWalletHooksContextProvider>
+        </AppLoadingBootstrapGate>
       </PrivyProviderSafetyBoundary>
     </PrivyClientContext.Provider>
   )

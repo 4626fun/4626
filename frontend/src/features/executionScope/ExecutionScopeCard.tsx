@@ -111,24 +111,10 @@ export function ExecutionScopeCard() {
               can sign the spend permission yet.
             </p>
             <p className="text-[11px] text-zinc-500">
-              {subAccountFlowEnabled ? (
-                <>
-                  For Base App smart wallets, finish the <strong>Connect Base App sub-account</strong>{' '}
-                  step on the waitlist — it provisions a 4626-scoped sub-account without changing
-                  parent wallet owners. Legacy owner-install remains available at{' '}
-                  <a href="/add-owner" className="text-zinc-300 underline decoration-dotted">
-                    /add-owner
-                  </a>{' '}
-                  in an external browser.
-                </>
-              ) : (
-                <>
-                  The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
-                  waitlist — it installs your 4626 app signer as an owner of your smart wallet
-                  (one-time setup). If you manage your CSW manually, you can also connect the wallet
-                  you used to create it (Rabby, MetaMask, Coinbase Wallet).
-                </>
-              )}
+              The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
+              waitlist — it installs your 4626 app signer as an owner of your smart wallet
+              (one-time setup). If you manage your CSW manually, you can also connect the wallet
+              you used to create it (Rabby, MetaMask, Coinbase Wallet).
             </p>
           </div>
         )}

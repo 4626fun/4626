@@ -186,6 +186,15 @@ export function isOpfsAccessHandleError(message: string): boolean {
   )
 }
 
+/** Local OPFS install no longer validates against the XMTP network inbox. */
+export function isLocalXmtpStateInvalidError(message: string): boolean {
+  const m = String(message || '')
+  return (
+    /InboxValidationFailed/i.test(m) ||
+    /synced \d+ messages?, \d+ failed \d+ succeeded/i.test(m)
+  )
+}
+
 // ---------------------------------------------------------------------------
 // canMessage result parsing
 // ---------------------------------------------------------------------------

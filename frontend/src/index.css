@@ -5,6 +5,7 @@
 @layer base {
   html {
     position: relative;
+    scrollbar-gutter: stable;
   }
 
   html,
@@ -57,6 +58,17 @@
   body.baseapp-scroll-lock,
   body.baseapp-scroll-lock #root {
     overscroll-behavior-y: none;
+  }
+
+  /* Full-screen bootstrap overlay: lock document scroll to avoid gutter flicker. */
+  html.app-loading-scroll-lock,
+  body.app-loading-scroll-lock {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  body.app-loading-scroll-lock #root {
+    overflow: hidden;
   }
   
   /* Cinematic Typography */

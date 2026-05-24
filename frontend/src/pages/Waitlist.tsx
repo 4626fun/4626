@@ -28,10 +28,6 @@ function WaitlistFlowGate() {
     )
   }
 
-  if (privyClientStatus === 'loading') {
-    return <AppLoadingRegistrar />
-  }
-
   return (
     <Suspense fallback={<AppLoadingRegistrar />}>
       <LazyWaitlistFlow sectionId="waitlist-page" />

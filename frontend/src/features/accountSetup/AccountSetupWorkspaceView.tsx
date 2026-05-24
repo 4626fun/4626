@@ -23,7 +23,6 @@ import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPan
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
-import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
@@ -204,11 +203,8 @@ export function AccountSetupWorkspaceView(props: {
     signingStepComplete,
     parentEmbeddedOwnerOnChain,
     refreshParentEmbeddedOwner,
-    persistedSubAccountAddress,
-    subAccountFlowEnabled,
   } = useWaitlistSigningStepComplete({
     accountSignals: me?.accountSignals,
-    baseSubAccount: me?.baseSubAccount ?? null,
     canonicalCswAddress,
     ownerInstallRequested: ownerInstallPathActive,
   })
@@ -233,16 +229,13 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
-  const preferBaseAppSubAccountSetup = false
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     ownerInstallRequested: ownerInstallPathActive,
     signingStepComplete,
     executionTrack,
-    preferBaseAppSubAccountSetup,
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
   })
-  const subAccountOwnerInstallPanel = null
   const stepTwoDoneSubtitle = signingStepComplete
     ? 'Embedded signer installed on your parent smart wallet'
     : 'Enable 4626 signing on your parent smart wallet'
@@ -369,12 +362,6 @@ export function AccountSetupWorkspaceView(props: {
               </button>
             </div>
           </div>
-
-          {subAccountOwnerInstallPanel ? (
-            <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
-              {subAccountOwnerInstallPanel}
-            </section>
-          ) : null}
 
           {summaryActions ? (
             <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
@@ -654,23 +641,6 @@ export function AccountSetupWorkspaceView(props: {
 
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
-                    {preferBaseAppSubAccountSetup ? (
-                      <div className="space-y-4">
-                        <p className="text-xs leading-relaxed text-zinc-500">
-                          <span className="text-zinc-400">Base App path.</span> Finish signing on your app wallet in
-                          Base App — not on the parent wallet from this site.{' '}
-                          <a
-                            href={buildWaitlistSetupUrl('base-app')}
-                            className="text-brand-200/90 underline decoration-dotted underline-offset-2 hover:text-brand-100"
-                          >
-                            Open setup
-                          </a>
-                        </p>
-                        {subAccountOwnerInstallPanel}
-                      </div>
-                    ) : (
-                      subAccountOwnerInstallPanel
-                    )}
                     {requiresBaseAppForOwnerInstall ? (
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         Your Zora smart wallet is passkey-controlled. Owner install cannot finish from this

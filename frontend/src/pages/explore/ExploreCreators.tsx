@@ -552,7 +552,6 @@ export function ExploreCreators() {
             { label: 'Volume', value: 'volume' },
             { label: 'Market cap', value: 'marketCap' },
             { label: 'Price change', value: 'priceChange' },
-            { label: 'Ethos score', value: 'ethosScore' },
             { label: 'Recently added', value: 'new' },
           ]}
           volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}

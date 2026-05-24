@@ -267,6 +267,8 @@ async function assembleEthosSortedCreatorResponse(params: {
         chainId: 8453,
         createdAt: (typeof detail?.createdAt === 'string' && detail.createdAt) || row.created_at || undefined,
         marketCap,
+        marketCapDelta24h:
+          typeof detail?.marketCapDelta24h === 'string' ? detail.marketCapDelta24h : undefined,
         volume24h,
         totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
         uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,

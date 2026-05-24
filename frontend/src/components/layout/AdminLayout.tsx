@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
-import { Link, Outlet, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { ShieldCheck } from 'lucide-react'
 import { useAccount } from 'wagmi'
+
+import { PageTransitionNestedOutlet } from '@/components/layout/PageTransition'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { deriveAdminWalletRoles } from '@/lib/wallet/adminWalletRoles'
@@ -181,7 +183,7 @@ export function AdminLayout() {
       </div>
 
       {/* Child route */}
-      <Outlet />
+      <PageTransitionNestedOutlet />
     </div>
   )
 }

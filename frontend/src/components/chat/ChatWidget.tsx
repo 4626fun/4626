@@ -95,7 +95,7 @@ type PendingDeepLinkIntent = {
 
 function ChatWidgetInner() {
   const { isConnected, address } = useAccount()
-  const { startDm, connect, status, identityAddress } = useXmtp()
+  const { startDm, connect, status, identityAddress, localStateResetRequired } = useXmtp()
 
   const [barExpanded, setBarExpanded] = useState(false)
   const [openWindows, setOpenWindows] = useState<OpenWindow[]>([])
@@ -114,10 +114,10 @@ function ChatWidgetInner() {
   const newDmInputRef = useRef<HTMLInputElement>(null)
 
   const maybeConnectMessaging = useCallback(() => {
-    if (shouldAutoConnectMessaging(status)) {
+    if (shouldAutoConnectMessaging(status, { localStateResetRequired })) {
       void connect('auto')
     }
-  }, [connect, status])
+  }, [connect, localStateResetRequired, status])
 
   const clearChatActionQuery = useCallback(() => {
     if (typeof window === 'undefined') return

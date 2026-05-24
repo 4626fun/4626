@@ -205,29 +205,6 @@ export const injectedConnectorFlag = defineFlag<boolean>({
   },
 })
 
-/**
- * Track C2 — sub-accounts on the waitlist (frontend half).
- *
- * Gates the waitlist `connect-base-app` step that runs the
- * `useSubAccountSetup` orchestrator and POSTs the resulting triple to
- * `/api/arch-b/sub-account/baseapp/register` (the C1 server endpoint).
- *
- * OFF by default — when off, waitlist behaviour stays auth → done.
- * Pairs with the server-side `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`
- * (PR #532); flip both for the full flow.
- */
-export const waitlistSubAccountFlowFlag = defineFlag<boolean>({
-  key: 'waitlist-subaccount-flow',
-  description:
-    'Track C2 — show the Base App sub-account connect step in the waitlist signup flow. Pairs with server WAITLIST_SUBACCOUNT_FLOW_ENABLED.',
-  category: 'operational',
-  defaultValue: false,
-  options: [{ value: false, label: 'Disabled' }, { value: true, label: 'Enabled' }],
-  decide() {
-    return isTruthyEnv(import.meta.env.VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED)
-  },
-})
-
 // ---------------------------------------------------------------------------
 // UI / product flags (candidates for remote targeting later)
 // ---------------------------------------------------------------------------

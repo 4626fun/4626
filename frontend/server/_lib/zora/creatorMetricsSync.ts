@@ -560,7 +560,22 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
   }
 }
 
-async function recomputeCreatorCounts(db: Db): Promise<void> {
+export async function recomputeCreatorCounts(db: Db): Promise<void> {
+  // Repair rows indexed via hot refresh before a matching creators upsert landed.
+  await db.sql`
+    INSERT INTO creators (creator_address, first_seen_at, coin_count, last_seen_at)
+    SELECT
+      cc.creator_address,
+      MIN(cc.created_at) AS first_seen_at,
+      COUNT(*)::INTEGER AS coin_count,
+      MAX(cc.last_seen_at) AS last_seen_at
+    FROM creator_coins AS cc
+    WHERE NOT EXISTS (
+      SELECT 1 FROM creators AS c WHERE c.creator_address = cc.creator_address
+    )
+    GROUP BY cc.creator_address
+    ON CONFLICT (creator_address) DO NOTHING;
+  `
   await db.sql`
     WITH counts AS (
       SELECT creator_address, COUNT(*)::INTEGER AS coin_count

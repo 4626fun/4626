@@ -8,7 +8,6 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
-import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { PageTransitionOutlet } from '@/components/layout/PageTransition'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 import { XmtpChatProvider } from '@/lib/xmtp/provider'
@@ -291,9 +290,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         <XmtpChatProvider>
           {/* Main */}
           <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-            <Suspense fallback={<AppLoadingRegistrar />}>
-              <PageTransitionOutlet />
-            </Suspense>
+            <PageTransitionOutlet />
           </main>
 
           {/* Chat discovery and dock — app domain only (XMTP installations are per-origin; avoid 4626.fun) */}
@@ -303,9 +300,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         </XmtpChatProvider>
       ) : (
         <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-          <Suspense fallback={<AppLoadingRegistrar />}>
-            <PageTransitionOutlet />
-          </Suspense>
+          <PageTransitionOutlet />
         </main>
       )}
 

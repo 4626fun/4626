@@ -163,6 +163,7 @@ describe('GET /api/zora/explore', () => {
           name: 'jesse',
           symbol: 'jesse',
           marketCap: '1200000',
+          marketCapDelta24h: '8.4',
           volume24h: '5400',
           uniqueHolders: 999,
           mediaContent: {
@@ -220,6 +221,7 @@ describe('GET /api/zora/explore', () => {
     expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('jesse')
     expect(res.body?.data?.edges?.[0]?.node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse.png')
     expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1979)
+    expect(res.body?.data?.edges?.[0]?.node?.marketCapDelta24h).toBe('8.4')
   })
 
   it.each([

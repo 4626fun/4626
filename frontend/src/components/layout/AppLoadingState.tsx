@@ -13,6 +13,8 @@ export type AppLoadingStateProps = {
   srStatusOverride?: string
   /** When true, session/page handoffs keep the same loader pattern (no animation reset). */
   stabilizePattern?: boolean
+  /** Fill a relative overlay shell instead of creating a second fixed layer. */
+  fillContainer?: boolean
 }
 
 function rotateIndex(index: number, phase: number, count: number) {
@@ -50,13 +52,17 @@ export function AppLoadingState(props: AppLoadingStateProps = {}) {
   const heading = props.labelOverride ?? config.headline
   const srStatus = props.srStatusOverride ?? config.srStatus
 
+  const rootClassName = props.fillContainer
+    ? 'app-loading-root absolute inset-0 isolate overflow-hidden text-zinc-100'
+    : 'app-loading-root fixed inset-0 z-[120] isolate h-[100dvh] max-h-[100dvh] w-full overflow-hidden text-zinc-100'
+
   return (
     <div
-      className="app-loading-root fixed inset-0 z-[120] isolate overflow-hidden text-zinc-100"
+      className={rootClassName}
       data-loading-intent={intent}
       data-loading-pattern={config.pattern.id}
     >
-      <div className="relative z-10 flex h-full items-center justify-center px-6 py-16">
+      <div className="relative z-10 flex h-full min-h-0 items-center justify-center px-6">
         <div className="flex items-center gap-3 text-center">
           <PixelWaveLoader
             className="shrink-0"

@@ -1,10 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { encodeFunctionData, getAddress } from 'viem'
 
-import {
-  describeGoldenPart1ExecuteBatchInnerCall,
-  validateGoldenCswDepositoryPart1UserCall,
-} from './goldenRelayPart1Shape'
+import { validateGoldenCswDepositoryPart1UserCall, type GoldenPart1UserCall } from './goldenRelayPart1Shape'
 import {
   GOLDEN_RELAY_PART1_DEPOSIT_WEI,
   GOLDEN_RELAY_PART1_ORDER_ID,
@@ -15,6 +12,18 @@ import {
 
 const CSW = GOLDEN_RELAY_PART1_PROBE_CSW
 const ORDER_ID = GOLDEN_RELAY_PART1_ORDER_ID
+
+function describeGoldenPart1ExecuteBatchInnerCall(userCall: GoldenPart1UserCall): {
+  target: string
+  value: string
+  data: string
+} {
+  return {
+    target: getAddress(userCall.to),
+    value: BigInt(userCall.value).toString(10),
+    data: userCall.data,
+  }
+}
 
 describe('validateGoldenCswDepositoryPart1UserCall', () => {
   const goldenData = encodeFunctionData({

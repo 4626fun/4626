@@ -882,22 +882,6 @@ class DeployVaultErrorBoundary extends Component<
 export function DeployVault() {
   const privyClientStatus = usePrivyClientStatus()
 
-  if (privyClientStatus === 'loading') {
-    return (
-      <div className="vault-shell min-h-0 bg-transparent text-white">
-        <section className="max-w-[1400px] mx-auto px-6 py-16">
-          <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
-          <div className="vault-surface vault-hover-lift p-8 space-y-3">
-            <div className="text-lg font-medium">Initializing authentication</div>
-            <div className="text-sm text-zinc-400 leading-relaxed">
-              Waiting for Privy client readiness before loading deploy controls.
-            </div>
-          </div>
-        </section>
-      </div>
-    )
-  }
-
   // Privy is used for auth/session - if disabled, show setup hint.
   if (privyClientStatus === 'disabled') {
     return (

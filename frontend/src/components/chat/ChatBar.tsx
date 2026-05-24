@@ -319,8 +319,9 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
               {localStateResetRequired ? (
                 <>
                   <div className="text-[11px] text-amber-200/80 leading-relaxed">
-                    This browser’s XMTP cache no longer validates against your inbox. Reset local messaging state,
-                    then sign once to create a fresh installation.
+                    This browser’s XMTP cache no longer validates against your inbox. Reset local messaging state to
+                    clear the cache and recreate this browser install. If reset says OPFS is locked with only one tab
+                    open, click Reset again — the page will reload once automatically to release the lock.
                   </div>
                   <button
                     type="button"

@@ -275,6 +275,8 @@ export function ChatWindow({
     startDmByInbox,
     subscribeToMessages,
     status,
+    localStateResetRequired,
+    resetLocalState,
     resolveInboxAddress,
     inboxId,
   } = useXmtp()
@@ -1333,6 +1335,23 @@ export function ChatWindow({
           </div>
         </button>
       )}
+
+      {localStateResetRequired && status === 'error' ? (
+        <div className="mx-3 mt-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100/90 shrink-0">
+          <p className="leading-relaxed">
+            Messaging disconnected because this browser&apos;s XMTP cache is out of sync. Use Reset local messaging state
+            in the chat panel. If you only have one tab open and reset reports an OPFS lock, click Reset again — the page
+            reloads once automatically to release it.
+          </p>
+          <button
+            type="button"
+            onClick={() => void resetLocalState()}
+            className="mt-2 rounded-md bg-amber-500/15 px-2.5 py-1 text-[11px] font-medium text-amber-200 hover:bg-amber-500/25 transition-colors"
+          >
+            Reset local XMTP state
+          </button>
+        </div>
+      ) : null}
 
       {/* Messages */}
       {(!minimized || isMobile) && (
