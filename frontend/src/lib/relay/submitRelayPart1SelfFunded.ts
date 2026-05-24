@@ -305,11 +305,13 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   }
 
   if (params.sessionKeyOwner) {
-    // Base App session-key Part 1 often validates no-chain UserOp hash (see recipe doc).
-    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
+    // Prepared-calls + EntryPoint v0.6 validate the with-chain stripped digest for Part 1.
+    // No-chain is Part 2 / passkey lane — keep it as fallback only.
+    pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_primary' })
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_fallback' })
   }
 
-  // Domain-matched stripped hash (usually with-chain when Base App injected paymaster).
+  // Domain-matched stripped hash when prepare hash domain is known.
   pushUnique(primary)
   if (primary.mode !== 'entrypoint_v06_no_chain') {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
@@ -1184,6 +1186,31 @@ async function sendSignedPreparedUserOp(params: {
         }
         if (preparedCallsResult.signatureRejected) {
           lastSignatureError = preparedCallsResult.error
+          params.appendEvent(
+            `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsResult.error).slice(0, 120)}`,
+          )
+          if (params.customOwnerPolicyToken) {
+            try {
+              return await submitSignedPreparedUserOpViaBundler({
+                publicClient: params.publicClient,
+                fundingCsw: params.fundingCsw,
+                strippedUserOp: input.userOp,
+                signature,
+                appendEvent: params.appendEvent,
+                customOwnerPolicyToken: params.customOwnerPolicyToken,
+              })
+            } catch (bundlerError) {
+              if (isUserRejectedWalletAction(bundlerError)) {
+                throw bundlerError
+              }
+              params.appendEvent(
+                `relay_part1:prepared_bundler_inline_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
+              )
+              lastSignatureError = bundlerError
+            }
+          }
+          // Wrong hash domain — re-sign with the next hash candidate, not alternate RPC methods.
+          break
         }
       } catch (preparedCallsError) {
         if (isUserRejectedWalletAction(preparedCallsError)) {
@@ -1194,12 +1221,11 @@ async function sendSignedPreparedUserOp(params: {
           params.appendEvent(
             `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsError).slice(0, 120)}`,
           )
+          break
         } else {
           throw preparedCallsError
         }
       }
-
-      params.appendEvent('relay_part1:skip_bundler_self_auth=1')
     }
     return null
   }

@@ -321,8 +321,10 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       chainId: 8453,
       sessionKeyOwner: true,
     })
-    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
-    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_chain_unmatched_prepare_hash')).toBe(true)
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_chain_session_key_primary')
+    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_no_chain_session_key_fallback')).toBe(
+      true,
+    )
   })
 
   it('stripRawWalletPreparedUserOp clears snake_case paymaster fields', () => {
@@ -693,7 +695,14 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
     expect(mockBundlerRequest).toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_prepare_native_paymaster_injected=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded_fallback')
+    const bundlerLaneEvents = appendEvent.mock.calls
+      .map((call) => call[0])
+      .filter(
+        (event) =>
+          event === 'relay_part1:lane=prepared_bundler_self_funded' ||
+          event === 'relay_part1:lane=prepared_bundler_self_funded_fallback',
+      )
+    expect(bundlerLaneEvents.length).toBeGreaterThan(0)
   })
 
   it('rejects mistaken owner slot 3 signatures before prepared-calls submit', async () => {
