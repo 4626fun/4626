@@ -39,3 +39,22 @@ curl -s https://4626.fun/.well-known/farcaster.json | jq '.miniapp.iconUrl, .min
 4. Force-quit and reopen Base App (client icon cache is aggressive).
 
 Website-only favicon updates are insufficient when Base still serves the old blue gradient squircle from base.dev or from a cached `/app-icon.png` fetch.
+
+## Pinata / IPFS (not the app icon)
+
+Live 4626 **app** icon surfaces (`favicon.ico`, `farcaster.json` `iconUrl`, `fc:miniapp` splash) are **local** under `frontend/public/` — not Pinata.
+
+Historical note: the first Base miniapp shell (removed ~Jan 2026) used a Pinata gateway favicon:
+
+```html
+<link rel="icon" href="https://tomato-abundant-urial-204.mypinata.cloud/ipfs/bafybeigzyatm2pgrkqbnskyvflnagtqli6rgh7wv7t2znaywkm2pixmkxy" />
+```
+
+If [base.dev](https://base.dev) project `695a49dc4d3a403912ed8ca5` still references that CID or an old blue-squircle upload, domain-bar flicker can persist until the project icon is replaced with `logo-mark-opaque-1024.png`.
+
+Current Pinata usage in-repo:
+
+| Path | Purpose |
+|------|---------|
+| `4626.fun/ipfs/*` → `pinata.4626.fun` | Hermit meme relay only |
+| Explore resource-link icons | **Self-hosted** at `/base/basescan-logo-symbol-light.svg` and `/brands/dexscreener.ico` (no Pinata fetch) |

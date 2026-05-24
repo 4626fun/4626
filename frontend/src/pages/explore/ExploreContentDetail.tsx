@@ -61,8 +61,7 @@ const METRICS: Array<{ key: MetricKey; label: string; icon: React.ReactNode }> =
 ]
 
 const ZORA_TOKEN_LOGO_URL = '/brands/zora-token.svg'
-const BASESCAN_ICON_URL =
-  'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi'
+const BASESCAN_ICON_URL = '/base/basescan-logo-symbol-light.svg'
 const UNISWAP_ICON_URL = '/protocols/uniswap.svg'
 
 const SNAPSHOT_METRIC_HELP: Record<string, string> = {

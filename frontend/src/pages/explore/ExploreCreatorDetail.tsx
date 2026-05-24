@@ -407,12 +407,12 @@ function ResourceLinks({ tokenAddress, compact = false }: { tokenAddress: string
     {
       name: 'Dexscreener',
       href: `https://dexscreener.com/base/${tokenAddress}`,
-      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreia3wpaw347dpdn5sewij3nsdpgzoa7i4n5toohojedrdvyvhx52le',
+      iconUrl: '/brands/dexscreener.ico',
     },
     {
       name: 'Basescan',
       href: `https://basescan.org/token/${tokenAddress}`,
-      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreidse2dmc2h5myecpddbm53xwbn62yq4l4af7fnpi362prhk6f2hoi',
+      iconUrl: '/base/basescan-logo-symbol-light.svg',
     },
   ]
 
