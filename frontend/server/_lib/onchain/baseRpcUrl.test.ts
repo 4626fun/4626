@@ -5,6 +5,7 @@ import {
   normalizeViemHttpRpcUrl,
   resolveServerBaseRpcUrl,
   resolveServerBaseRpcUrls,
+  resolveDeploySessionRpcUrl,
 } from './baseRpcUrl.js'
 
 describe('baseRpcUrl', () => {
@@ -40,5 +41,13 @@ describe('baseRpcUrl', () => {
   it('allows local fork RPC when explicitly requested', () => {
     process.env.BASE_RPC_URL = 'http://127.0.0.1:8545'
     expect(resolveServerBaseRpcUrl({ allowLocalFork: true })).toBe('http://127.0.0.1:8545')
+  })
+
+  it('routes deploy dry-run local RPC separately from server mainnet reads', () => {
+    process.env.BASE_RPC_URL = 'https://base.example/rpc'
+    process.env.DEPLOY_DRY_RUN_LOCAL_RPC_URL = 'http://127.0.0.1:8545'
+    expect(resolveServerBaseRpcUrl()).toBe('https://base.example/rpc')
+    expect(resolveDeploySessionRpcUrl()).toBe('http://127.0.0.1:8545')
+    delete process.env.DEPLOY_DRY_RUN_LOCAL_RPC_URL
   })
 })

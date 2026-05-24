@@ -6,6 +6,7 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -791,7 +792,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const smartWallet = getAddress(rec.smartWallet)
     const ownerIndex = await findOwnerIndex({
-      publicClient: createPublicClient({ chain: base, transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim()) }),
+      publicClient: createPublicClient({ chain: base, transport: http(resolveDeploySessionRpcUrl()) }),
       smartWallet,
       ownerAddress: sessionSigner,
       maxScan: 512,
@@ -800,7 +801,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const publicClient = createPublicClient({
       chain: base,
-      transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
+      transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
     })
 
     const origin = getCanonicalOrigin(req)

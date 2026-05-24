@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   type ApiEnvelope,
   getApiContracts,
@@ -251,7 +252,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const batcherAddress = contracts.creatorVaultBatcher ?? null
   const client = createPublicClient({
     chain: base,
-    transport: http((process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org', { timeout: 12_000 }),
+    transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
   })
 
   let onchainRolePolicyManager: Address | null = null

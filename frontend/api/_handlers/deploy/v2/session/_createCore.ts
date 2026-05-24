@@ -15,6 +15,7 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -855,7 +856,7 @@ async function normalizePhase1EntrypointCalls(calls: Call[]): Promise<{ calls: C
   }
   if (targetAddresses.size === 0) return { calls, rewrote: false }
 
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -925,7 +926,7 @@ async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls:
   }
   if (saltedTargets.size === 0) return { calls, rewrote: false }
 
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -1156,7 +1157,7 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
   if (isDeprecatedCreatorVaultBatcherAddress(batcherAddress)) {
     throw new DeploySessionRequestError(409, deploymentBatcherNotConfiguredMessage(batcherAddress))
   }
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const readClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -1871,7 +1872,7 @@ function isOvaultRuntimeConfigured(value: unknown): boolean {
 }
 
 async function assertOvaultRuntimeReadyForBatcher(batcherAddress: Address): Promise<void> {
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const publicClient = createPublicClient({
     chain: base,
     transport: http(rpc, { timeout: 12_000 }),
@@ -2243,8 +2244,7 @@ const COINBASE_SMART_WALLET_OWNER_LINK_ABI = [
 
 async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAddress: Address }): Promise<boolean> {
   try {
-    const rpcRaw = (process.env.BASE_RPC_URL ?? '').trim()
-    const rpc = rpcRaw || 'https://mainnet.base.org'
+    const rpc = resolveDeploySessionRpcUrl()
     const publicClient = createPublicClient({
       chain: base,
       transport: http(rpc, { timeout: 12_000 }),
@@ -2880,7 +2880,7 @@ export async function validateDeploySessionRequest(params: {
     }
 
     if (allSubmittedCalls.length > 0) {
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const rpc = resolveDeploySessionRpcUrl()
       const readClient = createPublicClient({
         chain: base,
         transport: http(rpc, { timeout: 12_000 }),
@@ -2924,7 +2924,7 @@ export async function validateDeploySessionRequest(params: {
       }
       const batcherAddress = getAddress(phase4Calls[0]!.to)
       const baseSalt = deriveBaseSalt({ creatorToken, owner: ownerAddress, chainId: 8453, version })
-      const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+      const rpc = resolveDeploySessionRpcUrl()
       const readClient = createPublicClient({
         chain: base,
         transport: http(rpc, { timeout: 12_000 }),

@@ -210,9 +210,11 @@ if port_in_use "$FORK_PORT"; then
 fi
 
 LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
-# Always point server + browser RPC reads to the selected local fork port.
-export BASE_RPC_URL="$LOCAL_RPC_URL"
+# Browser deploy reads use the fork; deploy-session API uses DEPLOY_DRY_RUN_LOCAL_RPC_URL.
+# Keep BASE_RPC_URL on live upstream so owner-install / Relay preview never hits dead Anvil.
+export DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL"
 export VITE_BASE_RPC="$LOCAL_RPC_URL"
+export BASE_RPC_URL="${BASE_FORK_UPSTREAM_RPC_URL:-https://mainnet.base.org}"
 export DEPLOY_DRY_RUN_FORK_PORT="$FORK_PORT"
 FALLBACK_FORK_UPSTREAM_RPC_URL="${DEPLOY_DRY_RUN_FORK_FALLBACK_RPC_URL:-https://mainnet.base.org}"
 
@@ -369,7 +371,7 @@ PY
   echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
 fi
 
-echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}) with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
+echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
 if port_in_use 5173; then
   echo "Warning: localhost:5173 is in use — stop pnpm dev before deploy dry-run to avoid esbuild OOM on WSL." >&2
 fi

@@ -6,6 +6,7 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
+import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -2002,7 +2003,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
 
   const publicClient = createPublicClient({
     chain: base,
-    transport: http((process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').trim(), { timeout: 12_000 }),
+    transport: http(resolveDeploySessionRpcUrl(), { timeout: 12_000 }),
   })
   const bundlerClient = createBundlerClient({ client: publicClient as any, transport })
 

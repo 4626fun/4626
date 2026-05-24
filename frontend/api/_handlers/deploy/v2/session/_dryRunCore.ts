@@ -16,6 +16,7 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
+import { isLocalForkRpcUrl, resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
   readBoundedJsonObjectBody,
@@ -309,10 +310,6 @@ const DRY_RUN_PHASE1_FINALIZE_WITH_SALT_ABI = [
     outputs: [],
   },
 ] as const
-
-function isLocalForkRpcUrl(rpcUrl: string): boolean {
-  return /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$)/i.test(rpcUrl.trim())
-}
 
 function callValueToBigInt(value: Call['value']): bigint {
   if (typeof value === 'bigint') return value
@@ -2018,7 +2015,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const auth = readDeployAuthFromRequest(req)
-  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const rpc = resolveDeploySessionRpcUrl()
   const isLocalFork = isLocalForkRpcUrl(rpc)
   if (!auth?.address) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)

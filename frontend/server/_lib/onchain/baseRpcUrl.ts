@@ -44,3 +44,15 @@ export function resolveServerBaseRpcUrls(options?: { allowLocalFork?: boolean })
 export function resolveServerBaseRpcUrl(options?: { allowLocalFork?: boolean }): string {
   return resolveServerBaseRpcUrls(options)[0] ?? DEFAULT_BASE_RPC
 }
+
+/**
+ * Deploy session / dry-run RPC. Prefers `DEPLOY_DRY_RUN_LOCAL_RPC_URL`, then any
+ * localhost entry in `BASE_RPC_URL`, otherwise live mainnet.
+ */
+export function resolveDeploySessionRpcUrl(): string {
+  const dryRunLocal = (process.env.DEPLOY_DRY_RUN_LOCAL_RPC_URL ?? '').trim()
+  if (dryRunLocal) return normalizeViemHttpRpcUrl(dryRunLocal)
+  const localFork = splitConfiguredBaseRpcUrls().find((url) => isLocalForkRpcUrl(url))
+  if (localFork) return localFork
+  return resolveServerBaseRpcUrl()
+}

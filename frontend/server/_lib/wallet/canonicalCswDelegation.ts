@@ -12,6 +12,7 @@ import {
   type ExecutionTrack,
 } from './executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
+import { resolveServerBaseRpcUrls } from '../onchain/baseRpcUrl.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import {
   classifyLinkedAccounts,
@@ -60,7 +61,6 @@ type StructuredDelegationError = Error & {
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const TX_HASH_RE = /^0x[a-fA-F0-9]{64}$/
-const DEFAULT_BASE_RPCS = ['https://mainnet.base.org'] as const
 const BLOCKED_DELEGATION_RPC_HOSTS = new Set(['base.llamarpc.com'])
 
 let delegationColumnsEnsured = false
@@ -125,26 +125,14 @@ function normalizeCanonicalSource(value: unknown, fallback: string): string {
   return raw || fallback
 }
 
-function normalizeDelegationRpcUrl(value: string): string | null {
-  const raw = value.trim()
-  if (!raw) return null
-  try {
-    const url = new URL(raw)
-    if (BLOCKED_DELEGATION_RPC_HOSTS.has(url.hostname.toLowerCase())) return null
-    return url.pathname === '/' && !url.search && !url.hash ? url.origin : url.toString()
-  } catch {
-    return raw
-  }
-}
-
 export function getBaseRpcUrls(): string[] {
-  const raw = String(process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return [...DEFAULT_BASE_RPCS]
-  const urls = raw
-    .split(',')
-    .map(normalizeDelegationRpcUrl)
-    .filter((value): value is string => Boolean(value))
-  return [...new Set([...urls, ...DEFAULT_BASE_RPCS])]
+  return resolveServerBaseRpcUrls().filter((url) => {
+    try {
+      return !BLOCKED_DELEGATION_RPC_HOSTS.has(new URL(url).hostname.toLowerCase())
+    } catch {
+      return true
+    }
+  })
 }
 
 function createBasePublicClient(rpcUrl: string) {
