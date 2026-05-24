@@ -1,5 +1,10 @@
-import { createWalletClient, custom, getAddress, type Address, type Hex, type PublicClient } from 'viem'
-import { entryPoint06Address, getUserOperationHash } from 'viem/account-abstraction'
+import { createWalletClient, custom, getAddress, http, type Address, type Hex, type PublicClient } from 'viem'
+import {
+  createBundlerClient,
+  entryPoint06Address,
+  getUserOperationHash,
+  waitForUserOperationReceipt,
+} from 'viem/account-abstraction'
 import { base } from 'viem/chains'
 
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
@@ -56,6 +61,19 @@ class RelayPart1PrepareFallbackToBundler extends Error {
   }
 }
 
+/** Prepared userOp was signed client-side; wallet_sendPreparedCalls rejected all payload shapes. */
+class RelayPart1PreparedUserOpHandoff extends Error {
+  readonly strippedUserOp: V06UserOpFields
+  readonly signature: Hex
+
+  constructor(strippedUserOp: V06UserOpFields, signature: Hex) {
+    super('relay_part1_prepared_userop_handoff')
+    this.name = 'RelayPart1PreparedUserOpHandoff'
+    this.strippedUserOp = strippedUserOp
+    this.signature = signature
+  }
+}
+
 /** Base App session-key lanes need inner ECDSA + on-chain owner address, not full wrapper passthrough. */
 export function resolveSelfAuthPreparedCallsSignaturePayloadParams(params: {
   signature: Hex
@@ -63,11 +81,15 @@ export function resolveSelfAuthPreparedCallsSignaturePayloadParams(params: {
   preparedCallsSignerAddress: `0x${string}` | null
   parsedOwnerIndex: number | null
 }): { mode: PreparedCallsSignaturePayloadMode; signerAddress: `0x${string}` | null } {
+  const modes = listSelfAuthPreparedCallsSignaturePayloadModes({
+    parsedOwnerIndex: params.parsedOwnerIndex ?? parseSelfAuthOwnerIndexFromSignature(params.signature),
+  })
+  const mode = modes[0] ?? 'auto'
   const wrapped = parseCoinbaseSignatureWrapper(params.signature)
   const ownerIndex = wrapped?.ownerIndex ?? params.parsedOwnerIndex
   if (ownerIndex === 2) {
     return {
-      mode: 'inner_secp256k1',
+      mode,
       signerAddress: params.preparedCallsSignerAddress,
     }
   }
@@ -79,6 +101,15 @@ export function resolveSelfAuthPreparedCallsSignaturePayloadParams(params: {
     return { mode: 'inner_secp256k1', signerAddress: params.preparedCallsSignerAddress }
   }
   return { mode: 'auto', signerAddress: params.preparedCallsSignerAddress ?? params.fundingCsw }
+}
+
+export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
+  parsedOwnerIndex: number | null
+}): PreparedCallsSignaturePayloadMode[] {
+  if (params.parsedOwnerIndex === 2) {
+    return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
+  }
+  return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
 }
 
 function recordSelfAuthOwnerDiscovery(params: {
@@ -319,15 +350,15 @@ function isUserRejectedWalletAction(error: unknown): boolean {
 function isNonCascadeRelayPart1Error(error: unknown): boolean {
   if (isUserRejectedWalletAction(error)) return true
   const message = formatRelayPart1Error(error).toLowerCase()
+  if (message.includes('retrying with prepare/bundler')) {
+    return false
+  }
   return (
     message.includes('failed to fetch rpc request') ||
     message.includes('failed to fetch') ||
     message.includes('internal error was received') ||
     message.includes('error generating message') ||
-    message.includes('error generating transaction') ||
-    message.includes('paymaster = 0') ||
-    message.includes('usdc paymaster') ||
-    message.includes('stalls relay part 2')
+    message.includes('error generating transaction')
   )
 }
 
@@ -445,6 +476,92 @@ async function signSelfAuthPreparedUserOpHash(params: {
   return { signature, preparedCallsSignerAddress, parsedOwnerIndex }
 }
 
+function toRpcUserOperation(userOp: V06UserOpFields, signature: Hex) {
+  return {
+    sender: userOp.sender,
+    nonce: userOp.nonce,
+    initCode: userOp.initCode,
+    callData: userOp.callData,
+    callGasLimit: userOp.callGasLimit,
+    verificationGasLimit: userOp.verificationGasLimit,
+    preVerificationGas: userOp.preVerificationGas,
+    maxFeePerGas: userOp.maxFeePerGas,
+    maxPriorityFeePerGas: userOp.maxPriorityFeePerGas,
+    paymasterAndData: userOp.paymasterAndData,
+    signature,
+  }
+}
+
+async function submitSignedPreparedUserOpViaBundler(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  strippedUserOp: V06UserOpFields
+  signature: Hex
+  appendEvent: (row: string) => void
+}): Promise<`0x${string}`> {
+  params.appendEvent('relay_part1:lane=prepared_bundler_self_funded')
+  const bundlerUrl = resolveBundlerUrl()
+  const bundlerClient = createBundlerClient({
+    client: params.publicClient as never,
+    transport: http(bundlerUrl),
+  })
+  const userOperation = toRpcUserOperation(params.strippedUserOp, params.signature)
+  const userOpHash = (await bundlerClient.request({
+    method: 'eth_sendUserOperation',
+    params: [userOperation, entryPoint06Address],
+  })) as Hex
+  params.appendEvent(`relay_part1:prepared_bundler_userop=${userOpHash}`)
+
+  const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: userOpHash })
+  const transactionHash = receipt.receipt.transactionHash
+  params.appendEvent(`relay_part1:prepared_bundler_tx=${transactionHash}`)
+  await assertRelayPart1TxHashSelfFunded({
+    transactionHash,
+    userOperationHash: userOpHash,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
+  return transactionHash
+}
+
+async function pollPreparedCallsBundle(params: {
+  walletRequest: WalletRequest
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  callsId: string
+  appendEvent: (row: string) => void
+}): Promise<`0x${string}`> {
+  const resolution = await waitForCallsTxHash({
+    walletRequest: params.walletRequest,
+    callBundleId: params.callsId,
+    timeoutMs: 90_000,
+    intervalMs: 1_500,
+    onTelemetry: (event) => {
+      try {
+        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
+        params.appendEvent(`relay_part1.prepared_status.${event.step}: ${detail.slice(0, 320)}`)
+      } catch {
+        params.appendEvent(`relay_part1.prepared_status.${event.step}: <unloggable>`)
+      }
+    },
+  })
+
+  await assertRelayPart1LandedSelfFunded({
+    resolution,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
+
+  const txHash = await resolveRelayPart1DepositTxHash({
+    resolution,
+    appendEvent: params.appendEvent,
+  })
+  params.appendEvent(`relay_part1:prepared_tx=${txHash}`)
+  return txHash
+}
+
 async function sendSignedPreparedUserOp(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -479,79 +596,66 @@ async function sendSignedPreparedUserOp(params: {
       ownerDiscovery: params.ownerDiscovery,
     })
 
-  const signaturePayloadParams = resolveSelfAuthPreparedCallsSignaturePayloadParams({
-    signature,
-    fundingCsw: params.fundingCsw,
-    preparedCallsSignerAddress,
+  const strippedUserOp = params.signAfterPaymasterStrip
+    ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
+    : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
+
+  const payloadModes = listSelfAuthPreparedCallsSignaturePayloadModes({
     parsedOwnerIndex,
   })
-  if (signaturePayloadParams.mode === 'inner_secp256k1') {
-    params.appendEvent('relay_part1:prepared_calls_signature_mode=inner_secp256k1')
-    if (signaturePayloadParams.signerAddress) {
-      params.appendEvent(`relay_part1:prepared_calls_signer=${signaturePayloadParams.signerAddress}`)
+  let lastSendError: unknown = null
+
+  for (const mode of payloadModes) {
+    params.appendEvent(`relay_part1:prepared_calls_signature_mode=${mode}`)
+    if (preparedCallsSignerAddress) {
+      params.appendEvent(`relay_part1:prepared_calls_signer=${preparedCallsSignerAddress}`)
+    }
+
+    const signaturePayload = buildSendPreparedCallsSignaturePayload({
+      sender: params.fundingCsw,
+      signature,
+      signerAddress: preparedCallsSignerAddress,
+      mode,
+    })
+
+    try {
+      const sendResult = await params.walletRequest({
+        method: 'wallet_sendPreparedCalls',
+        params: [
+          {
+            version: '1.0',
+            type: params.prepareResult.type ?? 'user-operation-v06',
+            data: params.prepareResult.userOp,
+            chainId: params.prepareResult.chainId ?? params.chainIdHex,
+            signature: signaturePayload,
+          },
+        ],
+      })
+
+      const callsId = extractWalletCallsId(sendResult)
+      if (!callsId) {
+        throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+      }
+      params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
+      return await pollPreparedCallsBundle({
+        walletRequest: params.walletRequest,
+        publicClient: params.publicClient,
+        fundingCsw: params.fundingCsw,
+        callsId,
+        appendEvent: params.appendEvent,
+      })
+    } catch (sendError) {
+      lastSendError = sendError
+      if (isUserRejectedWalletAction(sendError)) {
+        throw sendError
+      }
+      params.appendEvent(
+        `relay_part1:prepared_calls_send_error=${formatRelayPart1Error(sendError).slice(0, 180)} mode=${mode}`,
+      )
     }
   }
 
-  const signaturePayload = buildSendPreparedCallsSignaturePayload({
-    sender: params.fundingCsw,
-    signature,
-    signerAddress: signaturePayloadParams.signerAddress,
-    mode: signaturePayloadParams.mode,
-  })
-
-  const sendResult = await params.walletRequest({
-    method: 'wallet_sendPreparedCalls',
-    params: [
-      {
-        version: '1.0',
-        type: params.prepareResult.type ?? 'user-operation-v06',
-        data: params.prepareResult.userOp,
-        chainId: params.prepareResult.chainId ?? params.chainIdHex,
-        signature: signaturePayload,
-      },
-    ],
-  })
-
-  const callsId = extractWalletCallsId(sendResult)
-  if (!callsId) {
-    throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
-  }
-  params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
-
-  const resolution = await waitForCallsTxHash({
-    walletRequest: params.walletRequest,
-    callBundleId: callsId,
-    timeoutMs: 90_000,
-    intervalMs: 1_500,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.prepared_status.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.prepared_status.${event.step}: <unloggable>`)
-      }
-    },
-  })
-
-  if (!params.publicClient) {
-    throw new Error(
-      'Relay Part 1 requires an on-chain client to verify self-funded UserOps. Reload and retry.',
-    )
-  }
-
-  await assertRelayPart1LandedSelfFunded({
-    resolution,
-    publicClient: params.publicClient,
-    fundingCsw: params.fundingCsw,
-    appendEvent: params.appendEvent,
-  })
-
-  const txHash = await resolveRelayPart1DepositTxHash({
-    resolution,
-    appendEvent: params.appendEvent,
-  })
-  params.appendEvent(`relay_part1:prepared_tx=${txHash}`)
-  return txHash
+  throw new RelayPart1PreparedUserOpHandoff(strippedUserOp, signature)
 }
 
 function extractWalletCallsId(sendResult: unknown): string | null {
@@ -840,12 +944,31 @@ async function submitViaPreparedCallsSelfFunded(params: {
         ownerDiscovery: params.ownerDiscovery,
       })
     } catch (stripError) {
-      if (isUserRejectedWalletAction(stripError) || isNonCascadeRelayPart1Error(stripError)) {
+      if (stripError instanceof RelayPart1PreparedUserOpHandoff) {
+        try {
+          return await submitSignedPreparedUserOpViaBundler({
+            publicClient: params.publicClient!,
+            fundingCsw: params.fundingCsw,
+            strippedUserOp: stripError.strippedUserOp,
+            signature: stripError.signature,
+            appendEvent: params.appendEvent,
+          })
+        } catch (preparedBundlerError) {
+          if (isUserRejectedWalletAction(preparedBundlerError) || isNonCascadeRelayPart1Error(preparedBundlerError)) {
+            throw preparedBundlerError
+          }
+          params.appendEvent(
+            `relay_part1:prepared_bundler_error=${formatRelayPart1Error(preparedBundlerError).slice(0, 220)}`,
+          )
+        }
+      } else if (isUserRejectedWalletAction(stripError) || isNonCascadeRelayPart1Error(stripError)) {
         throw stripError
+      } else if (!(stripError instanceof RelayPart1PrepareFallbackToBundler)) {
+        params.appendEvent(
+          `relay_part1:strip_paymaster_send_error=${formatRelayPart1Error(stripError).slice(0, 220)}`,
+        )
       }
-      params.appendEvent(
-        `relay_part1:strip_paymaster_send_error=${formatRelayPart1Error(stripError).slice(0, 220)}`,
-      )
+
       params.appendEvent('relay_part1:strip_paymaster_fallback_to_bundler=1')
 
       if (params.ownerDiscovery.ownerIndex == null) {
@@ -887,13 +1010,11 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
  * Lane order for Base App self-auth (minimize passkey prompts):
- *   1. `wallet_prepareCalls` → self-funded `wallet_sendPreparedCalls` when paymaster=0
- *   2. When Base App injects paymaster: strip paymaster → `wallet_sendPreparedCalls` (inner secp256k1 for session-key owners)
- *   3. When strip/send fails: discover-sign → self-funded bundler with owner index
- *   4. Direct self-funded bundler UserOp fallback (`skipPaymaster: true`)
+ *   1. `wallet_sendCalls` golden path (May 12 reference) — verify paymaster=0, else cascade
+ *   2. `wallet_prepareCalls` → self-funded `wallet_sendPreparedCalls` when paymaster=0
+ *   3. When Base App injects paymaster: strip → payload-mode ladder → prepared bundler → viem bundler
  *
- * `wallet_sendCalls` is intentionally omitted — Base App routes it through CDP paymaster,
- * which stalls Relay Part 2 (solver `addOwnerAddress`).
+ * Do not stop at paymaster-sponsored sendCalls — cascade into prepare/strip until paymaster=0.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -918,6 +1039,21 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   }
 
   let lastError: unknown = null
+
+  try {
+    return await submitViaSendCallsSelfFunded({
+      ...params,
+      publicClient: params.publicClient,
+    })
+  } catch (sendCallsError) {
+    lastError = sendCallsError
+    if (isNonCascadeRelayPart1Error(sendCallsError)) {
+      throw sendCallsError
+    }
+    params.appendEvent(
+      `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
+    )
+  }
 
   try {
     return await submitViaPreparedCallsSelfFunded({

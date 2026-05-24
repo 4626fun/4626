@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { createLogger, defineConfig, type Logger, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
@@ -11,6 +11,21 @@ import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
+
+/** WalletConnect / Coinbase SDK packages ship incomplete sourcemaps — Vite warns on every file. */
+function createDevLogger(): Logger {
+  const logger = createLogger('info')
+  const isMissingSourcemapNoise = (msg: string) => msg.includes('points to missing source files')
+  const wrap =
+    (fn: Logger['warn']) =>
+    (msg: string, options?: Parameters<Logger['warn']>[1]) => {
+      if (isMissingSourcemapNoise(msg)) return
+      fn(msg, options)
+    }
+  logger.warn = wrap(logger.warn)
+  logger.warnOnce = wrap(logger.warnOnce)
+  return logger
+}
 
 function resolveFrontendRoot(): string {
   const fromMeta = path.dirname(fileURLToPath(import.meta.url))
@@ -58,9 +73,42 @@ function apiImport(relativePath: string) {
 }
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
-const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1'
+const deployDryRunDev = Boolean(String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim())
+// Deploy dry-run shares a heavy Privy/wagmi graph; skip optimizeDeps pre-bundling to avoid WSL OOM-killing esbuild.
+const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1' || deployDryRunDev
 const nodeRequire = createRequire(import.meta.url)
 const dotenvLoadedKeys = new Set<string>()
+
+function buildDevWatchIgnored(): string[] {
+  const repoRoot = path.resolve(frontendRoot, '..')
+  return [
+    '**/node_modules/**',
+    '**/.git/**',
+    '**/dist/**',
+    '**/.vite/**',
+    // Local API handlers run via tsx at request time — not part of the client HMR graph.
+    path.join(frontendRoot, 'api'),
+    path.join(frontendRoot, 'server'),
+    // Monorepo siblings outside the SPA dev graph (Forge submodules, keepers, etc.).
+    path.join(repoRoot, 'contracts'),
+    path.join(repoRoot, 'lib'),
+    path.join(repoRoot, 'kpr'),
+    path.join(repoRoot, 'programs'),
+    path.join(repoRoot, 'indexer'),
+    path.join(repoRoot, 'apps'),
+    path.join(repoRoot, '.worktrees'),
+  ]
+}
+
+function resolveDevServerWatch() {
+  const usePolling = deployDryRunDev
+    ? process.env.VITE_WATCH_POLLING !== '0'
+    : process.env.VITE_WATCH_POLLING === '1'
+  return {
+    ignored: buildDevWatchIgnored(),
+    ...(usePolling ? { usePolling: true, interval: 1000 } : {}),
+  }
+}
 
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
@@ -579,6 +627,7 @@ export default defineConfig(({ command }) => {
 
   return {
     cacheDir: viteCacheDir,
+    customLogger: command === 'serve' ? createDevLogger() : undefined,
     plugins: [
       resolveOxCjsPlugin(),
       react(),
@@ -590,6 +639,7 @@ export default defineConfig(({ command }) => {
       host: devServerHost,
       port: devServerPort,
       strictPort: true,
+      watch: resolveDevServerWatch(),
     },
   resolve: {
     alias: [

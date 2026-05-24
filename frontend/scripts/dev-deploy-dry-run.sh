@@ -29,9 +29,45 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+read_frontend_nvmrc_version() {
+  if [[ ! -f "$FRONTEND_DIR/.nvmrc" ]]; then
+    echo "20.19.0"
+    return 0
+  fi
+  sed 's/^[[:space:]]*v//; s/[[:space:]]*$//' "$FRONTEND_DIR/.nvmrc"
+}
+
+activate_frontend_node() {
+  local nvm_version nvm_node_bin
+  nvm_version="$(read_frontend_nvmrc_version)"
+  nvm_node_bin="${NVM_DIR:-$HOME/.nvm}/versions/node/v${nvm_version}/bin/node"
+  if [[ -x "$nvm_node_bin" ]]; then
+    export PATH="$(dirname "$nvm_node_bin"):$PATH"
+    return 0
+  fi
+
+  if [[ ! -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+    return 0
+  fi
+
+  # pnpm -C frontend injects npm_config_prefix=<package dir>; nvm refuses to load until it is cleared.
+  unset npm_config_prefix NPM_CONFIG_PREFIX
+  # shellcheck disable=SC1091
+  . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+  if [[ -f "$FRONTEND_DIR/.nvmrc" ]]; then
+    (cd "$FRONTEND_DIR" && nvm use --silent >/dev/null 2>&1) || (cd "$FRONTEND_DIR" && nvm install >/dev/null 2>&1)
+  else
+    nvm use --silent 20.19.0 >/dev/null 2>&1 || nvm install 20.19.0 >/dev/null 2>&1
+  fi
+  if command -v node >/dev/null 2>&1; then
+    export PATH="$(dirname "$(command -v node)"):$PATH"
+  fi
+}
+
 ensure_node_version() {
   local required_major=20
   local required_minor=19
+  activate_frontend_node
   local current=""
   if command -v node >/dev/null 2>&1; then
     current="$(node -p "process.versions.node.split('.').map(Number)" 2>/dev/null || true)"
@@ -43,26 +79,33 @@ ensure_node_version() {
   local major minor
   IFS=',' read -r major minor _ <<<"${current//[\[\] ]/}"
   if [[ "$major" -lt "$required_major" ]] || { [[ "$major" -eq "$required_major" ]] && [[ "$minor" -lt "$required_minor" ]]; }; then
-    if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
-      # shellcheck disable=SC1091
-      . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
-      if [[ -f "$FRONTEND_DIR/.nvmrc" ]]; then
-        nvm use --silent >/dev/null 2>&1 || nvm install >/dev/null 2>&1
-      else
-        nvm use --silent 20.19.0 >/dev/null 2>&1 || nvm install 20.19.0 >/dev/null 2>&1
-      fi
-      current="$(node -p "process.versions.node.split('.').map(Number)" 2>/dev/null || true)"
-      IFS=',' read -r major minor _ <<<"${current//[\[\] ]/}"
-    fi
-  fi
-  if [[ "$major" -lt "$required_major" ]] || { [[ "$major" -eq "$required_major" ]] && [[ "$minor" -lt "$required_minor" ]]; }; then
     echo "Node.js >= ${required_major}.${required_minor}.0 is required (Vite 7). Current: $(node -v 2>/dev/null || echo unknown)." >&2
-    echo "Install via nvm (frontend/.nvmrc pins 20.19.0) and retry." >&2
+    echo "Run: cd frontend && nvm use" >&2
     exit 1
   fi
 }
 
 ensure_node_version
+
+maybe_raise_inotify_limit() {
+  local target=524288
+  local current=0
+  if [[ -r /proc/sys/fs/inotify/max_user_watches ]]; then
+    current="$(cat /proc/sys/fs/inotify/max_user_watches)"
+  fi
+  if [[ "$current" -ge "$target" ]]; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n sysctl -w "fs.inotify.max_user_watches=${target}" >/dev/null 2>&1; then
+    echo "Raised fs.inotify.max_user_watches to ${target}."
+    return 0
+  fi
+  echo "Warning: fs.inotify.max_user_watches=${current} (recommend >= ${target} on WSL)." >&2
+  echo "Run: echo ${target} | sudo tee /proc/sys/fs/inotify/max_user_watches" >&2
+  echo "Persistent fix: add 'fs.inotify.max_user_watches=${target}' to /etc/sysctl.conf, then sudo sysctl -p" >&2
+}
+
+maybe_raise_inotify_limit
 
 port_in_use() {
   local port="$1"
@@ -243,9 +286,12 @@ if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
 
-# Dry-run pre-bundles a large Privy/wagmi graph. WSL boxes often OOM-kill esbuild
-# when a second Vite dev server is already running — give Node headroom and retry
-# transient esbuild service deaths during optimizeDeps.
+# Dry-run shares a large Privy/wagmi graph. WSL boxes often OOM-kill esbuild when
+# optimizeDeps pre-bundling runs alongside another Vite dev server — skip discovery
+# (VITE_LOW_MEMORY / DEPLOY_DRY_RUN_PORT in vite.config.ts) and give Node headroom.
+export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-1}"
+# WSL often hits ENOSPC on inotify; polling avoids kernel watcher limits (see vite.config watch.ignored too).
+export VITE_WATCH_POLLING="${VITE_WATCH_POLLING:-1}"
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
 
 is_transient_vite_esbuild_failure() {
@@ -278,9 +324,6 @@ if port_in_use "$DEV_PORT"; then
   fi
 fi
 export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
-if [[ "$DEV_PORT" == "5174" ]] && port_in_use 5173; then
-  echo "Warning: port 5173 is already in use (likely pnpm dev). Stop it before deploy dry-run to avoid esbuild OOM during dependency optimization." >&2
-fi
 APP_ORIGIN="${APP_ORIGIN:-http://localhost:${DEV_PORT}}"
 VITE_APP_ORIGIN="${VITE_APP_ORIGIN:-http://localhost:${DEV_PORT}}"
 if [[ -n "${APP_ORIGIN:-}" ]]; then
@@ -326,7 +369,10 @@ PY
   echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
 fi
 
-echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
+echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}) with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
+if port_in_use 5173; then
+  echo "Warning: localhost:5173 is in use — stop pnpm dev before deploy dry-run to avoid esbuild OOM on WSL." >&2
+fi
 cd "$FRONTEND_DIR"
 VITE_BOOTSTRAP_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-vite-bootstrap.log"
 MAX_VITE_EPIPE_RETRIES="${DEPLOY_DRY_RUN_VITE_EPIPE_RETRIES:-3}"
