@@ -624,6 +624,14 @@ function isSkippableSelfAuthSignMethodError(error: unknown): boolean {
   )
 }
 
+function isMisleadingWalletFundsSignError(error: unknown): boolean {
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return (
+    (message.includes('error generating message') || message.includes('error generating transaction')) &&
+    message.includes('enough funds')
+  )
+}
+
 async function ensureSelfAuthWalletAuthorized(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -676,13 +684,26 @@ export function listSelfAuthSignMethods(params: {
   parsedOwnerIndex: number | null
   bundlerOnly?: boolean
   sessionKeySignerAddress?: `0x${string}` | null
+  /** When replay-safe, prefer CSW EIP-712 (sukanto) over raw-hash personal_sign. */
+  hashMode?: string
 }): SelfAuthSignMethod[] {
   const sessionKeyContext = isSelfAuthSessionKeyOwnerContext({
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
   })
-  // Base App session-key Part 1: personal_sign only. eth_signTypedData_v4 triggers
-  // an "Incorrect address" modal with no recovery — see base-app-session-key-relay-part1-recipe.md.
+  if (sessionKeyContext && params.hashMode && isSelfAuthReplaySafeSignHashMode(params.hashMode)) {
+    // Coinbase guidance: sign replaySafe via CoinbaseSmartWalletMessage typed data.
+    // personal_sign on the replaySafe digest often surfaces misleading
+    // "Error generating message / not enough funds" in Base App.
+    const methods: SelfAuthSignMethod[] = ['typed_data_v4_csw']
+    if (params.sessionKeySignerAddress) {
+      methods.push('personal_sign_data_session_key', 'personal_sign_session_key_data')
+    }
+    methods.push('personal_sign_data_address', 'personal_sign_address_data')
+    return methods
+  }
+  // EntryPoint-hash session-key lane: personal_sign only. eth_signTypedData_v4 on
+  // non-replay-safe hashes can trigger an "Incorrect address" modal — see recipe doc.
   if (sessionKeyContext) {
     const methods: SelfAuthSignMethod[] = [
       'personal_sign_data_address',
@@ -1522,7 +1543,7 @@ async function sendSignedPreparedUserOp(params: {
   let lastSignatureError: unknown = null
   let lastBundlerSignature: Hex | null = null
 
-  const signMethodsFor = () =>
+  const signMethodsFor = (hashMode: string) =>
     listSelfAuthSignMethods({
       sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
@@ -1531,6 +1552,7 @@ async function sendSignedPreparedUserOp(params: {
       parsedOwnerIndex: params.ownerDiscovery?.ownerIndex ?? null,
       sessionKeySignerAddress: params.ownerDiscovery?.ownerSignerAddress ?? null,
       bundlerOnly: true,
+      hashMode,
     })
 
   const attemptPreparedCalls = async (input: {
@@ -1541,7 +1563,7 @@ async function sendSignedPreparedUserOp(params: {
     sendUserOpData?: unknown
   }): Promise<`0x${string}` | null> => {
     params.appendEvent(`relay_part1:sign_hash_mode=${input.hashMode}`)
-    for (const signMethod of signMethodsFor()) {
+    for (const signMethod of signMethodsFor(input.hashMode)) {
       let signature: Hex
       let preparedCallsSignerAddress: `0x${string}` | null
       let parsedOwnerIndex: number | null
@@ -1831,6 +1853,15 @@ async function sendSignedPreparedUserOp(params: {
 
   if (lastSignatureError instanceof Error && isUserRejectedWalletAction(lastSignatureError)) {
     throw new Error('Relay deposit signing was cancelled. Rebuild the preview and retry when ready.')
+  }
+
+  if (lastSignatureError && isMisleadingWalletFundsSignError(lastSignatureError)) {
+    throw new Error(
+      'Base App blocked the Relay deposit signature ("not enough funds" on Signature Request). ' +
+        'This is usually not your ETH balance — Base App often shows that message when it cannot sign the requested hash format. ' +
+        'Rebuild a fresh owner-install preview and retry inside Base App after the latest 4626 deploy. ' +
+        'If it repeats, open Enable 4626 signing in Chrome or Safari outside the Base App in-app browser.',
+    )
   }
 
   if (lastSignatureError && isSelfAuthWalletAuthorizationError(lastSignatureError)) {

@@ -682,26 +682,42 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
   })
 
-  it('session-key Part 1 uses personal_sign only (typed_data triggers Base App incorrect-address modal)', () => {
-    const methods = listSelfAuthSignMethods({
-      sessionKeyOwner: true,
-      parsedOwnerIndex: 2,
-      bundlerOnly: true,
-    })
-    expect(methods).toEqual(['personal_sign_data_address', 'personal_sign_address_data'])
+  it('session-key replay-safe hash prefers typed_data_v4 (sukanto), entrypoint hash uses personal_sign', () => {
     expect(
       listSelfAuthSignMethods({
         sessionKeyOwner: true,
         parsedOwnerIndex: 2,
         bundlerOnly: true,
+        hashMode: 'csw_replay_safe_primary',
+      }),
+    ).toEqual([
+      'typed_data_v4_csw',
+      'personal_sign_data_address',
+      'personal_sign_address_data',
+    ])
+    expect(
+      listSelfAuthSignMethods({
+        sessionKeyOwner: true,
+        parsedOwnerIndex: 2,
+        bundlerOnly: true,
+        hashMode: 'csw_replay_safe_primary',
         sessionKeySignerAddress: SESSION_KEY_OWNER,
       }),
     ).toEqual([
+      'typed_data_v4_csw',
       'personal_sign_data_session_key',
       'personal_sign_session_key_data',
       'personal_sign_data_address',
       'personal_sign_address_data',
     ])
+    expect(
+      listSelfAuthSignMethods({
+        sessionKeyOwner: true,
+        parsedOwnerIndex: 2,
+        bundlerOnly: true,
+        hashMode: 'entrypoint_v06_chain_session_key_primary',
+      }),
+    ).toEqual(['personal_sign_data_address', 'personal_sign_address_data'])
   })
 
   it('detects passkey vs session-key ECDSA signatures', () => {
@@ -721,7 +737,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     ).toBe(true)
   })
 
-  it('session-key Part 1 signs via personal_sign after paymaster strip', async () => {
+  it('session-key Part 1 signs replaySafe via typed_data after paymaster strip', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -791,10 +807,10 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(signMethods).toEqual(['personal_sign'])
+    expect(signMethods).toEqual(['eth_signTypedData_v4'])
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_hash_mode=csw_replay_safe_primary')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_session_key')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_bundler_primary')
   })
 
