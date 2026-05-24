@@ -1,5 +1,5 @@
 export const EXPLORE_FEE_VERSION_HEADER_HINT =
-  'Total fees (volume × fee %). 1% on V4 coins (after June 2025); 3% on legacy coins.'
+  'Estimated 24h trading fees (24h volume × fee rate). V4 coins: 1%; legacy: 3%. Expand a row for the payout split.'
 
 export function ExploreFeeInfoHint(props: { title: string; className?: string }) {
   return (

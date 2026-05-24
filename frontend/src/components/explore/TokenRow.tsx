@@ -105,16 +105,9 @@ export function TokenRow({
     : undefined
   
   // Determine fee structure (checks migration status first, then creation date)
-  const { isV4, isMigrated, feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
+  const { feeRates } = getCoinFeeStatus(coin.address, coin.createdAt, migratedCoins)
 
   const detailPath = `${linkPrefix}/${chain}/${address}`
-
-  // Fee badge tooltip
-  const feeTooltip = isMigrated
-    ? '1% fee (Migrated to V4)'
-    : isV4
-      ? '1% fee (V4 - after June 2025)'
-      : '3% fee (Legacy - before June 2025)'
 
   const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
   const deltaToneClass = getMarketCapDeltaToneClass(change)
@@ -252,9 +245,8 @@ export function TokenRow({
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volumeDisplay)}</span>
 
         {/* Total Fees */}
-        <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums">
-          <span title={feeBreakdown}>{totalFees}</span>
-          <ExploreFeeInfoHint title={feeTooltip} />
+        <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
+          <span>{totalFees}</span>
           {canToggleFees ? (
             <button
               type="button"

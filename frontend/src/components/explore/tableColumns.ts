@@ -83,7 +83,7 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
 
-    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 118, align: 'center' },
+    { id: 'totalFees', label: 'Fees (24h)', group: 'fees', widthPx: 118, align: 'center' },
 
     { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'center' },
   ]
