@@ -22,6 +22,7 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
+import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
 
 type TokenRowProps = {
   rank: number
@@ -250,20 +251,10 @@ export function TokenRow({
         {/* Volume */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volumeDisplay)}</span>
 
-        {/* Fee % */}
-        <div className="px-3 py-2 text-center">
-          <span
-            className="inline-flex items-center rounded-md border border-white/10 bg-white/3 px-2 py-0.5 text-[10px] font-medium text-zinc-300"
-            title={feeTooltip}
-          >
-            {isV4 ? '1%' : '3%'}
-            {isMigrated ? <span className="ml-0.5 text-zinc-500">*</span> : null}
-          </span>
-        </div>
-
         {/* Total Fees */}
-        <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums" title={feeBreakdown}>
-          <span>{totalFees}</span>
+        <div className="px-3 py-2 text-center flex items-center justify-center gap-1 text-zinc-200 tabular-nums">
+          <span title={feeBreakdown}>{totalFees}</span>
+          <ExploreFeeInfoHint title={feeTooltip} />
           {canToggleFees ? (
             <button
               type="button"
@@ -392,14 +383,15 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
           const align = c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'
 
           const labelNode =
-            c.id === 'feeBadge' ? (
-              <span title="Fee version: 1% (V4, after June 2025) or 3% (Legacy)">{c.label}</span>
-            ) : c.id === 'priceChange' ? (
+            c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
             ) : c.id === 'name' && c.sortKey === 'ethosScore' ? (
               <span title="Sort by Ethos score (highest first). Score badge appears on the avatar.">{c.label}</span>
             ) : c.id === 'totalFees' ? (
-              <span title="Total fees (volume × fee %)">{c.label}</span>
+              <span className="inline-flex items-center justify-center gap-0.5" title={EXPLORE_FEE_VERSION_HEADER_HINT}>
+                {c.label}
+                <ExploreFeeInfoHint title={EXPLORE_FEE_VERSION_HEADER_HINT} />
+              </span>
             ) : (
               <span>{c.label}</span>
             )

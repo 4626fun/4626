@@ -7,7 +7,6 @@ export type ExploreTableGroupId = 'identity' | 'market' | 'fees' | 'payout'
 export type ExploreTableColumnId =
   | 'rank'
   | 'name'
-  | 'feeBadge'
   | 'holders'
   | 'ethosScore'
   | 'marketCap'
@@ -84,8 +83,7 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
 
-    { id: 'feeBadge', label: 'Fee %', group: 'fees', widthPx: 72, align: 'center' },
-    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 110, align: 'center' },
+    { id: 'totalFees', label: 'Fees', group: 'fees', widthPx: 118, align: 'center' },
 
     { id: 'payoutTo', label: 'Payout To', group: 'payout', widthPx: 132, align: 'center' },
   ]
