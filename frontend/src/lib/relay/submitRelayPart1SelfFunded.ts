@@ -17,7 +17,6 @@ import {
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
-import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
@@ -575,6 +574,7 @@ async function sendSignedPreparedUserOp(params: {
   preparedUserOpRaw: unknown
   signatureRequestHash: Hex
   signAfterPaymasterStrip: boolean
+  forceBundlerOnly?: boolean
   chainId: number
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
@@ -602,9 +602,13 @@ async function sendSignedPreparedUserOp(params: {
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
   // Base App `wallet_sendPreparedCalls` re-injects USDC paymaster even when we strip
-  // paymasterAndData — submit the stripped UserOp via bundler only.
-  if (params.signAfterPaymasterStrip) {
-    params.appendEvent('relay_part1:skip_send_prepared_calls_after_paymaster_strip')
+  // paymasterAndData — owner-install always submits via bundler with custom-owner policy.
+  if (params.signAfterPaymasterStrip || params.forceBundlerOnly) {
+    params.appendEvent(
+      params.forceBundlerOnly
+        ? 'relay_part1:skip_send_prepared_calls_self_auth_bundler_only'
+        : 'relay_part1:skip_send_prepared_calls_after_paymaster_strip',
+    )
     throw new RelayPart1PreparedUserOpHandoff(strippedUserOp, signature)
   }
 
@@ -701,6 +705,7 @@ async function submitSignedPreparedUserOpWithBundlerFallback(params: {
   appendEvent: (row: string) => void
   ownerDiscovery?: SelfAuthOwnerDiscovery
   customOwnerPolicyToken?: string | null
+  forceBundlerOnly?: boolean
 }): Promise<`0x${string}`> {
   try {
     return await sendSignedPreparedUserOp(params)
@@ -819,9 +824,20 @@ async function submitViaPreparedCallsSelfFunded(params: {
   ownerDiscovery: SelfAuthOwnerDiscovery
   customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
+  const policyToken =
+    typeof params.customOwnerPolicyToken === 'string' && params.customOwnerPolicyToken.trim()
+      ? params.customOwnerPolicyToken.trim()
+      : null
+  if (!policyToken) {
+    throw new Error(
+      'Owner-install preview is missing the Relay Part 1 sponsorship token. Refresh Enable 4626 signing to build a fresh preview, then retry.',
+    )
+  }
+
   const chainIdHex = `0x${params.chainId.toString(16)}` as `0x${string}`
   const valueHex = normalizePreparedCallValueToHex(params.userCall.value)
   params.appendEvent('relay_part1:lane=prepare_calls_self_funded')
+  const forceBundlerOnly = true
 
   await ensureSelfAuthWalletAuthorized({
     walletRequest: params.walletRequest,
@@ -900,6 +916,8 @@ async function submitViaPreparedCallsSelfFunded(params: {
         userOp: serializeUserOpForPreparedCallsSend(stripped),
       },
       signAfterPaymasterStrip: true,
+      forceBundlerOnly,
+      customOwnerPolicyToken: policyToken,
     })
   }
 
@@ -913,6 +931,8 @@ async function submitViaPreparedCallsSelfFunded(params: {
       userOp: serializeUserOpForPreparedCallsSend(parseWalletPreparedUserOpV06(prepareResult.userOp)),
     },
     signAfterPaymasterStrip: false,
+    forceBundlerOnly,
+    customOwnerPolicyToken: policyToken,
   })
 }
 
@@ -920,10 +940,11 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * Submit Relay Part 1 (Depository.depositNative) from a Base App self-auth CSW
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
- * Lane order:
- *   1. `wallet_sendCalls` golden path
- *   2. `wallet_prepareCalls` → `wallet_sendPreparedCalls` (session-key inner_secp256k1 when needed)
- *   3. Prepared bundler (`eth_sendUserOperation` with the wallet signature as-is)
+ * Lane order (self-auth owner-install only):
+ *   1. `wallet_prepareCalls` (self-funded capabilities)
+ *   2. Sign + strip paymaster when Base App injects USDC sponsorship
+ *   3. `eth_sendUserOperation` via 4626 bundler with custom-owner policy (never `wallet_sendCalls`
+ *      or `wallet_sendPreparedCalls` — Base App re-injects USDC paymaster on those paths)
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -946,24 +967,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     sessionKeyOwner: false,
   }
 
-  const skipSendCalls = isBaseAppInAppContext(detectInAppEnvironment())
-  if (skipSendCalls) {
-    params.appendEvent('relay_part1:skip_send_calls_base_app_in_app')
-  } else {
-    try {
-      return await submitViaSendCallsSelfFunded({
-        ...params,
-        publicClient: params.publicClient,
-      })
-    } catch (sendCallsError) {
-      if (isNonCascadeRelayPart1Error(sendCallsError)) {
-        throw sendCallsError
-      }
-      params.appendEvent(
-        `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
-      )
-    }
-  }
+  params.appendEvent('relay_part1:skip_send_calls_self_auth')
 
   return await submitViaPreparedCallsSelfFunded({
     ...params,

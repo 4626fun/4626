@@ -89,6 +89,8 @@ const SAMPLE_USER_OP = {
   signature: '0x',
 }
 
+const TEST_CUSTOM_OWNER_POLICY_TOKEN = 'test-relay-owner-install-policy-token'
+
 describe('submitRelayPart1SelfFunded helpers', () => {
   it('detects empty paymasterAndData as self-funded (EntryPoint paymaster=0)', () => {
     expect(userOpHasPaymaster({ paymasterAndData: '0x' })).toBe(false)
@@ -191,35 +193,8 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
   })
 
-  it('does not cascade to prepare when sendCalls lands with a USDC paymaster', async () => {
-    mockSubmitOwnerViaSendCalls.mockResolvedValue({ callBundleId: 'send-calls-usdc' })
-    mockPublicClient.getTransactionReceipt.mockResolvedValue({
-      logs: [
-        {
-          address: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
-          topics: [
-            '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f',
-            '0x' + '11'.repeat(32),
-            '0x' + '00'.repeat(12) + '4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
-            '0x' + '00'.repeat(12) + '2faeb0760d4230ef2ac21496bb4f0b47d634fd4c',
-          ],
-        },
-      ],
-    })
-
-    const walletRequest = vi.fn(async (args: { method: string }) => {
-      if (args.method === 'eth_requestAccounts') {
-        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: '0x' + 'dd'.repeat(32) }],
-        }
-      }
-      throw new Error(`unexpected method ${args.method}`)
-    })
-
+  it('requires custom-owner policy token before prepare lane', async () => {
+    const walletRequest = vi.fn()
     const appendEvent = vi.fn()
     await expect(
       submitSelfAuthRelayPart1SelfFunded({
@@ -234,14 +209,53 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         publicClient: mockPublicClient as never,
         appendEvent,
       }),
-    ).rejects.toThrow(/USDC paymaster/)
+    ).rejects.toThrow(/sponsorship token/)
+    expect(walletRequest).not.toHaveBeenCalled()
+  })
 
+  it('never uses wallet_sendCalls in self-auth owner-install', async () => {
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x' + '11'.repeat(32) },
+          userOp: SAMPLE_USER_OP,
+        }
+      }
+      if (args.method === 'personal_sign') {
+        return '0x' + '22'.repeat(65)
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '0x110dea8a3f8',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+    })
+
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
     expect(walletRequest).not.toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'wallet_prepareCalls' }),
+      expect.objectContaining({ method: 'wallet_sendCalls' }),
     )
   })
 
-  it('cascades to prepare_calls when sendCalls fails and Base App returns a self-funded userOp', async () => {
+  it('uses prepare_calls when self-auth skips sendCalls', async () => {
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
@@ -281,11 +295,12 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       chainId: 8453,
       publicClient: mockPublicClient as never,
       appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(mockSubmitOwnerViaSendCalls).toHaveBeenCalledTimes(1)
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=send_calls_self_funded')
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_prepareCalls' }),
@@ -327,6 +342,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       chainId: 8453,
       publicClient: mockPublicClient as never,
       appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
     })
 
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
@@ -335,7 +351,49 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
     expect(mockBundlerRequest).toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_prepared_calls_after_paymaster_strip')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_prepared_calls_self_auth_bundler_only')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded')
+  })
+
+  it('uses bundler-only even when prepare returns paymaster=0', async () => {
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0xabc123' },
+          userOp: SAMPLE_USER_OP,
+        }
+      }
+      if (args.method === 'personal_sign') {
+        return wrapSelfAuthOwnerSignature(2)
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '0x110dea8a3f8',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+    })
+
+    expect(txHash).toBe('0x' + 'cc'.repeat(32))
+    expect(walletRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
+    )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_prepared_calls_self_auth_bundler_only')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded')
   })
 
@@ -377,6 +435,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       chainId: 8453,
       publicClient: mockPublicClient as never,
       appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
     })
 
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
@@ -427,6 +486,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         chainId: 8453,
         publicClient: mockPublicClient as never,
         appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
     ).rejects.toThrow(/prepared bundler rejected/)
   })
@@ -455,6 +515,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         chainId: 8453,
         publicClient: mockPublicClient as never,
         appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
     ).rejects.toThrow(/Failed to fetch RPC request/)
   })
@@ -495,6 +556,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         chainId: 8453,
         publicClient: mockPublicClient as never,
         appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
     ).rejects.toThrow(/error generating message/)
   })
@@ -515,15 +577,6 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       if (args.method === 'personal_sign') {
         return '0x' + '22'.repeat(65)
       }
-      if (args.method === 'wallet_sendPreparedCalls') {
-        return { id: 'prepared-self-funded-2' }
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: '0x' + 'ee'.repeat(32) }],
-        }
-      }
       throw new Error(`unexpected method ${args.method}`)
     })
 
@@ -539,12 +592,14 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       chainId: 8453,
       publicClient: mockPublicClient as never,
       appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
     })
 
-    expect(txHash).toBe('0x' + 'ee'.repeat(32))
+    expect(txHash).toBe('0x' + 'cc'.repeat(32))
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'eth_requestAccounts' }),
     )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_calls_self_auth')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
   })
 })
