@@ -1173,7 +1173,36 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // Find owner index
   let ownerIndex: number | null = ownerIndexOverride
   let ownerCount = 0
+  const ownerAddressIsSmartWallet =
+    ownerAddress.toLowerCase() === smartWallet.toLowerCase()
   if (ownerIndexOverride === null) {
+    if (ownerAddressIsSmartWallet && !usingExplicitOwnerLookupAddress) {
+      // Self-auth Base App signs personal_sign [hash, csw]. The CSW address is never an
+      // ownerAtIndex entry — scanning all slots (starting with WebAuthn owner[0]) is slow
+      // and can RPC-timeout before we reach the session-key owner slot.
+      const countRaw = (await withTimeout(
+        publicClient.readContract({
+          address: smartWallet,
+          abi: [{
+            type: 'function' as const,
+            name: 'ownerCount' as const,
+            inputs: [],
+            outputs: [{ type: 'uint256' as const }],
+            stateMutability: 'view' as const,
+          }],
+          functionName: 'ownerCount',
+        }),
+        RPC_READ_TIMEOUT_MS,
+        'ownerCount read',
+      )) as bigint
+      ownerCount = Number(countRaw)
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] Skipped owner-index scan for self-auth CSW sender', {
+          smartWallet,
+          ownerCount,
+        })
+      }
+    } else {
     let ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
       publicClient,
       smartWallet,
@@ -1212,6 +1241,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         ownerCount,
       })
     }
+    }
   } else if (AA_DEBUG) {
     logger.debug('[ERC-4337] Owner index override', {
       smartWallet,
@@ -1230,7 +1260,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       (!usingExplicitOwnerLookupAddress || ownerIndexLookupAddress === null)
     if (canProbeOwnerIndex) {
       let lastSignatureMismatch: unknown = null
-      for (let probeIndex = 0; probeIndex < probeOwnerCount; probeIndex += 1) {
+      const probeStartIndex = skipPasskeyOwnerSlotsInProbe ? 1 : 0
+      if (skipPasskeyOwnerSlotsInProbe && probeStartIndex > 0 && AA_DEBUG) {
+        logger.debug('[ERC-4337] Skipping WebAuthn owner[0] during self-auth owner-index probe', {
+          smartWallet,
+          ownerCount,
+        })
+      }
+      for (let probeIndex = probeStartIndex; probeIndex < probeOwnerCount; probeIndex += 1) {
         try {
           if (AA_DEBUG) {
             logger.debug('[ERC-4337] Probing smart-wallet owner index', {
