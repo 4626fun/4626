@@ -167,6 +167,35 @@ pnpm -C frontend exec tsx scripts/trace-creator-ethos-explore.ts \
 
 Checks projection row, merged resolver output, explore list match, and coin API payload.
 
+### Explore-targeted wallet backfill (recommended catch-up)
+
+For Explore sort coverage, prefer this over `ethos-zora-backfill.ts` (which scans all CSW owners):
+
+```bash
+pnpm -C frontend exec tsx scripts/ethos-creator-wallet-backfill.ts
+```
+
+The script:
+
+1. Selects top creators by `creator_coins.volume_24h_usd` (default top **10,000** on Base).
+2. Expands each batch to linked `zora_profiles` wallets and CSW owner EOAs (batch-scoped joins only).
+3. Calls Ethos bulk score sync for stale/missing `address:` userkeys (skips fresh matched rows by default).
+4. Re-runs `refreshCreatorEthosProjection` so `/explore` sort picks up new scores.
+
+Resume cursor: `ethos_score_sync_state.sync_key = ethos_creator_wallet_backfill_v1`.
+
+Useful env overrides:
+
+- `ETHOS_CREATOR_WALLET_BACKFILL_TOTAL_LIMIT=10000`
+- `ETHOS_CREATOR_WALLET_BACKFILL_BATCH_SIZE=500`
+- `ETHOS_CREATOR_WALLET_BACKFILL_SLEEP_MS=300`
+- `ETHOS_CREATOR_WALLET_BACKFILL_SKIP_FRESH=1`
+- `ETHOS_CREATOR_WALLET_BACKFILL_PROJECTION_LIMIT=50000`
+- `ETHOS_CREATOR_WALLET_BACKFILL_REFRESH_EACH_BATCH=0` (set `1` for per-batch projection; default runs once at end)
+- `ETHOS_CREATOR_WALLET_BACKFILL_RESET=1` or `--reset` to start from offset 0
+
+CLI overrides: `--offset 0`, `--total-limit 5000`, `--reset`.
+
 ### Paid on-demand refresh ($0.10 USDC)
 
 Authenticated users can pay **$0.10 USDC** on Base to re-fetch Ethos for one creator and upsert `creator_ethos_projection`:
