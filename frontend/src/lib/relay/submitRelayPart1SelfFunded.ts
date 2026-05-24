@@ -437,6 +437,16 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   )
 }
 
+function isSkippableSelfAuthSignMethodError(error: unknown): boolean {
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return (
+    message.includes('incorrect address') ||
+    message.includes('invalid address') ||
+    message.includes('does not match') ||
+    message.includes('error generating message')
+  )
+}
+
 function isRelayPart1UsdcPaymasterLandedError(error: unknown): boolean {
   const message = formatRelayPart1Error(error).toLowerCase()
   return message.includes('usdc paymaster')
@@ -503,8 +513,10 @@ function listSelfAuthSignMethods(params: {
   const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly || sessionKeyContext
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
+  // Session-key Part 1 uses personal_sign(hash, CSW) in Base App; typed-data with a
+  // non-CSW account param triggers an "incorrect address" modal with no recovery path.
   if (sessionKeyContext) {
-    return ['typed_data_v4_csw', ...ecdsaMethods]
+    return [...ecdsaMethods, 'typed_data_v4_csw']
   }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
@@ -518,17 +530,11 @@ async function requestSelfAuthSignature(params: {
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<Hex> {
   if (params.method === 'typed_data_v4_csw') {
-    const signerAddress =
-      isSelfAuthSessionKeyOwnerContext({
-        sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
-        ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
-      }) && params.ownerDiscovery?.ownerSignerAddress
-        ? params.ownerDiscovery.ownerSignerAddress
-        : params.fundingCsw
     return signCswUserOpHashViaTypedDataV4({
       walletRequest: params.walletRequest,
       smartWallet: params.fundingCsw,
-      signerAddress,
+      // Base App self-auth always expects the CSW as the typed-data account param.
+      signerAddress: params.fundingCsw,
       chainId: params.chainId,
       userOpHash: params.hashToSign,
     })
@@ -1136,6 +1142,9 @@ async function sendSignedPreparedUserOp(params: {
       } catch (signError) {
         if (isUserRejectedWalletAction(signError)) {
           throw signError
+        }
+        if (isSkippableSelfAuthSignMethodError(signError)) {
+          params.appendEvent(`relay_part1:skip_sign_method=${signMethod}`)
         }
         params.appendEvent(
           `relay_part1:sign_attempt_error=${formatRelayPart1Error(signError).slice(0, 120)} mode=${signMethod}`,

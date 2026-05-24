@@ -542,6 +542,79 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
   })
 
+  it('session-key Part 1 uses personal_sign before typed_data_v4 after paymaster strip', async () => {
+    mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
+      if (args.functionName === 'ownerAtIndex') {
+        return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+      }
+      return 500_000_000_000_000n
+    })
+
+    const signMethods: string[] = []
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x' + '11'.repeat(32) },
+          userOp: {
+            ...SAMPLE_USER_OP,
+            paymasterAndData:
+              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+          },
+        }
+      }
+      if (
+        args.method === 'personal_sign' ||
+        args.method === 'eth_sign' ||
+        args.method === 'eth_signTypedData_v4'
+      ) {
+        signMethods.push(args.method)
+        if (args.method === 'eth_signTypedData_v4') {
+          throw new Error('Incorrect address')
+        }
+        return wrapSelfAuthOwnerSignature(2)
+      }
+      if (args.method === 'eth_call') {
+        return mockOwnerAtIndexEthCall()
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        return { id: 'prepared-self-funded' }
+      }
+      if (args.method === 'wallet_getCallsStatus') {
+        return {
+          status: 200,
+          receipts: [{ transactionHash: '0x' + 'aa'.repeat(32) }],
+        }
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '0x110dea8a3f8',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+    })
+
+    expect(txHash).toBe('0x' + 'aa'.repeat(32))
+    expect(signMethods[0]).toBe('personal_sign')
+    expect(signMethods.includes('eth_signTypedData_v4')).toBe(false)
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_address')
+  })
+
   it('uses prepare-native mirror when prepare returns paymaster=0', async () => {
     mockPublicClientWithoutSessionKeyOwner()
 
