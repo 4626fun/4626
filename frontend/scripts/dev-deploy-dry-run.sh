@@ -292,7 +292,7 @@ fi
 export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-0}"
 # WSL often hits ENOSPC on inotify; polling avoids kernel watcher limits (see vite.config watch.ignored too).
 export VITE_WATCH_POLLING="${VITE_WATCH_POLLING:-1}"
-export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=8192}"
 
 is_transient_vite_esbuild_failure() {
   local log_file="$1"
