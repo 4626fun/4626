@@ -3,10 +3,14 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_HOT_REFRESH_LISTS,
   computeFees24hUsd,
+  createDefaultExploreBackfillCheckpoints,
   detectFeeModel,
   extractExploreListEdges,
+  isExploreBackfillComplete,
   isStaleRunningLock,
+  parseExploreBackfillCheckpoints,
   parseExploreCoinFinancialSnapshot,
+  serializeExploreBackfillCheckpoints,
 } from './creatorMetricsSyncHelpers.js'
 
 describe('creatorMetricsSyncHelpers', () => {
@@ -67,5 +71,19 @@ describe('creatorMetricsSyncHelpers', () => {
       }),
     ).toBe('legacy')
     expect(computeFees24hUsd(1000, 'legacy')).toBe(30)
+  })
+
+  it('round-trips explore backfill checkpoints', () => {
+    const checkpoints = createDefaultExploreBackfillCheckpoints()
+    checkpoints.NEW_CREATORS = { after: 'cursor-1', complete: false }
+    checkpoints.MOST_VALUABLE_CREATORS.complete = true
+    const serialized = serializeExploreBackfillCheckpoints(checkpoints)
+    const parsed = parseExploreBackfillCheckpoints(serialized)
+    expect(parsed.NEW_CREATORS).toEqual({ after: 'cursor-1', complete: false })
+    expect(parsed.MOST_VALUABLE_CREATORS.complete).toBe(true)
+    expect(isExploreBackfillComplete(parsed)).toBe(false)
+    parsed.TOP_VOLUME_CREATORS_24H.complete = true
+    parsed.NEW_CREATORS.complete = true
+    expect(isExploreBackfillComplete(parsed)).toBe(true)
   })
 })

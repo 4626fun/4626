@@ -16,6 +16,7 @@ type MetricsResponse = {
   syncStatus: SyncStatus
   sync: {
     backfillComplete: boolean
+    exploreBackfillComplete: boolean
     sampledCreators: number
     lastSyncStartedAt: string | null
     lastSyncFinishedAt: string | null
@@ -181,6 +182,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       syncStatus: 'error',
       sync: {
         backfillComplete: false,
+        exploreBackfillComplete: false,
         sampledCreators: 0,
         lastSyncStartedAt: null,
         lastSyncFinishedAt: null,
@@ -213,6 +215,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const stateResult = await db.sql`
     SELECT
       backfill_complete,
+      explore_backfill_complete,
       sync_status,
       sync_error,
       sampled_creators,
@@ -301,6 +304,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const agg = totalsResult.rows?.[0] ?? {}
   const syncStatus = parseSyncStatus(state.sync_status)
   const backfillComplete = Boolean(state.backfill_complete)
+  const exploreBackfillComplete = Boolean(state.explore_backfill_complete)
   const sampledCreators = Math.max(0, Math.floor(toNumber(state.sampled_creators) ?? 0))
   const lastFullSyncAt = asIsoString(state.last_full_sync_at)
   const lastSyncFinishedAt = asIsoString(state.last_sync_finished_at)
@@ -366,6 +370,7 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     syncStatus,
     sync: {
       backfillComplete,
+      exploreBackfillComplete,
       sampledCreators,
       lastSyncStartedAt,
       lastSyncFinishedAt,

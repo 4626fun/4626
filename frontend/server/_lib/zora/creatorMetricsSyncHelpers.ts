@@ -106,6 +106,52 @@ export function isStaleRunningLock(
   return nowMs - startedMs >= thresholdMs
 }
 
+export type ExploreListCheckpoint = {
+  after: string | null
+  complete: boolean
+}
+
+export type ExploreBackfillCheckpoints = Record<ExploreList, ExploreListCheckpoint>
+
+function emptyExploreCheckpoint(): ExploreListCheckpoint {
+  return { after: null, complete: false }
+}
+
+export function createDefaultExploreBackfillCheckpoints(): ExploreBackfillCheckpoints {
+  return {
+    NEW_CREATORS: emptyExploreCheckpoint(),
+    TOP_VOLUME_CREATORS_24H: emptyExploreCheckpoint(),
+    MOST_VALUABLE_CREATORS: emptyExploreCheckpoint(),
+  }
+}
+
+export function parseExploreBackfillCheckpoints(raw: unknown): ExploreBackfillCheckpoints {
+  const defaults = createDefaultExploreBackfillCheckpoints()
+  if (typeof raw !== 'string' || raw.trim().length === 0) return defaults
+  try {
+    const parsed = JSON.parse(raw) as Partial<Record<ExploreList, Partial<ExploreListCheckpoint>>>
+    for (const list of DEFAULT_HOT_REFRESH_LISTS) {
+      const entry = parsed[list]
+      if (!entry || typeof entry !== 'object') continue
+      defaults[list] = {
+        after: typeof entry.after === 'string' && entry.after.length > 0 ? entry.after : null,
+        complete: Boolean(entry.complete),
+      }
+    }
+  } catch {
+    return createDefaultExploreBackfillCheckpoints()
+  }
+  return defaults
+}
+
+export function serializeExploreBackfillCheckpoints(checkpoints: ExploreBackfillCheckpoints): string {
+  return JSON.stringify(checkpoints)
+}
+
+export function isExploreBackfillComplete(checkpoints: ExploreBackfillCheckpoints): boolean {
+  return DEFAULT_HOT_REFRESH_LISTS.every((list) => checkpoints[list]?.complete === true)
+}
+
 export function extractExploreListEdges(response: unknown): {
   edges: Array<{ node?: unknown }>
   pageInfo: { hasNextPage: boolean; endCursor: string | null }

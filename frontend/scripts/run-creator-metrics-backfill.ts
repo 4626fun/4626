@@ -6,6 +6,8 @@
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --release-lock
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --fast
+ *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --explore-backfill
+ *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --both --fast
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --force-full --max-pages 240
  */
 
@@ -13,7 +15,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { getDb } from '../server/_lib/db/postgres.js'
-import { recomputeCreatorCounts, runCreatorMetricsSync } from '../server/_lib/zora/creatorMetricsSync.js'
+import {
+  recomputeCreatorCounts,
+  runCreatorMetricsExploreBackfill,
+  runCreatorMetricsSync,
+} from '../server/_lib/zora/creatorMetricsSync.js'
 
 function loadEnvFile(path: string): void {
   let raw = ''
@@ -57,7 +63,10 @@ function parseArgs(argv: string[]) {
     releaseLock: flags.has('release-lock'),
     forceFull: flags.has('force-full'),
     fast: flags.has('fast'),
+    exploreBackfill: flags.has('explore-backfill'),
+    both: flags.has('both'),
     maxPages: Number(map.get('max-pages') ?? ''),
+    exploreMaxPages: Number(map.get('explore-max-pages') ?? ''),
   }
 }
 
@@ -73,6 +82,18 @@ function applyFastBackfillProfile(): void {
     if (!process.env[key]) process.env[key] = value
   }
   console.log('[sync] fast profile env', defaults)
+}
+
+function applyExploreBackfillProfile(): void {
+  const defaults: Record<string, string> = {
+    CREATOR_METRICS_EXPLORE_BACKFILL_MAX_PAGES_PER_LIST: '2000',
+    CREATOR_METRICS_EXPLORE_REQUEST_INTERVAL_MS: '50',
+    CREATOR_METRICS_COIN_UPSERT_BATCH_SIZE: '500',
+  }
+  for (const [key, value] of Object.entries(defaults)) {
+    if (!process.env[key]) process.env[key] = value
+  }
+  console.log('[sync] explore-backfill profile env', defaults)
 }
 
 async function auditDuplicates(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) {
@@ -163,6 +184,9 @@ async function auditDuplicates(db: NonNullable<Awaited<ReturnType<typeof getDb>>
       sql: db.sql`
         SELECT
           backfill_complete,
+          explore_backfill_complete,
+          explore_last_sync_at::text AS explore_last_sync_at,
+          explore_checkpoints_json,
           sync_status,
           sync_error,
           checkpoint_block,
@@ -220,8 +244,37 @@ async function main() {
   }
 
   const maxPages = Number.isFinite(args.maxPages) && args.maxPages > 0 ? Math.floor(args.maxPages) : undefined
+  const exploreMaxPages =
+    Number.isFinite(args.exploreMaxPages) && args.exploreMaxPages > 0 ? Math.floor(args.exploreMaxPages) : undefined
+
+  const runExplore = args.exploreBackfill || args.both
+  const runChain = args.both || (!args.exploreBackfill && !args.both)
+
+  if (runExplore) {
+    applyExploreBackfillProfile()
+    console.log('\n[sync] starting explore API backfill', {
+      forceFull: args.forceFull,
+      exploreMaxPages: exploreMaxPages ?? 'default',
+    })
+    const exploreResult = await runCreatorMetricsExploreBackfill({
+      forceFull: args.forceFull,
+      maxPagesPerList: exploreMaxPages,
+    })
+    console.log('\n[sync] explore result')
+    console.log(JSON.stringify(exploreResult, null, 2))
+    console.log('\n[audit] after explore')
+    await auditDuplicates(db)
+    if (!exploreResult.ok) process.exit(1)
+    if (!runChain) {
+      console.log('\n[done] explore-backfill only')
+      return
+    }
+  }
+
+  if (!runChain) return
+
   if (args.fast) applyFastBackfillProfile()
-  console.log('\n[sync] starting backfill', {
+  console.log('\n[sync] starting on-chain backfill', {
     forceFull: args.forceFull,
     fast: args.fast,
     maxPages: maxPages ?? 'default',

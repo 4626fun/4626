@@ -1,13 +1,19 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { runCreatorMetricsHotSync, runCreatorMetricsSync } from '../../../server/_lib/zora/creatorMetricsSync.js'
+import {
+  runCreatorMetricsExploreBackfill,
+  runCreatorMetricsHotSync,
+  runCreatorMetricsSync,
+} from '../../../server/_lib/zora/creatorMetricsSync.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../../packages/server-core/src/index.js'
 declare const process: { env: Record<string, string | undefined> }
 
-function readSyncMode(req: VercelRequest): 'hot' | 'backfill' {
+function readSyncMode(req: VercelRequest): 'hot' | 'explore' | 'backfill' {
   const raw = req.query?.mode
   const value = Array.isArray(raw) ? String(raw[0] ?? '') : typeof raw === 'string' ? raw : ''
   const normalized = value.trim().toLowerCase()
-  return normalized === 'hot' ? 'hot' : 'backfill'
+  if (normalized === 'hot') return 'hot'
+  if (normalized === 'explore') return 'explore'
+  return 'backfill'
 }
 
 function readCronSecret(req: VercelRequest): string {
@@ -74,6 +80,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (mode === 'hot') {
     const result = await runCreatorMetricsHotSync()
+    const status = result.ok ? 200 : 500
+    return res.status(status).json({
+      success: result.ok,
+      data: result,
+    })
+  }
+
+  if (mode === 'explore') {
+    const exploreMaxPages = readNumberQuery(req, 'maxPages')
+    const result = await runCreatorMetricsExploreBackfill({
+      forceFull,
+      maxPagesPerList: exploreMaxPages,
+      pageSize,
+    })
     const status = result.ok ? 200 : 500
     return res.status(status).json({
       success: result.ok,

@@ -6,14 +6,20 @@ import { logger } from '../infra/logger.js'
 import { requireServerKey } from '../../zora/_shared.js'
 import {
   DEFAULT_HOT_REFRESH_LISTS,
+  createDefaultExploreBackfillCheckpoints,
   detectFeeModel,
   extractExploreListEdges,
   feeRateFromModel,
+  isExploreBackfillComplete,
   isStaleRunningLock,
   normalizeAddress,
+  parseExploreBackfillCheckpoints,
   parseExploreCoinFinancialSnapshot,
   parseTimestamp,
+  serializeExploreBackfillCheckpoints,
   toFiniteNumber,
+  type ExploreBackfillCheckpoints,
+  type ExploreCoinFinancialSnapshot,
   type ExploreList,
 } from './creatorMetricsSyncHelpers.js'
 
@@ -75,6 +81,10 @@ const DEFAULT_MAX_CHAIN_SCAN_CHUNKS = 8
 const DEFAULT_ENRICH_BATCH_SIZE = 200
 const DEFAULT_HOT_REFRESH_PAGES_PER_LIST = 8
 const DEFAULT_STALE_RUNNING_LOCK_MS = 20 * 60 * 1000
+const DEFAULT_COIN_UPSERT_BATCH_SIZE = 200
+const DEFAULT_BLOCK_FETCH_CONCURRENCY = 32
+const DEFAULT_EXPLORE_BACKFILL_MAX_PAGES_PER_LIST = 500
+const DEFAULT_EXPLORE_REQUEST_INTERVAL_MS = 75
 const MAX_SYNC_RETRIES = 4
 let creatorMetricsSchemaEnsured = false
 let creatorMetricsSchemaEnsurePromise: Promise<void> | null = null
@@ -198,6 +208,9 @@ async function ensureCreatorMetricsStateColumns(db: Db): Promise<void> {
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_volume_24h_usd NUMERIC(38, 12);`
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_fees_24h_usd NUMERIC(38, 12);`
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS cached_totals_at TIMESTAMPTZ;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_checkpoints_json TEXT;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_backfill_complete BOOLEAN NOT NULL DEFAULT false;`
+  await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS explore_last_sync_at TIMESTAMPTZ;`
 }
 
 async function ensureCreatorMetricsConstraints(db: Db): Promise<void> {
@@ -457,6 +470,319 @@ async function refreshHotFinancialsFromExploreLists(
   return { coinsRefreshed, pagesFetched }
 }
 
+async function upsertExploreSnapshotBatch(db: Db, snapshots: readonly ExploreCoinFinancialSnapshot[]): Promise<void> {
+  if (snapshots.length === 0) return
+  const batchSize = parsePositiveInt(
+    process.env.CREATOR_METRICS_COIN_UPSERT_BATCH_SIZE,
+    DEFAULT_COIN_UPSERT_BATCH_SIZE,
+  )
+  for (let i = 0; i < snapshots.length; i += batchSize) {
+    const slice = snapshots.slice(i, i + batchSize)
+    const coinAddresses = slice.map((row) => row.coinAddress)
+    const creatorAddresses = slice.map((row) => row.creatorAddress)
+    const createdAts = slice.map((row) => row.createdAt)
+    const marketCapUsd = slice.map((row) => row.marketCapUsd)
+    const volume24hUsd = slice.map((row) => row.volume24hUsd)
+    const fees24hUsd = slice.map((row) => row.fees24hUsd)
+    const feeModels = slice.map((row) => row.feeModel)
+    await withRetry('upsert_explore_snapshot_batch', async () => {
+      await db.sql`
+        INSERT INTO creator_coins (
+          coin_address,
+          creator_address,
+          created_at,
+          chain_id,
+          market_cap_usd,
+          volume_24h_usd,
+          fees_24h_usd,
+          fee_model,
+          last_seen_at
+        )
+        SELECT
+          coin_address,
+          creator_address,
+          created_at::timestamptz,
+          ${BASE_CHAIN_ID},
+          market_cap_usd,
+          volume_24h_usd,
+          fees_24h_usd,
+          fee_model,
+          NOW()
+        FROM UNNEST(
+          ${coinAddresses}::text[],
+          ${creatorAddresses}::text[],
+          ${createdAts}::text[],
+          ${marketCapUsd}::numeric[],
+          ${volume24hUsd}::numeric[],
+          ${fees24hUsd}::numeric[],
+          ${feeModels}::text[]
+        ) AS t(
+          coin_address,
+          creator_address,
+          created_at,
+          market_cap_usd,
+          volume_24h_usd,
+          fees_24h_usd,
+          fee_model
+        )
+        ON CONFLICT (coin_address) DO UPDATE SET
+          creator_address = EXCLUDED.creator_address,
+          created_at = COALESCE(creator_coins.created_at, EXCLUDED.created_at),
+          chain_id = EXCLUDED.chain_id,
+          market_cap_usd = EXCLUDED.market_cap_usd,
+          volume_24h_usd = EXCLUDED.volume_24h_usd,
+          fees_24h_usd = EXCLUDED.fees_24h_usd,
+          fee_model = EXCLUDED.fee_model,
+          last_seen_at = NOW();
+      `
+    })
+  }
+}
+
+export type CreatorMetricsExploreBackfillResult = {
+  ok: boolean
+  runId: string
+  coinsUpserted: number
+  pagesFetched: number
+  exploreBackfillComplete: boolean
+  checkpoints: ExploreBackfillCheckpoints
+  error?: string
+}
+
+type ExploreBackfillOptions = {
+  forceFull?: boolean
+  maxPagesPerList?: number
+  pageSize?: number
+  lists?: readonly ExploreList[]
+}
+
+async function loadExploreBackfillState(db: Db): Promise<{
+  checkpoints: ExploreBackfillCheckpoints
+  exploreBackfillComplete: boolean
+  syncStatus: SyncStatus
+}> {
+  const result = await db.sql`
+    SELECT explore_checkpoints_json, explore_backfill_complete, sync_status
+    FROM creator_metrics_state
+    WHERE id = 1
+    LIMIT 1;
+  `
+  const row = result.rows?.[0] ?? {}
+  const syncStatusRaw = String(row.sync_status ?? 'idle')
+  const syncStatus: SyncStatus = syncStatusRaw === 'running' || syncStatusRaw === 'error' ? syncStatusRaw : 'idle'
+  return {
+    checkpoints: parseExploreBackfillCheckpoints(row.explore_checkpoints_json),
+    exploreBackfillComplete: Boolean(row.explore_backfill_complete),
+    syncStatus,
+  }
+}
+
+export async function runCreatorMetricsExploreBackfill(
+  options: ExploreBackfillOptions = {},
+): Promise<CreatorMetricsExploreBackfillResult> {
+  const runId = `creator-metrics-explore-${randomUUID()}`
+  const log = logger.child({ syncRunId: runId })
+  const db = (await getDbForCron()) ?? (await getDb())
+  if (!db) {
+    return {
+      ok: false,
+      runId,
+      coinsUpserted: 0,
+      pagesFetched: 0,
+      exploreBackfillComplete: false,
+      checkpoints: createDefaultExploreBackfillCheckpoints(),
+      error: 'database_not_configured',
+    }
+  }
+
+  await ensureCreatorMetricsSchema(db)
+  const exploreState = await loadExploreBackfillState(db)
+  if (exploreState.syncStatus === 'running') {
+    return {
+      ok: true,
+      runId,
+      coinsUpserted: 0,
+      pagesFetched: 0,
+      exploreBackfillComplete: exploreState.exploreBackfillComplete,
+      checkpoints: exploreState.checkpoints,
+      error: 'onchain_backfill_running',
+    }
+  }
+
+  const apiKey = requireServerKey() || process.env.VITE_ZORA_PUBLIC_API_KEY || null
+  if (!apiKey) {
+    return {
+      ok: false,
+      runId,
+      coinsUpserted: 0,
+      pagesFetched: 0,
+      exploreBackfillComplete: false,
+      checkpoints: exploreState.checkpoints,
+      error: 'zora_api_key_missing',
+    }
+  }
+
+  const pageSize = Math.min(
+    parsePositiveInt(process.env.CREATOR_METRICS_SYNC_PAGE_SIZE, options.pageSize ?? DEFAULT_PAGE_SIZE),
+    50,
+  )
+  const maxPagesPerList = parsePositiveInt(
+    process.env.CREATOR_METRICS_EXPLORE_BACKFILL_MAX_PAGES_PER_LIST,
+    options.maxPagesPerList ?? DEFAULT_EXPLORE_BACKFILL_MAX_PAGES_PER_LIST,
+  )
+  const requestIntervalMs = parsePositiveInt(
+    process.env.CREATOR_METRICS_EXPLORE_REQUEST_INTERVAL_MS,
+    DEFAULT_EXPLORE_REQUEST_INTERVAL_MS,
+  )
+  const lists = options.lists ?? DEFAULT_HOT_REFRESH_LISTS
+  const forceFull = Boolean(options.forceFull)
+  let checkpoints = forceFull ? createDefaultExploreBackfillCheckpoints() : exploreState.checkpoints
+
+  if (!forceFull && exploreState.exploreBackfillComplete) {
+    return {
+      ok: true,
+      runId,
+      coinsUpserted: 0,
+      pagesFetched: 0,
+      exploreBackfillComplete: true,
+      checkpoints,
+    }
+  }
+
+  if (forceFull) {
+    await db.sql`
+      UPDATE creator_metrics_state
+      SET
+        explore_checkpoints_json = NULL,
+        explore_backfill_complete = false
+      WHERE id = 1;
+    `
+  }
+
+  let coinsUpserted = 0
+  let pagesFetched = 0
+
+  try {
+    const sdk = await getSdk(apiKey)
+    log.info('[creator-metrics-explore-backfill] starting', {
+      maxPagesPerList,
+      pageSize,
+      lists,
+      forceFull,
+    })
+
+    for (const list of lists) {
+      const checkpoint = checkpoints[list]
+      if (checkpoint.complete) continue
+
+      let after = checkpoint.after
+      for (let page = 0; page < maxPagesPerList; page += 1) {
+        const response = await withRetry(`explore_backfill_${list}_page_${page}`, () =>
+          fetchPage(sdk, list, pageSize, after),
+        )
+        const { edges, pageInfo } = extractExploreListEdges(response)
+        pagesFetched += 1
+
+        const snapshots: ExploreCoinFinancialSnapshot[] = []
+        for (const edge of edges) {
+          const snapshot = parseExploreCoinFinancialSnapshot(edge?.node)
+          if (snapshot) snapshots.push(snapshot)
+        }
+        if (snapshots.length > 0) {
+          await upsertExploreSnapshotBatch(db, snapshots)
+          coinsUpserted += snapshots.length
+        }
+
+        if (!pageInfo.hasNextPage || edges.length === 0) {
+          checkpoints = {
+            ...checkpoints,
+            [list]: { after: null, complete: true },
+          }
+          break
+        }
+
+        after = pageInfo.endCursor
+        if (!after) {
+          checkpoints = {
+            ...checkpoints,
+            [list]: { after: null, complete: true },
+          }
+          break
+        }
+
+        checkpoints = {
+          ...checkpoints,
+          [list]: { after, complete: false },
+        }
+
+        await db.sql`
+          UPDATE creator_metrics_state
+          SET
+            explore_checkpoints_json = ${serializeExploreBackfillCheckpoints(checkpoints)},
+            explore_last_sync_at = NOW()
+          WHERE id = 1;
+        `
+
+        if (requestIntervalMs > 0) await sleep(requestIntervalMs)
+      }
+    }
+
+    await recomputeCreatorCounts(db)
+    const exploreBackfillComplete = isExploreBackfillComplete(checkpoints)
+    await recomputeAndCacheCreatorMetricsTotals(db)
+    await db.sql`
+      UPDATE creator_metrics_state
+      SET
+        explore_checkpoints_json = ${serializeExploreBackfillCheckpoints(checkpoints)},
+        explore_backfill_complete = ${exploreBackfillComplete},
+        explore_last_sync_at = NOW()
+      WHERE id = 1;
+    `
+
+    log.info('[creator-metrics-explore-backfill] completed', {
+      coinsUpserted,
+      pagesFetched,
+      exploreBackfillComplete,
+    })
+
+    return {
+      ok: true,
+      runId,
+      coinsUpserted,
+      pagesFetched,
+      exploreBackfillComplete,
+      checkpoints,
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'creator_metrics_explore_backfill_failed'
+    try {
+      await recomputeCreatorCounts(db)
+      await recomputeAndCacheCreatorMetricsTotals(db)
+      await db.sql`
+        UPDATE creator_metrics_state
+        SET
+          explore_checkpoints_json = ${serializeExploreBackfillCheckpoints(checkpoints)},
+          explore_last_sync_at = NOW()
+        WHERE id = 1;
+      `
+    } catch (repairError) {
+      log.warn('[creator-metrics-explore-backfill] post-failure repair failed', {
+        error: repairError instanceof Error ? repairError.message : String(repairError),
+      })
+    }
+    log.error('[creator-metrics-explore-backfill] failed', { error: errorMessage })
+    return {
+      ok: false,
+      runId,
+      coinsUpserted,
+      pagesFetched,
+      exploreBackfillComplete: isExploreBackfillComplete(checkpoints),
+      checkpoints,
+      error: errorMessage,
+    }
+  }
+}
+
 export async function recomputeAndCacheCreatorMetricsTotals(db: Db): Promise<void> {
   await db.sql`
     UPDATE creator_metrics_state
@@ -570,9 +896,6 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
     }
   }
 }
-
-const DEFAULT_COIN_UPSERT_BATCH_SIZE = 200
-const DEFAULT_BLOCK_FETCH_CONCURRENCY = 32
 
 type ChainScanCoinRow = {
   coinAddress: string
