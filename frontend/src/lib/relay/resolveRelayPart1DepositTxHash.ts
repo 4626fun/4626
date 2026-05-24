@@ -256,10 +256,13 @@ export async function ensureRelayIndexablePart1TxHash(params: {
         return resolved
       }
     } catch {
-      /* keep resolved if verification RPC fails */
+      params.appendEvent?.(
+        `relay_part1:index_tx_unverified bundle=${resolved.slice(0, 12)}… order=${params.orderId.slice(0, 12)}…`,
+      )
     }
   }
 
-  params.appendEvent?.(`relay_part1:index_tx=${resolved}`)
-  return resolved
+  throw new Error(
+    'Relay Part 1 deposit could not be verified for this quote (native Depository.depositNative log missing on the returned tx hash). Do not rebuild preview while Relay status is waiting — use Recheck Part 2. If Recheck fails, contact support with the Part 1 bundle tx from BaseScan.',
+  )
 }

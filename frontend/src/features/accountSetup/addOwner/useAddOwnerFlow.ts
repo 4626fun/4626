@@ -4,7 +4,13 @@ import { usePublicClient, useWalletClient } from 'wagmi'
 import { base } from 'viem/chains'
 import type { PublicClient } from 'viem'
 
-import { fetchAddOwnerPreview, type AddOwnerPreview } from '@/lib/addOwner/addOwnerHelpers'
+import {
+  clearPersistedAddOwnerPreview,
+  fetchAddOwnerPreview,
+  persistAddOwnerPreview,
+  readPersistedAddOwnerPreview,
+  type AddOwnerPreview,
+} from '@/lib/addOwner/addOwnerHelpers'
 import { executeAddOwnerViaRelay } from '@/lib/addOwner/addOwnerExecution'
 import {
   getWalletErrorMessage,
@@ -15,7 +21,10 @@ import {
   resolveOwnerMutationWallet,
 } from '@/lib/relay/resolveOwnerMutationWallet'
 import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
-import { readPersistedRelayPart1DepositTx } from '@/lib/relay/relayPart1DepositLookup'
+import {
+  findExistingRelayPart1DepositTx,
+  readPersistedRelayPart1DepositTx,
+} from '@/lib/relay/relayPart1DepositLookup'
 import { useDeferUntilMounted } from '@/hooks/useDeferUntilMounted'
 
 export type AddOwnerErrorDetail = {
@@ -200,6 +209,9 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         })
         if (requestId !== previewRequestIdRef.current) return null
         setPreview(data)
+        if (mutationCswAddress) {
+          persistAddOwnerPreview(mutationCswAddress, data)
+        }
         return data
       } catch (err: unknown) {
         if (requestId !== previewRequestIdRef.current) return null
@@ -262,7 +274,20 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       }
 
       let activePreview = preview
+      if (!activePreview && mutationCswAddress) {
+        activePreview = readPersistedAddOwnerPreview(mutationCswAddress)
+        if (activePreview) {
+          setPreview(activePreview)
+          appendEvent('preview:restored_from_session')
+        }
+      }
       if (!activePreview) {
+        if (mode === 'recheck') {
+          setPageError(
+            'This Relay quote is no longer in memory. Do not rebuild if Part 1 already deposited — reload the page and use Recheck Part 2, or wait for Relay Part 2 to finish.',
+          )
+          return false
+        }
         activePreview = await fetchPreview({ resetExecution: mode === 'submit' })
       }
       if (!activePreview || activePreview.preflight.alreadyOwner) {
@@ -270,7 +295,22 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       }
 
       const part1DepositTxHint = resolvePart1DepositTxHint(activePreview)
-      if (mode === 'recheck' && !part1DepositTxHint) {
+      let resolvedPart1Hint = part1DepositTxHint
+      if (
+        mode === 'recheck' &&
+        !resolvedPart1Hint &&
+        publicClient &&
+        activePreview.relay &&
+        fundingCswAddress
+      ) {
+        resolvedPart1Hint = await findExistingRelayPart1DepositTx({
+          publicClient,
+          fundingCsw: fundingCswAddress as `0x${string}`,
+          userCall: activePreview.relay.userCall,
+          orderId: resolveRelayOrderId(activePreview),
+        })
+      }
+      if (mode === 'recheck' && !resolvedPart1Hint) {
         setPageError(
           'No Part 1 deposit is recorded for this quote. Submit the Relay deposit once, then use Recheck Part 2.',
         )
@@ -297,16 +337,16 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       setLastErrorDetail(null)
       setPageNotice(null)
       setFlowComplete(false)
-      setWaitingForRelayFill(Boolean(part1DepositTxHint))
-      if (!part1DepositTxHint) {
+      setWaitingForRelayFill(Boolean(resolvedPart1Hint))
+      if (!resolvedPart1Hint) {
         setEventLog([])
       }
       appendEvent(mode === 'recheck' ? 'lane:recheck_relay_part2' : 'lane:preview_bound_relay_user_call')
       appendEvent(`target:owner=${activePreview.preflight.ownerToAdd}`)
       appendEvent(`target:selector=${activePreview.txRequest.data.slice(0, 10)}`)
       appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
-      if (part1DepositTxHint) {
-        appendEvent(`relay_part1:reuse_hint=${part1DepositTxHint}`)
+      if (resolvedPart1Hint) {
+        appendEvent(`relay_part1:reuse_hint=${resolvedPart1Hint}`)
       }
 
       let requiredDepositWei: bigint | null = null
@@ -350,13 +390,16 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
             setPart1TxHash((prev) => prev ?? hash)
             setWaitingForRelayFill(true)
           },
-          part1DepositTxHint,
+          part1DepositTxHint: resolvedPart1Hint,
         })
 
         setFlowComplete(true)
         setWaitingForRelayFill(false)
         setPageNotice(`4626 signing enabled via Relay (execution tx ${result.txHash.slice(0, 10)}…).`)
         setPreview(null)
+        if (mutationCswAddress) {
+          clearPersistedAddOwnerPreview(mutationCswAddress)
+        }
         return true
       } catch (err: unknown) {
         appendEvent(`error:${getWalletErrorMessage(err).slice(0, 260)}`)

@@ -141,7 +141,8 @@ export function resolveRelayIndexRequestIds(
 export function resolveRelayStatusRequestId(
   relay: Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>,
 ): `0x${string}` {
-  return relay.orderId ?? relay.requestId
+  // Same hex often appears in both fields, but Relay v3 only tracks deposit+fill on ?requestId=.
+  return relay.requestId
 }
 
 /** Secondary poll id when primary returns `unknown` and ids differ. */

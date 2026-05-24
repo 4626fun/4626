@@ -364,7 +364,7 @@ export async function executeOwnerMutationViaRelay(
   const pollStatus = async (endpoint: string) =>
     pollRelayStatusEndpoint({
       statusEndpoint: endpoint,
-      timeoutMs: 300_000,
+      timeoutMs: 480_000,
       intervalMs: 2_000,
       shouldShortCircuitSuccess: params.verifyMutation,
       onWaiting: reindexWhileWaiting,
@@ -422,7 +422,7 @@ export async function executeOwnerMutationViaRelay(
     }
     if (statusLabel === 'waiting') {
       throw new Error(
-        'Relay received the Part 1 deposit but has not submitted Part 2 (addOwnerAddress) yet. Tap Recheck in a minute — your deposit is recorded. If this persists, rebuild preview and retry Enable 4626 signing (use a fresh quote; paymaster-sponsored Part 1 deposits can stall the solver).',
+        `Relay received Part 1 (bundle tx ${executeTxHash.slice(0, 10)}…) but Part 2 (addOwnerAddress) is still pending. Tap Recheck Part 2 — do not rebuild preview. Quote requestId ${statusRequestId.slice(0, 12)}…`,
       )
     }
     throw new Error(

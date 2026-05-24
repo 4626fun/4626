@@ -5,6 +5,42 @@ import type {
 } from '@/lib/relay/ownerMutationTypes'
 import { validatePreviewRelayUserCallIsNativeDepository } from '@/lib/removeOwner/removeOwnerHelpers'
 
+const ADD_OWNER_PREVIEW_STORAGE_PREFIX = '4626:add_owner_preview:'
+
+function addOwnerPreviewStorageKey(cswAddress: string): string {
+  return `${ADD_OWNER_PREVIEW_STORAGE_PREFIX}${cswAddress.toLowerCase()}`
+}
+
+export function persistAddOwnerPreview(cswAddress: string, preview: AddOwnerPreview): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(addOwnerPreviewStorageKey(cswAddress), JSON.stringify(preview))
+  } catch {
+    /* WebView storage may be unavailable */
+  }
+}
+
+export function readPersistedAddOwnerPreview(cswAddress: string): AddOwnerPreview | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(addOwnerPreviewStorageKey(cswAddress))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as AddOwnerPreview
+    return sanitizeAddOwnerRelayPreview(parsed)
+  } catch {
+    return null
+  }
+}
+
+export function clearPersistedAddOwnerPreview(cswAddress: string): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(addOwnerPreviewStorageKey(cswAddress))
+  } catch {
+    /* ignore */
+  }
+}
+
 export type AddOwnerPreview = {
   txRequest: {
     chainId: 8453
