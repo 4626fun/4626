@@ -195,7 +195,7 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     )
   })
 
-  it('lists fallback hash candidates for session-key bundler submit', () => {
+  it('lists domain-matched stripped hash before no-chain fallback', () => {
     const withPaymaster = {
       ...SAMPLE_USER_OP,
       paymasterAndData:
@@ -214,10 +214,10 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       preparedUserOp: withPaymaster,
       signatureRequestHash: primary.hash,
       chainId: 8453,
-      preferSessionKeyNoChain: true,
     })
     expect(candidates.length).toBeGreaterThanOrEqual(1)
-    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
+    expect(candidates[0]?.mode).toBe(primary.mode)
+    expect(candidates[0]?.mode).not.toBe('entrypoint_v06_no_chain_session_key_primary')
   })
 
   it('parses owner index from Base App signature wrapper', () => {
@@ -248,15 +248,27 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index'])
   })
 
-  it('uses full_wrapper_secp256k1 first for Base App session-key owner index 2', () => {
+  it('session-key prepared-calls signers include funding CSW fallback', () => {
+    const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
+      parsedOwnerAddress: SESSION_KEY_OWNER,
+      fundingCsw: SAMPLE_USER_OP.sender,
+      sessionKeyOwner: true,
+    })
+    expect(candidates.map((candidate) => candidate.mode)).toEqual([
+      'owner_at_index',
+      'funding_csw_session_key',
+    ])
+  })
+
+  it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
-      'full_wrapper_secp256k1',
       'inner_secp256k1',
+      'full_wrapper_secp256k1',
       'auto',
     ])
     expect(
       listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: null, sessionKeyOwner: true }),
-    ).toEqual(['full_wrapper_secp256k1', 'inner_secp256k1', 'auto'])
+    ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
   })
 
   it('prepare capabilities request optional paymaster and required native funds', () => {
@@ -519,7 +531,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_address')
   })
 
-  it('surfaces prepared-calls failure when all payload modes fail', async () => {
+  it('falls back to bundler when prepared-calls reject all payload modes', async () => {
     mockPublicClientWithoutSessionKeyOwner()
 
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
@@ -548,24 +560,24 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     const appendEvent = vi.fn()
-    await expect(
-      submitSelfAuthRelayPart1SelfFunded({
-        walletRequest,
-        fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
-        userCall: {
-          to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
-          data: '0x49290c1c' + '0'.repeat(128),
-          value: '0x110dea8a3f8',
-        },
-        chainId: 8453,
-        publicClient: mockPublicClient as never,
-        appendEvent,
-        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
-      }),
-    ).rejects.toThrow(/UserOp signature verification failed/)
-    expect(mockBundlerRequest).not.toHaveBeenCalled()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '0x110dea8a3f8',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+      customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+    })
+
+    expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(mockBundlerRequest).toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_prepare_native_paymaster_injected=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_self_auth=1')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded_fallback')
   })
 
   it('rejects mistaken owner slot 3 signatures before prepared-calls submit', async () => {

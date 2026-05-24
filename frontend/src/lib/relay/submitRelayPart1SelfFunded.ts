@@ -84,7 +84,7 @@ export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   sessionKeyOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
   if (params.sessionKeyOwner || params.parsedOwnerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX) {
-    return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
+    return ['inner_secp256k1', 'full_wrapper_secp256k1', 'auto']
   }
   return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
 }
@@ -290,7 +290,6 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   preparedUserOp: unknown
   signatureRequestHash: Hex
   chainId: number
-  preferSessionKeyNoChain?: boolean
 }): Array<{ hash: Hex; mode: string }> {
   const primary = resolveSelfFundedSignHashAfterPaymasterStrip(params)
   const parsed = parseWalletPreparedUserOpV06(params.preparedUserOp)
@@ -304,17 +303,10 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
     candidates.push(entry)
   }
 
-  // Session-key CSWs (owner[2]) validate stripped self-funded UserOps on the no-chain domain.
-  if (params.preferSessionKeyNoChain) {
-    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
-    if (primary.mode !== 'entrypoint_v06_no_chain') {
-      pushUnique(primary)
-    }
-  } else {
-    pushUnique(primary)
-    if (primary.mode !== 'entrypoint_v06_no_chain') {
-      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
-    }
+  // Domain-matched stripped hash first (usually with-chain when Base App injected paymaster).
+  pushUnique(primary)
+  if (primary.mode !== 'entrypoint_v06_no_chain') {
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
   }
   if (primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash') {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_unmatched_fallback' })
@@ -332,6 +324,7 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   recoveredRawAddress?: `0x${string}` | null
   recoveredEip191Address?: `0x${string}` | null
   resolvedOwnerAtIndexAddress?: `0x${string}` | null
+  fundingCsw?: `0x${string}` | null
   /** When true, only on-chain owner slot addresses — skip ecrecover guesses. */
   sessionKeyOwner?: boolean
 }): Array<{ address: `0x${string}`; mode: string }> {
@@ -345,6 +338,9 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
 
   pushUnique(params.parsedOwnerAddress, 'owner_at_index')
   pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
+  if (params.sessionKeyOwner) {
+    pushUnique(params.fundingCsw ?? null, 'funding_csw_session_key')
+  }
   if (!params.sessionKeyOwner) {
     pushUnique(params.recoveredEip191Address, 'recovered_eip191')
     pushUnique(params.recoveredRawAddress, 'recovered_raw')
@@ -502,7 +498,7 @@ function listSelfAuthSignMethods(params: {
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
   if (sessionKeyContext) {
-    return [...ecdsaMethods, 'typed_data_v4_csw']
+    return ['typed_data_v4_csw', ...ecdsaMethods]
   }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
@@ -552,7 +548,6 @@ async function resolvePreparedCallsSignHash(params: {
   chainId: number
   signAfterPaymasterStrip: boolean
   forceBundlerOnly?: boolean
-  preferSessionKeyNoChain?: boolean
   hadInjectedPaymaster?: boolean
   appendEvent: (row: string) => void
 }): Promise<Array<{ hash: Hex; mode: string }>> {
@@ -566,7 +561,6 @@ async function resolvePreparedCallsSignHash(params: {
     preparedUserOp: params.preparedUserOpRaw,
     signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
-    preferSessionKeyNoChain: params.preferSessionKeyNoChain,
   })
   params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${candidates[0]?.mode ?? 'unknown'}`)
   if (candidates.length > 1) {
@@ -737,6 +731,7 @@ async function trySendPreparedCallsUserOp(params: {
     recoveredRawAddress: params.recoveredRawAddress,
     recoveredEip191Address: params.recoveredEip191Address,
     resolvedOwnerAtIndexAddress,
+    fundingCsw: params.fundingCsw,
     sessionKeyOwner: params.sessionKeyOwner,
   })
 
@@ -1075,10 +1070,6 @@ async function sendSignedPreparedUserOp(params: {
     chainId: params.chainId,
     signAfterPaymasterStrip: effectiveStrip,
     forceBundlerOnly: params.forceBundlerOnly,
-    preferSessionKeyNoChain: isSelfAuthSessionKeyOwnerContext({
-      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
-      ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
-    }),
     hadInjectedPaymaster: params.hadInjectedPaymaster,
     appendEvent: params.appendEvent,
   })
@@ -1088,6 +1079,7 @@ async function sendSignedPreparedUserOp(params: {
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
   let lastSignatureError: unknown = null
+  let lastBundlerSignature: Hex | null = null
 
   const signMethodsFor = () =>
     listSelfAuthSignMethods({
@@ -1139,6 +1131,8 @@ async function sendSignedPreparedUserOp(params: {
         lastSignatureError = signError
         continue
       }
+
+      lastBundlerSignature = signature
 
       const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
@@ -1214,6 +1208,32 @@ async function sendSignedPreparedUserOp(params: {
     })
     if (strippedTx) {
       return strippedTx
+    }
+  }
+
+  if (
+    lastBundlerSignature &&
+    params.customOwnerPolicyToken &&
+    effectiveStrip
+  ) {
+    params.appendEvent('relay_part1:lane=prepared_bundler_self_funded_fallback')
+    try {
+      return await submitSignedPreparedUserOpViaBundler({
+        publicClient: params.publicClient,
+        fundingCsw: params.fundingCsw,
+        strippedUserOp,
+        signature: lastBundlerSignature,
+        appendEvent: params.appendEvent,
+        customOwnerPolicyToken: params.customOwnerPolicyToken,
+      })
+    } catch (bundlerError) {
+      if (isUserRejectedWalletAction(bundlerError)) {
+        throw bundlerError
+      }
+      params.appendEvent(
+        `relay_part1:prepared_bundler_fallback_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
+      )
+      lastSignatureError = bundlerError
     }
   }
 
@@ -1505,7 +1525,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *   2. Sign prepare hash (typed data + ECDSA) against **native** prepared userOp
  *   3. Sign stripped-hash candidates against paymaster=0 userOp
  *   4. `wallet_sendPreparedCalls` for each pairing above
- *   Never `eth_sendUserOperation` — incompatible with Base App prepared UserOps.
+ *   5. `eth_sendUserOperation` via 4626 custom-owner bundler when prepared-calls reject
  * Never `wallet_sendCalls` — Base App re-injects USDC paymaster on that path.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
