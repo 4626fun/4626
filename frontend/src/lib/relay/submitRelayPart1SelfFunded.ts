@@ -20,6 +20,7 @@ import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSe
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
+  signCswUserOpHashViaTypedDataV4,
   type PreparedCallsSignaturePayloadMode,
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
@@ -436,17 +437,23 @@ async function ensureSelfAuthWalletAuthorized(params: {
   }
 }
 
-type SelfAuthSignMethod = 'personal_sign_data_address' | 'personal_sign_address_data' | 'eth_sign_address_data'
+type SelfAuthSignMethod =
+  | 'typed_data_v4_csw'
+  | 'personal_sign_data_address'
+  | 'personal_sign_address_data'
+  | 'eth_sign_address_data'
 
 function listSelfAuthSignMethods(params: {
   sessionKeyOwner: boolean
   parsedOwnerIndex: number | null
   bundlerOnly?: boolean
 }): SelfAuthSignMethod[] {
-  if (params.bundlerOnly || params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
-    return ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
-  }
-  return ['personal_sign_data_address']
+  const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly ||
+    params.sessionKeyOwner ||
+    params.parsedOwnerIndex === 2
+    ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
+    : ['personal_sign_data_address']
+  return ['typed_data_v4_csw', ...ecdsaMethods]
 }
 
 async function requestSelfAuthSignature(params: {
@@ -454,7 +461,18 @@ async function requestSelfAuthSignature(params: {
   fundingCsw: `0x${string}`
   hashToSign: Hex
   method: SelfAuthSignMethod
+  chainId: number
 }): Promise<Hex> {
+  if (params.method === 'typed_data_v4_csw') {
+    return signCswUserOpHashViaTypedDataV4({
+      walletRequest: params.walletRequest,
+      smartWallet: params.fundingCsw,
+      signerAddress: params.fundingCsw,
+      chainId: params.chainId,
+      userOpHash: params.hashToSign,
+    })
+  }
+
   const request =
     params.method === 'eth_sign_address_data'
       ? { method: 'eth_sign' as const, params: [params.fundingCsw, params.hashToSign] }
@@ -518,6 +536,7 @@ async function signSelfAuthPreparedUserOpOnce(params: {
   fundingCsw: `0x${string}`
   hashToSign: Hex
   signMethod: SelfAuthSignMethod
+  chainId: number
   appendEvent: (row: string) => void
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<{
@@ -533,6 +552,7 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     fundingCsw: params.fundingCsw,
     hashToSign: params.hashToSign,
     method: params.signMethod,
+    chainId: params.chainId,
   })
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
@@ -596,7 +616,7 @@ async function signSelfAuthPreparedUserOpOnce(params: {
   }
 }
 
-async function trySendStrippedPreparedCalls(params: {
+async function trySendPreparedCallsUserOp(params: {
   walletRequest: WalletRequest
   publicClient: PublicClient
   fundingCsw: `0x${string}`
@@ -605,25 +625,29 @@ async function trySendStrippedPreparedCalls(params: {
     chainId?: string
   }
   chainIdHex: `0x${string}`
-  strippedUserOp: V06UserOpFields
+  userOp: V06UserOpFields
+  lane: string
   signature: Hex
   parsedOwnerIndex: number | null
   preparedCallsSignerAddress: `0x${string}` | null
   recoveredRawAddress?: `0x${string}` | null
   recoveredEip191Address?: `0x${string}` | null
   sessionKeyOwner: boolean
+  ownerDiscovery?: SelfAuthOwnerDiscovery
   appendEvent: (row: string) => void
 }): Promise<`0x${string}` | null> {
+  const effectiveOwnerIndex =
+    params.parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null
   const payloadModes = listSelfAuthPreparedCallsSignaturePayloadModes({
-    parsedOwnerIndex: params.parsedOwnerIndex,
+    parsedOwnerIndex: effectiveOwnerIndex,
     sessionKeyOwner: params.sessionKeyOwner,
   })
   let resolvedOwnerAtIndexAddress: `0x${string}` | null = null
-  if (params.parsedOwnerIndex != null) {
+  if (effectiveOwnerIndex != null) {
     resolvedOwnerAtIndexAddress = await readCswOwnerAddressAtIndex({
       publicClient: params.publicClient,
       fundingCsw: params.fundingCsw,
-      ownerIndex: params.parsedOwnerIndex,
+      ownerIndex: effectiveOwnerIndex,
     })
     if (resolvedOwnerAtIndexAddress) {
       params.appendEvent(`relay_part1:resolved_owner_signer=${resolvedOwnerAtIndexAddress}`)
@@ -631,20 +655,17 @@ async function trySendStrippedPreparedCalls(params: {
   }
 
   const signerAddressCandidates = listSelfAuthPreparedCallsSignerAddressCandidates({
-    parsedOwnerAddress: params.preparedCallsSignerAddress,
+    parsedOwnerAddress:
+      params.preparedCallsSignerAddress ?? params.ownerDiscovery?.ownerSignerAddress ?? null,
     recoveredRawAddress: params.recoveredRawAddress,
     recoveredEip191Address: params.recoveredEip191Address,
     resolvedOwnerAtIndexAddress,
   })
 
-  if ((params.sessionKeyOwner || params.parsedOwnerIndex === 2) && signerAddressCandidates.length === 0) {
-    params.appendEvent('relay_part1:prepared_calls_signer_unresolved')
-    return null
-  }
+  const userOpPayload = serializeUserOpForPreparedCallsSend(params.userOp)
+  params.appendEvent(`relay_part1:lane=${params.lane}`)
 
-  const strippedUserOpPayload = serializeUserOpForPreparedCallsSend(params.strippedUserOp)
-  params.appendEvent('relay_part1:lane=prepared_calls_stripped_self_funded')
-
+  let lastSendError: unknown = null
   for (const mode of payloadModes) {
     params.appendEvent(`relay_part1:prepared_calls_signature_mode=${mode}`)
     const signerCandidates =
@@ -671,7 +692,7 @@ async function trySendStrippedPreparedCalls(params: {
             {
               version: '1.0',
               type: params.prepareResult.type ?? 'user-operation-v06',
-              data: strippedUserOpPayload,
+              data: userOpPayload,
               chainId: params.prepareResult.chainId ?? params.chainIdHex,
               signature: signaturePayload,
             },
@@ -683,13 +704,25 @@ async function trySendStrippedPreparedCalls(params: {
           throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
         }
         params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
-        return await pollPreparedCallsBundle({
-          walletRequest: params.walletRequest,
-          publicClient: params.publicClient,
-          fundingCsw: params.fundingCsw,
-          callsId,
-          appendEvent: params.appendEvent,
-        })
+        try {
+          return await pollPreparedCallsBundle({
+            walletRequest: params.walletRequest,
+            publicClient: params.publicClient,
+            fundingCsw: params.fundingCsw,
+            callsId,
+            appendEvent: params.appendEvent,
+          })
+        } catch (landError) {
+          const landMessage = formatRelayPart1Error(landError)
+          if (
+            landMessage.includes('USDC paymaster') ||
+            landMessage.includes('paymaster = 0')
+          ) {
+            params.appendEvent('relay_part1:prepared_calls_paymaster_landed=1')
+            return null
+          }
+          throw landError
+        }
       } catch (sendError) {
         if (isUserRejectedWalletAction(sendError)) {
           throw sendError
@@ -700,8 +733,13 @@ async function trySendStrippedPreparedCalls(params: {
         if (!isPreparedCallsSignatureRejectedError(sendError)) {
           throw sendError
         }
+        lastSendError = sendError
       }
     }
+  }
+
+  if (lastSendError instanceof Error) {
+    throw lastSendError
   }
 
   return null
@@ -867,15 +905,26 @@ async function sendSignedPreparedUserOp(params: {
     ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
+  const originalUserOp = parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
+  const prepareHash = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+
   let lastSignatureError: unknown = null
 
-  for (const candidate of hashCandidates) {
-    params.appendEvent(`relay_part1:sign_hash_mode=${candidate.mode}`)
-    for (const signMethod of listSelfAuthSignMethods({
+  const signMethodsFor = () =>
+    listSelfAuthSignMethods({
       sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner ?? false,
       parsedOwnerIndex: params.ownerDiscovery?.ownerIndex ?? null,
       bundlerOnly: true,
-    })) {
+    })
+
+  const attemptPreparedCalls = async (input: {
+    hashToSign: Hex
+    hashMode: string
+    userOp: V06UserOpFields
+    lane: string
+  }): Promise<`0x${string}` | null> => {
+    params.appendEvent(`relay_part1:sign_hash_mode=${input.hashMode}`)
+    for (const signMethod of signMethodsFor()) {
       let signature: Hex
       let preparedCallsSignerAddress: `0x${string}` | null
       let parsedOwnerIndex: number | null
@@ -891,8 +940,9 @@ async function sendSignedPreparedUserOp(params: {
         } = await signSelfAuthPreparedUserOpOnce({
           walletRequest: params.walletRequest,
           fundingCsw: params.fundingCsw,
-          hashToSign: candidate.hash,
+          hashToSign: input.hashToSign,
           signMethod,
+          chainId: params.chainId,
           appendEvent: params.appendEvent,
           ownerDiscovery: params.ownerDiscovery,
         }))
@@ -912,19 +962,21 @@ async function sendSignedPreparedUserOp(params: {
         parsedOwnerIndex === 2
 
       try {
-        const preparedCallsTx = await trySendStrippedPreparedCalls({
+        const preparedCallsTx = await trySendPreparedCallsUserOp({
           walletRequest: params.walletRequest,
           publicClient: params.publicClient,
           fundingCsw: params.fundingCsw,
           prepareResult: params.prepareResult,
           chainIdHex: params.chainIdHex,
-          strippedUserOp,
+          userOp: input.userOp,
+          lane: input.lane,
           signature,
           parsedOwnerIndex,
           preparedCallsSignerAddress,
           recoveredRawAddress,
           recoveredEip191Address,
           sessionKeyOwner,
+          ownerDiscovery: params.ownerDiscovery,
           appendEvent: params.appendEvent,
         })
         if (preparedCallsTx) {
@@ -944,11 +996,16 @@ async function sendSignedPreparedUserOp(params: {
         }
       }
 
+      if (sessionKeyOwner) {
+        params.appendEvent('relay_part1:skip_bundler_session_key_owner=1')
+        continue
+      }
+
       try {
         return await submitSignedPreparedUserOpViaBundler({
           publicClient: params.publicClient,
           fundingCsw: params.fundingCsw,
-          strippedUserOp,
+          strippedUserOp: input.userOp,
           signature,
           appendEvent: params.appendEvent,
           customOwnerPolicyToken: params.customOwnerPolicyToken,
@@ -966,6 +1023,29 @@ async function sendSignedPreparedUserOp(params: {
         }
         throw bundlerError
       }
+    }
+    return null
+  }
+
+  const prepareNativeTx = await attemptPreparedCalls({
+    hashToSign: prepareHash,
+    hashMode: 'prepare_signature_request_native_userop',
+    userOp: originalUserOp,
+    lane: 'prepared_calls_prepare_native',
+  })
+  if (prepareNativeTx) {
+    return prepareNativeTx
+  }
+
+  for (const candidate of hashCandidates) {
+    const strippedTx = await attemptPreparedCalls({
+      hashToSign: candidate.hash,
+      hashMode: candidate.mode,
+      userOp: strippedUserOp,
+      lane: 'prepared_calls_stripped_self_funded',
+    })
+    if (strippedTx) {
+      return strippedTx
     }
   }
 
@@ -1243,9 +1323,10 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *
  * Lane order (self-auth owner-install only):
  *   1. `wallet_prepareCalls` (self-funded capabilities)
- *   2. Sign (prepare hash + stripped-hash candidates; personal_sign / eth_sign)
- *   3. `wallet_sendPreparedCalls` with stripped paymaster=0 userOp + session-key payload
- *   4. `eth_sendUserOperation` via 4626 bundler with custom-owner policy
+ *   2. Sign prepare hash (typed data + ECDSA) against **native** prepared userOp
+ *   3. Sign stripped-hash candidates against paymaster=0 userOp
+ *   4. `wallet_sendPreparedCalls` for each pairing above
+ *   5. `eth_sendUserOperation` via 4626 bundler only for non-session-key owners
  * Never `wallet_sendCalls` — Base App re-injects USDC paymaster on that path.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
