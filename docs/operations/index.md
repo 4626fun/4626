@@ -17,7 +17,9 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Automation](/operations/automation)** | Automated operations setup |
 | **[AlfaClub /gmeow Outage Post-Mortem](/operations/alfaclub-gmeow-outage-postmortem-2026-05-02)** | SEV-2 incident record for the AlfaClub Cloudflare challenge and token bootstrap outage |
 | **[Coinbase Smart Wallet Capabilities](/operations/coinbase-smart-wallet-capabilities)** | Observed CSW/Base App provider methods, event payloads, signing behavior, and 4626 usage notes |
+| **[Owner-Install Reference Methods](/operations/owner-install-reference-methods)** | Method A/B/C index — primary embedded-EOA Relay path vs passkey-first Base App reference vs recovery |
 | **[CSW Recovery Playbook](/operations/csw-recovery-playbook)** | Recovery path and known-good owner-install execution lanes for CSW owner setup |
+| **[Base App Session-Key Relay Part 1 Recipe](/operations/base-app-session-key-relay-part1-recipe)** | Reference Method B — session-key Part 1 + passkey Part 2 for passkey-first Base App CSWs |
 | **[Relay-Sponsored Owner Mutation Flow](/operations/relay-sponsored-owner-mutation-flow)** | Two-session signer/funder architecture for Relay-backed owner mutations |
 | **[Relay Kit — Owner Mutation Guide](/operations/relay-owner-mutation-kit-guide)** | relay-kit + Privy example mapping for add-owner / remove-owner on Base CSWs |
 | **[Coinbase In-App SignatureWrapper Bug](/operations/coinbase-inapp-signaturewrapper-bug)** | Incident note for in-app owner-index/signature mismatch and mitigations |

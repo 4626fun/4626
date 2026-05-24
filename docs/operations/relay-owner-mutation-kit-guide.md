@@ -8,9 +8,11 @@ This doc maps [relay-kit](https://github.com/relayprotocol/relay-kit), [relay-wa
 
 Related runbooks:
 
+- [Owner-install reference methods](/operations/owner-install-reference-methods) — **Method A/B/C index** + golden txs (primary vs reference lanes)
+- [Base App session-key Relay Part 1 recipe](/operations/base-app-session-key-relay-part1-recipe) — **Method B** (passkey-first Base App; reference, not sole success path)
 - [Relay-Sponsored Owner Mutation Flow](/operations/relay-sponsored-owner-mutation-flow) — two-wallet architecture
 - [Relay Vaults evaluation](/research/relay-vaults-evaluation) — **not** the same product as Settlement / relay-kit
-- [CSW Recovery Playbook](/operations/csw-recovery-playbook) — passkey / prepared-calls recovery lanes
+- [CSW Recovery Playbook](/operations/csw-recovery-playbook) — **Method C** passkey / prepared-calls recovery lane
 
 ## Products (do not conflate)
 
@@ -25,6 +27,8 @@ Bridge/swap examples in the Privy sample (`EXACT_INPUT`, cross-chain ETH) are **
 ---
 
 ## Golden reference transactions (Base mainnet)
+
+> **Method A (primary).** For the full method index (including passkey-first Base App **Method B** and recovery **Method C**), see [Owner-install reference methods](/operations/owner-install-reference-methods).
 
 Successful **add embedded EOA owner** via Relay on block **45600637** (May 5, 2026). Part 1 and Part 2 landed in the same block.
 
@@ -48,6 +52,8 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 - `refundTo` / `nftRecipient`: the CSW (self-auth deposit lane)
 - Event: `AddOwner` with new owner EOA at owner index 33
 - Paymaster: `0x0` on the destination UserOp (self-funded)
+
+**Method B Part 2 reference (historical, passkey-first CSW):** [0x801b9d4b…91503](https://basescan.org/tx/0x801b9d4b8f7470226c2f02d5252583f00d77da5cbb0b7dc8b73421ed8b491503) on the same probe CSW — passkey `owner[0]` validates via `getUserOpHashWithoutChainId` (`org.toshi`); inner call added session-key `0xCf8D17…0142` at index **2**. Use for Part 2 signing-shape reference only; waitlist success still requires `isOwnerAddress(privyEmbeddedEoa)`. [Tenderly trace](https://dashboard.tenderly.co/tx/0x801b9d4b8f7470226c2f02d5252583f00d77da5cbb0b7dc8b73421ed8b491503).
 
 4626 replicates Part 1 by:
 
