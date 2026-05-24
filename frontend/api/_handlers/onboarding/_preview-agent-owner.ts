@@ -45,6 +45,7 @@ import {
   isOwner as isOwnerOnChain,
 } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { createAgentWallet } from '../../../server/_lib/wallet/privyWalletApi.js'
+import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const HEX_RE = /^0x[0-9a-fA-F]+$/
@@ -88,11 +89,6 @@ type PreviewResponse =
         value: '0x0'
       }
     }
-
-function resolveBaseRpcUrl(): string {
-  const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
-  return envUrl || 'https://mainnet.base.org'
-}
 
 /**
  * Permissive CORS for a public, no-credentials endpoint that must be
@@ -244,7 +240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   //    CSW addresses they don't control.
   const publicClient = createPublicClient({
     chain: base,
-    transport: http(resolveBaseRpcUrl()),
+    transport: http(resolveServerBaseRpcUrl()),
   })
 
   let connectedAddressIsOwner = false

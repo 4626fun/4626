@@ -1,17 +1,10 @@
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-const DEFAULT_BASE_RPCS = [
-  'https://mainnet.base.org',
-  'https://base.llamarpc.com',
-  'https://base-mainnet.public.blastapi.io',
-] as const
+import { resolveServerBaseRpcUrls } from './baseRpcUrl.js'
 
 export function resolveBaseRpcUrls(): string[] {
-  const raw = (process.env.BASE_RPC_URL ?? '').trim()
-  if (!raw) return [...DEFAULT_BASE_RPCS]
-  const parts = raw.split(',').map((s) => s.trim()).filter(Boolean)
-  return Array.from(new Set([...parts, ...DEFAULT_BASE_RPCS]))
+  return resolveServerBaseRpcUrls()
 }
 
 /** Read native balance from every configured Base RPC and return the highest value. */

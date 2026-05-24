@@ -23,6 +23,7 @@ import {
 import { base } from 'viem/chains'
 import { isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
+import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
 import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
 
 import { CSW_OWNER_ABI } from '../../../src/lib/wallet/cswOwnerAbi.js'
@@ -123,11 +124,6 @@ type RemoveOwnerPreviewResponse = {
   }
 }
 
-function resolveBaseRpcUrl(): string {
-  const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
-  return envUrl || 'https://mainnet.base.org'
-}
-
 function parseAddress(input: unknown): Address | null {
   const value = typeof input === 'string' ? input.trim() : ''
   if (!isAddress(value)) return null
@@ -220,7 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     try {
       const publicClient = createPublicClient({
         chain: base,
-        transport: http(resolveBaseRpcUrl()),
+        transport: http(resolveServerBaseRpcUrl()),
       })
       connectedIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedAddress)
     } catch (error) {
@@ -239,7 +235,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const publicClient = createPublicClient({
     chain: base,
-    transport: http(resolveBaseRpcUrl()),
+    transport: http(resolveServerBaseRpcUrl()),
   })
 
   try {

@@ -28,6 +28,7 @@ import {
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwnerMutationRelayFlow.js'
+import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
 import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import { ADD_OWNER_ADDRESS_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
@@ -106,11 +107,6 @@ type AddOwnerPreviewResponse = {
 type PreviewAddOwnerErrorEnvelope = ApiEnvelope<never> & {
   needsEmbeddedWallet?: boolean
   needsBaseAppSetup?: boolean
-}
-
-function resolveBaseRpcUrl(): string {
-  const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
-  return envUrl || 'https://mainnet.base.org'
 }
 
 function parseAddress(input: unknown): Address | null {
@@ -262,7 +258,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       isSubAccountTarget && connectedAddress.toLowerCase() === parentCswAddress.toLowerCase()
     const publicClient = createPublicClient({
       chain: base,
-      transport: http(resolveBaseRpcUrl()),
+      transport: http(resolveServerBaseRpcUrl()),
     })
     if (!connectedIsCswSelf && !connectedIsParentFundingSubAccount) {
       const connectedIsOwner = await isOwnerIfDeployed(publicClient, cswAddress, connectedAddress)

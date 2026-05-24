@@ -35,6 +35,7 @@ import {
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx, isOwner as isOwnerOnChain } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 import { createAgentWallet } from '../../../server/_lib/wallet/privyWalletApi.js'
+import { resolveServerBaseRpcUrl } from '../../../server/_lib/onchain/baseRpcUrl.js'
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 
@@ -68,11 +69,6 @@ function resolveStatusCode(error: unknown): number {
   }
   if (lower.includes('not configured')) return 503
   return 500
-}
-
-function resolveBaseRpcUrl(): string {
-  const envUrl = (process.env.BASE_RPC_URL ?? '').trim()
-  return envUrl || 'https://mainnet.base.org'
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -114,7 +110,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 3. Check if the agent wallet is already an owner of the CSW on-chain.
     const publicClient = createPublicClient({
       chain: base,
-      transport: http(resolveBaseRpcUrl()),
+      transport: http(resolveServerBaseRpcUrl()),
     })
 
     const alreadyOwner = await isOwnerOnChain(publicClient, canonicalCswAddress, agentWallet.address)

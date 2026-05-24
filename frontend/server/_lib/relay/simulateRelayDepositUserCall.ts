@@ -50,7 +50,19 @@ export type RelayDepositSimulation = {
 }
 
 function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message.trim()) return error.message
+  if (error instanceof Error && error.message.trim()) {
+    const message = error.message.trim()
+    if (
+      message.toLowerCase().includes('fetch failed') &&
+      (message.includes('127.0.0.1:8545') || message.includes('localhost:8545'))
+    ) {
+      return (
+        'Base RPC is pointed at a local Anvil fork (127.0.0.1:8545) that is not reachable. ' +
+        'Owner-install preview requires live Base mainnet RPC. Set BASE_RPC_URL to a public Base endpoint (or unset it) and rebuild preview.'
+      )
+    }
+    return message
+  }
   if (typeof error === 'string' && error.trim()) return error
   return 'unknown simulation error'
 }
