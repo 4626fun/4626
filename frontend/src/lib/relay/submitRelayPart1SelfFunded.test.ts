@@ -299,18 +299,15 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
-  it('session-key prepared-calls signers prefer delegated session-key EOA', () => {
+  it('session-key prepared-calls signers use ownerAtIndex not substituted EOAs', () => {
     const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
       parsedOwnerAddress: SESSION_KEY_OWNER,
       recoveredEip191Address: '0x87bEB08622dc13c7259dc9c9DD41CDc9d89A2C9b',
       recoveredRawAddress: '0xa57C36026Fe64284Bc45904fbe72685d897032ce',
+      resolvedOwnerAtIndexAddress: SESSION_KEY_OWNER,
       sessionKeyOwner: true,
     })
-    expect(candidates.map((candidate) => candidate.mode)).toEqual([
-      'recovered_session_key_eoa',
-      'recovered_session_key_eoa_eip191',
-      'owner_at_index',
-    ])
+    expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index_resolved'])
   })
 
   it('session-key prepared-calls signers include funding CSW fallback', () => {
@@ -325,15 +322,15 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
-  it('uses full_wrapper_secp256k1 first for Base App session-key owner index 2', () => {
+  it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
-      'full_wrapper_secp256k1',
       'inner_secp256k1',
+      'full_wrapper_secp256k1',
       'auto',
     ])
     expect(
       listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: null, sessionKeyOwner: true }),
-    ).toEqual(['full_wrapper_secp256k1', 'inner_secp256k1', 'auto'])
+    ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
   })
 
   it('prepare capabilities request required native funds only (no paymaster hint)', () => {
@@ -727,7 +724,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         bundlerOnly: true,
         hashMode: 'entrypoint_v06_chain_session_key_primary',
       }),
-    ).toEqual(['personal_sign_data_address', 'personal_sign_address_data'])
+    ).toEqual(['personal_sign_data_address', 'personal_sign_address_data', 'eth_sign_address_data'])
   })
 
   it('detects passkey vs session-key ECDSA signatures', () => {
@@ -884,8 +881,18 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
   })
 
-  it('skips prepared-calls and bundler when replaySafe sig fails validateUserOp preflight', async () => {
+  it('skips prepared-calls when replaySafe sig fails validateUserOp preflight', async () => {
     validateUserOpPreflightSpy.mockResolvedValue(false)
+    mockBundlerRequest.mockImplementation(async (args: { method?: string }) => {
+      if (args.method === 'eth_estimateUserOperationGas') {
+        return {
+          callGasLimit: '0x5208',
+          verificationGasLimit: '0x5208',
+          preVerificationGas: '0x5208',
+        }
+      }
+      throw new Error('Invalid UserOp signature or paymaster signature')
+    })
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -947,13 +954,14 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         appendEvent,
         customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
-    ).rejects.toThrow(/Could not submit the Relay deposit UserOp|signature verification failed|no matching signer/i)
+    ).rejects.toThrow(/Could not submit the Relay deposit UserOp|signature verification failed|Invalid UserOp signature/i)
 
-    expect(mockBundlerRequest).not.toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith(
       'relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1',
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_validate_user_op_preflight=1')
+    expect(appendEvent).toHaveBeenCalledWith(
+      expect.stringContaining('relay_part1:session_key_bundler_despite_validate_user_op_preflight=1'),
+    )
     expect(appendEvent).toHaveBeenCalledWith(
       expect.stringContaining('relay_part1:onchain_sig_preflight=advisory_invalid_session_key'),
     )

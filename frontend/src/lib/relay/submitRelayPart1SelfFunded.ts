@@ -215,7 +215,7 @@ export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   sessionKeyOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
   if (params.sessionKeyOwner || params.parsedOwnerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX) {
-    return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
+    return ['inner_secp256k1', 'full_wrapper_secp256k1', 'auto']
   }
   return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
 }
@@ -535,10 +535,7 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   }
 
   if (params.sessionKeyOwner) {
-    // Base App session keys often sign with a delegated EOA that differs from
-    // ownerAtIndex(2) bytes — wallet_sendPreparedCalls must target that signer.
-    pushUnique(params.recoveredRawAddress, 'recovered_session_key_eoa')
-    pushUnique(params.recoveredEip191Address, 'recovered_session_key_eoa_eip191')
+    // Recipe: signature.data.address = ownerAtIndex(2), not substituted sub-account EOAs.
     pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
     pushUnique(params.parsedOwnerAddress, 'owner_at_index')
     pushUnique(params.fundingCsw ?? null, 'funding_csw_session_key')
@@ -657,6 +654,8 @@ async function ensureSelfAuthWalletAuthorized(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
   appendEvent: (row: string) => void
+  /** Base App session-key CSWs often expose a delegated EOA in eth_accounts, not the CSW. */
+  sessionKeyOwner?: boolean
 }): Promise<void> {
   const expected = getAddress(params.fundingCsw)
   try {
@@ -668,6 +667,10 @@ async function ensureSelfAuthWalletAuthorized(params: {
     }
     if (!normalized.includes(expected.toLowerCase())) {
       params.appendEvent(`relay_part1:warn funding_csw_not_in_authorized_accounts expected=${expected}`)
+      if (params.sessionKeyOwner) {
+        params.appendEvent('relay_part1:session_key_skip_strict_account_match=1')
+        return
+      }
       throw new Error(
         `Incorrect address: Base App is connected to ${accounts[0] ?? 'another wallet'}, not your 4626 smart wallet (${expected}). Close 4626 in Base App, reopen https://4626.fun/waitlist?setup=owner-install, and retry Enable 4626 signing.`,
       )
@@ -718,20 +721,11 @@ export function listSelfAuthSignMethods(params: {
     // "Incorrect address" when the session-key delegated EOA is passed as signer.
     return ['typed_data_v4_csw']
   }
-  // EntryPoint-hash session-key lane: personal_sign only. eth_signTypedData_v4 on
-  // non-replay-safe hashes can trigger an "Incorrect address" modal — see recipe doc.
+  // EntryPoint-hash session-key lane: personal_sign / eth_sign with funding CSW only.
+  // ownerAtIndex(2) bytes are not the Base App connected account — passing them
+  // as personal_sign address triggers "Incorrect address / not connected" modals.
   if (sessionKeyContext) {
-    const methods: SelfAuthSignMethod[] = [
-      'personal_sign_data_address',
-      'personal_sign_address_data',
-    ]
-    if (params.sessionKeySignerAddress) {
-      methods.unshift(
-        'personal_sign_data_session_key',
-        'personal_sign_session_key_data',
-      )
-    }
-    return methods
+    return ['personal_sign_data_address', 'personal_sign_address_data', 'eth_sign_address_data']
   }
   const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
@@ -1125,6 +1119,10 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
     appendEvent: params.appendEvent,
+    sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
+      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+      ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+    }),
   })
   const signature = await requestSelfAuthSignature({
     walletRequest: params.walletRequest,
@@ -1706,7 +1704,7 @@ async function sendSignedPreparedUserOp(params: {
       const entryPointHash = entryPointUserOpHash
       let alignedRecoveredInnerSigner: `0x${string}` | null = null
       const sukantoReplaySafeLane = sessionKeyOwner && isSelfAuthReplaySafeSignHashMode(input.hashMode)
-      if (sukantoReplaySafeLane) {
+      if (sessionKeyOwner) {
         const preferredOwnerIndex =
           params.ownerDiscovery?.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX
         const aligned = await alignSelfAuthSessionKeySignature({
@@ -1770,8 +1768,16 @@ async function sendSignedPreparedUserOp(params: {
         signature,
         appendEvent: params.appendEvent,
       })
-      if (validateUserOpOk) {
+      const allowSessionKeyBundlerFallback =
+        sessionKeyOwner &&
+        sessionKeyEcdsaOk &&
+        parseCoinbaseSignatureWrapper(signature) != null &&
+        !isSelfAuthReplaySafeSignHashMode(input.hashMode)
+      if (validateUserOpOk || allowSessionKeyBundlerFallback) {
         lastBundlerSignature = signature
+        if (!validateUserOpOk && allowSessionKeyBundlerFallback) {
+          params.appendEvent('relay_part1:session_key_bundler_despite_validate_user_op_preflight=1')
+        }
       } else {
         params.appendEvent('relay_part1:skip_bundler_validate_user_op_preflight=1')
       }
@@ -1786,7 +1792,7 @@ async function sendSignedPreparedUserOp(params: {
       }
 
       const bypassSdkViaBundler =
-        validateUserOpOk &&
+        (validateUserOpOk || allowSessionKeyBundlerFallback) &&
         sessionKeyOwner &&
         (isSelfAuthReplaySafeSignHashMode(input.hashMode) || sessionKeyEcdsaOk)
 
@@ -1871,7 +1877,7 @@ async function sendSignedPreparedUserOp(params: {
         return preparedTx
       }
 
-      if (params.customOwnerPolicyToken && validateUserOpOk) {
+      if (params.customOwnerPolicyToken && (validateUserOpOk || allowSessionKeyBundlerFallback)) {
         try {
           return await submitSignedPreparedUserOpViaBundler({
             publicClient: params.publicClient,
@@ -1890,7 +1896,7 @@ async function sendSignedPreparedUserOp(params: {
           )
           lastSignatureError = bundlerError
         }
-      } else if (params.customOwnerPolicyToken && !validateUserOpOk) {
+      } else if (params.customOwnerPolicyToken && !validateUserOpOk && !allowSessionKeyBundlerFallback) {
         params.appendEvent('relay_part1:skip_bundler_inline_validate_user_op_preflight=1')
       }
 
@@ -2117,6 +2123,10 @@ async function submitViaPreparedCallsSelfFunded(params: {
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
     appendEvent: params.appendEvent,
+    sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
+      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+      ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+    }),
   })
 
   await assertSelfFundedPrefundBudget({
