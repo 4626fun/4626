@@ -7,6 +7,7 @@ import { useAddOwnerFlow } from '@/features/accountSetup/addOwner/useAddOwnerFlo
 import type { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { getAppBaseUrl } from '@/lib/env/host'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { resolveOwnerMutationSignerContext } from '@/lib/relay/resolveOwnerMutationSignerContext'
 
@@ -70,6 +71,7 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     [canonicalCswAddress, ownerSignerAddress, privyEmbeddedEoaAddress],
   )
   const isSelfAuthSession = signerContext.isSelfAuthSession
+  const inBaseApp = isBaseAppInAppContext()
 
   const passkeyOnlyOwnerInstallBlocked =
     requiresBaseAppForOwnerInstall &&
@@ -125,7 +127,9 @@ export function AddOwnerSigningPanel(props: AddOwnerSigningPanelProps) {
     <div className={`space-y-3 ${className}`} data-testid="add-owner-signing-panel">
       <p className="text-xs leading-relaxed text-zinc-500">
         {inlineRelay
-          ? 'Add your Privy embedded signer as a CSW owner through Relay: build preview, review deposit, then submit.'
+          ? inBaseApp && isSelfAuthSession
+            ? 'Approve with your Base App passkey: build preview, confirm the Relay deposit, then wait for Part 2 to add your 4626 signer.'
+            : 'Add your Privy embedded signer as a CSW owner through Relay: build preview, review deposit, then submit.'
           : (
               <>
                 Owner install runs on <span className="font-mono text-zinc-300">/add-owner</span> as a two-step

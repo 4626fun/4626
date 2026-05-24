@@ -11,6 +11,7 @@ Related runbooks:
 - [Relay-Sponsored Owner Mutation Flow](/operations/relay-sponsored-owner-mutation-flow) — two-wallet architecture
 - [Relay Vaults evaluation](/research/relay-vaults-evaluation) — **not** the same product as Settlement / relay-kit
 - [CSW Recovery Playbook](/operations/csw-recovery-playbook) — passkey / prepared-calls recovery lanes
+- [Base App session-key Relay Part 1 recipe](/operations/base-app-session-key-relay-part1-recipe) — passkey-first CSW observed lane + vendor questions
 
 ## Products (do not conflate)
 

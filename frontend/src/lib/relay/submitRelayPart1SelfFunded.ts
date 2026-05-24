@@ -23,6 +23,10 @@ import {
   type PreparedCallsSignaturePayloadMode,
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
+  discoverSelfAuthOwnerFromChain,
+  mergeSelfAuthOwnerDiscovery,
+} from '@/lib/wallet/cswSelfAuthOwnerDiscovery'
+import {
   getUserOpHashWithoutChainIdLocal,
   parseCoinbaseSignatureWrapper,
   preflightOwnerKeyMismatch,
@@ -546,6 +550,14 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     params.appendEvent(`relay_part1:parsed_owner_index=${parsedOwnerIndex}`)
   }
   if (params.ownerDiscovery) {
+    const merged = mergeSelfAuthOwnerDiscovery(params.ownerDiscovery, {
+      ownerIndex: parsedOwnerIndex,
+      ownerSignerAddress: preparedCallsSignerAddress,
+      sessionKeyOwner,
+    })
+    params.ownerDiscovery.ownerIndex = merged.ownerIndex
+    params.ownerDiscovery.ownerSignerAddress = merged.ownerSignerAddress
+    params.ownerDiscovery.sessionKeyOwner = merged.sessionKeyOwner
     recordSelfAuthOwnerDiscovery({
       discovery: params.ownerDiscovery,
       ownerIndex: parsedOwnerIndex,
@@ -847,7 +859,8 @@ async function sendSignedPreparedUserOp(params: {
 
       const sessionKeyOwner =
         params.ownerDiscovery?.sessionKeyOwner === true ||
-        parsedOwnerIndex === 2
+        parsedOwnerIndex === 2 ||
+        params.ownerDiscovery?.ownerIndex === 2
 
       try {
         const preparedCallsTx = await trySendStrippedPreparedCalls({
@@ -858,8 +871,9 @@ async function sendSignedPreparedUserOp(params: {
           chainIdHex: params.chainIdHex,
           strippedUserOp,
           signature,
-          parsedOwnerIndex,
-          preparedCallsSignerAddress,
+          parsedOwnerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
+          preparedCallsSignerAddress:
+            preparedCallsSignerAddress ?? params.ownerDiscovery?.ownerSignerAddress ?? null,
           sessionKeyOwner,
           appendEvent: params.appendEvent,
         })
@@ -1179,10 +1193,24 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     )
   }
 
+  const chainSeed = await discoverSelfAuthOwnerFromChain({
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    requirePasskeyAtZero: true,
+  })
   const ownerDiscovery: SelfAuthOwnerDiscovery = {
-    ownerIndex: null,
-    ownerSignerAddress: null,
-    sessionKeyOwner: false,
+    ownerIndex: chainSeed.ownerIndex,
+    ownerSignerAddress: chainSeed.ownerSignerAddress,
+    sessionKeyOwner: chainSeed.sessionKeyOwner,
+  }
+  if (chainSeed.sessionKeyOwner) {
+    params.appendEvent('relay_part1:preflight_session_key_owner=1')
+    if (chainSeed.ownerSignerAddress) {
+      params.appendEvent(`relay_part1:preflight_session_key_signer=${chainSeed.ownerSignerAddress}`)
+    }
+  }
+  if (chainSeed.passkeyFirst) {
+    params.appendEvent('relay_part1:preflight_passkey_first_csw=1')
   }
 
   params.appendEvent('relay_part1:skip_send_calls_self_auth')

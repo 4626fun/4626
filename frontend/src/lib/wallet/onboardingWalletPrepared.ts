@@ -1,5 +1,6 @@
 import { getAddress, recoverAddress, type Hex } from 'viem'
 
+import { KNOWN_BASE_APP_SESSION_KEY_SIGNER } from '@/lib/wallet/cswSelfAuthOwnerDiscovery'
 import {
   classifyWebAuthnOwnerSignature,
   hexByteLength,
@@ -593,7 +594,8 @@ export async function _submitOwnerViaPreparedCallsAllowAnyOwner(params: {
     throw new Error('personal_sign did not return a valid signature.')
   }
   const wrappedSignature = parseCoinbaseSignatureWrapper(signature)
-  const signerAddress = wrappedSignature?.ownerIndex === 2 ? '0xCf8D17Ce01B73637ef936fe7c47bA7100b820142' : params.sender
+  const signerAddress =
+    wrappedSignature?.ownerIndex === 2 ? KNOWN_BASE_APP_SESSION_KEY_SIGNER : params.sender
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
     sender: params.sender,
     signature,
