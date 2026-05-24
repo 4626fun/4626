@@ -135,6 +135,8 @@ export const RATE_LIMITS = {
   workspaceRead: { windowMs: 60_000, maxRequests: 120 },
   // Creator quickstart onboarding: 20 per minute per principal
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  // Relay owner-mutation status polling: up to ~30 polls/min for 8 minutes
+  relayIntentStatus: { windowMs: 60_000, maxRequests: 300 },
   // Keeper runtime ingest reads: 120 per minute per client IP
   creRuntimeIngestRead: { windowMs: 60_000, maxRequests: 120 },
   // Keeper runtime ingest writes: 60 per minute per client IP

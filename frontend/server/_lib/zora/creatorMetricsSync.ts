@@ -151,6 +151,17 @@ function getBasePublicClient() {
   })
 }
 
+function getArchivePublicClient(): ReturnType<typeof getBasePublicClient> | null {
+  const archiveUrl = (process.env.CREATOR_METRICS_ARCHIVE_RPC_URL ?? '').trim()
+  if (!archiveUrl) return null
+  const primaryUrl = (process.env.BASE_RPC_URL ?? '').trim()
+  if (archiveUrl === primaryUrl) return null
+  return createPublicClient({
+    chain: BASE_CHAIN_NAME,
+    transport: http(archiveUrl),
+  })
+}
+
 function extractList(response: any): any {
   return response?.data?.exploreList ?? response?.data?.creatorCoins ?? response?.data?.coins ?? null
 }
@@ -560,6 +571,165 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
   }
 }
 
+const DEFAULT_COIN_UPSERT_BATCH_SIZE = 200
+const DEFAULT_BLOCK_FETCH_CONCURRENCY = 32
+
+type ChainScanCoinRow = {
+  coinAddress: string
+  creatorAddress: string
+  createdAtBlock: bigint
+  feeModel: 'legacy' | 'v4'
+  blockNumber: bigint
+  logIndex: number
+}
+
+function enrichDuringBackfillEnabled(): boolean {
+  const raw = (process.env.CREATOR_METRICS_ENRICH_DURING_BACKFILL ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+async function prefetchBlockTimestamps(
+  client: ReturnType<typeof getBasePublicClient>,
+  blockNumbers: readonly bigint[],
+  cache: Map<string, string>,
+): Promise<void> {
+  const concurrency = parsePositiveInt(
+    process.env.CREATOR_METRICS_BLOCK_FETCH_CONCURRENCY,
+    DEFAULT_BLOCK_FETCH_CONCURRENCY,
+  )
+  const missing = [...new Set(blockNumbers.map((blockNumber) => blockNumber.toString()))].filter(
+    (key) => !cache.has(key),
+  )
+  for (let i = 0; i < missing.length; i += concurrency) {
+    const slice = missing.slice(i, i + concurrency)
+    await Promise.all(
+      slice.map(async (key) => {
+        const blockNumber = BigInt(key)
+        const block = await withRetry('fetch_coin_created_block', () => client.getBlock({ blockNumber }))
+        cache.set(key, timestampFromUnixSeconds(block.timestamp))
+      }),
+    )
+  }
+}
+
+async function upsertCreatorCoinBatch(db: Db, rows: ChainScanCoinRow[], cache: Map<string, string>): Promise<void> {
+  if (rows.length === 0) return
+  const batchSize = parsePositiveInt(
+    process.env.CREATOR_METRICS_COIN_UPSERT_BATCH_SIZE,
+    DEFAULT_COIN_UPSERT_BATCH_SIZE,
+  )
+  for (let i = 0; i < rows.length; i += batchSize) {
+    const slice = rows.slice(i, i + batchSize)
+    const coinAddresses = slice.map((row) => row.coinAddress)
+    const creatorAddresses = slice.map((row) => row.creatorAddress)
+    const createdAts = slice.map((row) => cache.get(row.createdAtBlock.toString()) ?? null)
+    const feeModels = slice.map((row) => row.feeModel)
+    await withRetry('upsert_creator_coin_batch', async () => {
+      await db.sql`
+        INSERT INTO creator_coins (
+          coin_address,
+          creator_address,
+          created_at,
+          chain_id,
+          market_cap_usd,
+          volume_24h_usd,
+          fees_24h_usd,
+          fee_model,
+          last_seen_at
+        )
+        SELECT
+          coin_address,
+          creator_address,
+          created_at::timestamptz,
+          ${BASE_CHAIN_ID},
+          NULL::numeric,
+          NULL::numeric,
+          NULL::numeric,
+          fee_model,
+          NOW()
+        FROM UNNEST(
+          ${coinAddresses}::text[],
+          ${creatorAddresses}::text[],
+          ${createdAts}::text[],
+          ${feeModels}::text[]
+        ) AS t(coin_address, creator_address, created_at, fee_model)
+        ON CONFLICT (coin_address) DO UPDATE SET
+          creator_address = EXCLUDED.creator_address,
+          created_at = COALESCE(creator_coins.created_at, EXCLUDED.created_at),
+          chain_id = EXCLUDED.chain_id,
+          market_cap_usd = COALESCE(creator_coins.market_cap_usd, EXCLUDED.market_cap_usd),
+          volume_24h_usd = COALESCE(creator_coins.volume_24h_usd, EXCLUDED.volume_24h_usd),
+          fees_24h_usd = COALESCE(creator_coins.fees_24h_usd, EXCLUDED.fees_24h_usd),
+          fee_model = EXCLUDED.fee_model,
+          last_seen_at = NOW();
+      `
+    })
+  }
+}
+
+function isPrunedHistoryError(error: unknown): boolean {
+  const msg = String((error as any)?.message ?? error ?? '').toLowerCase()
+  return msg.includes('pruned history') || msg.includes('history unavailable')
+}
+
+function isLogRangeTooLargeError(error: unknown): boolean {
+  const msg = String((error as any)?.message ?? error ?? '').toLowerCase()
+  return msg.includes('10,000') || msg.includes('10000') || msg.includes('too many')
+}
+
+async function fetchFactoryCoinCreatedLogsWithSplit(
+  client: ReturnType<typeof getBasePublicClient>,
+  fromBlock: bigint,
+  toBlock: bigint,
+  minSpanBlocks = 1000,
+): Promise<Awaited<ReturnType<ReturnType<typeof getBasePublicClient>['getLogs']>>> {
+  try {
+    return await client.getLogs({
+      address: ZORA_FACTORY_ADDRESS,
+      event: ZORA_FACTORY_COIN_CREATED_EVENT,
+      fromBlock,
+      toBlock,
+    })
+  } catch (error) {
+    if (fromBlock >= toBlock) throw error
+    const span = Number(toBlock - fromBlock + 1n)
+    if (span <= minSpanBlocks) throw error
+    if (!isPrunedHistoryError(error) && !isLogRangeTooLargeError(error)) throw error
+    const mid = fromBlock + (toBlock - fromBlock) / 2n
+    const [left, right] = await Promise.all([
+      fetchFactoryCoinCreatedLogsWithSplit(client, fromBlock, mid, minSpanBlocks),
+      fetchFactoryCoinCreatedLogsWithSplit(client, mid + 1n, toBlock, minSpanBlocks),
+    ])
+    return [...left, ...right]
+  }
+}
+
+async function resolveFactoryCoinCreatedLogs(
+  primaryClient: ReturnType<typeof getBasePublicClient>,
+  fromBlock: bigint,
+  toBlock: bigint,
+): Promise<{
+  logs: Awaited<ReturnType<ReturnType<typeof getBasePublicClient>['getLogs']>>
+  skippedPrunedGap: boolean
+}> {
+  try {
+    const logs = await fetchFactoryCoinCreatedLogsWithSplit(primaryClient, fromBlock, toBlock)
+    return { logs, skippedPrunedGap: false }
+  } catch (primaryError) {
+    if (!isPrunedHistoryError(primaryError)) throw primaryError
+    const archiveClient = getArchivePublicClient()
+    if (archiveClient) {
+      try {
+        const logs = await fetchFactoryCoinCreatedLogsWithSplit(archiveClient, fromBlock, toBlock)
+        return { logs, skippedPrunedGap: false }
+      } catch (archiveError) {
+        if (!isPrunedHistoryError(archiveError)) throw archiveError
+      }
+    }
+    return { logs: [], skippedPrunedGap: true }
+  }
+}
+
 export async function recomputeCreatorCounts(db: Db): Promise<void> {
   // Repair rows indexed via hot refresh before a matching creators upsert landed.
   await db.sql`
@@ -825,17 +995,19 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
         ? latestBlock
         : fromBlock + BigInt(chainScanBlockSpan - 1)
 
-      const logs = await withRetry('fetch_factory_coin_created_logs', () =>
-        client.getLogs({
-          address: ZORA_FACTORY_ADDRESS,
-          event: ZORA_FACTORY_COIN_CREATED_EVENT,
-          fromBlock,
-          toBlock,
-        }),
+      const { logs, skippedPrunedGap } = await withRetry('fetch_factory_coin_created_logs', () =>
+        resolveFactoryCoinCreatedLogs(client, fromBlock, toBlock),
       )
+      if (skippedPrunedGap) {
+        const skipNote = `pruned_history_skipped:${fromBlock.toString()}-${toBlock.toString()}`
+        coverageWarning = coverageWarning ? `${coverageWarning};${skipNote}` : skipNote
+        log.warn('[creator-metrics-sync] skipping pruned log window', { fromBlock: fromBlock.toString(), toBlock: toBlock.toString() })
+      }
 
       let lastCheckpointBlock = toBlock
       let lastCheckpointLogIndex = 0
+      const pendingRows: ChainScanCoinRow[] = []
+
       for (const entry of logs) {
         const blockNumber = entry.blockNumber ?? null
         const rawLogIndex = Number(entry.logIndex ?? 0)
@@ -852,69 +1024,30 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
           continue
         }
 
-        const blockCacheKey = blockNumber.toString()
-        let createdAt = blockTimestampCache.get(blockCacheKey) ?? null
-        if (!createdAt) {
-          const block = await withRetry('fetch_coin_created_block', () => client.getBlock({ blockNumber }))
-          createdAt = timestampFromUnixSeconds(block.timestamp)
-          blockTimestampCache.set(blockCacheKey, createdAt)
-        }
         const version = typeof args.version === 'string' ? args.version.toLowerCase() : ''
         const feeModel: 'legacy' | 'v4' = version.includes('legacy') || version.includes('v3') ? 'legacy' : 'v4'
-
-        await withRetry('upsert_creator_coin', async () => {
-          await db.sql`
-            INSERT INTO creator_coins (
-              coin_address,
-              creator_address,
-              created_at,
-              chain_id,
-              market_cap_usd,
-              volume_24h_usd,
-              fees_24h_usd,
-              fee_model,
-              last_seen_at
-            ) VALUES (
-              ${coinAddress},
-              ${creatorAddress},
-              ${createdAt},
-              ${BASE_CHAIN_ID},
-              ${null},
-              ${null},
-              ${null},
-              ${feeModel},
-              NOW()
-            )
-            ON CONFLICT (coin_address) DO UPDATE SET
-              creator_address = EXCLUDED.creator_address,
-              created_at = COALESCE(EXCLUDED.created_at, creator_coins.created_at),
-              chain_id = EXCLUDED.chain_id,
-              market_cap_usd = COALESCE(creator_coins.market_cap_usd, EXCLUDED.market_cap_usd),
-              volume_24h_usd = COALESCE(creator_coins.volume_24h_usd, EXCLUDED.volume_24h_usd),
-              fees_24h_usd = COALESCE(creator_coins.fees_24h_usd, EXCLUDED.fees_24h_usd),
-              fee_model = EXCLUDED.fee_model,
-              last_seen_at = NOW();
-          `
+        pendingRows.push({
+          coinAddress,
+          creatorAddress,
+          createdAtBlock: blockNumber,
+          feeModel,
+          blockNumber,
+          logIndex: rawLogIndex,
         })
+      }
 
-        await withRetry('upsert_creator', async () => {
-          await db.sql`
-            INSERT INTO creators (creator_address, first_seen_at, coin_count, last_seen_at)
-            VALUES (${creatorAddress}, ${createdAt}, 0, NOW())
-            ON CONFLICT (creator_address) DO UPDATE SET
-              first_seen_at = COALESCE(
-                LEAST(creators.first_seen_at, EXCLUDED.first_seen_at),
-                creators.first_seen_at,
-                EXCLUDED.first_seen_at
-              ),
-              last_seen_at = GREATEST(creators.last_seen_at, EXCLUDED.last_seen_at);
-          `
-        })
-
-        coinsUpserted += 1
-        sampledCreators += 1
-        lastCheckpointBlock = blockNumber
-        lastCheckpointLogIndex = rawLogIndex
+      if (pendingRows.length > 0) {
+        await prefetchBlockTimestamps(
+          client,
+          pendingRows.map((row) => row.createdAtBlock),
+          blockTimestampCache,
+        )
+        await upsertCreatorCoinBatch(db, pendingRows, blockTimestampCache)
+        coinsUpserted += pendingRows.length
+        sampledCreators += pendingRows.length
+        const lastRow = pendingRows[pendingRows.length - 1]!
+        lastCheckpointBlock = lastRow.blockNumber
+        lastCheckpointLogIndex = lastRow.logIndex
       }
 
       checkpointBlock = lastCheckpointBlock
@@ -936,7 +1069,9 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
 
     reachedChainTip = fromBlock > latestBlock
 
-    if (sdk) {
+    const shouldEnrichCoins =
+      sdk && (mode !== 'backfill' || reachedChainTip || enrichDuringBackfillEnabled())
+    if (shouldEnrichCoins) {
       const enrichCandidatesResult = await db.sql`
         SELECT coin_address, fee_model
         FROM creator_coins
@@ -1087,6 +1222,14 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_sync_failed'
+    try {
+      await withRetry('recompute_creator_counts_on_failure', () => recomputeCreatorCounts(db))
+      await recomputeAndCacheCreatorMetricsTotals(db)
+    } catch (repairError) {
+      log.warn('[creator-metrics-sync] post-failure creator repair failed', {
+        error: repairError instanceof Error ? repairError.message : String(repairError),
+      })
+    }
     await db.sql`
       UPDATE creator_metrics_state
       SET

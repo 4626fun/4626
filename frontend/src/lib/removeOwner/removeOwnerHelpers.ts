@@ -240,6 +240,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** Browser CSP blocks direct api.relay.link fetches — proxy via same-origin API. */
+export function resolveRelayStatusFetchUrl(statusEndpoint: string): string {
+  if (typeof window === 'undefined') return statusEndpoint
+  try {
+    const url = new URL(statusEndpoint)
+    if (url.hostname !== 'api.relay.link' || url.pathname !== '/intents/status/v3') {
+      return statusEndpoint
+    }
+    const requestId = url.searchParams.get('requestId')
+    const orderId = url.searchParams.get('orderId')
+    const proxy = new URL('/api/relay/intent-status', window.location.origin)
+    if (requestId) {
+      proxy.searchParams.set('requestId', requestId)
+    } else if (orderId) {
+      proxy.searchParams.set('orderId', orderId)
+    } else {
+      return statusEndpoint
+    }
+    return `${proxy.pathname}${proxy.search}`
+  } catch {
+    return statusEndpoint
+  }
+}
+
 export async function pollRelayStatusEndpoint(params: {
   statusEndpoint: string
   timeoutMs?: number
@@ -272,11 +296,20 @@ export async function pollRelayStatusEndpoint(params: {
       }
     }
     try {
-      const response = await fetch(params.statusEndpoint, {
+      const fetchUrl = resolveRelayStatusFetchUrl(params.statusEndpoint)
+      const response = await fetch(fetchUrl, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       })
-      const raw = await response.json().catch(() => null)
+      const payload = await response.json().catch(() => null)
+      const raw =
+        fetchUrl.startsWith('/api/relay/intent-status') &&
+        payload &&
+        typeof payload === 'object' &&
+        payload !== null &&
+        'data' in payload
+          ? (payload as { data?: unknown }).data ?? null
+          : payload
       const parsed = parseRelayIntentStatus(raw)
       lastRaw = raw
       lastTxHash = parsed.txHash ?? lastTxHash

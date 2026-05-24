@@ -6,6 +6,7 @@ import {
   resolveRelayIndexRequestIds,
   resolveRelayStatusEndpoints,
   resolveRelayStatusFallbackRequestId,
+  resolveRelayStatusFetchUrl,
   resolveRelayStatusRequestId,
   mapRemoveOwnerSubmissionError,
 } from '@/lib/removeOwner/removeOwnerHelpers'
@@ -39,7 +40,7 @@ describe('removeOwner relay status helpers', () => {
     } as Pick<OwnerMutationRelayFlow, 'orderId' | 'requestId'>
 
     expect(resolveRelayIndexRequestIds(relay)).toEqual([relay.orderId, relay.requestId])
-    expect(resolveRelayStatusRequestId(relay)).toBe(relay.orderId)
+    expect(resolveRelayStatusRequestId(relay)).toBe(relay.requestId)
     expect(resolveRelayStatusFallbackRequestId(relay)).toBe(relay.requestId)
     expect(resolveRelayStatusEndpoints(relay)).toEqual([
       'https://api.relay.link/intents/status/v3?requestId=0x1111111111111111111111111111111111111111111111111111111111111111',
@@ -117,6 +118,16 @@ describe('removeOwner relay status helpers', () => {
     expect(mapped).toMatch(/chrome or safari/i)
   })
 
+  it('rewrites Relay status URLs to the same-origin proxy in browser contexts', () => {
+    vi.stubGlobal('window', { location: { origin: 'https://app.4626.fun' } })
+    const endpoint =
+      'https://api.relay.link/intents/status/v3?requestId=0x1111111111111111111111111111111111111111111111111111111111111111'
+    expect(resolveRelayStatusFetchUrl(endpoint)).toBe(
+      '/api/relay/intent-status?requestId=0x1111111111111111111111111111111111111111111111111111111111111111',
+    )
+    vi.unstubAllGlobals()
+  })
+
   it('fail-fast polls when Relay returns unknown', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       json: async () => ({ status: 'unknown' }),
@@ -132,6 +143,10 @@ describe('removeOwner relay status helpers', () => {
     expect(result.done).toBe(true)
     expect(result.success).toBe(false)
     expect(fetchMock.mock.calls.length).toBe(1)
+    const calledUrl = String(fetchMock.mock.calls[0]?.[0] ?? '')
+    expect(calledUrl.startsWith('/api/relay/intent-status') || calledUrl.includes('api.relay.link')).toBe(
+      true,
+    )
     vi.unstubAllGlobals()
   })
 

@@ -17,6 +17,7 @@ import {
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
+import { detectInAppEnvironment, isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import {
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
@@ -312,9 +313,15 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   )
 }
 
+function isRelayPart1UsdcPaymasterLandedError(error: unknown): boolean {
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return message.includes('usdc paymaster')
+}
+
 /** Do not fall through to a second Part 1 lane — user already signed or wallet RPC is broken. */
 function isNonCascadeRelayPart1Error(error: unknown): boolean {
   if (isUserRejectedWalletAction(error)) return true
+  if (isRelayPart1UsdcPaymasterLandedError(error)) return true
   const message = formatRelayPart1Error(error).toLowerCase()
   return (
     message.includes('failed to fetch rpc request') ||
@@ -592,6 +599,13 @@ async function sendSignedPreparedUserOp(params: {
   const strippedUserOp = params.signAfterPaymasterStrip
     ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
     : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
+
+  // Base App `wallet_sendPreparedCalls` re-injects USDC paymaster even when we strip
+  // paymasterAndData — submit the stripped UserOp via bundler only.
+  if (params.signAfterPaymasterStrip) {
+    params.appendEvent('relay_part1:skip_send_prepared_calls_after_paymaster_strip')
+    throw new RelayPart1PreparedUserOpHandoff(strippedUserOp, signature)
+  }
 
   const payloadModes = listSelfAuthPreparedCallsSignaturePayloadModes({
     parsedOwnerIndex,
@@ -927,18 +941,23 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     sessionKeyOwner: false,
   }
 
-  try {
-    return await submitViaSendCallsSelfFunded({
-      ...params,
-      publicClient: params.publicClient,
-    })
-  } catch (sendCallsError) {
-    if (isNonCascadeRelayPart1Error(sendCallsError)) {
-      throw sendCallsError
+  const skipSendCalls = isBaseAppInAppContext(detectInAppEnvironment())
+  if (skipSendCalls) {
+    params.appendEvent('relay_part1:skip_send_calls_base_app_in_app')
+  } else {
+    try {
+      return await submitViaSendCallsSelfFunded({
+        ...params,
+        publicClient: params.publicClient,
+      })
+    } catch (sendCallsError) {
+      if (isNonCascadeRelayPart1Error(sendCallsError)) {
+        throw sendCallsError
+      }
+      params.appendEvent(
+        `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
+      )
     }
-    params.appendEvent(
-      `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
-    )
   }
 
   return await submitViaPreparedCallsSelfFunded({

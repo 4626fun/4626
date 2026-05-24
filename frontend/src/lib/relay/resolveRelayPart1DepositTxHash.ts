@@ -156,7 +156,8 @@ export async function assertRelayPart1LandedSelfFunded(params: {
 
   if (paymaster) {
     throw new Error(
-      'Base App submitted this deposit with a USDC paymaster. Relay Part 2 (addOwnerAddress) requires a self-funded UserOp (paymaster = 0). Retrying with prepare/bundler…',
+      'Base App submitted this deposit with a USDC paymaster. Relay Part 2 (addOwnerAddress) requires a self-funded UserOp (paymaster = 0). ' +
+        'Ensure your smart wallet holds enough native ETH for gas, build a fresh Relay preview, and retry — do not resubmit while Relay still shows "waiting" for an earlier deposit.',
     )
   }
 

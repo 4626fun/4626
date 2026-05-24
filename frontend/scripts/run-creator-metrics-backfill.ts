@@ -5,6 +5,7 @@
  * Usage:
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --audit-only
+ *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --fast
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --force-full --max-pages 240
  */
 
@@ -54,8 +55,23 @@ function parseArgs(argv: string[]) {
     auditOnly: flags.has('audit-only'),
     repairOnly: flags.has('repair-only'),
     forceFull: flags.has('force-full'),
+    fast: flags.has('fast'),
     maxPages: Number(map.get('max-pages') ?? ''),
   }
+}
+
+function applyFastBackfillProfile(): void {
+  const defaults: Record<string, string> = {
+    CREATOR_METRICS_MAX_CHAIN_SCAN_CHUNKS: '64',
+    CREATOR_METRICS_CHAIN_SCAN_BLOCK_SPAN: '90000',
+    CREATOR_METRICS_ENRICH_DURING_BACKFILL: '0',
+    CREATOR_METRICS_COIN_UPSERT_BATCH_SIZE: '500',
+    CREATOR_METRICS_BLOCK_FETCH_CONCURRENCY: '32',
+  }
+  for (const [key, value] of Object.entries(defaults)) {
+    if (!process.env[key]) process.env[key] = value
+  }
+  console.log('[sync] fast profile env', defaults)
 }
 
 async function auditDuplicates(db: NonNullable<Awaited<ReturnType<typeof getDb>>>) {
@@ -192,7 +208,12 @@ async function main() {
   }
 
   const maxPages = Number.isFinite(args.maxPages) && args.maxPages > 0 ? Math.floor(args.maxPages) : undefined
-  console.log('\n[sync] starting backfill', { forceFull: args.forceFull, maxPages: maxPages ?? 'default' })
+  if (args.fast) applyFastBackfillProfile()
+  console.log('\n[sync] starting backfill', {
+    forceFull: args.forceFull,
+    fast: args.fast,
+    maxPages: maxPages ?? 'default',
+  })
 
   const result = await runCreatorMetricsSync({
     forceFull: args.forceFull,
