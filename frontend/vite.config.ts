@@ -5,18 +5,56 @@ import { resolve } from 'path'
 import fs from 'fs'
 import path from 'path'
 import { createRequire } from 'module'
+import { fileURLToPath } from 'node:url'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
+function resolveFrontendRoot(): string {
+  const fromMeta = path.dirname(fileURLToPath(import.meta.url))
+  if (fs.existsSync(path.join(fromMeta, 'api', '_handlers'))) return fromMeta
+
+  const fromCwd = process.cwd()
+  if (fs.existsSync(path.join(fromCwd, 'api', '_handlers'))) return fromCwd
+  if (fs.existsSync(path.join(fromCwd, 'frontend', 'api', '_handlers'))) {
+    return path.join(fromCwd, 'frontend')
+  }
+
+  return fromMeta
+}
+
+const frontendRoot = resolveFrontendRoot()
+
+function resolveApiModulePath(relativePath: string): string {
+  const normalized = relativePath.replace(/^\.\//, '')
+  const basePath = path.join(frontendRoot, normalized)
+  if (fs.existsSync(basePath)) return basePath
+
+  for (const ext of ['.ts', '.tsx', '.js', '.mjs']) {
+    const candidate = `${basePath}${ext}`
+    if (fs.existsSync(candidate)) return candidate
+  }
+
+  throw new Error(`[vite] apiImport: module not found for ${relativePath} (resolved ${basePath})`)
+}
+
+let tsxLoader: typeof import('tsx/esm/api') | null = null
+
+async function loadApiModule(absPath: string) {
+  if (!tsxLoader) {
+    tsxLoader = await import('tsx/esm/api')
+  }
+  return tsxLoader.tsImport(absPath, import.meta.url) as Promise<{
+    default: (req: any, res: any) => any
+  }>
+}
+
 /** Keep local API handler paths out of Vite configFileDependencies (avoids full server restart + esbuild crash on every api/ edit). */
 function apiImport(relativePath: string) {
-  return () =>
-    import(/* @vite-ignore */ relativePath) as Promise<{
-      default: (req: any, res: any) => any
-    }>
+  const absPath = resolveApiModulePath(relativePath)
+  return () => loadApiModule(absPath)
 }
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'

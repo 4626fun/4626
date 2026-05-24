@@ -20,10 +20,55 @@ import {
 } from '@/lib/wallet/onboardingWalletPrepared'
 import {
   getUserOpHashWithoutChainIdLocal,
+  parseCoinbaseSignatureWrapper,
   preflightOwnerKeyMismatch,
   unwrapDoubleHexEncodedHash,
   type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
+
+export type SelfAuthOwnerDiscovery = {
+  ownerIndex: number | null
+  ownerSignerAddress: `0x${string}` | null
+}
+
+/** Base App self-auth wraps personal_sign payloads with the CSW owner slot it used. */
+export function parseSelfAuthOwnerIndexFromSignature(signature: Hex): number | null {
+  const wrapped = parseCoinbaseSignatureWrapper(signature)
+  if (
+    wrapped?.ownerIndex != null &&
+    Number.isInteger(wrapped.ownerIndex) &&
+    wrapped.ownerIndex >= 0
+  ) {
+    return wrapped.ownerIndex
+  }
+  return null
+}
+
+class RelayPart1PrepareFallbackToBundler extends Error {
+  readonly discovery: SelfAuthOwnerDiscovery
+
+  constructor(discovery: SelfAuthOwnerDiscovery) {
+    super('relay_part1_prepare_fallback_to_bundler')
+    this.name = 'RelayPart1PrepareFallbackToBundler'
+    this.discovery = discovery
+  }
+}
+
+function recordSelfAuthOwnerDiscovery(params: {
+  discovery: SelfAuthOwnerDiscovery
+  ownerIndex: number | null
+  ownerSignerAddress: `0x${string}` | null
+  appendEvent: (row: string) => void
+}): void {
+  if (params.ownerIndex != null && Number.isInteger(params.ownerIndex) && params.ownerIndex >= 0) {
+    params.discovery.ownerIndex = params.ownerIndex
+    params.appendEvent(`relay_part1:discovered_owner_index=${params.ownerIndex}`)
+  }
+  if (params.ownerSignerAddress) {
+    params.discovery.ownerSignerAddress = params.ownerSignerAddress
+    params.appendEvent(`relay_part1:discovered_owner_signer=${params.ownerSignerAddress}`)
+  }
+}
 
 type WalletRequest = (args: { method: string; params?: unknown[] }) => Promise<unknown>
 
@@ -316,7 +361,12 @@ async function signSelfAuthPreparedUserOpHash(params: {
   fundingCsw: `0x${string}`
   hashToSign: Hex
   appendEvent: (row: string) => void
-}): Promise<{ signature: Hex; preparedCallsSignerAddress: `0x${string}` | null }> {
+  ownerDiscovery?: SelfAuthOwnerDiscovery
+}): Promise<{
+  signature: Hex
+  preparedCallsSignerAddress: `0x${string}` | null
+  parsedOwnerIndex: number | null
+}> {
   params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
   const signature = (await params.walletRequest({
     method: 'personal_sign',
@@ -327,6 +377,7 @@ async function signSelfAuthPreparedUserOpHash(params: {
   }
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
+  let parsedOwnerIndex = parseSelfAuthOwnerIndexFromSignature(signature)
   try {
     const guardOutcome = await preflightOwnerKeyMismatch({
       walletRequest: params.walletRequest,
@@ -336,17 +387,35 @@ async function signSelfAuthPreparedUserOpHash(params: {
       sessionKind: 'self_auth',
     })
     if (
-      (guardOutcome.kind === 'ok' || guardOutcome.kind === 'skipped_self_auth_session_key') &&
-      guardOutcome.parsedOwnerAddress
+      guardOutcome.kind === 'ok' ||
+      guardOutcome.kind === 'skipped_self_auth_session_key' ||
+      guardOutcome.kind === 'skipped_code_bearing'
     ) {
-      preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
-      params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+      if ('parsedOwnerIndex' in guardOutcome && guardOutcome.parsedOwnerIndex != null) {
+        parsedOwnerIndex = guardOutcome.parsedOwnerIndex
+      }
+      if ('parsedOwnerAddress' in guardOutcome && guardOutcome.parsedOwnerAddress) {
+        preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
+        params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+      }
     }
   } catch {
     /* fail open — Base App webauthn payloads use sender address */
   }
 
-  return { signature, preparedCallsSignerAddress }
+  if (parsedOwnerIndex != null) {
+    params.appendEvent(`relay_part1:parsed_owner_index=${parsedOwnerIndex}`)
+  }
+  if (params.ownerDiscovery) {
+    recordSelfAuthOwnerDiscovery({
+      discovery: params.ownerDiscovery,
+      ownerIndex: parsedOwnerIndex,
+      ownerSignerAddress: preparedCallsSignerAddress,
+      appendEvent: params.appendEvent,
+    })
+  }
+
+  return { signature, preparedCallsSignerAddress, parsedOwnerIndex }
 }
 
 async function sendSignedPreparedUserOp(params: {
@@ -364,6 +433,7 @@ async function sendSignedPreparedUserOp(params: {
   chainId: number
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
+  ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<`0x${string}`> {
   const hashToSign = await resolvePreparedCallsSignHash({
     preparedUserOpRaw: params.preparedUserOpRaw,
@@ -378,6 +448,7 @@ async function sendSignedPreparedUserOp(params: {
     fundingCsw: params.fundingCsw,
     hashToSign,
     appendEvent: params.appendEvent,
+    ownerDiscovery: params.ownerDiscovery,
   })
 
   const signaturePayload = buildSendPreparedCallsSignaturePayload({
@@ -555,8 +626,18 @@ async function submitViaBundlerSelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   publicClient: PublicClient
   appendEvent: (row: string) => void
+  ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=bundler_self_funded')
+  const ownerIndexOverride =
+    params.ownerDiscovery?.ownerIndex != null &&
+    Number.isInteger(params.ownerDiscovery.ownerIndex) &&
+    params.ownerDiscovery.ownerIndex >= 0
+      ? params.ownerDiscovery.ownerIndex
+      : undefined
+  if (ownerIndexOverride != null) {
+    params.appendEvent(`relay_part1:bundler_owner_index_override=${ownerIndexOverride}`)
+  }
   await ensureSelfAuthWalletAuthorized({
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
@@ -576,6 +657,9 @@ async function submitViaBundlerSelfFunded(params: {
     smartWallet: params.fundingCsw,
     // Self-auth Base App signs via passkey against the CSW address (personal_sign [hash, csw]).
     ownerAddress: params.fundingCsw,
+    ownerIndexLookupAddress: params.ownerDiscovery?.ownerSignerAddress ?? undefined,
+    ownerIndexOverride,
+    bypassOwnerIndexCache: ownerIndexOverride != null,
     calls: [
       {
         to: getAddress(params.userCall.to),
@@ -585,7 +669,7 @@ async function submitViaBundlerSelfFunded(params: {
     ],
     skipPaymaster: true,
     retryOnPrefund: false,
-    retryOnInvalidSignature: false,
+    retryOnInvalidSignature: ownerIndexOverride == null,
     retryWithTypedDataSigning: false,
     useTypedDataSigning: false,
     userOpSignMode: 'signMessage',
@@ -602,6 +686,25 @@ async function submitViaBundlerSelfFunded(params: {
   return result.transactionHash
 }
 
+async function discoverSelfAuthOwnerForBundler(params: {
+  walletRequest: WalletRequest
+  fundingCsw: `0x${string}`
+  signatureRequestHash: Hex
+  ownerDiscovery: SelfAuthOwnerDiscovery
+  appendEvent: (row: string) => void
+}): Promise<SelfAuthOwnerDiscovery> {
+  params.appendEvent('relay_part1:lane=prepare_discover_owner_for_bundler')
+  const hashToSign = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+  await signSelfAuthPreparedUserOpHash({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    hashToSign,
+    appendEvent: params.appendEvent,
+    ownerDiscovery: params.ownerDiscovery,
+  })
+  return params.ownerDiscovery
+}
+
 async function submitViaPreparedCallsSelfFunded(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -609,6 +712,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
   chainId: number
   publicClient?: PublicClient
   appendEvent: (row: string) => void
+  ownerDiscovery: SelfAuthOwnerDiscovery
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}`
   const valueHex = normalizePreparedCallValueToHex(params.userCall.value)
@@ -670,44 +774,16 @@ async function submitViaPreparedCallsSelfFunded(params: {
       readPreparedUserOpPaymasterAndData(prepareResult.userOp),
     )
     params.appendEvent(`relay_part1:warn prepared_userop_paymaster=${paymaster ?? 'unknown'}`)
+    params.appendEvent('relay_part1:skip_strip_paymaster_to_bundler=1')
 
-    params.appendEvent('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
-    let stripError: unknown = null
-    try {
-      const strippedOp = stripUserOpPaymaster(parseWalletPreparedUserOpV06(prepareResult.userOp))
-      params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
-
-      return await sendSignedPreparedUserOp({
-        walletRequest: params.walletRequest,
-        fundingCsw: params.fundingCsw,
-        publicClient: params.publicClient!,
-        prepareResult: {
-          type: prepareResult.type,
-          chainId: prepareResult.chainId,
-          userOp: serializeUserOpForPreparedCallsSend(strippedOp),
-        },
-        preparedUserOpRaw: prepareResult.userOp,
-        signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
-        signAfterPaymasterStrip: true,
-        chainId: params.chainId,
-        chainIdHex,
-        appendEvent: params.appendEvent,
-      })
-    } catch (error) {
-      stripError = error
-      params.appendEvent(
-        `relay_part1:strip_paymaster_error=${formatRelayPart1Error(error).slice(0, 220)}`,
-      )
-    }
-
-    if (stripError) {
-      throw stripError
-    }
-
-    params.appendEvent('relay_part1:warn send_calls_blocked_paymaster_injected')
-    throw new Error(
-      'Base App injected a USDC paymaster for this deposit. That path stalls Relay Part 2 (addOwnerAddress). Tap Rebuild preview, then retry Enable 4626 signing so we can submit a self-funded UserOp instead.',
-    )
+    const discovery = await discoverSelfAuthOwnerForBundler({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      signatureRequestHash: prepareResult.signatureRequest.hash as Hex,
+      ownerDiscovery: params.ownerDiscovery,
+      appendEvent: params.appendEvent,
+    })
+    throw new RelayPart1PrepareFallbackToBundler(discovery)
   }
 
   params.appendEvent('relay_part1:prepared_userop_paymaster=0x0')
@@ -727,6 +803,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
     chainId: params.chainId,
     chainIdHex,
     appendEvent: params.appendEvent,
+    ownerDiscovery: params.ownerDiscovery,
   })
 }
 
@@ -735,8 +812,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
  * Lane order for Base App self-auth (minimize passkey prompts):
- *   1. `wallet_prepareCalls` → strip paymaster if needed → `wallet_sendPreparedCalls`
- *   2. Direct self-funded bundler UserOp (`skipPaymaster: true`, single personal_sign)
+ *   1. `wallet_prepareCalls` → self-funded `wallet_sendPreparedCalls` when paymaster=0
+ *   2. When Base App injects paymaster: one discover-sign → self-funded bundler with owner index
+ *   3. Direct self-funded bundler UserOp fallback (`skipPaymaster: true`)
  *
  * `wallet_sendCalls` is intentionally omitted — Base App routes it through CDP paymaster,
  * which stalls Relay Part 2 (solver `addOwnerAddress`).
@@ -758,6 +836,10 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   }
 
   const allowBundlerFallback = params.allowBundlerFallback !== false
+  const ownerDiscovery: SelfAuthOwnerDiscovery = {
+    ownerIndex: null,
+    ownerSignerAddress: null,
+  }
 
   let lastError: unknown = null
 
@@ -765,15 +847,20 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     return await submitViaPreparedCallsSelfFunded({
       ...params,
       publicClient: params.publicClient,
+      ownerDiscovery,
     })
   } catch (preparedError) {
-    lastError = preparedError
-    if (isNonCascadeRelayPart1Error(preparedError)) {
-      throw preparedError
+    if (preparedError instanceof RelayPart1PrepareFallbackToBundler) {
+      lastError = null
+    } else {
+      lastError = preparedError
+      if (isNonCascadeRelayPart1Error(preparedError)) {
+        throw preparedError
+      }
+      params.appendEvent(
+        `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
+      )
     }
-    params.appendEvent(
-      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
-    )
   }
 
   if (!allowBundlerFallback) {
@@ -789,6 +876,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
       userCall: params.userCall,
       publicClient: params.publicClient,
       appendEvent: params.appendEvent,
+      ownerDiscovery,
     })
   } catch (bundlerError) {
     lastError = bundlerError
