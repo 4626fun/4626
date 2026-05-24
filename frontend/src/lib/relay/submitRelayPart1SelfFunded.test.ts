@@ -238,6 +238,16 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
+  it('session-key prepared-calls signers skip ecrecover guesses', () => {
+    const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
+      parsedOwnerAddress: SESSION_KEY_OWNER,
+      recoveredEip191Address: '0x87bEB08622dc13c7259dc9c9DD41CDc9d89A2C9b',
+      recoveredRawAddress: '0xa57C36026Fe64284Bc45904fbe72685d897032ce',
+      sessionKeyOwner: true,
+    })
+    expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index'])
+  })
+
   it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
       'inner_secp256k1',

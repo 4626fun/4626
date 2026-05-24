@@ -274,15 +274,17 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
     candidates.push(entry)
   }
 
-  // Never sign wallet_prepareCalls' paymaster-included hash when submitting a stripped userOp.
+  // Session-key CSWs (owner[2]) validate stripped self-funded UserOps on the no-chain domain.
   if (params.preferSessionKeyNoChain) {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
-    pushUnique(primary)
+    if (primary.mode !== 'entrypoint_v06_no_chain') {
+      pushUnique(primary)
+    }
   } else {
     pushUnique(primary)
-  }
-  if (!params.preferSessionKeyNoChain && primary.mode !== 'entrypoint_v06_no_chain') {
-    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
+    if (primary.mode !== 'entrypoint_v06_no_chain') {
+      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
+    }
   }
   if (primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash') {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_unmatched_fallback' })
@@ -300,6 +302,8 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   recoveredRawAddress?: `0x${string}` | null
   recoveredEip191Address?: `0x${string}` | null
   resolvedOwnerAtIndexAddress?: `0x${string}` | null
+  /** When true, only on-chain owner slot addresses — skip ecrecover guesses. */
+  sessionKeyOwner?: boolean
 }): Array<{ address: `0x${string}`; mode: string }> {
   const candidates: Array<{ address: `0x${string}`; mode: string }> = []
   const pushUnique = (address: `0x${string}` | null | undefined, mode: string) => {
@@ -311,8 +315,10 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
 
   pushUnique(params.parsedOwnerAddress, 'owner_at_index')
   pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
-  pushUnique(params.recoveredEip191Address, 'recovered_eip191')
-  pushUnique(params.recoveredRawAddress, 'recovered_raw')
+  if (!params.sessionKeyOwner) {
+    pushUnique(params.recoveredEip191Address, 'recovered_eip191')
+    pushUnique(params.recoveredRawAddress, 'recovered_raw')
+  }
   return candidates
 }
 
@@ -541,7 +547,13 @@ function isBundlerSignatureRejectedError(error: unknown): boolean {
 }
 
 function isPreparedCallsSignatureRejectedError(error: unknown): boolean {
-  return isBundlerSignatureRejectedError(error)
+  if (isBundlerSignatureRejectedError(error)) return true
+  const message = formatRelayBundlerRpcError(error).toLowerCase()
+  return (
+    message.includes('no matching signer') ||
+    message.includes('packed signature') ||
+    message.includes('signature.data.address')
+  )
 }
 
 async function signSelfAuthPreparedUserOpOnce(params: {
@@ -629,6 +641,11 @@ async function signSelfAuthPreparedUserOpOnce(params: {
   }
 }
 
+type PreparedCallsSubmitOutcome =
+  | { ok: true; txHash: `0x${string}` }
+  | { ok: false; signatureRejected: true; error: unknown }
+  | { ok: false; signatureRejected: false }
+
 async function trySendPreparedCallsUserOp(params: {
   walletRequest: WalletRequest
   publicClient: PublicClient
@@ -650,7 +667,7 @@ async function trySendPreparedCallsUserOp(params: {
   sessionKeyOwner: boolean
   ownerDiscovery?: SelfAuthOwnerDiscovery
   appendEvent: (row: string) => void
-}): Promise<`0x${string}` | null> {
+}): Promise<PreparedCallsSubmitOutcome> {
   const effectiveOwnerIndex =
     params.parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null
   const payloadModes = listSelfAuthPreparedCallsSignaturePayloadModes({
@@ -675,13 +692,14 @@ async function trySendPreparedCallsUserOp(params: {
     recoveredRawAddress: params.recoveredRawAddress,
     recoveredEip191Address: params.recoveredEip191Address,
     resolvedOwnerAtIndexAddress,
+    sessionKeyOwner: params.sessionKeyOwner,
   })
 
   const userOpPayload =
     params.sendUserOpData ?? serializeUserOpForPreparedCallsSend(params.userOp)
   params.appendEvent(`relay_part1:lane=${params.lane}`)
 
-  let lastSendError: unknown = null
+  let lastSignatureRejection: unknown = null
   for (const mode of payloadModes) {
     params.appendEvent(`relay_part1:prepared_calls_signature_mode=${mode}`)
     const signerCandidates =
@@ -721,13 +739,14 @@ async function trySendPreparedCallsUserOp(params: {
         }
         params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
         try {
-          return await pollPreparedCallsBundle({
+          const txHash = await pollPreparedCallsBundle({
             walletRequest: params.walletRequest,
             publicClient: params.publicClient,
             fundingCsw: params.fundingCsw,
             callsId,
             appendEvent: params.appendEvent,
           })
+          return { ok: true, txHash }
         } catch (landError) {
           const landMessage = formatRelayPart1Error(landError)
           if (
@@ -735,7 +754,7 @@ async function trySendPreparedCallsUserOp(params: {
             landMessage.includes('paymaster = 0')
           ) {
             params.appendEvent('relay_part1:prepared_calls_paymaster_landed=1')
-            return null
+            return { ok: false, signatureRejected: false }
           }
           throw landError
         }
@@ -749,16 +768,15 @@ async function trySendPreparedCallsUserOp(params: {
         if (!isPreparedCallsSignatureRejectedError(sendError)) {
           throw sendError
         }
-        lastSendError = sendError
+        lastSignatureRejection = sendError
       }
     }
   }
 
-  if (lastSendError instanceof Error) {
-    throw lastSendError
+  if (lastSignatureRejection) {
+    return { ok: false, signatureRejected: true, error: lastSignatureRejection }
   }
-
-  return null
+  return { ok: false, signatureRejected: false }
 }
 
 function formatUserOpRpcHexField(value: bigint): `0x${string}` {
@@ -953,51 +971,33 @@ async function attemptPrepareNativeMirrorLane(params: {
     /* fail open — Base App webauthn/session-key payloads use sender address */
   }
 
-  const signaturePayload = buildSendPreparedCallsSignaturePayload({
-    sender: params.fundingCsw,
-    signature,
-    signerAddress: preparedCallsSignerAddress,
-    mode: 'auto',
-  })
-
+  const sessionKeyOwner =
+    params.ownerDiscovery?.sessionKeyOwner === true || params.ownerDiscovery?.ownerIndex === 2
+  let parsedOwnerIndex: number | null = params.ownerDiscovery?.ownerIndex ?? null
   try {
-    const sendResult = await params.walletRequest({
-      method: 'wallet_sendPreparedCalls',
-      params: [
-        {
-          version: '1.0',
-          type: params.prepareResult.type ?? 'user-operation-v06',
-          data: params.preparedUserOpRaw,
-          chainId: params.prepareResult.chainId ?? params.chainIdHex,
-          signature: signaturePayload,
-        },
-      ],
-    })
-
-    const callsId = extractWalletCallsId(sendResult)
-    if (!callsId) {
-      throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
-    }
-    params.appendEvent(`relay_part1:prepared_calls_bundle=${callsId}`)
-    return await pollPreparedCallsBundle({
-      walletRequest: params.walletRequest,
-      publicClient: params.publicClient,
-      fundingCsw: params.fundingCsw,
-      callsId,
-      appendEvent: params.appendEvent,
-    })
-  } catch (sendError) {
-    if (isUserRejectedWalletAction(sendError)) {
-      throw sendError
-    }
-    params.appendEvent(
-      `relay_part1:prepare_native_send_error=${formatRelayPart1Error(sendError).slice(0, 180)}`,
-    )
-    if (isPreparedCallsSignatureRejectedError(sendError)) {
-      return null
-    }
-    throw sendError
+    parsedOwnerIndex =
+      parseSelfAuthOwnerIndexFromSignature(signature) ?? parsedOwnerIndex
+  } catch {
+    /* optional */
   }
+
+  const preparedCallsResult = await trySendPreparedCallsUserOp({
+    walletRequest: params.walletRequest,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    prepareResult: params.prepareResult,
+    chainIdHex: params.chainIdHex,
+    userOp: parseWalletPreparedUserOpV06(params.preparedUserOpRaw),
+    sendUserOpData: params.preparedUserOpRaw,
+    lane: 'prepared_calls_prepare_native',
+    signature,
+    parsedOwnerIndex,
+    preparedCallsSignerAddress,
+    sessionKeyOwner,
+    ownerDiscovery: params.ownerDiscovery,
+    appendEvent: params.appendEvent,
+  })
+  return preparedCallsResult.ok ? preparedCallsResult.txHash : null
 }
 
 async function sendSignedPreparedUserOp(params: {
@@ -1092,7 +1092,7 @@ async function sendSignedPreparedUserOp(params: {
         parsedOwnerIndex === 2
 
       try {
-        const preparedCallsTx = await trySendPreparedCallsUserOp({
+        const preparedCallsResult = await trySendPreparedCallsUserOp({
           walletRequest: params.walletRequest,
           publicClient: params.publicClient,
           fundingCsw: params.fundingCsw,
@@ -1110,8 +1110,11 @@ async function sendSignedPreparedUserOp(params: {
           ownerDiscovery: params.ownerDiscovery,
           appendEvent: params.appendEvent,
         })
-        if (preparedCallsTx) {
-          return preparedCallsTx
+        if (preparedCallsResult.ok) {
+          return preparedCallsResult.txHash
+        }
+        if (preparedCallsResult.signatureRejected) {
+          lastSignatureError = preparedCallsResult.error
         }
       } catch (preparedCallsError) {
         if (isUserRejectedWalletAction(preparedCallsError)) {
