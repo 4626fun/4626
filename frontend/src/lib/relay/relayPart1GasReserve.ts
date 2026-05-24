@@ -7,7 +7,7 @@ export const RELAY_PART1_USER_OP_GAS_BUFFER_UNITS = 400_000n
 
 /**
  * Live EntryPoint v0.6 prefund estimate: `gasPrice × buffer units`.
- * Server re-exports this module from `server/_lib/relay/relayPart1GasReserve.ts`.
+ * Client import path; server API routes use `server/_lib/relay/relayPart1GasReserve.ts`.
  */
 export async function resolveRelayPart1UserOpGasReserveWei(
   publicClient: Pick<PublicClient, 'getGasPrice'> | null | undefined,
