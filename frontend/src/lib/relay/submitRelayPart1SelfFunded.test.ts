@@ -10,6 +10,7 @@ import {
   resolveSelfFundedSignHashAfterPaymasterStrip,
   listSelfAuthBundlerSignHashCandidates,
   listSelfAuthPreparedCallsSignaturePayloadModes,
+  listSelfAuthPreparedCallsSignerAddressCandidates,
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
   userOpHasPaymaster,
@@ -196,12 +197,26 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       preferSessionKeyNoChain: true,
     })
     expect(candidates.length).toBeGreaterThanOrEqual(1)
-    expect(candidates[0]?.hash).toMatch(/^0x[a-fA-F0-9]{64}$/)
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
+    expect(candidates.some((candidate) => candidate.mode === 'prepare_signature_request')).toBe(false)
   })
 
   it('parses owner index from Base App signature wrapper', () => {
     expect(parseSelfAuthOwnerIndexFromSignature(wrapSelfAuthOwnerSignature(2))).toBe(2)
     expect(parseSelfAuthOwnerIndexFromSignature(`0x${'22'.repeat(65)}`)).toBeNull()
+  })
+
+  it('orders prepared-calls signer address candidates for session-key recovery', () => {
+    const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
+      parsedOwnerAddress: SESSION_KEY_OWNER,
+      recoveredEip191Address: '0x87bEB08622dc13c7259dc9c9DD41CDc9d89A2C9b',
+      recoveredRawAddress: '0xa57C36026Fe64284Bc45904fbe72685d897032ce',
+    })
+    expect(candidates.map((candidate) => candidate.mode)).toEqual([
+      'owner_at_index',
+      'recovered_eip191',
+      'recovered_raw',
+    ])
   })
 
   it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
