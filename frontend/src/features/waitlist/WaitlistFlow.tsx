@@ -1082,13 +1082,7 @@ export function WaitlistFlow(props: {
 
   return (
     <>
-      {showAuthBootstrapLoader ? (
-        <AppLoadingRegistrar
-          intent="session"
-          labelOverride={authUi.busyLabel}
-          srStatusOverride={authUi.busyLabel}
-        />
-      ) : null}
+      {showAuthBootstrapLoader ? <AppLoadingRegistrar /> : null}
       <section id={sectionId} className={wrapClass} aria-hidden={showAuthBootstrapLoader ? true : undefined}>
       {disableHeroMotion ? (
         step === 'auth' ? (

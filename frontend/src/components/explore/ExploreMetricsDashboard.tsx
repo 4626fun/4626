@@ -20,6 +20,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
     volume24h,
     fees24h,
     statusLine,
+    partial,
     isLoading,
     isFetching,
   } = useExploreCreatorsHeroMetrics()
@@ -28,6 +29,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
     creatorsNew24h != null && creatorsNew24h > 0
       ? `+${creatorsNew24h.toLocaleString()} today`
       : 'Tracking newly created creators'
+
+  const financialHint = partial ? 'Sum of indexed coins' : 'All Base creator coins'
+  const financialTitleSuffix = partial ? ' (indexed coins only)' : ''
 
   return (
     <div className={joinClasses('space-y-2', className)}>
@@ -45,21 +49,21 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         <ExploreHeroMetric
           label="Market Cap"
           value={formatCompactUsd(marketCap)}
-          hint="Indexed creator market cap"
+          hint={financialHint}
           accent
-          title="Indexed creator-coin market cap"
+          title={`Creator-coin market cap${financialTitleSuffix}`}
         />
         <ExploreHeroMetric
           label="1D Vol"
           value={formatCompactUsd(volume24h)}
-          hint="24H trade volume"
-          title="24H trade volume across creator coins"
+          hint={financialHint}
+          title={`24H trade volume${financialTitleSuffix}`}
         />
         <ExploreHeroMetric
           label="1D Fees"
           value={formatCompactUsd(fees24h)}
-          hint="24H trading fees"
-          title="24H fees from creator-coin trading"
+          hint={financialHint}
+          title={`24H fees from creator-coin trading${financialTitleSuffix}`}
         />
       </div>
 

@@ -29,6 +29,41 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+ensure_node_version() {
+  local required_major=20
+  local required_minor=19
+  local current=""
+  if command -v node >/dev/null 2>&1; then
+    current="$(node -p "process.versions.node.split('.').map(Number)" 2>/dev/null || true)"
+  fi
+  if [[ -z "$current" ]]; then
+    echo "Node.js is required for deploy dry-run local dev." >&2
+    exit 1
+  fi
+  local major minor
+  IFS=',' read -r major minor _ <<<"${current//[\[\] ]/}"
+  if [[ "$major" -lt "$required_major" ]] || { [[ "$major" -eq "$required_major" ]] && [[ "$minor" -lt "$required_minor" ]]; }; then
+    if [[ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]]; then
+      # shellcheck disable=SC1091
+      . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+      if [[ -f "$FRONTEND_DIR/.nvmrc" ]]; then
+        nvm use --silent >/dev/null 2>&1 || nvm install >/dev/null 2>&1
+      else
+        nvm use --silent 20.19.0 >/dev/null 2>&1 || nvm install 20.19.0 >/dev/null 2>&1
+      fi
+      current="$(node -p "process.versions.node.split('.').map(Number)" 2>/dev/null || true)"
+      IFS=',' read -r major minor _ <<<"${current//[\[\] ]/}"
+    fi
+  fi
+  if [[ "$major" -lt "$required_major" ]] || { [[ "$major" -eq "$required_major" ]] && [[ "$minor" -lt "$required_minor" ]]; }; then
+    echo "Node.js >= ${required_major}.${required_minor}.0 is required (Vite 7). Current: $(node -v 2>/dev/null || echo unknown)." >&2
+    echo "Install via nvm (frontend/.nvmrc pins 20.19.0) and retry." >&2
+    exit 1
+  fi
+}
+
+ensure_node_version
+
 port_in_use() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then

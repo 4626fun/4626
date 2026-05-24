@@ -26,7 +26,7 @@ function ReplaceOnMount(props: { to: string }) {
     window.location.replace(props.to)
   }, [props.to])
 
-  return <AppLoadingRegistrar intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 /**
@@ -71,7 +71,7 @@ function HandoffOnMount(props: { to: string }) {
     })()
   }, [props.to, ready, authenticated, getAccessToken])
 
-  return <AppLoadingRegistrar intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 /** Redirect from 4626.fun to app.4626.fun when user hits app-only routes. */

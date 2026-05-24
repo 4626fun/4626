@@ -224,8 +224,11 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
         ref={pinRef}
         className={cn(
           'flex w-full flex-col',
-          immersiveStats ? 'sticky top-0 h-screen' : centerContent ? 'relative min-h-0' : 'sticky top-0 h-screen',
-          centerContent && 'items-center justify-center',
+          immersiveStats
+            ? 'sticky top-0 h-screen'
+            : centerContent
+              ? 'pointer-events-none absolute inset-0'
+              : 'sticky top-0 h-screen',
         )}
       >
         {caption ? (
@@ -248,7 +251,9 @@ export const CreatorScrollBridge = forwardRef<HTMLDivElement, CreatorScrollBridg
           <div
             className={cn(
               'relative z-[2] flex w-full flex-col items-center justify-center px-4 sm:px-10 lg:px-16 text-center',
-              immersiveStats ? 'flex-1 py-10 sm:py-14' : 'py-12 sm:py-16',
+              immersiveStats
+                ? 'pointer-events-auto flex-1 py-10 sm:py-14'
+                : 'pointer-events-auto absolute inset-x-0 top-1/2 -translate-y-1/2 py-8',
             )}
           >
             {centerContent}

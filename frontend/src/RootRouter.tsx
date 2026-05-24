@@ -5,7 +5,6 @@ import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { MarketingWaitlistRoute } from '@/app/routeGuards'
 import { AppCanvas } from '@/components/layout/AppCanvas'
 import { AppLoadingOverlay, AppLoadingProvider, AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
-import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
 import App from './App'
 import { AppQueryProvider } from './web3/Web3Providers'
@@ -21,11 +20,7 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 function LazyRouteBoundary(props: { children: ReactNode }) {
-  const location = useLocation()
-  const intent = getLoadingIntentFromPath(location.pathname)
-  return (
-    <Suspense fallback={<AppLoadingRegistrar intent={intent} />}>{props.children}</Suspense>
-  )
+  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
 }
 
 const Home = lazyNamed(() => import('./pages/Home'), 'Home')
@@ -51,7 +46,7 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
     window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
   }, [location.hash, location.search, props.htmlPath])
 
-  return <AppLoadingRegistrar intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 function AppHostRedirect(props: { target: string }) {
@@ -61,7 +56,7 @@ function AppHostRedirect(props: { target: string }) {
     window.location.replace(props.target)
   }, [props.target])
 
-  return <AppLoadingRegistrar intent="redirect" />
+  return <AppLoadingRegistrar />
 }
 
 function MarketingLayout() {

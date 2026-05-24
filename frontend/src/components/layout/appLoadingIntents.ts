@@ -117,22 +117,8 @@ export function getLoadingIntentConfig(intent: LoadingIntent): LoadingIntentConf
   return LOADING_INTENT_CONFIG[intent]
 }
 
-/** Session + route chunk loads share one calm bootstrap headline to avoid flicker between guards. */
-export function resolveOverlayHeadline(intent: LoadingIntent): string {
-  if (intent === 'session' || intent === 'page') {
-    return LOADING_INTENT_CONFIG.page.headline
-  }
-  return LOADING_INTENT_CONFIG[intent].headline
-}
-
 /** Keep the wave loader animation stable while bootstrap intents hand off. */
 export function resolveOverlayPatternIntent(intent: LoadingIntent): LoadingIntent {
-  if (intent === 'session') return 'page'
+  if (intent === 'session' || intent === 'redirect' || intent === 'deploy') return 'page'
   return intent
-}
-
-export function getLoadingIntentFromPath(pathname: string): LoadingIntent {
-  if (pathname.startsWith('/deploy')) return 'deploy'
-  if (pathname === '/waitlist' || pathname.startsWith('/r/')) return 'session'
-  return 'page'
 }

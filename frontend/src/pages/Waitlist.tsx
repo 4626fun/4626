@@ -29,11 +29,11 @@ function WaitlistFlowGate() {
   }
 
   if (privyClientStatus === 'loading') {
-    return <AppLoadingRegistrar intent="session" />
+    return <AppLoadingRegistrar />
   }
 
   return (
-    <Suspense fallback={<AppLoadingRegistrar intent="session" />}>
+    <Suspense fallback={<AppLoadingRegistrar />}>
       <LazyWaitlistFlow sectionId="waitlist-page" />
     </Suspense>
   )

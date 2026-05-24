@@ -3,7 +3,7 @@ import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export const EXPLORE_CREATORS_METRICS_QUERY_KEY = ['explore', 'creators', 'metrics', 'shared-dashboard'] as const
-/** Align with server Zora explore financial cache (~2 min) to avoid redundant polls. */
+/** Align with server metrics cache (~5 min) to avoid redundant polls. */
 export const LIVE_HERO_METRICS_REFETCH_MS = 120_000
 
 export type ExploreCreatorsMetrics = {
@@ -33,7 +33,6 @@ export type ExploreCreatorsMetrics = {
     ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
-    usingZoraExploreFinancials?: boolean
   }
   history30d: Array<{
     date: string
@@ -62,42 +61,16 @@ export async function fetchExploreCreatorsMetrics(): Promise<ExploreCreatorsMetr
   return null
 }
 
-export function toFiniteNumber(value: unknown): number | null {
-  const n = typeof value === 'string' ? Number(value) : typeof value === 'number' ? value : NaN
-  if (!Number.isFinite(n)) return null
-  return n
-}
-
-export function coalesceMetricValue(...values: Array<number | null | undefined>): number | null {
-  for (const value of values) {
-    if (value == null) continue
-    if (Number.isFinite(value)) return value
-  }
-  return null
-}
-
-export function preferLiveMetricValue(
-  canonical: number | null | undefined,
-  live: number | null | undefined,
-): number | null {
-  const canonicalValue = toFiniteNumber(canonical)
-  const liveValue = toFiniteNumber(live)
-  if (canonicalValue == null) return liveValue
-  if (liveValue == null) return canonicalValue
-  return Math.max(canonicalValue, liveValue)
-}
-
 export function buildExploreHeroStatusLine(input: {
   updatedAt: string | null
   exact: boolean
   syncStatus: ExploreCreatorsMetrics['syncStatus']
   creatorsTotal: number | null
   syncMeta: ExploreCreatorsMetrics['sync'] | null
-  usingLiveFinancials: boolean
 }): string {
-  const { updatedAt, exact, syncStatus, creatorsTotal, syncMeta, usingLiveFinancials } = input
+  const { updatedAt, exact, syncStatus, creatorsTotal, syncMeta } = input
 
-  if (!updatedAt) return 'Canonical totals unavailable'
+  if (!updatedAt) return 'Indexed totals unavailable'
 
   const time = new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const indexedLine =
@@ -111,15 +84,10 @@ export function buildExploreHeroStatusLine(input: {
     return indexedLine ?? `Metrics refresh error — showing last known values (${time})`
   }
 
-  if (usingLiveFinancials) {
-    return indexedLine
-      ? `${indexedLine} · live vol/fees from Zora`
-      : `Live vol/fees from Zora · indexed totals refreshed ${time}`
+  if (!exact) {
+    const partialNote = 'Financial totals sum indexed coins only'
+    return indexedLine ? `${indexedLine} · ${partialNote}` : `${partialNote} · refreshed ${time}`
   }
 
-  if (syncStatus === 'running' || !exact) {
-    return indexedLine ?? `Estimated totals refreshed ${time}`
-  }
-
-  return `Canonical totals refreshed ${time}`
+  return indexedLine ?? `Indexed totals refreshed ${time}`
 }

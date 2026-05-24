@@ -5,10 +5,6 @@ import {
   cachedTotalsMaxAgeMs,
   ensureCreatorMetricsSchema,
 } from '../../../server/_lib/zora/creatorMetricsSync.js'
-import {
-  fetchZoraExploreFinancialEstimate,
-  preferHigherMetric,
-} from '../../../server/_lib/zora/zoraExploreFinancials.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'
@@ -40,7 +36,6 @@ type MetricsResponse = {
     ethos1800Creators: number | null
     partial: boolean
     sampledCreators: number
-    usingZoraExploreFinancials: boolean
   }
   history30d: Array<{
     date: string
@@ -138,17 +133,6 @@ function mapHistoryRows(rows: any[]): Array<{ date: string; creatorCoinsMarketCa
     .filter((entry): entry is { date: string; creatorCoinsMarketCapUsd: number | null } => entry != null)
 }
 
-function hasMeaningfulHistory(points: Array<{ date: string; creatorCoinsMarketCapUsd: number | null }>): boolean {
-  if (points.length < 7) return false
-  const unique = new Set<number>()
-  for (const point of points) {
-    if (typeof point.creatorCoinsMarketCapUsd !== 'number' || !Number.isFinite(point.creatorCoinsMarketCapUsd)) continue
-    unique.add(Number(point.creatorCoinsMarketCapUsd.toFixed(2)))
-    if (unique.size > 1) return true
-  }
-  return false
-}
-
 function errorSignature(err: unknown): string {
   const code = String((err as any)?.code ?? '').trim().toUpperCase()
   const msg = err instanceof Error ? err.message : String(err ?? '')
@@ -217,7 +201,6 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
         ethos1800Creators: null,
         partial: true,
         sampledCreators: 0,
-        usingZoraExploreFinancials: false,
       },
       history30d: [],
     }
@@ -329,24 +312,9 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
 
   const creatorsTotal = toNumber(agg.creators_total)
   const creatorsNew24h = toNumber(agg.creators_new_24h)
-  let creatorCoinsMarketCapUsd = toNumber(agg.market_cap_usd)
-  let creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
-  let creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
-  let usingZoraExploreFinancials = false
-
-  if (!exact) {
-    try {
-      const zoraFinancials = await fetchZoraExploreFinancialEstimate()
-      if (zoraFinancials) {
-        usingZoraExploreFinancials = true
-        creatorCoinsVolume24hUsd = preferHigherMetric(creatorCoinsVolume24hUsd, zoraFinancials.volume24hUsd)
-        creatorCoinsFees24hUsd = preferHigherMetric(creatorCoinsFees24hUsd, zoraFinancials.fees24hUsd)
-        creatorCoinsMarketCapUsd = preferHigherMetric(creatorCoinsMarketCapUsd, zoraFinancials.marketCapUsd)
-      }
-    } catch (error) {
-      console.warn('[zora/metrics] zora explore financial estimate failed', error)
-    }
-  }
+  const creatorCoinsMarketCapUsd = toNumber(agg.market_cap_usd)
+  const creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
+  const creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
 
   // Persist one daily canonical snapshot and return the latest 30-day market-cap series.
   // This keeps the dashboard trend independent from client-side sort/view state.
@@ -387,60 +355,9 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     WHERE day >= CURRENT_DATE - INTERVAL '29 days'
     ORDER BY day ASC;
   `
-  const snapshotHistory30d = mapHistoryRows(
+  const history30d = mapHistoryRows(
     Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
   )
-  let history30d = snapshotHistory30d
-  if (!hasMeaningfulHistory(snapshotHistory30d)) {
-    // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
-    // This uses creator coin creation dates + current market-cap state to derive a
-    // cumulative day-by-day series until enough canonical daily snapshots exist.
-    const derivedHistoryResult = await db.sql`
-      WITH bounds AS (
-        SELECT (CURRENT_DATE - INTERVAL '29 days')::date AS start_day
-      ),
-      days AS (
-        SELECT generate_series((SELECT start_day FROM bounds), CURRENT_DATE, INTERVAL '1 day')::date AS day
-      ),
-      base AS (
-        SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS base_market_cap
-        FROM creator_coins
-        WHERE chain_id = 8453
-          AND market_cap_usd IS NOT NULL
-          AND (created_at IS NULL OR created_at::date < (SELECT start_day FROM bounds))
-      ),
-      by_day AS (
-        SELECT created_at::date AS day, COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS day_market_cap
-        FROM creator_coins
-        WHERE chain_id = 8453
-          AND market_cap_usd IS NOT NULL
-          AND created_at::date >= (SELECT start_day FROM bounds)
-        GROUP BY created_at::date
-      ),
-      series AS (
-        SELECT
-          d.day,
-          (
-            (SELECT base_market_cap FROM base)
-            + COALESCE(
-                SUM(COALESCE(b.day_market_cap, 0)) OVER (
-                  ORDER BY d.day
-                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                ),
-                0
-              )
-          )::NUMERIC AS creator_coins_market_cap_usd
-        FROM days d
-        LEFT JOIN by_day b ON b.day = d.day
-      )
-      SELECT day::text AS day, creator_coins_market_cap_usd
-      FROM series
-      ORDER BY day ASC;
-    `
-    history30d = mapHistoryRows(
-      Array.isArray((derivedHistoryResult as any)?.rows) ? (derivedHistoryResult as any).rows : [],
-    )
-  }
 
   return {
     scope,
@@ -470,7 +387,6 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       ethos1800Creators,
       partial: !exact,
       sampledCreators,
-      usingZoraExploreFinancials,
     },
     history30d,
   }

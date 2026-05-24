@@ -29,7 +29,6 @@ export function useExploreCreatorsHeroMetrics() {
 
   const metrics = metricsQuery.data
   const exact = metrics?.exact === true
-  const usingLiveFinancials = metrics?.totals?.usingZoraExploreFinancials === true
 
   const creatorsTotal = metrics?.totals?.creatorsTotal ?? null
   const creatorsNew24h = metrics?.totals?.creatorsNew24h ?? null
@@ -43,14 +42,12 @@ export function useExploreCreatorsHeroMetrics() {
     syncStatus: metrics?.syncStatus ?? 'idle',
     creatorsTotal,
     syncMeta: metrics?.sync ?? null,
-    usingLiveFinancials,
   })
 
   return {
     metricsQuery,
     exact,
     partial: metrics?.totals?.partial === true,
-    usingLiveFinancials,
     creatorsLabel: exact ? 'Creators' : 'Indexed creators',
     creatorsTotal,
     creatorsNew24h,

@@ -10,35 +10,37 @@ import {
 } from './AppLoadingOverlay'
 
 describe('AppLoadingOverlay', () => {
-  it('shows one unified bootstrap headline for session registrations', () => {
+  it('shows one shared Loading headline for every registration', () => {
     render(
       <AppLoadingProvider>
-        <AppLoadingRegistrar intent="session" />
+        <AppLoadingRegistrar />
         <AppLoadingOverlay />
       </AppLoadingProvider>,
     )
 
-    expect(screen.getByRole('heading', { name: /loading/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^loading\.\.\.$/i })).toBeTruthy()
     expect(screen.queryByRole('heading', { name: /syncing session/i })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /redirecting/i })).toBeNull()
   })
 
-  it('keeps the overlay mounted while multiple registrations overlap', () => {
+  it('keeps the overlay visible while registrations overlap', () => {
     const { rerender } = render(
       <AppLoadingProvider>
-        <AppLoadingRegistrar intent="session" />
+        <AppLoadingRegistrar />
+        <AppLoadingRegistrar />
         <AppLoadingOverlay />
       </AppLoadingProvider>,
     )
 
-    expect(screen.getByRole('heading', { name: /loading/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^loading\.\.\.$/i })).toBeTruthy()
 
     rerender(
       <AppLoadingProvider>
-        <AppLoadingRegistrar intent="page" />
+        <AppLoadingRegistrar />
         <AppLoadingOverlay />
       </AppLoadingProvider>,
     )
 
-    expect(screen.getByRole('heading', { name: /loading/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^loading\.\.\.$/i })).toBeTruthy()
   })
 })

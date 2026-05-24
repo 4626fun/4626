@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 
-import { preferLiveMetricValue } from '@/features/explore/exploreCreatorsMetrics'
 import {
   DEFAULT_HOT_REFRESH_LISTS,
   computeFees24hUsd,
@@ -68,11 +67,5 @@ describe('creatorMetricsSyncHelpers', () => {
       }),
     ).toBe('legacy')
     expect(computeFees24hUsd(1000, 'legacy')).toBe(30)
-  })
-})
-
-describe('exploreCreatorsMetrics helpers remain compatible', () => {
-  it('still prefers live financial totals over stale DB totals', () => {
-    expect(preferLiveMetricValue(5733.39, 494592.77)).toBe(494592.77)
   })
 })

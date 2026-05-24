@@ -1,8 +1,7 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 
 import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
-import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { SmartWalletsRouteProvider as SmartWalletsRouteProviderComponent } from '@/lib/privy/SmartWalletsRouteProvider'
 import { Swap as SwapPage } from '../pages/Swap'
 
@@ -84,11 +83,7 @@ export const LazyRequireAccepted = lazyNamed(() => import('./accessRuntime'), 'R
 export const LazyRequireAdmin = lazyNamed(() => import('./accessRuntime'), 'RequireAdmin')
 
 export function LazyRouteBoundary(props: { children: ReactNode }) {
-  const location = useLocation()
-  const intent = getLoadingIntentFromPath(location.pathname)
-  return (
-    <Suspense fallback={<AppLoadingRegistrar intent={intent} />}>{props.children}</Suspense>
-  )
+  return <Suspense fallback={<AppLoadingRegistrar />}>{props.children}</Suspense>
 }
 
 export type LazyRouteComponent = ComponentType<any> | LazyExoticComponent<ComponentType<any>>

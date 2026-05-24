@@ -21,7 +21,7 @@ function TelegramLinkStandaloneApp() {
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingRegistrar intent="session" />
+    return <AppLoadingRegistrar />
   }
 
   return (

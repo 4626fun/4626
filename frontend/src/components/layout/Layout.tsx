@@ -291,7 +291,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         <XmtpChatProvider>
           {/* Main */}
           <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-            <Suspense fallback={<AppLoadingRegistrar intent="page" />}>
+            <Suspense fallback={<AppLoadingRegistrar />}>
               <PageTransitionOutlet />
             </Suspense>
           </main>
@@ -303,7 +303,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
         </XmtpChatProvider>
       ) : (
         <main id="main-content" className={`flex min-h-0 flex-1 flex-col overflow-x-clip ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
-          <Suspense fallback={<AppLoadingRegistrar intent="page" />}>
+          <Suspense fallback={<AppLoadingRegistrar />}>
             <PageTransitionOutlet />
           </Suspense>
         </main>
