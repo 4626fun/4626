@@ -328,8 +328,8 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       chainId: 8453,
       sessionKeyOwner: true,
     })
-    expect(candidates[0]?.mode).toBe('entrypoint_v06_chain_session_key_primary')
-    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_no_chain_session_key_fallback')).toBe(
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
+    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_chain_session_key_fallback')).toBe(
       true,
     )
   })
@@ -549,16 +549,16 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
   })
 
-  it('session-key Part 1 uses typed_data_v4 only (personal_sign cannot pass CSW replaySafeHash)', () => {
+  it('session-key Part 1 uses personal_sign only (typed_data triggers Base App incorrect-address modal)', () => {
     const methods = listSelfAuthSignMethods({
       sessionKeyOwner: true,
       parsedOwnerIndex: 2,
       bundlerOnly: true,
     })
-    expect(methods).toEqual(['typed_data_v4_csw', 'typed_data_v4_session_key'])
+    expect(methods).toEqual(['personal_sign_data_address', 'personal_sign_address_data'])
   })
 
-  it('session-key Part 1 signs via eth_signTypedData_v4 after paymaster strip', async () => {
+  it('session-key Part 1 signs via personal_sign after paymaster strip', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -628,9 +628,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(signMethods).toEqual(['eth_signTypedData_v4'])
+    expect(signMethods).toEqual(['personal_sign'])
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_address')
   })
 
   it('uses prepare-native mirror when prepare returns paymaster=0', async () => {

@@ -330,10 +330,9 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   }
 
   if (params.sessionKeyOwner) {
-    // Prepared-calls + EntryPoint v0.6 validate the with-chain stripped digest for Part 1.
-    // No-chain is Part 2 / passkey lane — keep it as fallback only.
-    pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_primary' })
-    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_fallback' })
+    // Recipe: personal_sign over no-chain stripped digest first for session-key Part 1.
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
+    pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_fallback' })
   }
 
   // Domain-matched stripped hash when prepare hash domain is known.
@@ -489,7 +488,8 @@ function isNonCascadeRelayPart1Error(error: unknown): boolean {
     message.includes('failed to fetch') ||
     message.includes('internal error was received') ||
     message.includes('error generating message') ||
-    message.includes('error generating transaction')
+    message.includes('error generating transaction') ||
+    message.includes('incorrect address')
   )
 }
 
@@ -498,14 +498,24 @@ async function ensureSelfAuthWalletAuthorized(params: {
   fundingCsw: `0x${string}`
   appendEvent: (row: string) => void
 }): Promise<void> {
+  const expected = getAddress(params.fundingCsw)
   try {
     const accounts = (await params.walletRequest({ method: 'eth_requestAccounts' })) as string[]
-    const normalized = accounts.map((account) => account.toLowerCase())
+    const normalized = accounts.map((account) => getAddress(account as `0x${string}`).toLowerCase())
     params.appendEvent(`relay_part1:authorized_accounts=${accounts.length}`)
-    if (!normalized.includes(params.fundingCsw.toLowerCase())) {
-      params.appendEvent('relay_part1:warn funding_csw_not_in_authorized_accounts')
+    if (accounts.length > 0) {
+      params.appendEvent(`relay_part1:active_wallet=${getAddress(accounts[0] as `0x${string}`)}`)
+    }
+    if (!normalized.includes(expected.toLowerCase())) {
+      params.appendEvent(`relay_part1:warn funding_csw_not_in_authorized_accounts expected=${expected}`)
+      throw new Error(
+        `Incorrect address: Base App is connected to ${accounts[0] ?? 'another wallet'}, not your 4626 smart wallet (${expected}). Close 4626 in Base App, reopen https://4626.fun/waitlist?setup=owner-install, and retry Enable 4626 signing.`,
+      )
     }
   } catch (requestError) {
+    if (formatRelayPart1Error(requestError).toLowerCase().includes('incorrect address')) {
+      throw requestError
+    }
     let fallbackAccounts: string[] = []
     try {
       fallbackAccounts = (await params.walletRequest({ method: 'eth_accounts' })) as string[]
@@ -524,7 +534,6 @@ async function ensureSelfAuthWalletAuthorized(params: {
 
 type SelfAuthSignMethod =
   | 'typed_data_v4_csw'
-  | 'typed_data_v4_session_key'
   | 'personal_sign_data_address'
   | 'personal_sign_address_data'
   | 'eth_sign_address_data'
@@ -538,10 +547,10 @@ export function listSelfAuthSignMethods(params: {
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
   })
-  // Session-key Part 1 must use CSW EIP-712 (replaySafeHash). personal_sign cannot pass
-  // isValidSignature — it signs EIP-191 over the raw hash, not replaySafeHash.
+  // Base App session-key Part 1: personal_sign(hash, CSW) only. eth_signTypedData_v4 triggers
+  // an "Incorrect address" modal with no recovery — see base-app-session-key-relay-part1-recipe.md.
   if (sessionKeyContext) {
-    return ['typed_data_v4_csw', 'typed_data_v4_session_key']
+    return ['personal_sign_data_address', 'personal_sign_address_data']
   }
   const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
@@ -625,11 +634,6 @@ async function preflightSelfAuthUserOpSignatureOnChain(params: {
   signature: Hex
   appendEvent: (row: string) => void
 }): Promise<boolean> {
-  if (params.signMethod !== 'typed_data_v4_csw' && params.signMethod !== 'typed_data_v4_session_key') {
-    params.appendEvent('relay_part1:onchain_sig_preflight=skip_non_typed_data')
-    return false
-  }
-
   const entryPointHash = computeUserOpHashWithChainId(params.strippedUserOp, params.chainId)
   const validationHashes: Array<{ hash: Hex; mode: string }> = [
     { hash: entryPointHash, mode: 'entrypoint_v06_chain' },
@@ -691,16 +695,11 @@ async function requestSelfAuthSignature(params: {
   chainId: number
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<Hex> {
-  if (params.method === 'typed_data_v4_csw' || params.method === 'typed_data_v4_session_key') {
-    const sessionKeyAddress = params.ownerDiscovery?.ownerSignerAddress ?? null
-    const signerAddress =
-      params.method === 'typed_data_v4_session_key' && sessionKeyAddress
-        ? getAddress(sessionKeyAddress)
-        : params.fundingCsw
+  if (params.method === 'typed_data_v4_csw') {
     return signCswUserOpHashViaTypedDataV4({
       walletRequest: params.walletRequest,
       smartWallet: params.fundingCsw,
-      signerAddress,
+      signerAddress: params.fundingCsw,
       chainId: params.chainId,
       userOpHash: params.hashToSign,
     })
@@ -1148,30 +1147,14 @@ async function attemptPrepareNativeMirrorLane(params: {
   params.appendEvent('relay_part1:lane=prepared_calls_prepare_native')
   const hashToSign = unwrapDoubleHexEncodedHash(params.signatureRequestHash)
   params.appendEvent('relay_part1:sign_hash_mode=prepare_signature_request_native_userop')
-
-  const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
-    sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
-    ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
-  })
+  params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
 
   let signature: Hex
   try {
-    if (sessionKeyOwner) {
-      params.appendEvent('relay_part1:sign_mode=typed_data_v4_csw')
-      signature = await signCswUserOpHashViaTypedDataV4({
-        walletRequest: params.walletRequest,
-        smartWallet: params.fundingCsw,
-        signerAddress: params.fundingCsw,
-        chainId: Number.parseInt(params.chainIdHex.slice(2), 16),
-        userOpHash: hashToSign,
-      })
-    } else {
-      params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
-      signature = (await params.walletRequest({
-        method: 'personal_sign',
-        params: [hashToSign, params.fundingCsw],
-      })) as Hex
-    }
+    signature = (await params.walletRequest({
+      method: 'personal_sign',
+      params: [hashToSign, params.fundingCsw],
+    })) as Hex
   } catch (signError) {
     if (isUserRejectedWalletAction(signError)) {
       throw signError

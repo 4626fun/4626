@@ -706,6 +706,25 @@ export function mapRemoveOwnerSubmissionError(params: {
   }
 
   if (
+    normalized.includes('incorrect address') ||
+    normalized.includes('not connected to your wallet') ||
+    normalized.includes('funding_csw_not_in_authorized_accounts')
+  ) {
+    if (params.isSelfAuthSession && isBaseAppInAppContext()) {
+      return (
+        'Base App is connected to a different wallet than your 4626 account. ' +
+        'Force-close 4626 in Base App, reopen https://4626.fun/waitlist?setup=owner-install, confirm your smart wallet matches 4626.base.eth, rebuild the preview, then retry Enable 4626 signing.'
+      )
+    }
+    if (params.isSelfAuthSession) {
+      return (
+        'The connected wallet does not match your 4626 smart wallet. ' +
+        'Rebuild the preview and retry from the same wallet that holds your canonical CSW.'
+      )
+    }
+  }
+
+  if (
     normalized.includes('did not validate on-chain') ||
     normalized.includes('signature verification failed for the relay deposit') ||
     normalized.includes('onchain_sig_preflight=invalid') ||
