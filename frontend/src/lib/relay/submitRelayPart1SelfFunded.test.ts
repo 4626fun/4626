@@ -11,6 +11,7 @@ import {
   listSelfAuthBundlerSignHashCandidates,
   listSelfAuthPreparedCallsSignaturePayloadModes,
   listSelfAuthPreparedCallsSignerAddressCandidates,
+  listSelfAuthSignMethods,
   stripRawWalletPreparedUserOp,
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
@@ -60,6 +61,9 @@ const mockPublicClient = {
     if (args.functionName === 'ownerAtIndex') {
       return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
     }
+    if (args.functionName === 'isValidSignature') {
+      return '0x1626ba7e'
+    }
     return 500_000_000_000_000n
   }),
   getGasPrice: vi.fn(async () => 1_000_000_000n),
@@ -103,6 +107,9 @@ function mockPublicClientWithoutSessionKeyOwner() {
   mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
     if (args.functionName === 'ownerAtIndex') {
       throw new Error('no session key owner')
+    }
+    if (args.functionName === 'isValidSignature') {
+      return '0x1626ba7e'
     }
     return 500_000_000_000_000n
   })
@@ -544,10 +551,22 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
   })
 
-  it('session-key Part 1 uses typed_data_v4 before personal_sign after paymaster strip', async () => {
+  it('session-key Part 1 uses typed_data_v4 only (personal_sign cannot pass CSW replaySafeHash)', () => {
+    const methods = listSelfAuthSignMethods({
+      sessionKeyOwner: true,
+      parsedOwnerIndex: 2,
+      bundlerOnly: true,
+    })
+    expect(methods).toEqual(['typed_data_v4_csw'])
+  })
+
+  it('session-key Part 1 signs via eth_signTypedData_v4 after paymaster strip', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+      }
+      if (args.functionName === 'isValidSignature') {
+        return '0x1626ba7e'
       }
       return 500_000_000_000_000n
     })
@@ -611,8 +630,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(signMethods[0]).toBe('eth_signTypedData_v4')
-    expect(signMethods.includes('eth_sign')).toBe(false)
+    expect(signMethods).toEqual(['eth_signTypedData_v4'])
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
   })

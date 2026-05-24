@@ -1,4 +1,4 @@
-import { decodeAbiParameters, getAddress, type Address, type Hex, type PublicClient } from 'viem'
+import { decodeAbiParameters, getAddress, hashTypedData, recoverAddress, type Address, type Hex, type PublicClient } from 'viem'
 import {
   createBundlerClient,
   entryPoint06Address,
@@ -18,6 +18,7 @@ import {
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
 import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
 import {
+  buildCswUserOpTypedDataPayload,
   buildSendPreparedCallsSignaturePayload,
   normalizePreparedCallValueToHex,
   signCswUserOpHashViaTypedDataV4,
@@ -121,6 +122,21 @@ const ENTRY_POINT_BALANCE_OF_ABI = [
     outputs: [{ type: 'uint256' }],
   },
 ] as const
+
+const CSW_IS_VALID_SIGNATURE_ABI = [
+  {
+    type: 'function',
+    name: 'isValidSignature',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'hash', type: 'bytes32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'magicValue', type: 'bytes4' }],
+  },
+] as const
+
+const ERC1271_MAGIC_VALUE = '0x1626ba7e' as const
 
 export function readPreparedUserOpPaymasterAndData(userOp: unknown): Hex | null {
   if (!userOp || typeof userOp !== 'object') return null
@@ -503,7 +519,7 @@ type SelfAuthSignMethod =
   | 'personal_sign_address_data'
   | 'eth_sign_address_data'
 
-function listSelfAuthSignMethods(params: {
+export function listSelfAuthSignMethods(params: {
   sessionKeyOwner: boolean
   parsedOwnerIndex: number | null
   bundlerOnly?: boolean
@@ -512,16 +528,87 @@ function listSelfAuthSignMethods(params: {
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
   })
-  const ecdsaMethods: SelfAuthSignMethod[] = sessionKeyContext
-    ? ['personal_sign_data_address', 'personal_sign_address_data']
-    : params.bundlerOnly
-      ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
-      : ['personal_sign_data_address']
-  // Base App exposes eth_signTypedData_v4; eth_sign returns 4200 unsupported for session keys.
+  // Session-key Part 1 must use CSW EIP-712 (replaySafeHash). personal_sign over the raw
+  // EntryPoint digest cannot pass isValidSignature — it signs EIP-191, not replaySafeHash.
   if (sessionKeyContext) {
-    return ['typed_data_v4_csw', ...ecdsaMethods]
+    return ['typed_data_v4_csw']
   }
+  const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly
+    ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
+    : ['personal_sign_data_address']
   return ['typed_data_v4_csw', ...ecdsaMethods]
+}
+
+function hexByteLength(value: Hex): number {
+  return (value.length - 2) / 2
+}
+
+async function preflightSelfAuthUserOpSignatureOnChain(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  strippedUserOp: V06UserOpFields
+  chainId: number
+  hashToSign: Hex
+  signMethod: SelfAuthSignMethod
+  signature: Hex
+  appendEvent: (row: string) => void
+}): Promise<boolean> {
+  if (params.signMethod !== 'typed_data_v4_csw') {
+    params.appendEvent('relay_part1:onchain_sig_preflight=skip_non_typed_data')
+    return false
+  }
+
+  const entryPointHash = computeUserOpHashWithChainId(params.strippedUserOp, params.chainId)
+  const validationHashes: Array<{ hash: Hex; mode: string }> = [
+    { hash: entryPointHash, mode: 'entrypoint_v06_chain' },
+  ]
+  if (params.hashToSign.toLowerCase() !== entryPointHash.toLowerCase()) {
+    validationHashes.push({ hash: params.hashToSign, mode: 'signed_hash' })
+  }
+
+  for (const candidate of validationHashes) {
+    try {
+      const magic = await params.publicClient.readContract({
+        address: params.fundingCsw,
+        abi: CSW_IS_VALID_SIGNATURE_ABI,
+        functionName: 'isValidSignature',
+        args: [candidate.hash, params.signature],
+      })
+      const ok = String(magic).toLowerCase() === ERC1271_MAGIC_VALUE
+      params.appendEvent(
+        `relay_part1:onchain_sig_preflight=${ok ? 'ok' : 'invalid'}:${candidate.mode}`,
+      )
+      if (ok) return true
+    } catch (error) {
+      params.appendEvent(
+        `relay_part1:onchain_sig_preflight=skipped:${candidate.mode}:${formatRelayPart1Error(error).slice(0, 80)}`,
+      )
+    }
+  }
+
+  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
+  if (wrapped && hexByteLength(wrapped.signatureData) === 65) {
+    try {
+      const replaySafe = hashTypedData(
+        buildCswUserOpTypedDataPayload({
+          smartWallet: params.fundingCsw,
+          chainId: params.chainId,
+          userOpHash: entryPointHash,
+        }),
+      )
+      const recovered = await recoverAddress({
+        hash: replaySafe,
+        signature: wrapped.signatureData,
+      })
+      params.appendEvent(
+        `relay_part1:onchain_sig_recovered=${recovered} owner_index=${wrapped.ownerIndex ?? 'n/a'}`,
+      )
+    } catch {
+      /* diagnostic only */
+    }
+  }
+
+  return false
 }
 
 async function requestSelfAuthSignature(params: {
@@ -1163,25 +1250,20 @@ async function sendSignedPreparedUserOp(params: {
         ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
       })
 
-      if (sessionKeyOwner && params.customOwnerPolicyToken) {
-        try {
-          return await submitSignedPreparedUserOpViaBundler({
-            publicClient: params.publicClient,
-            fundingCsw: params.fundingCsw,
-            strippedUserOp: input.userOp,
-            signature,
-            appendEvent: params.appendEvent,
-            customOwnerPolicyToken: params.customOwnerPolicyToken,
-          })
-        } catch (bundlerError) {
-          if (isUserRejectedWalletAction(bundlerError)) {
-            throw bundlerError
-          }
-          params.appendEvent(
-            `relay_part1:prepared_bundler_primary_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
-          )
-          lastSignatureError = bundlerError
-        }
+      const onChainSignatureOk = await preflightSelfAuthUserOpSignatureOnChain({
+        publicClient: params.publicClient,
+        fundingCsw: params.fundingCsw,
+        strippedUserOp: input.userOp,
+        chainId: params.chainId,
+        hashToSign: input.hashToSign,
+        signMethod,
+        signature,
+        appendEvent: params.appendEvent,
+      })
+      if (!onChainSignatureOk) {
+        params.appendEvent(`relay_part1:skip_submit_invalid_onchain_sig mode=${signMethod}`)
+        lastSignatureError = new Error('On-chain isValidSignature preflight rejected signature')
+        continue
       }
 
       try {
@@ -1211,28 +1293,6 @@ async function sendSignedPreparedUserOp(params: {
           params.appendEvent(
             `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsResult.error).slice(0, 120)}`,
           )
-          if (params.customOwnerPolicyToken) {
-            try {
-              return await submitSignedPreparedUserOpViaBundler({
-                publicClient: params.publicClient,
-                fundingCsw: params.fundingCsw,
-                strippedUserOp: input.userOp,
-                signature,
-                appendEvent: params.appendEvent,
-                customOwnerPolicyToken: params.customOwnerPolicyToken,
-              })
-            } catch (bundlerError) {
-              if (isUserRejectedWalletAction(bundlerError)) {
-                throw bundlerError
-              }
-              params.appendEvent(
-                `relay_part1:prepared_bundler_inline_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
-              )
-              lastSignatureError = bundlerError
-            }
-          }
-          // Wrong hash domain — re-sign with the next hash candidate, not alternate RPC methods.
-          break
         }
       } catch (preparedCallsError) {
         if (isUserRejectedWalletAction(preparedCallsError)) {
@@ -1243,11 +1303,34 @@ async function sendSignedPreparedUserOp(params: {
           params.appendEvent(
             `relay_part1:prepared_calls_signature_rejected=${formatRelayPart1Error(preparedCallsError).slice(0, 120)}`,
           )
-          break
         } else {
           throw preparedCallsError
         }
       }
+
+      if (params.customOwnerPolicyToken) {
+        try {
+          return await submitSignedPreparedUserOpViaBundler({
+            publicClient: params.publicClient,
+            fundingCsw: params.fundingCsw,
+            strippedUserOp: input.userOp,
+            signature,
+            appendEvent: params.appendEvent,
+            customOwnerPolicyToken: params.customOwnerPolicyToken,
+          })
+        } catch (bundlerError) {
+          if (isUserRejectedWalletAction(bundlerError)) {
+            throw bundlerError
+          }
+          params.appendEvent(
+            `relay_part1:prepared_bundler_inline_error=${formatRelayPart1Error(bundlerError).slice(0, 180)}`,
+          )
+          lastSignatureError = bundlerError
+        }
+      }
+
+      // Try the next sign method for this hash before advancing hash candidates.
+      continue
     }
     return null
   }
@@ -1310,6 +1393,18 @@ async function sendSignedPreparedUserOp(params: {
     throw new Error(
       'UserOp signature verification failed for the Relay deposit. Rebuild the owner-install preview in Base App and retry Enable 4626 signing.',
     )
+  }
+
+  const lastErrorMessage = lastSignatureError instanceof Error ? lastSignatureError.message : ''
+  if (lastErrorMessage.includes('On-chain isValidSignature preflight rejected signature')) {
+    throw new Error(
+      'Base App returned a Relay deposit signature that did not validate on-chain for your smart wallet. ' +
+        'Rebuild the preview and retry once. If lane events show onchain_sig_recovered with an address that is not your session-key owner, open Enable 4626 signing in Chrome or Safari outside the Base App in-app browser.',
+    )
+  }
+
+  if (lastSignatureError instanceof Error && isUserRejectedWalletAction(lastSignatureError)) {
+    throw new Error('Relay deposit signing was cancelled. Rebuild the preview and retry when ready.')
   }
 
   throw lastSignatureError instanceof Error

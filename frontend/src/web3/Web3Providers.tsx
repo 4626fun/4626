@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { WagmiProvider, useAccount } from 'wagmi'
 import { wagmiConfig } from '@/config/wagmi'
+import { useDeferUntilAfterCommit } from '@/hooks/useDeferUntilMounted'
 import { applyChainBrandTheme, resolveChainBrandTheme } from '@/theme/chainBrandTheme'
 
 function isRateLimitedError(error: unknown): boolean {
@@ -42,10 +43,19 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
 export function WalletProviders({ children }: { children: ReactNode }) {
   return (
     <WagmiProvider config={wagmiConfig} reconnectOnMount>
-      <ChainBrandThemeSync />
-      {children}
+      <DeferWagmiConsumers>
+        <ChainBrandThemeSync />
+        {children}
+      </DeferWagmiConsumers>
     </WagmiProvider>
   )
+}
+
+/** Wait one commit before mounting wagmi hook consumers — avoids Hydrate reconnect setState during render. */
+function DeferWagmiConsumers({ children }: { children: ReactNode }) {
+  const ready = useDeferUntilAfterCommit()
+  if (!ready) return null
+  return children
 }
 
 function ChainBrandThemeSync() {
