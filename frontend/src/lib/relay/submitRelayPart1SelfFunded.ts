@@ -298,7 +298,35 @@ async function assertSelfFundedPrefundBudget(params: {
 }
 
 function formatRelayPart1Error(error: unknown): string {
-  return getWalletErrorMessage(error)
+  return formatRelayBundlerRpcError(error)
+}
+
+function formatRelayBundlerRpcError(error: unknown): string {
+  if (!(error instanceof Error)) return getWalletErrorMessage(error)
+
+  const record = error as Record<string, unknown>
+  const shortMessage = typeof record.shortMessage === 'string' ? record.shortMessage.trim() : ''
+  if (shortMessage && shortMessage.toLowerCase() !== 'rpc request failed.') {
+    return shortMessage
+  }
+
+  const details = record.details
+  if (typeof details === 'string' && details.trim()) return details
+  if (details && typeof details === 'object') {
+    const nested = details as { message?: unknown; error?: { message?: unknown } }
+    const message = nested.error?.message ?? nested.message
+    if (typeof message === 'string' && message.trim()) return message
+  }
+
+  const cause = record.cause
+  if (cause instanceof Error) {
+    const causeMessage = cause.message.trim()
+    if (causeMessage && causeMessage.toLowerCase() !== error.message.toLowerCase()) {
+      return causeMessage
+    }
+  }
+
+  return error.message.trim() || getWalletErrorMessage(error)
 }
 
 function isUserRejectedWalletAction(error: unknown): boolean {
@@ -506,10 +534,17 @@ async function submitSignedPreparedUserOpViaBundler(params: {
     transport: buildRelayBundlerHttpTransport(params.customOwnerPolicyToken),
   })
   const userOperation = toRpcUserOperation(params.strippedUserOp, params.signature)
-  const userOpHash = (await bundlerClient.request({
-    method: 'eth_sendUserOperation',
-    params: [userOperation, entryPoint06Address],
-  })) as Hex
+  let userOpHash: Hex
+  try {
+    userOpHash = (await bundlerClient.request({
+      method: 'eth_sendUserOperation',
+      params: [userOperation, entryPoint06Address],
+    })) as Hex
+  } catch (error) {
+    const message = formatRelayBundlerRpcError(error)
+    params.appendEvent(`relay_part1:prepared_bundler_error=${message.slice(0, 260)}`)
+    throw new Error(message)
+  }
   params.appendEvent(`relay_part1:prepared_bundler_userop=${userOpHash}`)
 
   const receipt = await waitForUserOperationReceipt(bundlerClient, { hash: userOpHash })

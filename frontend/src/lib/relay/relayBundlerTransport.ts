@@ -20,13 +20,16 @@ function readStoredSessionToken(): string | null {
 export function buildRelayBundlerHttpTransport(customOwnerPolicyToken?: string | null) {
   const url = resolveRelayBundlerUrl()
   const sameOrigin = isSameOriginUrl(url)
-  const sessionToken = sameOrigin ? readStoredSessionToken() : null
   const policyToken =
     sameOrigin &&
     typeof customOwnerPolicyToken === 'string' &&
     customOwnerPolicyToken.trim()
       ? customOwnerPolicyToken.trim()
       : null
+  // Owner-install policy tokens bind to the HttpOnly session principal. Do not attach
+  // sessionStorage bearer auth here — a stale cv_siwe_session_token shadows the
+  // active cookie and triggers custom_owner_policy_session_mismatch on /api/paymaster.
+  const sessionToken = sameOrigin && !policyToken ? readStoredSessionToken() : null
 
   const headers: Record<string, string> = {
     ...(sameOrigin && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),

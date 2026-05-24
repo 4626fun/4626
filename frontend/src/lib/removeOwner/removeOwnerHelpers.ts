@@ -635,6 +635,21 @@ export function mapRemoveOwnerSubmissionError(params: {
   }
 
   if (
+    normalized.includes('custom_owner_policy_session_mismatch') ||
+    normalized.includes('custom_owner_policy_invalid') ||
+    normalized.includes('custom_owner_policy_sender_mismatch')
+  ) {
+    return 'Owner-install session expired or mismatched. Sign out, sign in again, rebuild the preview, then retry Enable 4626 signing.'
+  }
+
+  if (
+    normalized.includes('request denied - not authenticated') ||
+    normalized.includes('no_session')
+  ) {
+    return '4626 session expired. Sign in again on this page, rebuild the preview, then retry Enable 4626 signing.'
+  }
+
+  if (
     normalized.includes('failed to fetch rpc request') ||
     normalized.includes('internal error was received')
   ) {
