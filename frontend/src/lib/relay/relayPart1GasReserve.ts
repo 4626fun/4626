@@ -1,6 +1,6 @@
 import type { PublicClient } from 'viem'
 
-import { GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI } from '@/lib/wallet/cswOwnerAbi'
+import { GOLDEN_RELAY_PART1_ENTRYPOINT_PREFUND_WEI } from '../wallet/cswOwnerAbi.js'
 
 /** Conservative gas-unit budget for a CSW self-funded Part 1 UserOp (depositNative). */
 export const RELAY_PART1_USER_OP_GAS_BUFFER_UNITS = 400_000n
