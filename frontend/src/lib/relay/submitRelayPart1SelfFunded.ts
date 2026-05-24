@@ -34,8 +34,36 @@ import {
 export type SelfAuthOwnerDiscovery = {
   ownerIndex: number | null
   ownerSignerAddress: `0x${string}` | null
-  /** Base App session-key owner — uses inner_secp256k1 prepared-calls payload. */
+  /** Base App session-key owner at owner[2] — uses inner_secp256k1 prepared-calls payload. */
   sessionKeyOwner: boolean
+}
+
+/** Base App session-key lane used for May 5 owner-install Part 1 (4626.base.eth). */
+export const SELF_AUTH_SESSION_KEY_OWNER_INDEX = 2
+
+/** Mistaken owner added in a prior bad install — never route Part 1 through this slot. */
+export const MISTAKEN_OWNER_INDEX = 3
+
+export function isSelfAuthSessionKeyOwnerContext(params: {
+  sessionKeyOwner?: boolean
+  ownerIndex?: number | null
+}): boolean {
+  return (
+    params.sessionKeyOwner === true ||
+    params.ownerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX
+  )
+}
+
+export function assertOwnerIndexAllowedForSelfAuthPart1(params: {
+  ownerIndex: number | null
+  appendEvent: (row: string) => void
+}): void {
+  if (params.ownerIndex === MISTAKEN_OWNER_INDEX) {
+    params.appendEvent('relay_part1:reject_owner_index_3=1')
+    throw new Error(
+      'This smart wallet still has a mistaken owner in slot 3 from an earlier attempt. Remove that owner in Accounts or Base App, then retry Enable 4626 signing.',
+    )
+  }
 }
 
 /** Base App self-auth wraps personal_sign payloads with the CSW owner slot it used. */
@@ -55,7 +83,7 @@ export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   parsedOwnerIndex: number | null
   sessionKeyOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
-  if (params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
+  if (params.sessionKeyOwner || params.parsedOwnerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX) {
     return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
   }
   return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
@@ -466,13 +494,15 @@ function listSelfAuthSignMethods(params: {
   parsedOwnerIndex: number | null
   bundlerOnly?: boolean
 }): SelfAuthSignMethod[] {
-  const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly ||
-    params.sessionKeyOwner ||
-    params.parsedOwnerIndex === 2
+  const sessionKeyContext = isSelfAuthSessionKeyOwnerContext({
+    sessionKeyOwner: params.sessionKeyOwner,
+    ownerIndex: params.parsedOwnerIndex,
+  })
+  const ecdsaMethods: SelfAuthSignMethod[] = params.bundlerOnly || sessionKeyContext
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
-  if (params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
-    return ['typed_data_v4_csw', ...ecdsaMethods]
+  if (sessionKeyContext) {
+    return [...ecdsaMethods, 'typed_data_v4_csw']
   }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
@@ -486,14 +516,17 @@ async function requestSelfAuthSignature(params: {
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<Hex> {
   if (params.method === 'typed_data_v4_csw') {
-    const sessionKeySigner =
-      params.ownerDiscovery?.sessionKeyOwner === true && params.ownerDiscovery.ownerSignerAddress
+    const signerAddress =
+      isSelfAuthSessionKeyOwnerContext({
+        sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+        ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      }) && params.ownerDiscovery?.ownerSignerAddress
         ? params.ownerDiscovery.ownerSignerAddress
         : params.fundingCsw
     return signCswUserOpHashViaTypedDataV4({
       walletRequest: params.walletRequest,
       smartWallet: params.fundingCsw,
-      signerAddress: sessionKeySigner,
+      signerAddress,
       chainId: params.chainId,
       userOpHash: params.hashToSign,
     })
@@ -629,6 +662,10 @@ async function signSelfAuthPreparedUserOpOnce(params: {
 
   if (parsedOwnerIndex != null) {
     params.appendEvent(`relay_part1:parsed_owner_index=${parsedOwnerIndex}`)
+    assertOwnerIndexAllowedForSelfAuthPart1({
+      ownerIndex: parsedOwnerIndex,
+      appendEvent: params.appendEvent,
+    })
   }
   if (params.ownerDiscovery) {
     recordSelfAuthOwnerDiscovery({
@@ -979,8 +1016,6 @@ async function attemptPrepareNativeMirrorLane(params: {
     /* fail open — Base App webauthn/session-key payloads use sender address */
   }
 
-  const sessionKeyOwner =
-    params.ownerDiscovery?.sessionKeyOwner === true || params.ownerDiscovery?.ownerIndex === 2
   let parsedOwnerIndex: number | null = params.ownerDiscovery?.ownerIndex ?? null
   try {
     parsedOwnerIndex =
@@ -988,6 +1023,11 @@ async function attemptPrepareNativeMirrorLane(params: {
   } catch {
     /* optional */
   }
+
+  const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+    sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+    ownerIndex: parsedOwnerIndex,
+  })
 
   const preparedCallsResult = await trySendPreparedCallsUserOp({
     walletRequest: params.walletRequest,
@@ -1035,8 +1075,10 @@ async function sendSignedPreparedUserOp(params: {
     chainId: params.chainId,
     signAfterPaymasterStrip: effectiveStrip,
     forceBundlerOnly: params.forceBundlerOnly,
-    preferSessionKeyNoChain:
-      params.ownerDiscovery?.sessionKeyOwner === true || params.ownerDiscovery?.ownerIndex === 2,
+    preferSessionKeyNoChain: isSelfAuthSessionKeyOwnerContext({
+      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+      ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+    }),
     hadInjectedPaymaster: params.hadInjectedPaymaster,
     appendEvent: params.appendEvent,
   })
@@ -1049,7 +1091,10 @@ async function sendSignedPreparedUserOp(params: {
 
   const signMethodsFor = () =>
     listSelfAuthSignMethods({
-      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner ?? false,
+      sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
+        sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+        ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      }),
       parsedOwnerIndex: params.ownerDiscovery?.ownerIndex ?? null,
       bundlerOnly: true,
     })
@@ -1095,9 +1140,10 @@ async function sendSignedPreparedUserOp(params: {
         continue
       }
 
-      const sessionKeyOwner =
-        params.ownerDiscovery?.sessionKeyOwner === true ||
-        parsedOwnerIndex === 2
+      const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+        sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+        ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
+      })
 
       try {
         const preparedCallsResult = await trySendPreparedCallsUserOp({
@@ -1306,15 +1352,24 @@ async function discoverSelfAuthSessionKeyOwner(params: {
   const sessionKeyOwnerAddress = await readCswOwnerAddressAtIndex({
     publicClient: params.publicClient,
     fundingCsw: params.fundingCsw,
-    ownerIndex: 2,
+    ownerIndex: SELF_AUTH_SESSION_KEY_OWNER_INDEX,
   })
-  if (!sessionKeyOwnerAddress) return
+  if (sessionKeyOwnerAddress) {
+    params.ownerDiscovery.ownerIndex = SELF_AUTH_SESSION_KEY_OWNER_INDEX
+    params.ownerDiscovery.ownerSignerAddress = sessionKeyOwnerAddress
+    params.ownerDiscovery.sessionKeyOwner = true
+    params.appendEvent('relay_part1:preflight_session_key_owner=1')
+    params.appendEvent(`relay_part1:preflight_session_key_address=${sessionKeyOwnerAddress}`)
+  }
 
-  params.ownerDiscovery.ownerIndex = 2
-  params.ownerDiscovery.ownerSignerAddress = sessionKeyOwnerAddress
-  params.ownerDiscovery.sessionKeyOwner = true
-  params.appendEvent('relay_part1:preflight_session_key_owner=1')
-  params.appendEvent(`relay_part1:preflight_session_key_address=${sessionKeyOwnerAddress}`)
+  const mistakenOwnerAddress = await readCswOwnerAddressAtIndex({
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    ownerIndex: MISTAKEN_OWNER_INDEX,
+  })
+  if (mistakenOwnerAddress) {
+    params.appendEvent(`relay_part1:warn_mistaken_owner_slot_3_present=${mistakenOwnerAddress}`)
+  }
 }
 
 async function submitViaPreparedCallsSelfFunded(params: {

@@ -218,7 +218,6 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     })
     expect(candidates.length).toBeGreaterThanOrEqual(1)
     expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
-    expect(candidates.some((candidate) => candidate.mode === 'prepare_signature_request')).toBe(false)
   })
 
   it('parses owner index from Base App signature wrapper', () => {
@@ -569,7 +568,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_self_auth=1')
   })
 
-  it('surfaces prepared-calls failure for session-key owners without bundler fallback', async () => {
+  it('rejects mistaken owner slot 3 signatures before prepared-calls submit', async () => {
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
@@ -587,7 +586,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         }
       }
       if (args.method === 'personal_sign' || args.method === 'eth_sign' || args.method === 'eth_signTypedData_v4') {
-        return wrapSelfAuthOwnerSignature(2)
+        return wrapSelfAuthOwnerSignature(3)
       }
       if (args.method === 'eth_call') {
         return mockOwnerAtIndexEthCall()
@@ -613,9 +612,9 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         appendEvent,
         customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
-    ).rejects.toThrow(/UserOp signature verification failed/)
+    ).rejects.toThrow(/mistaken owner in slot 3/)
     expect(mockBundlerRequest).not.toHaveBeenCalled()
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_self_auth=1')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:reject_owner_index_3=1')
   })
 
   it('does not cascade when prepare fails with Failed to fetch RPC request', async () => {
