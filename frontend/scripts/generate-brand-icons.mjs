@@ -1,27 +1,24 @@
 #!/usr/bin/env node
 /**
- * Regenerate favicon/PWA PNG derivatives from the canonical opaque app mark.
+ * Sync favicon/PWA PNG outputs from the committed starter-kit masters.
  *
- * Source of truth: public/assets/logo-mark-opaque-1024.png (white 4 on rounded black tile).
- * Versioned filenames come from shared/site-config.json so Base App cannot reuse
- * stale cache entries keyed only by path (query strings are often ignored).
+ * Source of truth: assets/brand/master/icons/ (imported from 4626-web-starter-v2).
+ * Hand-tuned favicon sizes and logo-mark-1024 stay intact — the script does not
+ * re-render them with Sharp. Only the 200px mini-app icon is generated from the
+ * opaque app mark when no master exists at that size.
  *
- * Also restores legacy root paths (app-icon.png, pwa-512.png, …) that Base App and
- * older crawlers may still fetch instead of /favicon.ico.
+ * Versioned filenames (domain-bar-icon-v{N}-*, base-miniapp-icon-v{N}-200) come
+ * from shared/site-config.json for Base App cache busting.
  *
  * Usage:
  *   node scripts/generate-brand-icons.mjs --out public
  */
 
-import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
 
 import sharp from 'sharp'
-
-const execFileAsync = promisify(execFile)
 
 function parseArg(flag, fallback) {
   const i = process.argv.indexOf(flag)
@@ -48,26 +45,43 @@ function assetBasename(assetPath) {
   return String(assetPath ?? '').replace(/^\/assets\//, 'assets/')
 }
 
+/** Files copied verbatim from master/icons → public/assets */
+const MASTER_ICON_SYNC = [
+  'logo-mark-opaque-1024.png',
+  'logo-mark-1024.png',
+  'logo-mark-transparent.png',
+  'logo-source-transparent.png',
+  'logo-trimmed-transparent.png',
+  'favicon.svg',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'favicon-48x48.png',
+  'favicon-64x64.png',
+  'apple-touch-icon.png',
+  'android-chrome-192x192.png',
+  'android-chrome-512x512.png',
+  'maskable-icon-192x192.png',
+  'maskable-icon-512x512.png',
+  'mstile-150x150.png',
+  'logo-mark.svg',
+  'logo-mark-blue.svg',
+  'safari-pinned-tab.svg',
+  'logo-wordmark.svg',
+  'logo-mark-16.png',
+  'logo-mark-32.png',
+  'logo-mark-48.png',
+  'logo-mark-64.png',
+  'logo-mark-96.png',
+  'logo-mark-180.png',
+  'logo-mark-192.png',
+  'logo-mark-256.png',
+  'logo-mark-512.png',
+]
+
 function buildDerivativePlan(siteConfig) {
   const favicon32 = assetBasename(siteConfig.assets?.favicon32)
   const appleTouchIcon = assetBasename(siteConfig.assets?.appleTouchIcon)
   const miniappIcon = assetBasename(siteConfig.assets?.miniappIcon)
-
-  const pngDerivatives = [
-    { size: 16, file: 'assets/favicon-16x16.png' },
-    { size: 32, file: 'assets/favicon-32x32.png' },
-    { size: 32, file: 'assets/app-tab-icon-32.png' },
-    { size: 32, file: favicon32 },
-    { size: 48, file: 'assets/favicon-48x48.png' },
-    { size: 64, file: 'assets/favicon-64x64.png' },
-    { size: 180, file: 'assets/apple-touch-icon.png' },
-    { size: 180, file: 'assets/app-tab-icon-180.png' },
-    { size: 180, file: appleTouchIcon },
-    { size: 192, file: 'assets/android-chrome-192x192.png' },
-    { size: 512, file: 'assets/android-chrome-512x512.png' },
-    { size: 150, file: 'assets/mstile-150x150.png' },
-    { size: 200, file: miniappIcon },
-  ]
 
   const rootCompatibilityCopies = [
     ['assets/favicon-brand.ico', 'favicon.ico'],
@@ -79,7 +93,6 @@ function buildDerivativePlan(siteConfig) {
     [miniappIcon, 'icon.png'],
     ['assets/logo-mark-1024.png', 'logo.png'],
     ['assets/og-image.png', 'og.png'],
-    // Legacy Base App / PWA paths that must stay real PNGs (not SPA HTML fallthrough).
     ['assets/base-app-icon-1024.png', 'app-icon.png'],
     ['assets/android-chrome-512x512.png', 'pwa-512.png'],
     ['assets/android-chrome-512x512.png', 'icon-512.png'],
@@ -88,7 +101,7 @@ function buildDerivativePlan(siteConfig) {
     ['assets/og-image.png', 'miniapp-hero.png'],
   ]
 
-  return { pngDerivatives, rootCompatibilityCopies, favicon32 }
+  return { rootCompatibilityCopies, favicon32, appleTouchIcon, miniappIcon }
 }
 
 const docsBrandCopies = [
@@ -96,51 +109,52 @@ const docsBrandCopies = [
   ['assets/favicon.svg', 'brand/favicon.svg'],
 ]
 
-const MASKABLE_DERIVATIVES = [
-  { size: 192, file: 'assets/maskable-icon-192x192.png' },
-  { size: 512, file: 'assets/maskable-icon-512x512.png' },
-]
+async function writeSquareIcon(source, outPath, size) {
+  await sharp(source).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
+}
 
-async function writeSquareIcon(source, outPath, size, { maskableSafeZone = false } = {}) {
-  const innerSize = maskableSafeZone ? Math.round(size * 0.8) : size
-  const resized = await sharp(source).resize(innerSize, innerSize, { fit: 'contain' }).png().toBuffer()
+async function syncMasterIcons(masterDir, outDir) {
+  for (const file of MASTER_ICON_SYNC) {
+    const sourcePath = path.join(masterDir, file)
+    const destPath = path.join(outDir, 'assets', file)
 
-  if (!maskableSafeZone) {
-    await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
+    if (!(await exists(sourcePath))) {
+      // eslint-disable-next-line no-console
+      console.error(`Missing starter-kit master icon: ${sourcePath}`)
+      process.exitCode = 1
+      return false
+    }
+
+    await fs.mkdir(path.dirname(destPath), { recursive: true })
+    await fs.copyFile(sourcePath, destPath)
+  }
+
+  const masterFaviconIco = path.join(masterDir, 'favicon.ico')
+  const brandIco = path.join(outDir, 'assets/favicon-brand.ico')
+  await fs.copyFile(masterFaviconIco, brandIco)
+
+  const opaqueMaster = path.join(masterDir, 'logo-mark-opaque-1024.png')
+  await fs.copyFile(opaqueMaster, path.join(outDir, 'assets/base-app-icon-1024.png'))
+
+  await fs.copyFile(path.join(outDir, 'assets/favicon-32x32.png'), path.join(outDir, 'assets/app-tab-icon-32.png'))
+  await fs.copyFile(path.join(outDir, 'assets/apple-touch-icon.png'), path.join(outDir, 'assets/app-tab-icon-180.png'))
+
+  return true
+}
+
+async function syncVersionedIcons(outDir, { favicon32, appleTouchIcon, miniappIcon }, masterDir) {
+  await fs.copyFile(path.join(outDir, 'assets/favicon-32x32.png'), path.join(outDir, favicon32))
+  await fs.copyFile(path.join(outDir, 'assets/apple-touch-icon.png'), path.join(outDir, appleTouchIcon))
+
+  const miniappDest = path.join(outDir, miniappIcon)
+  const masterMiniapp200 = path.join(masterDir, 'base-miniapp-icon-200.png')
+  if (await exists(masterMiniapp200)) {
+    await fs.copyFile(masterMiniapp200, miniappDest)
     return
   }
 
-  await sharp(resized).resize(size, size, { fit: 'cover' }).png().toFile(outPath)
-}
-
-async function writeFaviconIco(outDir, source32Path) {
-  const icoPath = path.join(outDir, 'assets/favicon-brand.ico')
-  try {
-    await execFileAsync('convert', [
-      source32Path,
-      '-define',
-      'icon:auto-resize=16,32,48',
-      icoPath,
-    ])
-  } catch (error) {
-    // eslint-disable-next-line no-console
-    console.warn('ImageMagick convert unavailable; copying 32px PNG as favicon fallback', error?.message ?? error)
-    await fs.copyFile(source32Path, icoPath)
-  }
-}
-
-async function regeneratePngDerivatives(outDir, sourcePath, pngDerivatives, favicon32) {
-  for (const { size, file } of pngDerivatives) {
-    const outPath = path.join(outDir, file)
-    await writeSquareIcon(sourcePath, outPath, size)
-  }
-
-  for (const { size, file } of MASKABLE_DERIVATIVES) {
-    const outPath = path.join(outDir, file)
-    await writeSquareIcon(sourcePath, outPath, size, { maskableSafeZone: true })
-  }
-
-  await writeFaviconIco(outDir, path.join(outDir, favicon32))
+  const opaqueSource = path.join(outDir, 'assets/logo-mark-opaque-1024.png')
+  await writeSquareIcon(opaqueSource, miniappDest, 200)
 }
 
 async function syncCompatibilityAssets(outDir, copies, label) {
@@ -190,25 +204,24 @@ async function main() {
   const root = process.cwd()
   const outRel = parseArg('--out', 'public')
   const outDir = path.resolve(root, outRel)
+  const masterDir = path.resolve(root, 'assets/brand/master/icons')
   const siteConfig = await loadSiteConfig(root)
   const version = Number(siteConfig.brandAssetVersion ?? 3)
-  const { pngDerivatives, rootCompatibilityCopies, favicon32 } = buildDerivativePlan(siteConfig)
-  const sourcePath = path.join(outDir, 'assets/logo-mark-opaque-1024.png')
+  const plan = buildDerivativePlan(siteConfig)
 
-  if (!(await exists(sourcePath))) {
+  if (!(await exists(masterDir))) {
     // eslint-disable-next-line no-console
-    console.error(`Missing canonical icon source: ${sourcePath}`)
+    console.error(`Missing starter-kit master directory: ${masterDir}`)
     process.exitCode = 1
     return
   }
 
-  // Keep square full-bleed and opaque tile exports aligned for agent-registration URLs.
-  await fs.copyFile(sourcePath, path.join(outDir, 'assets/base-app-icon-1024.png'))
-  await fs.copyFile(sourcePath, path.join(outDir, 'assets/logo-mark-1024.png'))
+  const syncedMasters = await syncMasterIcons(masterDir, outDir)
+  if (!syncedMasters) return
 
-  await regeneratePngDerivatives(outDir, sourcePath, pngDerivatives, favicon32)
+  await syncVersionedIcons(outDir, plan, masterDir)
 
-  const syncedRoot = await syncCompatibilityAssets(outDir, rootCompatibilityCopies, 'root compatibility icons')
+  const syncedRoot = await syncCompatibilityAssets(outDir, plan.rootCompatibilityCopies, 'root compatibility icons')
   if (!syncedRoot) return
 
   const syncedDocsBrand = await syncCompatibilityAssets(outDir, docsBrandCopies, 'docs-site brand icons')
@@ -217,9 +230,9 @@ async function main() {
   await removeObsoleteVersionedIcons(outDir, version)
 
   // eslint-disable-next-line no-console
-  console.log(`regenerated favicon/PWA PNG derivatives from assets/logo-mark-opaque-1024.png in ${outRel}`)
+  console.log(`synced favicon/PWA assets from assets/brand/master/icons into ${outRel}`)
   // eslint-disable-next-line no-console
-  console.log('synced root compatibility icons and docs-site brand/favicon.svg + brand/logo.svg from canonical assets')
+  console.log('preserved hand-tuned starter-kit favicon sizes; versioned domain/miniapp paths only')
 }
 
 await main()

@@ -6,7 +6,7 @@ Use this when you want to replace the current SEO, social, miniapp, splash, and 
 
 Editable sources:
 
-- `assets/brand/master/` for design masters and intake files
+- `assets/brand/master/icons/` — hand-tuned starter-kit favicon/logo PNG masters (imported from `4626-web-starter-v2.zip`); **do not Sharp-regenerate these in CI**
 - `shared/site-config.json` and `src/config/site.ts` for canonical brand paths and metadata
 - `public/site.webmanifest`
 
@@ -37,7 +37,7 @@ pnpm -C frontend clean:derived-assets
 
 3. Replace or redesign the editable source assets:
 
-- Start from the current master in `assets/brand/master/` instead of from `tmp/` or old generated PNGs.
+- Start from `assets/brand/master/icons/` (starter-kit masters) instead of from `tmp/` or regenerated PNGs.
 - `public/assets/og-image.png` and `public/assets/twitter-card.png` for SEO/social cards.
 - `public/assets/logo-mark-opaque-1024.png` is the canonical app-icon source (white 4 on rounded black tile).
 - `public/assets/favicon*`, `public/assets/apple-touch-icon.png`, `public/assets/android-chrome-*`, root `public/favicon.*`, legacy root `app-icon.png` / `pwa-512.png`, `public/site.webmanifest`, and `public/browserconfig.xml` for install surfaces.

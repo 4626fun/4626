@@ -7,15 +7,13 @@ Base App shows two different icon surfaces:
 
 4626 project id: `695a49dc4d3a403912ed8ca5`.
 
-## What changed in v15
+## What changed in v16
 
-- Icon source switched from full-bleed `base-app-icon-1024.png` to **`logo-mark-opaque-1024.png`** (white `4` on rounded black tile).
-- Legacy root PNGs are regenerated again so crawlers do not receive SPA HTML at 200:
-  - `/app-icon.png` (1024)
-  - `/pwa-512.png` (512)
-  - `/miniapp-icon.png` (200)
-  - `/miniapp-hero.png` (og-image dimensions)
-- `brandAssetVersion` bumped in `frontend/shared/site-config.json`; run `pnpm -C frontend generate:brand-icons`.
+- Restored the **4626-web-starter-v2** hand-tuned favicon kit from `frontend/assets/brand/master/icons/`.
+- `generate-brand-icons.mjs` now **syncs** masters into `public/` instead of Sharp/ImageMagick re-rendering (which caused drift).
+- `logo-mark-1024.png` (full-bleed) and `logo-mark-opaque-1024.png` (app tile) are separate again — v15 had incorrectly copied opaque over full-bleed.
+
+Prior v15 notes still apply for legacy root paths and base.dev re-upload.
 
 ## Deploy verification
 
