@@ -4,6 +4,7 @@ import {
   mapSubAccountOwnerInstallError,
   SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE,
   SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE,
+  SUB_ACCOUNT_BASE_APP_SIGNING_ENDPOINT_FAILED_MESSAGE,
   SUB_ACCOUNT_TESTNET_MESSAGE,
   SUB_ACCOUNT_WRONG_BROWSER_MESSAGE,
 } from './subAccountOwnerInstallMessages'
@@ -53,5 +54,13 @@ describe('mapSubAccountOwnerInstallError', () => {
         { inBaseApp: true },
       ),
     ).toBe(SUB_ACCOUNT_BASE_APP_APPROVAL_FAILED_MESSAGE)
+  })
+
+  it('maps Base App signing endpoint failures to in-app retry guidance', () => {
+    expect(
+      mapSubAccountOwnerInstallError('An internal error was received. Details: Failed to fetch RPC request', {
+        inBaseApp: true,
+      }),
+    ).toBe(SUB_ACCOUNT_BASE_APP_SIGNING_ENDPOINT_FAILED_MESSAGE)
   })
 })

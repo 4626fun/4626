@@ -22,6 +22,9 @@ export const SUB_ACCOUNT_COUNTERFACTUAL_RELAY_BLOCKED_MESSAGE =
 export const SUB_ACCOUNT_AA23_SIGNATURE_VALIDATION_MESSAGE =
   'Base App could not validate the smart-wallet signature for the on-chain owner step (AA23). Force-close 4626 in Base App, reopen this page, confirm Base Mainnet is selected, then tap Enable 4626 signing again.'
 
+export const SUB_ACCOUNT_BASE_APP_SIGNING_ENDPOINT_FAILED_MESSAGE =
+  'Base App could not reach Coinbase’s signing service (Failed to fetch RPC request). Force-close 4626 in Base App, reopen this page, confirm Base Mainnet is selected, tap Rebuild preview, then retry once. If it keeps failing, update Base App and retry on a stable connection — stay inside Base App, not Chrome or Safari.'
+
 /** Strip nested setup wrapper text before classifying provider errors. */
 export function normalizeSubAccountOwnerInstallErrorSource(message: string): string {
   const trimmed = message.trim()
@@ -76,6 +79,12 @@ export function mapSubAccountOwnerInstallError(
   }
   if (lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')) {
     return SUB_ACCOUNT_USER_REJECTED_MESSAGE
+  }
+  if (
+    options.inBaseApp &&
+    (lower.includes('failed to fetch rpc request') || lower.includes('internal error was received'))
+  ) {
+    return SUB_ACCOUNT_BASE_APP_SIGNING_ENDPOINT_FAILED_MESSAGE
   }
   if (lower.includes('connect base app first')) {
     return message

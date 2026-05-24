@@ -1,6 +1,7 @@
 import { formatEther, type PublicClient } from 'viem'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 import type {
   OwnerMutationEip5792Call,
   OwnerMutationRelayDepositSimulation,
@@ -603,10 +604,23 @@ export function mapRemoveOwnerSubmissionError(params: {
     normalized.includes('failed to fetch rpc request') ||
     normalized.includes('internal error was received')
   ) {
+    if (params.isSelfAuthSession && isBaseAppInAppContext()) {
+      return (
+        'Base App could not reach Coinbase’s signing service (Failed to fetch RPC request). ' +
+        'Force-close 4626 in Base App, reopen https://4626.fun/waitlist?setup=base-app, confirm Base Mainnet is selected, tap Rebuild preview, then retry once. ' +
+        'If it keeps failing, update Base App and retry on a stable connection — this step must stay inside Base App, not Chrome or Safari.'
+      )
+    }
+    if (params.isSelfAuthSession) {
+      return (
+        'Could not reach the Coinbase signing endpoint (Failed to fetch RPC request). ' +
+        'The Coinbase Wallet in-app browser blocks passkey signing. Open the same page in Chrome or Safari, confirm Base Mainnet, rebuild the preview, then retry.'
+      )
+    }
     return (
-      'Base App could not reach the signing endpoint (Failed to fetch RPC request). ' +
-      'Close and reopen https://4626.fun/waitlist?setup=base-app inside Base App, confirm Base Mainnet, rebuild the preview, then retry once. ' +
-      'If it keeps failing, open the same link in Chrome/Safari instead of the in-app browser.'
+      'Could not reach the wallet signing endpoint (Failed to fetch RPC request). ' +
+      'Close and reopen this page, confirm Base Mainnet, rebuild the preview, then retry once. ' +
+      'If you are in a wallet in-app browser, open the same link in Chrome or Safari instead.'
     )
   }
 

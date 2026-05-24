@@ -11,6 +11,14 @@ import {
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationRelayFlow } from '@/lib/relay/ownerMutationTypes'
 
+vi.mock('@/lib/wallet/inAppBrowser', () => ({
+  isBaseAppInAppContext: vi.fn(() => false),
+}))
+
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+
+const mockedIsBaseAppInAppContext = vi.mocked(isBaseAppInAppContext)
+
 describe('removeOwner relay status helpers', () => {
   it('builds status endpoints with requestId first when ids match', () => {
     const relay = {
@@ -83,6 +91,30 @@ describe('removeOwner relay status helpers', () => {
       latestCswBalanceWei: null,
     })
     expect(mapped).toMatch(/rebuild preview/i)
+  })
+
+  it('maps Base App signing endpoint failures without Chrome escape guidance', () => {
+    mockedIsBaseAppInAppContext.mockReturnValueOnce(true)
+    const mapped = mapRemoveOwnerSubmissionError({
+      error: new Error('An internal error was received. Details: Failed to fetch RPC request'),
+      requiredDepositWei: null,
+      latestCswBalanceWei: null,
+      isSelfAuthSession: true,
+    })
+    expect(mapped).toMatch(/base app could not reach coinbase/i)
+    expect(mapped).not.toMatch(/open the same link in chrome/i)
+    expect(mapped).toMatch(/stay inside base app/i)
+  })
+
+  it('maps Coinbase Wallet in-app self-auth signing failures to external browser guidance', () => {
+    mockedIsBaseAppInAppContext.mockReturnValueOnce(false)
+    const mapped = mapRemoveOwnerSubmissionError({
+      error: new Error('Failed to fetch RPC request'),
+      requiredDepositWei: null,
+      latestCswBalanceWei: null,
+      isSelfAuthSession: true,
+    })
+    expect(mapped).toMatch(/chrome or safari/i)
   })
 
   it('fail-fast polls when Relay returns unknown', async () => {
