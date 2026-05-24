@@ -163,6 +163,25 @@ export async function assertRelayPart1LandedSelfFunded(params: {
   params.appendEvent('relay_part1:landed_userop_paymaster=0x0')
 }
 
+/** Final on-chain gate before Relay `/transactions/index` — rejects paymaster Part 1. */
+export async function assertRelayPart1TxHashSelfFunded(params: {
+  transactionHash: `0x${string}`
+  userOperationHash?: Hex | null
+  publicClient: PublicClient
+  fundingCsw: Address
+  appendEvent: (row: string) => void
+}): Promise<void> {
+  await assertRelayPart1LandedSelfFunded({
+    resolution: {
+      transactionHash: params.transactionHash,
+      userOperationHash: params.userOperationHash ?? null,
+    },
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
+}
+
 export async function resolveRelayPart1DepositTxHash(params: {
   resolution: RelayPart1CallsResolution
   appendEvent?: (row: string) => void

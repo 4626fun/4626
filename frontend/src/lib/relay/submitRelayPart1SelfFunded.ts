@@ -8,6 +8,7 @@ import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
 import {
   assertRelayPart1LandedSelfFunded,
+  assertRelayPart1TxHashSelfFunded,
   resolveRelayBundlerUrl,
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
@@ -335,6 +336,7 @@ async function signSelfAuthPreparedUserOpHash(params: {
 async function sendSignedPreparedUserOp(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
+  publicClient: PublicClient
   prepareResult: {
     type?: string
     chainId?: string
@@ -401,6 +403,19 @@ async function sendSignedPreparedUserOp(params: {
         params.appendEvent(`relay_part1.prepared_status.${event.step}: <unloggable>`)
       }
     },
+  })
+
+  if (!params.publicClient) {
+    throw new Error(
+      'Relay Part 1 requires an on-chain client to verify self-funded UserOps. Reload and retry.',
+    )
+  }
+
+  await assertRelayPart1LandedSelfFunded({
+    resolution,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
   })
 
   const txHash = await resolveRelayPart1DepositTxHash({
@@ -558,6 +573,13 @@ async function submitViaBundlerSelfFunded(params: {
     userOpSignMode: 'auto',
   })
   params.appendEvent(`relay_part1:bundler_tx=${result.transactionHash}`)
+  await assertRelayPart1TxHashSelfFunded({
+    transactionHash: result.transactionHash,
+    userOperationHash: result.userOperationHash,
+    publicClient: params.publicClient,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
   return result.transactionHash
 }
 
@@ -639,6 +661,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
       return await sendSignedPreparedUserOp({
         walletRequest: params.walletRequest,
         fundingCsw: params.fundingCsw,
+        publicClient: params.publicClient!,
         prepareResult: {
           type: prepareResult.type,
           chainId: prepareResult.chainId,
@@ -689,6 +712,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
   return await sendSignedPreparedUserOp({
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
+    publicClient: params.publicClient!,
     prepareResult: {
       type: prepareResult.type,
       chainId: prepareResult.chainId,
@@ -708,13 +732,11 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
  * Lane order (Base App injects USDC paymaster on `wallet_sendCalls` today):
- *   1. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
- *   2. `wallet_sendCalls` with preview-bound Depository `depositNative` only
- *   3. Direct self-funded bundler UserOp when publicClient is available
+ *   1. Direct self-funded bundler UserOp (`skipPaymaster: true`)
+ *   2. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
  *
- * EntryPoint v0.6 self-fund path: when `paymasterAndData` is empty, `_validateAccountPrepayment`
- * sets `missingAccountFunds = requiredPrefund - (nativeBalance + EntryPoint.deposits[sender])`
- * and the CSW `payPrefund` modifier tops up EntryPoint from native ETH.
+ * `wallet_sendCalls` is intentionally omitted — Base App routes it through CDP paymaster,
+ * which stalls Relay Part 2 (solver `addOwnerAddress`).
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -722,16 +744,10 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   chainId: number
   publicClient?: PublicClient
-  /**
-   * When prepare/sendCalls lanes fail, fall back to a direct self-funded bundler
-   * UserOp (paymasterAndData = 0x). Requires publicClient.
-   */
+  /** @deprecated Bundler is always attempted first when publicClient is set. */
   allowBundlerFallback?: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
-  const allowBundlerFallback =
-    params.allowBundlerFallback !== false && Boolean(params.publicClient)
-
   if (!params.publicClient) {
     throw new Error(
       'Relay Part 1 requires an on-chain client to verify self-funded UserOps. Reload the page and retry Enable 4626 signing.',
@@ -739,6 +755,24 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   }
 
   let lastError: unknown = null
+
+  try {
+    return await submitViaBundlerSelfFunded({
+      walletRequest: params.walletRequest,
+      fundingCsw: params.fundingCsw,
+      userCall: params.userCall,
+      publicClient: params.publicClient,
+      appendEvent: params.appendEvent,
+    })
+  } catch (bundlerError) {
+    lastError = bundlerError
+    if (isUserRejectedWalletAction(bundlerError)) {
+      throw bundlerError
+    }
+    params.appendEvent(
+      `relay_part1:bundler_error=${formatRelayPart1Error(bundlerError).slice(0, 220)}`,
+    )
+  }
 
   try {
     return await submitViaPreparedCallsSelfFunded({
@@ -755,36 +789,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     )
   }
 
-  try {
-    return await submitViaSendCallsSelfFunded({
-      walletRequest: params.walletRequest,
-      fundingCsw: params.fundingCsw,
-      userCall: params.userCall,
-      chainId: params.chainId,
-      publicClient: params.publicClient,
-      appendEvent: params.appendEvent,
-    })
-  } catch (sendCallsError) {
-    lastError = sendCallsError
-    if (isUserRejectedWalletAction(sendCallsError)) {
-      throw sendCallsError
-    }
-    params.appendEvent(
-      `relay_part1:send_calls_error=${formatRelayPart1Error(sendCallsError).slice(0, 220)}`,
-    )
-  }
-
-  if (!allowBundlerFallback) {
-    throw lastError instanceof Error
-      ? lastError
-      : new Error(formatRelayPart1Error(lastError))
-  }
-
-  return await submitViaBundlerSelfFunded({
-    walletRequest: params.walletRequest,
-    fundingCsw: params.fundingCsw,
-    userCall: params.userCall,
-    publicClient: params.publicClient,
-    appendEvent: params.appendEvent,
-  })
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(formatRelayPart1Error(lastError))
 }

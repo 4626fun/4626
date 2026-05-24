@@ -127,9 +127,46 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       paymaster: undefined,
       receipt: { transactionHash: '0x' + 'aa'.repeat(32) },
     })
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockReset()
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockRejectedValue(
+      new Error('bundler unavailable in test default'),
+    )
   })
 
-  it('uses prepare_calls lane first when prepare returns a self-funded userOp', async () => {
+  it('uses bundler lane first when direct self-funded UserOp succeeds', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
+      transactionHash: '0x' + 'dd'.repeat(32),
+      userOperationHash: '0x' + 'bb'.repeat(32),
+    } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
+
+    const walletRequest = vi.fn(async (args: { method: string }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
+      walletRequest,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      userCall: {
+        to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+        data: '0x49290c1c' + '0'.repeat(128),
+        value: '18871666861048',
+      },
+      chainId: 8453,
+      publicClient: mockPublicClient as never,
+      appendEvent,
+    })
+
+    expect(txHash).toBe('0x' + 'dd'.repeat(32))
+    expect(sendCoinbaseSmartWalletUserOperation).toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
+  })
+
+  it('falls back to prepare_calls when bundler fails', async () => {
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
@@ -176,12 +213,13 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_prepareCalls' }),
     )
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
   })
 
-  it('falls back to bundler when sendCalls lands with a paymaster-sponsored UserOp', async () => {
+  it('rejects paymaster-sponsored bundler UserOp and falls back to prepare', async () => {
     vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
-      transactionHash: '0x' + 'dd'.repeat(32),
+      transactionHash: '0x' + 'aa'.repeat(32),
       userOperationHash: '0x' + 'bb'.repeat(32),
     } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
 
@@ -190,31 +228,35 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       receipt: { transactionHash: '0x' + 'aa'.repeat(32) },
     })
 
-    mockSubmitOwnerViaSendCalls.mockResolvedValue({ callBundleId: 'bundle-paymaster' })
-
-    const walletRequest = vi.fn(async (args: { method: string }) => {
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
       }
       if (args.method === 'wallet_prepareCalls') {
-        throw new Error('prepare unavailable in test')
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x' + '11'.repeat(32) },
+          userOp: SAMPLE_USER_OP,
+        }
+      }
+      if (args.method === 'personal_sign') {
+        return '0x' + '22'.repeat(65)
+      }
+      if (args.method === 'wallet_sendPreparedCalls') {
+        return { id: 'prepared-after-paymaster-bundler' }
       }
       if (args.method === 'wallet_getCallsStatus') {
         return {
           status: 200,
-          receipts: [
-            {
-              transactionHash: '0x' + 'aa'.repeat(32),
-              userOperationHash: '0x' + 'bb'.repeat(32),
-            },
-          ],
+          receipts: [{ transactionHash: '0x' + 'ee'.repeat(32) }],
         }
       }
       throw new Error(`unexpected method ${args.method}`)
     })
 
     const appendEvent = vi.fn()
-    await submitSelfAuthRelayPart1SelfFunded({
+    const txHash = await submitSelfAuthRelayPart1SelfFunded({
       walletRequest,
       fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
       userCall: {
@@ -227,19 +269,21 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
       appendEvent,
     })
 
-    expect(mockSubmitOwnerViaSendCalls).toHaveBeenCalled()
+    expect(txHash).toBe('0x' + 'ee'.repeat(32))
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith(
       'relay_part1:landed_userop_paymaster=0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c',
     )
-    expect(sendCoinbaseSmartWalletUserOperation).toHaveBeenCalled()
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
   })
 
-  it('falls back to bundler when prepare injects paymaster and strip signing fails', async () => {
-    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
-      transactionHash: '0x' + 'cc'.repeat(32),
-      userOperationHash: '0x' + 'bb'.repeat(32),
-    } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
+  it('falls back to bundler inside prepare when strip signing fails', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation)
+      .mockRejectedValueOnce(new Error('primary bundler unavailable'))
+      .mockResolvedValueOnce({
+        transactionHash: '0x' + 'cc'.repeat(32),
+        userOperationHash: '0x' + 'bb'.repeat(32),
+      } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
 
     const walletRequest = vi.fn(async (args: { method: string }) => {
       if (args.method === 'eth_requestAccounts') {
@@ -285,10 +329,8 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
   })
 
-  it('throws bundler error when prepare strip and sendCalls fallback all fail', async () => {
+  it('throws when primary bundler and prepare strip both fail', async () => {
     vi.mocked(sendCoinbaseSmartWalletUserOperation).mockRejectedValue(new Error('bundler rejected'))
-
-    mockSubmitOwnerViaSendCalls.mockRejectedValue(new Error('sendCalls unavailable'))
 
     const walletRequest = vi.fn(async (args: { method: string }) => {
       if (args.method === 'eth_requestAccounts') {
@@ -326,12 +368,14 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         publicClient: mockPublicClient as never,
         appendEvent,
       }),
-    ).rejects.toThrow(/bundler rejected/)
-    expect(mockSubmitOwnerViaSendCalls).toHaveBeenCalled()
+    ).rejects.toThrow(/error generating message/)
     expect(sendCoinbaseSmartWalletUserOperation).toHaveBeenCalled()
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
   })
 
-  it('strips injected paymaster on the primary prepare lane', async () => {
+  it('strips injected paymaster on the prepare fallback lane', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockRejectedValue(new Error('bundler unavailable'))
+
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
@@ -381,37 +425,23 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
 
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
     expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperation).toHaveBeenCalledTimes(1)
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_strip_paymaster_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=personal_sign_data_address')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:prepared_userop_paymaster=0x0')
   })
 
-  it('calls eth_requestAccounts before prepare on the primary lane', async () => {
+  it('calls eth_requestAccounts before bundler on the primary lane', async () => {
+    vi.mocked(sendCoinbaseSmartWalletUserOperation).mockResolvedValue({
+      transactionHash: '0x' + 'ee'.repeat(32),
+      userOperationHash: '0x' + 'bb'.repeat(32),
+    } as Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>)
+
     const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
       if (args.method === 'eth_requestAccounts') {
         return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_prepareCalls') {
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: '0x' + '11'.repeat(32) },
-          userOp: SAMPLE_USER_OP,
-        }
-      }
-      if (args.method === 'personal_sign') {
-        return '0x' + '22'.repeat(65)
-      }
-      if (args.method === 'wallet_sendPreparedCalls') {
-        return { id: 'prepared-self-funded-2' }
-      }
-      if (args.method === 'wallet_getCallsStatus') {
-        return {
-          status: 200,
-          receipts: [{ transactionHash: '0x' + 'ee'.repeat(32) }],
-        }
       }
       throw new Error(`unexpected method ${args.method}`)
     })
@@ -434,6 +464,6 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'eth_requestAccounts' }),
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_calls_self_funded')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=bundler_self_funded')
   })
 })

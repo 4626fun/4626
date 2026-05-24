@@ -6,7 +6,10 @@ import {
   RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR,
 } from '@/lib/wallet/cswOwnerAbi'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
-import { resolveBundleTxFromUserOperationHash } from '@/lib/relay/resolveRelayPart1DepositTxHash'
+import {
+  readPaymasterFromBundleReceipt,
+  resolveBundleTxFromUserOperationHash,
+} from '@/lib/relay/resolveRelayPart1DepositTxHash'
 
 /** Relay Depository `NativeDeposit` / depositNative success log (Base mainnet). */
 export const RELAY_DEPOSITORY_NATIVE_DEPOSIT_LOG_TOPIC =
@@ -75,6 +78,45 @@ export function persistRelayPart1DepositTx(params: {
   }
 }
 
+export function clearPersistedRelayPart1DepositTx(orderId: `0x${string}`): void {
+  if (typeof window === 'undefined') return
+  try {
+    window.sessionStorage.removeItem(relayPart1StorageKey(orderId))
+  } catch {
+    /* ignore */
+  }
+}
+
+async function resolveBundleTxForPaymasterCheck(params: {
+  publicClient: PublicClient
+  txHash: `0x${string}`
+}): Promise<`0x${string}`> {
+  try {
+    await params.publicClient.getTransactionReceipt({ hash: params.txHash })
+    return params.txHash
+  } catch {
+    const bundleTx = await resolveBundleTxFromUserOperationHash({
+      userOperationHash: params.txHash,
+    })
+    return bundleTx ?? params.txHash
+  }
+}
+
+/** Paymaster-sponsored Part 1 deposits must not be reused — Relay Part 2 will not fill. */
+export async function isRelayPart1TxPaymasterSponsored(params: {
+  publicClient: PublicClient
+  txHash: `0x${string}`
+  fundingCsw: `0x${string}`
+}): Promise<boolean> {
+  const bundleTx = await resolveBundleTxForPaymasterCheck(params)
+  const paymaster = await readPaymasterFromBundleReceipt({
+    publicClient: params.publicClient,
+    transactionHash: bundleTx,
+    sender: params.fundingCsw,
+  })
+  return paymaster != null
+}
+
 /** Single-receipt check — safe through `/api/rpc` (no wide eth_getLogs scans). */
 export async function verifyRelayPart1DepositTxHint(params: {
   publicClient: PublicClient
@@ -137,7 +179,21 @@ export async function findExistingRelayPart1DepositTx(params: {
         fundingCsw: params.fundingCsw,
         orderId: boundOrderId,
       })
-      if (verified) return hint
+      if (verified) {
+        const bundleTx = await resolveBundleTxForPaymasterCheck({
+          publicClient: params.publicClient,
+          txHash: hint,
+        })
+        if (await isRelayPart1TxPaymasterSponsored({
+          publicClient: params.publicClient,
+          txHash: bundleTx,
+          fundingCsw: params.fundingCsw,
+        })) {
+          clearPersistedRelayPart1DepositTx(boundOrderId)
+          continue
+        }
+        return bundleTx
+      }
     } catch {
       /* may be UserOp hash — try bundler resolution below */
     }
@@ -153,7 +209,16 @@ export async function findExistingRelayPart1DepositTx(params: {
         fundingCsw: params.fundingCsw,
         orderId: boundOrderId,
       })
-      if (verified) return bundleTx
+      if (!verified) continue
+      if (await isRelayPart1TxPaymasterSponsored({
+        publicClient: params.publicClient,
+        txHash: bundleTx,
+        fundingCsw: params.fundingCsw,
+      })) {
+        clearPersistedRelayPart1DepositTx(boundOrderId)
+        continue
+      }
+      return bundleTx
     } catch {
       /* fail open — try next hint or proceed to fresh Part 1 */
     }

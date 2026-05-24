@@ -25,7 +25,7 @@ import {
 } from '@/lib/removeOwner/removeOwnerHelpers'
 import { validateGoldenCswDepositoryPart1UserCall } from '@/lib/relay/goldenRelayPart1Shape'
 import { notifyRelaySolverAfterPart1Deposit } from '@/lib/relay/notifyRelaySolverDeposit'
-import { ensureRelayIndexablePart1TxHash } from '@/lib/relay/resolveRelayPart1DepositTxHash'
+import { ensureRelayIndexablePart1TxHash, assertRelayPart1TxHashSelfFunded } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
 import type { OwnerMutationWalletLike } from '@/lib/relay/resolveOwnerMutationWallet'
 
@@ -315,6 +315,15 @@ export async function executeOwnerMutationViaRelay(
     depositTxHash: executeTxHash,
     appendEvent,
   })
+
+  if (publicClient && executeTxHash) {
+    await assertRelayPart1TxHashSelfFunded({
+      transactionHash: executeTxHash,
+      publicClient,
+      fundingCsw: fundingCswAddress,
+      appendEvent,
+    })
+  }
 
   let notifyResult = await wakeRelaySolverAfterPart1Deposit({
     depositTxHash: executeTxHash,
