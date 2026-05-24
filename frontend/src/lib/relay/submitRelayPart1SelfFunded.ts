@@ -257,6 +257,38 @@ export function resolveSelfFundedSignHashAfterPaymasterStrip(params: {
   }
 }
 
+/** Ordered hash candidates for self-funded bundler submit after paymaster strip. */
+export function listSelfAuthBundlerSignHashCandidates(params: {
+  preparedUserOp: unknown
+  signatureRequestHash: Hex
+  chainId: number
+  preferSessionKeyNoChain?: boolean
+}): Array<{ hash: Hex; mode: string }> {
+  const primary = resolveSelfFundedSignHashAfterPaymasterStrip(params)
+  const parsed = parseWalletPreparedUserOpV06(params.preparedUserOp)
+  const stripped = stripUserOpPaymaster(parsed)
+  const withChainId = computeUserOpHashWithChainId(stripped, params.chainId)
+  const withoutChainId = getUserOpHashWithoutChainIdLocal(stripped, ENTRY_POINT_V06_BASE)
+
+  const candidates: Array<{ hash: Hex; mode: string }> = [primary]
+  const pushUnique = (entry: { hash: Hex; mode: string }) => {
+    if (candidates.some((candidate) => candidate.hash.toLowerCase() === entry.hash.toLowerCase())) return
+    candidates.push(entry)
+  }
+
+  if (params.preferSessionKeyNoChain && primary.mode !== 'entrypoint_v06_no_chain') {
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_fallback' })
+  }
+  if (primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash') {
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_unmatched_fallback' })
+  }
+  if (primary.hash.toLowerCase() !== withChainId.toLowerCase()) {
+    pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_fallback' })
+  }
+
+  return candidates
+}
+
 async function assertSelfFundedPrefundBudget(params: {
   publicClient: PublicClient
   fundingCsw: `0x${string}`
@@ -388,90 +420,217 @@ async function ensureSelfAuthWalletAuthorized(params: {
   }
 }
 
+type SelfAuthSignMethod = 'personal_sign_data_address' | 'personal_sign_address_data' | 'eth_sign_address_data'
+
+function listSelfAuthSignMethods(params: {
+  sessionKeyOwner: boolean
+  parsedOwnerIndex: number | null
+  bundlerOnly?: boolean
+}): SelfAuthSignMethod[] {
+  if (params.bundlerOnly || params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
+    return ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
+  }
+  return ['personal_sign_data_address']
+}
+
+async function requestSelfAuthSignature(params: {
+  walletRequest: WalletRequest
+  fundingCsw: `0x${string}`
+  hashToSign: Hex
+  method: SelfAuthSignMethod
+}): Promise<Hex> {
+  const request =
+    params.method === 'eth_sign_address_data'
+      ? { method: 'eth_sign' as const, params: [params.fundingCsw, params.hashToSign] }
+      : params.method === 'personal_sign_address_data'
+        ? { method: 'personal_sign' as const, params: [params.fundingCsw, params.hashToSign] }
+        : { method: 'personal_sign' as const, params: [params.hashToSign, params.fundingCsw] }
+
+  const signature = (await params.walletRequest(request)) as Hex
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error(`${request.method} did not return a valid signature.`)
+  }
+  return signature
+}
+
 async function resolvePreparedCallsSignHash(params: {
   preparedUserOpRaw: unknown
   signatureRequestHash: Hex
   chainId: number
   signAfterPaymasterStrip: boolean
+  forceBundlerOnly?: boolean
+  preferSessionKeyNoChain?: boolean
   appendEvent: (row: string) => void
-}): Promise<Hex> {
-  if (!params.signAfterPaymasterStrip) {
-    return unwrapDoubleHexEncodedHash(params.signatureRequestHash)
+}): Promise<Array<{ hash: Hex; mode: string }>> {
+  if (!params.signAfterPaymasterStrip && !params.forceBundlerOnly) {
+    return [{
+      hash: unwrapDoubleHexEncodedHash(params.signatureRequestHash),
+      mode: 'prepare_signature_request',
+    }]
   }
-  const resolved = resolveSelfFundedSignHashAfterPaymasterStrip({
+  const candidates = listSelfAuthBundlerSignHashCandidates({
     preparedUserOp: params.preparedUserOpRaw,
     signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
+    preferSessionKeyNoChain: params.preferSessionKeyNoChain,
   })
-  params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${resolved.mode}`)
-  return resolved.hash
+  params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${candidates[0]?.mode ?? 'unknown'}`)
+  if (candidates.length > 1) {
+    params.appendEvent(`relay_part1:sign_hash_candidates=${candidates.length}`)
+  }
+  return candidates
+}
+
+function isBundlerSignatureRejectedError(error: unknown): boolean {
+  const message = formatRelayBundlerRpcError(error).toLowerCase()
+  return (
+    message.includes('invalid userop signature') ||
+    message.includes('invalid signature') ||
+    message.includes('signature check failed') ||
+    message.includes('aa24') ||
+    message.includes('paymaster signature')
+  )
+}
+
+async function probeBundlerAcceptsUserOp(params: {
+  publicClient: PublicClient
+  userOperation: ReturnType<typeof toRpcUserOperation>
+  customOwnerPolicyToken?: string | null
+}): Promise<void> {
+  const bundlerClient = createBundlerClient({
+    client: params.publicClient as never,
+    transport: buildRelayBundlerHttpTransport(params.customOwnerPolicyToken),
+  })
+  await bundlerClient.request({
+    method: 'eth_estimateUserOperationGas',
+    params: [params.userOperation, entryPoint06Address],
+  })
 }
 
 async function signSelfAuthPreparedUserOpHash(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
-  hashToSign: Hex
+  hashCandidates: Array<{ hash: Hex; mode: string }>
   appendEvent: (row: string) => void
   ownerDiscovery?: SelfAuthOwnerDiscovery
+  strippedUserOp: V06UserOpFields
+  publicClient: PublicClient
+  customOwnerPolicyToken?: string | null
 }): Promise<{
   signature: Hex
   preparedCallsSignerAddress: `0x${string}` | null
   parsedOwnerIndex: number | null
+  hashSigned: Hex
+  signMethod: SelfAuthSignMethod
 }> {
-  params.appendEvent('relay_part1:sign_mode=personal_sign_data_address')
-  const signature = (await params.walletRequest({
-    method: 'personal_sign',
-    params: [params.hashToSign, params.fundingCsw],
-  })) as Hex
-  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
-    throw new Error('personal_sign did not return a valid signature.')
-  }
+  let lastError: unknown = null
 
-  let preparedCallsSignerAddress: `0x${string}` | null = null
-  let parsedOwnerIndex = parseSelfAuthOwnerIndexFromSignature(signature)
-  let sessionKeyOwner = false
-  try {
-    const guardOutcome = await preflightOwnerKeyMismatch({
-      walletRequest: params.walletRequest,
-      sender: params.fundingCsw,
-      hashToSign: params.hashToSign,
-      signature,
-      sessionKind: 'self_auth',
-    })
-    if (
-      guardOutcome.kind === 'ok' ||
-      guardOutcome.kind === 'skipped_self_auth_session_key' ||
-      guardOutcome.kind === 'skipped_code_bearing'
-    ) {
-      if (guardOutcome.kind === 'skipped_self_auth_session_key') {
-        sessionKeyOwner = true
-      }
-      if ('parsedOwnerIndex' in guardOutcome && guardOutcome.parsedOwnerIndex != null) {
-        parsedOwnerIndex = guardOutcome.parsedOwnerIndex
-      }
-      if ('parsedOwnerAddress' in guardOutcome && guardOutcome.parsedOwnerAddress) {
-        preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
-        params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+  for (const candidate of params.hashCandidates) {
+    params.appendEvent(`relay_part1:sign_hash_mode=${candidate.mode}`)
+    for (const signMethod of listSelfAuthSignMethods({
+      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner ?? false,
+      parsedOwnerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      bundlerOnly: true,
+    })) {
+      try {
+        params.appendEvent(`relay_part1:sign_mode=${signMethod}`)
+        const signature = await requestSelfAuthSignature({
+          walletRequest: params.walletRequest,
+          fundingCsw: params.fundingCsw,
+          hashToSign: candidate.hash,
+          method: signMethod,
+        })
+
+        let preparedCallsSignerAddress: `0x${string}` | null = null
+        let parsedOwnerIndex = parseSelfAuthOwnerIndexFromSignature(signature)
+        let sessionKeyOwner = false
+        try {
+          const guardOutcome = await preflightOwnerKeyMismatch({
+            walletRequest: params.walletRequest,
+            sender: params.fundingCsw,
+            hashToSign: candidate.hash,
+            signature,
+            sessionKind: 'self_auth',
+          })
+          if (
+            guardOutcome.kind === 'ok' ||
+            guardOutcome.kind === 'skipped_self_auth_session_key' ||
+            guardOutcome.kind === 'skipped_code_bearing'
+          ) {
+            if (guardOutcome.kind === 'skipped_self_auth_session_key') {
+              sessionKeyOwner = true
+            }
+            if ('parsedOwnerIndex' in guardOutcome && guardOutcome.parsedOwnerIndex != null) {
+              parsedOwnerIndex = guardOutcome.parsedOwnerIndex
+            }
+            if ('parsedOwnerAddress' in guardOutcome && guardOutcome.parsedOwnerAddress) {
+              preparedCallsSignerAddress = guardOutcome.parsedOwnerAddress
+              params.appendEvent(`relay_part1:prepared_signer=${preparedCallsSignerAddress}`)
+            }
+          }
+        } catch {
+          /* fail open — Base App webauthn payloads use sender address */
+        }
+
+        if (parsedOwnerIndex != null) {
+          params.appendEvent(`relay_part1:parsed_owner_index=${parsedOwnerIndex}`)
+        }
+        if (params.ownerDiscovery) {
+          recordSelfAuthOwnerDiscovery({
+            discovery: params.ownerDiscovery,
+            ownerIndex: parsedOwnerIndex,
+            ownerSignerAddress: preparedCallsSignerAddress,
+            sessionKeyOwner,
+            appendEvent: params.appendEvent,
+          })
+        }
+
+        const userOperation = toRpcUserOperation(params.strippedUserOp, signature)
+        try {
+          await probeBundlerAcceptsUserOp({
+            publicClient: params.publicClient,
+            userOperation,
+            customOwnerPolicyToken: params.customOwnerPolicyToken,
+          })
+          params.appendEvent('relay_part1:bundler_estimate_ok=1')
+          return {
+            signature,
+            preparedCallsSignerAddress,
+            parsedOwnerIndex,
+            hashSigned: candidate.hash,
+            signMethod,
+          }
+        } catch (estimateError) {
+          lastError = estimateError
+          if (isBundlerSignatureRejectedError(estimateError)) {
+            params.appendEvent(
+              `relay_part1:bundler_estimate_rejected=${formatRelayPart1Error(estimateError).slice(0, 120)}`,
+            )
+            continue
+          }
+          throw estimateError
+        }
+      } catch (error) {
+        if (!isBundlerSignatureRejectedError(error) && !(error instanceof Error && error.message.includes('did not return'))) {
+          throw error
+        }
+        lastError = error
+        params.appendEvent(
+          `relay_part1:sign_attempt_error=${formatRelayPart1Error(error).slice(0, 120)} mode=${signMethod}`,
+        )
       }
     }
-  } catch {
-    /* fail open — Base App webauthn payloads use sender address */
   }
 
-  if (parsedOwnerIndex != null) {
-    params.appendEvent(`relay_part1:parsed_owner_index=${parsedOwnerIndex}`)
-  }
-  if (params.ownerDiscovery) {
-    recordSelfAuthOwnerDiscovery({
-      discovery: params.ownerDiscovery,
-      ownerIndex: parsedOwnerIndex,
-      ownerSignerAddress: preparedCallsSignerAddress,
-      sessionKeyOwner,
-      appendEvent: params.appendEvent,
-    })
+  if (lastError instanceof Error && isBundlerSignatureRejectedError(lastError)) {
+    throw new Error(
+      'UserOp signature verification failed for the Relay deposit. Rebuild the owner-install preview in Base App and retry Enable 4626 signing.',
+    )
   }
 
-  return { signature, preparedCallsSignerAddress, parsedOwnerIndex }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error('Could not obtain a Base App signature for the Relay deposit UserOp. Retry Enable 4626 signing.')
 }
 
 function formatUserOpRpcHexField(value: bigint): `0x${string}` {
@@ -614,31 +773,39 @@ async function sendSignedPreparedUserOp(params: {
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
   ownerDiscovery?: SelfAuthOwnerDiscovery
+  customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
-  const hashToSign = await resolvePreparedCallsSignHash({
+  const effectiveStrip = params.signAfterPaymasterStrip || Boolean(params.forceBundlerOnly)
+  const hashCandidates = await resolvePreparedCallsSignHash({
     preparedUserOpRaw: params.preparedUserOpRaw,
     signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
-    signAfterPaymasterStrip: params.signAfterPaymasterStrip,
+    signAfterPaymasterStrip: effectiveStrip,
+    forceBundlerOnly: params.forceBundlerOnly,
+    preferSessionKeyNoChain:
+      params.ownerDiscovery?.sessionKeyOwner === true || params.ownerDiscovery?.ownerIndex === 2,
     appendEvent: params.appendEvent,
   })
+
+  const strippedUserOp = effectiveStrip
+    ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
+    : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
   const { signature, preparedCallsSignerAddress, parsedOwnerIndex } =
     await signSelfAuthPreparedUserOpHash({
       walletRequest: params.walletRequest,
       fundingCsw: params.fundingCsw,
-      hashToSign,
+      hashCandidates,
       appendEvent: params.appendEvent,
       ownerDiscovery: params.ownerDiscovery,
+      strippedUserOp,
+      publicClient: params.publicClient,
+      customOwnerPolicyToken: params.customOwnerPolicyToken,
     })
-
-  const strippedUserOp = params.signAfterPaymasterStrip
-    ? stripUserOpPaymaster(parseWalletPreparedUserOpV06(params.preparedUserOpRaw))
-    : parseWalletPreparedUserOpV06(params.preparedUserOpRaw)
 
   // Base App `wallet_sendPreparedCalls` re-injects USDC paymaster even when we strip
   // paymasterAndData — owner-install always submits via bundler with custom-owner policy.
-  if (params.signAfterPaymasterStrip || params.forceBundlerOnly) {
+  if (effectiveStrip || params.forceBundlerOnly) {
     params.appendEvent(
       params.forceBundlerOnly
         ? 'relay_part1:skip_send_prepared_calls_self_auth_bundler_only'
@@ -965,7 +1132,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
       chainId: prepareResult.chainId,
       userOp: serializeUserOpForPreparedCallsSend(parseWalletPreparedUserOpV06(prepareResult.userOp)),
     },
-    signAfterPaymasterStrip: false,
+    signAfterPaymasterStrip: true,
     forceBundlerOnly,
     customOwnerPolicyToken: policyToken,
   })

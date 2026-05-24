@@ -7,6 +7,7 @@
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --release-lock
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --fast
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --explore-backfill
+ *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --refresh-ethos
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --both --fast
  *   pnpm -C frontend exec tsx scripts/run-creator-metrics-backfill.ts --force-full --max-pages 240
  */
@@ -17,6 +18,7 @@ import { resolve } from 'node:path'
 import { getDb } from '../server/_lib/db/postgres.js'
 import {
   recomputeCreatorCounts,
+  runCreatorEthosProjectionRefresh,
   runCreatorMetricsExploreBackfill,
   runCreatorMetricsSync,
 } from '../server/_lib/zora/creatorMetricsSync.js'
@@ -65,8 +67,11 @@ function parseArgs(argv: string[]) {
     fast: flags.has('fast'),
     exploreBackfill: flags.has('explore-backfill'),
     both: flags.has('both'),
+    refreshEthos: flags.has('refresh-ethos'),
+    skipEthosRefresh: flags.has('skip-ethos-refresh'),
     maxPages: Number(map.get('max-pages') ?? ''),
     exploreMaxPages: Number(map.get('explore-max-pages') ?? ''),
+    ethosLimit: Number(map.get('ethos-limit') ?? ''),
   }
 }
 
@@ -89,6 +94,7 @@ function applyExploreBackfillProfile(): void {
     CREATOR_METRICS_EXPLORE_BACKFILL_MAX_PAGES_PER_LIST: '2000',
     CREATOR_METRICS_EXPLORE_REQUEST_INTERVAL_MS: '50',
     CREATOR_METRICS_COIN_UPSERT_BATCH_SIZE: '500',
+    CREATOR_METRICS_EXPLORE_ETHOS_PROJECTION_LIMIT: '50000',
   }
   for (const [key, value] of Object.entries(defaults)) {
     if (!process.env[key]) process.env[key] = value
@@ -246,9 +252,24 @@ async function main() {
   const maxPages = Number.isFinite(args.maxPages) && args.maxPages > 0 ? Math.floor(args.maxPages) : undefined
   const exploreMaxPages =
     Number.isFinite(args.exploreMaxPages) && args.exploreMaxPages > 0 ? Math.floor(args.exploreMaxPages) : undefined
+  const ethosLimit =
+    Number.isFinite(args.ethosLimit) && args.ethosLimit > 0 ? Math.floor(args.ethosLimit) : undefined
+  const refreshEthosOpt = args.skipEthosRefresh ? false : args.refreshEthos ? true : undefined
 
   const runExplore = args.exploreBackfill || args.both
-  const runChain = args.both || (!args.exploreBackfill && !args.both)
+  const runChain = args.both || (!args.exploreBackfill && !args.both && !args.refreshEthos)
+  const runEthosOnly = args.refreshEthos && !runExplore && !runChain
+
+  if (runEthosOnly) {
+    console.log('\n[sync] refreshing creator Ethos projection', { ethosLimit: ethosLimit ?? 'default' })
+    const ethosResult = await runCreatorEthosProjectionRefresh({ limit: ethosLimit })
+    console.log('\n[sync] ethos result')
+    console.log(JSON.stringify(ethosResult, null, 2))
+    console.log('\n[audit] after ethos refresh')
+    await auditDuplicates(db)
+    if (!ethosResult.ok) process.exit(1)
+    return
+  }
 
   if (runExplore) {
     applyExploreBackfillProfile()
@@ -259,6 +280,7 @@ async function main() {
     const exploreResult = await runCreatorMetricsExploreBackfill({
       forceFull: args.forceFull,
       maxPagesPerList: exploreMaxPages,
+      refreshEthos: refreshEthosOpt,
     })
     console.log('\n[sync] explore result')
     console.log(JSON.stringify(exploreResult, null, 2))

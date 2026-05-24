@@ -546,6 +546,7 @@ export type CreatorMetricsExploreBackfillResult = {
   pagesFetched: number
   exploreBackfillComplete: boolean
   checkpoints: ExploreBackfillCheckpoints
+  ethosProjectionRefreshedRows?: number
   error?: string
 }
 
@@ -554,6 +555,54 @@ type ExploreBackfillOptions = {
   maxPagesPerList?: number
   pageSize?: number
   lists?: readonly ExploreList[]
+  /** When true (default), refresh creator_ethos_projection after explore upserts. */
+  refreshEthos?: boolean
+}
+
+const DEFAULT_EXPLORE_ETHOS_PROJECTION_LIMIT = 50_000
+
+function exploreEthosRefreshEnabled(options: ExploreBackfillOptions): boolean {
+  if (options.refreshEthos === false) return false
+  if (options.refreshEthos === true) return true
+  return process.env.CREATOR_METRICS_EXPLORE_ETHOS_REFRESH_ENABLED !== '0'
+}
+
+async function refreshCreatorEthosProjectionAfterExploreBackfill(
+  db: Db,
+  log: ReturnType<typeof logger.child>,
+): Promise<{ refreshedRows: number; appliedLimit: number; available: boolean }> {
+  const { refreshCreatorEthosProjection } = await import('./creatorEthosProjection.js')
+  const limit = parsePositiveInt(
+    process.env.CREATOR_METRICS_EXPLORE_ETHOS_PROJECTION_LIMIT,
+    DEFAULT_EXPLORE_ETHOS_PROJECTION_LIMIT,
+  )
+  const result = await refreshCreatorEthosProjection({ db, limit })
+  log.info('[creator-metrics-explore-backfill] ethos projection refreshed', result)
+  return result
+}
+
+export async function runCreatorEthosProjectionRefresh(options: {
+  limit?: number
+} = {}): Promise<{ ok: boolean; refreshedRows: number; appliedLimit: number; available: boolean; error?: string }> {
+  const db = (await getDbForCron()) ?? (await getDb())
+  if (!db) {
+    return { ok: false, refreshedRows: 0, appliedLimit: 0, available: false, error: 'database_not_configured' }
+  }
+  await ensureCreatorMetricsSchema(db)
+  try {
+    const { refreshCreatorEthosProjection } = await import('./creatorEthosProjection.js')
+    const limit =
+      options.limit ??
+      parsePositiveInt(
+        process.env.CREATOR_METRICS_EXPLORE_ETHOS_PROJECTION_LIMIT,
+        DEFAULT_EXPLORE_ETHOS_PROJECTION_LIMIT,
+      )
+    const result = await refreshCreatorEthosProjection({ db, limit })
+    return { ok: result.available, ...result }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'creator_ethos_projection_refresh_failed'
+    return { ok: false, refreshedRows: 0, appliedLimit: 0, available: false, error: errorMessage }
+  }
 }
 
 async function loadExploreBackfillState(db: Db): Promise<{
@@ -639,6 +688,17 @@ export async function runCreatorMetricsExploreBackfill(
   let checkpoints = forceFull ? createDefaultExploreBackfillCheckpoints() : exploreState.checkpoints
 
   if (!forceFull && exploreState.exploreBackfillComplete) {
+    let ethosProjectionRefreshedRows = 0
+    if (exploreEthosRefreshEnabled(options)) {
+      try {
+        const ethos = await refreshCreatorEthosProjectionAfterExploreBackfill(db, log)
+        ethosProjectionRefreshedRows = ethos.refreshedRows
+      } catch (ethosError) {
+        log.warn('[creator-metrics-explore-backfill] ethos projection refresh failed', {
+          error: ethosError instanceof Error ? ethosError.message : String(ethosError),
+        })
+      }
+    }
     return {
       ok: true,
       runId,
@@ -646,6 +706,7 @@ export async function runCreatorMetricsExploreBackfill(
       pagesFetched: 0,
       exploreBackfillComplete: true,
       checkpoints,
+      ethosProjectionRefreshedRows,
     }
   }
 
@@ -739,10 +800,23 @@ export async function runCreatorMetricsExploreBackfill(
       WHERE id = 1;
     `
 
+    let ethosProjectionRefreshedRows = 0
+    if (exploreEthosRefreshEnabled(options)) {
+      try {
+        const ethos = await refreshCreatorEthosProjectionAfterExploreBackfill(db, log)
+        ethosProjectionRefreshedRows = ethos.refreshedRows
+      } catch (ethosError) {
+        log.warn('[creator-metrics-explore-backfill] ethos projection refresh failed', {
+          error: ethosError instanceof Error ? ethosError.message : String(ethosError),
+        })
+      }
+    }
+
     log.info('[creator-metrics-explore-backfill] completed', {
       coinsUpserted,
       pagesFetched,
       exploreBackfillComplete,
+      ethosProjectionRefreshedRows,
     })
 
     return {
@@ -752,6 +826,7 @@ export async function runCreatorMetricsExploreBackfill(
       pagesFetched,
       exploreBackfillComplete,
       checkpoints,
+      ethosProjectionRefreshedRows,
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_explore_backfill_failed'

@@ -8,6 +8,7 @@ import {
   readPreparedUserOpPaymasterAndData,
   buildSelfFundedRelayPrepareCapabilities,
   resolveSelfFundedSignHashAfterPaymasterStrip,
+  listSelfAuthBundlerSignHashCandidates,
   listSelfAuthPreparedCallsSignaturePayloadModes,
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
@@ -138,6 +139,31 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     )
   })
 
+  it('lists fallback hash candidates for session-key bundler submit', () => {
+    const withPaymaster = {
+      ...SAMPLE_USER_OP,
+      paymasterAndData:
+        '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+    }
+    const primary = resolveSelfFundedSignHashAfterPaymasterStrip({
+      preparedUserOp: withPaymaster,
+      signatureRequestHash: resolveSelfFundedSignHashAfterPaymasterStrip({
+        preparedUserOp: withPaymaster,
+        signatureRequestHash: '0x' + '00'.repeat(32),
+        chainId: 8453,
+      }).hash,
+      chainId: 8453,
+    })
+    const candidates = listSelfAuthBundlerSignHashCandidates({
+      preparedUserOp: withPaymaster,
+      signatureRequestHash: primary.hash,
+      chainId: 8453,
+      preferSessionKeyNoChain: true,
+    })
+    expect(candidates.length).toBeGreaterThanOrEqual(1)
+    expect(candidates[0]?.hash).toMatch(/^0x[a-fA-F0-9]{64}$/)
+  })
+
   it('parses owner index from Base App signature wrapper', () => {
     expect(parseSelfAuthOwnerIndexFromSignature(wrapSelfAuthOwnerSignature(2))).toBe(2)
     expect(parseSelfAuthOwnerIndexFromSignature(`0x${'22'.repeat(65)}`)).toBeNull()
@@ -171,7 +197,16 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     mockSubmitOwnerViaSendCalls.mockReset()
     mockSubmitOwnerViaSendCalls.mockRejectedValue(new Error('sendCalls unavailable in test'))
     mockBundlerRequest.mockReset()
-    mockBundlerRequest.mockResolvedValue('0x' + 'bb'.repeat(32))
+    mockBundlerRequest.mockImplementation(async (args: { method?: string }) => {
+      if (args.method === 'eth_estimateUserOperationGas') {
+        return {
+          callGasLimit: '0x5208',
+          verificationGasLimit: '0x5208',
+          preVerificationGas: '0x5208',
+        }
+      }
+      return '0x' + 'bb'.repeat(32)
+    })
     mockGetUserOperationReceipt.mockReset()
     mockGetUserOperationReceipt.mockResolvedValue({
       paymaster: undefined,
