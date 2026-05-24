@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeAbiParameters, type Hex } from 'viem'
 import { entryPoint06Address, getUserOperationHash } from 'viem/account-abstraction'
 
+import * as submitRelayPart1SelfFundedModule from '@/lib/relay/submitRelayPart1SelfFunded'
 import {
   parseEntryPointPaymasterAddress,
   parseSelfAuthOwnerIndexFromSignature,
@@ -17,7 +18,6 @@ import {
   isSelfAuthPasskeyOwnerSignature,
   isSelfAuthReplaySafeSignHashMode,
   isSelfAuthSessionKeyEcdsaSignature,
-  preflightValidateUserOpStyleSignature,
   shouldRejectSelfAuthSignatureForSessionKeyLane,
   stripRawWalletPreparedUserOp,
   stripUserOpPaymaster,
@@ -210,7 +210,7 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     )
   })
 
-  it('lists replaySafe hash first for session-key sukanto lane', () => {
+  it('lists entrypoint hash before replaySafe for session-key lane', () => {
     expect(isSelfAuthReplaySafeSignHashMode('csw_replay_safe_primary')).toBe(true)
     expect(isSelfAuthReplaySafeSignHashMode('entrypoint_v06_chain')).toBe(false)
     const withPaymaster = {
@@ -244,6 +244,15 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     })
     expect(replaySafe).toMatch(/^0x[a-fA-F0-9]{64}$/)
     expect(replaySafe).not.toBe(entryPointHash)
+    const candidates = listSelfAuthBundlerSignHashCandidates({
+      preparedUserOp: withPaymaster,
+      signatureRequestHash: entryPointHash,
+      chainId: 8453,
+      sessionKeyOwner: true,
+      fundingCsw: SAMPLE_USER_OP.sender,
+    })
+    expect(candidates[0]?.mode).toMatch(/entrypoint_v06.*session_key/)
+    expect(candidates.some((candidate) => candidate.mode === 'csw_replay_safe_sdk_fallback')).toBe(true)
   })
 
   it('lists domain-matched stripped hash before no-chain fallback', () => {
@@ -316,15 +325,15 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
-  it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
+  it('uses full_wrapper_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
-      'inner_secp256k1',
       'full_wrapper_secp256k1',
+      'inner_secp256k1',
       'auto',
     ])
     expect(
       listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: null, sessionKeyOwner: true }),
-    ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
+    ).toEqual(['full_wrapper_secp256k1', 'inner_secp256k1', 'auto'])
   })
 
   it('prepare capabilities request required native funds only (no paymaster hint)', () => {
@@ -378,8 +387,8 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       fundingCsw: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
       preferReplaySafeHash: true,
     })
-    expect(candidates[0]?.mode).toBe('csw_replay_safe_primary')
-    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_no_chain_session_key_fallback')).toBe(
+    expect(candidates[0]?.mode).toMatch(/entrypoint_v06.*session_key/)
+    expect(candidates.some((candidate) => candidate.mode === 'csw_replay_safe_sdk_fallback')).toBe(
       true,
     )
   })
@@ -417,8 +426,8 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       fundingCsw: SAMPLE_USER_OP.sender,
       preferReplaySafeHash: true,
     })
-    expect(candidates[0]?.mode).toBe('csw_replay_safe_primary')
-    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_chain_session_key_primary')).toBe(
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_chain_session_key_primary')
+    expect(candidates.some((candidate) => candidate.mode === 'csw_replay_safe_sdk_fallback')).toBe(
       true,
     )
   })
@@ -437,7 +446,13 @@ describe('submitRelayPart1SelfFunded helpers', () => {
 })
 
 describe('submitSelfAuthRelayPart1SelfFunded', () => {
+  const validateUserOpPreflightSpy = vi.spyOn(
+    submitRelayPart1SelfFundedModule,
+    'preflightValidateUserOpStyleSignature',
+  )
+
   beforeEach(() => {
+    validateUserOpPreflightSpy.mockResolvedValue(true)
     mockSubmitOwnerViaSendCalls.mockReset()
     mockSubmitOwnerViaSendCalls.mockRejectedValue(new Error('sendCalls unavailable in test'))
     mockPublicClient.readContract.mockReset()
@@ -732,7 +747,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     ).toBe(true)
   })
 
-  it('session-key Part 1 signs replaySafe via typed_data after paymaster strip', async () => {
+  it('session-key Part 1 tries entrypoint hash before replaySafe after paymaster strip', async () => {
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -802,13 +817,10 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toMatch(/^0x[a-fA-F0-9]{64}$/)
-    expect(signMethods).toEqual(['eth_signTypedData_v4'])
+    expect(signMethods).toContain('personal_sign')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:preflight_session_key_owner=1')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_hash_mode=csw_replay_safe_primary')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:sign_mode=typed_data_v4_csw')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_prepared_calls_primary')
-    expect(walletRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
+    expect(appendEvent).toHaveBeenCalledWith(
+      expect.stringMatching(/relay_part1:sign_hash_mode=entrypoint_v06.*session_key/),
     )
   })
 
@@ -839,12 +851,11 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           signatureRequest: { hash: '0x' + '11'.repeat(32) },
           userOp: {
             ...SAMPLE_USER_OP,
-            paymasterAndData:
-              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+            paymasterAndData: '0x',
           },
         }
       }
-      if (args.method === 'personal_sign') {
+      if (args.method === 'personal_sign' || args.method === 'eth_signTypedData_v4') {
         return passkeyLike
       }
       throw new Error(`unexpected method ${args.method}`)
@@ -873,7 +884,8 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
   })
 
-  it('skips bundler when replaySafe session-key sig fails validateUserOp preflight', async () => {
+  it('skips prepared-calls and bundler when replaySafe sig fails validateUserOp preflight', async () => {
+    validateUserOpPreflightSpy.mockResolvedValue(false)
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string }) => {
       if (args.functionName === 'ownerAtIndex') {
         return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
@@ -935,10 +947,12 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         appendEvent,
         customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
-    ).rejects.toThrow(/signature verification failed|Relay deposit signing was cancelled|did not validate on-chain|no matching signer/i)
+    ).rejects.toThrow(/Could not submit the Relay deposit UserOp|signature verification failed|no matching signer/i)
 
     expect(mockBundlerRequest).not.toHaveBeenCalled()
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=sukanto_prepared_calls_primary')
+    expect(appendEvent).toHaveBeenCalledWith(
+      'relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1',
+    )
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_validate_user_op_preflight=1')
     expect(appendEvent).toHaveBeenCalledWith(
       expect.stringContaining('relay_part1:onchain_sig_preflight=advisory_invalid_session_key'),

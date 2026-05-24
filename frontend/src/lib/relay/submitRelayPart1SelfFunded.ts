@@ -215,7 +215,7 @@ export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   sessionKeyOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
   if (params.sessionKeyOwner || params.parsedOwnerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX) {
-    return ['inner_secp256k1', 'full_wrapper_secp256k1', 'auto']
+    return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
   }
   return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
 }
@@ -454,7 +454,7 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
       })
     : null
   const preferReplaySafe =
-    params.preferReplaySafeHash ?? params.sessionKeyOwner ?? Boolean(params.fundingCsw)
+    params.preferReplaySafeHash ?? (!params.sessionKeyOwner && Boolean(params.fundingCsw))
 
   const candidates: Array<{ hash: Hex; mode: string }> = []
   const pushUnique = (entry: { hash: Hex; mode: string }) => {
@@ -462,13 +462,8 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
     candidates.push(entry)
   }
 
-  if (preferReplaySafe && replaySafeHash) {
-    pushUnique({ hash: replaySafeHash, mode: 'csw_replay_safe_primary' })
-  }
-
   if (params.sessionKeyOwner) {
-    // When Base App injected a paymaster, prepare usually signs the with-chain hash. After
-    // strip, sign the domain-matched stripped digest first — not no-chain.
+    // validateUserOp checks raw EntryPoint userOpHash (not replaySafe). Try that domain first.
     if (
       primary.mode === 'entrypoint_v06_chain' ||
       primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash'
@@ -485,9 +480,28 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
       pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
       pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_fallback' })
     }
+
+    pushUnique(primary)
+    if (primary.mode !== 'entrypoint_v06_no_chain') {
+      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
+    }
+    if (primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash') {
+      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_unmatched_fallback' })
+    }
+    if (primary.hash.toLowerCase() !== withChainId.toLowerCase()) {
+      pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_fallback' })
+    }
+
+    if (replaySafeHash) {
+      pushUnique({ hash: replaySafeHash, mode: 'csw_replay_safe_sdk_fallback' })
+    }
+    return candidates
   }
 
-  // Domain-matched stripped hash when prepare hash domain is known.
+  if (preferReplaySafe && replaySafeHash) {
+    pushUnique({ hash: replaySafeHash, mode: 'csw_replay_safe_primary' })
+  }
+
   pushUnique(primary)
   if (primary.mode !== 'entrypoint_v06_no_chain') {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
@@ -1760,6 +1774,15 @@ async function sendSignedPreparedUserOp(params: {
         lastBundlerSignature = signature
       } else {
         params.appendEvent('relay_part1:skip_bundler_validate_user_op_preflight=1')
+      }
+
+      const replaySafeValidateUserOpMismatch =
+        !validateUserOpOk &&
+        isSelfAuthReplaySafeSignHashMode(input.hashMode) &&
+        (onChainSignatureOk || sessionKeyEcdsaOk)
+      if (replaySafeValidateUserOpMismatch) {
+        params.appendEvent('relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1')
+        continue
       }
 
       const bypassSdkViaBundler =
