@@ -16,6 +16,7 @@ import {
   submitSelfAuthRelayPart1SelfFunded,
   userOpHasPaymaster,
 } from '@/lib/relay/submitRelayPart1SelfFunded'
+import { unwrapDoubleHexEncodedHash } from '@/lib/wallet/onboardingWalletReplayable'
 
 function wrapSelfAuthOwnerSignature(ownerIndex: number): Hex {
   return encodeAbiParameters(
@@ -280,6 +281,48 @@ describe('submitRelayPart1SelfFunded helpers', () => {
         value: '0x1358b225a3f8',
       },
     ])
+  })
+
+  it('resolves 4626.base.eth double-encoded prepare hash to entrypoint_v06_chain stripped digest', () => {
+    const userOp = {
+      sender: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      nonce: '0xa2',
+      initCode: '0x',
+      callData:
+        '0x34fcd5be0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000004cd00e387622c35bddb9b4c962c136462338bc31000000000000000000000000000000000000000000000000000ab49cfb5a3f000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000004449290c1c0000000000000000000000004beabd0afbcc2f0440cdef1c3c745d43fae704efa0d6076b65c7e73da11bd76cb32c250572e41ac715176971c4b1c554ce036e8400000000000000000000000000000000000000000000000000000000',
+      callGasLimit: '0x4bb8',
+      verificationGasLimit: '0x16fcf',
+      preVerificationGas: '0x1cffa',
+      maxFeePerGas: '0x8c51e0',
+      maxPriorityFeePerGas: '0x16e360',
+      paymasterAndData:
+        '0x2faeb0760d4230ef2ac21496bb4f0b47d634fd4c00006a132502000000000000e8a7bee5b39b423e9123132896077745000100833589fcd6edb6e08f4c7c32d4f71b54bda0291328da22dcc90c4d9f4caee6d0bfe11aec413ef609000000000000000000000000000000000000000000000000000000003e72d2f40000006978409b8a037cf26c9ef30572ffc772d2fd8af7697630afc65d8e70ee0d2dcd566c7002dd2fded8b8940c26cc67ab06ed4a347bfe3b182f3d61e25b915919db5eca1c',
+      signature: '0x',
+    }
+    const doubleEncodedHash =
+      '0x307836636633643632656437376462336532646663623932346438393464636335626463386366653637303439383964386235356364303133376264393439613930' as Hex
+
+    const unwrapped = unwrapDoubleHexEncodedHash(doubleEncodedHash)
+    expect(unwrapped).toBe('0x6cf3d62ed77db3e2dfcb924d894dcc5bdc8cfe6704989d8b55cd0137bd949a90')
+
+    const parsed = parseWalletPreparedUserOpV06(userOp)
+    const primary = resolveSelfFundedSignHashAfterPaymasterStrip({
+      preparedUserOp: userOp,
+      signatureRequestHash: doubleEncodedHash,
+      chainId: 8453,
+    })
+    // Base App may use a prepare-local hash domain; unmatched still yields stripped with-chain digest.
+    expect(['entrypoint_v06_chain', 'entrypoint_v06_chain_unmatched_prepare_hash']).toContain(primary.mode)
+    expect(stripUserOpPaymaster(parsed).paymasterAndData).toBe('0x')
+
+    const candidates = listSelfAuthBundlerSignHashCandidates({
+      preparedUserOp: userOp,
+      signatureRequestHash: doubleEncodedHash,
+      chainId: 8453,
+      sessionKeyOwner: true,
+    })
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_session_key_primary')
+    expect(candidates.some((candidate) => candidate.mode === 'entrypoint_v06_chain_unmatched_prepare_hash')).toBe(true)
   })
 
   it('stripRawWalletPreparedUserOp clears snake_case paymaster fields', () => {

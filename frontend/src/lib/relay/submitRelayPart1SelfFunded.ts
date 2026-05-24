@@ -290,6 +290,7 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   preparedUserOp: unknown
   signatureRequestHash: Hex
   chainId: number
+  sessionKeyOwner?: boolean
 }): Array<{ hash: Hex; mode: string }> {
   const primary = resolveSelfFundedSignHashAfterPaymasterStrip(params)
   const parsed = parseWalletPreparedUserOpV06(params.preparedUserOp)
@@ -303,7 +304,12 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
     candidates.push(entry)
   }
 
-  // Domain-matched stripped hash first (usually with-chain when Base App injected paymaster).
+  if (params.sessionKeyOwner) {
+    // Base App session-key Part 1 often validates no-chain UserOp hash (see recipe doc).
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
+  }
+
+  // Domain-matched stripped hash (usually with-chain when Base App injected paymaster).
   pushUnique(primary)
   if (primary.mode !== 'entrypoint_v06_no_chain') {
     pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_fallback' })
@@ -549,6 +555,7 @@ async function resolvePreparedCallsSignHash(params: {
   signAfterPaymasterStrip: boolean
   forceBundlerOnly?: boolean
   hadInjectedPaymaster?: boolean
+  sessionKeyOwner?: boolean
   appendEvent: (row: string) => void
 }): Promise<Array<{ hash: Hex; mode: string }>> {
   if (!params.signAfterPaymasterStrip && !params.forceBundlerOnly) {
@@ -561,6 +568,7 @@ async function resolvePreparedCallsSignHash(params: {
     preparedUserOp: params.preparedUserOpRaw,
     signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
+    sessionKeyOwner: params.sessionKeyOwner,
   })
   params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${candidates[0]?.mode ?? 'unknown'}`)
   if (candidates.length > 1) {
@@ -1071,6 +1079,10 @@ async function sendSignedPreparedUserOp(params: {
     signAfterPaymasterStrip: effectiveStrip,
     forceBundlerOnly: params.forceBundlerOnly,
     hadInjectedPaymaster: params.hadInjectedPaymaster,
+    sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
+      sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+      ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+    }),
     appendEvent: params.appendEvent,
   })
 
@@ -1204,7 +1216,7 @@ async function sendSignedPreparedUserOp(params: {
       hashMode: candidate.mode,
       userOp: strippedUserOp,
       lane: 'prepared_calls_stripped_self_funded',
-      sendUserOpData: stripRawWalletPreparedUserOp(params.preparedUserOpRaw),
+      sendUserOpData: serializeUserOpForPreparedCallsSend(strippedUserOp),
     })
     if (strippedTx) {
       return strippedTx
