@@ -17,6 +17,7 @@
     "prebuild:app": "pnpm generate:html-shells",
     "prebuild:telegram-link-standalone": "pnpm generate:html-shells",
     "dev": "vite --config vite.config.ts",
+    "dev:low-memory": "VITE_LOW_MEMORY=1 vite --config vite.config.ts",
     "clean:dist": "node scripts/clean-dist.mjs",
     "clean:derived-assets": "node scripts/clean-derived-assets.mjs",
     "build:clean": "pnpm clean:dist && pnpm build",

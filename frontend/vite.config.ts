@@ -12,6 +12,7 @@ import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
+const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1'
 const nodeRequire = createRequire(import.meta.url)
 const dotenvLoadedKeys = new Set<string>()
 
@@ -558,7 +559,10 @@ export default defineConfig(({ command }) => {
     global: 'globalThis',
   },
   optimizeDeps: {
-    include: ['buffer'],
+    // WSL/low-RAM dev: skip esbuild pre-bundling to avoid OOM-killed esbuild (EPIPE overlay).
+    ...(lowMemoryDev && command === 'serve'
+      ? { noDiscovery: true, include: [] as string[] }
+      : { include: ['buffer'] }),
     // @xmtp/browser-sdk uses Web Workers (workers/client) that Vite's dep optimizer cannot handle
     exclude: ['@xmtp/browser-sdk'],
     esbuildOptions: {
