@@ -74,8 +74,10 @@ function apiImport(relativePath: string) {
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const deployDryRunDev = Boolean(String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim())
-// Deploy dry-run shares a heavy Privy/wagmi graph; skip optimizeDeps pre-bundling to avoid WSL OOM-killing esbuild.
-const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1' || deployDryRunDev
+// Opt-in only: skip optimizeDeps discovery when WSL/RAM is tight (e.g. two Vite dev servers at once).
+const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1'
+// react-router imports named exports from CJS `cookie`; always pre-bundle in dev.
+const alwaysOptimizeInclude = ['buffer', 'cookie', 'set-cookie-parser'] as const
 const nodeRequire = createRequire(import.meta.url)
 const dotenvLoadedKeys = new Set<string>()
 
@@ -657,8 +659,8 @@ export default defineConfig(({ command }) => {
   optimizeDeps: {
     // WSL/low-RAM dev: skip esbuild pre-bundling to avoid OOM-killed esbuild (EPIPE overlay).
     ...(lowMemoryDev && command === 'serve'
-      ? { noDiscovery: true, include: [] as string[] }
-      : { include: ['buffer'] }),
+      ? { noDiscovery: true, include: [...alwaysOptimizeInclude] }
+      : { include: [...alwaysOptimizeInclude] }),
     // @xmtp/browser-sdk uses Web Workers (workers/client) that Vite's dep optimizer cannot handle
     exclude: ['@xmtp/browser-sdk'],
     esbuildOptions: {

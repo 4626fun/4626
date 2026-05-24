@@ -286,10 +286,10 @@ if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
 
-# Dry-run shares a large Privy/wagmi graph. WSL boxes often OOM-kill esbuild when
-# optimizeDeps pre-bundling runs alongside another Vite dev server — skip discovery
-# (VITE_LOW_MEMORY / DEPLOY_DRY_RUN_PORT in vite.config.ts) and give Node headroom.
-export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-1}"
+# Dry-run shares a large Privy/wagmi graph. WSL boxes may OOM-kill esbuild when
+# optimizeDeps pre-bundling runs alongside another Vite dev server — opt in with
+# VITE_LOW_MEMORY=1 (uses cookie shim + skips dep discovery in vite.config.ts).
+export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-0}"
 # WSL often hits ENOSPC on inotify; polling avoids kernel watcher limits (see vite.config watch.ignored too).
 export VITE_WATCH_POLLING="${VITE_WATCH_POLLING:-1}"
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=4096}"

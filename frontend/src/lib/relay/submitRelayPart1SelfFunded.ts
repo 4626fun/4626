@@ -56,7 +56,7 @@ export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   sessionKeyOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
   if (params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
-    return ['inner_secp256k1', 'full_wrapper_secp256k1', 'auto']
+    return ['full_wrapper_secp256k1', 'inner_secp256k1', 'auto']
   }
   return ['auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
 }
@@ -190,13 +190,15 @@ function serializeUserOpForPreparedCallsSend(op: V06UserOpFields): Record<string
 }
 
 /** Preserve Base App field encoding when resubmitting a prepared userOp. */
-function stripRawWalletPreparedUserOp(raw: unknown): unknown {
+export function stripRawWalletPreparedUserOp(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw
-  return {
-    ...(raw as Record<string, unknown>),
-    paymasterAndData: '0x',
-    signature: '0x',
+  const record = { ...(raw as Record<string, unknown>) }
+  // Base App may return snake_case or camelCase — zero every alias so bundlers
+  // cannot read paymaster bytes from a field we did not strip.
+  for (const key of ['paymasterAndData', 'paymaster_and_data', 'signature'] as const) {
+    record[key] = '0x'
   }
+  return record
 }
 
 function computeUserOpHashWithChainId(op: V06UserOpFields, chainId: number): `0x${string}` {
@@ -470,7 +472,7 @@ function listSelfAuthSignMethods(params: {
     ? ['personal_sign_data_address', 'eth_sign_address_data', 'personal_sign_address_data']
     : ['personal_sign_data_address']
   if (params.sessionKeyOwner || params.parsedOwnerIndex === 2) {
-    return [...ecdsaMethods, 'typed_data_v4_csw']
+    return ['typed_data_v4_csw', ...ecdsaMethods]
   }
   return ['typed_data_v4_csw', ...ecdsaMethods]
 }
@@ -481,12 +483,17 @@ async function requestSelfAuthSignature(params: {
   hashToSign: Hex
   method: SelfAuthSignMethod
   chainId: number
+  ownerDiscovery?: SelfAuthOwnerDiscovery
 }): Promise<Hex> {
   if (params.method === 'typed_data_v4_csw') {
+    const sessionKeySigner =
+      params.ownerDiscovery?.sessionKeyOwner === true && params.ownerDiscovery.ownerSignerAddress
+        ? params.ownerDiscovery.ownerSignerAddress
+        : params.fundingCsw
     return signCswUserOpHashViaTypedDataV4({
       walletRequest: params.walletRequest,
       smartWallet: params.fundingCsw,
-      signerAddress: params.fundingCsw,
+      signerAddress: sessionKeySigner,
       chainId: params.chainId,
       userOpHash: params.hashToSign,
     })
@@ -578,6 +585,7 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     hashToSign: params.hashToSign,
     method: params.signMethod,
     chainId: params.chainId,
+    ownerDiscovery: params.ownerDiscovery,
   })
 
   let preparedCallsSignerAddress: `0x${string}` | null = null
@@ -1213,6 +1221,8 @@ export function buildSelfFundedRelayPrepareCapabilities(
 ): Record<string, unknown> {
   const requiredWei = depositWei + gasReserveWei
   return {
+    // Valid Base App shape; discourages mandatory CDP paymaster injection when possible.
+    paymasterService: { optional: true },
     requiredFunds: [
       {
         address: '0x0000000000000000000000000000000000000000',

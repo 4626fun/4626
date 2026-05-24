@@ -11,6 +11,7 @@ import {
   listSelfAuthBundlerSignHashCandidates,
   listSelfAuthPreparedCallsSignaturePayloadModes,
   listSelfAuthPreparedCallsSignerAddressCandidates,
+  stripRawWalletPreparedUserOp,
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
   userOpHasPaymaster,
@@ -248,26 +249,38 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index'])
   })
 
-  it('uses inner_secp256k1 first for Base App session-key owner index 2', () => {
+  it('uses full_wrapper_secp256k1 first for Base App session-key owner index 2', () => {
     expect(listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 2 })).toEqual([
-      'inner_secp256k1',
       'full_wrapper_secp256k1',
+      'inner_secp256k1',
       'auto',
     ])
     expect(
       listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: null, sessionKeyOwner: true }),
-    ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
+    ).toEqual(['full_wrapper_secp256k1', 'inner_secp256k1', 'auto'])
   })
 
-  it('prepare capabilities omit paymasterService so Base App stays self-funded', () => {
+  it('prepare capabilities request optional paymaster and required native funds', () => {
     const caps = buildSelfFundedRelayPrepareCapabilities(18_871_666_861_048n, 2_400_000_000_000n)
-    expect(caps).not.toHaveProperty('paymasterService')
+    expect(caps.paymasterService).toEqual({ optional: true })
     expect(caps.requiredFunds).toEqual([
       {
         address: '0x0000000000000000000000000000000000000000',
         value: '0x1358b225a3f8',
       },
     ])
+  })
+
+  it('stripRawWalletPreparedUserOp clears snake_case paymaster fields', () => {
+    const stripped = stripRawWalletPreparedUserOp({
+      sender: SAMPLE_USER_OP.sender,
+      paymaster_and_data:
+        '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+      signature: '0xdead',
+    }) as Record<string, unknown>
+    expect(stripped.paymasterAndData).toBe('0x')
+    expect(stripped.paymaster_and_data).toBe('0x')
+    expect(stripped.signature).toBe('0x')
   })
 })
 
