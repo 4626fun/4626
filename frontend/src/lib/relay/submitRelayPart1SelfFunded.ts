@@ -243,6 +243,22 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   )
 }
 
+/** Do not fall through to a second Part 1 lane — user already signed or wallet RPC is broken. */
+function isNonCascadeRelayPart1Error(error: unknown): boolean {
+  if (isUserRejectedWalletAction(error)) return true
+  const message = formatRelayPart1Error(error).toLowerCase()
+  return (
+    message.includes('failed to fetch rpc request') ||
+    message.includes('failed to fetch') ||
+    message.includes('internal error was received') ||
+    message.includes('error generating message') ||
+    message.includes('error generating transaction') ||
+    message.includes('paymaster = 0') ||
+    message.includes('usdc paymaster') ||
+    message.includes('stalls relay part 2')
+  )
+}
+
 /**
  * Base App returns 4100 ("Must call eth_requestAccounts before other methods")
  * when prepare/sign RPC runs before the in-app wallet session is authorized.
@@ -569,8 +585,11 @@ async function submitViaBundlerSelfFunded(params: {
     ],
     skipPaymaster: true,
     retryOnPrefund: false,
-    useTypedDataSigning: true,
-    userOpSignMode: 'auto',
+    retryOnInvalidSignature: false,
+    retryWithTypedDataSigning: false,
+    useTypedDataSigning: false,
+    userOpSignMode: 'signMessage',
+    ownerIsContract: true,
   })
   params.appendEvent(`relay_part1:bundler_tx=${result.transactionHash}`)
   await assertRelayPart1TxHashSelfFunded({
@@ -681,22 +700,6 @@ async function submitViaPreparedCallsSelfFunded(params: {
       )
     }
 
-    if (params.publicClient) {
-      try {
-        return await submitViaBundlerSelfFunded({
-          walletRequest: params.walletRequest,
-          fundingCsw: params.fundingCsw,
-          userCall: params.userCall,
-          publicClient: params.publicClient,
-          appendEvent: params.appendEvent,
-        })
-      } catch (bundlerError) {
-        params.appendEvent(
-          `relay_part1:bundler_fallback_error=${formatRelayPart1Error(bundlerError).slice(0, 220)}`,
-        )
-      }
-    }
-
     if (stripError) {
       throw stripError
     }
@@ -731,9 +734,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
  * Submit Relay Part 1 (Depository.depositNative) from a Base App self-auth CSW
  * without ERC-4337 paymaster sponsorship (native ETH / EntryPoint prefund only).
  *
- * Lane order (Base App injects USDC paymaster on `wallet_sendCalls` today):
- *   1. Direct self-funded bundler UserOp (`skipPaymaster: true`)
- *   2. `wallet_prepareCalls` → strip paymaster → `wallet_sendPreparedCalls`
+ * Lane order for Base App self-auth (minimize passkey prompts):
+ *   1. `wallet_prepareCalls` → strip paymaster if needed → `wallet_sendPreparedCalls`
+ *   2. Direct self-funded bundler UserOp (`skipPaymaster: true`, single personal_sign)
  *
  * `wallet_sendCalls` is intentionally omitted — Base App routes it through CDP paymaster,
  * which stalls Relay Part 2 (solver `addOwnerAddress`).
@@ -744,7 +747,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   userCall: OwnerMutationEip5792Call
   chainId: number
   publicClient?: PublicClient
-  /** @deprecated Bundler is always attempted first when publicClient is set. */
+  /** @deprecated Bundler is the prepare lane fallback when publicClient is set. */
   allowBundlerFallback?: boolean
   appendEvent: (row: string) => void
 }): Promise<`0x${string}`> {
@@ -754,7 +757,30 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     )
   }
 
+  const allowBundlerFallback = params.allowBundlerFallback !== false
+
   let lastError: unknown = null
+
+  try {
+    return await submitViaPreparedCallsSelfFunded({
+      ...params,
+      publicClient: params.publicClient,
+    })
+  } catch (preparedError) {
+    lastError = preparedError
+    if (isNonCascadeRelayPart1Error(preparedError)) {
+      throw preparedError
+    }
+    params.appendEvent(
+      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
+    )
+  }
+
+  if (!allowBundlerFallback) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(formatRelayPart1Error(lastError))
+  }
 
   try {
     return await submitViaBundlerSelfFunded({
@@ -766,26 +792,11 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     })
   } catch (bundlerError) {
     lastError = bundlerError
-    if (isUserRejectedWalletAction(bundlerError)) {
+    if (isNonCascadeRelayPart1Error(bundlerError)) {
       throw bundlerError
     }
     params.appendEvent(
       `relay_part1:bundler_error=${formatRelayPart1Error(bundlerError).slice(0, 220)}`,
-    )
-  }
-
-  try {
-    return await submitViaPreparedCallsSelfFunded({
-      ...params,
-      publicClient: params.publicClient,
-    })
-  } catch (preparedError) {
-    lastError = preparedError
-    if (isUserRejectedWalletAction(preparedError)) {
-      throw preparedError
-    }
-    params.appendEvent(
-      `relay_part1:prepare_calls_error=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
     )
   }
 

@@ -600,6 +600,17 @@ export function mapRemoveOwnerSubmissionError(params: {
   }
 
   if (
+    normalized.includes('failed to fetch rpc request') ||
+    normalized.includes('internal error was received')
+  ) {
+    return (
+      'Base App could not reach the signing endpoint (Failed to fetch RPC request). ' +
+      'Close and reopen https://4626.fun/waitlist?setup=base-app inside Base App, confirm Base Mainnet, rebuild the preview, then retry once. ' +
+      'If it keeps failing, open the same link in Chrome/Safari instead of the in-app browser.'
+    )
+  }
+
+  if (
     normalized.includes('failed to estimate gas for user operation') &&
     normalized.includes('useroperation reverted')
   ) {
