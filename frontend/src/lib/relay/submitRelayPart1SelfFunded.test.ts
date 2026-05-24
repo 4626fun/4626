@@ -92,6 +92,41 @@ const SAMPLE_USER_OP = {
 
 const TEST_CUSTOM_OWNER_POLICY_TOKEN = 'test-relay-owner-install-policy-token'
 
+function mockOwnerAtIndexEthCall() {
+  return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+}
+
+/** Default self-auth wallet mock: prepared-calls signature rejected, bundler succeeds. */
+function createBundlerFallbackWalletRequest(options?: {
+  prepareUserOp?: Record<string, unknown>
+  signatureRequestHash?: Hex
+  signature?: Hex
+}) {
+  return vi.fn(async (args: { method: string; params?: unknown[] }) => {
+    if (args.method === 'eth_requestAccounts') {
+      return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+    }
+    if (args.method === 'wallet_prepareCalls') {
+      return {
+        type: 'user-operation-v06',
+        chainId: '0x2105',
+        signatureRequest: { hash: options?.signatureRequestHash ?? ('0x' + '11'.repeat(32)) },
+        userOp: options?.prepareUserOp ?? SAMPLE_USER_OP,
+      }
+    }
+    if (args.method === 'personal_sign' || args.method === 'eth_sign') {
+      return options?.signature ?? wrapSelfAuthOwnerSignature(2)
+    }
+    if (args.method === 'eth_call') {
+      return mockOwnerAtIndexEthCall()
+    }
+    if (args.method === 'wallet_sendPreparedCalls') {
+      throw new Error('Invalid UserOp signature or paymaster signature')
+    }
+    throw new Error(`unexpected method ${args.method}`)
+  })
+}
+
 describe('submitRelayPart1SelfFunded helpers', () => {
   it('detects empty paymasterAndData as self-funded (EntryPoint paymaster=0)', () => {
     expect(userOpHasPaymaster({ paymasterAndData: '0x' })).toBe(false)
@@ -249,23 +284,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('never uses wallet_sendCalls in self-auth owner-install', async () => {
-    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_requestAccounts') {
-        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_prepareCalls') {
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: '0x' + '11'.repeat(32) },
-          userOp: SAMPLE_USER_OP,
-        }
-      }
-      if (args.method === 'personal_sign') {
-        return '0x' + '22'.repeat(65)
-      }
-      throw new Error(`unexpected method ${args.method}`)
-    })
+    const walletRequest = createBundlerFallbackWalletRequest()
 
     const appendEvent = vi.fn()
     await submitSelfAuthRelayPart1SelfFunded({
@@ -343,26 +362,13 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('strips paymaster and submits via bundler when Base App injects paymaster on prepare', async () => {
-    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_requestAccounts') {
-        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_prepareCalls') {
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: '0xabc123' },
-          userOp: {
-            ...SAMPLE_USER_OP,
-            paymasterAndData:
-              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
-          },
-        }
-      }
-      if (args.method === 'personal_sign') {
-        return wrapSelfAuthOwnerSignature(2)
-      }
-      throw new Error(`unexpected method ${args.method}`)
+    const walletRequest = createBundlerFallbackWalletRequest({
+      signatureRequestHash: '0xabc123',
+      prepareUserOp: {
+        ...SAMPLE_USER_OP,
+        paymasterAndData:
+          '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+      },
     })
 
     const appendEvent = vi.fn()
@@ -381,32 +387,18 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
-    expect(walletRequest).not.toHaveBeenCalledWith(
+    expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
     )
     expect(mockBundlerRequest).toHaveBeenCalled()
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_prepared_calls_self_auth_bundler_only')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded')
   })
 
-  it('uses bundler-only even when prepare returns paymaster=0', async () => {
-    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_requestAccounts') {
-        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_prepareCalls') {
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: '0xabc123' },
-          userOp: SAMPLE_USER_OP,
-        }
-      }
-      if (args.method === 'personal_sign') {
-        return wrapSelfAuthOwnerSignature(2)
-      }
-      throw new Error(`unexpected method ${args.method}`)
+  it('uses bundler fallback even when prepare returns paymaster=0', async () => {
+    const walletRequest = createBundlerFallbackWalletRequest({
+      signatureRequestHash: '0xabc123',
     })
 
     const appendEvent = vi.fn()
@@ -425,10 +417,10 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     })
 
     expect(txHash).toBe('0x' + 'cc'.repeat(32))
-    expect(walletRequest).not.toHaveBeenCalledWith(
+    expect(walletRequest).toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_send_prepared_calls_self_auth_bundler_only')
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_bundler_self_funded')
   })
 
@@ -597,23 +589,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('calls eth_requestAccounts before prepare on the primary lane', async () => {
-    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
-      if (args.method === 'eth_requestAccounts') {
-        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
-      }
-      if (args.method === 'wallet_prepareCalls') {
-        return {
-          type: 'user-operation-v06',
-          chainId: '0x2105',
-          signatureRequest: { hash: '0x' + '11'.repeat(32) },
-          userOp: SAMPLE_USER_OP,
-        }
-      }
-      if (args.method === 'personal_sign') {
-        return '0x' + '22'.repeat(65)
-      }
-      throw new Error(`unexpected method ${args.method}`)
-    })
+    const walletRequest = createBundlerFallbackWalletRequest()
 
     const appendEvent = vi.fn()
     const txHash = await submitSelfAuthRelayPart1SelfFunded({
