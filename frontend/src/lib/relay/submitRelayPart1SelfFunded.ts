@@ -89,6 +89,56 @@ export function parseSelfAuthOwnerIndexFromSignature(signature: Hex): number | n
   return null
 }
 
+/** ABI-encoded Coinbase Smart Wallet owner signature wrapper `(ownerIndex, bytes sig)`. */
+export function wrapBareSelfAuthOwnerSignature(signature: Hex, ownerIndex: number): Hex {
+  const wrapped = parseCoinbaseSignatureWrapper(signature)
+  if (wrapped && hexByteLength(wrapped.signatureData) === 65) {
+    return signature
+  }
+  if (hexByteLength(signature) !== 65) {
+    return signature
+  }
+  return encodeAbiParameters(
+    [{ type: 'uint256' }, { type: 'bytes' }],
+    [BigInt(ownerIndex), signature],
+  ) as Hex
+}
+
+export async function resolveCswOwnerIndexForEoaAddress(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  eoaAddress: `0x${string}`
+  maxScan?: number
+}): Promise<number | null> {
+  const target = getAddress(params.eoaAddress).toLowerCase()
+  let ownerCount = params.maxScan ?? 8
+  try {
+    const count = await params.publicClient.readContract({
+      address: params.fundingCsw,
+      abi: CSW_OWNER_READ_ABI,
+      functionName: 'ownerCount',
+      args: [],
+    })
+    if (typeof count === 'bigint' && count > 0n) {
+      ownerCount = Math.min(Number(count), params.maxScan ?? 8)
+    }
+  } catch {
+    /* scan fallback */
+  }
+
+  for (let index = 0; index < ownerCount; index += 1) {
+    const ownerAddress = await readCswOwnerAddressAtIndex({
+      publicClient: params.publicClient,
+      fundingCsw: params.fundingCsw,
+      ownerIndex: index,
+    })
+    if (ownerAddress && ownerAddress.toLowerCase() === target) {
+      return index
+    }
+  }
+  return null
+}
+
 export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   parsedOwnerIndex: number | null
   sessionKeyOwner?: boolean
@@ -330,9 +380,24 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   }
 
   if (params.sessionKeyOwner) {
-    // Recipe: personal_sign over no-chain stripped digest first for session-key Part 1.
-    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
-    pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_fallback' })
+    // When Base App injected a paymaster, prepare usually signs the with-chain hash. After
+    // strip, sign the domain-matched stripped digest first — not no-chain.
+    if (
+      primary.mode === 'entrypoint_v06_chain' ||
+      primary.mode === 'entrypoint_v06_chain_unmatched_prepare_hash'
+    ) {
+      pushUnique({
+        hash: primary.hash,
+        mode: `${primary.mode}_session_key_primary`,
+      })
+      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_fallback' })
+      if (primary.hash.toLowerCase() !== withChainId.toLowerCase()) {
+        pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_fallback' })
+      }
+    } else {
+      pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_session_key_primary' })
+      pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_session_key_fallback' })
+    }
   }
 
   // Domain-matched stripped hash when prepare hash domain is known.
@@ -624,6 +689,83 @@ function hexByteLength(value: Hex): number {
   return (value.length - 2) / 2
 }
 
+async function alignSelfAuthSessionKeySignature(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  chainId: number
+  userOpHash: Hex
+  signature: Hex
+  preferredOwnerIndex: number
+  preferredOwnerAddress: `0x${string}` | null
+  appendEvent: (row: string) => void
+}): Promise<{ signature: Hex; ownerIndex: number | null }> {
+  let signature = params.signature
+  let ownerIndex = parseSelfAuthOwnerIndexFromSignature(signature)
+
+  if (ownerIndex == null && hexByteLength(signature) === 65) {
+    signature = wrapBareSelfAuthOwnerSignature(signature, params.preferredOwnerIndex)
+    ownerIndex = params.preferredOwnerIndex
+    params.appendEvent('relay_part1:sig_wrapped_bare_secp256k1=1')
+  }
+
+  if (params.preferredOwnerAddress) {
+    const repaired = await repairSelfAuthSessionKeyWrapperSignature({
+      signature,
+      chainId: params.chainId,
+      fundingCsw: params.fundingCsw,
+      userOpHash: params.userOpHash,
+      expectedOwnerIndex: params.preferredOwnerIndex,
+      expectedOwnerAddress: params.preferredOwnerAddress,
+    })
+    if (repaired.repaired) {
+      signature = repaired.signature
+      ownerIndex = params.preferredOwnerIndex
+      params.appendEvent('relay_part1:sig_wrapper_repaired=1')
+    }
+  }
+
+  const wrapped = parseCoinbaseSignatureWrapper(signature)
+  if (wrapped && hexByteLength(wrapped.signatureData) === 65) {
+    const replaySafe = hashTypedData(
+      buildCswUserOpTypedDataPayload({
+        smartWallet: params.fundingCsw,
+        chainId: params.chainId,
+        userOpHash: params.userOpHash,
+      }),
+    )
+    try {
+      const recovered = await recoverAddress({
+        hash: replaySafe,
+        signature: wrapped.signatureData,
+      })
+      params.appendEvent(
+        `relay_part1:onchain_sig_recovered=${recovered} owner_index=${wrapped.ownerIndex ?? 'n/a'}`,
+      )
+      const resolvedIndex = await resolveCswOwnerIndexForEoaAddress({
+        publicClient: params.publicClient,
+        fundingCsw: params.fundingCsw,
+        eoaAddress: recovered,
+      })
+      if (
+        resolvedIndex != null &&
+        (wrapped.ownerIndex == null || wrapped.ownerIndex !== resolvedIndex)
+      ) {
+        signature = wrapBareSelfAuthOwnerSignature(wrapped.signatureData, resolvedIndex)
+        ownerIndex = resolvedIndex
+        params.appendEvent(`relay_part1:sig_owner_index_resolved=${resolvedIndex}`)
+      }
+    } catch {
+      /* diagnostic only */
+    }
+  }
+
+  return { signature, ownerIndex }
+}
+
+function isSessionKeyPersonalSignMethod(method: SelfAuthSignMethod): boolean {
+  return method === 'personal_sign_data_address' || method === 'personal_sign_address_data'
+}
+
 async function preflightSelfAuthUserOpSignatureOnChain(params: {
   publicClient: PublicClient
   fundingCsw: `0x${string}`
@@ -659,28 +801,6 @@ async function preflightSelfAuthUserOpSignatureOnChain(params: {
       params.appendEvent(
         `relay_part1:onchain_sig_preflight=skipped:${candidate.mode}:${formatRelayPart1Error(error).slice(0, 80)}`,
       )
-    }
-  }
-
-  const wrapped = parseCoinbaseSignatureWrapper(params.signature)
-  if (wrapped && hexByteLength(wrapped.signatureData) === 65) {
-    try {
-      const replaySafe = hashTypedData(
-        buildCswUserOpTypedDataPayload({
-          smartWallet: params.fundingCsw,
-          chainId: params.chainId,
-          userOpHash: entryPointHash,
-        }),
-      )
-      const recovered = await recoverAddress({
-        hash: replaySafe,
-        signature: wrapped.signatureData,
-      })
-      params.appendEvent(
-        `relay_part1:onchain_sig_recovered=${recovered} owner_index=${wrapped.ownerIndex ?? 'n/a'}`,
-      )
-    } catch {
-      /* diagnostic only */
     }
   }
 
@@ -1321,24 +1441,32 @@ async function sendSignedPreparedUserOp(params: {
 
       lastBundlerSignature = signature
 
-      const sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+      let sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
         ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
       })
 
       const entryPointHash = computeUserOpHashWithChainId(input.userOp, params.chainId)
-      if (sessionKeyOwner && params.ownerDiscovery?.ownerSignerAddress) {
-        const repaired = await repairSelfAuthSessionKeyWrapperSignature({
-          signature,
-          chainId: params.chainId,
+      if (sessionKeyOwner) {
+        const preferredOwnerIndex =
+          params.ownerDiscovery?.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX
+        const aligned = await alignSelfAuthSessionKeySignature({
+          publicClient: params.publicClient,
           fundingCsw: params.fundingCsw,
+          chainId: params.chainId,
           userOpHash: entryPointHash,
-          expectedOwnerIndex: SELF_AUTH_SESSION_KEY_OWNER_INDEX,
-          expectedOwnerAddress: params.ownerDiscovery.ownerSignerAddress,
+          signature,
+          preferredOwnerIndex,
+          preferredOwnerAddress: params.ownerDiscovery?.ownerSignerAddress ?? null,
+          appendEvent: params.appendEvent,
         })
-        if (repaired.repaired) {
-          signature = repaired.signature
-          params.appendEvent('relay_part1:sig_wrapper_repaired=1')
+        signature = aligned.signature
+        if (aligned.ownerIndex != null) {
+          parsedOwnerIndex = aligned.ownerIndex
+          sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
+            sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+            ownerIndex: aligned.ownerIndex,
+          })
         }
       }
 
@@ -1352,10 +1480,16 @@ async function sendSignedPreparedUserOp(params: {
         signature,
         appendEvent: params.appendEvent,
       })
-      if (!onChainSignatureOk) {
+      const sessionKeyPersonalSign = sessionKeyOwner && isSessionKeyPersonalSignMethod(signMethod)
+      if (!onChainSignatureOk && !sessionKeyPersonalSign) {
         params.appendEvent(`relay_part1:skip_submit_invalid_onchain_sig mode=${signMethod}`)
         lastSignatureError = new Error('On-chain isValidSignature preflight rejected signature')
         continue
+      }
+      if (!onChainSignatureOk && sessionKeyPersonalSign) {
+        params.appendEvent(
+          `relay_part1:onchain_sig_preflight=advisory_invalid_session_key mode=${signMethod}`,
+        )
       }
 
       try {

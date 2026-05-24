@@ -8,6 +8,9 @@ export const GOLDEN_RELAY_PART1_DEPOSIT_WEI = 18_871_666_861_048n
 /** Broken Part 1 (~2.88e12 wei, tx 0xdfec2946…) never triggered Part 2 solver fill. */
 export const MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI = 8_000_000_000_000n
 
+/** Cap on Relay re-quote seed wei — golden Part 1 ≈19e12; blocks runaway deposit seeds. */
+export const MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI = 100_000_000_000_000n
+
 /** May 5 2026 golden Part 1 order id (probe CSW 0x4bea…). */
 export const GOLDEN_RELAY_PART1_ORDER_ID =
   '0x8cc58ae3d8f127fbe4c8327958cf9c638f4d3b25547ddcbb190c8ce8e853797a' as const

@@ -7,6 +7,7 @@ export type RelayPreviewShape = {
   relay?: {
     userCall?: { value?: string | bigint | null }
     paymentDetails?: { amount?: string | null } | null
+    feeUsd?: string | null
   } | null
   preflight?: {
     alreadyOwner?: boolean
@@ -25,6 +26,7 @@ export type RelayPreviewShape = {
     relayQuoteDiagnostics?: {
       paymentDetails?: { amount?: string | null } | null
       userTransaction?: { value?: string | null } | null
+      feeUsd?: string | null
     } | null
   } | null
 } | null
@@ -219,4 +221,12 @@ export function formatRelayDepositEth(requiredDepositWei: bigint): string {
   const fraction = parts[1] ?? ''
   const trimmed = fraction.replace(/0+$/, '').slice(0, 8)
   return trimmed ? `${whole}.${trimmed}` : whole
+}
+
+/** Relay solver gas-fee estimate in USD (informational — not the Part 1 native deposit). */
+export function resolveRelayFeeUsd(preview: RelayPreviewShape): string | null {
+  const raw = preview?.relay?.feeUsd ?? preview?.preflight?.relayQuoteDiagnostics?.feeUsd ?? null
+  if (typeof raw !== 'string') return null
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : null
 }

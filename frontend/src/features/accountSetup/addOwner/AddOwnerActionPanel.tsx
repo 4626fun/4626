@@ -2,6 +2,7 @@ import type { AddOwnerPreview } from '@/lib/addOwner/addOwnerHelpers'
 import { OwnerMutationStepFlow } from '@/features/accountSetup/ownerMutation/OwnerMutationStepFlow'
 import {
   formatRelayDepositEth,
+  resolveRelayFeeUsd,
   resolveRelayRequiredDepositWei,
 } from '@/lib/relay/ownerMutationPreviewHelpers'
 
@@ -33,6 +34,7 @@ type AddOwnerActionPanelProps = {
 function AddOwnerPreviewDetails(props: { preview: AddOwnerPreview }) {
   const { preview } = props
   const requiredDepositWei = resolveRelayRequiredDepositWei(preview)
+  const relayFeeUsd = resolveRelayFeeUsd(preview)
   const depositSim = preview.preflight.relayDepositSimulation
   return (
     <details className="rounded-xl border border-white/10 bg-black/30 p-3 text-xs text-zinc-300">
@@ -45,7 +47,7 @@ function AddOwnerPreviewDetails(props: { preview: AddOwnerPreview }) {
           <dd className="mt-0.5 break-all font-mono text-zinc-200">{preview.preflight.ownerToAdd}</dd>
         </div>
         <div>
-          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Relay deposit</dt>
+          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Part 1 deposit (native ETH)</dt>
           <dd className="mt-0.5 font-mono">
             {requiredDepositWei !== null ? (
               <span className="text-zinc-200">
@@ -55,6 +57,15 @@ function AddOwnerPreviewDetails(props: { preview: AddOwnerPreview }) {
             ) : (
               <span className="text-rose-300">missing</span>
             )}
+          </dd>
+          <p className="mt-1 text-[11px] leading-relaxed text-zinc-500">
+            Locked in Relay&apos;s depository for Part 2 — not the same as the USD fee line below.
+          </p>
+        </div>
+        <div>
+          <dt className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Estimated Relay fee</dt>
+          <dd className="mt-0.5 font-mono text-zinc-200">
+            {relayFeeUsd ? `$${relayFeeUsd}` : <span className="text-zinc-500">n/a</span>}
           </dd>
         </div>
         <div>

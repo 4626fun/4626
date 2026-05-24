@@ -378,13 +378,8 @@ export async function buildOwnerMutationRelayFlow(
     let nonNativeQuoteError = resolveNonNativeRelayQuoteError(e)
     let resolvedDepositWei = resolveQuotedNativeDepositWei(e)
     if (resolvedDepositWei == null && relayQuoteRequestAmount === '0') {
-      const gasPriceWei =
-        typeof params.publicClient.getGasPrice === 'function'
-          ? await params.publicClient.getGasPrice().catch(() => null)
-          : null
       const depositQuoteSeed = deriveRelayOwnerMutationDepositQuoteSeedWei({
         zeroQuoteExtract: e,
-        gasPriceWei,
       })
       const retryQuote = await getRelayQuote({
         ...quoteParamsBase,

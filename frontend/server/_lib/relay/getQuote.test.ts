@@ -6,12 +6,26 @@ import {
   relayQuoteUsesNonNativeInput,
   resolveNonNativeRelayQuoteError,
   resolveQuotedNativeDepositWei,
-  RELAY_OWNER_MUTATION_FEES_GAS_TO_DEPOSIT_MULTIPLIER,
 } from './getQuote.js'
-import { MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import {
+  MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI,
+  MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI,
+} from '../../../src/lib/wallet/cswOwnerAbi.js'
 
 describe('deriveRelayOwnerMutationDepositQuoteSeedWei', () => {
-  it('scales zero-quote fees.gas into a native deposit seed', () => {
+  it('uses deposit-scale fees.gas as the native deposit seed', () => {
+    const feesGas = 23_728_009_023_622n
+    const extract = extractFromRelayQuoteResponse({
+      fees: { gas: { amount: feesGas.toString() } },
+    })
+    expect(
+      deriveRelayOwnerMutationDepositQuoteSeedWei({
+        zeroQuoteExtract: extract,
+      }),
+    ).toBe(feesGas)
+  })
+
+  it('clamps sub-minimum fees.gas to MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI', () => {
     const feesGas = 148_913_182_984n
     const extract = extractFromRelayQuoteResponse({
       fees: { gas: { amount: feesGas.toString() } },
@@ -19,29 +33,29 @@ describe('deriveRelayOwnerMutationDepositQuoteSeedWei', () => {
     expect(
       deriveRelayOwnerMutationDepositQuoteSeedWei({
         zeroQuoteExtract: extract,
-        gasPriceWei: null,
       }),
-    ).toBe(feesGas * RELAY_OWNER_MUTATION_FEES_GAS_TO_DEPOSIT_MULTIPLIER)
+    ).toBe(MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI)
   })
 
-  it('falls back to live gasPrice × overhead when fees.gas is absent', () => {
+  it('falls back to MIN when fees.gas is absent or zero', () => {
     const extract = extractFromRelayQuoteResponse({ fees: { gas: { amount: '0' } } })
     expect(
       deriveRelayOwnerMutationDepositQuoteSeedWei({
         zeroQuoteExtract: extract,
-        gasPriceWei: 6_000_000n,
       }),
-    ).toBe(6_000_000n * 300_000n * 10n)
+    ).toBe(MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI)
   })
 
-  it('never returns below MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI', () => {
-    const extract = extractFromRelayQuoteResponse({ fees: { gas: { amount: '1000' } } })
+  it('caps runaway fees.gas seeds', () => {
+    const feesGas = 500_000_000_000_000n
+    const extract = extractFromRelayQuoteResponse({
+      fees: { gas: { amount: feesGas.toString() } },
+    })
     expect(
       deriveRelayOwnerMutationDepositQuoteSeedWei({
         zeroQuoteExtract: extract,
-        gasPriceWei: 1n,
       }),
-    ).toBe(MIN_OWNER_MUTATION_RELAY_DEPOSIT_WEI)
+    ).toBe(MAX_OWNER_MUTATION_RELAY_DEPOSIT_SEED_WEI)
   })
 })
 

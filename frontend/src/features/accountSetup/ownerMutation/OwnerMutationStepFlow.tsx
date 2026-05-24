@@ -6,6 +6,7 @@ import { RemoveOwnerStatusCards } from '@/features/accountSetup/removeOwner/Remo
 import {
   formatRelayDepositEth,
   resolveOwnerMutationPhase,
+  resolveRelayFeeUsd,
   resolveRelayPreviewBlockReason,
   resolveRelayPreviewStepOneStatus,
   resolveRelayRequiredDepositWei,
@@ -75,6 +76,7 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
   const requiredDepositWei = resolveRelayRequiredDepositWei(preview)
   const requiredDepositEth =
     requiredDepositWei !== null ? formatRelayDepositEth(requiredDepositWei) : null
+  const relayFeeUsd = resolveRelayFeeUsd(preview)
   const stepOneStatus = resolveRelayPreviewStepOneStatus({ previewLoading, preview })
   const previewBlockReason = resolveRelayPreviewBlockReason(preview)
   const stepTwoStatus = resolveRelaySubmitStepTwoStatus({
@@ -208,13 +210,19 @@ export function OwnerMutationStepFlow(props: OwnerMutationStepFlowProps) {
         <div className="space-y-3">
           {previewDetails}
           <div className="rounded-xl border border-emerald-400/25 bg-emerald-500/10 p-3 text-xs text-emerald-100">
-            <div className="text-[10px] uppercase tracking-[0.16em] opacity-80">Relay deposit</div>
+            <div className="text-[10px] uppercase tracking-[0.16em] opacity-80">Part 1 deposit (native ETH)</div>
             <div className="mt-1 font-mono">
               {requiredDepositEth} ETH
               {requiredDepositWei !== null ? (
                 <span className="ml-2 opacity-80">({requiredDepositWei.toString()} wei)</span>
               ) : null}
             </div>
+            {relayFeeUsd ? (
+              <div className="mt-2 opacity-90">
+                Estimated Relay solver fee:{' '}
+                <span className="font-mono">${relayFeeUsd}</span>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
