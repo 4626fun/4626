@@ -25,7 +25,7 @@ import {
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
-import { waitForCallsTxHash, _submitOwnerViaSendCalls } from '@/lib/wallet/cswSendCalls'
+import { waitForCallsTxHash } from '@/lib/wallet/cswSendCalls'
 import {
   buildCswUserOpTypedDataPayload,
   buildSendPreparedCallsSignaturePayload,
@@ -538,26 +538,6 @@ function isSkippableSelfAuthSignMethodError(error: unknown): boolean {
   )
 }
 
-function isRelayPart1UsdcPaymasterLandedError(error: unknown): boolean {
-  const message = formatRelayPart1Error(error).toLowerCase()
-  return message.includes('usdc paymaster')
-}
-
-/** Do not fall through to a second Part 1 lane — user already signed or wallet RPC is broken. */
-function isNonCascadeRelayPart1Error(error: unknown): boolean {
-  if (isUserRejectedWalletAction(error)) return true
-  if (isRelayPart1UsdcPaymasterLandedError(error)) return true
-  const message = formatRelayPart1Error(error).toLowerCase()
-  return (
-    message.includes('failed to fetch rpc request') ||
-    message.includes('failed to fetch') ||
-    message.includes('internal error was received') ||
-    message.includes('error generating message') ||
-    message.includes('error generating transaction') ||
-    message.includes('incorrect address')
-  )
-}
-
 async function ensureSelfAuthWalletAuthorized(params: {
   walletRequest: WalletRequest
   fundingCsw: `0x${string}`
@@ -673,15 +653,12 @@ export async function repairSelfAuthSessionKeyWrapperSignature(params: {
   }
 }
 
-function shouldAttemptSendCallsPart1Fallback(error: unknown): boolean {
-  if (isUserRejectedWalletAction(error)) return false
+function isSelfAuthWalletAuthorizationError(error: unknown): boolean {
   const message = formatRelayPart1Error(error).toLowerCase()
   return (
-    message.includes('signature verification failed') ||
-    message.includes('did not validate on-chain') ||
-    message.includes('isvalidsignature preflight') ||
-    message.includes('could not submit the relay deposit userop') ||
-    isBundlerSignatureRejectedError(error)
+    message.includes('eth_requestaccounts') ||
+    message.includes('not been authorized') ||
+    (message.includes('must call') && message.includes('eth_requestaccounts'))
   )
 }
 
@@ -905,6 +882,11 @@ async function signSelfAuthPreparedUserOpOnce(params: {
   recoveredEip191Address: `0x${string}` | null
 }> {
   params.appendEvent(`relay_part1:sign_mode=${params.signMethod}`)
+  await ensureSelfAuthWalletAuthorized({
+    walletRequest: params.walletRequest,
+    fundingCsw: params.fundingCsw,
+    appendEvent: params.appendEvent,
+  })
   const signature = await requestSelfAuthSignature({
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
@@ -1429,6 +1411,12 @@ async function sendSignedPreparedUserOp(params: {
         if (isUserRejectedWalletAction(signError)) {
           throw signError
         }
+        if (
+          signError instanceof Error &&
+          signError.message.includes('mistaken owner in slot 3')
+        ) {
+          throw signError
+        }
         if (isSkippableSelfAuthSignMethodError(signError)) {
           params.appendEvent(`relay_part1:skip_sign_method=${signMethod}`)
         }
@@ -1633,6 +1621,20 @@ async function sendSignedPreparedUserOp(params: {
     throw new Error('Relay deposit signing was cancelled. Rebuild the preview and retry when ready.')
   }
 
+  if (lastSignatureError && isSelfAuthWalletAuthorizationError(lastSignatureError)) {
+    throw new Error(
+      'Base App did not authorize the Relay deposit signature after prepare. When Base App shows a signing prompt, approve it — then rebuild the preview and retry Enable 4626 signing. Do not leave the flow mid-session.',
+    )
+  }
+
+  if (params.hadInjectedPaymaster) {
+    throw new Error(
+      'Base App injected a USDC paymaster on prepare, and the self-funded strip-and-sign path could not complete. ' +
+        'Ensure your smart wallet holds enough native ETH for gas, rebuild a fresh Relay preview, and retry. ' +
+        'Do not resubmit while Relay still shows "waiting" for an earlier deposit.',
+    )
+  }
+
   throw lastSignatureError instanceof Error
     ? lastSignatureError
     : new Error('Could not submit the Relay deposit UserOp. Rebuild the preview in Base App and retry.')
@@ -1677,8 +1679,6 @@ export function buildSelfFundedRelayPrepareCapabilities(
 ): Record<string, unknown> {
   const requiredWei = depositWei + gasReserveWei
   return {
-    // Valid Base App shape; discourages mandatory CDP paymaster injection when possible.
-    paymasterService: { optional: true },
     requiredFunds: [
       {
         address: '0x0000000000000000000000000000000000000000',
@@ -1686,71 +1686,6 @@ export function buildSelfFundedRelayPrepareCapabilities(
       },
     ],
   }
-}
-
-async function submitViaSendCallsSelfFunded(params: {
-  walletRequest: WalletRequest
-  fundingCsw: `0x${string}`
-  userCall: OwnerMutationEip5792Call
-  chainId: number
-  publicClient?: PublicClient
-  appendEvent: (row: string) => void
-}): Promise<`0x${string}`> {
-  params.appendEvent('relay_part1:lane=send_calls_self_funded')
-  await ensureSelfAuthWalletAuthorized({
-    walletRequest: params.walletRequest,
-    fundingCsw: params.fundingCsw,
-    appendEvent: params.appendEvent,
-  })
-  const { callBundleId } = await _submitOwnerViaSendCalls({
-    walletRequest: params.walletRequest,
-    csw: params.fundingCsw,
-    chainId: params.chainId,
-    calls: [
-      {
-        to: getAddress(params.userCall.to),
-        data: params.userCall.data,
-        value: BigInt(params.userCall.value),
-      },
-    ],
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.send_calls.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.send_calls.${event.step}: <unloggable>`)
-      }
-    },
-  })
-
-  const resolution = await waitForCallsTxHash({
-    walletRequest: params.walletRequest,
-    callBundleId,
-    timeoutMs: 90_000,
-    intervalMs: 1_500,
-    onTelemetry: (event) => {
-      try {
-        const detail = typeof event.detail === 'string' ? event.detail : JSON.stringify(event.detail)
-        params.appendEvent(`relay_part1.send_calls_status.${event.step}: ${detail.slice(0, 320)}`)
-      } catch {
-        params.appendEvent(`relay_part1.send_calls_status.${event.step}: <unloggable>`)
-      }
-    },
-  })
-
-  await assertRelayPart1LandedSelfFunded({
-    resolution,
-    publicClient: params.publicClient,
-    fundingCsw: params.fundingCsw,
-    appendEvent: params.appendEvent,
-  })
-
-  const txHash = await resolveRelayPart1DepositTxHash({
-    resolution,
-    appendEvent: params.appendEvent,
-  })
-  params.appendEvent(`relay_part1:send_calls_tx=${txHash}`)
-  return txHash
 }
 
 async function discoverSelfAuthSessionKeyOwner(params: {
@@ -1916,7 +1851,8 @@ async function submitViaPreparedCallsSelfFunded(params: {
  *   3. Sign stripped-hash candidates against paymaster=0 userOp
  *   4. `wallet_sendPreparedCalls` for each pairing above
  *   5. `eth_sendUserOperation` via 4626 custom-owner bundler when prepared-calls reject
- *   6. `wallet_sendCalls` last-resort when signature validation fails (may re-inject paymaster)
+ *
+ * Never fall back to `wallet_sendCalls` — Base App re-injects USDC paymaster and Relay Part 2 stalls.
  */
 export async function submitSelfAuthRelayPart1SelfFunded(params: {
   walletRequest: WalletRequest
@@ -1946,28 +1882,10 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     appendEvent: params.appendEvent,
   })
 
-  try {
-    return await submitViaPreparedCallsSelfFunded({
-      ...params,
-      publicClient: params.publicClient,
-      ownerDiscovery,
-      customOwnerPolicyToken: params.customOwnerPolicyToken,
-    })
-  } catch (preparedError) {
-    if (!shouldAttemptSendCallsPart1Fallback(preparedError)) {
-      throw preparedError
-    }
-    params.appendEvent(
-      `relay_part1:prepared_calls_failed=${formatRelayPart1Error(preparedError).slice(0, 220)}`,
-    )
-    params.appendEvent('relay_part1:lane=send_calls_self_funded_fallback')
-    return await submitViaSendCallsSelfFunded({
-      walletRequest: params.walletRequest,
-      fundingCsw: params.fundingCsw,
-      userCall: params.userCall,
-      chainId: params.chainId,
-      publicClient: params.publicClient,
-      appendEvent: params.appendEvent,
-    })
-  }
+  return await submitViaPreparedCallsSelfFunded({
+    ...params,
+    publicClient: params.publicClient,
+    ownerDiscovery,
+    customOwnerPolicyToken: params.customOwnerPolicyToken,
+  })
 }

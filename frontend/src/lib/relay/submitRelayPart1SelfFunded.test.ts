@@ -280,9 +280,9 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
   })
 
-  it('prepare capabilities request optional paymaster and required native funds', () => {
+  it('prepare capabilities request required native funds only (no paymaster hint)', () => {
     const caps = buildSelfFundedRelayPrepareCapabilities(18_871_666_861_048n, 2_400_000_000_000n)
-    expect(caps.paymasterService).toEqual({ optional: true })
+    expect(caps.paymasterService).toBeUndefined()
     expect(caps.requiredFunds).toEqual([
       {
         address: '0x0000000000000000000000000000000000000000',
@@ -582,6 +582,55 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_prepare_native_paymaster_injected=1')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepare_strip_paymaster_self_funded')
     expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=prepared_calls_stripped_self_funded')
+  })
+
+  it('does not fall back to wallet_sendCalls when paymaster strip signing is unauthorized', async () => {
+    const walletRequest = vi.fn(async (args: { method: string; params?: unknown[] }) => {
+      if (args.method === 'eth_requestAccounts') {
+        return ['0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF']
+      }
+      if (args.method === 'wallet_prepareCalls') {
+        return {
+          type: 'user-operation-v06',
+          chainId: '0x2105',
+          signatureRequest: { hash: '0x' + '11'.repeat(32) },
+          userOp: {
+            ...SAMPLE_USER_OP,
+            paymasterAndData:
+              '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+          },
+        }
+      }
+      if (args.method === 'personal_sign' || args.method === 'eth_sign') {
+        throw new Error("Must call 'eth_requestAccounts' before other methods")
+      }
+      if (args.method === 'wallet_sendCalls') {
+        throw new Error('wallet_sendCalls must not run in self-auth Part 1')
+      }
+      throw new Error(`unexpected method ${args.method}`)
+    })
+
+    const appendEvent = vi.fn()
+    await expect(
+      submitSelfAuthRelayPart1SelfFunded({
+        walletRequest,
+        fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+        userCall: {
+          to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+          data: '0x49290c1c' + '0'.repeat(128),
+          value: '0x110dea8a3f8',
+        },
+        chainId: 8453,
+        publicClient: mockPublicClient as never,
+        appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+      }),
+    ).rejects.toThrow(/did not authorize the Relay deposit signature|USDC paymaster on prepare/)
+
+    expect(mockSubmitOwnerViaSendCalls).not.toHaveBeenCalled()
+    expect(walletRequest).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendCalls' }),
+    )
   })
 
   it('session-key Part 1 uses personal_sign only (typed_data triggers Base App incorrect-address modal)', () => {
@@ -941,7 +990,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         appendEvent,
         customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
-    ).rejects.toThrow(/error generating message/)
+    ).rejects.toThrow(/USDC paymaster on prepare|error generating message/)
   })
 
   it('calls eth_requestAccounts before prepare on the primary lane', async () => {

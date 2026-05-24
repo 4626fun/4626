@@ -32,9 +32,9 @@
  * Do not use bare CSW self-call `eth_sendTransaction` for owner mutations from
  * third-party dapps (reverts or blocked). See relay-owner-mutation-kit-guide.md.
  *
- * Self-auth Relay Part 1 goes through `submitSelfAuthRelayPart1SelfFunded.ts`,
- * which tries `_submitOwnerViaSendCalls` first (May 12 golden path), then
- * prepare_calls / bundler fallbacks when sendCalls fails.
+ * Self-auth Relay Part 1 goes through `submitSelfAuthRelayPart1SelfFunded.ts`
+ * (prepare → strip paymaster → sign → wallet_sendPreparedCalls / bundler).
+ * Do not use `wallet_sendCalls` for self-auth Relay Part 1 — Base App injects USDC paymaster.
  */
 
 import { getAddress } from 'viem'
