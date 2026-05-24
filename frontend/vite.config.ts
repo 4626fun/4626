@@ -12,18 +12,34 @@ import type { IncomingMessage, ServerResponse } from 'http'
 import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
+const ESBUILD_DEAD_RE =
+  /The service is no longer running|The service was stopped|write EPIPE/i
+
 /** WalletConnect / Coinbase SDK packages ship incomplete sourcemaps — Vite warns on every file. */
-function createDevLogger(): Logger {
+function createDevLogger(failFastOnEsbuildDeath: boolean): Logger {
   const logger = createLogger('info')
   const isMissingSourcemapNoise = (msg: string) => msg.includes('points to missing source files')
+  let esbuildExitScheduled = false
+
+  const scheduleEsbuildRestartExit = (msg: string) => {
+    if (!failFastOnEsbuildDeath || esbuildExitScheduled || !ESBUILD_DEAD_RE.test(msg)) return
+    esbuildExitScheduled = true
+    logger.warn(
+      'esbuild transform service died (often WSL memory pressure). Exiting so deploy dry-run can restart Vite...',
+    )
+    setTimeout(() => process.exit(1), 300)
+  }
+
   const wrap =
     (fn: Logger['warn']) =>
     (msg: string, options?: Parameters<Logger['warn']>[1]) => {
       if (isMissingSourcemapNoise(msg)) return
+      scheduleEsbuildRestartExit(msg)
       fn(msg, options)
     }
   logger.warn = wrap(logger.warn)
   logger.warnOnce = wrap(logger.warnOnce)
+  logger.error = wrap(logger.error)
   return logger
 }
 
@@ -74,10 +90,17 @@ function apiImport(relativePath: string) {
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const deployDryRunDev = Boolean(String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim())
-// Opt-in only: skip optimizeDeps discovery when WSL/RAM is tight (e.g. two Vite dev servers at once).
+// Opt-in only: skip optimizeDeps discovery when WSL/RAM is tight (export VITE_LOW_MEMORY=1).
 const lowMemoryDev = process.env.VITE_LOW_MEMORY === '1'
-// react-router imports named exports from CJS `cookie`; always pre-bundle in dev.
-const alwaysOptimizeInclude = ['buffer', 'cookie', 'set-cookie-parser'] as const
+// CJS packages that break in the browser when low-memory skips full dep discovery.
+const alwaysOptimizeInclude = [
+  'buffer',
+  'cookie',
+  'set-cookie-parser',
+  'ox',
+  'ox/erc8010',
+  'viem',
+] as const
 const nodeRequire = createRequire(import.meta.url)
 const dotenvLoadedKeys = new Set<string>()
 
@@ -580,13 +603,18 @@ function localMarketingLandingPlugin(): Plugin {
   }
 }
 
-function resolveOxCjsPlugin(): Plugin {
+function resolveOxModulePlugin(): Plugin {
   return {
-    name: '4626-resolve-ox-cjs',
+    name: '4626-resolve-ox-esm',
     enforce: 'pre',
     resolveId(source) {
       if (source !== 'ox' && !source.startsWith('ox/')) return null
-      return nodeRequire.resolve(source, { paths: [__dirname] })
+      const resolved = nodeRequire.resolve(source, { paths: [frontendRoot] })
+      const cjsSegment = `${path.sep}_cjs${path.sep}`
+      const esmSegment = `${path.sep}_esm${path.sep}`
+      if (!resolved.includes(cjsSegment)) return resolved
+      const esmPath = resolved.replace(cjsSegment, esmSegment)
+      return fs.existsSync(esmPath) ? esmPath : resolved
     },
   }
 }
@@ -629,9 +657,12 @@ export default defineConfig(({ command }) => {
 
   return {
     cacheDir: viteCacheDir,
-    customLogger: command === 'serve' ? createDevLogger() : undefined,
+    customLogger:
+      command === 'serve'
+        ? createDevLogger(deployDryRunDev || process.env.VITE_ESBUILD_FAIL_FAST === '1')
+        : undefined,
     plugins: [
-      resolveOxCjsPlugin(),
+      resolveOxModulePlugin(),
       react(),
       tailwindcss(),
       ...(command === 'serve' ? [localMarketingLandingPlugin(), localApiRoutesPlugin()] : []),

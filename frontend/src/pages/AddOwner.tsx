@@ -4,8 +4,10 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { AddOwnerActionPanel } from '@/features/accountSetup/addOwner/AddOwnerActionPanel'
+import { BaseAppOwnerInstallBanner } from '@/features/accountSetup/addOwner/BaseAppOwnerInstallBanner'
 import { useAddOwnerFlow } from '@/features/accountSetup/addOwner/useAddOwnerFlow'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { isBaseAppSelfAuthRelayPart1Blocked } from '@/lib/relay/baseAppOwnerInstallGuard'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { detectInAppEnvironment, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 
@@ -21,6 +23,8 @@ export function AddOwnerPage() {
     activeExternalOwnerWallet,
     privyWallets,
     connectOwnerWallet,
+    connectedOnchainEoaOwner,
+    submitOwnerInstallViaOnchainEoa,
   } = controller
 
   const inAppEnv = useMemo(() => detectInAppEnvironment(), [])
@@ -56,6 +60,13 @@ export function AddOwnerPage() {
     ownerSignerAddress,
     privyEmbeddedEoaAddress,
     privyExternalOwnerWallet: activeExternalOwnerWallet,
+    connectedOnchainEoaOwner,
+    submitOwnerInstallViaOnchainEoa,
+  })
+
+  const baseAppSelfAuthBlocked = isBaseAppSelfAuthRelayPart1Blocked({
+    isSelfAuthSession,
+    hasConnectedOnchainEoaOwner: Boolean(connectedOnchainEoaOwner),
   })
 
   const onAddSuccess = async () => {
@@ -130,7 +141,11 @@ export function AddOwnerPage() {
           </div>
         ) : null}
 
-        {inAppEnv?.isAnyWalletInApp && isSelfAuthSession ? (
+        {inAppEnv?.isAnyWalletInApp && isSelfAuthSession && baseAppSelfAuthBlocked ? (
+          <BaseAppOwnerInstallBanner className="rounded-2xl p-6" />
+        ) : null}
+
+        {inAppEnv?.isAnyWalletInApp && isSelfAuthSession && !baseAppSelfAuthBlocked ? (
           <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 text-xs text-emerald-100/85">
             In-app browser detected with a CSW self-auth session. This page uses Relay-bound preview
             execution from the active signer context. If the wallet prompt stalls, open the page in

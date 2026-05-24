@@ -1,6 +1,7 @@
 import { formatEther, type PublicClient } from 'viem'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import { mapBaseAppOwnerInstallSubmissionError } from '@/lib/relay/baseAppOwnerInstallGuard'
 import { isBaseAppInAppContext, externalBrowserUrlFor } from '@/lib/wallet/inAppBrowser'
 import type {
   OwnerMutationEip5792Call,
@@ -570,6 +571,11 @@ export function mapRemoveOwnerSubmissionError(params: {
         ? params.error
         : ''
   const normalized = message.toLowerCase()
+
+  const baseAppOwnerInstallMessage = mapBaseAppOwnerInstallSubmissionError(message)
+  if (baseAppOwnerInstallMessage) {
+    return baseAppOwnerInstallMessage
+  }
 
   if (
     normalized.includes("must call 'eth_requestaccounts'") ||

@@ -94,6 +94,17 @@ export function parseSelfAuthOwnerIndexFromSignature(signature: Hex): number | n
 const PASSKEY_SIGNATURE_REJECTED_ERROR =
   'passkey signature rejected for session-key Part 1'
 
+/** Inner ECDSA recovers to a Base App session key that is not in the CSW owner array. */
+export const BASE_APP_SUBSTITUTED_SIGNER_ERROR =
+  'base app substituted signer not in csw owner array'
+
+export type SelfAuthValidateUserOpPreflight = {
+  ok: boolean
+  recovered: `0x${string}` | null
+  ownerAddress: `0x${string}` | null
+  ownerIndex: number | null
+}
+
 /** WebAuthn / passkey wrapper (owner slot 0) — invalid for session-key Relay Part 1. */
 export function isSelfAuthPasskeyOwnerSignature(signature: Hex): boolean {
   const classification = classifyWebAuthnOwnerSignature(signature)
@@ -535,7 +546,8 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   }
 
   if (params.sessionKeyOwner) {
-    // Recipe: signature.data.address = ownerAtIndex(2), not substituted sub-account EOAs.
+    // Base App may sign via a delegated EOA; try it before ownerAtIndex(2) bytes.
+    pushUnique(params.recoveredRawAddress, 'session_key_delegated_eoa')
     pushUnique(params.resolvedOwnerAtIndexAddress, 'owner_at_index_resolved')
     pushUnique(params.parsedOwnerAddress, 'owner_at_index')
     pushUnique(params.fundingCsw ?? null, 'funding_csw_session_key')
@@ -962,17 +974,22 @@ export async function preflightValidateUserOpStyleSignature(params: {
   chainId: number
   signature: Hex
   appendEvent: (row: string) => void
-}): Promise<boolean> {
+}): Promise<SelfAuthValidateUserOpPreflight> {
   const userOpHash = computeUserOpHashWithChainId(params.strippedUserOp, params.chainId)
   const wrapped = parseCoinbaseSignatureWrapper(params.signature)
   if (!wrapped) {
     params.appendEvent('relay_part1:validate_user_op_preflight=no_wrapper')
-    return false
+    return { ok: false, recovered: null, ownerAddress: null, ownerIndex: null }
   }
 
   if (hexByteLength(wrapped.signatureData) !== 65) {
     params.appendEvent('relay_part1:validate_user_op_preflight=skipped_non_ecdsa')
-    return true
+    return {
+      ok: true,
+      recovered: null,
+      ownerAddress: null,
+      ownerIndex: wrapped.ownerIndex ?? null,
+    }
   }
 
   const ownerIndex = wrapped.ownerIndex ?? 0
@@ -983,7 +1000,12 @@ export async function preflightValidateUserOpStyleSignature(params: {
   })
   if (!ownerAddress) {
     params.appendEvent('relay_part1:validate_user_op_preflight=skipped_non_address_owner')
-    return true
+    return {
+      ok: true,
+      recovered: null,
+      ownerAddress: null,
+      ownerIndex,
+    }
   }
 
   const inner = wrapped.signatureData
@@ -992,21 +1014,37 @@ export async function preflightValidateUserOpStyleSignature(params: {
     { hash: hashMessage({ raw: userOpHash }), mode: 'eip191_entrypoint' },
   ]
 
+  let lastRecovered: `0x${string}` | null = null
   for (const candidate of recoveryHashes) {
     try {
       const recovered = await recoverAddress({ hash: candidate.hash, signature: inner })
+      lastRecovered = recovered
       const ok = recovered.toLowerCase() === ownerAddress.toLowerCase()
       params.appendEvent(
         `relay_part1:validate_user_op_preflight=${ok ? 'ok' : 'mismatch'}:${candidate.mode} recovered=${recovered} owner=${ownerAddress}`,
       )
-      if (ok) return true
+      if (ok) {
+        return { ok: true, recovered, ownerAddress, ownerIndex }
+      }
     } catch {
       /* try next hash domain */
     }
   }
 
   params.appendEvent('relay_part1:validate_user_op_preflight=invalid')
-  return false
+  return {
+    ok: false,
+    recovered: lastRecovered,
+    ownerAddress,
+    ownerIndex,
+  }
+}
+
+export function buildBaseAppSubstitutedSignerError(recovered: `0x${string}`): Error {
+  return new Error(
+    `${BASE_APP_SUBSTITUTED_SIGNER_ERROR}: Base App signed with ${recovered}, which is not an on-chain owner of your smart wallet. ` +
+      'Connect one of the listed on-chain EOA owners below (Rabby / MetaMask), or open Enable 4626 signing in Chrome or Safari outside the Base App browser.',
+  )
 }
 
 async function requestSelfAuthSignature(params: {
@@ -1802,7 +1840,7 @@ async function sendSignedPreparedUserOp(params: {
         )
       }
 
-      const validateUserOpOk = await preflightValidateUserOpStyleSignature({
+      const validateUserOpPreflight = await preflightValidateUserOpStyleSignature({
         publicClient: params.publicClient,
         fundingCsw: params.fundingCsw,
         strippedUserOp: input.userOp,
@@ -1810,35 +1848,66 @@ async function sendSignedPreparedUserOp(params: {
         signature,
         appendEvent: params.appendEvent,
       })
-      if (validateUserOpOk) {
+      const validateUserOpOk = validateUserOpPreflight.ok
+      const replaySafeSignHash = isSelfAuthReplaySafeSignHashMode(input.hashMode)
+
+      if (
+        sessionKeyOwner &&
+        !replaySafeSignHash &&
+        !validateUserOpOk &&
+        validateUserOpPreflight.recovered &&
+        hexByteLength(parseCoinbaseSignatureWrapper(signature)?.signatureData ?? '0x') === 65
+      ) {
+        const recoveredOwnerIndex = await resolveCswOwnerIndexForEoaAddress({
+          publicClient: params.publicClient,
+          fundingCsw: params.fundingCsw,
+          eoaAddress: validateUserOpPreflight.recovered,
+        })
+        if (recoveredOwnerIndex == null) {
+          params.appendEvent(
+            `relay_part1:substituted_signer=${validateUserOpPreflight.recovered}`,
+          )
+          throw buildBaseAppSubstitutedSignerError(validateUserOpPreflight.recovered)
+        }
+      }
+
+      const sessionKeySubmitEligible =
+        sessionKeyOwner &&
+        (validateUserOpOk ||
+          (onChainSignatureOk && replaySafeSignHash) ||
+          (sessionKeyEcdsaOk && replaySafeSignHash))
+      const bundlerSubmitEligible = validateUserOpOk || (onChainSignatureOk && replaySafeSignHash)
+
+      if (bundlerSubmitEligible) {
         lastBundlerSignature = signature
       } else {
         params.appendEvent('relay_part1:skip_bundler_validate_user_op_preflight=1')
       }
 
-      const replaySafeValidateUserOpMismatch =
+      if (
         !validateUserOpOk &&
         isSelfAuthReplaySafeSignHashMode(input.hashMode) &&
-        (onChainSignatureOk || sessionKeyEcdsaOk)
-      if (replaySafeValidateUserOpMismatch) {
-        params.appendEvent('relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1')
-        continue
+        sessionKeySubmitEligible
+      ) {
+        params.appendEvent(
+          'relay_part1:validate_user_op_preflight=advisory_mismatch_session_key_replay_safe',
+        )
       }
 
-      const entrypointValidateUserOpMismatch =
+      if (
         !validateUserOpOk &&
         !isSelfAuthReplaySafeSignHashMode(input.hashMode) &&
-        sessionKeyOwner &&
-        (onChainSignatureOk || sessionKeyEcdsaOk)
-      if (entrypointValidateUserOpMismatch) {
-        params.appendEvent('relay_part1:skip_prepared_calls_entrypoint_validate_user_op_mismatch=1')
-        continue
+        sessionKeySubmitEligible
+      ) {
+        params.appendEvent(
+          'relay_part1:validate_user_op_preflight=advisory_mismatch_session_key_entrypoint',
+        )
       }
 
       const bypassSdkViaBundler =
-        validateUserOpOk &&
         sessionKeyOwner &&
-        (isSelfAuthReplaySafeSignHashMode(input.hashMode) || sessionKeyEcdsaOk)
+        bundlerSubmitEligible &&
+        (replaySafeSignHash || validateUserOpOk)
 
       const submitPreparedCalls = async (laneSuffix: string): Promise<`0x${string}` | null> => {
         try {
@@ -1892,6 +1961,12 @@ async function sendSignedPreparedUserOp(params: {
         if (preparedTx) {
           return preparedTx
         }
+      } else if (sessionKeySubmitEligible) {
+        params.appendEvent('relay_part1:lane=session_key_prepared_calls_primary')
+        const preparedTx = await submitPreparedCalls('session_key_primary')
+        if (preparedTx) {
+          return preparedTx
+        }
       }
 
       if (bypassSdkViaBundler && params.customOwnerPolicyToken) {
@@ -1923,7 +1998,7 @@ async function sendSignedPreparedUserOp(params: {
         return preparedTx
       }
 
-      if (params.customOwnerPolicyToken && validateUserOpOk) {
+      if (params.customOwnerPolicyToken && bundlerSubmitEligible) {
         try {
           return await submitSignedPreparedUserOpViaBundler({
             publicClient: params.publicClient,
@@ -1944,7 +2019,7 @@ async function sendSignedPreparedUserOp(params: {
           )
           lastSignatureError = bundlerError
         }
-      } else if (params.customOwnerPolicyToken && !validateUserOpOk) {
+      } else if (params.customOwnerPolicyToken && !bundlerSubmitEligible) {
         params.appendEvent('relay_part1:skip_bundler_inline_validate_user_op_preflight=1')
       }
 
@@ -2026,6 +2101,11 @@ async function sendSignedPreparedUserOp(params: {
   }
 
   const lastErrorMessage = lastSignatureError instanceof Error ? lastSignatureError.message : ''
+  if (lastErrorMessage.includes(BASE_APP_SUBSTITUTED_SIGNER_ERROR)) {
+    throw lastSignatureError instanceof Error
+      ? lastSignatureError
+      : buildBaseAppSubstitutedSignerError('0x0000000000000000000000000000000000000000')
+  }
   if (lastErrorMessage.includes(PASSKEY_SIGNATURE_REJECTED_ERROR)) {
     throw new Error(
       'Base App signed Relay Part 1 with your passkey (owner slot 0). This deposit must be signed by the session key at owner slot 2. Force-close Base App, reopen /waitlist?setup=owner-install, rebuild the preview, and retry Enable 4626 signing. Part 2 still uses passkey approval — Part 1 must not.',

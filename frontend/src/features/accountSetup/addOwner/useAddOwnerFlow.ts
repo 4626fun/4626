@@ -28,6 +28,11 @@ import {
   readPersistedRelayPart1DepositTx,
 } from '@/lib/relay/relayPart1DepositLookup'
 import { useDeferUntilMounted } from '@/hooks/useDeferUntilMounted'
+import {
+  buildBaseAppSelfAuthPart1BlockedMessage,
+  isBaseAppSelfAuthRelayPart1Blocked,
+} from '@/lib/relay/baseAppOwnerInstallGuard'
+import type { PreparedOwnerTxRequest } from '@/lib/wallet/onboardingWallet'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 export type AddOwnerErrorDetail = {
@@ -48,6 +53,8 @@ type UseAddOwnerFlowParams = {
   privyExternalOwnerWallet?: unknown
   /** Sub-account panel: parent CSW pays deposit via self-auth even outside Base App WebView. */
   preferFundingCswSelfAuth?: boolean
+  connectedOnchainEoaOwner?: { index: number; ownerAddress: `0x${string}` } | null
+  submitOwnerInstallViaOnchainEoa?: (txRequest: PreparedOwnerTxRequest) => Promise<`0x${string}`>
   enabled?: boolean
 }
 
@@ -111,6 +118,8 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     privyEmbeddedEoaAddress,
     privyExternalOwnerWallet,
     preferFundingCswSelfAuth = false,
+    connectedOnchainEoaOwner = null,
+    submitOwnerInstallViaOnchainEoa,
     enabled = true,
   } = params
 
@@ -295,6 +304,59 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       }
       if (!activePreview || activePreview.preflight.alreadyOwner) {
         return activePreview?.preflight.alreadyOwner === true
+      }
+
+      if (
+        isBaseAppSelfAuthRelayPart1Blocked({
+          isSelfAuthSession,
+          hasConnectedOnchainEoaOwner: Boolean(connectedOnchainEoaOwner),
+        })
+      ) {
+        appendEvent('relay_part1:blocked_base_app_self_auth')
+        setPageError(buildBaseAppSelfAuthPart1BlockedMessage())
+        return false
+      }
+
+      if (
+        mode === 'submit' &&
+        connectedOnchainEoaOwner &&
+        submitOwnerInstallViaOnchainEoa &&
+        !isSelfAuthSession
+      ) {
+        setBusy(true)
+        setPageError(null)
+        setLastErrorDetail(null)
+        setPageNotice(null)
+        setFlowComplete(false)
+        setEventLog([])
+        appendEvent('lane:onchain_eoa_owner_prepared_calls')
+        appendEvent(`target:owner=${activePreview.preflight.ownerToAdd}`)
+        try {
+          const hash = await submitOwnerInstallViaOnchainEoa(activePreview.txRequest)
+          setTxHash(hash)
+          setPart1TxHash(hash)
+          setFlowComplete(true)
+          setWaitingForRelayFill(false)
+          setPageNotice(`4626 signing enabled via on-chain owner (tx ${hash.slice(0, 10)}…).`)
+          setPreview(null)
+          if (mutationCswAddress) {
+            clearPersistedAddOwnerPreview(mutationCswAddress)
+          }
+          return true
+        } catch (err: unknown) {
+          appendEvent(`error:${getWalletErrorMessage(err).slice(0, 260)}`)
+          const mapped = mapRemoveOwnerSubmissionError({
+            error: err,
+            requiredDepositWei: null,
+            latestCswBalanceWei: null,
+            isSelfAuthSession,
+            fundingCswAddress,
+          })
+          setPageError(mapped ?? getWalletErrorMessage(err))
+          return false
+        } finally {
+          setBusy(false)
+        }
       }
 
       const part1DepositTxHint = resolvePart1DepositTxHint(activePreview)
@@ -488,6 +550,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
     [
       appendEvent,
       baseAccountSdk,
+      connectedOnchainEoaOwner,
       flowEnabled,
       fetchPreview,
       fundingCswAddress,
@@ -502,6 +565,7 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       setErrorDetail,
       signingBlockedReason,
       signingReady,
+      submitOwnerInstallViaOnchainEoa,
       wagmiWalletClient,
     ],
   )

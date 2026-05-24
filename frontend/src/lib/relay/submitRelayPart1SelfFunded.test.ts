@@ -24,6 +24,7 @@ import {
   stripUserOpPaymaster,
   submitSelfAuthRelayPart1SelfFunded,
   userOpHasPaymaster,
+  BASE_APP_SUBSTITUTED_SIGNER_ERROR,
 } from '@/lib/relay/submitRelayPart1SelfFunded'
 import { unwrapDoubleHexEncodedHash } from '@/lib/wallet/onboardingWalletReplayable'
 
@@ -312,7 +313,7 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ])
   })
 
-  it('session-key prepared-calls signers use ownerAtIndex not substituted EOAs', () => {
+  it('session-key prepared-calls signers prefer delegated EOA then ownerAtIndex', () => {
     const candidates = listSelfAuthPreparedCallsSignerAddressCandidates({
       parsedOwnerAddress: SESSION_KEY_OWNER,
       recoveredEip191Address: '0x87bEB08622dc13c7259dc9c9DD41CDc9d89A2C9b',
@@ -320,7 +321,10 @@ describe('submitRelayPart1SelfFunded helpers', () => {
       resolvedOwnerAtIndexAddress: SESSION_KEY_OWNER,
       sessionKeyOwner: true,
     })
-    expect(candidates.map((candidate) => candidate.mode)).toEqual(['owner_at_index_resolved'])
+    expect(candidates.map((candidate) => candidate.mode)).toEqual([
+      'session_key_delegated_eoa',
+      'owner_at_index_resolved',
+    ])
   })
 
   it('session-key prepared-calls signers include funding CSW fallback', () => {
@@ -472,7 +476,12 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   )
 
   beforeEach(() => {
-    validateUserOpPreflightSpy.mockResolvedValue(true)
+    validateUserOpPreflightSpy.mockResolvedValue({
+      ok: true,
+      recovered: null,
+      ownerAddress: null,
+      ownerIndex: null,
+    })
     mockRecoverAddress.mockImplementation(async () => SESSION_KEY_OWNER)
     mockSubmitOwnerViaSendCalls.mockReset()
     mockSubmitOwnerViaSendCalls.mockRejectedValue(new Error('sendCalls unavailable in test'))
@@ -912,10 +921,8 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
     )
   })
 
-  it('skips prepared-calls when replaySafe sig fails validateUserOp preflight', async () => {
-    mockRecoverAddress.mockImplementation(
-      async () => '0x0000000000000000000000000000000000000002' as const,
-    )
+  it('still submits session-key sig when replaySafe validateUserOp preflight mismatches', async () => {
+    mockRecoverAddress.mockImplementation(async () => SESSION_KEY_OWNER)
     mockBundlerRequest.mockImplementation(async (args: { method?: string }) => {
       if (args.method === 'eth_estimateUserOperationGas') {
         return {
@@ -990,14 +997,16 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
         appendEvent,
         customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
       }),
-    ).rejects.toThrow(/Could not submit the Relay deposit UserOp|signature verification failed|Invalid UserOp signature/i)
-
-    expect(appendEvent).toHaveBeenCalledWith(
-      'relay_part1:skip_prepared_calls_replay_safe_validate_user_op_mismatch=1',
+    ).rejects.toThrow(
+      /Could not submit the Relay deposit UserOp|signature verification failed|Invalid UserOp signature|no matching signer found for account/i,
     )
-    expect(appendEvent).toHaveBeenCalledWith('relay_part1:skip_bundler_validate_user_op_preflight=1')
+
+    expect(appendEvent).toHaveBeenCalledWith('relay_part1:lane=session_key_prepared_calls_primary')
     expect(appendEvent).toHaveBeenCalledWith(
       expect.stringContaining('relay_part1:onchain_sig_preflight=advisory_invalid_session_key'),
+    )
+    expect(appendEvent).toHaveBeenCalledWith(
+      expect.stringContaining('relay_part1:prepared_bundler_fallback_error=Invalid UserOp signature'),
     )
   })
 
@@ -1087,6 +1096,60 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
           event === 'relay_part1:lane=prepared_bundler_self_funded_fallback',
       )
     expect(bundlerLaneEvents.length).toBeGreaterThan(0)
+  })
+
+  it('fails fast when Base App substitutes a non-owner session key', async () => {
+    const substitutedSigner = '0xe3E054EDCFC6e3dc63A6B685bbA741C5e1425D82' as const
+    mockRecoverAddress.mockImplementation(async () => substitutedSigner)
+    mockBundlerRequest.mockImplementation(async () => {
+      throw new Error('bundler should not run for substituted signer')
+    })
+    mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string; args?: unknown[] }) => {
+      if (args.functionName === 'ownerAtIndex') {
+        const ownerIndex = Number((args.args as bigint[] | undefined)?.[0] ?? 2)
+        if (ownerIndex === 2) {
+          return encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+        }
+        return encodeAbiParameters([{ type: 'address' }], ['0x0000000000000000000000000000000000000001'])
+      }
+      if (args.functionName === 'ownerCount') {
+        return 4n
+      }
+      if (args.functionName === 'isValidSignature') {
+        return '0xffffffff'
+      }
+      return 500_000_000_000_000n
+    })
+
+    const walletRequest = createPreparedCallsWalletRequest({
+      preparedCallsAccept: false,
+      signature: wrapSelfAuthOwnerSignature(2),
+      prepareUserOp: {
+        ...SAMPLE_USER_OP,
+        paymasterAndData:
+          '0x2FAEB0760D4230Ef2aC21496Bb4F0b47D634FD4c0000000000000000000000000000000000000000000000000000000000000064',
+      },
+    })
+    const appendEvent = vi.fn()
+
+    await expect(
+      submitSelfAuthRelayPart1SelfFunded({
+        walletRequest,
+        fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+        userCall: {
+          to: '0x4cd00e387622c35bddb9b4c962c136462338bc31',
+          data: '0x49290c1c' + '0'.repeat(128),
+          value: '0x110dea8a3f8',
+        },
+        chainId: 8453,
+        publicClient: mockPublicClient as never,
+        appendEvent,
+        customOwnerPolicyToken: TEST_CUSTOM_OWNER_POLICY_TOKEN,
+      }),
+    ).rejects.toThrow(BASE_APP_SUBSTITUTED_SIGNER_ERROR)
+
+    expect(mockBundlerRequest).not.toHaveBeenCalled()
+    expect(appendEvent).toHaveBeenCalledWith(`relay_part1:substituted_signer=${substitutedSigner}`)
   })
 
   it('rejects mistaken owner slot 3 signatures before prepared-calls submit', async () => {

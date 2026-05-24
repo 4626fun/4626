@@ -288,9 +288,9 @@ if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
   rm -rf "$FRONTEND_DIR/node_modules/.vite"
 fi
 
-# Dry-run shares a large Privy/wagmi graph. WSL boxes may OOM-kill esbuild when
-# optimizeDeps pre-bundling runs alongside another Vite dev server — opt in with
-# VITE_LOW_MEMORY=1 (uses cookie shim + skips dep discovery in vite.config.ts).
+# Dry-run shares a large Privy/wagmi graph. WSL boxes with <=8GB RAM may OOM-kill esbuild
+# when optimizeDeps pre-bundling runs alongside another Vite dev server — opt in with
+# VITE_LOW_MEMORY=1 (skips dep discovery; see vite.config.ts alwaysOptimizeInclude).
 export VITE_LOW_MEMORY="${VITE_LOW_MEMORY:-0}"
 # WSL often hits ENOSPC on inotify; polling avoids kernel watcher limits (see vite.config watch.ignored too).
 export VITE_WATCH_POLLING="${VITE_WATCH_POLLING:-1}"
@@ -402,7 +402,7 @@ while true; do
   fi
 
   if is_transient_vite_esbuild_failure "$VITE_BOOTSTRAP_LOG_FILE"; then
-    echo "Detected transient Vite/esbuild failure during dependency optimization; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
+    echo "Detected transient Vite/esbuild failure; clearing cache and retrying (attempt ${vite_attempt}/${MAX_VITE_EPIPE_RETRIES})..."
     rm -rf "$FRONTEND_DIR/node_modules/.vite"
     sleep 2
     continue

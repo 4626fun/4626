@@ -1,4 +1,14 @@
-import { type KeyboardEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { encodeFunctionData, getAddress } from 'viem'
 import {
@@ -19,7 +29,6 @@ import { Button } from '@/components/ui/Button'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
-import { AddOwnerSigningPanel } from '@/features/accountSetup/AddOwnerSigningPanel'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
@@ -134,6 +143,30 @@ function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undef
 }
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
+
+const LazyAddOwnerSigningPanel = lazy(async () => {
+  const mod = await import('@/features/accountSetup/AddOwnerSigningPanel')
+  return { default: mod.AddOwnerSigningPanel }
+})
+
+function AddOwnerSigningPanelLazy(props: {
+  controller: AccountSetupWorkspaceController
+  className?: string
+  inlineRelay?: boolean
+  onOwnerInstallSuccess?: () => void | Promise<void>
+}) {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-xl bg-white/[0.02] px-3 py-3 text-xs text-zinc-500 ring-1 ring-white/10">
+          <LoadingText intent="session" labelOverride="Loading signing setup..." />
+        </div>
+      }
+    >
+      <LazyAddOwnerSigningPanel {...props} />
+    </Suspense>
+  )
+}
 
 export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
@@ -667,7 +700,7 @@ export function AccountSetupWorkspaceView(props: {
                       </div>
                     ) : null}
                     {showParentCswAddOwnerPanel ? (
-                      <AddOwnerSigningPanel
+                      <AddOwnerSigningPanelLazy
                         controller={controller}
                         inlineRelay
                         onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
@@ -1066,7 +1099,7 @@ export function AccountSetupWorkspaceView(props: {
                       : ''}
                   </div>
                 ) : null}
-                <AddOwnerSigningPanel
+                <AddOwnerSigningPanelLazy
                   controller={controller}
                   className="mt-4"
                   inlineRelay
