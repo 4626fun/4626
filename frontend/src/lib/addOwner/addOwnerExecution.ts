@@ -58,6 +58,7 @@ export async function executeAddOwnerViaRelay(
     appendEvent,
     onTxHash,
     part1DepositTxHint: params.part1DepositTxHint,
+    customOwnerPolicyToken: preview.sponsorship?.customOwnerPolicyToken ?? null,
     precheckMutation: async () => {
       if (!publicClient) return
       if (!preview.preflight.simulation.ok) {

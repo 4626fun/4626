@@ -83,6 +83,9 @@ export type AddOwnerPreview = {
       rawSnippet: string | null
     } | null
   }
+  sponsorship?: {
+    customOwnerPolicyToken?: string
+  }
 }
 
 /**

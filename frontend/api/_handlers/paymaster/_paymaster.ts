@@ -90,6 +90,8 @@ const PAYMASTER_MAX_BODY_BYTES = 512_000
 
 const ENTRYPOINT_V06 = getAddress(`0x${'5ff137d4b0fdcd49dca30c7cf57e578a026d2789'}`)
 const BASE_CHAIN_ID = 8453
+const RELAY_DEPOSITORY_BASE = getAddress('0x4cd00e387622c35bddb9b4c962c136462338bc31')
+const RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR = '0x49290c1c'
 const ERC8004_IDENTITY_REGISTRY_DEFAULT = getAddress('0x8004A169FB4a3325136EB29fA0ceB6D2e539a432')
 
 // Coinbase Smart Wallet callData
@@ -1319,6 +1321,31 @@ function normalizeSponsoredInnerCalls(
   }))
 }
 
+function isRelayPart1DepositoryInnerCall(call: InnerCall): boolean {
+  return (
+    getAddress(call.target) === RELAY_DEPOSITORY_BASE &&
+    getSelector(call.data) === RELAY_DEPOSITORY_NATIVE_DEPOSIT_SELECTOR &&
+    call.value > 0n
+  )
+}
+
+function assertRelayOwnerInstallPart1InnerCalls(params: {
+  sender: Address
+  innerCalls: InnerCall[]
+  customOwnerSponsorship: {
+    smartWalletAddress: Address
+  }
+}): void {
+  if (getAddress(params.sender) !== getAddress(params.customOwnerSponsorship.smartWalletAddress)) {
+    throw new Error('custom_owner_policy_sender_mismatch')
+  }
+  if (params.innerCalls.length !== 1) throw new Error('relay_part1_call_count_invalid')
+  const only = params.innerCalls[0]
+  if (!only || !isRelayPart1DepositoryInnerCall(only)) {
+    throw new Error('relay_part1_call_shape_invalid')
+  }
+}
+
 function decodeSmartWalletInnerCalls(callData: Hex): Array<{ to: Address; value: bigint; data: Hex }> {
   const decoded = decodeFunctionData({ abi: COINBASE_SMART_WALLET_ABI, data: callData })
   if (decoded.functionName === 'execute') {
@@ -1404,15 +1431,29 @@ export async function validateSponsoredSmartWalletCalls(params: {
     if (customOwnerSponsorship.smartWalletAddress !== params.sender) {
       throw new Error('custom_owner_policy_sender_mismatch')
     }
+    const relayPart1Only =
+      innerCalls.length === 1 && isRelayPart1DepositoryInnerCall(innerCalls[0]!)
+    if (relayPart1Only) {
+      assertRelayOwnerInstallPart1InnerCalls({
+        sender: params.sender,
+        innerCalls,
+        customOwnerSponsorship,
+      })
+      const client = await getBaseClient()
+      await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
+      return { expectedCreatorToken: null, mode: 'relay_owner_install_part1' }
+    }
   }
 
-  await assertSessionOwnsSender({
-    sender: params.sender,
-    sessionAddress: params.sessionAddress,
-    initCode: params.initCode ?? null,
-    factory: params.factory ?? null,
-    factoryData: params.factoryData ?? null,
-  })
+  if (!customOwnerSponsorship) {
+    await assertSessionOwnsSender({
+      sender: params.sender,
+      sessionAddress: params.sessionAddress,
+      initCode: params.initCode ?? null,
+      factory: params.factory ?? null,
+      factoryData: params.factoryData ?? null,
+    })
+  }
 
   if (deploySessionOwner) {
     const client = await getBaseClient()
@@ -1452,7 +1493,7 @@ export async function validateSponsoredSmartWalletCalls(params: {
     customOwnerSponsorship,
     debug: params.debug,
   })
-  if (validated.mode !== 'deploy_session_setup') {
+  if (validated.mode !== 'deploy_session_setup' && validated.mode !== 'relay_owner_install_part1') {
     await assertCreatorAllowlisted({
       sessionAddress: params.sessionAddress,
       creatorToken: validated.expectedCreatorToken,

@@ -1,4 +1,4 @@
-import { decodeAbiParameters, getAddress, http, type Address, type Hex, type PublicClient } from 'viem'
+import { decodeAbiParameters, getAddress, type Address, type Hex, type PublicClient } from 'viem'
 import {
   createBundlerClient,
   entryPoint06Address,
@@ -9,10 +9,10 @@ import {
 import { getWalletErrorMessage } from '@/lib/removeOwner/removeOwnerHelpers'
 import type { OwnerMutationEip5792Call } from '@/lib/relay/ownerMutationTypes'
 import { resolveRelayPart1UserOpGasReserveWei } from '@/lib/relay/relayPart1GasReserve'
+import { buildRelayBundlerHttpTransport } from '@/lib/relay/relayBundlerTransport'
 import {
   assertRelayPart1LandedSelfFunded,
   assertRelayPart1TxHashSelfFunded,
-  resolveRelayBundlerUrl,
   resolveRelayPart1DepositTxHash,
 } from '@/lib/relay/resolveRelayPart1DepositTxHash'
 import { ENTRY_POINT_V06_BASE, CSW_OWNER_READ_ABI } from '@/lib/wallet/cswOwnerAbi'
@@ -499,11 +499,12 @@ async function submitSignedPreparedUserOpViaBundler(params: {
   strippedUserOp: V06UserOpFields
   signature: Hex
   appendEvent: (row: string) => void
+  customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
   params.appendEvent('relay_part1:lane=prepared_bundler_self_funded')
   const bundlerClient = createBundlerClient({
     client: params.publicClient as never,
-    transport: http(resolveRelayBundlerUrl()),
+    transport: buildRelayBundlerHttpTransport(params.customOwnerPolicyToken),
   })
   const userOperation = toRpcUserOperation(params.strippedUserOp, params.signature)
   const userOpHash = (await bundlerClient.request({
@@ -699,6 +700,7 @@ async function submitSignedPreparedUserOpWithBundlerFallback(params: {
   chainIdHex: `0x${string}`
   appendEvent: (row: string) => void
   ownerDiscovery?: SelfAuthOwnerDiscovery
+  customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
   try {
     return await sendSignedPreparedUserOp(params)
@@ -712,6 +714,7 @@ async function submitSignedPreparedUserOpWithBundlerFallback(params: {
       strippedUserOp: error.strippedUserOp,
       signature: error.signature,
       appendEvent: params.appendEvent,
+      customOwnerPolicyToken: params.customOwnerPolicyToken,
     })
   }
 }
@@ -814,6 +817,7 @@ async function submitViaPreparedCallsSelfFunded(params: {
   publicClient: PublicClient
   appendEvent: (row: string) => void
   ownerDiscovery: SelfAuthOwnerDiscovery
+  customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
   const chainIdHex = `0x${params.chainId.toString(16)}` as `0x${string}`
   const valueHex = normalizePreparedCallValueToHex(params.userCall.value)
@@ -928,6 +932,7 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
   chainId: number
   publicClient?: PublicClient
   appendEvent: (row: string) => void
+  customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
   if (!params.publicClient) {
     throw new Error(
@@ -964,5 +969,6 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     ...params,
     publicClient: params.publicClient,
     ownerDiscovery,
+    customOwnerPolicyToken: params.customOwnerPolicyToken,
   })
 }

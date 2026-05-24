@@ -7,6 +7,7 @@ import {
   RATE_LIMITS,
   rateLimitKey,
   readJsonBody,
+  readRequestPrincipalAddress,
   setCors,
   setNoStore,
   type ApiEnvelope,
@@ -30,6 +31,7 @@ import { buildOwnerMutationRelayFlow } from '../../../server/_lib/relay/buildOwn
 import { simulateRelayDepositUserCall } from '../../../server/_lib/relay/simulateRelayDepositUserCall.js'
 import { validateGoldenCswDepositoryPart1UserCall } from '../../../src/lib/relay/goldenRelayPart1Shape.js'
 import { ADD_OWNER_ADDRESS_SELECTOR } from '../../../src/lib/wallet/cswOwnerAbi.js'
+import { issueCustomOwnerSponsorshipToken } from '../../../server/_lib/paymaster/customOwnerSponsorshipToken.js'
 
 const PREVIEW_ADD_OWNER_BODY_MAX_BYTES = 8 * 1024
 
@@ -95,6 +97,9 @@ type AddOwnerPreviewResponse = {
       feeUsd: string | null
       rawSnippet: string | null
     } | null
+  }
+  sponsorship?: {
+    customOwnerPolicyToken: string
   }
 }
 
@@ -393,10 +398,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Relay-only lane: never fall back to bare CSW addOwnerAddress in `calls`.
     const calls: Eip5792Call[] = relay ? [relay.userCall] : []
 
+    const principalAddress = parseAddress(readRequestPrincipalAddress(req, { lowercase: false }))
+    const sponsorshipToken =
+      relay && principalAddress
+        ? issueCustomOwnerSponsorshipToken({
+            sessionAddress: principalAddress,
+            smartWalletAddress: (relayFundingCswHint ?? cswAddress) as `0x${string}`,
+            ownerToAdd,
+            profileId: bootstrap.profileId,
+            ttlSeconds: 15 * 60,
+          })
+        : null
+
     const response: AddOwnerPreviewResponse = {
       txRequest,
       calls,
       relay,
+      ...(sponsorshipToken ? { sponsorship: { customOwnerPolicyToken: sponsorshipToken } } : null),
       preflight: {
         ownerToAdd,
         alreadyOwner: false,

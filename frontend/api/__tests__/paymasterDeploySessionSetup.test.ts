@@ -332,6 +332,88 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/custom_owner_policy/i)
   })
 
+  it('accepts relay Part 1 depositNative when custom owner policy matches session + sender', async () => {
+    mockReadContract.mockImplementation((opts: { functionName?: string }) => {
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(false)
+      if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      return Promise.resolve(null)
+    })
+
+    const customOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const relayDepository = getAddress('0x4cd00e387622c35bddb9b4c962c136462338bc31')
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'payable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const depositData = (`0x49290c1c${'0'.repeat(128)}`) as `0x${string}`
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [relayDepository, 1n, depositData],
+    })
+
+    const validated = await validateSponsoredSmartWalletCalls({
+      sender,
+      sessionAddress,
+      calls: [{ to: relayDepository, value: 1n, data: depositData }],
+      customOwnerPolicyToken: policyToken,
+      initCode: '0x',
+    })
+
+    expect(validated.mode).toBe('relay_owner_install_part1')
+    expect(validated.expectedCreatorToken).toBeNull()
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'eth_sendUserOperation',
+      params: [
+        {
+          sender,
+          callData,
+          initCode: '0x',
+          paymasterAndData: '0x',
+        },
+        ENTRYPOINT_V06,
+      ],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-cv-custom-owner-policy': policyToken,
+      },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/not_owner/i)
+  })
+
   it('accepts custom-owner policy token even when canonical embedded owner resolves', async () => {
     getActiveDeploySessionMock.mockResolvedValue(null)
     const customOwner = getAddress('0x6666666666666666666666666666666666666666')

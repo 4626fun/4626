@@ -47,6 +47,8 @@ export type ExecuteOwnerMutationViaRelayParams = {
   onTxHash: (txHash: string) => void
   verifyMutation: () => Promise<boolean>
   precheckMutation?: () => Promise<void>
+  /** Short-lived policy token from preview-add-owner for bundler auth before embedded EOA is owner. */
+  customOwnerPolicyToken?: string | null
   /** Reuse a prior Part 1 bundle tx for this quote (retry after waiting). */
   part1DepositTxHint?: `0x${string}` | null
 }
@@ -287,6 +289,7 @@ export async function executeOwnerMutationViaRelay(
         chainId: base.id,
         publicClient,
         appendEvent,
+        customOwnerPolicyToken: params.customOwnerPolicyToken ?? null,
       })
       onTxHash(executeTxHash)
     } else {
