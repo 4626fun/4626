@@ -1,10 +1,5 @@
     <meta charset="UTF-8" />
-    <!-- Single PNG favicon stack — avoids Base App flicker from SVG/mask-icon/manifest conflicts. -->
-    <link rel="icon" type="image/png" sizes="16x16" href="{{FAVICON_16_PATH}}" />
-    <link rel="icon" type="image/png" sizes="32x32" href="{{FAVICON_32_PATH}}" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-    <link rel="apple-touch-icon" sizes="180x180" href="{{APPLE_TOUCH_ICON_PATH}}" />
-    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />
+    <!-- Single /favicon.ico only — Base App domain bar ignores ?v= and flickers when multiple icon tags race. -->
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <meta name="msapplication-TileColor" content="{{MS_TILE_COLOR}}" />
     <meta name="msapplication-config" content="/browserconfig.xml" />

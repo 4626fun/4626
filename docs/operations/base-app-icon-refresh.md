@@ -7,13 +7,13 @@ Base App shows two different icon surfaces:
 
 4626 project id: `695a49dc4d3a403912ed8ca5`.
 
-## What changed in v16
+## What changed in v17
 
-- Restored the **4626-web-starter-v2** hand-tuned favicon kit from `frontend/assets/brand/master/icons/`.
-- `generate-brand-icons.mjs` now **syncs** masters into `public/` instead of Sharp/ImageMagick re-rendering (which caused drift).
-- `logo-mark-1024.png` (full-bleed) and `logo-mark-opaque-1024.png` (app tile) are separate again — v15 had incorrectly copied opaque over full-bleed.
+- HTML shells (`html-shells/` + static pages) emit **one** tag: `<link rel="icon" href="/favicon.ico" sizes="any" />`.
+- Install surfaces (favicon ladder, `.ico`, apple-touch, PWA sizes) are **derived from `logo-mark-opaque-1024.png`** so the domain bar and signature modal match the rounded-tile mark.
+- Logo/wordmark masters (`logo-mark-1024.png`, SVGs) stay hand-tuned from the starter kit.
 
-Prior v15 notes still apply for legacy root paths and base.dev re-upload.
+Prior v16 notes still apply for legacy root paths and base.dev re-upload.
 
 ## Deploy verification
 

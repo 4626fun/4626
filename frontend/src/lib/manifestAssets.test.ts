@@ -27,8 +27,6 @@ const siteConfig = JSON.parse(readFileSync(siteConfigPath, 'utf8')) as {
   }
 }
 const BRAND_ASSET_VERSION = Number(siteConfig.brandAssetVersion ?? 3)
-const TAB_ICON_32 = `${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
-const TAB_ICON_180 = `${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
 const MINIAPP_ICON_PATH = siteConfig.assets?.miniappIcon ?? '/assets/base-miniapp-icon-200.png'
 const ANDROID_192 = `/assets/android-chrome-192x192.png?v=${BRAND_ASSET_VERSION}`
 const ANDROID_512 = `/assets/android-chrome-512x512.png?v=${BRAND_ASSET_VERSION}`
@@ -37,8 +35,8 @@ const TWITTER_SOCIAL_IMAGE_URL = `https://4626.fun/assets/twitter-card.png?v=${B
 const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
 const MINIAPP_SPLASH_URL = `https://4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
 const APP_SHELL_MINIAPP_SPLASH_URL = `https://app.4626.fun${siteConfig.assets?.miniappSplash ?? MINIAPP_ICON_PATH}?v=${BRAND_ASSET_VERSION}`
-const APP_SHELL_TAB_ICON_32 = `https://app.4626.fun${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${BRAND_ASSET_VERSION}`
-const APP_SHELL_TAB_ICON_180 = `https://app.4626.fun${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${BRAND_ASSET_VERSION}`
+const SINGLE_FAVICON_TAG = '<link rel="icon" href="/favicon.ico" sizes="any" />'
+const APP_SHELL_FAVICON_TAG = '<link rel="icon" href="https://app.4626.fun/favicon.ico" sizes="any" />'
 const farcasterManifestPath = path.join(publicRoot, '.well-known/farcaster.json')
 
 describe('public manifest assets', () => {
@@ -84,15 +82,17 @@ describe('public manifest assets', () => {
     const marketingHtml = readFileSync(marketingHtmlPath, 'utf8')
     const appHtml = readFileSync(appHtmlPath, 'utf8')
 
-    expect(marketingHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON_32}" />`)
-    expect(marketingHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${TAB_ICON_180}" />`)
+    expect(marketingHtml).toContain(SINGLE_FAVICON_TAG)
+    expect((marketingHtml.match(/<link rel="icon"/g) ?? []).length).toBe(1)
+    expect(marketingHtml).not.toContain('apple-touch-icon')
     expect(marketingHtml).not.toContain('rel="mask-icon"')
     expect(marketingHtml).not.toContain('image/svg+xml')
     expect(marketingHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
     expect(marketingHtml).toContain('<meta name="theme-color" content="#000000" />')
 
-    expect(appHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${APP_SHELL_TAB_ICON_32}" />`)
-    expect(appHtml).toContain(`<link rel="apple-touch-icon" sizes="180x180" href="${APP_SHELL_TAB_ICON_180}" />`)
+    expect(appHtml).toContain(APP_SHELL_FAVICON_TAG)
+    expect((appHtml.match(/<link rel="icon"/g) ?? []).length).toBe(1)
+    expect(appHtml).not.toContain('apple-touch-icon')
     expect(appHtml).not.toContain('rel="shortcut icon"')
     expect(appHtml).not.toContain('rel="mask-icon"')
     expect(appHtml).toContain('<link rel="manifest" href="/site.webmanifest" crossorigin="use-credentials" />')
@@ -128,7 +128,9 @@ describe('public manifest assets', () => {
 
     expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_HERO_URL}" />`)
     expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_HERO_URL}" />`)
-    expect(telegramLinkHtml).toContain(`<link rel="icon" type="image/png" sizes="32x32" href="${TAB_ICON_32}" />`)
+    expect(telegramLinkHtml).toContain(SINGLE_FAVICON_TAG)
+    expect((telegramLinkHtml.match(/<link rel="icon"/g) ?? []).length).toBe(1)
+    expect(telegramLinkHtml).not.toContain('apple-touch-icon')
     expect(telegramLinkHtml).not.toContain('app-hero.png?v=6')
   })
 
@@ -136,11 +138,11 @@ describe('public manifest assets', () => {
     for (const htmlPath of trustPagePaths) {
       const html = readFileSync(htmlPath, 'utf8')
 
-      expect(html).toContain(TAB_ICON_32)
-      expect(html).toContain(TAB_ICON_180)
+      expect(html).toContain(SINGLE_FAVICON_TAG)
+      expect((html.match(/<link rel="icon"/g) ?? []).length).toBe(1)
+      expect(html).not.toContain('apple-touch-icon')
       expect(html).not.toContain('rel="mask-icon"')
       expect(html).not.toContain('image/svg+xml')
-      expect(html).not.toContain('/assets/apple-touch-icon.png?v=')
       expect(html).not.toContain('og-image.png?v=8')
       expect(html).toContain('<link rel="manifest" href="/site.webmanifest">')
     }
@@ -149,10 +151,10 @@ describe('public manifest assets', () => {
   it('keeps the marketing homepage immersive shell on the canonical favicon kit', () => {
     const immersiveHtml = readFileSync(path.join(publicRoot, 'immersive/index.html'), 'utf8')
 
-    expect(immersiveHtml).toContain(TAB_ICON_32)
-    expect(immersiveHtml).toContain('/favicon.ico')
+    expect(immersiveHtml).toContain(SINGLE_FAVICON_TAG)
+    expect((immersiveHtml.match(/<link rel="icon"/g) ?? []).length).toBe(1)
+    expect(immersiveHtml).not.toContain('apple-touch-icon')
     expect(immersiveHtml).not.toContain('rel="mask-icon"')
-    expect(immersiveHtml).not.toContain('/assets/apple-touch-icon.png?v=')
     expect(immersiveHtml).not.toContain('app-tab-icon-32.png?v=9')
   })
 
@@ -190,7 +192,7 @@ describe('public manifest assets', () => {
 
     expect(manifest.miniapp?.iconUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
     expect(manifest.miniapp?.splashImageUrl).toBe(`https://4626.fun${MINIAPP_ICON_PATH}`)
-    expect(manifest.miniapp?.version).toBe('9')
+    expect(manifest.miniapp?.version).toBe('10')
     expect(existsSync(path.join(publicRoot, MINIAPP_ICON_PATH.replace(/^\//, '')))).toBe(true)
   })
 })

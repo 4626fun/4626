@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Align every static public HTML shell with the canonical PNG favicon stack.
- * Base App loads 4626.fun/ as immersive/index.html and often ignores ?v= query params.
+ * Align static public HTML shells with the single /favicon.ico head policy.
+ * Base App loads 4626.fun/ as immersive/index.html and ignores ?v= query params.
  */
 
 import fs from 'node:fs/promises'
@@ -14,30 +14,20 @@ const siteConfigPath = path.join(frontendRoot, 'shared/site-config.json')
 
 const siteConfig = JSON.parse(await fs.readFile(siteConfigPath, 'utf8'))
 const version = Number(siteConfig.brandAssetVersion ?? 3)
-const favicon16 = `${siteConfig.assets?.favicon16 ?? '/assets/favicon-16x16.png'}?v=${version}`
-const favicon32 = `${siteConfig.assets?.favicon32 ?? '/assets/domain-bar-icon-32.png'}?v=${version}`
-const appleTouch = `${siteConfig.assets?.appleTouchIcon ?? '/assets/domain-bar-icon-180.png'}?v=${version}`
 const ogImageUrl = `https://4626.fun${siteConfig.assets?.ogImage ?? '/assets/og-image.png'}?v=${version}`
 const twitterImageUrl = `https://4626.fun${siteConfig.assets?.twitterImage ?? '/assets/twitter-card.png'}?v=${version}`
 const logoPngUrl = `https://4626.fun${siteConfig.assets?.logoPng ?? '/assets/logo-mark-1024.png'}?v=${version}`
 
-const canonicalBlock = [
-  '    <link rel="icon" type="image/png" sizes="16x16" href="' + favicon16 + '" />',
-  '    <link rel="icon" type="image/png" sizes="32x32" href="' + favicon32 + '" />',
-  '    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />',
-  '    <link rel="apple-touch-icon" sizes="180x180" href="' + appleTouch + '" />',
-  '    <link rel="apple-touch-icon-precomposed" href="/apple-touch-icon-precomposed.png" />',
-  '    <link rel="icon" href="/favicon.ico" sizes="any" />',
-].join('\n')
+const canonicalBlock = '    <link rel="icon" href="/favicon.ico" sizes="any" />'
 
 const canonicalComment =
-  '<!-- Canonical PNG favicon stack (Base App domain bar + /favicon.ico). -->'
+  '<!-- Single /favicon.ico (Base App domain bar; avoids multi-tag icon flicker). -->'
 
 const iconLinkPattern =
   /<link rel="(?:icon|apple-touch-icon(?:-precomposed)?|mask-icon|shortcut icon)"[^>]*>\s*/gi
 
 const canonicalCommentPattern =
-  /<!--\s*Canonical PNG favicon stack[^]*?-->\s*/g
+  /<!--\s*(?:Single \/favicon\.ico|Canonical PNG favicon stack)[^]*?-->\s*/g
 
 async function walkHtmlFiles(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true })
