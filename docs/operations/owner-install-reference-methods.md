@@ -17,6 +17,7 @@ title: Owner-Install Reference Methods
 | **A** | **Relay embedded-EOA owner-install** | Primary waitlist / `/waitlist?setup=owner-install` path; Part 1 deposit + Part 2 `addOwnerAddress(embeddedEoa)` | [Relay Kit — Owner Mutation Guide](/operations/relay-owner-mutation-kit-guide) | May 2026 block 45600637 (see guide) |
 | **B** | **Passkey-first Base App session-key Relay Part 1** | Base App WebView CSW with WebAuthn at `owner[0]` and session key at `owner[2]`; Part 1 signed by session key, Part 2 validated by passkey | [Base App session-key Part 1 recipe](/operations/base-app-session-key-relay-part1-recipe) | Part 2 reference below; Part 1 shares Method A deposit shape |
 | **C** | **Direct prepared-calls passkey (external browser)** | Recovery / legacy when CSW already has passkey owner and user opens `/add-owner` in a normal browser | [CSW Recovery Playbook](/operations/csw-recovery-playbook) | March 2026 userOpHash on probe CSW |
+| **D** | **Direct SDK-style `wallet_sendCalls` addOwner** | External browser / Coinbase Wallet SDK evaluation; **not** Base App WebView primary until Phase 0 gate passes | [Coinbase Smart Wallet Capabilities](/operations/coinbase-smart-wallet-capabilities) | N/A — single-step self-call |
 
 Implementation entry points:
 
@@ -24,6 +25,7 @@ Implementation entry points:
 | --- | --- | --- |
 | A, B | `useAddOwnerFlow` → `executeOwnerMutationViaRelay` → `submitSelfAuthRelayPart1SelfFunded` | `POST /api/onboarding/preview-add-owner` |
 | C | `onboardingWallet.sendPreparedOwnerTx` | `POST /api/onboarding/preview-add-owner` (same preview; different client lane) |
+| D | `useAddOwnerFlow` → `executeAddOwnerViaSendCalls` (flag `VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS=1`, non–Base-App-WebView only) → Relay fallback | Same preview (Relay quote optional when direct succeeds) |
 
 ---
 
@@ -92,9 +94,29 @@ Confirmed reference: [CSW Recovery Playbook](/operations/csw-recovery-playbook) 
 
 ---
 
+## Method D — Direct `wallet_sendCalls` addOwner (evaluation / fallback)
+
+**When to use:** External browser or Coinbase Wallet extension/SDK contexts where the connected Smart Wallet can execute a **single-step** CSW self-call:
+
+`wallet_sendCalls` → CSW `addOwnerAddress(privyEmbeddedEoa)` with `version: "2.0.0"`, `from` = CSW, `to` = CSW.
+
+**When not to use (2026-05):**
+
+- **Base App WebView waitlist** — Phase 0 gate **not passed**; privileged owner selectors are blocked or paymaster-injected. Keep **Method A/B Relay** primary.
+- **Passkey-first session-key CSWs** — `wallet_sendCalls` may re-inject USDC paymaster; use prepared-calls / Relay Part 1 recipe instead.
+
+**Enable:** `VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS=1` (or Vercel Toolbar flag `direct-csw-add-owner-send-calls`). `useAddOwnerFlow` tries Method D first only outside Base App WebView; on `direct_add_owner_blocked` errors it falls back to Relay.
+
+**Implementation:** `executeAddOwnerViaSendCalls.ts`, shared payload `walletSendCallsPayload.ts`, prolink encoder `encodeSingleCallSendCallsProlink({ from, to, data })`.
+
+**Cross-chain caveat:** Direct Method D updates owners on the selected chain only. Cross-chain owner replay still requires `executeWithoutChainIdValidation` (Relay Part 2 or prepared replayable lane).
+
+---
+
 ## How to cite in code and AGENTS.md
 
-- **Primary path / success gates:** Method **A**
+- **Primary path / success gates:** Method **A** (Relay) until Base App WebView direct addOwner is verified
+- **External-browser SDK evaluation:** Method **D** + flag
 - **Base App session-key Part 1 / Part 2 split:** Method **B** + [recipe](/operations/base-app-session-key-relay-part1-recipe)
 - **Passkey Part 2 golden shape (historical):** Method **B** Part 2 tx `0x801b9d4b…`
 - **External-browser passkey recovery:** Method **C**

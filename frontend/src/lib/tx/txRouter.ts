@@ -5,6 +5,7 @@ import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { recordUserOpTelemetry } from '@/lib/aa/coinbaseErc4337Telemetry'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import type { TransactionRequest } from '@/lib/uniswap/tradingApi'
+import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 import {
   isAllowedCanonicalSigner,
@@ -120,10 +121,6 @@ function asOptionalBigInt(value: unknown): bigint | undefined {
 
 function toHex(value: bigint): `0x${string}` {
   return `0x${value.toString(16)}` as `0x${string}`
-}
-
-function toChainHex(chainId: number): `0x${string}` {
-  return `0x${Math.floor(chainId).toString(16)}` as `0x${string}`
 }
 
 function isTxHash(value: unknown): value is `0x${string}` {
@@ -587,21 +584,22 @@ async function sendViaSendCalls(params: {
   let telemetryErrorCode: string | null = null
   let fellBackToAnotherMode = false
   try {
+    if (!sender) {
+      throw new Error('wallet_sendCalls requires a connected sender address')
+    }
+    const sendCallsPayload = buildWalletSendCallsPayload({
+      from: sender as `0x${string}`,
+      chainId: context.chainId,
+      atomicRequired: calls.length > 1,
+      calls: calls.map((call) => ({
+        to: call.to,
+        data: call.data,
+        value: call.value,
+      })),
+    })
     const response = await wallet.request({
       method: 'wallet_sendCalls',
-      params: [
-        {
-          chainId: toChainHex(context.chainId),
-          from: sender ?? undefined,
-          calls: calls.map((call) => ({
-            to: call.to,
-            data: call.data,
-            value: toHex(call.value),
-          })),
-          atomicRequired: calls.length > 1,
-          version: '2.0.0',
-        },
-      ],
+      params: [sendCallsPayload],
     })
     const callsId =
       typeof response === 'string'

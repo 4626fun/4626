@@ -37,7 +37,12 @@
  * prepare_calls / bundler fallbacks when sendCalls fails.
  */
 
-import { getAddress, type Hex } from 'viem'
+import { getAddress } from 'viem'
+
+import {
+  buildWalletSendCallsPayload,
+  type WalletSendCallsCallInput,
+} from '@/lib/wallet/walletSendCallsPayload'
 
 export type CswSendCallsTelemetry = {
   step:
@@ -51,19 +56,7 @@ export type CswSendCallsTelemetry = {
   detail: unknown
 }
 
-/**
- * One EIP-5792 call entry. Mirrors the shape the backend preview handler
- * returns and the shape EIP-5792 wallets accept in wallet_sendCalls.calls[].
- */
-export type SendCallsCall = {
-  to: `0x${string}`
-  data: Hex
-  /**
-   * Native value to send with this specific call. Accepts either a bigint
-   * (which we'll hex-encode here) or a pre-hex-encoded string. Defaults to 0.
-   */
-  value?: bigint | `0x${string}`
-}
+export type SendCallsCall = WalletSendCallsCallInput
 
 export type SubmitViaSendCallsParams = {
   /**
@@ -93,10 +86,17 @@ function encodeValue(value: SendCallsCall['value']): `0x${string}` {
   if (value === undefined) return '0x0'
   if (typeof value === 'bigint') return `0x${value.toString(16)}` as `0x${string}`
   if (typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)) return value
-  // Defensive fallback so a malformed value never silently sends a wrong amount.
   throw new Error(
     `Invalid SendCallsCall.value: expected bigint or 0x-prefixed hex string, got ${String(value)}`,
   )
+}
+
+function normalizeSendCallsCalls(calls: SendCallsCall[]) {
+  return calls.map((c) => ({
+    to: getAddress(c.to),
+    data: c.data,
+    value: encodeValue(c.value),
+  }))
 }
 
 export async function _submitOwnerViaSendCalls(
@@ -128,11 +128,7 @@ export async function _submitOwnerViaSendCalls(
   // Normalize calls to the EIP-5792 wire shape and capture a summary for the
   // telemetry event. Each call's value can arrive as bigint or hex string;
   // encodeValue() turns both into a 0x-prefixed hex wei string.
-  const normalizedCalls = params.calls.map((c) => ({
-    to: getAddress(c.to),
-    data: c.data,
-    value: encodeValue(c.value),
-  }))
+  const normalizedCalls = normalizeSendCallsCalls(params.calls)
 
   const callsSummary = normalizedCalls.map((c, idx) => ({
     index: idx,
@@ -161,24 +157,19 @@ export async function _submitOwnerViaSendCalls(
     throw new Error('wallet_sendCalls: must provide at least one call.')
   }
 
-  const chainIdHex = `0x${params.chainId.toString(16)}`
-
-  // EIP-5792 wallet_sendCalls payload. Spec:
-  // https://eips.ethereum.org/EIPS/eip-5792
-  const payload = {
-    version: '1.0',
-    from: getAddress(params.csw),
-    chainId: chainIdHex,
-    atomicRequired: params.atomicRequired ?? true,
-    calls: normalizedCalls,
-  }
+  const payload = buildWalletSendCallsPayload({
+    from: params.csw,
+    chainId: params.chainId,
+    calls: params.calls,
+    atomicRequired: params.atomicRequired,
+  })
 
   emit({
     step: 'prompt_sign',
     detail: {
       method: 'wallet_sendCalls',
       from: payload.from,
-      chainId: chainIdHex,
+      chainId: payload.chainId,
       callCount: normalizedCalls.length,
       calls: callsSummary,
     },

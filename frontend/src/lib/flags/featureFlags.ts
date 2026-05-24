@@ -262,6 +262,20 @@ export const useropTelemetryFlag = defineFlag<boolean>({
   },
 })
 
+export const directCswAddOwnerSendCallsFlag = defineFlag<boolean>({
+  key: 'direct-csw-add-owner-send-calls',
+  description:
+    'Try Method D direct wallet_sendCalls addOwnerAddress before Relay on non–Base-App-WebView surfaces.',
+  category: 'ui',
+  defaultValue: false,
+  options: [{ value: false, label: 'Relay primary' }, { value: true, label: 'Direct first' }],
+  decide() {
+    const remote = getRemoteFlag<boolean>('direct-csw-add-owner-send-calls')
+    if (remote !== undefined) return remote
+    return isTruthyEnv(import.meta.env.VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS)
+  },
+})
+
 export const privyAnalyticsFlag = defineFlag<boolean>({
   key: 'privy-analytics',
   description: 'Enable Privy browser analytics (disabled by default to reduce client-side noise).',
@@ -301,6 +315,7 @@ export const allFlags: FeatureFlag<unknown>[] = [
   swapProviderFlag,
   injectedConnectorFlag,
   lensGroveFlag,
+  directCswAddOwnerSendCallsFlag,
   debugLogsFlag,
   xmtpDebugFlag,
   useropTelemetryFlag,

@@ -1,5 +1,6 @@
 import { getAddress, recoverAddress, type Hex } from 'viem'
 
+import { buildWalletSendCallsPayload } from '@/lib/wallet/walletSendCallsPayload'
 import {
   classifyWebAuthnOwnerSignature,
   hexByteLength,
@@ -669,7 +670,6 @@ export async function _submitOwnerViaWalletSendCalls(params: {
   canonicalCswAddress: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
 }): Promise<`0x${string}`> {
-  const chainIdHex = `0x${params.chainId.toString(16)}`
   const capabilities: Record<string, unknown> = {}
   if (params.paymasterUrl) {
     const normalizedPaymaster = String(params.paymasterUrl).trim()
@@ -692,12 +692,13 @@ export async function _submitOwnerViaWalletSendCalls(params: {
   })
 
   const sendCallsPayload = {
-    version: '1.0',
-    from: params.sender,
-    chainId: chainIdHex,
-    atomicRequired: true,
-    calls: [{ to: params.to, data: params.data, value: '0x0' }],
-    capabilities,
+    ...buildWalletSendCallsPayload({
+      from: params.sender,
+      chainId: params.chainId,
+      atomicRequired: true,
+      calls: [{ to: params.to, data: params.data, value: 0n }],
+    }),
+    ...(Object.keys(capabilities).length > 0 ? { capabilities } : {}),
   }
   let sendResult: unknown
   try {

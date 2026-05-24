@@ -504,6 +504,7 @@ export function AdminAgentSetup() {
     queryFn: async (): Promise<string | null> => {
       if (!manualCswAddress || !manualOwnerToAdd || !manualAddOwnerCalldata) return null
       const payload = await encodeSingleCallSendCallsProlink({
+        from: manualCswAddress,
         to: manualCswAddress,
         data: manualAddOwnerCalldata as `0x${string}`,
       })
@@ -519,6 +520,7 @@ export function AdminAgentSetup() {
     queryFn: async (): Promise<string | null> => {
       if (!canonicalCswAddress || !serverWalletAddress || !serverOwnerAddCalldata) return null
       const payload = await encodeSingleCallSendCallsProlink({
+        from: canonicalCswAddress,
         to: canonicalCswAddress,
         data: serverOwnerAddCalldata as `0x${string}`,
       })

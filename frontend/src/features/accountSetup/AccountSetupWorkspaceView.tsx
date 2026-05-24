@@ -1204,6 +1204,7 @@ function WaitlistAdvancedSection({
     queryFn: async () => {
       if (!prolinkCallTarget || !prolinkCallData) return null
       return await encodeSingleCallSendCallsProlink({
+        from: canonicalCswAddress ?? prolinkCallTarget,
         to: prolinkCallTarget,
         data: prolinkCallData,
         value: prolinkCallValue,

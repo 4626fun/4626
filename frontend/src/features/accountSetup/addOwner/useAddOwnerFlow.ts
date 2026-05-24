@@ -12,6 +12,8 @@ import {
   type AddOwnerPreview,
 } from '@/lib/addOwner/addOwnerHelpers'
 import { executeAddOwnerViaRelay } from '@/lib/addOwner/addOwnerExecution'
+import { executeAddOwnerViaSendCalls } from '@/lib/addOwner/executeAddOwnerViaSendCalls'
+import { directCswAddOwnerSendCallsFlag } from '@/lib/flags/featureFlags'
 import {
   getWalletErrorMessage,
   mapRemoveOwnerSubmissionError,
@@ -26,6 +28,7 @@ import {
   readPersistedRelayPart1DepositTx,
 } from '@/lib/relay/relayPart1DepositLookup'
 import { useDeferUntilMounted } from '@/hooks/useDeferUntilMounted'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 export type AddOwnerErrorDetail = {
   revertReason: string | null
@@ -341,12 +344,18 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
       if (!resolvedPart1Hint) {
         setEventLog([])
       }
-      appendEvent(mode === 'recheck' ? 'lane:recheck_relay_part2' : 'lane:preview_bound_relay_user_call')
       appendEvent(`target:owner=${activePreview.preflight.ownerToAdd}`)
       appendEvent(`target:selector=${activePreview.txRequest.data.slice(0, 10)}`)
       appendEvent(`session:${isSelfAuthSession ? 'self_auth' : 'external_signer'}`)
       if (resolvedPart1Hint) {
         appendEvent(`relay_part1:reuse_hint=${resolvedPart1Hint}`)
+      }
+
+      const preferDirectSendCalls =
+        directCswAddOwnerSendCallsFlag() && !isBaseAppInAppContext()
+
+      if (!preferDirectSendCalls) {
+        appendEvent(mode === 'recheck' ? 'lane:recheck_relay_part2' : 'lane:preview_bound_relay_user_call')
       }
 
       let requiredDepositWei: bigint | null = null
@@ -371,6 +380,42 @@ export function useAddOwnerFlow(params: UseAddOwnerFlowParams) {
         if (isSelfAuthSession && !walletRequest) {
           setPageError('Base App wallet session is unavailable. Reconnect your smart wallet and retry.')
           return false
+        }
+
+        const tryDirectSendCalls = preferDirectSendCalls && Boolean(walletRequest)
+
+        if (tryDirectSendCalls && walletRequest) {
+          appendEvent('lane:direct_send_calls_add_owner')
+          try {
+            const directResult = await executeAddOwnerViaSendCalls({
+              cswAddress: mutationCswAddress as `0x${string}`,
+              ownerToAdd: activePreview.preflight.ownerToAdd,
+              publicClient,
+              walletRequest,
+              appendEvent,
+              onTxHash: (hash) => {
+                setTxHash(hash)
+                setPart1TxHash(hash)
+              },
+            })
+            setFlowComplete(true)
+            setWaitingForRelayFill(false)
+            setPageNotice(
+              `4626 signing enabled via direct addOwner (tx ${directResult.txHash.slice(0, 10)}…).`,
+            )
+            setPreview(null)
+            if (mutationCswAddress) {
+              clearPersistedAddOwnerPreview(mutationCswAddress)
+            }
+            return true
+          } catch (directErr: unknown) {
+            const directMessage = getWalletErrorMessage(directErr)
+            appendEvent(`direct_add_owner:fallback_relay=${directMessage.slice(0, 200)}`)
+            if (!directMessage.includes('direct_add_owner_blocked')) {
+              throw directErr
+            }
+            appendEvent('lane:preview_bound_relay_user_call')
+          }
         }
 
         const result = await executeAddOwnerViaRelay({

@@ -63,6 +63,8 @@ Observed on Part 2 (CSW `0x4beabd0…`, probe `4626.base.eth`):
 
 Implementation: `buildOwnerMutationRelayFlow.ts`, `ownerMutationExecution.ts`, `submitRelayPart1SelfFunded.ts`.
 
+**Method D (direct addOwner):** External-browser evaluation via `executeAddOwnerViaSendCalls` may skip Relay when `VITE_DIRECT_CSW_ADD_OWNER_SEND_CALLS=1` and the wallet accepts a direct `addOwnerAddress` self-call. Base App WebView waitlist remains on this Relay guide until the Phase 0 gate in [Coinbase Smart Wallet Capabilities](/operations/coinbase-smart-wallet-capabilities) passes.
+
 ---
 
 ## Canonical relay-kit pattern (Settlement API)

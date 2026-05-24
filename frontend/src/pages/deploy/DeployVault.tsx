@@ -8571,6 +8571,7 @@ function DeployVaultMain() {
     queryFn: async () => {
       if (!canonicalIdentityAddress || !addPrivySmartWalletOwnerCalldata) return null
       return await encodeSingleCallSendCallsProlink({
+        from: canonicalIdentityAddress,
         to: canonicalIdentityAddress,
         data: addPrivySmartWalletOwnerCalldata,
       })
