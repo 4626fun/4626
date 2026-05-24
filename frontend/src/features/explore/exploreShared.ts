@@ -304,6 +304,47 @@ export function flattenExplorePagedNodes<TNode>(
   return flattened
 }
 
+type ExploreCoinIdentity = {
+  address?: string | null
+  creatorAddress?: string | null
+  symbol?: string | null
+  name?: string | null
+  creatorProfile?: {
+    handle?: string | null
+    username?: string | null
+  } | null
+}
+
+export function resolveExploreCreatorIdentityKey(coin: ExploreCoinIdentity): string {
+  const profileHandle = coin.creatorProfile?.handle ?? coin.creatorProfile?.username ?? ''
+  const handle = String(profileHandle).trim().toLowerCase().replace(/^@/, '')
+  if (handle && !handle.startsWith('0x')) return `identity:handle:${handle}`
+
+  const symbol = typeof coin.symbol === 'string' ? coin.symbol.trim().toLowerCase().replace(/^@/, '') : ''
+  if (symbol && !symbol.startsWith('0x')) return `identity:symbol:${symbol}`
+
+  const creator = typeof coin.creatorAddress === 'string' ? coin.creatorAddress.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(creator)) return `identity:addr:${creator}`
+
+  const address = typeof coin.address === 'string' ? coin.address.trim().toLowerCase() : ''
+  if (/^0x[a-f0-9]{40}$/.test(address)) return `identity:coin:${address}`
+
+  const name = typeof coin.name === 'string' ? coin.name.trim().toLowerCase() : ''
+  return `identity:fallback:${name}:${creator}:${address}`
+}
+
+export function dedupeExploreCoinsByCreatorIdentity<T extends ExploreCoinIdentity>(coins: readonly T[]): T[] {
+  const out: T[] = []
+  const seen = new Set<string>()
+  for (const coin of coins) {
+    const key = resolveExploreCreatorIdentityKey(coin)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(coin)
+  }
+  return out
+}
+
 export function isSupportedExploreChain(chain: string): boolean {
   return chain.toLowerCase() === 'base'
 }

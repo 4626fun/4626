@@ -17,6 +17,7 @@ import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import { buildEthosSocialUserkeyFromZoraProfile, getZoraCreatorProfileIdentifier } from '@/lib/ethos/zoraSocial'
 import { fetchEthosScoreForUserkey, type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import {
+  dedupeExploreCoinsByCreatorIdentity,
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
   normalizeCoinSearchQuery,
@@ -317,8 +318,12 @@ export function ExploreCreators() {
 
   // Flatten all pages into a single array of coins
   const allCoins = useMemo(() => {
-    return flattenExplorePagedNodes(data?.pages)
-  }, [data?.pages])
+    const flattened = flattenExplorePagedNodes(data?.pages)
+    if (currentSort !== 'ethosScore') return flattened
+    return dedupeExploreCoinsByCreatorIdentity(flattened)
+  }, [data?.pages, currentSort])
+
+  const serverEthosSort = currentSort === 'ethosScore'
 
   const trimmedSearchQuery = searchQuery.trim()
   const debouncedSearchQuery = useDebouncedValue(trimmedSearchQuery, 250)
@@ -364,6 +369,7 @@ export function ExploreCreators() {
   const baseDisplayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
 
   const profileIdentifiers = useMemo(() => {
+    if (serverEthosSort) return []
     return baseDisplayCoins
       .filter((coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)))
       .filter((coin) => !deriveImmediateEthosUserkey(coin))
@@ -372,7 +378,7 @@ export function ExploreCreators() {
       identifier: getZoraCreatorProfileIdentifier(coin),
       immediateUserkey: deriveImmediateEthosUserkey(coin),
       }))
-  }, [baseDisplayCoins])
+  }, [baseDisplayCoins, serverEthosSort])
 
   const profileQueries = useQueries({
     queries: profileIdentifiers.map(({ coinKey, identifier }) => ({
@@ -399,11 +405,13 @@ export function ExploreCreators() {
   }, [profileIdentifiers, profileQueries])
 
   const coinsNeedingClientEthosLookup = useMemo(
-    () =>
-      baseDisplayCoins.filter(
+    () => {
+      if (serverEthosSort) return []
+      return baseDisplayCoins.filter(
         (coin) => !(typeof coin.ethosScore === 'number' && Number.isFinite(coin.ethosScore)),
-      ),
-    [baseDisplayCoins],
+      )
+    },
+    [baseDisplayCoins, serverEthosSort],
   )
 
   const ethosScoreQueries = useQueries({

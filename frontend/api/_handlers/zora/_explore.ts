@@ -113,6 +113,41 @@ async function loadCreatorEthosProjectionPage(params: {
   ethosMin: number | null
 }) {
   const rows = await params.db.sql`
+    WITH identity_ranked AS (
+      SELECT
+        creator_address,
+        coin_address,
+        twitter_username,
+        zora_handle,
+        created_at,
+        market_cap_usd,
+        volume_24h_usd,
+        ethos_score,
+        ethos_level,
+        ethos_score_source,
+        COALESCE(
+          NULLIF(lower(regexp_replace(trim(zora_handle), '^@', '')), ''),
+          NULLIF(lower(regexp_replace(trim(twitter_username), '^@', '')), ''),
+          lower(creator_address)
+        ) AS identity_key,
+        ROW_NUMBER() OVER (
+          PARTITION BY COALESCE(
+            NULLIF(lower(regexp_replace(trim(zora_handle), '^@', '')), ''),
+            NULLIF(lower(regexp_replace(trim(twitter_username), '^@', '')), ''),
+            lower(creator_address)
+          )
+          ORDER BY
+            ethos_score DESC NULLS LAST,
+            volume_24h_usd DESC NULLS LAST,
+            market_cap_usd DESC NULLS LAST,
+            creator_address ASC
+        ) AS identity_rank
+      FROM public.creator_ethos_projection
+      WHERE (
+        ${params.ethosMin}::numeric IS NULL
+        OR (ethos_score IS NOT NULL AND ethos_score >= ${params.ethosMin})
+      )
+    )
     SELECT
       creator_address,
       coin_address,
@@ -124,11 +159,8 @@ async function loadCreatorEthosProjectionPage(params: {
       ethos_score,
       ethos_level,
       ethos_score_source
-    FROM public.creator_ethos_projection
-    WHERE (
-      ${params.ethosMin}::numeric IS NULL
-      OR (ethos_score IS NOT NULL AND ethos_score >= ${params.ethosMin})
-    )
+    FROM identity_ranked
+    WHERE identity_rank = 1
     ORDER BY
       CASE WHEN ethos_score IS NULL THEN 1 ELSE 0 END ASC,
       ethos_score DESC NULLS LAST,
@@ -183,6 +215,37 @@ function exploreRowDisplayLabel(
   return shortSymbol(address)
 }
 
+function creatorExploreIdentityKey(row: {
+  creator_address: string
+  zora_handle?: string | null
+  twitter_username?: string | null
+}): string {
+  const handle = typeof row.zora_handle === 'string' ? row.zora_handle.trim().toLowerCase().replace(/^@/, '') : ''
+  if (handle) return `handle:${handle}`
+  const twitter =
+    typeof row.twitter_username === 'string' ? row.twitter_username.trim().toLowerCase().replace(/^@/, '') : ''
+  if (twitter) return `twitter:${twitter}`
+  return `addr:${String(row.creator_address).toLowerCase()}`
+}
+
+function dedupeEthosSortedCreatorRows<
+  T extends {
+    creator_address: string
+    zora_handle?: string | null
+    twitter_username?: string | null
+  },
+>(rows: T[]): T[] {
+  const out: T[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const key = creatorExploreIdentityKey(row)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(row)
+  }
+  return out
+}
+
 function buildCreatorProfileFromExploreRow(
   row: Pick<ExploreDbListingRow, 'zora_handle' | 'twitter_username'>,
 ): Record<string, unknown> | undefined {
@@ -214,12 +277,14 @@ async function assembleEthosSortedCreatorResponse(params: {
   hasNextPage: boolean
   usingProjectionRows: boolean
   key: string | null
+  /** When true, skip per-row Zora getCoin calls and serve indexed projection fields only. */
+  skipZoraCoinEnrichment?: boolean
   resolveNodeEthos: (
     row: EthosSortedCreatorRow,
   ) => { score: number | null; level: string | null; source: string | null }
 }) {
   let coinDetails = new Map<string, any>()
-  if (params.key && params.pageRows.length > 0) {
+  if (params.key && params.pageRows.length > 0 && !params.skipZoraCoinEnrichment) {
     try {
       const sdk: any = await import('@zoralabs/coins-sdk')
       sdk.setApiKey(params.key)
@@ -347,6 +412,7 @@ async function buildEthosSortedCreatorList(params: {
       offset,
       hasNextPage: candidateRows.length > params.count,
       usingProjectionRows: true,
+      skipZoraCoinEnrichment: true,
       key: params.key,
       resolveNodeEthos: (row) => ({
         score: toFiniteNumberOrNull(row.ethos_score),
@@ -598,6 +664,8 @@ async function buildEthosSortedCreatorList(params: {
     if (aMcap !== bMcap) return bMcap - aMcap
     return String(a.creator_address).localeCompare(String(b.creator_address))
   })
+
+  candidateRows = dedupeEthosSortedCreatorRows(candidateRows)
 
   const pageRows = candidateRows.slice(offset, offset + params.count)
   const hasNextPage = candidateRows.length > offset + params.count

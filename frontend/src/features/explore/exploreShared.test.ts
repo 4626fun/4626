@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  dedupeExploreCoinsByCreatorIdentity,
   recordExploreQueryRefresh,
   recordExploreSearchInputUpdate,
   setExploreSearchParam,
@@ -116,5 +117,29 @@ describe('explore query debug counters', () => {
     }
 
     ;(globalThis as any).window = prevWindow
+  })
+})
+
+describe('dedupeExploreCoinsByCreatorIdentity', () => {
+  it('keeps one row per zora handle across different creator addresses', () => {
+    const coins = [
+      {
+        address: '0x0000000000000000000000000000000000000001',
+        creatorAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        creatorProfile: { handle: 'jonathanmann' },
+      },
+      {
+        address: '0x0000000000000000000000000000000000000002',
+        creatorAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        creatorProfile: { handle: 'jonathanmann' },
+      },
+      {
+        address: '0x0000000000000000000000000000000000000003',
+        creatorAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+        creatorProfile: { handle: 'jacob' },
+      },
+    ]
+
+    expect(dedupeExploreCoinsByCreatorIdentity(coins)).toHaveLength(2)
   })
 })

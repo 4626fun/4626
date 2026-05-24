@@ -214,14 +214,9 @@ describe('GET /api/zora/explore', () => {
     await handler(req, res)
 
     expect(res.statusCode).toBe(200)
-    expect(getCoinMock).toHaveBeenCalledWith({
-      address: '0x0000000000000000000000000000000000000123',
-      chain: 8453,
-    })
-    expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('jesse')
-    expect(res.body?.data?.edges?.[0]?.node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse.png')
+    expect(getCoinMock).not.toHaveBeenCalled()
+    expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('jessepollak')
     expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1979)
-    expect(res.body?.data?.edges?.[0]?.node?.marketCapDelta24h).toBe('8.4')
   })
 
   it.each([
