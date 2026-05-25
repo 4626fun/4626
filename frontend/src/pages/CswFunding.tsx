@@ -447,11 +447,7 @@ export function CswFundingPage() {
                     Aggregate ETH held by the depository \u2014 your CSW&apos;s
                     per-order credits live in <code className="font-mono">RelayNativeDeposit</code>{' '}
                     events, not in a per-user storage slot. Visible here for
-                    sanity-checking when funding Relay-backed owner removal on{' '}
-                    <Link to="/remove-owner" className="underline underline-offset-2">
-                      /remove-owner
-                    </Link>
-                    .
+                    sanity-checking when funding Relay-backed owner mutations (archived).
                   </p>
                 </li>
               </ul>

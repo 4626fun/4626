@@ -4,7 +4,6 @@ import { Navigate, Route } from 'react-router-dom'
 import {
   AccountsPage,
   AmoeQuickTasks,
-  RemoveOwnerPage,
   CswFundingPage,
   AdminAgentSetup,
   AdminCreatorAccess,
@@ -113,16 +112,9 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     path: '/add-owner',
     element: <Navigate to="/waitlist" replace />,
   },
-  // `/remove-owner` removes an owner from the canonical CSW via the same Relay
-  // deposit + solver-fill lane as add-owner (`preview-remove-owner` →
-  // `useRemoveOwnerFlow` → `executeOwnerMutationViaRelay`).
   {
     path: '/remove-owner',
-    element: (
-      <SmartWalletRoute>
-        <RemoveOwnerPage />
-      </SmartWalletRoute>
-    ),
+    element: <Navigate to="/waitlist" replace />,
   },
   // `/csw-funding` shows the three funding sources for CSW UserOps on Base
   // (native ETH, EntryPoint deposit, RelayDepository total) and lets anyone

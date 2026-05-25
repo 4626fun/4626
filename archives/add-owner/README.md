@@ -13,9 +13,10 @@ Retired **2026-05-25**. The Relay + Base App owner-install lane (`preview-add-ow
 ## What was **not** archived (still in tree)
 
 - **Server agent delegation**: `preview-agent-owner`, `provision-agent-owner` (deploy/XMTP automation)
-- **Remove-owner** flow (`/remove-owner`) — shares `frontend/src/lib/relay/ownerMutationExecution.ts` and Part 1 self-funded submit
+- **Remove-owner + Relay owner-mutation stack** — `archives/remove-owner/` (includes Part 1 self-funded submit formerly kept for `/remove-owner`)
 - **DeployVault / AdminAgentSetup** `addOwnerAddress` for deploy-session batching (different product track)
 - **Execution track** reads (`legacy-owner-install`) for gating and `/api/accounts/me`
+- **`/csw-funding`** — CSW balance diagnostics + EntryPoint top-up
 
 ## Restoring (operator-only)
 
