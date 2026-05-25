@@ -91,11 +91,12 @@ export function YourIdentityHero() {
           <div className="mt-2">
             <CopyableAddress address={identity.cswAddress} />
           </div>
-          <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-              Execution sub-account
-            </div>
-            {identity.executionSubAccountAddress ? (
+          {identity.accountChrome.mode === 'sub-account' && identity.executionSubAccountAddress ? (
+            <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                {identity.accountChrome.executionLaneTitle}
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">{identity.accountChrome.executionLaneDescription}</p>
               <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-300">
                 <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
                 <a
@@ -107,14 +108,22 @@ export function YourIdentityHero() {
                   Basescan <ExternalLink className="h-3 w-3" />
                 </a>
               </div>
-            ) : (
-              <div className="mt-1 text-[11px] text-zinc-500">
-                {identity.executionTrack === 'legacy-owner-install'
-                  ? 'Legacy owner path active — no sub-account registered.'
-                  : 'Not provisioned yet.'}
+            </div>
+          ) : identity.accountChrome.mode === 'parent-csw' ? (
+            <div className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.04] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-300/80 font-medium">
+                {identity.accountChrome.executionLaneTitle}
               </div>
-            )}
-          </div>
+              <p className="mt-1 text-[11px] text-zinc-400">{identity.accountChrome.executionLaneDescription}</p>
+            </div>
+          ) : identity.accountChrome.mode === 'none' ? (
+            <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+                {identity.accountChrome.executionLaneTitle}
+              </div>
+              <p className="mt-1 text-[11px] text-zinc-500">{identity.accountChrome.executionLaneDescription}</p>
+            </div>
+          ) : null}
         </div>
       </div>
 

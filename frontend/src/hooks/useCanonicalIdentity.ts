@@ -6,6 +6,12 @@ import { base } from 'viem/chains'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import {
+  deriveAccountChromeExecution,
+  type AccountChromeExecution,
+  type UserFrontendExecutionTrack,
+} from '@/lib/wallet/userExecutionTrack'
 import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 
 /**
@@ -86,10 +92,14 @@ export type CanonicalIdentity = {
   creatorCoinAddress: Address | null
   /** Loading state for async CSW → coin lookup. */
   loadingCoin: boolean
-  /** Optional app-scoped execution sub-account, hidden unless a route actively uses it. */
+  /** Optional app-scoped execution sub-account when the effective track uses it. */
   executionSubAccountAddress: Address | null
-  /** Server-derived execution track classification. */
-  executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet' | null
+  /** Server-derived execution track classification (raw from `/api/accounts/me`). */
+  executionTrack: UserFrontendExecutionTrack | null
+  /** Effective track after parent-owner promotion over stale sub-account state. */
+  effectiveExecutionTrack: UserFrontendExecutionTrack
+  /** Tray / accounts / swap chrome derived from the effective execution lane. */
+  accountChrome: AccountChromeExecution
 }
 
 /**
@@ -218,12 +228,17 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   const executionTrack = (accountMe.me?.accountSignals?.executionTrack ?? null) as CanonicalIdentity['executionTrack']
   const embeddedSignerAuthorizedOnCsw =
     accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
+  const accountSignals = accountMe.me?.accountSignals
+  const accountChrome = deriveAccountChromeExecution({
+    executionTrack,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: embeddedSignerAuthorizedOnCsw,
+    subAccountFlowEnabled: waitlistSubAccountFlowFlag(),
+    canonicalCswAddress: csw,
+    baseSubAccount: accountSignals?.baseSubAccount,
+  })
+  const effectiveExecutionTrack = accountChrome.effectiveExecutionTrack
   const executionSubAccountAddress: Address | null = (() => {
-    const signals = accountMe.me?.accountSignals
-    if (!signals) return null
-    if (signals.executionTrack !== 'sub-account' && signals.executionTrack !== 'migration-pending') return null
-    if (!signals.baseSubAccount?.registered) return null
-    const candidate = signals.baseSubAccount.address
+    const candidate = accountChrome.subAccountAddress
     if (!candidate || !isAddress(candidate)) return null
     const normalized = candidate as Address
     const lower = normalized.toLowerCase()
@@ -289,5 +304,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     loadingCoin,
     executionSubAccountAddress,
     executionTrack,
+    effectiveExecutionTrack,
+    accountChrome,
   }
 }

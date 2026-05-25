@@ -46,7 +46,7 @@ import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/s
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
-import { resolveEffectiveExecutionTrack } from '@/lib/wallet/userExecutionTrack'
+import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution } from '@/lib/wallet/userExecutionTrack'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
@@ -816,6 +816,26 @@ export function Swap() {
   )
   const subAccountTrack =
     effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending'
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
+  const swapExecutionChrome = useMemo(
+    () =>
+      deriveAccountChromeExecution({
+        executionTrack: executionTrack ?? undefined,
+        parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+        subAccountFlowEnabled,
+        canonicalCswAddress: canonicalAddress,
+        baseSubAccount: accountSignals?.baseSubAccount,
+      }),
+    [
+      executionTrack,
+      accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      accountSignals?.baseSubAccount,
+      privyEmbeddedEoaCanOperateCanonicalQuery.data,
+      subAccountFlowEnabled,
+      canonicalAddress,
+    ],
+  )
   const subAccountRuntime = useSwapSubAccountRuntime({
     enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
     canonicalAddress,
@@ -1012,7 +1032,6 @@ export function Swap() {
   }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
-  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const canonicalSetupGateCodes = useMemo(
     () =>
       new Set([
@@ -1861,7 +1880,9 @@ export function Swap() {
                           needsCanonicalSetupAction
                             ? canonicalSignerGate.reason ??
                               'Finish one-time account setup before canonical swaps can execute.'
-                            : null
+                            : executionMode === 'canonical' && swapExecutionChrome.swapSenderLabel
+                              ? swapExecutionChrome.swapSenderLabel
+                              : null
                         }
                       />
                       <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 text-sm text-vault-text transition hover:bg-white/[0.07]">

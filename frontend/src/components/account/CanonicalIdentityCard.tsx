@@ -155,8 +155,7 @@ export function CanonicalIdentityCard({
 
 /**
  * Dropdown body content — canonical smart wallet first, then signer lanes.
- * The app-scoped sub-account is intentionally not surfaced here unless a
- * future route actively uses it as the transaction sender.
+ * Sub-account is surfaced only for population (b) when it is the effective swap lane.
  */
 export function CanonicalIdentityDropdown({
   identity,
@@ -258,6 +257,30 @@ export function CanonicalIdentityDropdown({
             </div>
           </div>
         </div>
+      ) : null}
+
+      {identity.accountChrome.showSubAccountInTray && identity.executionSubAccountAddress ? (
+        <>
+          <div className="mx-4 my-2 h-px bg-white/8" />
+          <div className={sectionClassName}>
+            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+              {identity.accountChrome.executionLaneTitle}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2.5">
+              <JazziconAvatar address={identity.executionSubAccountAddress} size={24} />
+              <div className="min-w-0 flex-1">
+                <AddressWithBasescan
+                  address={identity.executionSubAccountAddress}
+                  variant="muted"
+                  className="text-xs text-zinc-300"
+                />
+                <div className="text-[10px] text-zinc-600 truncate">
+                  {identity.accountChrome.executionLaneDescription}
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
       ) : null}
 
       {(identity.cswAddress && (

@@ -118,6 +118,122 @@ export type WaitlistStepRoutingContext = {
   onchainEoaOwnerCount?: number
 }
 
+export type AccountChromeExecutionMode = 'parent-csw' | 'sub-account' | 'none'
+
+export type AccountChromeExecution = {
+  mode: AccountChromeExecutionMode
+  effectiveExecutionTrack: UserFrontendExecutionTrack
+  showSubAccountInTray: boolean
+  showSubAccountInAccounts: boolean
+  swapSenderLabel: string | null
+  subAccountAddress: string | null
+  executionLaneTitle: string
+  executionLaneDescription: string
+}
+
+function resolveDistinctSubAccountAddress(params: {
+  effectiveExecutionTrack: UserFrontendExecutionTrack
+  canonicalCswAddress?: string | null
+  baseSubAccount?: {
+    address?: string | null
+    registered?: boolean
+    isDistinctFromCsw?: boolean
+  } | null
+}): string | null {
+  if (
+    params.effectiveExecutionTrack !== 'sub-account' &&
+    params.effectiveExecutionTrack !== 'migration-pending'
+  ) {
+    return null
+  }
+  const candidate = params.baseSubAccount?.address
+  if (params.baseSubAccount?.registered !== true || typeof candidate !== 'string' || !candidate.trim()) {
+    return null
+  }
+  const normalized = candidate.trim()
+  if (params.baseSubAccount.isDistinctFromCsw === false) return null
+  if (
+    params.canonicalCswAddress &&
+    normalized.toLowerCase() === params.canonicalCswAddress.toLowerCase()
+  ) {
+    return null
+  }
+  return normalized
+}
+
+/**
+ * Account chrome (tray, /accounts, swap sender hint) must follow the effective
+ * execution track — parent CSW owner (population c) hides stale sub-account UI.
+ */
+export function deriveAccountChromeExecution(params: {
+  executionTrack?: UserFrontendExecutionTrack | null
+  parentEmbeddedOwnerOnChain?: boolean
+  privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
+  subAccountFlowEnabled?: boolean
+  canonicalCswAddress?: string | null
+  baseSubAccount?: {
+    address?: string | null
+    registered?: boolean
+    isDistinctFromCsw?: boolean
+  } | null
+}): AccountChromeExecution {
+  const effectiveExecutionTrack = resolveEffectiveExecutionTrack({
+    executionTrack: params.executionTrack,
+    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: params.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+  })
+
+  const subAccountAddress = resolveDistinctSubAccountAddress({
+    effectiveExecutionTrack,
+    canonicalCswAddress: params.canonicalCswAddress,
+    baseSubAccount: params.baseSubAccount,
+  })
+
+  const subAccountLaneActive =
+    params.subAccountFlowEnabled === true &&
+    Boolean(subAccountAddress) &&
+    (effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending')
+
+  if (effectiveExecutionTrack === 'legacy-owner-install') {
+    return {
+      mode: 'parent-csw',
+      effectiveExecutionTrack,
+      showSubAccountInTray: false,
+      showSubAccountInAccounts: false,
+      swapSenderLabel: 'Sending from your Coinbase Smart Wallet',
+      subAccountAddress: null,
+      executionLaneTitle: 'Parent smart wallet signing',
+      executionLaneDescription:
+        'Sponsored swaps and deploys send from your Coinbase Smart Wallet — your canonical identity.',
+    }
+  }
+
+  if (subAccountLaneActive) {
+    return {
+      mode: 'sub-account',
+      effectiveExecutionTrack,
+      showSubAccountInTray: true,
+      showSubAccountInAccounts: true,
+      swapSenderLabel: 'Sending from 4626 app wallet (swaps only)',
+      subAccountAddress,
+      executionLaneTitle: '4626 app wallet (swaps only)',
+      executionLaneDescription:
+        'Base App swap lane — execution only, not your onchain identity or deploy sender.',
+    }
+  }
+
+  return {
+    mode: 'none',
+    effectiveExecutionTrack,
+    showSubAccountInTray: false,
+    showSubAccountInAccounts: false,
+    swapSenderLabel: null,
+    subAccountAddress: null,
+    executionLaneTitle: 'Execution lane',
+    executionLaneDescription: 'Finish account setup to enable sponsored swaps.',
+  }
+}
+
 export function buildWaitlistStepRoutingParams<
   TAccount extends {
     emailVerified: boolean

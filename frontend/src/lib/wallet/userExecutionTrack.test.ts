@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildWaitlistStepRoutingParams,
+  deriveAccountChromeExecution,
   inferWaitlistEoaOwnerRoutingHint,
   isParentCswEmbeddedOwnerReady,
   isZoraLinkedFromAccountSignals,
@@ -103,5 +104,66 @@ describe('inferWaitlistEoaOwnerRoutingHint', () => {
         accountSignals: { executionTrack: 'none-yet' },
       }),
     ).toBe(2)
+  })
+})
+
+describe('deriveAccountChromeExecution', () => {
+  const csw = '0xAb6d5c10b03300326cd7fab7267ae192842967b5'
+  const subAccount = '0x1111111111111111111111111111111111111111'
+
+  it('hides sub-account chrome for population c with stale sub-account DB state', () => {
+    const chrome = deriveAccountChromeExecution({
+      executionTrack: 'sub-account',
+      parentEmbeddedOwnerOnChain: true,
+      subAccountFlowEnabled: true,
+      canonicalCswAddress: csw,
+      baseSubAccount: {
+        address: subAccount,
+        registered: true,
+        isDistinctFromCsw: true,
+      },
+    })
+
+    expect(chrome.mode).toBe('parent-csw')
+    expect(chrome.showSubAccountInTray).toBe(false)
+    expect(chrome.showSubAccountInAccounts).toBe(false)
+    expect(chrome.subAccountAddress).toBeNull()
+    expect(chrome.swapSenderLabel).toContain('Coinbase Smart Wallet')
+  })
+
+  it('surfaces sub-account chrome for population b when flags are on', () => {
+    const chrome = deriveAccountChromeExecution({
+      executionTrack: 'sub-account',
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+      subAccountFlowEnabled: true,
+      canonicalCswAddress: csw,
+      baseSubAccount: {
+        address: subAccount,
+        registered: true,
+        isDistinctFromCsw: true,
+      },
+    })
+
+    expect(chrome.mode).toBe('sub-account')
+    expect(chrome.showSubAccountInTray).toBe(true)
+    expect(chrome.showSubAccountInAccounts).toBe(true)
+    expect(chrome.subAccountAddress).toBe(subAccount)
+    expect(chrome.swapSenderLabel).toContain('4626 app wallet')
+  })
+
+  it('does not surface sub-account chrome when the sub-account flag is off', () => {
+    const chrome = deriveAccountChromeExecution({
+      executionTrack: 'sub-account',
+      subAccountFlowEnabled: false,
+      canonicalCswAddress: csw,
+      baseSubAccount: {
+        address: subAccount,
+        registered: true,
+        isDistinctFromCsw: true,
+      },
+    })
+
+    expect(chrome.mode).toBe('none')
+    expect(chrome.showSubAccountInTray).toBe(false)
   })
 })
