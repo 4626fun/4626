@@ -9,8 +9,8 @@ import {
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
-export const DEFAULT_SPARKLINE_PRECOMPUTE_BUDGET = 48
-export const DEFAULT_SPARKLINE_PRECOMPUTE_CONCURRENCY = 6
+export const DEFAULT_SPARKLINE_PRECOMPUTE_BUDGET = 96
+export const DEFAULT_SPARKLINE_PRECOMPUTE_CONCURRENCY = 8
 
 export type ExploreSparklinePrecomputeResult = {
   attempted: number

@@ -117,7 +117,9 @@ contract DeploymentBatcherPhase3Helper {
                     pool: v3Pool,
                     manager: protocolTreasury,
                     managerFee: CHARM_MANAGER_FEE_PIPS,
-                    rebalanceDelegate: protocolTreasury,
+                    // Creator CSW (params.owner) may trigger rebalance(); protocol treasury
+                    // retains manager controls (parameters, fees, delegate rotation).
+                    rebalanceDelegate: params.owner,
                     maxTotalSupply: type(uint256).max,
                     baseThreshold: 3000,
                     limitThreshold: 6000,

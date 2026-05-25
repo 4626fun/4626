@@ -39,6 +39,9 @@ export type ChainKey = keyof typeof CHAINS;
 /** Charm AlphaProVaultFactory on Base mainnet */
 export const CHARM_FACTORY_ADDRESS = '0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa' as const;
 
+/** Protocol treasury Safe — Charm vault manager and strategy owner after deploy */
+export const PROTOCOL_TREASURY_ADDRESS = '0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3' as const;
+
 // ---------------------------------------------------------------------------
 // Timing constants
 // ---------------------------------------------------------------------------

@@ -110,6 +110,21 @@ vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
   officialCharmVaultError: vi.fn((vault: string) => `not_official:${vault}`),
 }))
 
+const PROTOCOL_TREASURY = '0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'
+const DELEGATE_CSW = '0x7777777777777777777777777777777777777777'
+
+vi.mock('../../server/_lib/wallet/protocolTreasurySafe.js', () => ({
+  executeViaProtocolTreasurySafe: vi.fn(),
+  isProtocolTreasuryManager: vi.fn((manager: string | null | undefined) =>
+    Boolean(manager && manager.toLowerCase() === PROTOCOL_TREASURY.toLowerCase()),
+  ),
+  isSameAddress: vi.fn(
+    (a: string | null | undefined, b: string | null | undefined) =>
+      Boolean(a && b && a.toLowerCase() === b.toLowerCase()),
+  ),
+  resolveProtocolTreasuryAddress: vi.fn(() => PROTOCOL_TREASURY),
+}))
+
 vi.mock('viem/chains', () => ({
   base: { id: 8453 },
 }))
@@ -140,6 +155,7 @@ vi.mock('viem', async () => {
 })
 
 import { executeKeeprAction } from '../../server/keepr/xmtpQueueExecutor.ts'
+import { executeViaProtocolTreasurySafe } from '../../server/_lib/wallet/protocolTreasurySafe.js'
 
 describe('xmtp queue executor Ajna canonical automation', () => {
   let restoreEnv: (() => void) | null = null
@@ -699,7 +715,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     })
     mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
       if (functionName === 'manager') return '0x6666666666666666666666666666666666666666'
-      if (functionName === 'rebalanceDelegate') return '0x0000000000000000000000000000000000000000'
+      if (functionName === 'rebalanceDelegate') return DELEGATE_CSW
       throw new Error(`Unexpected readContract call: ${functionName}`)
     })
     mocks.findCoinbaseSmartWalletOwnerIndex
@@ -730,10 +746,67 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(mocks.findCoinbaseSmartWalletOwnerIndex).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
-        smartWallet: '0x6666666666666666666666666666666666666666',
+        smartWallet: DELEGATE_CSW,
       }),
     )
     expect(mocks.sendCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+    expect(mocks.writeContract).not.toHaveBeenCalled()
+    expect(executeViaProtocolTreasurySafe).not.toHaveBeenCalled()
+  })
+
+  it('rebalances Charm via protocol treasury Safe when manager is treasury', async () => {
+    process.env.KPR_PRIVATE_KEY =
+      '0x1111111111111111111111111111111111111111111111111111111111111111'
+    mocks.privateKeyToAccount.mockReturnValue({
+      address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+    mocks.sql.mockResolvedValueOnce({
+      rows: [
+        {
+          vault_address: VAULT,
+          group_id: 'group-1',
+          canonical_owner_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          creator_address: null,
+          agent_type: null,
+          privy_wallet_id: null,
+          csw_address: CANONICAL_CSW,
+          encrypted_private_key_b64: null,
+          encrypted_private_key_iv_b64: null,
+          encrypted_private_key_tag_b64: null,
+        },
+      ],
+    })
+    mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName === 'manager') return PROTOCOL_TREASURY
+      if (functionName === 'rebalanceDelegate') return CANONICAL_CSW
+      throw new Error(`Unexpected readContract call: ${functionName}`)
+    })
+    vi.mocked(executeViaProtocolTreasurySafe).mockResolvedValueOnce({
+      txHash: TX_HASH,
+      safeAddress: PROTOCOL_TREASURY,
+      signerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    const result = await executeKeeprAction({
+      id: 13,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'strategy.charm.rebalance',
+      action: {
+        action: 'strategy.charm.rebalance',
+        charmVaultAddress: VAULT,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.actionType).toBe('strategy.charm.rebalance')
+    expect(result.details).toMatchObject({
+      txHash: TX_HASH,
+      mode: 'protocol_treasury_safe',
+      safeAddress: PROTOCOL_TREASURY,
+    })
+    expect(executeViaProtocolTreasurySafe).toHaveBeenCalledTimes(1)
+    expect(mocks.findCoinbaseSmartWalletOwnerIndex).not.toHaveBeenCalled()
     expect(mocks.writeContract).not.toHaveBeenCalled()
   })
 })

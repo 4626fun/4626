@@ -28,6 +28,11 @@ import {
 } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
 import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
+import {
+  executeViaProtocolTreasurySafe,
+  isProtocolTreasuryManager,
+  isSameAddress,
+} from '../_lib/wallet/protocolTreasurySafe.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -503,9 +508,50 @@ export async function executeStrategyAction(
       ? normalizeAddress(options.queueRow.cswAddress, 'cswAddress')
       : null
 
+  const rebalanceCalldata = encodeFunctionData({
+    abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
+    functionName: 'rebalance',
+    args: [],
+  })
+
+  if (isProtocolTreasuryManager(managerAddress)) {
+    try {
+      const viaSafe = await executeViaProtocolTreasurySafe({
+        publicClient,
+        rpcUrl,
+        to: charmVaultAddress,
+        data: rebalanceCalldata,
+      })
+      return {
+        txHash: viaSafe.txHash,
+        charmVaultAddress,
+        mode: 'protocol_treasury_safe',
+        safeAddress: viaSafe.safeAddress,
+        signerAddress: viaSafe.signerAddress,
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.warn('[keepr/strategy] charm rebalance treasury Safe path failed', {
+        charmVaultAddress,
+        managerAddress,
+        error: message,
+      })
+      if (message.startsWith('protocol_treasury_safe_owner_key_missing')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      if (message.startsWith('protocol_treasury_safe_signer_not_owner')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      throw new KeeprStrategyError(
+        `protocol_treasury_safe_failed:${message}`,
+        isLikelyRetryableRpcError(message),
+      )
+    }
+  }
+
   const cswCandidates = Array.from(
     new Set(
-      [rowCswAddress, delegateAddress, managerAddress].filter(
+      [rowCswAddress, delegateAddress].filter(
         (addr): addr is `0x${string}` => Boolean(addr && addr !== ZERO_ADDRESS && addr !== keeperAddress),
       ),
     ),
@@ -544,8 +590,7 @@ export async function executeStrategyAction(
     }
   }
 
-  const keeperCanDirectlyRebalance =
-    (delegateAddress && delegateAddress === keeperAddress) || (managerAddress && managerAddress === keeperAddress)
+  const keeperCanDirectlyRebalance = Boolean(delegateAddress && isSameAddress(delegateAddress, keeperAddress))
 
   if (keeperCanDirectlyRebalance) {
     const txHash = await walletClient.writeContract({

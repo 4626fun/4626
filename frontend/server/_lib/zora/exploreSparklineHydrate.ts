@@ -5,8 +5,8 @@ import { persistExploreSparklinesToDb } from './exploreSparklineCache.js'
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
-export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_MAX = 25
-export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_CONCURRENCY = 6
+export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_MAX = 48
+export const DEFAULT_EXPLORE_SPARKLINE_HYDRATE_CONCURRENCY = 8
 
 type ExploreEdge = { node?: { address?: string; trend30d?: { values?: unknown } } }
 

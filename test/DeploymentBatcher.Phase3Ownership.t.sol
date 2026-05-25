@@ -354,7 +354,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             pool: v3Pool,
             manager: protocolTreasury,
             managerFee: CHARM_MANAGER_FEE_PIPS,
-            rebalanceDelegate: protocolTreasury,
+            rebalanceDelegate: params.owner,
             maxTotalSupply: type(uint256).max,
             baseThreshold: 3000,
             limitThreshold: 6000,

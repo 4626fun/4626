@@ -4122,7 +4122,7 @@ function DeployVaultBatcher({
                 pool: v3PoolAddress,
                 manager: expectedProtocolTreasury,
                 managerFee: 160_000,
-                rebalanceDelegate: expectedProtocolTreasury,
+                rebalanceDelegate: owner,
                 maxTotalSupply: (1n << 256n) - 1n,
                 baseThreshold: 3_000,
                 limitThreshold: 6_000,
