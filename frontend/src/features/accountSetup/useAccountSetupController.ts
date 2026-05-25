@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
-import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { getAddress } from 'viem'
+import { base } from 'viem/chains'
+import { useAccount, useConnections, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
@@ -23,6 +25,8 @@ import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtil
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
+import { submitOwnerViaPreparedCallsWithEoaOwner } from '@/lib/wallet/eoaOwnerPreparedCalls'
+import type { PreparedOwnerTxRequest } from '@/lib/wallet/zoraAddOwnerApi'
 
 import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
@@ -35,6 +39,12 @@ import type {
   ZoraLinkStatusResponse,
   ZoraResolveResponse,
 } from './types'
+
+function resolveDirectPreparedCallsPaymasterUrl(): string | null {
+  const direct = String(import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL ?? '').trim()
+  if (/^https?:\/\//i.test(direct)) return direct
+  return null
+}
 
 function parseChainId(value: string | number | null | undefined): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
@@ -159,6 +169,7 @@ export function useAccountSetupController(params: {
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { address: connectedAddress, chainId } = useAccount()
+  const wagmiConnections = useConnections()
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
@@ -764,11 +775,124 @@ export function useAccountSetupController(params: {
     )
   }, [])
 
-  const submitOwnerInstallViaOnchainEoa = useCallback(async () => {
-    throw new Error(
-      'User add-owner setup is paused. Use /swap with an external wallet (EOA mode), or wait for wallet onboarding to return.',
-    )
-  }, [])
+  const onchainEoaOwnerCandidates = useMemo(
+    () =>
+      cswOwnersState.owners
+        .filter((owner) => owner.isAddressOwner && owner.ownerAddress)
+        .map((owner) => ({
+          index: owner.index,
+          ownerAddress: getAddress(owner.ownerAddress as `0x${string}`) as `0x${string}`,
+        })),
+    [cswOwnersState.owners],
+  )
+  const connectedOnchainEoaOwner = useMemo(() => {
+    if (!connectedAddress) return null
+    const lower = connectedAddress.toLowerCase()
+    return onchainEoaOwnerCandidates.find((c) => c.ownerAddress.toLowerCase() === lower) ?? null
+  }, [connectedAddress, onchainEoaOwnerCandidates])
+  const passkeyOnlyCanonicalCsw = useMemo(
+    () =>
+      Boolean(
+        canonicalCswAddress &&
+          cswOwnersState.status === 'ready' &&
+          cswOwnersState.owners.length > 0 &&
+          onchainEoaOwnerCandidates.length === 0,
+      ),
+    [canonicalCswAddress, cswOwnersState.owners.length, cswOwnersState.status, onchainEoaOwnerCandidates.length],
+  )
+  const requiresBaseAppForOwnerInstall = useMemo(
+    () => passkeyOnlyCanonicalCsw && !isMobileWalletEnvironment() && !connectedOnchainEoaOwner,
+    [connectedOnchainEoaOwner, passkeyOnlyCanonicalCsw],
+  )
+
+  const submitOwnerInstallViaOnchainEoa = useCallback(
+    async (txRequest: PreparedOwnerTxRequest): Promise<`0x${string}`> => {
+      if (!canonicalCswAddress) {
+        throw new Error('No canonical Coinbase Smart Wallet selected.')
+      }
+      if (!connectedOnchainEoaOwner) {
+        const expected = onchainEoaOwnerCandidates.map((c) => c.ownerAddress).join(', ')
+        throw new Error(
+          expected
+            ? `Connect one of these on-chain EOA owners to use this lane: ${expected}.`
+            : 'No on-chain EOA owners are available on this Coinbase Smart Wallet.',
+        )
+      }
+      if (txRequest.to.toLowerCase() !== canonicalCswAddress.toLowerCase()) {
+        throw new Error('Prepared transaction target does not match the canonical Coinbase Smart Wallet.')
+      }
+
+      const ownerLower = connectedOnchainEoaOwner.ownerAddress.toLowerCase()
+      const signerConnection = wagmiConnections.find((conn) =>
+        conn.accounts.some((acct) => String(acct).toLowerCase() === ownerLower),
+      )
+      if (!signerConnection) {
+        throw new Error(
+          `No connected wagmi account matches on-chain EOA owner ${connectedOnchainEoaOwner.ownerAddress}. ` +
+            'Connect that wallet directly and retry.',
+        )
+      }
+      const signerProvider = (await (signerConnection.connector as { getProvider?: () => Promise<unknown> })
+        .getProvider?.()) as { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> } | null
+      if (!signerProvider || typeof signerProvider.request !== 'function') {
+        throw new Error('EOA-owner connector does not expose a request() surface for personal_sign.')
+      }
+      const signerRequest = async (args: { method: string; params?: unknown[] }) =>
+        await signerProvider.request!(args)
+
+      const isCoinbaseLikeConnector = (connectorId: unknown): boolean => {
+        const id = String(connectorId ?? '').toLowerCase()
+        return id === 'coinbasewalletsdk' || id === 'base-account' || id.includes('coinbase')
+      }
+      let cswRequest: typeof signerRequest = signerRequest
+      if (!isCoinbaseLikeConnector(signerConnection.connector?.id)) {
+        const coinbaseConnection = wagmiConnections.find((conn) =>
+          isCoinbaseLikeConnector(conn.connector?.id),
+        )
+        if (coinbaseConnection) {
+          const coinbaseProvider = (await (coinbaseConnection.connector as {
+            getProvider?: () => Promise<unknown>
+          }).getProvider?.()) as
+            | { request?: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
+            | null
+          if (coinbaseProvider && typeof coinbaseProvider.request === 'function') {
+            cswRequest = async (args: { method: string; params?: unknown[] }) =>
+              await coinbaseProvider.request!(args)
+          }
+        }
+      }
+
+      if (chainId !== base.id && typeof switchChainAsync === 'function') {
+        await switchChainAsync({ chainId: base.id })
+      }
+      const paymasterUrl = resolveDirectPreparedCallsPaymasterUrl()
+      if (!paymasterUrl) {
+        throw new Error(
+          'Sponsored owner approval requires `VITE_CDP_SENDCALLS_PAYMASTER_URL` to be set to a direct CDP RPC URL.',
+        )
+      }
+
+      return await submitOwnerViaPreparedCallsWithEoaOwner({
+        cswRequest,
+        signerRequest,
+        eoaOwnerAddress: connectedOnchainEoaOwner.ownerAddress,
+        eoaOwnerIndex: connectedOnchainEoaOwner.index,
+        chainId: base.id,
+        sender: canonicalCswAddress as `0x${string}`,
+        to: txRequest.to,
+        data: txRequest.data,
+        paymasterUrl,
+      })
+    },
+    [
+      canonicalCswAddress,
+      chainId,
+      connectedOnchainEoaOwner,
+      onchainEoaOwnerCandidates,
+      switchChainAsync,
+      wagmiConnections,
+    ],
+  )
 
   const retryOwnerCheck = useCallback(async () => {
     if (!canonicalCswAddress) return
@@ -830,7 +954,7 @@ export function useAccountSetupController(params: {
   )
   const connectedSignerLabel = ownerSignerAddress ? shortValue(ownerSignerAddress) : 'No wallet connected'
   const connectedSignerDetail = ownerApprovalReady
-    ? 'Add-owner setup is paused in this build. Connect an owner wallet for diagnostics, or trade at /swap with an external wallet.'
+    ? 'On-chain owner connected. Enable 4626 signing when your embedded signer is not yet installed.'
     : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
       ? 'Wallet connection is still finishing. Wait for the signer session to hydrate.'
       : ownerAuthorityState.detail
@@ -862,7 +986,7 @@ export function useAccountSetupController(params: {
       {
         title: 'Wallet signing',
         description: ownerApprovalReady
-          ? 'In-app owner setup is paused. Use /swap with an external wallet if canonical signing is unavailable.'
+          ? 'Run Enable 4626 signing to add your embedded signer as a CSW owner.'
           : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
             ? 'Wait for the signer client to finish hydrating.'
             : 'Connect and verify a current CSW owner first.',
@@ -879,7 +1003,7 @@ export function useAccountSetupController(params: {
     ],
   )
   const ownerPrimaryCtaLabel = ownerApprovalReady
-    ? 'Owner setup paused'
+    ? 'Ready to enable signing'
     : needsEmbeddedWallet
       ? 'Provisioning embedded wallet…'
       : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
@@ -938,6 +1062,8 @@ export function useAccountSetupController(params: {
     onResetOwnerApproval,
     onSwitchAccount,
     onAddRabbyCoOwner,
+    onchainEoaOwnerCandidates,
+    connectedOnchainEoaOwner,
     ownerApprovalReady,
     ownerAuthorityState,
     ownerChecklist,
@@ -956,6 +1082,7 @@ export function useAccountSetupController(params: {
     providerCards,
     publicClient,
     refreshCswOwners,
+    requiresBaseAppForOwnerInstall,
     readableCswOwners,
     retryOwnerCheck,
     sendPreparedOwnerTx,

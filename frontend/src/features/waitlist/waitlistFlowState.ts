@@ -33,14 +33,28 @@ export function isWaitlistStepTwoSigningComplete(params: {
   })
 }
 
-export function shouldShowParentCswAddOwnerPanel(_params: {
+export function shouldShowParentCswAddOwnerPanel(params: {
+  zoraLinked?: boolean
   ownerInstallRequested: boolean
   signingStepComplete: boolean
   executionTrack?: WaitlistAccountWithCanonical['accountSignals']['executionTrack']
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
+  onchainEoaOwnerCount?: number
 }): boolean {
-  return false
+  if (params.signingStepComplete) return false
+  if (isLegacyParentOwnerSigningReady({ parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain })) {
+    return false
+  }
+  const canonical =
+    typeof params.accountSignals?.canonicalCswAddress === 'string'
+      ? params.accountSignals.canonicalCswAddress.trim()
+      : ''
+  if (!canonical) return false
+  if ((params.onchainEoaOwnerCount ?? 0) <= 0) return false
+  if (params.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return false
+  if (!params.zoraLinked && !params.ownerInstallRequested) return false
+  return true
 }
 
 type CanonicalBootstrapResult = {

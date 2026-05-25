@@ -42,6 +42,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'accounts/link': () => import('./accounts/_link.js'),
   'accounts/unlink': () => import('./accounts/_unlink.js'),
   'wallet/sync': () => import('./wallet/_sync.js'),
+  'wallet/prepare-add-privy-owner': () => import('./wallet/_prepare-add-privy-owner.js'),
+  'wallet/confirm-owner': () => import('./wallet/_confirm-owner.js'),
   'portfolio/me': () => import('./portfolio/_me.js'),
   'vaults/active': () => import('./vaults/_activeProtected.js'),
 

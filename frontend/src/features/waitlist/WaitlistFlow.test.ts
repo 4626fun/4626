@@ -128,19 +128,76 @@ describe('isWaitlistStepTwoSigningComplete', () => {
 })
 
 describe('shouldShowParentCswAddOwnerPanel', () => {
-  it('never mounts the archived add-owner panel', () => {
+  it('shows the Zora EOA-owner panel when signing is incomplete and EOA owners exist', () => {
     expect(
       shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: false,
+        signingStepComplete: false,
+        executionTrack: 'none-yet',
+        accountSignals: {
+          executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 1,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides the panel for passkey-only Zora CSWs without EOA owners', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: false,
+        signingStepComplete: false,
+        executionTrack: 'none-yet',
+        accountSignals: {
+          executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        },
+        parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 0,
+      }),
+    ).toBe(false)
+  })
+
+  it('hides the panel when signing is already complete on-chain', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: true,
+        ownerInstallRequested: true,
+        signingStepComplete: true,
+        executionTrack: 'legacy-owner-install',
+        accountSignals: {
+          executionTrack: 'legacy-owner-install',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+        },
+        parentEmbeddedOwnerOnChain: true,
+        onchainEoaOwnerCount: 1,
+      }),
+    ).toBe(false)
+  })
+
+  it('allows owner-install resume without Zora link when EOA owners exist', () => {
+    expect(
+      shouldShowParentCswAddOwnerPanel({
+        zoraLinked: false,
         ownerInstallRequested: true,
         signingStepComplete: false,
         executionTrack: 'none-yet',
         accountSignals: {
           executionTrack: 'none-yet',
+          canonicalCswAddress: '0x1234567890123456789012345678901234567890',
           privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
         },
         parentEmbeddedOwnerOnChain: false,
+        onchainEoaOwnerCount: 1,
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 })
 
