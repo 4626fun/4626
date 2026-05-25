@@ -13,14 +13,25 @@
 
 // FIX: MED-01 — Replace require('crypto') with ES module import
 import * as crypto from 'node:crypto';
+import { Connection, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
+import {
+  TOKEN_2022_PROGRAM_ID,
+  getTransferFeeConfig,
+  getMint,
+  getAccount,
+  getAssociatedTokenAddressSync,
+  createAssociatedTokenAccountIdempotentInstruction,
+} from '@solana/spl-token';
 import {
   requireEnv,
   CHAINS,
   SOLANA_BRIDGE_ADAPTER_ABI,
+  parseDotenvJsonObject,
 } from '../config.js';
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
+import { collectKeeperBaseWritePreflight, formatKeeperPreflightSummary } from '../utils/solanaKeeperPreflight.js';
 // FIX: HGH-02 — Import isAddress for shareOFT validation
 import { isAddress } from 'viem';
 
@@ -56,22 +67,12 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
   const keeperPubkey = requireEnv('SOLANA_KEEPER_PUBKEY');
 
   try {
-    const { Connection, PublicKey, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
-    const {
-      TOKEN_2022_PROGRAM_ID,
-      getTransferFeeConfig,
-      getMint,
-      getAccount,
-      getAssociatedTokenAddressSync,
-      createAssociatedTokenAccountIdempotentInstruction,
-    } = require('@solana/spl-token');
-
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
     const programPubkey = new PublicKey(CHAINS.solana.programId);
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
     // FIX: HGH-02 — Validate each address in shareOFTMapping before use
-    const rawShareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    const rawShareOFTMapping = parseDotenvJsonObject('SOLANA_SHARE_OFT_MAPPING');
     const shareOFTMapping: Record<string, `0x${string}`> = {};
     for (const [key, value] of Object.entries(rawShareOFTMapping)) {
       if (typeof value === 'string' && isAddress(value)) {
@@ -247,6 +248,20 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
 
       totalFeesSettled += feeVaultAmount;
       result.feesSettled = true;
+
+      const preflight = await collectKeeperBaseWritePreflight();
+      for (const warning of preflight.warnings) {
+        await alertWarning(WORKFLOW_NAME, warning);
+      }
+      if (preflight.blockers.length > 0) {
+        await alertWarning(WORKFLOW_NAME, 'Skipping Base fee forward — keeper preflight not ready', {
+          blockers: preflight.blockers,
+          summary: formatKeeperPreflightSummary(preflight),
+          withheld: feeVaultAmount.toString(),
+          mint: mintStr,
+        });
+        continue;
+      }
 
       const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
 

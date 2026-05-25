@@ -316,6 +316,7 @@ export const SOLANA_BRIDGE_ADAPTER_ABI = [
           { name: 'buyerSolanaPubkey', type: 'bytes32' },
           { name: 'shareOFT', type: 'address' },
           { name: 'amountSolanaUnits', type: 'uint256' },
+          { name: 'solanaTxSig', type: 'bytes32' },
         ],
       },
     ],
@@ -334,4 +335,52 @@ export function requireEnv(key: string): string {
     throw new Error(`Missing required env var: ${key}`);
   }
   return value;
+}
+
+/**
+ * Parse JSON object env vars that dotenv may have de-quoted.
+ * Prefer single-quoted JSON in .env files, e.g.
+ * SOLANA_SHARE_OFT_MAPPING='{"Mint":"0xShareOFT"}'
+ */
+export function parseDotenvJsonObject(
+  envKey: string,
+  fallback: Record<string, string> = {},
+): Record<string, string> {
+  const inline = String(process.env[envKey] ?? '').trim();
+  if (!inline) return fallback;
+
+  const tryParse = (raw: string): Record<string, string> | null => {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+      return Object.fromEntries(
+        Object.entries(parsed as Record<string, unknown>).filter(
+          (entry): entry is [string, string] => typeof entry[1] === 'string',
+        ),
+      );
+    } catch {
+      return null;
+    }
+  };
+
+  const direct = tryParse(inline);
+  if (direct) return direct;
+
+  // dotenv strips double quotes from bare JSON objects: {"k":"v"} → {k:v}
+  if (inline.startsWith('{') && inline.endsWith('}') && !inline.includes('"')) {
+    const obj: Record<string, string> = {};
+    const inner = inline.slice(1, -1);
+    for (const pair of inner.split(',')) {
+      const trimmed = pair.trim();
+      if (!trimmed) continue;
+      const colon = trimmed.indexOf(':');
+      if (colon <= 0) continue;
+      obj[trimmed.slice(0, colon).trim()] = trimmed.slice(colon + 1).trim();
+    }
+    if (Object.keys(obj).length > 0) return obj;
+  }
+
+  throw new Error(
+    `Invalid JSON in ${envKey}. Quote-wrap the value in .env, e.g. ${envKey}='{"mint":"0x..."}'.`,
+  );
 }

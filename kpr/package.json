@@ -24,6 +24,8 @@
     "dry-run:cca-finalization": "DRY_RUN=true tsx runner.ts cca-finalization",
     "dry-run:bridge-integrity-monitor": "DRY_RUN=true tsx runner.ts bridge-integrity-monitor",
     "authorize-solana-adapter": "tsx scripts/authorize-solana-adapter.ts",
+    "authorize-solana-keepers": "tsx scripts/authorize-solana-keepers.ts",
+    "preflight-orchestrator": "tsx scripts/solana/preflight-orchestrator.ts",
     "solana:create-dlmm-pool": "tsx scripts/solana/launch/create-dlmm-pool.ts",
     "solana:create-alpha-vault": "tsx scripts/solana/launch/create-alpha-vault.ts",
     "solana:register-meteora-vault": "tsx scripts/solana/launch/register-meteora-vault.ts",

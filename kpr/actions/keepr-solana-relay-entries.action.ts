@@ -7,14 +7,17 @@
 
 // FIX: MED-01 — Replace require('crypto') with ES module import
 import * as crypto from 'node:crypto';
+import { Connection, PublicKey, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
 import {
   requireEnv,
   CHAINS,
   SOLANA_BRIDGE_ADAPTER_ABI,
+  parseDotenvJsonObject,
 } from '../config.js';
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
+import { collectKeeperBaseWritePreflight, formatKeeperPreflightSummary } from '../utils/solanaKeeperPreflight.js';
 // FIX: HGH-02 — Import isAddress for shareOFT validation
 import { isAddress } from 'viem';
 
@@ -39,6 +42,23 @@ const RELAY_ENTRIES_DISCRIMINATOR = crypto
   .digest()
   .subarray(0, 8);
 
+function deriveSolanaEntryDedupeId(params: {
+  creatorMint: string;
+  buyerBytes: Buffer;
+  amount: bigint;
+  slot: bigint;
+}): `0x${string}` {
+  const digest = crypto
+    .createHash('sha256')
+    .update('4626:solana-pending-entry:')
+    .update(params.creatorMint)
+    .update(params.buyerBytes)
+    .update(Buffer.from(params.amount.toString()))
+    .update(Buffer.from(params.slot.toString()))
+    .digest();
+  return (`0x${digest.toString('hex')}`) as `0x${string}`;
+}
+
 export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
   const result: EntryRelayResult = {
     entriesQueued: 0,
@@ -53,15 +73,13 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
   const keeperPubkey = requireEnv('SOLANA_KEEPER_PUBKEY');
 
   try {
-    const { Connection, PublicKey, Transaction, sendAndConfirmTransaction } = require('@solana/web3.js');
-
     const connection = new Connection(solanaRpcUrl, 'confirmed');
     const keeperKeypair = loadKeeperKeypair();
     const programPubkey = new PublicKey(programId);
 
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
     // FIX: HGH-02 — Validate each address in shareOFTMapping before use
-    const rawShareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    const rawShareOFTMapping = parseDotenvJsonObject('SOLANA_SHARE_OFT_MAPPING');
     const shareOFTMapping: Record<string, `0x${string}`> = {};
     for (const [key, value] of Object.entries(rawShareOFTMapping)) {
       if (typeof value === 'string' && isAddress(value)) {
@@ -80,6 +98,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
       buyerSolanaPubkey: `0x${string}`;
       shareOFT: `0x${string}`;
       amountSolanaUnits: bigint;
+      solanaTxSig: `0x${string}`;
     }> = [];
 
     for (const mintStr of creatorMints) {
@@ -128,6 +147,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
         const buyerBytes = data.subarray(offset, offset + 32);
         const amount = data.readBigUInt64LE(offset + 32);
+        const slot = data.readBigUInt64LE(offset + 40);
 
         if (buyerBytes.every((b: number) => b === 0)) continue;
 
@@ -135,6 +155,12 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
           buyerSolanaPubkey: ('0x' + Buffer.from(buyerBytes).toString('hex')) as `0x${string}`,
           shareOFT,
           amountSolanaUnits: amount,
+          solanaTxSig: deriveSolanaEntryDedupeId({
+            creatorMint: mintStr,
+            buyerBytes: Buffer.from(buyerBytes),
+            amount,
+            slot,
+          }),
         });
       }
 
@@ -146,6 +172,19 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
     if (allEntries.length === 0) {
       await alertInfo(WORKFLOW_NAME, 'No entries to relay');
+      return result;
+    }
+
+    const preflight = await collectKeeperBaseWritePreflight();
+    for (const warning of preflight.warnings) {
+      await alertWarning(WORKFLOW_NAME, warning);
+    }
+    if (preflight.blockers.length > 0) {
+      await alertWarning(WORKFLOW_NAME, 'Skipping Base relay — keeper preflight not ready', {
+        blockers: preflight.blockers,
+        summary: formatKeeperPreflightSummary(preflight),
+        pendingEntries: allEntries.length,
+      });
       return result;
     }
 
