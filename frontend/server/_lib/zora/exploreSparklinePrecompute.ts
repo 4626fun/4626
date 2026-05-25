@@ -1,6 +1,6 @@
 import type { getDb } from '../../../packages/server-core/src/index.js'
 
-import { fetchCoinPriceSparkline } from './coinPriceSparkline.js'
+import { resolveCoinPriceSparkline } from './coinPriceSparkline.js'
 import {
   isSparklineDbRowFresh,
   persistExploreSparklinesToDb,
@@ -178,7 +178,7 @@ export async function precomputeExploreSparklinesForCoins(
 
   await mapWithConcurrency(targets, concurrency, async (coinAddress) => {
     try {
-      const row = await fetchCoinPriceSparkline(sdk, coinAddress, 8453, '1m')
+      const row = await resolveCoinPriceSparkline(coinAddress, { sdk, chainId: 8453 })
       if (row.values.length >= 2) fulfilled.push(row)
     } catch {
       failed += 1

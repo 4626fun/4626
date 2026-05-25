@@ -1,11 +1,15 @@
 import type { Address } from 'viem'
 
+import { fetchTokenPoolDayCloseSeries } from '../uniswap/tokenPoolHistorySeries.js'
+
 export type CoinSparklineTimeframe = '1m'
+export type CoinSparklineSource = 'subgraph' | 'zora_swaps' | null
 
 export type CoinPriceSparklineResult = {
   coinAddress: string
   values: number[]
   changePercent: number | null
+  source: CoinSparklineSource
 }
 
 const SPARKLINE_CONFIG: Record<
@@ -36,7 +40,7 @@ function bucketKey(timestampMs: number, bucketMs: number): number {
 export function buildCoinPriceSparklineFromSwapEdges(
   edges: ReadonlyArray<{ node?: SwapNode }>,
   timeframe: CoinSparklineTimeframe = '1m',
-): Omit<CoinPriceSparklineResult, 'coinAddress'> {
+): Omit<CoinPriceSparklineResult, 'coinAddress' | 'source'> {
   const config = SPARKLINE_CONFIG[timeframe]
   const windowStartMs = Date.now() - config.bucketMs * config.buckets
 
@@ -79,7 +83,7 @@ export function buildCoinPriceSparklineFromSwapEdges(
   return { values, changePercent }
 }
 
-export async function fetchCoinPriceSparkline(
+export async function fetchCoinPriceSparklineFromZoraSwaps(
   sdk: any,
   coinAddress: string,
   chainId: number,
@@ -95,6 +99,59 @@ export async function fetchCoinPriceSparkline(
   const built = buildCoinPriceSparklineFromSwapEdges(edges, timeframe)
   return {
     coinAddress: coinAddress.toLowerCase(),
+    source: built.values.length >= 2 ? 'zora_swaps' : null,
     ...built,
+  }
+}
+
+/** @deprecated Use resolveCoinPriceSparkline — kept for call-site stability. */
+export async function fetchCoinPriceSparkline(
+  sdk: any,
+  coinAddress: string,
+  chainId: number,
+  timeframe: CoinSparklineTimeframe = '1m',
+): Promise<CoinPriceSparklineResult> {
+  return resolveCoinPriceSparkline(coinAddress, { sdk, chainId, timeframe })
+}
+
+/**
+ * Subgraph-first, Zora swap fallback — same resolution order as detail charts.
+ */
+export async function resolveCoinPriceSparkline(
+  coinAddress: string,
+  options: {
+    sdk?: any
+    chainId?: number
+    timeframe?: CoinSparklineTimeframe
+  } = {},
+): Promise<CoinPriceSparklineResult> {
+  const normalized = coinAddress.toLowerCase()
+  const timeframe = options.timeframe ?? '1m'
+  const config = SPARKLINE_CONFIG[timeframe]
+
+  const subgraph = await fetchTokenPoolDayCloseSeries(normalized, config.buckets)
+  if (subgraph && subgraph.values.length >= 2) {
+    return {
+      coinAddress: normalized,
+      values: subgraph.values,
+      changePercent: subgraph.changePercent,
+      source: 'subgraph',
+    }
+  }
+
+  if (options.sdk) {
+    return fetchCoinPriceSparklineFromZoraSwaps(
+      options.sdk,
+      normalized,
+      options.chainId ?? 8453,
+      timeframe,
+    )
+  }
+
+  return {
+    coinAddress: normalized,
+    values: [],
+    changePercent: null,
+    source: null,
   }
 }

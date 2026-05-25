@@ -4,7 +4,7 @@
 
 import { getAddress, isAddress, type Address } from 'viem';
 import { requireEnv } from '../config.js';
-import { readContract } from './onchain.js';
+import { getPublicClient, readContract } from './onchain.js';
 
 export interface VaultConfig {
   vaultAddress: `0x${string}`;
@@ -50,6 +50,21 @@ const CREATOR_REGISTRY_ABI = [
   },
 ] as const;
 
+const CREATOR_OVAULT_ASSET_ABI = [
+  {
+    type: 'function',
+    name: 'asset',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const;
+
+function isGrandfatheredKeeperListingEnabled(): boolean {
+  const flag = String(process.env.KEEPER_ALLOW_GRANDFATHERED_VAULTS ?? '1').trim().toLowerCase();
+  return !['0', 'false', 'no'].includes(flag);
+}
+
 function normalizeAddress(value: string | null | undefined): Address | null {
   const raw = String(value ?? '').trim();
   if (!isAddress(raw)) return null;
@@ -63,6 +78,48 @@ function getCreatorRegistryAddress(): Address {
     throw new Error('CREATOR_REGISTRY is not a valid address');
   }
   return getAddress(candidate);
+}
+
+async function verifyGrandfatheredVaultBinding(vault: VaultConfig): Promise<RegistryVerificationResult> {
+  const creatorCoin = normalizeAddress(vault.creatorCoinAddress);
+  const expectedVault = normalizeAddress(vault.vaultAddress);
+  const expectedShare = vault.shareTokenAddress ? normalizeAddress(vault.shareTokenAddress) : null;
+
+  if (!creatorCoin || !expectedVault || (vault.shareTokenAddress && !expectedShare)) {
+    return { verified: false, reason: 'invalid_addresses' };
+  }
+
+  const client = getPublicClient();
+  const [vaultBytecode, shareBytecode] = await Promise.all([
+    client.getBytecode({ address: expectedVault }),
+    expectedShare ? client.getBytecode({ address: expectedShare }) : Promise.resolve('0x' as `0x${string}`),
+  ]);
+
+  if (!vaultBytecode || vaultBytecode === '0x') {
+    return { verified: false, reason: 'grandfathered_vault_not_deployed' };
+  }
+
+  let assetRaw: Address;
+  try {
+    assetRaw = (await client.readContract({
+      address: expectedVault,
+      abi: CREATOR_OVAULT_ASSET_ABI,
+      functionName: 'asset',
+    })) as Address;
+  } catch {
+    return { verified: false, reason: 'grandfathered_vault_not_deployed' };
+  }
+
+  const asset = normalizeAddress(assetRaw);
+  if (!asset || getAddress(asset) !== creatorCoin) {
+    return { verified: false, reason: 'grandfathered_vault_asset_mismatch' };
+  }
+
+  if (expectedShare && (!shareBytecode || shareBytecode === '0x')) {
+    return { verified: false, reason: 'share_token_mismatch' };
+  }
+
+  return { verified: true };
 }
 
 export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<RegistryVerificationResult> {
@@ -97,9 +154,25 @@ export async function verifyVaultRegistryBinding(vault: VaultConfig): Promise<Re
     }),
   ]);
 
-  if (!active) return { verified: false, reason: 'creator_coin_inactive' };
-  if (getAddress(registryVault) !== expectedVault) return { verified: false, reason: 'vault_mismatch' };
+  if (!active) {
+    if (isGrandfatheredKeeperListingEnabled()) {
+      const grandfathered = await verifyGrandfatheredVaultBinding(vault);
+      if (grandfathered.verified) return grandfathered;
+    }
+    return { verified: false, reason: 'creator_coin_inactive' };
+  }
+  if (getAddress(registryVault) !== expectedVault) {
+    if (isGrandfatheredKeeperListingEnabled()) {
+      const grandfathered = await verifyGrandfatheredVaultBinding(vault);
+      if (grandfathered.verified) return grandfathered;
+    }
+    return { verified: false, reason: 'vault_mismatch' };
+  }
   if (expectedShare && getAddress(registryShare) !== expectedShare) {
+    if (isGrandfatheredKeeperListingEnabled()) {
+      const grandfathered = await verifyGrandfatheredVaultBinding(vault);
+      if (grandfathered.verified) return grandfathered;
+    }
     return { verified: false, reason: 'share_token_mismatch' };
   }
 

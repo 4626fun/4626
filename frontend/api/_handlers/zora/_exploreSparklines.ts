@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getDb } from '../../../packages/server-core/src/index.js'
-import { fetchCoinPriceSparkline } from '../../../server/_lib/zora/coinPriceSparkline.js'
+import { resolveCoinPriceSparkline } from '../../../server/_lib/zora/coinPriceSparkline.js'
 import { persistExploreSparklinesToDb } from '../../../server/_lib/zora/exploreSparklineCache.js'
 import {
   DEFAULT_CHAIN_ID,
@@ -37,8 +37,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const key = requireServerKey()
-  if (!key) {
-    return res.status(503).json({ success: false, error: 'ZORA_SERVER_API_KEY is not configured' })
+  const hasGraphKey = Boolean(process.env.THEGRAPH_API_KEY || process.env.GRAPH_API_KEY)
+  if (!key && !hasGraphKey) {
+    return res.status(503).json({
+      success: false,
+      error: 'Neither ZORA_SERVER_API_KEY nor THEGRAPH_API_KEY is configured',
+    })
   }
 
   const coins = parseCoinAddresses(getStringQuery(req, 'coins') ?? getStringQuery(req, 'addresses'))
@@ -49,11 +53,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const chain = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID
 
   try {
-    const sdk: any = await import('@zoralabs/coins-sdk')
-    sdk.setApiKey(key)
+    let sdk: any = null
+    if (key) {
+      sdk = await import('@zoralabs/coins-sdk')
+      sdk.setApiKey(key)
+    }
 
     const results = await Promise.allSettled(
-      coins.map((coinAddress) => fetchCoinPriceSparkline(sdk, coinAddress, chain, '1m')),
+      coins.map((coinAddress) => resolveCoinPriceSparkline(coinAddress, { sdk, chainId: chain })),
     )
 
     const sparklines: Record<
@@ -62,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     > = {}
 
     const fulfilled = results
-      .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchCoinPriceSparkline>>> =>
+      .filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof resolveCoinPriceSparkline>>> =>
         result.status === 'fulfilled',
       )
       .map((result) => result.value)
