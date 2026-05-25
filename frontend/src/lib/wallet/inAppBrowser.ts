@@ -111,8 +111,8 @@ export function isBaseAppInAppContext(env: InAppEnvironment | null = detectInApp
   if (env.isBaseAppInApp) return true
 
   const uaLower = env.userAgent.toLowerCase()
+  // Mobile Base App / Coinbase in-app webview markers — not desktop Chrome + extension.
   if (
-    uaLower.includes('coinbase') ||
     uaLower.includes('cbios') ||
     uaLower.includes('cbandroid') ||
     uaLower.includes('baseapp') ||
@@ -126,7 +126,14 @@ export function isBaseAppInAppContext(env: InAppEnvironment | null = detectInApp
     return true
   }
 
-  if (hasCoinbaseInjectedProvider()) return true
+  // WebView with Coinbase injection but missing isToshi/isBaseApp (some Base App builds).
+  if (
+    uaLower.includes('wv') &&
+    hasCoinbaseInjectedProvider() &&
+    (env.isCoinbaseInApp || uaLower.includes('android'))
+  ) {
+    return true
+  }
 
   return false
 }
