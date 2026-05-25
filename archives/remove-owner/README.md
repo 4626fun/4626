@@ -13,7 +13,6 @@ Retired **2026-05-25**. The `/remove-owner` flow and its Relay deposit + solver-
 
 ## What was **not** archived (still in tree)
 
-- **`/csw-funding`** — read-only CSW balance diagnostics + EntryPoint top-up (no owner mutation)
 - **Deploy-session cleanup** — `removeOwnerAtIndex` in deploy v2 session handlers (temporary owner removal during deploy automation)
 - **Paymaster gates** — `removeOwnerAtIndex` sponsorship rules in `paymaster/_paymaster.ts`
 - **Server agent delegation** — `preview-agent-owner`, `provision-agent-owner`

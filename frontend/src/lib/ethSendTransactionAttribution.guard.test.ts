@@ -16,7 +16,6 @@ const EXCLUDED_FILE_REGEX = [
 const ALLOWLIST_FILE_PATTERNS = [
   'server/keepr/sendCommand.ts',
   'server/zora/commands.ts',
-  'src/pages/CswFunding.tsx',
 ]
 const ALLOWLIST_MARKER = 'builder-codes-allow-raw-send'
 const SEND_METHOD_REGEX = /method:\s*['"]eth_sendTransaction['"]/g

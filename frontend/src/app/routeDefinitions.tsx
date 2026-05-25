@@ -4,7 +4,6 @@ import { Navigate, Route } from 'react-router-dom'
 import {
   AccountsPage,
   AmoeQuickTasks,
-  CswFundingPage,
   AdminAgentSetup,
   AdminCreatorAccess,
   AdminCreatorStrategyProvisioning,
@@ -116,17 +115,9 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
     path: '/remove-owner',
     element: <Navigate to="/waitlist" replace />,
   },
-  // `/csw-funding` shows the three funding sources for CSW UserOps on Base
-  // (native ETH, EntryPoint deposit, RelayDepository total) and lets anyone
-  // top up the EntryPoint deposit via depositTo(csw) payable. Pure
-  // diagnostics + a single self-contained top-up form; no owner mutation.
   {
     path: '/csw-funding',
-    element: (
-      <SmartWalletRoute>
-        <CswFundingPage />
-      </SmartWalletRoute>
-    ),
+    element: <Navigate to="/waitlist" replace />,
   },
 ]
 
