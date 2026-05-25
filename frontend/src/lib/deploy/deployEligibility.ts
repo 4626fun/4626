@@ -61,15 +61,15 @@ export function classifyDeployPopulation(input: DeployEligibilityInput): DeployU
   if (zora && eoaOwners) return 'zora-eoa-owner'
   if (zora && !eoaOwners) return 'zora-passkey-only'
 
+  if (input.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true || input.executionTrack === 'legacy-owner-install') {
+    return 'zora-eoa-owner'
+  }
+
   if (input.baseAppLinked || input.executionTrack === 'sub-account') {
     return 'base-app-passkey'
   }
 
-  if (input.executionTrack === 'legacy-owner-install' || input.privyEmbeddedEoaIsOwnerOfCanonicalCsw) {
-    return 'zora-eoa-owner'
-  }
-
-  return 'base-app-passkey'
+  return 'unknown'
 }
 
 export function evaluateDeployEligibility(input: DeployEligibilityInput): DeployEligibilityResult {
@@ -107,6 +107,17 @@ export function evaluateDeployEligibility(input: DeployEligibilityInput): Deploy
       showOwnerApprovalPanel: false,
       blockerMessage:
         'Vault deploy from a Base App smart wallet is not supported in the browser yet. Swaps work after Connect Base App setup; deploy requires Enable 4626 signing (Zora EOA owner) or an operator handoff.',
+    }
+  }
+
+  if (population === 'unknown') {
+    return {
+      population,
+      code: 'signing-required',
+      canProceedWithDeploySession: false,
+      showOwnerApprovalPanel: false,
+      blockerMessage:
+        'Enable 4626 signing on the waitlist (Step 2) before deploying. Your Privy embedded wallet must be an owner of your canonical smart wallet.',
     }
   }
 

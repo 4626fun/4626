@@ -34,6 +34,17 @@ describe('classifyDeployPopulation', () => {
       }),
     ).toBe('base-app-passkey')
   })
+
+  it('prefers zora-eoa-owner when embedded EOA owns parent CSW despite sub-account track', () => {
+    expect(
+      classifyDeployPopulation({
+        canonicalCswAddress: CSW,
+        canonicalIdentityType: 'contract',
+        executionTrack: 'sub-account',
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+      }),
+    ).toBe('zora-eoa-owner')
+  })
 })
 
 describe('evaluateDeployEligibility', () => {

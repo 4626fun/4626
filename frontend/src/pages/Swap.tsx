@@ -46,6 +46,7 @@ import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/s
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+import { resolveEffectiveExecutionTrack } from '@/lib/wallet/userExecutionTrack'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
@@ -619,7 +620,6 @@ export function Swap() {
   const baseSubAccountAddress = normalizeAddressOrNull(
     accountSignals?.baseSubAccount?.address ?? accountMe.me?.baseSubAccount ?? null,
   )
-  const subAccountTrack = executionTrack === 'sub-account' || executionTrack === 'migration-pending'
 
   const privyCrossAppEmbeddedEoaAddress = useMemo(() => pickPrivyCrossAppEmbeddedEoaAddress(privyUser), [privyUser])
   const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
@@ -683,14 +683,6 @@ export function Swap() {
 
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
-  const subAccountRuntime = useSwapSubAccountRuntime({
-    enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
-    canonicalAddress,
-    baseSubAccountAddress,
-    baseAccountWallet,
-    embeddedWallet: privyEmbeddedEoaWallet,
-    baseAccountSdk,
-  })
 
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -809,6 +801,30 @@ export function Swap() {
     },
   })
 
+  const effectiveExecutionTrack = useMemo(
+    () =>
+      resolveEffectiveExecutionTrack({
+        executionTrack: executionTrack ?? undefined,
+        parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      }),
+    [
+      executionTrack,
+      accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      privyEmbeddedEoaCanOperateCanonicalQuery.data,
+    ],
+  )
+  const subAccountTrack =
+    effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending'
+  const subAccountRuntime = useSwapSubAccountRuntime({
+    enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
+    canonicalAddress,
+    baseSubAccountAddress,
+    baseAccountWallet,
+    embeddedWallet: privyEmbeddedEoaWallet,
+    baseAccountSdk,
+  })
+
   const privyEmbeddedCanonicalWalletClient = useMemo(() => {
     if (!privyEmbeddedEoaAddress) return null
     return {
@@ -886,7 +902,7 @@ export function Swap() {
     () =>
       evaluateCanonicalSignerGate({
         executionMode,
-        executionTrack,
+        executionTrack: effectiveExecutionTrack,
         canonicalAddress,
         baseSubAccountAddress,
         subAccountProviderReady: subAccountRuntime.ready,
@@ -898,7 +914,7 @@ export function Swap() {
         ownerCheckStatus: canonicalOwnerCheckStatus,
       }),
     [
-      executionTrack,
+      effectiveExecutionTrack,
       executionMode,
       canonicalAddress,
       baseSubAccountAddress,
@@ -974,10 +990,10 @@ export function Swap() {
       : (accountContext.activeAccount ?? null)
   const routerExecutionTrack =
     executionMode === 'canonical' && useSubAccountCanonicalSigner
-      ? executionTrack
+      ? effectiveExecutionTrack
       : executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
         ? 'legacy-owner-install'
-        : executionTrack
+        : effectiveExecutionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
@@ -1019,7 +1035,7 @@ export function Swap() {
   const handleEnableCanonicalSigning = useCallback(() => {
     const needsSubAccountSetup =
       subAccountFlowEnabled &&
-      (executionTrack === 'none-yet' ||
+      (effectiveExecutionTrack === 'none-yet' ||
         (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
     if (needsSubAccountSetup) {
       window.location.assign(buildWaitlistSetupUrl('base-app'))
@@ -1028,7 +1044,7 @@ export function Swap() {
     window.location.assign('/waitlist?setup=owner-install')
   }, [
     canonicalSignerGate.code,
-    executionTrack,
+    effectiveExecutionTrack,
     subAccountFlowEnabled,
     subAccountRuntime.ready,
     subAccountTrack,

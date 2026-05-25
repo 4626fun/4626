@@ -28,6 +28,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel } from '@/features/waitlist/waitlistFlowState'
+import { inferWaitlistEoaOwnerRoutingHint } from '@/lib/wallet/userExecutionTrack'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -268,6 +269,13 @@ export function AccountSetupWorkspaceView(props: {
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
   const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
+  const resolvedOnchainEoaOwnerCount = Math.max(
+    onchainEoaOwnerCandidates.length,
+    inferWaitlistEoaOwnerRoutingHint({
+      parentEmbeddedOwnerOnChain,
+      accountSignals: me.accountSignals,
+    }),
+  )
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
@@ -275,21 +283,24 @@ export function AccountSetupWorkspaceView(props: {
     executionTrack,
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
-    onchainEoaOwnerCount: onchainEoaOwnerCandidates.length,
+    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
     subAccountFlowEnabled,
   })
   const showBaseAppConnectPanel = shouldShowBaseAppConnectPanel({
     subAccountFlowEnabled,
     signingStepComplete,
     embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+    parentEmbeddedOwnerOnChain,
     zoraLinked,
-    onchainEoaOwnerCount: onchainEoaOwnerCandidates.length,
+    onchainEoaOwnerCount: resolvedOnchainEoaOwnerCount,
     accountSignals: me.accountSignals,
   })
   const stepTwoDoneSubtitle = signingStepComplete
-    ? executionTrack === 'sub-account'
-      ? 'Base App sub-account connected for swaps'
-      : 'Embedded signer installed on your parent smart wallet'
+    ? parentEmbeddedOwnerOnChain || executionTrack === 'legacy-owner-install'
+      ? 'Embedded signer installed on your parent smart wallet'
+      : executionTrack === 'sub-account'
+        ? 'Base App sub-account connected for swaps'
+        : '4626 signing enabled'
     : showBaseAppConnectPanel
       ? 'Connect Base App to enable sponsored swaps'
       : showParentCswAddOwnerPanel

@@ -24,12 +24,15 @@ import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
 import {
   applyWaitlistSubAccountConnectOverlay,
+  buildWaitlistStepRoutingParams,
+  isParentCswEmbeddedOwnerReady,
   type WaitlistStep,
   type WaitlistSubAccountConnectOverlay,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldForceBaseAppConnectStep,
 } from './waitlistFlowState'
+import { useEmbeddedOwnerOnCsw } from './useEmbeddedOwnerOnCsw'
 import { writePersistedSubAccountConnectOverlay } from './waitlistSubAccountConnectCache'
 import {
   clearStoredWaitlistSessionToken,
@@ -371,6 +374,16 @@ export function WaitlistFlow(props: {
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
   const [signOutBusy, setSignOutBusy] = useState(false)
 
+  const canonicalCswForOwnerProbe =
+    typeof account?.accountSignals?.canonicalCswAddress === 'string'
+      ? account.accountSignals.canonicalCswAddress.trim()
+      : null
+  const { isOwner: parentEmbeddedOwnerOnChain } = useEmbeddedOwnerOnCsw({
+    cswAddress: canonicalCswForOwnerProbe,
+    embeddedEoaAddress,
+    enabled: Boolean(canonicalCswForOwnerProbe && embeddedEoaAddress),
+  })
+
   const resolveSubAccountStepCompleted = useCallback(
     (targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): boolean => {
       const accountCompletionKey = getSubAccountCompletionAccountKey(targetAccount)
@@ -383,39 +396,52 @@ export function WaitlistFlow(props: {
     [subAccountStepCompletedAccountKey],
   )
 
+  const waitlistStepRoutingContext = useMemo(
+    () => ({
+      subAccountFlowEnabled,
+      embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+      subAccountStepCompleted: resolveSubAccountStepCompleted(account),
+      parentEmbeddedOwnerOnChain,
+    }),
+    [
+      account,
+      embeddedEoaAddress,
+      parentEmbeddedOwnerOnChain,
+      resolveSubAccountStepCompleted,
+      subAccountFlowEnabled,
+    ],
+  )
+
+  const parentCswSigningReady = useMemo(
+    () =>
+      isParentCswEmbeddedOwnerReady({
+        parentEmbeddedOwnerOnChain,
+        accountSignals: account?.accountSignals,
+      }),
+    [account?.accountSignals, parentEmbeddedOwnerOnChain],
+  )
+
   useEffect(() => {
     if (!account?.emailVerified) return
     const setup = searchParams.get('setup')
-    if (subAccountFlowEnabled) {
-      if (
-        shouldForceBaseAppConnectStep({
-          setupIntent: setup,
-          subAccountFlowEnabled,
-          account,
-        })
-      ) {
-        setStep('connect-base-app')
-        return
-      }
-      const nextStep = resolveWaitlistStep({
-        account,
+    const routingParams = buildWaitlistStepRoutingParams(account, waitlistStepRoutingContext)
+
+    if (
+      shouldForceBaseAppConnectStep({
+        setupIntent: setup,
         subAccountFlowEnabled,
-        embeddedEoaAvailable: Boolean(embeddedEoaAddress),
-        subAccountStepCompleted: resolveSubAccountStepCompleted(account),
+        parentEmbeddedOwnerOnChain,
+        zoraLinked: routingParams.zoraLinked,
+        onchainEoaOwnerCount: routingParams.onchainEoaOwnerCount,
+        account,
       })
-      if (nextStep === 'connect-base-app') {
-        setStep('connect-base-app')
-        return
-      }
+    ) {
+      setStep('connect-base-app')
+      return
     }
-    setStep(resolveWaitlistStep({ account, subAccountFlowEnabled }))
-  }, [
-    account,
-    embeddedEoaAddress,
-    resolveSubAccountStepCompleted,
-    searchParams,
-    subAccountFlowEnabled,
-  ])
+
+    setStep(resolveWaitlistStep(routingParams))
+  }, [account, searchParams, subAccountFlowEnabled, waitlistStepRoutingContext, parentEmbeddedOwnerOnChain])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
@@ -1086,6 +1112,7 @@ export function WaitlistFlow(props: {
                 account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
               }
               embeddedEoaAddress={embeddedEoaAddress ?? null}
+              parentCswSigningReady={parentCswSigningReady}
             />
           </div>
         ) : step === 'done' && account ? (
@@ -1132,6 +1159,7 @@ export function WaitlistFlow(props: {
                   account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
                 }
                 embeddedEoaAddress={embeddedEoaAddress ?? null}
+                parentCswSigningReady={parentCswSigningReady}
               />
             </motion.div>
           ) : step === 'done' && account ? (

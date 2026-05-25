@@ -1,16 +1,28 @@
+import {
+  buildWaitlistStepRoutingParams,
+  inferWaitlistEoaOwnerRoutingHint,
+  isParentCswEmbeddedOwnerReady,
+  isZoraLinkedFromAccountSignals,
+  resolveEffectiveExecutionTrack,
+  shouldUseBaseAppSubAccountPath,
+  type UserExecutionAccountSignals,
+  type WaitlistStepRoutingContext,
+} from '@/lib/wallet/userExecutionTrack'
+
 export type WaitlistStep = 'auth' | 'connect-base-app' | 'done'
 
+export {
+  buildWaitlistStepRoutingParams,
+  inferWaitlistEoaOwnerRoutingHint,
+  isParentCswEmbeddedOwnerReady,
+  isZoraLinkedFromAccountSignals,
+  resolveEffectiveExecutionTrack,
+  shouldUseBaseAppSubAccountPath,
+  type WaitlistStepRoutingContext,
+}
+
 type WaitlistAccountWithCanonical = {
-  accountSignals: {
-    canonicalCswAddress?: string | null
-    executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
-    privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean | null
-    baseSubAccount?: {
-      address?: string | null
-      registered?: boolean
-      isDistinctFromCsw?: boolean
-    }
-  }
+  accountSignals: UserExecutionAccountSignals
 }
 
 function hasRegisteredSubAccountExecution(
@@ -68,8 +80,9 @@ export function shouldPromptBaseAccountReconnect(params: {
 export function isWaitlistSigningReady(account: {
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
 }): boolean {
+  if (hasLegacyOwnerInstallSigning(account.accountSignals)) return true
   if (isSubAccountExecutionReady(account.accountSignals)) return true
-  return hasLegacyOwnerInstallSigning(account.accountSignals)
+  return false
 }
 
 const SIGNING_ENABLED_NOTICE_RE = /4626 signing is enabled|already enabled/i
@@ -94,6 +107,7 @@ export function applyWaitlistSubAccountConnectOverlay<T extends WaitlistAccountW
   subAccountStepCompleted: boolean,
 ): T {
   if (!overlay || !subAccountStepCompleted) return account
+  if (isParentCswEmbeddedOwnerReady({ accountSignals: account.accountSignals })) return account
   if (isWaitlistSigningReady(account)) return account
 
   const canonical =
@@ -121,6 +135,9 @@ export function applyWaitlistSubAccountConnectOverlay<T extends WaitlistAccountW
 export function shouldForceBaseAppConnectStep(params: {
   setupIntent: string | null | undefined
   subAccountFlowEnabled?: boolean
+  parentEmbeddedOwnerOnChain?: boolean
+  zoraLinked?: boolean
+  onchainEoaOwnerCount?: number
   account: {
     emailVerified: boolean
     accountSignals?: WaitlistAccountWithCanonical['accountSignals']
@@ -132,6 +149,17 @@ export function shouldForceBaseAppConnectStep(params: {
   if (setup !== 'base-app') return false
   if (params.subAccountFlowEnabled !== true) return false
   if (!params.account.emailVerified) return false
+  if (
+    !shouldUseBaseAppSubAccountPath({
+      subAccountFlowEnabled: params.subAccountFlowEnabled === true,
+      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+      accountSignals: params.account.accountSignals,
+      zoraLinked: params.zoraLinked,
+      onchainEoaOwnerCount: params.onchainEoaOwnerCount,
+    })
+  ) {
+    return false
+  }
   return !isSubAccountExecutionReady(params.account.accountSignals)
 }
 
@@ -144,12 +172,12 @@ export function isWaitlistStepTwoSigningComplete(params: {
   parentEmbeddedOwnerOnChain?: boolean
   subAccountFlowEnabled?: boolean
 }): boolean {
+  if (params.parentEmbeddedOwnerOnChain === true) return true
+  if (params.accountSignals?.executionTrack === 'legacy-owner-install') return true
   if (params.subAccountFlowEnabled && isSubAccountExecutionReady(params.accountSignals)) {
     return true
   }
-  return isLegacyParentOwnerSigningReady({
-    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-  })
+  return false
 }
 
 export function shouldShowParentCswAddOwnerPanel(params: {
@@ -182,6 +210,7 @@ export function shouldShowBaseAppConnectPanel(params: {
   subAccountFlowEnabled: boolean
   signingStepComplete: boolean
   embeddedEoaAvailable: boolean
+  parentEmbeddedOwnerOnChain?: boolean
   zoraLinked?: boolean
   onchainEoaOwnerCount?: number
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
@@ -190,13 +219,27 @@ export function shouldShowBaseAppConnectPanel(params: {
   if (params.signingStepComplete) return false
   if (!params.embeddedEoaAvailable) return false
   if (!params.accountSignals?.canonicalCswAddress?.trim()) return false
-  if (hasLegacyOwnerInstallSigning(params.accountSignals)) return false
-  if (params.zoraLinked && (params.onchainEoaOwnerCount ?? 0) > 0) return false
+  if (
+    !shouldUseBaseAppSubAccountPath({
+      subAccountFlowEnabled: params.subAccountFlowEnabled,
+      parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+      accountSignals: params.accountSignals,
+      zoraLinked: params.zoraLinked,
+      onchainEoaOwnerCount: params.onchainEoaOwnerCount,
+    })
+  ) {
+    return false
+  }
 
   const subAccountAddress = resolveSubAccountAddress({
     accountSignals: params.accountSignals,
   })
-  const signingReady = isWaitlistSigningReady({ accountSignals: params.accountSignals })
+  const signingReady = isWaitlistStepTwoSigningComplete({
+    accountSignals: params.accountSignals,
+    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
+    subAccountFlowEnabled: params.subAccountFlowEnabled,
+    ownerInstallRequested: false,
+  })
   const shouldOfferSubAccountStep =
     !hasRegisteredSubAccountExecution(params.accountSignals?.executionTrack)
   const shouldRecoverSubAccountOwner = Boolean(subAccountAddress) && !signingReady
@@ -213,22 +256,47 @@ export function resolveWaitlistStep(params: {
   subAccountFlowEnabled?: boolean
   embeddedEoaAvailable?: boolean
   subAccountStepCompleted?: boolean
+  parentEmbeddedOwnerOnChain?: boolean
+  zoraLinked?: boolean
+  onchainEoaOwnerCount?: number
 }): WaitlistStep {
-  const { account, subAccountFlowEnabled, embeddedEoaAvailable, subAccountStepCompleted } = params
+  const {
+    account,
+    subAccountFlowEnabled,
+    embeddedEoaAvailable,
+    subAccountStepCompleted,
+    parentEmbeddedOwnerOnChain,
+    zoraLinked,
+    onchainEoaOwnerCount,
+  } = params
   if (!account.emailVerified) return 'auth'
 
   const track = account.accountSignals?.executionTrack
   const hasSubAccount = hasRegisteredSubAccountExecution(track)
-  const signingReady =
-    subAccountFlowEnabled === true
-      ? isSubAccountExecutionReady(account.accountSignals)
-      : isWaitlistSigningReady(account)
+  const signingReady = isWaitlistStepTwoSigningComplete({
+    accountSignals: account.accountSignals,
+    parentEmbeddedOwnerOnChain,
+    subAccountFlowEnabled: subAccountFlowEnabled === true,
+    ownerInstallRequested: false,
+  })
   const hasCanonicalCsw = Boolean(
     typeof account.accountSignals?.canonicalCswAddress === 'string' &&
       account.accountSignals.canonicalCswAddress.trim(),
   )
 
   if (subAccountStepCompleted === true) {
+    return 'done'
+  }
+
+  if (
+    !shouldUseBaseAppSubAccountPath({
+      subAccountFlowEnabled: subAccountFlowEnabled === true,
+      parentEmbeddedOwnerOnChain,
+      accountSignals: account.accountSignals,
+      zoraLinked,
+      onchainEoaOwnerCount,
+    })
+  ) {
     return 'done'
   }
 

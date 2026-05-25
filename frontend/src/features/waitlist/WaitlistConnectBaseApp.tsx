@@ -40,6 +40,8 @@ type Props = {
   parentAddress?: string | null
   subAccountAddress?: string | null
   embeddedEoaAddress?: string | null
+  /** Population (c): embedded EOA already owns the parent CSW — skip sub-account UI. */
+  parentCswSigningReady?: boolean
 }
 
 type PendingProvision = {
@@ -185,7 +187,14 @@ export function WaitlistConnectBaseApp(props: Props) {
 }
 
 function WaitlistConnectBaseAppReady(props: Props) {
-  const { onSkip, onComplete, parentAddress, subAccountAddress, embeddedEoaAddress } = props
+  const {
+    onSkip,
+    onComplete,
+    parentAddress,
+    subAccountAddress,
+    embeddedEoaAddress,
+    parentCswSigningReady = false,
+  } = props
   const setup = useSubAccountSetup()
   const {
     provisionSubAccount,
@@ -344,9 +353,30 @@ function WaitlistConnectBaseAppReady(props: Props) {
     return () => window.clearTimeout(timer)
   }, [view, onComplete])
 
-  const showRecoveryPanel = Boolean(
-    parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim(),
-  )
+  const showRecoveryPanel =
+    !parentCswSigningReady &&
+    Boolean(parentAddress?.trim() && subAccountAddress?.trim() && embeddedEoaAddress?.trim())
+
+  if (parentCswSigningReady) {
+    return (
+      <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-parent-signing-ready">
+        <div className="space-y-2">
+          <CheckCircle2 className="mx-auto h-10 w-10 text-emerald-400" aria-hidden />
+          <h2 className="text-[1.8rem] font-light leading-tight tracking-tight text-white">
+            4626 signing is already enabled
+          </h2>
+          <p className="text-sm leading-relaxed text-zinc-400">
+            Your embedded 4626 key is already a co-owner of your main smart wallet
+            {parentAddress ? ` (${shortAddress(parentAddress as Address)})` : ''}. Sponsored swaps use that wallet
+            directly — no separate app wallet is required.
+          </p>
+        </div>
+        <Button type="button" variant="primary" className="w-full" onClick={() => onSkip()}>
+          Continue setup
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto w-full max-w-md space-y-6 text-center" data-testid="waitlist-connect-base-app">

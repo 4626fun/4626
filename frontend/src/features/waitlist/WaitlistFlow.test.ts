@@ -5,8 +5,10 @@ import {
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  shouldForceBaseAppConnectStep,
   shouldShowBaseAppConnectPanel,
   shouldShowParentCswAddOwnerPanel,
+  applyWaitlistSubAccountConnectOverlay,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
@@ -61,6 +63,50 @@ describe('resolveWaitlistStep', () => {
             executionTrack: 'sub-account',
             canonicalCswAddress: '0x1234567890123456789012345678901234567890',
             privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+      }),
+    ).toBe('done')
+  })
+
+  it('skips connect-base-app when embedded EOA is parent CSW owner on-chain (population c)', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          baseSubAccount: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          accountSignals: {
+            executionTrack: 'sub-account',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+            baseSubAccount: {
+              address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+              registered: true,
+              isDistinctFromCsw: true,
+            },
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+        parentEmbeddedOwnerOnChain: true,
+      }),
+    ).toBe('done')
+  })
+
+  it('skips connect-base-app for Zora-linked legacy-owner accounts', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            linked: true,
+            executionTrack: 'legacy-owner-install',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
           },
         },
         subAccountFlowEnabled: true,
@@ -196,6 +242,26 @@ describe('shouldShowBaseAppConnectPanel', () => {
       }),
     ).toBe(false)
   })
+
+  it('hides Base App connect when embedded EOA is parent CSW owner on-chain', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        parentEmbeddedOwnerOnChain: true,
+        accountSignals: {
+          ...canonicalSignals,
+          executionTrack: 'sub-account',
+          baseSubAccount: {
+            address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            registered: true,
+            isDistinctFromCsw: true,
+          },
+        },
+      }),
+    ).toBe(false)
+  })
 })
 
 describe('shouldShowParentCswAddOwnerPanel', () => {
@@ -269,6 +335,50 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
         onchainEoaOwnerCount: 1,
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldForceBaseAppConnectStep', () => {
+  it('does not force base-app setup for population c accounts', () => {
+    expect(
+      shouldForceBaseAppConnectStep({
+        setupIntent: 'base-app',
+        subAccountFlowEnabled: true,
+        parentEmbeddedOwnerOnChain: true,
+        account: {
+          emailVerified: true,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+          },
+        },
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('applyWaitlistSubAccountConnectOverlay', () => {
+  it('does not downgrade legacy-owner accounts to sub-account overlay state', () => {
+    const account = {
+      emailVerified: true,
+      appAccessStatus: null,
+      accountSignals: {
+        executionTrack: 'legacy-owner-install' as const,
+        canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+      },
+    }
+
+    const merged = applyWaitlistSubAccountConnectOverlay(
+      account,
+      {
+        parentAddress: '0x1234567890123456789012345678901234567890',
+        subAccountAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      },
+      true,
+    )
+
+    expect(merged.accountSignals.executionTrack).toBe('legacy-owner-install')
   })
 })
 
