@@ -20,11 +20,17 @@ import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
+
 import {
+  applyWaitlistSubAccountConnectOverlay,
   type WaitlistStep,
+  type WaitlistSubAccountConnectOverlay,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  shouldForceBaseAppConnectStep,
 } from './waitlistFlowState'
+import { writePersistedSubAccountConnectOverlay } from './waitlistSubAccountConnectCache'
 import {
   clearStoredWaitlistSessionToken,
   isAlreadyLoggedInAuthError,
@@ -36,8 +42,12 @@ import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } fro
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import {
+  WaitlistConnectBaseApp,
+  type WaitlistConnectBaseAppResult,
+} from './WaitlistConnectBaseApp'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
-import { type WaitlistAccountsSummary } from './waitlistAccountTypes'
+import { getSubAccountCompletionAccountKey, type WaitlistAccountsSummary } from './waitlistAccountTypes'
 import {
   FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS,
   FINALIZING_BACKGROUND_RETRY_MS,
@@ -340,6 +350,10 @@ export function WaitlistFlow(props: {
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [step, setStep] = useState<WaitlistStep>('auth')
+  const [subAccountStepCompletedAccountKey, setSubAccountStepCompletedAccountKey] = useState<string | null>(null)
+  const subAccountStepCompletedAccountKeyRef = useRef<string | null>(null)
+  const subAccountConnectOverlayRef = useRef<WaitlistSubAccountConnectOverlay | null>(null)
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
 
   const {
     busy,
@@ -357,10 +371,51 @@ export function WaitlistFlow(props: {
   const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
   const [signOutBusy, setSignOutBusy] = useState(false)
 
+  const resolveSubAccountStepCompleted = useCallback(
+    (targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null): boolean => {
+      const accountCompletionKey = getSubAccountCompletionAccountKey(targetAccount)
+      if (!accountCompletionKey) return false
+      return (
+        subAccountStepCompletedAccountKey === accountCompletionKey ||
+        subAccountStepCompletedAccountKeyRef.current === accountCompletionKey
+      )
+    },
+    [subAccountStepCompletedAccountKey],
+  )
+
   useEffect(() => {
     if (!account?.emailVerified) return
-    setStep(resolveWaitlistStep({ account }))
-  }, [account])
+    const setup = searchParams.get('setup')
+    if (subAccountFlowEnabled) {
+      if (
+        shouldForceBaseAppConnectStep({
+          setupIntent: setup,
+          subAccountFlowEnabled,
+          account,
+        })
+      ) {
+        setStep('connect-base-app')
+        return
+      }
+      const nextStep = resolveWaitlistStep({
+        account,
+        subAccountFlowEnabled,
+        embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+        subAccountStepCompleted: resolveSubAccountStepCompleted(account),
+      })
+      if (nextStep === 'connect-base-app') {
+        setStep('connect-base-app')
+        return
+      }
+    }
+    setStep(resolveWaitlistStep({ account, subAccountFlowEnabled }))
+  }, [
+    account,
+    embeddedEoaAddress,
+    resolveSubAccountStepCompleted,
+    searchParams,
+    subAccountFlowEnabled,
+  ])
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const startAuthAutoAttemptedRef = useRef(false)
@@ -445,6 +500,49 @@ export function WaitlistFlow(props: {
     finalizingAutoRetryCountRef,
     finalizingBackgroundRetryCountRef,
   })
+
+  const markSubAccountStepCompleted = useCallback((targetAccount: Pick<AccountsSummary, 'privyUserId' | 'email'> | null) => {
+    const completionKey = getSubAccountCompletionAccountKey(targetAccount)
+    if (!completionKey) return
+    subAccountStepCompletedAccountKeyRef.current = completionKey
+    setSubAccountStepCompletedAccountKey(completionKey)
+  }, [])
+
+  const clearBaseAppSetupDeepLink = useCallback(() => {
+    if ((searchParams.get('setup') ?? '').trim().toLowerCase() !== 'base-app') return
+    const nextParams = new URLSearchParams(searchParams)
+    nextParams.delete('setup')
+    setSearchParams(nextParams, { replace: true })
+  }, [searchParams, setSearchParams])
+
+  const handleSubAccountSkip = useCallback(() => {
+    markSubAccountStepCompleted(account)
+    clearBaseAppSetupDeepLink()
+    setStep('done')
+  }, [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted])
+
+  const handleSubAccountComplete = useCallback(
+    (result: WaitlistConnectBaseAppResult) => {
+      subAccountConnectOverlayRef.current = {
+        parentAddress: result.parentAddress,
+        subAccountAddress: result.subAccountAddress,
+      }
+      const completionKey = getSubAccountCompletionAccountKey(account)
+      if (completionKey) {
+        writePersistedSubAccountConnectOverlay(completionKey, subAccountConnectOverlayRef.current)
+        markSubAccountStepCompleted(account)
+      }
+      clearBaseAppSetupDeepLink()
+      setAccount((current) => {
+        const base = current ?? account
+        if (!base) return current
+        return applyWaitlistSubAccountConnectOverlay(base, subAccountConnectOverlayRef.current, true)
+      })
+      setStep('done')
+      void requestBootstrap({ forceNew: true }).catch(() => null)
+    },
+    [account, clearBaseAppSetupDeepLink, markSubAccountStepCompleted, requestBootstrap],
+  )
 
   const tryResumeExistingPrivySession = useCallback(async (): Promise<boolean> => {
     const existingToken = await getAccessToken().catch(() => null)
@@ -978,6 +1076,18 @@ export function WaitlistFlow(props: {
             onRecoverAccount={onRecoverAccount}
             disableMotion
           />
+        ) : step === 'connect-base-app' ? (
+          <div key="connect-base-app-static" className="flex min-h-[460px] items-center justify-center py-12 sm:py-20">
+            <WaitlistConnectBaseApp
+              onSkip={handleSubAccountSkip}
+              onComplete={handleSubAccountComplete}
+              parentAddress={account?.accountSignals?.canonicalCswAddress ?? null}
+              subAccountAddress={
+                account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
+              }
+              embeddedEoaAddress={embeddedEoaAddress ?? null}
+            />
+          </div>
         ) : step === 'done' && account ? (
           <div key="done-static">
             <WaitlistSetupWorkspace
@@ -1005,6 +1115,25 @@ export function WaitlistFlow(props: {
               onContinueAuth={onContinueAuth}
               onRecoverAccount={onRecoverAccount}
             />
+          ) : step === 'connect-base-app' ? (
+            <motion.div
+              key="connect-base-app"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: WAITLIST_EASE }}
+              className="flex min-h-[460px] items-center justify-center py-12 sm:py-20"
+            >
+              <WaitlistConnectBaseApp
+                onSkip={handleSubAccountSkip}
+                onComplete={handleSubAccountComplete}
+                parentAddress={account?.accountSignals?.canonicalCswAddress ?? null}
+                subAccountAddress={
+                  account?.accountSignals?.baseSubAccount?.address ?? account?.baseSubAccount ?? null
+                }
+                embeddedEoaAddress={embeddedEoaAddress ?? null}
+              />
+            </motion.div>
           ) : step === 'done' && account ? (
             <motion.div
               key="done"

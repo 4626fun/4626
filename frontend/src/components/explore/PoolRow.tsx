@@ -11,6 +11,7 @@ import {
   formatMarketCapDeltaPercent,
   getCoinFeeStatus,
   getMarketCapDeltaToneClass,
+  resolveExploreFees24hDisplay,
   shortAddress,
 } from './rowFormatting'
 import { useIdentity } from '@/hooks/useIdentity'
@@ -68,7 +69,7 @@ export function PoolRow({
 
   const detailPath = `/explore/content/${chain}/${address}`
 
-  const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
+  const totalFees = resolveExploreFees24hDisplay(coin.fees24hUsd, volumeForFees, feeRates.total)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,
     `Platform ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.platform)}`,

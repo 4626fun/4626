@@ -35,6 +35,7 @@ export function useExploreCreatorsHeroMetrics() {
   const marketCap = metrics?.totals?.creatorCoinsMarketCapUsd ?? null
   const volume24h = metrics?.totals?.creatorCoinsVolume24hUsd ?? null
   const fees24h = metrics?.totals?.creatorCoinsFees24hUsd ?? null
+  const history30d = metrics?.history30d ?? []
 
   const statusLine = buildExploreHeroStatusLine({
     updatedAt: metrics?.updatedAt ?? null,
@@ -54,6 +55,7 @@ export function useExploreCreatorsHeroMetrics() {
     marketCap,
     volume24h,
     fees24h,
+    history30d,
     statusLine,
     syncStatus: metrics?.syncStatus ?? 'running',
     creatorsTotalCount: creatorsTotal ?? 0,

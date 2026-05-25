@@ -5,6 +5,7 @@ import {
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
+  shouldShowBaseAppConnectPanel,
   shouldShowParentCswAddOwnerPanel,
 } from './waitlistFlowState'
 import { isPrivyLoginBootstrapError } from './WaitlistFlow'
@@ -15,6 +16,7 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: false,
+          appAccessStatus: null,
         },
       }),
     ).toBe('auth')
@@ -25,7 +27,44 @@ describe('resolveWaitlistStep', () => {
       resolveWaitlistStep({
         account: {
           emailVerified: true,
+          appAccessStatus: null,
         },
+      }),
+    ).toBe('done')
+  })
+
+  it('routes Base App users to connect-base-app when sub-account flow is enabled', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            executionTrack: 'none-yet',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
+      }),
+    ).toBe('connect-base-app')
+  })
+
+  it('skips connect-base-app when sub-account execution is already registered', () => {
+    expect(
+      resolveWaitlistStep({
+        account: {
+          emailVerified: true,
+          appAccessStatus: null,
+          accountSignals: {
+            executionTrack: 'sub-account',
+            canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+          },
+        },
+        subAccountFlowEnabled: true,
+        embeddedEoaAvailable: true,
       }),
     ).toBe('done')
   })
@@ -122,6 +161,38 @@ describe('isWaitlistStepTwoSigningComplete', () => {
           privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
         },
         parentEmbeddedOwnerOnChain: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldShowBaseAppConnectPanel', () => {
+  const canonicalSignals = {
+    executionTrack: 'none-yet' as const,
+    canonicalCswAddress: '0x1234567890123456789012345678901234567890',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+  }
+
+  it('shows Base App connect when sub-account flow is enabled and signing is incomplete', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        accountSignals: canonicalSignals,
+      }),
+    ).toBe(true)
+  })
+
+  it('hides Base App connect for Zora users with an on-chain EOA owner path', () => {
+    expect(
+      shouldShowBaseAppConnectPanel({
+        subAccountFlowEnabled: true,
+        signingStepComplete: false,
+        embeddedEoaAvailable: true,
+        zoraLinked: true,
+        onchainEoaOwnerCount: 1,
+        accountSignals: canonicalSignals,
       }),
     ).toBe(false)
   })

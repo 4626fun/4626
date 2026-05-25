@@ -58,6 +58,7 @@ export type ZoraCoin = {
   tokenPrice?: ZoraTokenPrice
   marketCap?: string
   marketCapDelta24h?: string
+  fees24hUsd?: string | null
   chainId?: number
   uniqueHolders?: number
   tokenUri?: string

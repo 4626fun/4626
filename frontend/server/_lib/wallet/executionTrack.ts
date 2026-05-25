@@ -8,21 +8,23 @@
  * a direct owner on that wallet (`legacy-owner-install`); sponsored swaps use
  * `canonical4337` with the parent as ERC-4337 sender.
  *
- * A persisted `profiles.base_sub_account` / arch-b CIEC row may still exist
- * for audit or future app-scoped work, but it does **not** select the
- * execution track. Sub-account / `migration-pending` tracks are dormant.
+ * When `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`, a distinct registered
+ * `profiles.base_sub_account` selects the `sub-account` track for swaps.
+ * Deploy-session automation still uses parent CSW + delegated server owner.
  *
  * Possible tracks:
  *
+ *   - `sub-account`          — distinct app-scoped sub-account registered (flag-gated).
  *   - `legacy-owner-install` — embedded EOA is a direct owner of the parent CSW.
- *   - `none-yet`             — parent CSW known but embedded owner not confirmed.
- *
- * `sub-account` and `migration-pending` remain in the union for typed API
- * compatibility but are not returned by `resolveExecutionTrack`.
+ *   - `none-yet`             — parent CSW known but neither track is ready.
  *
  * Server-side agent / deploy-session delegation is a separate, orthogonal
  * track defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
  */
+
+import { isWaitlistSubaccountFlowEnabled } from './waitlistSubaccountFlowEnv.js'
+
+export { isWaitlistSubaccountFlowEnabled } from './waitlistSubaccountFlowEnv.js'
 
 const EVM_ADDRESS_RE = /^0x[a-f0-9]{40}$/
 
@@ -87,6 +89,10 @@ export function summarizeBaseSubAccount(input: BaseSubAccountInput): BaseSubAcco
 export function resolveExecutionTrack(input: ExecutionTrackInput): ExecutionTrack {
   if (input.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) {
     return 'legacy-owner-install'
+  }
+  if (isWaitlistSubaccountFlowEnabled()) {
+    const summary = summarizeBaseSubAccount(input)
+    if (summary.registered) return 'sub-account'
   }
   return 'none-yet'
 }

@@ -205,6 +205,19 @@ export const injectedConnectorFlag = defineFlag<boolean>({
   },
 })
 
+/** Pairs with server `WAITLIST_SUBACCOUNT_FLOW_ENABLED=1`. */
+export const waitlistSubAccountFlowFlag = defineFlag<boolean>({
+  key: 'waitlist-subaccount-flow',
+  description:
+    'Track C2 — show the Base App sub-account connect step in waitlist/account setup. Pairs with server WAITLIST_SUBACCOUNT_FLOW_ENABLED.',
+  category: 'operational',
+  defaultValue: false,
+  options: [{ value: false, label: 'Disabled' }, { value: true, label: 'Enabled' }],
+  decide() {
+    return isTruthyEnv(import.meta.env.VITE_WAITLIST_SUBACCOUNT_FLOW_ENABLED)
+  },
+})
+
 // ---------------------------------------------------------------------------
 // UI / product flags (candidates for remote targeting later)
 // ---------------------------------------------------------------------------
@@ -314,6 +327,7 @@ export const allFlags: FeatureFlag<unknown>[] = [
   publicSiteModeFlag,
   swapProviderFlag,
   injectedConnectorFlag,
+  waitlistSubAccountFlowFlag,
   lensGroveFlag,
   directCswAddOwnerSendCallsFlag,
   debugLogsFlag,

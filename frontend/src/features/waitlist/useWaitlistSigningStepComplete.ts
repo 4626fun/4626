@@ -2,6 +2,7 @@ import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 
 import { useEmbeddedOwnerOnCsw } from './useEmbeddedOwnerOnCsw'
 import { isWaitlistStepTwoSigningComplete } from './waitlistFlowState'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 
 type WaitlistAccountSignals = {
   executionTrack?: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
@@ -39,6 +40,7 @@ export function useWaitlistSigningStepComplete(params: {
         ownerInstallRequested: params.ownerInstallRequested,
         accountSignals: params.accountSignals,
         parentEmbeddedOwnerOnChain,
+        subAccountFlowEnabled: waitlistSubAccountFlowFlag(),
       })
     : false
 

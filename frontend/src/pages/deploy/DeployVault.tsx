@@ -63,6 +63,8 @@ import {
   normalizeCreatorVaultBatcherAddress,
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
+import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
+import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
 import { VaultImageGenerator } from '@/components/deploy/VaultImageGenerator'
@@ -7780,6 +7782,7 @@ function DeployVaultMain() {
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
+  const accountMe = useAccountMe()
   // State for adding Privy app smart wallet as owner (EIP-1271 signer)
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
@@ -9354,14 +9357,42 @@ function DeployVaultMain() {
       connectedEoaOwnerReady ||
       (privySmartWalletReady &&
         (smartWalletMatchesCanonical || privySmartWalletOwnerReady || privyEmbeddedOwnerReady))
+  const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
+
+  const deployEligibility = useMemo(
+    () =>
+      evaluateDeployEligibility({
+        canonicalCswAddress: canonicalIdentityAddress,
+        canonicalIdentityType,
+        zoraLinked: hasDetectedZoraCrossAppWallet,
+        baseAppLinked: Boolean(isCoinbaseWalletDirect && !hasDetectedZoraCrossAppWallet),
+        executionTrack: accountMe.me?.accountSignals?.executionTrack ?? null,
+        onchainEoaOwnerCount: connectedEoaOwnerReady || privyEmbeddedOwnerReady ? 1 : 0,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw:
+          accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ??
+          (privyEmbeddedEoaIsCanonicalOwner ? true : null),
+      }),
+    [
+      accountMe.me?.accountSignals?.executionTrack,
+      accountMe.me?.accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      canonicalIdentityAddress,
+      canonicalIdentityType,
+      connectedEoaOwnerReady,
+      hasDetectedZoraCrossAppWallet,
+      isCoinbaseWalletDirect,
+      privyEmbeddedEoaIsCanonicalOwner,
+      privyEmbeddedOwnerReady,
+    ],
+  )
+
   const oneTimePrivyOwnerApprovalNeeded = Boolean(
-    canonicalIdentityIsContract &&
+    deployEligibility.showOwnerApprovalPanel &&
+      canonicalIdentityIsContract &&
       canonicalIdentityAddress &&
       privySmartWalletAddress &&
       !smartWalletMatchesCanonical &&
       !privySmartWalletIsCanonicalOwner,
   )
-  const hasDetectedZoraCrossAppWallet = Boolean(privyCrossAppSmartWalletAddress || privyCrossAppEmbeddedEoaAddress)
 
   const canDeploy =
     tokenIsValid &&
@@ -9383,6 +9414,7 @@ function DeployVaultMain() {
     !solanaMintOverrideInvalid &&
     !solanaDecimalsOverrideInvalid &&
     !identityBlockingReason &&
+    deployEligibility.canProceedWithDeploySession &&
     smartWalletCapabilityReady
 
   const vrfConsumerAddress = (CONTRACTS.vrfConsumer ?? null) as Address | null
@@ -9518,6 +9550,8 @@ function DeployVaultMain() {
                       ? `Needs ${minFirstDepositDisplay} ${underlyingSymbolUpper || 'TOKENS'} to deploy.`
                       : strictNoEoaEnforced && !strictNoEoaEligibility
                         ? NO_EOA_STRICT_BLOCKER
+                      : deployEligibility.blockerMessage
+                        ? deployEligibility.blockerMessage
                       : identityBlockingReason
                         ? identityBlockingReason
                       : solanaMintOverrideInvalid

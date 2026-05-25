@@ -27,7 +27,8 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
+import { shouldShowParentCswAddOwnerPanel, shouldShowBaseAppConnectPanel } from '@/features/waitlist/waitlistFlowState'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { shortValue } from './shared'
@@ -150,6 +151,27 @@ function ZoraAddOwnerSigningPanelLazy(props: {
   )
 }
 
+const LazyWaitlistConnectBaseApp = lazy(async () => {
+  const mod = await import('@/features/waitlist/WaitlistConnectBaseApp')
+  return { default: mod.WaitlistConnectBaseApp }
+})
+
+function WaitlistConnectBaseAppLazy(
+  props: Parameters<typeof import('@/features/waitlist/WaitlistConnectBaseApp').WaitlistConnectBaseApp>[0],
+) {
+  return (
+    <Suspense
+      fallback={
+        <div className="text-xs text-zinc-500">
+          <LoadingText intent="processing" size="sm" labelOverride="Loading Base App setup..." />
+        </div>
+      }
+    >
+      <LazyWaitlistConnectBaseApp {...props} />
+    </Suspense>
+  )
+}
+
 export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
@@ -216,6 +238,7 @@ export function AccountSetupWorkspaceView(props: {
   const ownerInstallPathActive = ownerInstallResumeState.requested
   const {
     signingStepComplete,
+    embeddedEoaAddress,
     parentEmbeddedOwnerOnChain,
     refreshParentEmbeddedOwner,
   } = useWaitlistSigningStepComplete({
@@ -244,6 +267,7 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
+  const subAccountFlowEnabled = waitlistSubAccountFlowFlag()
   const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
     zoraLinked,
     ownerInstallRequested: ownerInstallPathActive,
@@ -252,10 +276,23 @@ export function AccountSetupWorkspaceView(props: {
     accountSignals: me.accountSignals,
     parentEmbeddedOwnerOnChain,
     onchainEoaOwnerCount: onchainEoaOwnerCandidates.length,
+    subAccountFlowEnabled,
+  })
+  const showBaseAppConnectPanel = shouldShowBaseAppConnectPanel({
+    subAccountFlowEnabled,
+    signingStepComplete,
+    embeddedEoaAvailable: Boolean(embeddedEoaAddress),
+    zoraLinked,
+    onchainEoaOwnerCount: onchainEoaOwnerCandidates.length,
+    accountSignals: me.accountSignals,
   })
   const stepTwoDoneSubtitle = signingStepComplete
-    ? 'Embedded signer installed on your parent smart wallet'
-    : showParentCswAddOwnerPanel
+    ? executionTrack === 'sub-account'
+      ? 'Base App sub-account connected for swaps'
+      : 'Embedded signer installed on your parent smart wallet'
+    : showBaseAppConnectPanel
+      ? 'Connect Base App to enable sponsored swaps'
+      : showParentCswAddOwnerPanel
       ? 'Connect a CSW owner wallet and enable 4626 signing'
       : 'Optional — trade at /swap with an external wallet (EOA mode) if you skip this step'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
@@ -667,6 +704,19 @@ export function AccountSetupWorkspaceView(props: {
                       <p className="text-xs text-zinc-400 leading-relaxed">
                         Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
                       </p>
+                    ) : showBaseAppConnectPanel ? (
+                      <WaitlistConnectBaseAppLazy
+                        onSkip={() => undefined}
+                        onComplete={() => {
+                          void loadMe()
+                          void refreshParentEmbeddedOwner()
+                        }}
+                        parentAddress={canonicalCswAddress}
+                        subAccountAddress={
+                          me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null
+                        }
+                        embeddedEoaAddress={embeddedEoaAddress ?? null}
+                      />
                     ) : showParentCswAddOwnerPanel ? (
                       <ZoraAddOwnerSigningPanelLazy
                         controller={controller}
@@ -1032,7 +1082,18 @@ export function AccountSetupWorkspaceView(props: {
                     </p>
                   </div>
                 ) : null}
-                {showParentCswAddOwnerPanel ? (
+                {showBaseAppConnectPanel ? (
+                  <WaitlistConnectBaseAppLazy
+                    onSkip={() => undefined}
+                    onComplete={() => {
+                      void loadMe()
+                      void refreshParentEmbeddedOwner()
+                    }}
+                    parentAddress={canonicalCswAddress}
+                    subAccountAddress={me.accountSignals.baseSubAccount?.address ?? me.baseSubAccount ?? null}
+                    embeddedEoaAddress={embeddedEoaAddress ?? null}
+                  />
+                ) : showParentCswAddOwnerPanel ? (
                   <ZoraAddOwnerSigningPanelLazy
                     controller={controller}
                     className="mt-4"
@@ -1041,8 +1102,12 @@ export function AccountSetupWorkspaceView(props: {
                 ) : (
                   <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
                     {signingStepComplete
-                      ? '4626 signing is enabled on your canonical wallet.'
-                      : 'Enable 4626 signing appears when your Zora smart wallet has a connectable on-chain EOA owner.'}
+                      ? executionTrack === 'sub-account'
+                        ? '4626 swaps can route through your Base App sub-account.'
+                        : '4626 signing is enabled on your canonical wallet.'
+                      : subAccountFlowEnabled
+                        ? 'Connect Base App for sponsored swaps, or enable Zora EOA signing when available.'
+                        : 'Enable 4626 signing appears when your Zora smart wallet has a connectable on-chain EOA owner.'}
                   </p>
                 )}
                 <div className="mt-4 flex flex-wrap items-start gap-3">

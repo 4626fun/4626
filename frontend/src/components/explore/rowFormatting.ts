@@ -65,6 +65,19 @@ export function formatFeeAmount(volume: string | undefined, totalFeeRate: number
   return formatCompactNumber(fee)
 }
 
+/** Prefer indexed 24h fees from Supabase when present; fall back to volume × fee rate. */
+export function resolveExploreFees24hDisplay(
+  fees24hUsd: string | number | null | undefined,
+  volumeForFees: string | undefined,
+  totalFeeRate: number,
+): string {
+  if (fees24hUsd != null && fees24hUsd !== '') {
+    const indexed = typeof fees24hUsd === 'string' ? parseFloat(fees24hUsd) : fees24hUsd
+    if (Number.isFinite(indexed) && indexed > 0) return formatCompactNumber(indexed)
+  }
+  return formatFeeAmount(volumeForFees, totalFeeRate, 1)
+}
+
 export function shortAddress(addr: string | undefined): string {
   if (!addr) return '-'
   if (addr.length <= 10) return addr

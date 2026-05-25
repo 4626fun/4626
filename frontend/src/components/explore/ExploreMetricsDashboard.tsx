@@ -1,4 +1,5 @@
 import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreHeroSparkline } from '@/components/explore/ExploreHeroSparkline'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { formatCompactUsd } from '@/features/explore/exploreShared'
 import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
@@ -21,6 +22,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
     fees24h,
     statusLine,
     partial,
+    history30d,
     isLoading,
     isFetching,
   } = useExploreCreatorsHeroMetrics()
@@ -51,7 +53,13 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           value={formatCompactUsd(marketCap)}
           hint={financialHint}
           accent
-          title={`Creator-coin market cap${financialTitleSuffix}`}
+          title={`Indexed creator-coin market cap${financialTitleSuffix} · 30D trend uses daily Supabase snapshots`}
+          trailing={
+            <ExploreHeroSparkline
+              history={history30d}
+              title={`Indexed creator-coin market cap trend · last ${history30d.length} daily snapshots`}
+            />
+          }
         />
         <ExploreHeroMetric
           label="1D Vol"

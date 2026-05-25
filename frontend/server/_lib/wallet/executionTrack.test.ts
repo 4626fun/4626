@@ -5,7 +5,7 @@ import {
   summarizeBaseSubAccount,
   type BaseSubAccountInput,
   type ExecutionTrackInput,
-} from './executionTrack'
+} from './executionTrack.js'
 
 const CSW = '0x00000000000000000000000000000000000000aa'
 const SUB = '0x00000000000000000000000000000000000000bb'
@@ -113,12 +113,28 @@ describe('resolveExecutionTrack', () => {
     ).toBe('legacy-owner-install')
   })
 
-  it("returns 'none-yet' when parent embedded owner is not confirmed (sub-account metadata ignored for execution)", () => {
+  it("returns 'none-yet' when parent embedded owner is not confirmed and sub-account flow is disabled", () => {
     expect(
       track({
         baseSubAccountAddress: SUB,
         privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
       }),
     ).toBe('none-yet')
+  })
+
+  it("returns 'sub-account' when sub-account flow is enabled and a distinct sub-account is registered", () => {
+    const prev = process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
+    process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = '1'
+    try {
+      expect(
+        track({
+          baseSubAccountAddress: SUB,
+          privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+        }),
+      ).toBe('sub-account')
+    } finally {
+      if (prev === undefined) delete process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED
+      else process.env.WAITLIST_SUBACCOUNT_FLOW_ENABLED = prev
+    }
   })
 })

@@ -15,6 +15,7 @@ import {
   formatMarketCapDeltaPercent,
   getCoinFeeStatus,
   getMarketCapDeltaToneClass,
+  resolveExploreFees24hDisplay,
   shortAddress,
 } from './rowFormatting'
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
@@ -107,7 +108,7 @@ export function TokenRow({
 
   const detailPath = `${linkPrefix}/${chain}/${address}`
 
-  const totalFees = formatFeeAmount(volumeForFees, feeRates.total, 1)
+  const totalFees = resolveExploreFees24hDisplay(coin.fees24hUsd, volumeForFees, feeRates.total)
   const deltaToneClass = getMarketCapDeltaToneClass(change)
   const feeBreakdown = [
     `Creator ${formatFeeAmount(volumeForFees, feeRates.total, feeRates.creator)}`,

@@ -99,6 +99,46 @@ function toFiniteNumberOrNull(value: unknown): number | null {
   return null
 }
 
+async function loadCreatorCoinFeesByAddresses(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
+  coinAddresses: string[],
+): Promise<Map<string, string>> {
+  const normalized = [...new Set(coinAddresses.map((address) => address.toLowerCase()).filter(Boolean))]
+  if (normalized.length === 0) return new Map()
+
+  const result = await db.sql`
+    SELECT lower(coin_address) AS coin_address, fees_24h_usd
+    FROM creator_coins
+    WHERE chain_id = 8453
+      AND lower(coin_address) = ANY(${normalized}::text[])
+  `
+
+  const map = new Map<string, string>()
+  for (const row of result.rows ?? []) {
+    const coinAddress = typeof row.coin_address === 'string' ? row.coin_address.toLowerCase() : ''
+    const fees = toNumericString(row.fees_24h_usd)
+    if (coinAddress && fees) map.set(coinAddress, fees)
+  }
+  return map
+}
+
+async function attachIndexedFeesToCreatorEdges(
+  db: NonNullable<Awaited<ReturnType<typeof getDb>>> | null,
+  edges: any[],
+): Promise<void> {
+  if (!db || edges.length === 0) return
+  const coinAddresses = edges
+    .map((edge) => (typeof edge?.node?.address === 'string' ? edge.node.address : null))
+    .filter((value): value is string => Boolean(value))
+  const feesMap = await loadCreatorCoinFeesByAddresses(db, coinAddresses)
+  for (const edge of edges) {
+    const address = typeof edge?.node?.address === 'string' ? edge.node.address.toLowerCase() : ''
+    if (!address || !edge?.node) continue
+    const fees = feesMap.get(address)
+    if (fees) edge.node.fees24hUsd = fees
+  }
+}
+
 async function hasCreatorEthosProjection(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<boolean> {
   const result = await db.sql`
     SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
@@ -115,37 +155,41 @@ async function loadCreatorEthosProjectionPage(params: {
   const rows = await params.db.sql`
     WITH identity_ranked AS (
       SELECT
-        creator_address,
-        coin_address,
-        twitter_username,
-        zora_handle,
-        created_at,
-        market_cap_usd,
-        volume_24h_usd,
-        ethos_score,
-        ethos_level,
-        ethos_score_source,
+        cep.creator_address,
+        cep.coin_address,
+        cep.twitter_username,
+        cep.zora_handle,
+        cep.created_at,
+        cep.market_cap_usd,
+        cep.volume_24h_usd,
+        cc.fees_24h_usd,
+        cep.ethos_score,
+        cep.ethos_level,
+        cep.ethos_score_source,
         COALESCE(
-          NULLIF(lower(regexp_replace(trim(zora_handle), '^@', '')), ''),
-          NULLIF(lower(regexp_replace(trim(twitter_username), '^@', '')), ''),
-          lower(creator_address)
+          NULLIF(lower(regexp_replace(trim(cep.zora_handle), '^@', '')), ''),
+          NULLIF(lower(regexp_replace(trim(cep.twitter_username), '^@', '')), ''),
+          lower(cep.creator_address)
         ) AS identity_key,
         ROW_NUMBER() OVER (
           PARTITION BY COALESCE(
-            NULLIF(lower(regexp_replace(trim(zora_handle), '^@', '')), ''),
-            NULLIF(lower(regexp_replace(trim(twitter_username), '^@', '')), ''),
-            lower(creator_address)
+            NULLIF(lower(regexp_replace(trim(cep.zora_handle), '^@', '')), ''),
+            NULLIF(lower(regexp_replace(trim(cep.twitter_username), '^@', '')), ''),
+            lower(cep.creator_address)
           )
           ORDER BY
-            ethos_score DESC NULLS LAST,
-            volume_24h_usd DESC NULLS LAST,
-            market_cap_usd DESC NULLS LAST,
-            creator_address ASC
+            cep.ethos_score DESC NULLS LAST,
+            cep.volume_24h_usd DESC NULLS LAST,
+            cep.market_cap_usd DESC NULLS LAST,
+            cep.creator_address ASC
         ) AS identity_rank
-      FROM public.creator_ethos_projection
+      FROM public.creator_ethos_projection cep
+      LEFT JOIN creator_coins cc
+        ON lower(cc.coin_address) = lower(cep.coin_address)
+        AND cc.chain_id = 8453
       WHERE (
         ${params.ethosMin}::numeric IS NULL
-        OR (ethos_score IS NOT NULL AND ethos_score >= ${params.ethosMin})
+        OR (cep.ethos_score IS NOT NULL AND cep.ethos_score >= ${params.ethosMin})
       )
     )
     SELECT
@@ -156,6 +200,7 @@ async function loadCreatorEthosProjectionPage(params: {
       created_at,
       market_cap_usd,
       volume_24h_usd,
+      fees_24h_usd,
       ethos_score,
       ethos_level,
       ethos_score_source
@@ -178,6 +223,7 @@ async function loadCreatorEthosProjectionPage(params: {
     created_at: string | null
     market_cap_usd: string | number | null
     volume_24h_usd: string | number | null
+    fees_24h_usd: string | number | null
     ethos_score: number | string | null
     ethos_level: string | null
     ethos_score_source: string | null
@@ -202,6 +248,7 @@ type ExploreDbListingRow = {
   created_at: string | null
   market_cap_usd: string | number | null
   volume_24h_usd: string | number | null
+  fees_24h_usd?: string | number | null
 }
 
 function exploreRowDisplayLabel(
@@ -317,6 +364,7 @@ async function assembleEthosSortedCreatorResponse(params: {
         : exploreRowDisplayLabel(row, address)
     const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
     const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
+    const fees24hUsd = toNumericString(row.fees_24h_usd)
     const creatorProfile = detail?.creatorProfile ?? buildCreatorProfileFromExploreRow(row)
     const ethos = params.resolveNodeEthos(row)
     return {
@@ -335,6 +383,7 @@ async function assembleEthosSortedCreatorResponse(params: {
         marketCapDelta24h:
           typeof detail?.marketCapDelta24h === 'string' ? detail.marketCapDelta24h : undefined,
         volume24h,
+        fees24hUsd,
         totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
         uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
         mediaContent: detail?.mediaContent,
@@ -374,6 +423,7 @@ async function buildEthosSortedCreatorList(params: {
     created_at: string | null
     market_cap_usd: string | number | null
     volume_24h_usd: string | number | null
+    fees_24h_usd?: string | number | null
     ethos_score: number | string | null
     ethos_level: string | null
     ethos_score_source: string | null
@@ -433,6 +483,7 @@ async function buildEthosSortedCreatorList(params: {
         cc.created_at,
         cc.market_cap_usd,
         cc.volume_24h_usd,
+        cc.fees_24h_usd,
         ROW_NUMBER() OVER (
           PARTITION BY lower(cc.creator_address)
           ORDER BY
@@ -524,6 +575,7 @@ async function buildEthosSortedCreatorList(params: {
       rcc.created_at,
       rcc.market_cap_usd,
       rcc.volume_24h_usd,
+      rcc.fees_24h_usd,
       cs.score AS canonical_social_score,
       cw.score AS canonical_wallet_score,
       oc.score AS owner_class_csw_score,
@@ -618,6 +670,7 @@ async function buildEthosSortedCreatorList(params: {
       created_at: string | null
       market_cap_usd: string | number | null
       volume_24h_usd: string | number | null
+      fees_24h_usd: string | number | null
       ethos_score: number | string | null
       ethos_level: string | null
       canonical_social_score: number | string | null
@@ -853,6 +906,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return typeof score === 'number' && score >= ethosMin
         })
       }
+
+      await attachIndexedFeesToCreatorEdges(db, Array.isArray(data?.edges) ? data.edges : [])
     }
 
     setCache(res, 300)

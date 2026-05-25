@@ -99,8 +99,8 @@ function formatTokenPrice(value: number): string {
   return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
 }
 
-function formatPercent(value: number): string {
-  if (!Number.isFinite(value)) return '0.00%'
+function formatPercent(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return '-'
   const sign = value >= 0 ? '+' : '-'
   return `${sign}${Math.abs(value).toFixed(2)}%`
 }
@@ -228,7 +228,7 @@ type PoolHistoryPoint = {
  * Per-metric chart with viz tuned to the metric's semantics:
  *   - Price     \u2192 smooth LineChart (continuous spot movement)
  *   - Volume    \u2192 BarChart (per-bucket USD notional)
- *   - Fees      \u2192 BarChart of *cumulative* fees (monotonically growing)
+ *   - Fees      \u2192 BarChart (per-bucket USD fees)
  *   - Liquidity \u2192 stacked BarChart split by the pool's two tokens
  *
  * Every metric shares the same scrubber readout so the bucket under the
@@ -247,17 +247,7 @@ function MetricChart({
 }) {
   const labels = useMemo(() => points.map((p) => formatTimestamp(p.timestamp)), [points])
 
-  // Per-bucket raw values for the active metric. Fees gets transformed into
-  // a cumulative running sum so each bar represents total fees accrued up
-  // to and including that bucket.
-  const values = useMemo(() => {
-    const raw = points.map((p) => extractMetricValue(p, metric))
-    if (metric === 'fees') {
-      let running = 0
-      return raw.map((v) => (running += Number.isFinite(v) ? v : 0))
-    }
-    return raw
-  }, [points, metric])
+  const values = useMemo(() => points.map((p) => extractMetricValue(p, metric)), [points, metric])
 
   const [hoverIndex, setHoverIndex] = useState<number | null>(null)
   const handleScrub = useCallback<(index: number | undefined) => void>((index) => {
@@ -333,7 +323,6 @@ function MetricChart({
               />
               <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
                 {label}
-                {metric === 'fees' ? ' (cumulative)' : ''}
               </span>
             </div>
             <div className="flex items-baseline gap-2">
@@ -512,7 +501,7 @@ export function ExploreContentDetail() {
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('1D')
   // Single-metric view — each metric renders in its own specialised viz
-  // (line for price, bars for volume, cumulative bars for fees, stacked
+  // (line for price, bars for volume/fees, stacked
   // token-composition bars for liquidity). Defaults to `price` because
   // that is the metric traders check first.
   const [selectedMetric, setSelectedMetric] = useState<MetricKey>('price')
@@ -634,13 +623,28 @@ export function ExploreContentDetail() {
   const liquidityUrl = primaryPool?.id
     ? `https://app.uniswap.org/explore/pools/base/${primaryPool.id}`
     : `https://app.uniswap.org/explore/tokens/base/${contentCoinAddress}`
-  const tvlUsd = history?.tvlUSD ?? parseNumber(primaryPool?.totalValueLockedUSD) ?? parseNumber(coin?.marketCap)
+  const tvlUsd = history?.tvlUSD ?? parseNumber(primaryPool?.totalValueLockedUSD)
   const volumeUsd = history?.volumeUSD ?? parseNumber(coin?.volume24h)
-  const feesUsd = history?.feesUSD
+  const hasSubgraphFees =
+    Boolean(history?.poolId) || (history?.dataPoints?.some((p) => (p.feesUSD ?? 0) > 0) ?? false)
+  const feesUsd = hasSubgraphFees ? (history?.feesUSD ?? 0) : null
   const priceUsd = parseNumber(coin?.tokenPrice?.priceInUsdc)
-  const priceDelta = history?.priceChangePercent ?? parseNumber(coin?.marketCapDelta24h)
 
   const points = history?.dataPoints ?? []
+
+  const priceDelta = (() => {
+    if (history?.priceChangePercent != null && Number.isFinite(history.priceChangePercent)) {
+      return history.priceChangePercent
+    }
+    if (points.length >= 2) {
+      const firstClose = points[0]?.close
+      const lastClose = points[points.length - 1]?.close
+      if (firstClose != null && lastClose != null && firstClose > 0) {
+        return ((lastClose - firstClose) / firstClose) * 100
+      }
+    }
+    return null
+  })()
 
   const liquidityCV = calcCoefficientOfVariation(points.map((p) => p.tvlUSD))
   const priceCV = calcCoefficientOfVariation(points.map((p) => p.close ?? 0))
@@ -866,7 +870,7 @@ export function ExploreContentDetail() {
               <div className="grid grid-cols-1">
                 <ExploreStatRow
                   label={renderSnapshotLabel('TVL', SNAPSHOT_METRIC_HELP.tvl)}
-                  value={formatUsd(tvlUsd)}
+                  value={tvlUsd != null && tvlUsd > 0 ? formatUsd(tvlUsd) : '-'}
                   rowClassName="py-2 border-b border-white/8 last:border-0"
                 />
                 <ExploreStatRow
@@ -876,7 +880,7 @@ export function ExploreContentDetail() {
                 />
                 <ExploreStatRow
                   label={renderSnapshotLabel(`Fees (${selectedPeriod})`, SNAPSHOT_METRIC_HELP.fees)}
-                  value={formatUsd(feesUsd ?? 0)}
+                  value={feesUsd != null ? formatUsd(feesUsd) : '-'}
                   rowClassName="py-2 border-b border-white/8 last:border-0"
                 />
                 <ExploreStatRow
@@ -974,8 +978,7 @@ export function ExploreContentDetail() {
               <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
                 <span>Oldest</span>
                 <span className="text-zinc-400">
-                  {METRICS.find((m) => m.key === selectedMetric)?.label}
-                  {selectedMetric === 'fees' ? ' (cumulative)' : ''} over {selectedPeriod}
+                  {METRICS.find((m) => m.key === selectedMetric)?.label} over {selectedPeriod}
                 </span>
                 <span>Latest</span>
               </div>

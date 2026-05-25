@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
 import {
   useActiveWallet,
+  useBaseAccountSdk,
   usePrivy,
   useWallets,
 } from '@privy-io/react-auth'
@@ -42,6 +43,9 @@ import {
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
+import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
+import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
+import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
@@ -432,6 +436,7 @@ export function Swap() {
   const [showSwapWalletOptions, setShowSwapWalletOptions] = useState(false)
   const walletRecoveryAttemptKeyRef = useRef('')
   const accountMe = useAccountMe()
+  const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
   // `privy.user` (`linkedAccounts` / `user.wallets`). Those records do NOT
   // carry provider methods like `getEthereumProvider` — so the earlier
@@ -470,6 +475,10 @@ export function Swap() {
     }
     return merged
   }, [privyLiveWallets, privyUser])
+  const baseAccountWallet = useMemo(
+    () => (Array.isArray(privyWallets) ? (privyWallets as any[]).find(isBaseAccountWallet) ?? null : null),
+    [privyWallets],
+  )
   const auth = useSiweAuth()
   const {
     authAddress,
@@ -607,6 +616,10 @@ export function Swap() {
   const signerAddress = accountContext.signerAddress ?? null
   const accountSignals = accountMe.me?.accountSignals ?? null
   const executionTrack = (accountSignals?.executionTrack ?? null) as UserExecutionTrack | null
+  const baseSubAccountAddress = normalizeAddressOrNull(
+    accountSignals?.baseSubAccount?.address ?? accountMe.me?.baseSubAccount ?? null,
+  )
+  const subAccountTrack = executionTrack === 'sub-account' || executionTrack === 'migration-pending'
 
   const privyCrossAppEmbeddedEoaAddress = useMemo(() => pickPrivyCrossAppEmbeddedEoaAddress(privyUser), [privyUser])
   const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
@@ -670,6 +683,14 @@ export function Swap() {
 
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
+  const subAccountRuntime = useSwapSubAccountRuntime({
+    enabled: accountContext.activeAccountType === 'SMART_WALLET' && subAccountTrack,
+    canonicalAddress,
+    baseSubAccountAddress,
+    baseAccountWallet,
+    embeddedWallet: privyEmbeddedEoaWallet,
+    baseAccountSdk,
+  })
 
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -867,6 +888,8 @@ export function Swap() {
         executionMode,
         executionTrack,
         canonicalAddress,
+        baseSubAccountAddress,
+        subAccountProviderReady: subAccountRuntime.ready,
         clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
@@ -878,6 +901,8 @@ export function Swap() {
       executionTrack,
       executionMode,
       canonicalAddress,
+      baseSubAccountAddress,
+      subAccountRuntime.ready,
       privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
@@ -885,46 +910,74 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && canonicalSignerGate.ready
+  const useSubAccountCanonicalSigner =
+    executionMode === 'canonical' &&
+    subAccountTrack &&
+    subAccountRuntime.ready &&
+    canonicalSignerGate.code === 'ok'
+  const usePrivyEmbeddedCanonicalSigner =
+    executionMode === 'canonical' && !useSubAccountCanonicalSigner && canonicalSignerGate.ready
   const canonicalSignerAddress =
-    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null) : signerAddress
+    executionMode === 'canonical'
+      ? useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner
+        ? privyEmbeddedEoaAddress
+        : null
+      : signerAddress
   const canonicalSignerWalletClient =
     executionMode === 'canonical'
-      ? usePrivyEmbeddedCanonicalSigner
-        ? (privyEmbeddedCanonicalWalletClient as any)
-        : null
+      ? useSubAccountCanonicalSigner
+        ? subAccountRuntime.provider
+        : usePrivyEmbeddedCanonicalSigner
+          ? (privyEmbeddedCanonicalWalletClient as any)
+          : null
       : walletClient
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionSignerType =
-    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? 'EOA' : 'UNKNOWN') : accountContext.signerType
+    executionMode === 'canonical'
+      ? useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner
+        ? 'EOA'
+        : 'UNKNOWN'
+      : accountContext.signerType
   const executionCapabilities = useMemo(
     () =>
       executionMode === 'canonical'
         ? ({
             paymasterService: false,
-            atomicStatus: 'unknown',
-            supports5792: false,
+            atomicStatus: useSubAccountCanonicalSigner ? 'supported' : 'unknown',
+            supports5792: useSubAccountCanonicalSigner,
           } as const)
         : accountContext.capabilities,
-    [executionMode, accountContext.capabilities],
+    [executionMode, accountContext.capabilities, useSubAccountCanonicalSigner],
   )
   const executionConnectorId =
     executionMode === 'canonical'
-      ? usePrivyEmbeddedCanonicalSigner
-        ? 'privy-embedded'
-        : 'privy-embedded-required'
+      ? useSubAccountCanonicalSigner
+        ? 'base-sub-account'
+        : usePrivyEmbeddedCanonicalSigner
+          ? 'privy-embedded'
+          : 'privy-embedded-required'
       : (connector?.id ?? null)
   const executionConnectorName =
     executionMode === 'canonical'
-      ? usePrivyEmbeddedCanonicalSigner
-        ? 'Privy Embedded EOA'
-        : 'Privy Embedded EOA (required)'
+      ? useSubAccountCanonicalSigner
+        ? 'Base Account Sub-Account'
+        : usePrivyEmbeddedCanonicalSigner
+          ? 'Privy Embedded EOA'
+          : 'Privy Embedded EOA (required)'
       : (connector?.name ?? null)
   const executionAddress =
-    executionMode === 'canonical' ? canonicalAddress : (accountContext.activeAccount ?? null)
+    executionMode === 'canonical'
+      ? useSubAccountCanonicalSigner
+        ? baseSubAccountAddress
+        : canonicalAddress
+      : (accountContext.activeAccount ?? null)
   const routerExecutionTrack =
-    executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner ? 'legacy-owner-install' : executionTrack
+    executionMode === 'canonical' && useSubAccountCanonicalSigner
+      ? executionTrack
+      : executionMode === 'canonical' && usePrivyEmbeddedCanonicalSigner
+        ? 'legacy-owner-install'
+        : executionTrack
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
@@ -943,17 +996,43 @@ export function Swap() {
   }, [executionMode, executionSignerAddress])
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
+  const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
   const canonicalSetupGateCodes = useMemo(
     () =>
-      new Set(['execution-setup-required', 'embedded-wallet-not-owner']),
+      new Set([
+        'execution-setup-required',
+        'embedded-wallet-not-owner',
+        'base-sub-account-missing',
+        'base-sub-account-invalid',
+        'base-sub-account-provider-missing',
+      ]),
     [],
   )
   const needsCanonicalSetupAction =
-    executionMode === 'canonical' && canonicalSetupGateCodes.has(canonicalSignerGate.code)
-  const canonicalSetupActionLabel = 'Open waitlist setup'
+    executionMode === 'canonical' &&
+    subAccountFlowEnabled &&
+    canonicalSetupGateCodes.has(canonicalSignerGate.code)
+  const canonicalSetupActionLabel =
+    canonicalSignerGate.code === 'base-sub-account-provider-missing'
+      ? 'Reconnect Base App'
+      : 'Open waitlist setup'
   const handleEnableCanonicalSigning = useCallback(() => {
-    window.location.assign('/waitlist')
-  }, [])
+    const needsSubAccountSetup =
+      subAccountFlowEnabled &&
+      (executionTrack === 'none-yet' ||
+        (subAccountTrack && !subAccountRuntime.ready && canonicalSignerGate.code !== 'ok'))
+    if (needsSubAccountSetup) {
+      window.location.assign(buildWaitlistSetupUrl('base-app'))
+      return
+    }
+    window.location.assign('/waitlist?setup=owner-install')
+  }, [
+    canonicalSignerGate.code,
+    executionTrack,
+    subAccountFlowEnabled,
+    subAccountRuntime.ready,
+    subAccountTrack,
+  ])
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&

@@ -214,6 +214,7 @@ type ExploreHeroMetricProps = {
   hint?: string | null
   title?: string
   accent?: boolean
+  trailing?: ReactNode
 }
 
 type ExploreTableLoadingOverlayProps = {
@@ -239,7 +240,7 @@ export function ExploreTableLoadingOverlay({
   )
 }
 
-export function ExploreHeroMetric({ label, value, hint, title, accent = false }: ExploreHeroMetricProps) {
+export function ExploreHeroMetric({ label, value, hint, title, accent = false, trailing }: ExploreHeroMetricProps) {
   return (
     <div
       className={`vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
@@ -247,7 +248,10 @@ export function ExploreHeroMetric({ label, value, hint, title, accent = false }:
       }`}
       title={title}
     >
-      <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{label}</div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{label}</div>
+        {trailing ? <div className="shrink-0 pt-0.5">{trailing}</div> : null}
+      </div>
       <div className="mt-1 text-xl sm:text-[26px] font-semibold tracking-tight text-white tabular-nums lining-nums">
         {value}
       </div>
