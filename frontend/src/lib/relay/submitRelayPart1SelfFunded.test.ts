@@ -17,6 +17,7 @@ import {
   listSelfAuthPreparedCallsSignerAddressCandidates,
   listSelfAuthSignMethods,
   isSelfAuthPasskeyOwnerSignature,
+  isCswWebAuthnOwnerBytes,
   isSelfAuthReplaySafeSignHashMode,
   isSelfAuthSessionKeyEcdsaSignature,
   shouldRejectSelfAuthSignatureForSessionKeyLane,
@@ -39,6 +40,13 @@ vi.mock('viem', async (importOriginal) => {
     recoverAddress: (args: { hash: Hex; signature: Hex }) => mockRecoverAddress(args),
   }
 })
+
+const mockIsBaseAppInAppContext = vi.fn(() => false)
+
+vi.mock('@/lib/wallet/inAppBrowser', () => ({
+  isBaseAppInAppContext: () => mockIsBaseAppInAppContext(),
+  externalBrowserUrlFor: (path: string) => `https://4626.fun${path}`,
+}))
 
 function wrapSelfAuthOwnerSignature(ownerIndex: number): Hex {
   return encodeAbiParameters(
@@ -360,6 +368,46 @@ describe('submitRelayPart1SelfFunded helpers', () => {
     ).toEqual(['inner_secp256k1', 'full_wrapper_secp256k1', 'auto'])
   })
 
+  it('uses full_wrapper_webauthn first for passkey-first owner slot 0', () => {
+    expect(
+      listSelfAuthPreparedCallsSignaturePayloadModes({ parsedOwnerIndex: 0, passkeyFirstOwner: true }),
+    ).toEqual(['full_wrapper_webauthn', 'auto', 'full_wrapper_secp256k1', 'inner_secp256k1'])
+    expect(listSelfAuthPreparedCallsSignerAddressCandidates({
+      parsedOwnerAddress: null,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+      passkeyFirstOwner: true,
+    })).toEqual([
+      { address: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF', mode: 'funding_csw_passkey' },
+    ])
+    expect(
+      listSelfAuthSignMethods({
+        sessionKeyOwner: false,
+        passkeyFirstOwner: true,
+        parsedOwnerIndex: 0,
+        bundlerOnly: true,
+        hashMode: 'entrypoint_v06_no_chain_passkey_primary',
+      }),
+    ).toEqual(['personal_sign_data_address', 'personal_sign_address_data', 'typed_data_v4_csw'])
+  })
+
+  it('prioritizes no-chain entrypoint hash for passkey-first Part 1', () => {
+    const candidates = listSelfAuthBundlerSignHashCandidates({
+      preparedUserOp: SAMPLE_USER_OP,
+      signatureRequestHash: '0xabc' as Hex,
+      chainId: 8453,
+      passkeyFirstOwner: true,
+      fundingCsw: '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF',
+    })
+    expect(candidates[0]?.mode).toBe('entrypoint_v06_no_chain_passkey_primary')
+  })
+
+  it('detects WebAuthn owner bytes at owner index 0', () => {
+    const addressOwner = encodeAbiParameters([{ type: 'address' }], [SESSION_KEY_OWNER])
+    const webAuthnOwner = `0x${'ab'.repeat(64)}` as Hex
+    expect(isCswWebAuthnOwnerBytes(addressOwner)).toBe(false)
+    expect(isCswWebAuthnOwnerBytes(webAuthnOwner)).toBe(true)
+  })
+
   it('prepare capabilities request required native funds only (no paymaster hint)', () => {
     const caps = buildSelfFundedRelayPrepareCapabilities(18_871_666_861_048n, 2_400_000_000_000n)
     expect(caps.paymasterService).toBeUndefined()
@@ -476,6 +524,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   )
 
   beforeEach(() => {
+    mockIsBaseAppInAppContext.mockReturnValue(false)
     validateUserOpPreflightSpy.mockResolvedValue({
       ok: true,
       recovered: null,
@@ -778,6 +827,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('session-key Part 1 tries entrypoint hash before replaySafe after paymaster strip', async () => {
+    mockIsBaseAppInAppContext.mockReturnValue(true)
     mockPublicClient.readContract.mockImplementation(async (args: { functionName?: string; args?: unknown[] }) => {
       if (args.functionName === 'ownerAtIndex') {
         const ownerIndex = Number((args.args as bigint[] | undefined)?.[0] ?? 2)
@@ -1099,6 +1149,7 @@ describe('submitSelfAuthRelayPart1SelfFunded', () => {
   })
 
   it('fails fast when Base App substitutes a non-owner session key', async () => {
+    mockIsBaseAppInAppContext.mockReturnValue(true)
     const substitutedSigner = '0xe3E054EDCFC6e3dc63A6B685bbA741C5e1425D82' as const
     mockRecoverAddress.mockImplementation(async () => substitutedSigner)
     mockBundlerRequest.mockImplementation(async () => {

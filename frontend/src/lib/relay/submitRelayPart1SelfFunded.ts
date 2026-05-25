@@ -42,13 +42,19 @@ import {
   unwrapDoubleHexEncodedHash,
   type V06UserOpFields,
 } from '@/lib/wallet/onboardingWalletReplayable'
+import { isBaseAppInAppContext } from '@/lib/wallet/inAppBrowser'
 
 export type SelfAuthOwnerDiscovery = {
   ownerIndex: number | null
   ownerSignerAddress: `0x${string}` | null
   /** Base App session-key owner at owner[2] — uses inner_secp256k1 prepared-calls payload. */
   sessionKeyOwner: boolean
+  /** WebAuthn passkey at owner[0] (org.toshi) — Relay Part 1 uses passkey, not session key. */
+  passkeyFirstOwner: boolean
 }
+
+/** WebAuthn passkey owner slot on passkey-first Base App CSWs. */
+export const SELF_AUTH_PASSKEY_OWNER_INDEX = 0
 
 /** Base App session-key lane used for May 5 owner-install Part 1 (4626.base.eth). */
 export const SELF_AUTH_SESSION_KEY_OWNER_INDEX = 2
@@ -59,11 +65,38 @@ export const MISTAKEN_OWNER_INDEX = 3
 export function isSelfAuthSessionKeyOwnerContext(params: {
   sessionKeyOwner?: boolean
   ownerIndex?: number | null
+  passkeyFirstOwner?: boolean
 }): boolean {
+  if (params.passkeyFirstOwner) return false
   return (
     params.sessionKeyOwner === true ||
     params.ownerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX
   )
+}
+
+export function isSelfAuthPasskeyOwnerContext(params: {
+  passkeyFirstOwner?: boolean
+  ownerIndex?: number | null
+}): boolean {
+  return (
+    params.passkeyFirstOwner === true ||
+    params.ownerIndex === SELF_AUTH_PASSKEY_OWNER_INDEX
+  )
+}
+
+/** Passkey owners store a 64-byte WebAuthn pubkey, not a 20-byte address word. */
+export function isCswWebAuthnOwnerBytes(ownerBytes: Hex): boolean {
+  const byteLength = (ownerBytes.length - 2) / 2
+  // EOA owners are a single 32-byte ABI word; passkey pubkeys are 64 bytes on-chain.
+  if (byteLength === 32) {
+    try {
+      decodeAbiParameters([{ type: 'address' }], ownerBytes)
+      return false
+    } catch {
+      return false
+    }
+  }
+  return byteLength >= 64
 }
 
 export function assertOwnerIndexAllowedForSelfAuthPart1(params: {
@@ -105,7 +138,7 @@ export type SelfAuthValidateUserOpPreflight = {
   ownerIndex: number | null
 }
 
-/** WebAuthn / passkey wrapper (owner slot 0) — invalid for session-key Relay Part 1. */
+/** WebAuthn / passkey wrapper (owner slot 0). Rejected on session-key Part 1; required on passkey-first Part 1. */
 export function isSelfAuthPasskeyOwnerSignature(signature: Hex): boolean {
   const classification = classifyWebAuthnOwnerSignature(signature)
   if (classification.ok) return true
@@ -135,10 +168,12 @@ export function shouldRejectSelfAuthSignatureForSessionKeyLane(params: {
   parsedOwnerIndex: number | null
   ownerDiscovery?: SelfAuthOwnerDiscovery
 }): boolean {
+  if (params.ownerDiscovery?.passkeyFirstOwner) return false
   if (
     !isSelfAuthSessionKeyOwnerContext({
       sessionKeyOwner: params.sessionKeyOwner,
       ownerIndex: params.parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
+      passkeyFirstOwner: params.ownerDiscovery?.passkeyFirstOwner,
     })
   ) {
     return false
@@ -224,7 +259,14 @@ export async function resolveCswOwnerIndexForEoaAddress(params: {
 export function listSelfAuthPreparedCallsSignaturePayloadModes(params: {
   parsedOwnerIndex: number | null
   sessionKeyOwner?: boolean
+  passkeyFirstOwner?: boolean
 }): PreparedCallsSignaturePayloadMode[] {
+  if (
+    params.passkeyFirstOwner ||
+    (params.parsedOwnerIndex === SELF_AUTH_PASSKEY_OWNER_INDEX && !params.sessionKeyOwner)
+  ) {
+    return ['full_wrapper_webauthn', 'auto', 'full_wrapper_secp256k1', 'inner_secp256k1']
+  }
   if (params.sessionKeyOwner || params.parsedOwnerIndex === SELF_AUTH_SESSION_KEY_OWNER_INDEX) {
     return ['inner_secp256k1', 'full_wrapper_secp256k1', 'auto']
   }
@@ -236,8 +278,14 @@ function recordSelfAuthOwnerDiscovery(params: {
   ownerIndex: number | null
   ownerSignerAddress: `0x${string}` | null
   sessionKeyOwner?: boolean
+  passkeyFirstOwner?: boolean
   appendEvent: (row: string) => void
 }): void {
+  if (params.passkeyFirstOwner) {
+    params.discovery.passkeyFirstOwner = true
+    params.discovery.sessionKeyOwner = false
+    params.appendEvent('relay_part1:discovered_passkey_first_owner=1')
+  }
   if (params.sessionKeyOwner) {
     params.discovery.sessionKeyOwner = true
     params.appendEvent('relay_part1:discovered_session_key_owner=1')
@@ -451,6 +499,12 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
   fundingCsw?: `0x${string}`
   /** When true (default for session-key / funding CSW), try CSW replaySafe hash first. */
   preferReplaySafeHash?: boolean
+  /**
+   * Chrome/Safari + Coinbase extension: session-key Part 1 should sign replaySafe
+   * typed data first; entrypoint-hash prompts delegate ephemeral keys.
+   */
+  preferReplaySafeForSessionKey?: boolean
+  passkeyFirstOwner?: boolean
 }): Array<{ hash: Hex; mode: string }> {
   const primary = resolveSelfFundedSignHashAfterPaymasterStrip(params)
   const parsed = parseWalletPreparedUserOpV06(params.preparedUserOp)
@@ -473,7 +527,24 @@ export function listSelfAuthBundlerSignHashCandidates(params: {
     candidates.push(entry)
   }
 
+  if (params.passkeyFirstOwner) {
+    // Part 2 golden (org.toshi) validates via getUserOpHashWithoutChainId — lead with that for passkey Part 1.
+    pushUnique({ hash: withoutChainId, mode: 'entrypoint_v06_no_chain_passkey_primary' })
+    pushUnique(primary)
+    if (primary.hash.toLowerCase() !== withChainId.toLowerCase()) {
+      pushUnique({ hash: withChainId, mode: 'entrypoint_v06_chain_passkey_fallback' })
+    }
+    if (replaySafeHash) {
+      pushUnique({ hash: replaySafeHash, mode: 'csw_replay_safe_passkey_fallback' })
+    }
+    return candidates
+  }
+
   if (params.sessionKeyOwner) {
+    if (params.preferReplaySafeForSessionKey && replaySafeHash) {
+      pushUnique({ hash: replaySafeHash, mode: 'csw_replay_safe_external_browser_primary' })
+    }
+
     // validateUserOp checks raw EntryPoint userOpHash (not replaySafe). Try that domain first.
     if (
       primary.mode === 'entrypoint_v06_chain' ||
@@ -536,6 +607,7 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
   fundingCsw?: `0x${string}` | null
   /** When true, prefer delegated session-key EOA before ownerAtIndex bytes. */
   sessionKeyOwner?: boolean
+  passkeyFirstOwner?: boolean
 }): Array<{ address: `0x${string}`; mode: string }> {
   const candidates: Array<{ address: `0x${string}`; mode: string }> = []
   const pushUnique = (address: `0x${string}` | null | undefined, mode: string) => {
@@ -543,6 +615,11 @@ export function listSelfAuthPreparedCallsSignerAddressCandidates(params: {
     const normalized = getAddress(address)
     if (candidates.some((candidate) => candidate.address.toLowerCase() === normalized.toLowerCase())) return
     candidates.push({ address: normalized, mode })
+  }
+
+  if (params.passkeyFirstOwner) {
+    pushUnique(params.fundingCsw ?? null, 'funding_csw_passkey')
+    return candidates
   }
 
   if (params.sessionKeyOwner) {
@@ -686,6 +763,7 @@ async function ensureSelfAuthWalletAuthorized(params: {
   appendEvent: (row: string) => void
   /** Base App session-key CSWs often expose a delegated EOA in eth_accounts, not the CSW. */
   sessionKeyOwner?: boolean
+  passkeyFirstOwner?: boolean
 }): Promise<void> {
   const expected = getAddress(params.fundingCsw)
   try {
@@ -697,7 +775,7 @@ async function ensureSelfAuthWalletAuthorized(params: {
     }
     if (!normalized.includes(expected.toLowerCase())) {
       params.appendEvent(`relay_part1:warn funding_csw_not_in_authorized_accounts expected=${expected}`)
-      if (params.sessionKeyOwner) {
+      if (params.sessionKeyOwner || params.passkeyFirstOwner) {
         params.appendEvent('relay_part1:session_key_skip_strict_account_match=1')
         return
       }
@@ -735,15 +813,20 @@ type SelfAuthSignMethod =
 
 export function listSelfAuthSignMethods(params: {
   sessionKeyOwner: boolean
+  passkeyFirstOwner?: boolean
   parsedOwnerIndex: number | null
   bundlerOnly?: boolean
   sessionKeySignerAddress?: `0x${string}` | null
   /** When replay-safe, prefer CSW EIP-712 (sukanto) over raw-hash personal_sign. */
   hashMode?: string
 }): SelfAuthSignMethod[] {
+  if (params.passkeyFirstOwner) {
+    return ['personal_sign_data_address', 'personal_sign_address_data', 'typed_data_v4_csw']
+  }
   const sessionKeyContext = isSelfAuthSessionKeyOwnerContext({
     sessionKeyOwner: params.sessionKeyOwner,
     ownerIndex: params.parsedOwnerIndex,
+    passkeyFirstOwner: params.passkeyFirstOwner,
   })
   if (sessionKeyContext && params.hashMode && isSelfAuthReplaySafeSignHashMode(params.hashMode)) {
     // Coinbase guidance: sign replaySafe via CoinbaseSmartWalletMessage typed data.
@@ -1110,6 +1193,7 @@ async function resolvePreparedCallsSignHash(params: {
   forceBundlerOnly?: boolean
   hadInjectedPaymaster?: boolean
   sessionKeyOwner?: boolean
+  passkeyFirstOwner?: boolean
   appendEvent: (row: string) => void
 }): Promise<Array<{ hash: Hex; mode: string }>> {
   if (!params.signAfterPaymasterStrip && !params.forceBundlerOnly) {
@@ -1123,8 +1207,10 @@ async function resolvePreparedCallsSignHash(params: {
     signatureRequestHash: params.signatureRequestHash,
     chainId: params.chainId,
     sessionKeyOwner: params.sessionKeyOwner,
+    passkeyFirstOwner: params.passkeyFirstOwner,
     fundingCsw: params.fundingCsw,
     preferReplaySafeHash: params.sessionKeyOwner ?? false,
+    preferReplaySafeForSessionKey: params.sessionKeyOwner && !params.passkeyFirstOwner && !isBaseAppInAppContext(),
   })
   params.appendEvent(`relay_part1:strip_paymaster_sign_mode=${candidates[0]?.mode ?? 'unknown'}`)
   if (candidates.length > 1) {
@@ -1171,6 +1257,7 @@ async function signSelfAuthPreparedUserOpOnce(params: {
   recoveredEip191Address: `0x${string}` | null
 }> {
   params.appendEvent(`relay_part1:sign_mode=${params.signMethod}`)
+  const passkeyFirstOwner = params.ownerDiscovery?.passkeyFirstOwner === true
   await ensureSelfAuthWalletAuthorized({
     walletRequest: params.walletRequest,
     fundingCsw: params.fundingCsw,
@@ -1178,7 +1265,9 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
       sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
       ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      passkeyFirstOwner,
     }),
+    passkeyFirstOwner,
   })
   const signature = await requestSelfAuthSignature({
     walletRequest: params.walletRequest,
@@ -1206,7 +1295,8 @@ async function signSelfAuthPreparedUserOpOnce(params: {
     if (
       guardOutcome.kind === 'ok' ||
       guardOutcome.kind === 'skipped_self_auth_session_key' ||
-      guardOutcome.kind === 'skipped_code_bearing'
+      guardOutcome.kind === 'skipped_code_bearing' ||
+      guardOutcome.kind === 'skipped_webauthn'
     ) {
       if (guardOutcome.kind === 'skipped_self_auth_session_key') {
         sessionKeyOwner = true
@@ -1284,9 +1374,11 @@ async function trySendPreparedCallsUserOp(params: {
 }): Promise<PreparedCallsSubmitOutcome> {
   const effectiveOwnerIndex =
     params.parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null
+  const passkeyFirstOwner = params.ownerDiscovery?.passkeyFirstOwner === true
   const payloadModes = listSelfAuthPreparedCallsSignaturePayloadModes({
     parsedOwnerIndex: effectiveOwnerIndex,
     sessionKeyOwner: params.sessionKeyOwner,
+    passkeyFirstOwner,
   })
   let resolvedOwnerAtIndexAddress: `0x${string}` | null = null
   if (effectiveOwnerIndex != null) {
@@ -1308,6 +1400,7 @@ async function trySendPreparedCallsUserOp(params: {
     resolvedOwnerAtIndexAddress,
     fundingCsw: params.fundingCsw,
     sessionKeyOwner: params.sessionKeyOwner,
+    passkeyFirstOwner,
   })
 
   const userOpPayload =
@@ -1396,6 +1489,25 @@ async function trySendPreparedCallsUserOp(params: {
 
 function formatUserOpRpcHexField(value: bigint): `0x${string}` {
   return `0x${value.toString(16)}`
+}
+
+async function readCswOwnerBytesAtIndex(params: {
+  publicClient: PublicClient
+  fundingCsw: `0x${string}`
+  ownerIndex: number
+}): Promise<Hex | null> {
+  try {
+    const ownerBytes = await params.publicClient.readContract({
+      address: params.fundingCsw,
+      abi: CSW_OWNER_READ_ABI,
+      functionName: 'ownerAtIndex',
+      args: [BigInt(params.ownerIndex)],
+    })
+    if (typeof ownerBytes !== 'string' || !ownerBytes.startsWith('0x')) return null
+    return ownerBytes as Hex
+  } catch {
+    return null
+  }
 }
 
 async function readCswOwnerAddressAtIndex(params: {
@@ -1666,6 +1778,7 @@ async function sendSignedPreparedUserOp(params: {
   customOwnerPolicyToken?: string | null
 }): Promise<`0x${string}`> {
   const effectiveStrip = params.signAfterPaymasterStrip || Boolean(params.forceBundlerOnly)
+  const passkeyFirstOwner = params.ownerDiscovery?.passkeyFirstOwner === true
   const hashCandidates = await resolvePreparedCallsSignHash({
     preparedUserOpRaw: params.preparedUserOpRaw,
     signatureRequestHash: params.signatureRequestHash,
@@ -1677,7 +1790,9 @@ async function sendSignedPreparedUserOp(params: {
     sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
       sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
       ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      passkeyFirstOwner,
     }),
+    passkeyFirstOwner,
     appendEvent: params.appendEvent,
   })
 
@@ -1695,7 +1810,9 @@ async function sendSignedPreparedUserOp(params: {
       sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
         sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
         ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+        passkeyFirstOwner,
       }),
+      passkeyFirstOwner,
       parsedOwnerIndex: params.ownerDiscovery?.ownerIndex ?? null,
       sessionKeySignerAddress: params.ownerDiscovery?.ownerSignerAddress ?? null,
       bundlerOnly: true,
@@ -1753,10 +1870,13 @@ async function sendSignedPreparedUserOp(params: {
         continue
       }
 
-      let sessionKeyOwner = isSelfAuthSessionKeyOwnerContext({
-        sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
-        ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
-      })
+      let sessionKeyOwner =
+        !passkeyFirstOwner &&
+        isSelfAuthSessionKeyOwnerContext({
+          sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
+          ownerIndex: parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? null,
+          passkeyFirstOwner,
+        })
 
       if (
         shouldRejectSelfAuthSignatureForSessionKeyLane({
@@ -1767,14 +1887,27 @@ async function sendSignedPreparedUserOp(params: {
         })
       ) {
         params.appendEvent('relay_part1:reject_passkey_sig_session_key_lane=1')
-        lastSignatureError = new Error(PASSKEY_SIGNATURE_REJECTED_ERROR)
-        continue
+        throw new Error(
+          'Base App signed Relay Part 1 with your passkey (owner slot 0). This deposit must be signed by the session key at owner slot 2. Force-close Base App, reopen /waitlist?setup=owner-install, rebuild the preview, and retry Enable 4626 signing.',
+        )
       }
 
       const entryPointHash = entryPointUserOpHash
       let alignedRecoveredInnerSigner: `0x${string}` | null = null
       const sukantoReplaySafeLane = sessionKeyOwner && isSelfAuthReplaySafeSignHashMode(input.hashMode)
-      if (sessionKeyOwner) {
+
+      if (passkeyFirstOwner) {
+        parsedOwnerIndex = SELF_AUTH_PASSKEY_OWNER_INDEX
+        preparedCallsSignerAddress = params.fundingCsw
+        if (!isSelfAuthPasskeyOwnerSignature(signature)) {
+          params.appendEvent('relay_part1:skip_submit_non_passkey_sig=1')
+          lastSignatureError = new Error(
+            'Expected a Coinbase passkey (owner slot 0) signature for Relay Part 1. Approve with Face ID / fingerprint in Base App or Coinbase Wallet.',
+          )
+          continue
+        }
+        params.appendEvent('relay_part1:passkey_owner_signature=1')
+      } else if (sessionKeyOwner) {
         const preferredOwnerIndex =
           params.ownerDiscovery?.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX
         const aligned = await alignSelfAuthSessionKeySignature({
@@ -1826,10 +1959,13 @@ async function sendSignedPreparedUserOp(params: {
         appendEvent: params.appendEvent,
       })
       const expectedOwnerIndex =
-        parsedOwnerIndex ?? params.ownerDiscovery?.ownerIndex ?? SELF_AUTH_SESSION_KEY_OWNER_INDEX
+        parsedOwnerIndex ??
+        params.ownerDiscovery?.ownerIndex ??
+        (passkeyFirstOwner ? SELF_AUTH_PASSKEY_OWNER_INDEX : SELF_AUTH_SESSION_KEY_OWNER_INDEX)
       const sessionKeyEcdsaOk =
         sessionKeyOwner && isSelfAuthSessionKeyEcdsaSignature(signature, expectedOwnerIndex)
-      if (!onChainSignatureOk && !sessionKeyEcdsaOk) {
+      const passkeySigOk = passkeyFirstOwner && isSelfAuthPasskeyOwnerSignature(signature)
+      if (!onChainSignatureOk && !sessionKeyEcdsaOk && !passkeySigOk) {
         params.appendEvent(`relay_part1:skip_submit_invalid_onchain_sig mode=${signMethod}`)
         lastSignatureError = new Error('On-chain isValidSignature preflight rejected signature')
         continue
@@ -1837,6 +1973,11 @@ async function sendSignedPreparedUserOp(params: {
       if (!onChainSignatureOk && sessionKeyEcdsaOk) {
         params.appendEvent(
           `relay_part1:onchain_sig_preflight=advisory_invalid_session_key mode=${signMethod}`,
+        )
+      }
+      if (!onChainSignatureOk && passkeySigOk) {
+        params.appendEvent(
+          `relay_part1:onchain_sig_preflight=advisory_invalid_passkey mode=${signMethod}`,
         )
       }
 
@@ -1852,6 +1993,7 @@ async function sendSignedPreparedUserOp(params: {
       const replaySafeSignHash = isSelfAuthReplaySafeSignHashMode(input.hashMode)
 
       if (
+        !passkeyFirstOwner &&
         sessionKeyOwner &&
         !replaySafeSignHash &&
         !validateUserOpOk &&
@@ -1867,16 +2009,30 @@ async function sendSignedPreparedUserOp(params: {
           params.appendEvent(
             `relay_part1:substituted_signer=${validateUserOpPreflight.recovered}`,
           )
-          throw buildBaseAppSubstitutedSignerError(validateUserOpPreflight.recovered)
+          if (isBaseAppInAppContext()) {
+            throw buildBaseAppSubstitutedSignerError(validateUserOpPreflight.recovered)
+          }
+          params.appendEvent('relay_part1:substituted_signer_deferred_external_browser=1')
         }
       }
+
+      const externalDelegatedSessionKeySigner =
+        sessionKeyOwner &&
+        !isBaseAppInAppContext() &&
+        alignedRecoveredInnerSigner != null &&
+        isSelfAuthSessionKeyEcdsaSignature(signature, expectedOwnerIndex)
+
+      const passkeySubmitEligible =
+        passkeyFirstOwner && isSelfAuthPasskeyOwnerSignature(signature)
 
       const sessionKeySubmitEligible =
         sessionKeyOwner &&
         (validateUserOpOk ||
           (onChainSignatureOk && replaySafeSignHash) ||
-          (sessionKeyEcdsaOk && replaySafeSignHash))
-      const bundlerSubmitEligible = validateUserOpOk || (onChainSignatureOk && replaySafeSignHash)
+          (sessionKeyEcdsaOk && replaySafeSignHash) ||
+          externalDelegatedSessionKeySigner)
+      const bundlerSubmitEligible =
+        validateUserOpOk || (onChainSignatureOk && replaySafeSignHash) || passkeySubmitEligible
 
       if (bundlerSubmitEligible) {
         lastBundlerSignature = signature
@@ -1954,8 +2110,14 @@ async function sendSignedPreparedUserOp(params: {
         return null
       }
 
-      // Base App session keys: SDK packing with delegated EOA before raw bundler.
-      if (sukantoReplaySafeLane) {
+      // Passkey-first CSWs: WebAuthn (org.toshi) via prepared-calls before session-key lanes.
+      if (passkeySubmitEligible) {
+        params.appendEvent('relay_part1:lane=passkey_prepared_calls_primary')
+        const preparedTx = await submitPreparedCalls('passkey_primary')
+        if (preparedTx) {
+          return preparedTx
+        }
+      } else if (sukantoReplaySafeLane) {
         params.appendEvent('relay_part1:lane=sukanto_prepared_calls_primary')
         const preparedTx = await submitPreparedCalls('sukanto_prepared_primary')
         if (preparedTx) {
@@ -2108,7 +2270,15 @@ async function sendSignedPreparedUserOp(params: {
   }
   if (lastErrorMessage.includes(PASSKEY_SIGNATURE_REJECTED_ERROR)) {
     throw new Error(
-      'Base App signed Relay Part 1 with your passkey (owner slot 0). This deposit must be signed by the session key at owner slot 2. Force-close Base App, reopen /waitlist?setup=owner-install, rebuild the preview, and retry Enable 4626 signing. Part 2 still uses passkey approval — Part 1 must not.',
+      'Base App signed Relay Part 1 with your passkey (owner slot 0) on a session-key wallet layout. This wallet expects the session key at owner slot 2 for Part 1. Force-close Base App, reopen /waitlist?setup=owner-install, rebuild the preview, and retry Enable 4626 signing.',
+    )
+  }
+  if (
+    params.ownerDiscovery?.passkeyFirstOwner &&
+    lastErrorMessage.includes('Expected a Coinbase passkey')
+  ) {
+    throw new Error(
+      'Relay Part 1 requires your Coinbase passkey (owner slot 0). Approve the Face ID / fingerprint prompt in Base App or Coinbase Wallet, then retry Enable 4626 signing.',
     )
   }
   if (lastErrorMessage.includes('On-chain isValidSignature preflight rejected signature')) {
@@ -2198,23 +2368,44 @@ export function buildSelfFundedRelayPrepareCapabilities(
   }
 }
 
-async function discoverSelfAuthSessionKeyOwner(params: {
+async function discoverSelfAuthOwnerLayout(params: {
   publicClient: PublicClient
   fundingCsw: `0x${string}`
   ownerDiscovery: SelfAuthOwnerDiscovery
   appendEvent: (row: string) => void
 }): Promise<void> {
-  const sessionKeyOwnerAddress = await readCswOwnerAddressAtIndex({
+  const passkeyOwnerBytes = await readCswOwnerBytesAtIndex({
     publicClient: params.publicClient,
     fundingCsw: params.fundingCsw,
-    ownerIndex: SELF_AUTH_SESSION_KEY_OWNER_INDEX,
+    ownerIndex: SELF_AUTH_PASSKEY_OWNER_INDEX,
   })
-  if (sessionKeyOwnerAddress) {
-    params.ownerDiscovery.ownerIndex = SELF_AUTH_SESSION_KEY_OWNER_INDEX
-    params.ownerDiscovery.ownerSignerAddress = sessionKeyOwnerAddress
-    params.ownerDiscovery.sessionKeyOwner = true
-    params.appendEvent('relay_part1:preflight_session_key_owner=1')
-    params.appendEvent(`relay_part1:preflight_session_key_address=${sessionKeyOwnerAddress}`)
+  if (passkeyOwnerBytes && isCswWebAuthnOwnerBytes(passkeyOwnerBytes)) {
+    params.ownerDiscovery.ownerIndex = SELF_AUTH_PASSKEY_OWNER_INDEX
+    params.ownerDiscovery.passkeyFirstOwner = true
+    params.ownerDiscovery.sessionKeyOwner = false
+    params.ownerDiscovery.ownerSignerAddress = null
+    params.appendEvent('relay_part1:preflight_passkey_first_csw=1')
+    recordSelfAuthOwnerDiscovery({
+      discovery: params.ownerDiscovery,
+      ownerIndex: SELF_AUTH_PASSKEY_OWNER_INDEX,
+      ownerSignerAddress: null,
+      passkeyFirstOwner: true,
+      appendEvent: params.appendEvent,
+    })
+  } else {
+    const sessionKeyOwnerAddress = await readCswOwnerAddressAtIndex({
+      publicClient: params.publicClient,
+      fundingCsw: params.fundingCsw,
+      ownerIndex: SELF_AUTH_SESSION_KEY_OWNER_INDEX,
+    })
+    if (sessionKeyOwnerAddress) {
+      params.ownerDiscovery.ownerIndex = SELF_AUTH_SESSION_KEY_OWNER_INDEX
+      params.ownerDiscovery.ownerSignerAddress = sessionKeyOwnerAddress
+      params.ownerDiscovery.sessionKeyOwner = true
+      params.ownerDiscovery.passkeyFirstOwner = false
+      params.appendEvent('relay_part1:preflight_session_key_owner=1')
+      params.appendEvent(`relay_part1:preflight_session_key_address=${sessionKeyOwnerAddress}`)
+    }
   }
 
   const mistakenOwnerAddress = await readCswOwnerAddressAtIndex({
@@ -2259,7 +2450,9 @@ async function submitViaPreparedCallsSelfFunded(params: {
     sessionKeyOwner: isSelfAuthSessionKeyOwnerContext({
       sessionKeyOwner: params.ownerDiscovery?.sessionKeyOwner,
       ownerIndex: params.ownerDiscovery?.ownerIndex ?? null,
+      passkeyFirstOwner: params.ownerDiscovery?.passkeyFirstOwner,
     }),
+    passkeyFirstOwner: params.ownerDiscovery?.passkeyFirstOwner,
   })
 
   await assertSelfFundedPrefundBudget({
@@ -2387,9 +2580,10 @@ export async function submitSelfAuthRelayPart1SelfFunded(params: {
     ownerIndex: null,
     ownerSignerAddress: null,
     sessionKeyOwner: false,
+    passkeyFirstOwner: false,
   }
 
-  await discoverSelfAuthSessionKeyOwner({
+  await discoverSelfAuthOwnerLayout({
     publicClient: params.publicClient,
     fundingCsw: params.fundingCsw,
     ownerDiscovery,
