@@ -3,12 +3,9 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { encodeFunctionData, getAddress } from 'viem'
 import {
   Apple,
   CheckCircle2,
@@ -28,14 +25,11 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
-import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
-import { CSW_OWNER_MUTATION_ABI } from '@/lib/wallet/cswOwnerAbi'
 
 const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
   email: Mail,
@@ -84,17 +78,6 @@ const ZORA_PROFILE_BASE = 'https://zora.co/'
 function shortAddr(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function isAddressLike(value: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/i.test(value.trim())
-}
-
-function formatEth(value: bigint): string {
-  const asEth = Number(value) / 1e18
-  if (!Number.isFinite(asEth)) return '0'
-  if (asEth >= 0.01) return asEth.toFixed(4).replace(/\.?0+$/, '')
-  return asEth.toFixed(6).replace(/\.?0+$/, '')
 }
 
 function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): string | null {
@@ -185,7 +168,6 @@ export function AccountSetupWorkspaceView(props: {
     providerCollision,
     readableCswOwners,
     zoraCrossAppCount,
-    requiresBaseAppForOwnerInstall,
     zoraLinked,
   } = controller
   const copyAddress = useCallback((addr: string) => {
@@ -205,15 +187,7 @@ export function AccountSetupWorkspaceView(props: {
   const walletStepComplete = Boolean(canonicalCswAddress)
   const stepOneComplete = zoraStepComplete && walletStepComplete
   const ownerInstallPathActive = ownerInstallResumeState.requested
-  const {
-    signingStepComplete,
-    parentEmbeddedOwnerOnChain,
-    refreshParentEmbeddedOwner,
-  } = useWaitlistSigningStepComplete({
-    accountSignals: me?.accountSignals,
-    canonicalCswAddress,
-    ownerInstallRequested: ownerInstallPathActive,
-  })
+  const signingStepComplete = me?.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
 
   useEffect(() => {
     onSigningStepCompleteChange?.(signingStepComplete)
@@ -1124,81 +1098,16 @@ function WaitlistAdvancedSection({
   label?: string
 }) {
   const [open, setOpen] = useState(false)
-  const [rabbyOpen, setRabbyOpen] = useState(false)
-  const [rabbyAddress, setRabbyAddress] = useState('')
   const {
-    advancedBusy,
     busyProvider,
     canShowAdvanced,
-    canonicalCswAddress,
-    customOwnerGasPreflight,
-    customOwnerPreparedAddress,
-    customOwnerPreparedTxRequest,
-    ownerInstallIntent,
     providerCards,
     onLinkProvider,
     onUnlinkProvider,
-    onAddRabbyCoOwner,
     telegramLaunchParamsAvailable,
   } = controller
-  const normalizedRabbyAddress = useMemo(() => {
-    const raw = rabbyAddress.trim()
-    return isAddressLike(raw) ? raw.toLowerCase() : null
-  }, [rabbyAddress])
-  const rabbyOwnerAddCalldata = useMemo(() => {
-    if (!normalizedRabbyAddress) return null
-    try {
-      return encodeFunctionData({
-        abi: CSW_OWNER_MUTATION_ABI,
-        functionName: 'addOwnerAddress',
-        args: [getAddress(normalizedRabbyAddress) as `0x${string}`],
-      })
-    } catch {
-      return null
-    }
-  }, [normalizedRabbyAddress])
-  const preparedOwnerTxForAddress = useMemo(() => {
-    if (!customOwnerPreparedTxRequest || !customOwnerPreparedAddress || !normalizedRabbyAddress) return null
-    if (customOwnerPreparedAddress.toLowerCase() !== normalizedRabbyAddress.toLowerCase()) return null
-    return customOwnerPreparedTxRequest
-  }, [customOwnerPreparedAddress, customOwnerPreparedTxRequest, normalizedRabbyAddress])
-  const prolinkCallTarget = preparedOwnerTxForAddress?.to ?? canonicalCswAddress ?? null
-  const prolinkCallData = preparedOwnerTxForAddress?.data ?? rabbyOwnerAddCalldata
-  const prolinkCallValue = preparedOwnerTxForAddress?.value ?? '0x0'
-  const rabbyProlinkSourceLabel = preparedOwnerTxForAddress
-    ? 'Base App prolink (exact backend-prepared call)'
-    : 'Base App prolink (local preview call)'
-  const rabbyOwnerAddProlinkQuery = useQuery({
-    queryKey: [
-      'waitlist-advanced',
-      'custom-owner-prolink',
-      prolinkCallTarget,
-      normalizedRabbyAddress,
-      prolinkCallData,
-      prolinkCallValue,
-      preparedOwnerTxForAddress ? 'prepared' : 'preview',
-    ],
-    queryFn: async () => {
-      if (!prolinkCallTarget || !prolinkCallData) return null
-      return await encodeSingleCallSendCallsProlink({
-        from: canonicalCswAddress ?? prolinkCallTarget,
-        to: prolinkCallTarget,
-        data: prolinkCallData,
-        value: prolinkCallValue,
-      })
-    },
-    enabled: Boolean(rabbyOpen && prolinkCallTarget && normalizedRabbyAddress && prolinkCallData),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  })
-  const rabbyOwnerAddProlinkUrl = useMemo(() => {
-    if (!rabbyOwnerAddProlinkQuery.data) return null
-    try {
-      return buildBaseAppProlinkUrl(rabbyOwnerAddProlinkQuery.data)
-    } catch {
-      return null
-    }
-  }, [rabbyOwnerAddProlinkQuery.data])
+
+  if (!canShowAdvanced) return null
 
   return (
     <div className="w-full">
@@ -1284,104 +1193,6 @@ function WaitlistAdvancedSection({
               })}
             </ul>
           </div>
-
-          {/* Advanced owner actions — nested disclosure, gated on canonical CSW */}
-          {canShowAdvanced ? (
-            <div className="border-t border-white/[0.05] pt-3">
-              <button
-                type="button"
-                onClick={() => setRabbyOpen((prev) => !prev)}
-                className="group flex w-full items-center justify-between gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
-                aria-expanded={rabbyOpen}
-              >
-                <span>Advanced owner actions</span>
-                <ChevronRight
-                  className={`h-3.5 w-3.5 transition-transform duration-150 ${rabbyOpen ? 'rotate-90' : ''}`}
-                  aria-hidden="true"
-                />
-              </button>
-              {rabbyOpen ? (
-                <div className="mt-2.5 space-y-2">
-                  <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). 4626 will use sponsored
-                    smart-wallet approval when policy context is available.
-                  </p>
-                  {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight ? (
-                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10.5px] text-zinc-300">
-                      <div>Signer: <span className="font-mono text-zinc-200">{shortAddr(customOwnerGasPreflight.payerAddress)}</span></div>
-                      <div className="mt-0.5">Estimated gas: <span className="font-mono text-zinc-200">{customOwnerGasPreflight.estimatedGas.toString()}</span></div>
-                      <div className="mt-0.5">
-                        Required: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.requiredWei)} ETH</span>
-                        {' '}| Balance: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.balanceWei)} ETH</span>
-                      </div>
-                    </div>
-                  ) : null}
-                  <p className="text-[10.5px] leading-relaxed text-zinc-500">
-                    {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight
-                      ? 'Fallback path is direct transaction approval. If Base App shows insufficient funds, fund the signer wallet on Base and retry Add co-owner.'
-                      : 'If sponsorship is denied, the error will include diagnostics so you can retry with the same signed-in wallet session.'}
-                  </p>
-                  <input
-                    value={rabbyAddress}
-                    onChange={(event) => setRabbyAddress(event.target.value)}
-                    placeholder="0x…"
-                    className="w-full rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 font-mono text-[11.5px] text-white placeholder:text-zinc-700 outline-none focus:border-brand-primary/40"
-                  />
-                  {rabbyOwnerAddProlinkQuery.isLoading ? (
-                    <div className="text-[10.5px] text-zinc-500">Encoding Base App prolink…</div>
-                  ) : rabbyOwnerAddProlinkQuery.data ? (
-                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 space-y-2">
-                      <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-                        {rabbyProlinkSourceLabel}
-                      </div>
-                      {rabbyOwnerAddProlinkUrl ? (
-                        <a
-                          href={rabbyOwnerAddProlinkUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2 py-1 text-[10px] text-brand-100 hover:bg-brand-primary/20"
-                        >
-                          Open in Base App <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : null}
-                      <div className="flex items-start gap-2">
-                        <span className="font-mono text-[10px] break-all text-zinc-300">{rabbyOwnerAddProlinkQuery.data}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            void (async () => {
-                              try {
-                                if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-                                  await navigator.clipboard.writeText(rabbyOwnerAddProlinkQuery.data ?? '')
-                                }
-                              } catch {
-                                // ignore
-                              }
-                            })()
-                          }}
-                          className="shrink-0 rounded-md border border-white/10 bg-black/25 px-2 py-1 text-[10px] text-zinc-300 hover:bg-black/40"
-                        >
-                          Copy
-                        </button>
-                      </div>
-                    </div>
-                  ) : rabbyOwnerAddProlinkQuery.error ? (
-                    <div className="text-[10.5px] text-amber-300">
-                      Prolink unavailable: {(rabbyOwnerAddProlinkQuery.error as Error)?.message}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    disabled={advancedBusy || rabbyAddress.trim().length === 0}
-                    onClick={() => void onAddRabbyCoOwner(rabbyAddress)}
-                    className="inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-[11.5px] text-zinc-300 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
-                  >
-                    {advancedBusy ? 'Preparing…' : 'Add co-owner'}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
         </div>
       ) : null}
     </div>

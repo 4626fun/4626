@@ -3,7 +3,7 @@ import { useCallback, useRef, type MutableRefObject } from 'react'
 import { apiFetch } from '@/lib/api/apiBase'
 import { clearStoredWaitlistReferralCode } from '@/lib/auth/waitlistEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'
+import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingBootstrapTypes'
 
 import { mergeCanonicalWaitlistAccount, resolveWaitlistStep, type WaitlistStep } from './waitlistFlowState'
 import { isRecoveryRequiredAuthError } from './waitlistAuthState'

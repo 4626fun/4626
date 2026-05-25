@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
+import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
 /**

@@ -60,7 +60,7 @@ import { recordUserOpTelemetry, type UserOpTelemetrySample } from './coinbaseErc
 import {
   hexByteLength,
   parseCoinbaseSignatureWrapper,
-} from '@/lib/wallet/onboardingWalletReplayable'
+} from '@/lib/wallet/coinbaseSignatureWrapper'
 
 // ============================================================================
 // ENTRYPOINT v0.6 ENFORCEMENT

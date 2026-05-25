@@ -18,7 +18,7 @@ import {
 import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
-import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
+import type { ApiEnvelope } from '@/lib/wallet/onboardingBootstrapTypes'
 
 import {
   type WaitlistStep,
