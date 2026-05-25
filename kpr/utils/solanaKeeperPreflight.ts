@@ -11,6 +11,10 @@ import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
 
 import { requireEnv, parseDotenvJsonObject } from '../config.js';
+import {
+  CANONICAL_SOLANA_BRIDGE_ADAPTER,
+  normalizeSolanaBridgeAdapter,
+} from './solanaCanonicalAddresses.js';
 import { solanaPubkeyToBytes32 } from './solana.js';
 
 export const BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as const;
@@ -85,7 +89,13 @@ export async function collectKeeperBaseWritePreflight(): Promise<KeeperBaseWrite
   const blockers: string[] = [];
   const warnings: string[] = [];
 
-  const adapter = requireEnv('SOLANA_BRIDGE_ADAPTER') as Address;
+  const adapterRaw = requireEnv('SOLANA_BRIDGE_ADAPTER');
+  const adapter = normalizeSolanaBridgeAdapter(adapterRaw) as Address;
+  if (adapterRaw.trim().toLowerCase() !== adapter.toLowerCase()) {
+    warnings.push(
+      `SOLANA_BRIDGE_ADAPTER ${adapterRaw} is deprecated; using canonical ${CANONICAL_SOLANA_BRIDGE_ADAPTER}`,
+    );
+  }
   const keeperPubkey = requireEnv('SOLANA_KEEPER_PUBKEY');
   const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
   const client = basePublicClient();

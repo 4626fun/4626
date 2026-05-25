@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 # Build a minimal solana-keeper-orchestrator env from kpr/.env (KPR_* / SOLANA_* only).
-#
-# Usage on Vultr:
 #   cd /opt/4626
 #   sudo bash kpr/deploy/seed-solana-orchestrator-env.sh \
 #     --source /opt/4626/kpr/.env \
@@ -119,6 +117,39 @@ quote_json_if_needed() {
   printf "'%s'" "${raw}"
 }
 
+CANONICAL_SOLANA_BRIDGE_ADAPTER="0x700b4BBAf965c013123bAd02a6562FBa487aC0f1"
+CANONICAL_LOTTERY_MANAGER="0x5c0115589d7F4930A0dc93417aE409f44186f4E7"
+DEPRECATED_SOLANA_ADAPTERS="0x2414b595c4f18532A5836B6e2E6d536832c572e8|0x3a9dC0b2c11b348E4bD60D9605dc3D4Be9bB6cf5|0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00"
+DEPRECATED_LOTTERY_MANAGERS="0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3"
+
+normalize_solana_bridge_adapter() {
+  local raw="$1"
+  if [[ -z "${raw}" ]]; then
+    printf '%s' "${CANONICAL_SOLANA_BRIDGE_ADAPTER}"
+    return
+  fi
+  if echo "${raw}" | grep -Eiq "${DEPRECATED_SOLANA_ADAPTERS}"; then
+    echo "note: overriding deprecated SOLANA_BRIDGE_ADAPTER ${raw} -> ${CANONICAL_SOLANA_BRIDGE_ADAPTER}" >&2
+    printf '%s' "${CANONICAL_SOLANA_BRIDGE_ADAPTER}"
+    return
+  fi
+  printf '%s' "${raw}"
+}
+
+normalize_lottery_manager() {
+  local raw="$1"
+  if [[ -z "${raw}" ]]; then
+    printf '%s' "${CANONICAL_LOTTERY_MANAGER}"
+    return
+  fi
+  if echo "${raw}" | grep -Eiq "${DEPRECATED_LOTTERY_MANAGERS}"; then
+    echo "note: overriding deprecated LOTTERY_MANAGER ${raw} -> ${CANONICAL_LOTTERY_MANAGER}" >&2
+    printf '%s' "${CANONICAL_LOTTERY_MANAGER}"
+    return
+  fi
+  printf '%s' "${raw}"
+}
+
 BASE_RPC_URL="$(require_from_source BASE_RPC_URL)"
 SOLANA_RPC_URL="$(require_from_source SOLANA_RPC_URL)"
 SOLANA_PROGRAM_ID="$(require_from_source SOLANA_PROGRAM_ID)"
@@ -127,15 +158,9 @@ SOLANA_KEEPER_PUBKEY="$(require_from_source SOLANA_KEEPER_PUBKEY)"
 SOLANA_CREATOR_MINTS="$(require_from_source SOLANA_CREATOR_MINTS)"
 KPR_PRIVATE_KEY="$(optional_from_source KPR_PRIVATE_KEY)"
 
-SOLANA_BRIDGE_ADAPTER="$(optional_from_source SOLANA_BRIDGE_ADAPTER)"
-if [[ -z "${SOLANA_BRIDGE_ADAPTER}" ]]; then
-  SOLANA_BRIDGE_ADAPTER="0x700b4BBAf965c013123bAd02a6562FBa487aC0f1"
-fi
+SOLANA_BRIDGE_ADAPTER="$(normalize_solana_bridge_adapter "$(optional_from_source SOLANA_BRIDGE_ADAPTER)")"
 
-LOTTERY_MANAGER="$(optional_from_source LOTTERY_MANAGER)"
-if [[ -z "${LOTTERY_MANAGER}" ]]; then
-  LOTTERY_MANAGER="0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626"
-fi
+LOTTERY_MANAGER="$(normalize_lottery_manager "$(optional_from_source LOTTERY_MANAGER)")"
 
 SHARE_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_SHARE_OFT_MAPPING)")"
 CREATOR_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_CREATOR_COIN_TO_MINT_MAPPING)")"

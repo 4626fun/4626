@@ -1,9 +1,10 @@
 #!/usr/bin/env tsx
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { timingSafeEqual } from 'node:crypto'
-import { config } from 'dotenv'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { loadKeeperEnv } from './utils/loadKeeperEnv.js'
 
 import { executeSolanaRelayEntries } from './actions/keepr-solana-relay-entries.action.js'
 import { executeSolanaFeeSettlement } from './actions/keepr-solana-settle-fees.action.js'
@@ -13,7 +14,7 @@ import { executeSolanaGraduation } from './actions/keepr-solana-graduation.actio
 import { executeSolanaRebalance } from './actions/keepr-solana-rebalance.action.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: resolve(__dirname, '.env') })
+loadKeeperEnv()
 
 type ReconcileBody = {
   workflow?: string

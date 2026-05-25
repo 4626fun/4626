@@ -5,14 +5,10 @@
  * Usage: pnpm -C kpr preflight-orchestrator
  */
 
-import { config } from 'dotenv';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-
 import { collectKeeperBaseWritePreflight } from '../../utils/solanaKeeperPreflight.js';
+import { loadKeeperEnv } from '../../utils/loadKeeperEnv.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: resolve(__dirname, '../../.env') });
+loadKeeperEnv();
 
 async function main() {
   const preflight = await collectKeeperBaseWritePreflight();
