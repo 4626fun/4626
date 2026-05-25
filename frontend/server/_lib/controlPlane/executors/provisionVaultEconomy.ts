@@ -1,10 +1,15 @@
 import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { ensureDeploySessionsSchema, type DeploySessionRecord } from '../../deploy/deploySessions.js'
 import {
+  buildKeeprConfig,
+  KeeprConfigBuildError,
+  normalizeKeeprAddress,
+  readKeeprString,
+} from '../../keepr/keeprConfigBuilder.js'
+import {
   computeConfigHash,
   getKeeprVaultByVaultAddress,
   upsertKeeprVault,
-  type KeeprConfigV1,
 } from '../../keepr/keeprRegistry.js'
 import { upsertKeeprVaultAutomation } from '../../keepr/keeprAutomation.js'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
@@ -12,7 +17,8 @@ import {
   enableCswAgent,
   getOrCreateCreatorXmtpAgent,
 } from '../../messaging/creatorXmtpAgents.js'
-import { mergeStrategyContracts, resolveStrategyProfile } from './strategyRegistry.js'
+import { enrichVaultArtifactsFromOnChain } from '../../onchain/vaultStrategyOnchain.js'
+import { resolveStrategyProfile } from './strategyRegistry.js'
 
 export class ProvisionVaultEconomyError extends Error {
   code: string
@@ -41,15 +47,6 @@ export type ProvisionVaultEconomyResult = {
   automationEnabled: boolean
   warnings: string[]
   deploySessionId?: string | null
-}
-
-function normalizeAddress(value: unknown): `0x${string}` | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  return /^0x[a-f0-9]{40}$/.test(raw) ? (raw as `0x${string}`) : null
-}
-
-function readString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
 }
 
 function isEnabled(): boolean {
@@ -123,57 +120,6 @@ function readArtifacts(session: DeploySessionRecord | null): Record<string, unkn
   return merged
 }
 
-function buildKeeprConfig(params: {
-  vaultAddress: `0x${string}`
-  chainId: number
-  creatorAddress: `0x${string}`
-  strategyVariant: string | null | undefined
-  artifacts: Record<string, unknown>
-  groupId: string
-  agentInboxId?: string | null
-}): KeeprConfigV1 {
-  const profile = resolveStrategyProfile(params.strategyVariant)
-  const shareTokenAddress =
-    normalizeAddress(params.artifacts.shareToken) ??
-    normalizeAddress(params.artifacts.shareTokenAddress) ??
-    normalizeAddress(params.artifacts.shareOFT)
-  const creatorCoinAddress =
-    normalizeAddress(params.artifacts.creatorCoin) ??
-    normalizeAddress(params.artifacts.creatorCoinAddress) ??
-    normalizeAddress(params.artifacts.creatorToken)
-  if (!creatorCoinAddress) {
-    throw new ProvisionVaultEconomyError('creator_coin_address_missing', {
-      code: 'creator_coin_address_missing',
-      retryable: false,
-    })
-  }
-  return {
-    version: 1,
-    chainId: params.chainId,
-    vault: {
-      vaultAddress: params.vaultAddress,
-      creatorCoinAddress,
-      canonicalOwnerAddress: params.creatorAddress,
-      ...(shareTokenAddress ? { shareTokenAddress } : null),
-    },
-    xmtp: {
-      groupId: params.groupId,
-      ...(params.agentInboxId ? { agentInboxId: params.agentInboxId } : null),
-    },
-    gating: {
-      enabled: true,
-      joinLocked: false,
-      mode: 'shares',
-      thresholds: { minShares: '1' },
-      failClosed: true,
-    },
-    roles: {
-      owner: params.creatorAddress,
-    },
-    contracts: mergeStrategyContracts(profile, params.artifacts),
-  }
-}
-
 export async function provisionVaultEconomy(
   input: ProvisionVaultEconomyInput,
 ): Promise<ProvisionVaultEconomyResult> {
@@ -199,12 +145,20 @@ export async function provisionVaultEconomy(
   }
 
   const session = await findDeploySessionByVaultAddress(vaultAddress)
-  const artifacts = readArtifacts(session)
+  let artifacts = readArtifacts(session)
+  const enriched = await enrichVaultArtifactsFromOnChain({
+    vaultAddress,
+    chainId,
+    artifacts,
+  })
+  artifacts = enriched.artifacts
+  warnings.push(...enriched.warnings)
+
   const creatorAddress =
-    normalizeAddress(input.creatorAddress) ??
-    normalizeAddress(artifacts.creatorAddress) ??
-    normalizeAddress(session?.smartWallet) ??
-    normalizeAddress(artifacts.owner)
+    normalizeKeeprAddress(input.creatorAddress) ??
+    normalizeKeeprAddress(artifacts.creatorAddress) ??
+    normalizeKeeprAddress(session?.smartWallet) ??
+    normalizeKeeprAddress(artifacts.owner)
   if (!creatorAddress) {
     throw new ProvisionVaultEconomyError('creator_address_missing', {
       code: 'creator_address_missing',
@@ -212,11 +166,13 @@ export async function provisionVaultEconomy(
     })
   }
   if (!session) {
-    warnings.push('deploy_session_not_found_using_request_fields')
+    warnings.push('deploy_session_not_found_using_onchain_fields')
   }
 
-  let groupId = readString(artifacts.groupId) || readString((artifacts.xmtp as Record<string, unknown> | undefined)?.groupId)
-  let agentInboxId = readString((artifacts.xmtp as Record<string, unknown> | undefined)?.agentInboxId) || null
+  let groupId =
+    readKeeprString(artifacts.groupId) ||
+    readKeeprString((artifacts.xmtp as Record<string, unknown> | undefined)?.groupId)
+  let agentInboxId = readKeeprString((artifacts.xmtp as Record<string, unknown> | undefined)?.agentInboxId) || null
 
   if (!groupId) {
     groupId = `control-plane:${vaultAddress}:${Date.now()}`
@@ -236,7 +192,7 @@ export async function provisionVaultEconomy(
         const cswRow = await enableCswAgent({
           creatorAddress,
           cswAddress: creatorAddress,
-          privyWalletId: readString(artifacts.privyWalletId) || 'control-plane-bootstrap',
+          privyWalletId: readKeeprString(artifacts.privyWalletId) || 'control-plane-bootstrap',
           listedPublicly: true,
         })
         agentInboxId = cswRow.xmtpAgentAddress
@@ -246,15 +202,26 @@ export async function provisionVaultEconomy(
     }
   }
 
-  const config = buildKeeprConfig({
-    vaultAddress,
-    chainId,
-    creatorAddress,
-    strategyVariant: input.strategyVariant,
-    artifacts,
-    groupId,
-    agentInboxId,
-  })
+  let config
+  try {
+    config = buildKeeprConfig({
+      vaultAddress,
+      chainId,
+      creatorAddress,
+      strategyVariant: input.strategyVariant,
+      artifacts,
+      groupId,
+      agentInboxId,
+    })
+  } catch (error) {
+    if (error instanceof KeeprConfigBuildError) {
+      throw new ProvisionVaultEconomyError(error.message, {
+        code: error.code,
+        retryable: false,
+      })
+    }
+    throw error
+  }
 
   const row = await upsertKeeprVault({
     config,

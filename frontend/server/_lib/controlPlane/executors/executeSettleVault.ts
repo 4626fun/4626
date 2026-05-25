@@ -1,5 +1,6 @@
 import { getDb, isDbConfigured } from '../../../../packages/server-core/src/index.js'
 import { ensureKeeprSchema } from '../../keepr/keeprSchema.js'
+import { ensureKeeperRegistryForVault } from '../../keepr/keeperRegistryBootstrap.js'
 
 export class SettleVaultExecutionError extends Error {
   statusCode: number
@@ -102,6 +103,11 @@ export type ExecuteSettleVaultResult = {
   vaultAddress: `0x${string}`
   updated: boolean
   stageUpdated: boolean
+  registryBootstrap?: {
+    keeprProvisioned: boolean
+    ajnaSeeded: boolean
+    warnings: string[]
+  }
 }
 
 export async function executeSettleVault(input: {
@@ -146,9 +152,43 @@ export async function executeSettleVault(input: {
     WHERE LOWER(vault_address) = ${parsed.vaultAddress};
   `
 
+  let registryBootstrap: ExecuteSettleVaultResult['registryBootstrap']
+  if (parsed.normalizedStage.toLowerCase() === 'completed' && parsed.settledAt) {
+    try {
+      const bootstrap = await ensureKeeperRegistryForVault({
+        vaultAddress: parsed.vaultAddress,
+        source: 'vault.settle.completed',
+        skipProvisionIfExists: true,
+        seedAjna: true,
+      })
+      registryBootstrap = {
+        keeprProvisioned: bootstrap.keeprProvisioned,
+        ajnaSeeded: bootstrap.ajnaSeeded,
+        warnings: bootstrap.warnings,
+      }
+      if (bootstrap.warnings.length > 0) {
+        console.warn('keeper_registry.bootstrap_after_settle', {
+          vaultAddress: parsed.vaultAddress,
+          warnings: bootstrap.warnings,
+        })
+      }
+    } catch (error) {
+      console.warn('keeper_registry.bootstrap_after_settle_failed', {
+        vaultAddress: parsed.vaultAddress,
+        message: error instanceof Error ? error.message : String(error),
+      })
+      registryBootstrap = {
+        keeprProvisioned: false,
+        ajnaSeeded: false,
+        warnings: [`bootstrap_failed:${error instanceof Error ? error.message : String(error)}`],
+      }
+    }
+  }
+
   return {
     vaultAddress: parsed.vaultAddress,
     updated: true,
     stageUpdated: Boolean(parsed.normalizedStage),
+    ...(registryBootstrap ? { registryBootstrap } : null),
   }
 }

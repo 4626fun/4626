@@ -126,6 +126,78 @@ On Vercel, append `rebalance` to `KEEPER_SOLANA_RECONCILE_ACTIONS` and set on Vu
 | Vultr orchestrator `/healthz` | ✅ 200 |
 | AKITA on canonical Solana adapter | ❌ not registered |
 | ShareOFT on adapter | ❌ neither legacy nor live share registered |
-| Local `KPR_API_KEY` vs Vercel | ❌ mismatch (sync from dashboard) |
-| Keeper code on `main` | ⏳ uncommitted local diff |
-| `KEEPER_AJNA_MANAGER_*` on Vercel | ❌ not set yet |
+| Local `KPR_API_KEY` vs Vercel | sync via `./scripts/ops/sync-kpr-env-from-vercel.sh` |
+| Keeper code on `main` | ✅ shipped |
+| `KEEPER_AJNA_MANAGER_*` on Vercel | ✅ enabled |
+
+## Making this seamless (target architecture)
+
+Today activation is manual because three things are decoupled:
+
+1. **On-chain deploy** (vault exists)
+2. **DB registry** (`keepr_vaults`, `ajna_vaults`) — empty for grandfathered vaults like AKITA
+3. **Host env** (Vercel crons, Vultr orchestrator, local `kpr/.env`)
+
+The seamless model is: **deploy completion is the only human trigger**. Everything else chains automatically.
+
+```mermaid
+flowchart TD
+  deploy[Vault deploy completes / sweep settles]
+  cp[Control plane: provisionVaultEconomy]
+  db[(keepr_vaults + ajna_vaults + automation dry_run)]
+  sol[Solana register if strategy paid]
+  vercel[Vercel crons already enabled]
+  vultr[Vultr orchestrator preflight then writes]
+  kpr[KPR vault-keeper via HTTP bridge]
+
+  deploy --> cp
+  cp --> db
+  cp --> sol
+  db --> vercel
+  sol --> vultr
+  vercel --> kpr
+```
+
+### What to build (priority order)
+
+| Priority | Change | Effect |
+|----------|--------|--------|
+| P0 | **Grandfathered vault backfill** — `scripts/ops/backfill-keepr-vault.ts` upserts AKITA into `keepr_vaults` + `ajna_vaults` from on-chain + `AKITA_DEFAULTS` | Registry stops returning 0 vaults |
+| P0 | **`sync-kpr-env-from-vercel.sh`** | One command local env sync (no dashboard copy/paste) |
+| P1 | **Post-settle hook** — `executeSettleVault` calls `ensureKeeperRegistryForVault` when `settlementStage=completed` | New deploys auto-seed registry if row missing |
+| P1 | **Enable `KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED=1`** with `tend,report` | Crons fan out vault keeper without KPR polling registry |
+| P2 | **Solana in deploy phase** — if `solana_bridge_strategy` paid, `registerSolanaBridgeToken` + provisioner run before "live" | No separate Phase 2 bridge ops |
+| P2 | **Ajna default `dry_run`** on seed, promote to `live` via control-plane only | Safe-by-default automation |
+
+### One-time AKITA backfill (grandfathered vault)
+
+After Vercel deploy + env sync:
+
+```bash
+# Preview
+pnpm -C frontend exec tsx scripts/ops/backfill-keepr-vault.ts --dry-run
+
+# Write keepr_vaults + ajna_vaults
+pnpm -C frontend exec tsx scripts/ops/backfill-keepr-vault.ts --execute
+
+# Confirm registry
+./scripts/ops/test-akita-keeper-stack.sh
+```
+
+Requires `DATABASE_URL` (same Supabase pooler URL as production API). Optional `--creator` if on-chain owner resolution differs from expected CSW.
+
+### Operator UX today
+
+```bash
+# 1. Sync secrets (after Vercel deploy)
+./scripts/ops/sync-kpr-env-from-vercel.sh
+
+# 2. Smoke
+./scripts/ops/test-akita-keeper-stack.sh
+
+# 3. Dry-run keeper
+cd kpr && pnpm exec tsx runner.ts vault-keeper --dry-run
+```
+
+New deploys that complete settlement via control plane auto-call `ensureKeeperRegistryForVault` (env `KEEPER_REGISTRY_AUTO_BOOTSTRAP_ENABLED=1`, default on).
+

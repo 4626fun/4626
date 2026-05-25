@@ -20,6 +20,15 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
+vi.mock('../../server/_lib/keepr/keeperRegistryBootstrap.js', () => ({
+  ensureKeeperRegistryForVault: vi.fn(async () => ({
+    vaultAddress: '0x1111111111111111111111111111111111111111',
+    keeprProvisioned: false,
+    ajnaSeeded: false,
+    warnings: [],
+  })),
+}))
+
 vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
