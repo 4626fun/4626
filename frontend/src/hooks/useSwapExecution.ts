@@ -1246,7 +1246,7 @@ export function useSwapExecution(params: {
     }
     if (!params.executionReady) {
       setError(
-        'Swap signer is not ready yet. Open /waitlist?setup=owner-install and complete Enable 4626 signing on your parent smart wallet.',
+        'Swap signer is not ready yet. Connect an external wallet for EOA mode at /swap, or finish waitlist setup if your embedded signer is already an on-chain owner.',
       )
       return
     }

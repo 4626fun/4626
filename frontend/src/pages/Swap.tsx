@@ -29,7 +29,6 @@ import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
-import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
@@ -951,9 +950,9 @@ export function Swap() {
   )
   const needsCanonicalSetupAction =
     executionMode === 'canonical' && canonicalSetupGateCodes.has(canonicalSignerGate.code)
-  const canonicalSetupActionLabel = 'Enable 4626 signing'
+  const canonicalSetupActionLabel = 'Open waitlist setup'
   const handleEnableCanonicalSigning = useCallback(() => {
-    window.location.assign(buildWaitlistSetupUrl('owner-install'))
+    window.location.assign('/waitlist')
   }, [])
   const needsPrivyCanonicalAuth = useMemo(
     () =>

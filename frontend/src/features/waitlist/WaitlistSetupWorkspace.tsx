@@ -42,8 +42,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const onSigningStepCompleteChange = useCallback((complete: boolean) => {
     setSigningStepComplete(complete)
   }, [])
-  const setupComplete =
-    controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
+  const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
   const canEnterNow = canEnterApp && setupComplete
   const waitlistChatStatus = useWaitlistChatJoin({
     canonicalCswAddress: controller.canonicalCswAddress,

@@ -128,7 +128,7 @@ describe('isWaitlistStepTwoSigningComplete', () => {
 })
 
 describe('shouldShowParentCswAddOwnerPanel', () => {
-  it('shows parent add-owner until parent embedded owner is confirmed on-chain', () => {
+  it('never mounts the archived add-owner panel', () => {
     expect(
       shouldShowParentCswAddOwnerPanel({
         ownerInstallRequested: true,
@@ -140,7 +140,7 @@ describe('shouldShowParentCswAddOwnerPanel', () => {
         },
         parentEmbeddedOwnerOnChain: false,
       }),
-    ).toBe(true)
+    ).toBe(false)
   })
 })
 

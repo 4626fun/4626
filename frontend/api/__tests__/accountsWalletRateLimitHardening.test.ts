@@ -22,9 +22,6 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
 import accountsLinkHandler from '../_handlers/accounts/_link.ts'
 import accountsUnlinkHandler from '../_handlers/accounts/_unlink.ts'
 import walletSyncHandler from '../_handlers/wallet/_sync.ts'
-import walletPrepareAddPrivyOwnerHandler from '../_handlers/wallet/_prepare-add-privy-owner.ts'
-import walletPrepareAddRabbyOwnerHandler from '../_handlers/wallet/_prepare-add-rabby-owner.ts'
-import walletConfirmOwnerHandler from '../_handlers/wallet/_confirm-owner.ts'
 
 describe('accounts/wallet endpoint rate-limit hardening', () => {
   it('returns 429 for /accounts/link when limited', async () => {
@@ -49,39 +46,6 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()
     await walletSyncHandler(req, res)
-    expect(res.statusCode).toBe(429)
-    expect(res.body?.error).toBe('Rate limit exceeded')
-    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
-  })
-
-  it('returns 429 for /wallet/prepare-add-privy-owner when limited', async () => {
-    const req = createMockReq({ method: 'POST' })
-    const res = createMockRes()
-    await walletPrepareAddPrivyOwnerHandler(req, res)
-    expect(res.statusCode).toBe(429)
-    expect(res.body?.error).toBe('Rate limit exceeded')
-    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
-  })
-
-  it('returns 429 for /wallet/prepare-add-rabby-owner when limited', async () => {
-    const req = createMockReq({
-      method: 'POST',
-      body: {
-        rabbyAddress: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
-        confirmedAdvanced: true,
-      },
-    })
-    const res = createMockRes()
-    await walletPrepareAddRabbyOwnerHandler(req, res)
-    expect(res.statusCode).toBe(429)
-    expect(res.body?.error).toBe('Rate limit exceeded')
-    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
-  })
-
-  it('returns 429 for /wallet/confirm-owner when limited', async () => {
-    const req = createMockReq({ method: 'POST', body: {} })
-    const res = createMockRes()
-    await walletConfirmOwnerHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
     expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)

@@ -33,17 +33,14 @@ export function isWaitlistStepTwoSigningComplete(params: {
   })
 }
 
-export function shouldShowParentCswAddOwnerPanel(params: {
+export function shouldShowParentCswAddOwnerPanel(_params: {
   ownerInstallRequested: boolean
   signingStepComplete: boolean
   executionTrack?: WaitlistAccountWithCanonical['accountSignals']['executionTrack']
   accountSignals?: WaitlistAccountWithCanonical['accountSignals']
   parentEmbeddedOwnerOnChain?: boolean
 }): boolean {
-  if (params.signingStepComplete) return false
-  return !isLegacyParentOwnerSigningReady({
-    parentEmbeddedOwnerOnChain: params.parentEmbeddedOwnerOnChain,
-  })
+  return false
 }
 
 type CanonicalBootstrapResult = {

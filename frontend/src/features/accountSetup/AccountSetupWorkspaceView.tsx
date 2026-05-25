@@ -1,8 +1,6 @@
 import {
   type KeyboardEvent,
   type ReactNode,
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -30,7 +28,6 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
-import { shouldShowParentCswAddOwnerPanel } from '@/features/waitlist/waitlistFlowState'
 import { useWaitlistSigningStepComplete } from '@/features/waitlist/useWaitlistSigningStepComplete'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
@@ -144,30 +141,6 @@ function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undef
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
 
-const LazyAddOwnerSigningPanel = lazy(async () => {
-  const mod = await import('@/features/accountSetup/AddOwnerSigningPanel')
-  return { default: mod.AddOwnerSigningPanel }
-})
-
-function AddOwnerSigningPanelLazy(props: {
-  controller: AccountSetupWorkspaceController
-  className?: string
-  inlineRelay?: boolean
-  onOwnerInstallSuccess?: () => void | Promise<void>
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="rounded-xl bg-white/[0.02] px-3 py-3 text-xs text-zinc-500 ring-1 ring-white/10">
-          <LoadingText intent="session" labelOverride="Loading signing setup..." />
-        </div>
-      }
-    >
-      <LazyAddOwnerSigningPanel {...props} />
-    </Suspense>
-  )
-}
-
 export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
@@ -262,16 +235,9 @@ export function AccountSetupWorkspaceView(props: {
   // form used by the rendered step UI — it shadows the auto-trigger
   // helper `signingStepCompleteForAuto` once `me` is available.
   const executionTrack = me.accountSignals.executionTrack
-  const showParentCswAddOwnerPanel = shouldShowParentCswAddOwnerPanel({
-    ownerInstallRequested: ownerInstallPathActive,
-    signingStepComplete,
-    executionTrack,
-    accountSignals: me.accountSignals,
-    parentEmbeddedOwnerOnChain,
-  })
   const stepTwoDoneSubtitle = signingStepComplete
     ? 'Embedded signer installed on your parent smart wallet'
-    : 'Enable 4626 signing on your parent smart wallet'
+    : '4626 signing setup is paused while we rework wallet onboarding'
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
@@ -311,7 +277,7 @@ export function AccountSetupWorkspaceView(props: {
           ? 'active'
           : 'upcoming'
 
-    const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
+    const allDone = zoraStepComplete && walletStepComplete
     const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
     const normalizedZoraHandle = rawZoraHandle
       ? (rawZoraHandle.startsWith('@') || rawZoraHandle.startsWith('$') ? rawZoraHandle : `@${rawZoraHandle}`)
@@ -438,8 +404,11 @@ export function AccountSetupWorkspaceView(props: {
               Enable signing on your parent smart wallet from this browser.
             </div>
             <p className="mt-1 text-sm leading-relaxed text-brand-50/85">
-              Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), then
-              finish the two-step Relay flow on <span className="font-mono text-brand-50">/add-owner</span>.
+              Wallet signing setup is paused in this build. Link Zora and confirm your smart wallet, then use{' '}
+              <a href="/swap" className="font-mono text-brand-50 underline underline-offset-2">
+                /swap
+              </a>{' '}
+              with an external wallet (EOA mode) if canonical signing is unavailable.
             </p>
           </div>
         ) : null}
@@ -674,47 +643,20 @@ export function AccountSetupWorkspaceView(props: {
 
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
-                    {requiresBaseAppForOwnerInstall ? (
-                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
-                        Your Zora smart wallet is passkey-controlled. Owner install cannot finish from this
-                        desktop browser — open{' '}
-                        {baseAppUrl ? (
-                          <a
-                            href={baseAppUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="font-semibold text-brand-50 underline decoration-dotted underline-offset-2"
-                          >
-                            Base app
-                          </a>
-                        ) : (
-                          <span className="font-semibold">Base app</span>
-                        )}{' '}
-                        or connect an on-chain EOA owner in the wallet connector first.
-                      </div>
-                    ) : shouldHintBaseAccountForZora ? (
-                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
-                        <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
-                        in the wallet connector. Your Zora smart wallet is passkey-controlled,
-                        so 4626 can approve embedded signing on the canonical smart wallet.
-                      </div>
-                    ) : null}
-                    {showParentCswAddOwnerPanel ? (
-                      <AddOwnerSigningPanelLazy
-                        controller={controller}
-                        inlineRelay
-                        onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
-                      />
-                    ) : null}
-                    {needsEmbeddedWallet ? (
-                      <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
-                    ) : null}
-                    {inTelegramMiniApp ? (
-                      <p className="text-xs text-amber-300/80">Owner signatures are more reliable in an external browser tab.</p>
-                    ) : null}
-                    {providerCollision.shouldDisableInjectedConnector ? (
-                      <p className="text-xs text-zinc-600">Coinbase/Base is the most reliable option when a wallet collision is detected.</p>
-                    ) : null}
+                    {signingStepComplete ? (
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        Your embedded signer is confirmed as an on-chain owner of your parent smart wallet.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-zinc-400 leading-relaxed">
+                        In-app owner setup is paused while we rework wallet onboarding. You can still trade at{' '}
+                        <a href="/swap" className="text-brand-100 underline underline-offset-2">
+                          /swap
+                        </a>{' '}
+                        with an external wallet (EOA mode). This step completes automatically once your embedded
+                        signer is already an on-chain owner.
+                      </p>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -798,9 +740,12 @@ export function AccountSetupWorkspaceView(props: {
               : 'Enable signing on your parent smart wallet from this browser.'}
           </div>
           <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
-            Connect a current owner of your Zora Coinbase Smart Wallet (Rabby, MetaMask, or Base Account), verify
-            authority on Base, then finish the two-step Relay add-owner flow on{' '}
-            <span className="font-mono text-brand-50">/add-owner</span>.
+            Wallet signing setup is paused in this build. Finish Zora linking and smart-wallet confirmation here,
+            then use{' '}
+            <a href="/swap" className="font-mono text-brand-50 underline underline-offset-2">
+              /swap
+            </a>{' '}
+            with an external wallet (EOA mode) if you need to trade before signing returns.
           </div>
         </div>
       ) : null}
@@ -941,11 +886,13 @@ export function AccountSetupWorkspaceView(props: {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
-                    <div className="text-base font-medium text-white">Enable 4626 smart-wallet signing</div>
+                    <div className="text-base font-medium text-white">Wallet signing</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Your canonical CSW stays primary. Finish the two-step Relay add-owner flow on{' '}
-                      <span className="font-mono text-zinc-300">/add-owner</span> so your Privy embedded signer can
-                      co-sign sponsored actions.
+                      In-app owner setup is paused. Your canonical CSW stays primary; use{' '}
+                      <a href="/swap" className="text-zinc-200 underline underline-offset-2">
+                        /swap
+                      </a>{' '}
+                      with an external wallet (EOA mode) if canonical signing is unavailable.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -958,8 +905,8 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {ownerInstallResumeState.requested ? (
                   <div className="mt-4 rounded-xl bg-brand-primary/10 px-3 py-3 text-xs leading-5 text-brand-50/90 ring-1 ring-brand-primary/20">
-                    This step was resumed from another surface. Connect a current owner of the detected CSW, verify the
-                    signer, then continue on <span className="font-mono">/add-owner</span> for the Relay add-owner flow.
+                    This step was resumed from another surface. In-app owner setup is paused — finish Zora and
+                    smart-wallet confirmation here, or use /swap with an external wallet (EOA mode).
                   </div>
                 ) : null}
                 <details className="mt-4 rounded-xl bg-white/[0.02] px-3 py-3 ring-1 ring-white/10">
@@ -1099,12 +1046,9 @@ export function AccountSetupWorkspaceView(props: {
                       : ''}
                   </div>
                 ) : null}
-                <AddOwnerSigningPanelLazy
-                  controller={controller}
-                  className="mt-4"
-                  inlineRelay
-                  onOwnerInstallSuccess={() => refreshParentEmbeddedOwner()}
-                />
+                <p className="mt-4 text-xs text-zinc-500 leading-relaxed">
+                  Add-owner setup is paused in this build. Connect a current CSW owner above for diagnostics only.
+                </p>
               </section>
             </div>
           </div>

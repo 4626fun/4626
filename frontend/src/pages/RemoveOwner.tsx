@@ -192,11 +192,11 @@ export function RemoveOwnerPage() {
 
         <div className="text-[11px] text-zinc-500 space-y-1">
           <div>
-            Looking to install a signing key instead?{' '}
-            <Link to="/add-owner" className="underline underline-offset-2">
-              /add-owner
-            </Link>
-            .
+            Canonical signing setup is paused. Use{' '}
+            <Link to="/swap" className="underline underline-offset-2">
+              /swap
+            </Link>{' '}
+            with an external wallet (EOA mode) if remove-owner is unavailable.
           </div>
           <div>
             Need to fund the CSW before submitting?{' '}

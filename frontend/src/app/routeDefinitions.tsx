@@ -3,7 +3,6 @@ import { Navigate, Route } from 'react-router-dom'
 
 import {
   AccountsPage,
-  AddOwnerPage,
   AmoeQuickTasks,
   RemoveOwnerPage,
   CswFundingPage,
@@ -110,17 +109,9 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
-  // `/add-owner` installs the user's Privy embedded EOA onto their canonical CSW
-  // via Relay (`preview-add-owner` → `useAddOwnerFlow`). The embedded EOA is
-  // resolved server-side from the Privy session; an existing CSW owner approves
-  // the mutation. Same lane as waitlist `AddOwnerSigningPanel` / `?setup=owner-install`.
   {
     path: '/add-owner',
-    element: (
-      <SmartWalletRoute>
-        <AddOwnerPage />
-      </SmartWalletRoute>
-    ),
+    element: <Navigate to="/waitlist" replace />,
   },
   // `/remove-owner` removes an owner from the canonical CSW via the same Relay
   // deposit + solver-fill lane as add-owner (`preview-remove-owner` →

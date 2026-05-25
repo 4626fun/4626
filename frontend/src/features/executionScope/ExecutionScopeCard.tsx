@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { ExternalLink, ShieldOff, RefreshCw } from 'lucide-react'
 
 import { CopyableAddress } from '@/components/account/CopyableAddress'
-import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
 import { useRevokeSubAccount } from './useRevokeSubAccount'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
@@ -32,8 +31,8 @@ export function ExecutionScopeCard() {
   const revoke = useRevokeSubAccount()
   const reprovision = useReprovisionSubAccount()
   const ownerCheck = useCswOwnerSigner()
-  const ownerInstallHref = buildWaitlistSetupUrl('owner-install')
-  const ownerInstallLabel = 'Enable 4626 signing on parent wallet'
+  const ownerInstallHref = '/waitlist'
+  const ownerInstallLabel = 'Open waitlist setup'
   const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const onRevokeClick = async () => {
@@ -111,10 +110,12 @@ export function ExecutionScopeCard() {
               can sign the spend permission yet.
             </p>
             <p className="text-[11px] text-zinc-500">
-              The usual fix is to finish the <strong>Enable 4626 signing</strong> step on the
-              waitlist — it installs your 4626 app signer as an owner of your smart wallet
-              (one-time setup). If you manage your CSW manually, you can also connect the wallet
-              you used to create it (Rabby, MetaMask, Coinbase Wallet).
+              In-app owner setup is paused. Connect the wallet you used to create your CSW (Rabby,
+              MetaMask, Coinbase Wallet), or use{' '}
+              <a href="/swap" className="text-zinc-300 underline underline-offset-2">
+                /swap
+              </a>{' '}
+              with an external wallet (EOA mode).
             </p>
           </div>
         )}
@@ -124,7 +125,7 @@ export function ExecutionScopeCard() {
             type="button"
             onClick={onReprovisionClick}
             disabled={reprovision.busy || !hasOwnerSigner}
-            title={hasOwnerSigner ? undefined : 'Finish the owner-install step or connect an owner wallet first'}
+            title={hasOwnerSigner ? undefined : 'Connect an owner wallet first, or use /swap in EOA mode'}
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             {reprovision.busy ? <Spinner size="sm" /> : <RefreshCw className="h-3.5 w-3.5" />}
