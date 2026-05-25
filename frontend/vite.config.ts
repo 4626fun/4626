@@ -11,6 +11,7 @@ import type { IncomingMessage, ServerResponse } from 'http'
 
 import { classifyManualChunk } from './src/lib/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
+import { applyLocalDevServerEnv } from './server/_lib/dev/localDevEnv.ts'
 
 const ESBUILD_DEAD_RE =
   /The service is no longer running|The service was stopped|write EPIPE/i
@@ -72,14 +73,30 @@ function resolveApiModulePath(relativePath: string): string {
 }
 
 let tsxLoader: typeof import('tsx/esm/api') | null = null
+const apiModuleCache = new Map<
+  string,
+  Promise<{
+    default: (req: any, res: any) => any
+  }>
+>()
 
 async function loadApiModule(absPath: string) {
+  const cached = apiModuleCache.get(absPath)
+  if (cached) return cached
+
   if (!tsxLoader) {
     tsxLoader = await import('tsx/esm/api')
   }
-  return tsxLoader.tsImport(absPath, import.meta.url) as Promise<{
+  const pending = tsxLoader.tsImport(absPath, import.meta.url) as Promise<{
     default: (req: any, res: any) => any
   }>
+  apiModuleCache.set(absPath, pending)
+  try {
+    return await pending
+  } catch (error) {
+    apiModuleCache.delete(absPath)
+    throw error
+  }
 }
 
 /** Keep local API handler paths out of Vite configFileDependencies (avoids full server restart + esbuild crash on every api/ edit). */
@@ -295,6 +312,7 @@ function localApiRoutesPlugin(): Plugin {
       // - Also load frontend/.env if present.
       loadDotEnvFile(path.resolve(__dirname, '../.env'))
       loadDotEnvFile(path.resolve(__dirname, './.env'))
+      applyLocalDevServerEnv()
 
       // Local dev note:
       // Our API handlers use `server/_lib/postgres.ts`, which treats `POSTGRES_URL*` as Vercel Postgres.

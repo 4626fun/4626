@@ -48,3 +48,44 @@ export function normalizeOwnerReadAddress(value: string | null | undefined): Add
   if (!isAddress(trimmed)) return null
   return getAddress(trimmed)
 }
+
+/**
+ * Server-side owner probe with RPC fallbacks — avoids false "not owner" reads from
+ * wallet-injected or rate-limited browser RPC clients (DeployVault uses the same API).
+ */
+export async function fetchIsOwnerAddressViaApi(params: {
+  cswAddress: Address
+  ownerAddress: Address
+}): Promise<boolean | null> {
+  try {
+    const res = await fetch('/api/deploy/smartWalletOwner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        smartWallet: params.cswAddress,
+        ownerAddress: params.ownerAddress,
+      }),
+    })
+    const json = (await res.json()) as { success?: boolean; data?: { isOwner?: boolean } }
+    if (json?.success === true && typeof json.data?.isOwner === 'boolean') {
+      return json.data.isOwner
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/** Prefer server owner probe; fall back to local bytecode-guarded read. */
+export async function resolveEmbeddedOwnerOnCanonicalCsw(params: {
+  publicClient: Pick<PublicClient, 'readContract' | 'getBytecode'>
+  cswAddress: Address
+  ownerAddress: Address
+}): Promise<boolean | null> {
+  const fromApi = await fetchIsOwnerAddressViaApi({
+    cswAddress: params.cswAddress,
+    ownerAddress: params.ownerAddress,
+  })
+  if (fromApi === true || fromApi === false) return fromApi
+  return readIsOwnerAddressIfDeployed(params)
+}

@@ -1,7 +1,12 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi, afterEach } from 'vitest'
 import { getAddress } from 'viem'
 
-import { hasDeployedBytecode, readIsOwnerAddressIfDeployed } from './cswOwnerRead'
+import {
+  fetchIsOwnerAddressViaApi,
+  hasDeployedBytecode,
+  readIsOwnerAddressIfDeployed,
+  resolveEmbeddedOwnerOnCanonicalCsw,
+} from './cswOwnerRead'
 
 const SUB = getAddress('0x9d01012E95D07d44f9173ADe047F0A63c8939020')
 const EMBED = getAddress('0xB2aaD65A5402714bf428a66731ae62BA5c45CAC0')
@@ -43,5 +48,47 @@ describe('cswOwnerRead', () => {
 
     expect(result).toBe(true)
     expect(publicClient.readContract).toHaveBeenCalled()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('fetchIsOwnerAddressViaApi returns boolean from server probe', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        json: async () => ({ success: true, data: { isOwner: true } }),
+      })),
+    )
+
+    const result = await fetchIsOwnerAddressViaApi({
+      cswAddress: SUB,
+      ownerAddress: EMBED,
+    })
+
+    expect(result).toBe(true)
+  })
+
+  it('resolveEmbeddedOwnerOnCanonicalCsw prefers API over local read', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        json: async () => ({ success: true, data: { isOwner: true } }),
+      })),
+    )
+    const publicClient = {
+      getBytecode: vi.fn(async () => '0x' as const),
+      readContract: vi.fn(),
+    }
+
+    const result = await resolveEmbeddedOwnerOnCanonicalCsw({
+      publicClient,
+      cswAddress: SUB,
+      ownerAddress: EMBED,
+    })
+
+    expect(result).toBe(true)
+    expect(publicClient.readContract).not.toHaveBeenCalled()
   })
 })

@@ -8,8 +8,7 @@ import { AppLoadingRegistrar } from '@/components/layout/AppLoadingOverlay'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { isScreenshotMode } from '@/lib/ui/screenshotMode'
 import {
@@ -52,16 +51,12 @@ function useResolvedAccessState(): AccessState {
   }, [siwe.authAddress])
   const hasSession = Boolean(siweAuthAddress)
   const acceptedStateQuery = useQuery({
-    queryKey: ['appAccessStatus', 'waitlist-me'],
+    queryKey: WAITLIST_ME_QUERY_KEY,
     enabled: hasSession && !screenshotMode,
     queryFn: async (): Promise<WaitlistMeResponse | null> => {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeResponse | null> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
+      const data = await fetchWaitlistMe()
+      if (!data) return null
+      return { appAccessStatus: data.appAccessStatus ?? null }
     },
     staleTime: 15_000,
     retry: 0,

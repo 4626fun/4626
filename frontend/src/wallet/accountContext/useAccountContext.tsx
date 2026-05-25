@@ -3,9 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { getAddress, isAddress } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
-import { apiFetch } from '@/lib/api/apiBase'
-import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { pickCanonicalSmartWalletAddress, type WaitlistMeData } from '@/hooks/canonicalWalletUtils'
+import { pickCanonicalSmartWalletAddress } from '@/hooks/canonicalWalletUtils'
+import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
 import { probeWalletCapabilities } from './getCapabilities'
 import { detectSignerType } from './detectSignerType'
 import { checkEoaOwnershipOfCsw } from './ownership'
@@ -58,17 +57,9 @@ export function AccountContextProvider(props: { children: ReactNode }) {
   const chainIdHex = useMemo(() => toChainIdHex(chainIdValue), [chainIdValue])
 
   const waitlistMeQuery = useQuery({
-    queryKey: ['account-context', 'waitlist-me'],
+    queryKey: WAITLIST_ME_QUERY_KEY,
     enabled: Boolean(signerAddress),
-    queryFn: async (): Promise<WaitlistMeData | null> => {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
-      if (!res.ok || !json?.success) return null
-      return json.data ?? null
-    },
+    queryFn: fetchWaitlistMe,
     staleTime: 15_000,
   })
 

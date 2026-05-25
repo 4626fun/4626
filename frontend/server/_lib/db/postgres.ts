@@ -228,6 +228,9 @@ export function isPostgresPoolSaturatedError(err: unknown): boolean {
 }
 
 function getInitRetryWindowMs(): number {
+  if (isDeployDryRunContext()) {
+    return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 3_000
+  }
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }
 
@@ -239,11 +242,10 @@ function getAuthInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS_AUTH) ?? 300_000
 }
 
-function isDeployDryRunContext(): boolean {
-  if (String(process.env.DEPLOY_DRY_RUN_PORT ?? '').trim()) return true
-  const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').toLowerCase()
-  return deploymentVersion.includes('dryrun')
-}
+import {
+  isDeployDryRunContext,
+  isDeployDryRunDbDisabled,
+} from '../dev/localDevEnv.js'
 
 function isLikelyConnectivityTimeout(err: unknown): boolean {
   const code = String((err as any)?.code ?? '').trim().toUpperCase()
@@ -408,6 +410,7 @@ export async function getDbForCron(deadlineMs?: number): Promise<DbPool | null> 
 }
 
 export async function getDb(): Promise<DbPool | null> {
+  if (isDeployDryRunDbDisabled()) return null
   if (cachedDb) return cachedDb
   if (initError) {
     const retryAfterMs = initRetryWindowMs > 0 ? initRetryWindowMs : getInitRetryWindowMs()
@@ -509,7 +512,7 @@ export async function getDb(): Promise<DbPool | null> {
         const idleTimeoutMillis = parsePositiveInt(process.env.POSTGRES_POOL_IDLE_TIMEOUT_MS) ?? (useConservativeServerlessPool ? 1_000 : 5_000)
         const connectionTimeoutMillis =
           parsePositiveInt(process.env.POSTGRES_POOL_CONNECT_TIMEOUT_MS) ??
-          (useConservativeServerlessPool ? 10_000 : 8_000)
+          (isDeployDryRunContext() ? 3_000 : useConservativeServerlessPool ? 10_000 : 8_000)
         const maxUses = parsePositiveInt(process.env.POSTGRES_POOL_MAX_USES) ?? 7_500
         const createPgDb = async (sslForPool: any): Promise<DbPool> => {
           const pool = new Pool({

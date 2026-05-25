@@ -47,7 +47,7 @@ import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwa
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
 import { resolveEffectiveExecutionTrack, deriveAccountChromeExecution } from '@/lib/wallet/userExecutionTrack'
-import { readIsOwnerAddressIfDeployed } from '@/lib/wallet/cswOwnerRead'
+import { resolveEmbeddedOwnerOnCanonicalCsw } from '@/lib/wallet/cswOwnerRead'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -790,14 +790,13 @@ export function Swap() {
         swapChainId === BASE_CHAIN_ID,
     ),
     staleTime: 10_000,
-    queryFn: async () => {
-      if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return false
-      const installed = await readIsOwnerAddressIfDeployed({
+    queryFn: async (): Promise<boolean | null> => {
+      if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return null
+      return resolveEmbeddedOwnerOnCanonicalCsw({
         publicClient,
         cswAddress: canonicalAddress as Address,
         ownerAddress: privyEmbeddedEoaAddress as Address,
       })
-      return installed === true
     },
   })
 
@@ -912,8 +911,11 @@ export function Swap() {
     }
     if (privyEmbeddedEoaCanOperateCanonicalQuery.data === true) return 'owner'
     if (privyEmbeddedEoaCanOperateCanonicalQuery.data === false) return 'not-owner'
+    if (accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true) return 'owner'
+    if (privyEmbeddedEoaCanOperateCanonicalQuery.data === null) return 'pending'
     return 'unknown'
   }, [
+    accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
     privyEmbeddedEoaCanOperateCanonicalQuery.data,
     privyEmbeddedEoaCanOperateCanonicalQuery.isFetching,
     privyEmbeddedEoaCanOperateCanonicalQuery.isLoading,
@@ -1046,7 +1048,11 @@ export function Swap() {
   const needsCanonicalSetupAction =
     executionMode === 'canonical' &&
     subAccountFlowEnabled &&
-    canonicalSetupGateCodes.has(canonicalSignerGate.code)
+    canonicalSetupGateCodes.has(canonicalSignerGate.code) &&
+    !(
+      canonicalSignerGate.code === 'embedded-wallet-not-owner' &&
+      effectiveExecutionTrack === 'legacy-owner-install'
+    )
   const canonicalSetupActionLabel =
     canonicalSignerGate.code === 'base-sub-account-provider-missing'
       ? 'Reconnect Base App'

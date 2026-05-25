@@ -157,10 +157,13 @@ set +a
 # This avoids local startup failures when frontend/.env carries an unreachable
 # DATABASE_URL from another workflow. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=1 to opt
 # back into DB-backed routes during dry-run.
-if [[ "${DEPLOY_DRY_RUN_KEEP_DB_ENV:-0}" != "1" ]]; then
+export DEPLOY_DRY_RUN_KEEP_DB_ENV="${DEPLOY_DRY_RUN_KEEP_DB_ENV:-0}"
+if [[ "${DEPLOY_DRY_RUN_KEEP_DB_ENV}" != "1" ]]; then
   unset DATABASE_URL
   unset POSTGRES_URL
   unset POSTGRES_URL_NON_POOLING
+else
+  export POSTGRES_POOL_CONNECT_TIMEOUT_MS="${POSTGRES_POOL_CONNECT_TIMEOUT_MS:-3000}"
 fi
 
 : "${BASE_FORK_UPSTREAM_RPC_URL:?Set BASE_FORK_UPSTREAM_RPC_URL in $PRESET_FILE or your shell environment.}"
@@ -214,7 +217,10 @@ LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
 # Keep BASE_RPC_URL on live upstream so owner-install / Relay preview never hits dead Anvil.
 export DEPLOY_DRY_RUN_LOCAL_RPC_URL="$LOCAL_RPC_URL"
 export VITE_BASE_RPC="$LOCAL_RPC_URL"
+export BASE_READ_RPC_URL="$LOCAL_RPC_URL"
+export BASE_LOGS_RPC_URL="$LOCAL_RPC_URL"
 export BASE_RPC_URL="${BASE_FORK_UPSTREAM_RPC_URL:-https://mainnet.base.org}"
+export ETH_RPC_URL="${ETH_RPC_URL:-https://ethereum-rpc.publicnode.com}"
 export DEPLOY_DRY_RUN_FORK_PORT="$FORK_PORT"
 FALLBACK_FORK_UPSTREAM_RPC_URL="${DEPLOY_DRY_RUN_FORK_FALLBACK_RPC_URL:-https://mainnet.base.org}"
 
@@ -371,7 +377,7 @@ PY
   echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
 fi
 
-echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
+echo "Starting frontend dev server on port ${DEV_PORT} (node $(node -v), VITE_LOW_MEMORY=${VITE_LOW_MEMORY}, VITE_WATCH_POLLING=${VITE_WATCH_POLLING}, DEPLOY_DRY_RUN_KEEP_DB_ENV=${DEPLOY_DRY_RUN_KEEP_DB_ENV}) with DEPLOY_DRY_RUN_LOCAL_RPC_URL=${DEPLOY_DRY_RUN_LOCAL_RPC_URL}, BASE_READ_RPC_URL=${BASE_READ_RPC_URL}, BASE_RPC_URL=${BASE_RPC_URL}, VITE_BASE_RPC=${VITE_BASE_RPC}"
 if port_in_use 5173; then
   echo "Warning: localhost:5173 is in use — stop pnpm dev before deploy dry-run to avoid esbuild OOM on WSL." >&2
 fi

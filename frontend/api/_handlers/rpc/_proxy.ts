@@ -12,6 +12,11 @@ import {
 
 
 
+import {
+  filterDevelopmentRpcUrls,
+  resolveLocalDryRunRpcUrl,
+} from '../../../server/_lib/dev/localDevEnv.js'
+
 type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params?: unknown }
 
 const DEFAULT_CHAIN_RPCS = {
@@ -363,7 +368,12 @@ function resolveRpcChain(req: VercelRequest): RpcChain {
 function getRpcUrls(chain: RpcChain): string[] {
   const fromEnv = readChainRpcUrlsFromEnv(chain)
   const defaults = DEFAULT_CHAIN_RPCS[chain]
-  const urls = fromEnv.length > 0 ? [...fromEnv, ...defaults] : [...defaults]
+  let urls = fromEnv.length > 0 ? [...fromEnv, ...defaults] : [...defaults]
+  if (chain === 'base') {
+    const localFork = resolveLocalDryRunRpcUrl()
+    if (localFork) urls = [localFork, ...urls.filter((url) => url !== localFork)]
+  }
+  urls = filterDevelopmentRpcUrls(urls)
   return Array.from(new Set(urls))
 }
 

@@ -1,9 +1,10 @@
-import { Component, type ReactNode, useEffect, useState } from 'react'
+import { Component, type ReactNode, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/account/ConnectButton'
-import { apiFetch } from '@/lib/api/apiBase'
+import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -237,33 +238,13 @@ function VaultNavBarWithAdminStatus(props: {
   publicMode: boolean
   hostMode: ReturnType<typeof getHostMode>
 }) {
-  const [isAdmin, setIsAdmin] = useState(false)
+  const siwe = useSiweAuth()
+  const adminStatus = useAdminStatusFromSession({
+    authAddress: typeof siwe.authAddress === 'string' ? siwe.authAddress : null,
+    sessionHydrated: siwe.sessionHydrated,
+  })
 
-  useEffect(() => {
-    let cancelled = false
-    void (async () => {
-      try {
-        const res = await apiFetch('/api/auth/admin', {
-          method: 'GET',
-          headers: { Accept: 'application/json' },
-          credentials: 'include',
-        })
-        const json = (await res.json().catch(() => null)) as
-          | { success?: boolean; data?: { isAdmin?: boolean } | null }
-          | null
-        const nextIsAdmin = Boolean(res.ok && json?.success && json?.data?.isAdmin === true)
-        if (!cancelled) setIsAdmin(nextIsAdmin)
-      } catch {
-        if (!cancelled) setIsAdmin(false)
-      }
-    })()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  return <VaultNavBarContent {...props} isAdmin={isAdmin} />
+  return <VaultNavBarContent {...props} isAdmin={adminStatus.isAdmin} />
 }
 
 export function VaultNavBar(props: { interactive?: boolean }) {

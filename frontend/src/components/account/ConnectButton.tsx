@@ -417,7 +417,7 @@ export function ConnectButton({
   )
   const trayPortfolioQuery = useQuery({
     queryKey: ['account-tray', 'wallet-portfolio', trayWalletKey],
-    enabled: auth.hasSession && trayWalletSources.length > 0,
+    enabled: auth.hasSession && trayWalletSources.length > 0 && showMenu,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
@@ -516,7 +516,7 @@ export function ConnectButton({
   ])
   const trayPointsQuery = useQuery({
     queryKey: ['account-tray', 'waitlist-position', trayPointsLookupWallet],
-    enabled: auth.hasSession && Boolean(trayPointsLookupWallet),
+    enabled: auth.hasSession && Boolean(trayPointsLookupWallet) && showMenu,
     staleTime: 15_000,
     retry: 0,
     queryFn: async () => fetchWaitlistPositionByWallet(trayPointsLookupWallet as string),
