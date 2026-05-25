@@ -85,8 +85,9 @@ pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
 if [[ -f "${KPR_DIR}/.env" ]] && [[ ! -f "${ENV_DST}" ]]; then
   install -d -m 0755 /etc/4626
-  cp "${KPR_DIR}/.env" "${ENV_DST}"
-  chmod 0640 "${ENV_DST}"
+  bash "${KPR_DIR}/deploy/seed-solana-orchestrator-env.sh" \
+    --source "${KPR_DIR}/.env" \
+    --dest "${ENV_DST}"
 fi
 
 bash "${KPR_DIR}/deploy/install-systemd.sh" --repo-root "${REPO_ROOT_ON_HOST}" --service-user "${SERVICE_USER}"
@@ -133,7 +134,8 @@ cat <<EOF
 Done on host. Remaining manual steps:
   1) DNS: point orchestrator.4626.fun -> this Vultr host (or add Cloudflare tunnel).
   2) Caddy: merge kpr/deploy/Caddyfile.orchestrator.example and reload caddy.
-  3) Ensure ${ENV_DST} on the host has full kpr keeper secrets (SOLANA_KEEPER_KEYPAIR, mappings).
+  3) Regenerate ${ENV_DST} from kpr/.env if it still has CRE_* noise:
+       sudo bash kpr/deploy/seed-solana-orchestrator-env.sh --source kpr/.env --dest ${ENV_DST}
   4) Vercel production redeploy after env change.
 
 Public URL for Vercel: ${ORCHESTRATOR_PUBLIC_URL}
