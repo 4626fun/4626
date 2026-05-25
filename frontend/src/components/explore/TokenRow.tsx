@@ -23,6 +23,7 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
+import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
 import { ExploreTableSparkline } from '@/components/explore/ExploreTableSparkline'
 import type { ExploreTableSparkline as ExploreTableSparklineData } from '@/features/explore/exploreTableSparklines'
 

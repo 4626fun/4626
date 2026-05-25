@@ -13,12 +13,30 @@ export type ExploreTableSparklinesResponse = {
 
 const STORAGE_KEY = '4626:explore:table-sparklines:v1'
 const STORAGE_MAX_AGE_MS = 6 * 60 * 60_000
-
-type PersistedSparklineEntry = ExploreTableSparkline & { savedAt: number }
+const SPARKLINE_FETCH_CHUNK_SIZE = 25
 
 function isValidSparkline(entry: ExploreTableSparkline | null | undefined): entry is ExploreTableSparkline {
   return Boolean(entry && Array.isArray(entry.values) && entry.values.length >= 2)
 }
+
+export function resolveExploreRowTrend30d(
+  coin: Pick<ZoraCoin, 'address' | 'trend30d'> | null | undefined,
+  sparklines: ReadonlyMap<string, ExploreTableSparkline>,
+): ExploreTableSparkline | null {
+  const address = typeof coin?.address === 'string' ? coin.address.toLowerCase() : ''
+  if (!address) return null
+  const cached = sparklines.get(address)
+  if (isValidSparkline(cached)) return cached
+  if (isValidSparkline(coin?.trend30d)) {
+    return {
+      values: [...coin.trend30d.values],
+      changePercent: coin.trend30d.changePercent ?? null,
+    }
+  }
+  return null
+}
+
+type PersistedSparklineEntry = ExploreTableSparkline & { savedAt: number }
 
 export function seedSparklinesFromCoins(
   coins: ReadonlyArray<Pick<ZoraCoin, 'address' | 'trend30d'>>,
@@ -109,10 +127,19 @@ export async function fetchExploreTableSparklines(
   const normalized = [...new Set(coinAddresses.map((address) => address.toLowerCase()).filter(Boolean))]
   if (normalized.length === 0) return new Map()
 
-  const query = new URLSearchParams({ coins: normalized.join(',') })
-  const res = await apiFetch(`/api/zora/exploreSparklines?${query.toString()}`, { method: 'GET' })
-  const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreTableSparklinesResponse> | null
-  if (!res.ok || !json?.success || !json.data?.sparklines) return new Map()
+  async function fetchChunk(chunk: string[]): Promise<Map<string, ExploreTableSparkline>> {
+    const query = new URLSearchParams({ coins: chunk.join(',') })
+    const res = await apiFetch(`/api/zora/exploreSparklines?${query.toString()}`, { method: 'GET' })
+    const json = (await res.json().catch(() => null)) as ApiEnvelope<ExploreTableSparklinesResponse> | null
+    if (!res.ok || !json?.success || !json.data?.sparklines) return new Map()
+    return new Map(Object.entries(json.data.sparklines))
+  }
 
-  return new Map(Object.entries(json.data.sparklines))
+  const chunks: string[][] = []
+  for (let i = 0; i < normalized.length; i += SPARKLINE_FETCH_CHUNK_SIZE) {
+    chunks.push(normalized.slice(i, i + SPARKLINE_FETCH_CHUNK_SIZE))
+  }
+
+  const chunkResults = await Promise.all(chunks.map((chunk) => fetchChunk(chunk)))
+  return mergeExploreTableSparklineMaps(...chunkResults)
 }

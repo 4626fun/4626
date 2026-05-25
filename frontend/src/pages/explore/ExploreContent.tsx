@@ -20,6 +20,7 @@ import {
 } from '@/features/explore/exploreShared'
 import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
+import { resolveExploreRowTrend30d } from '@/features/explore/exploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -162,11 +163,7 @@ export function ExploreContent() {
                         coin={coin}
                         timeframe={currentTimeFilter}
                         migratedCoins={migratedCoins ?? undefined}
-                        trend30d={
-                          coin.address
-                            ? tableSparklines.get(String(coin.address).toLowerCase()) ?? null
-                            : null
-                        }
+                        trend30d={resolveExploreRowTrend30d(coin, tableSparklines)}
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

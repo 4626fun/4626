@@ -17,6 +17,7 @@ import {
   loadExploreCoinTableContextByAddresses,
   type ExploreCoinTableContext,
 } from '../../../server/_lib/zora/exploreCoinTableContext.js'
+import { hydrateExploreSparklinesOnEdges } from '../../../server/_lib/zora/exploreSparklineHydrate.js'
 
 type ExploreList =
   | 'TOP_GAINERS'
@@ -106,9 +107,10 @@ function toFiniteNumberOrNull(value: unknown): number | null {
   return null
 }
 
-async function attachIndexedCoinTableFieldsToCreatorEdges(
+async function attachIndexedCoinTableFieldsToEdges(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>> | null,
   edges: any[],
+  sdk?: unknown,
 ): Promise<void> {
   if (!db || edges.length === 0) return
   const coinAddresses = edges
@@ -123,6 +125,7 @@ async function attachIndexedCoinTableFieldsToCreatorEdges(
     const trend30d = buildTrend30dFromTableContext(ctx)
     if (trend30d) edge.node.trend30d = trend30d
   }
+  await hydrateExploreSparklinesOnEdges(db, edges, { sdk })
 }
 
 async function hasCreatorEthosProjection(db: NonNullable<Awaited<ReturnType<typeof getDb>>>): Promise<boolean> {
@@ -405,6 +408,20 @@ async function assembleEthosSortedCreatorResponse(params: {
       },
     }
   })
+
+  if (params.db && edges.length > 0) {
+    let sdk: unknown = null
+    if (params.key) {
+      try {
+        const mod: any = await import('@zoralabs/coins-sdk')
+        mod.setApiKey(params.key)
+        sdk = mod
+      } catch {
+        sdk = null
+      }
+    }
+    await hydrateExploreSparklinesOnEdges(params.db, edges, { sdk })
+  }
 
   return {
     edges,
@@ -919,8 +936,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return typeof score === 'number' && score >= ethosMin
         })
       }
+    }
 
-      await attachIndexedCoinTableFieldsToCreatorEdges(db, Array.isArray(data?.edges) ? data.edges : [])
+    const exploreEdges = Array.isArray(data?.edges) ? data.edges : []
+    const db = await getDb()
+    if (db && exploreEdges.length > 0) {
+      await attachIndexedCoinTableFieldsToEdges(db, exploreEdges, sdk)
     }
 
     setCache(res, 300)

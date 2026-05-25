@@ -28,6 +28,7 @@ import {
 import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
 import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
+import { resolveExploreRowTrend30d } from '@/features/explore/exploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -617,11 +618,7 @@ export function ExploreCreators() {
                         migratedCoins={migratedCoins ?? undefined}
                         ethosUserkey={ethos?.userkey ?? null}
                         ethosScore={ethos?.score ?? null}
-                        trend30d={
-                          coin.address
-                            ? tableSparklines.get(String(coin.address).toLowerCase()) ?? null
-                            : null
-                        }
+                        trend30d={resolveExploreRowTrend30d(coin, tableSparklines)}
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

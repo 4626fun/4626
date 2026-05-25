@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
+import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import {

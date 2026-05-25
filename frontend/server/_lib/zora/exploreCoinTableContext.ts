@@ -1,9 +1,6 @@
 import type { getDb } from '../../../packages/server-core/src/index.js'
 
-import {
-  isSparklineDbRowFresh,
-  parseSparklineValuesFromDb,
-} from './exploreSparklineCache.js'
+import { parseSparklineValuesFromDb } from './exploreSparklineCache.js'
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
@@ -105,12 +102,9 @@ export async function loadExploreCoinTableContextByAddresses(
 
     const coinUniqueHolders = toIntegerOrNull(row.coin_unique_holders)
     const profileUniqueHolders = toIntegerOrNull(row.profile_unique_holders)
-    const sparklineValues = isSparklineDbRowFresh(row.sparkline_30d_updated_at)
-      ? parseSparklineValuesFromDb(row.sparkline_30d_values)
-      : []
-    const sparklineChangePct = isSparklineDbRowFresh(row.sparkline_30d_updated_at)
-      ? toFiniteNumberOrNull(row.sparkline_30d_change_pct)
-      : null
+    const sparklineValues = parseSparklineValuesFromDb(row.sparkline_30d_values)
+    const sparklineChangePct =
+      sparklineValues.length >= 2 ? toFiniteNumberOrNull(row.sparkline_30d_change_pct) : null
     map.set(coinAddress, {
       coinAddress,
       fees24hUsd: toNumericString(row.fees_24h_usd),

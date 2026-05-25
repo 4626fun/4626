@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
 import {
@@ -36,7 +36,7 @@ export function useExploreTableSparklines(
   }, [coinAddresses])
 
   const seededSparklines = useMemo(() => seedSparklinesFromCoins(seedCoins), [seedCoins])
-  const persistedSparklines = readPersistedExploreTableSparklines()
+  const [persistedSparklines] = useState(() => readPersistedExploreTableSparklines())
 
   const warmSparklines = useMemo(
     () => mergeExploreTableSparklineMaps(persistedSparklines, seededSparklines),
