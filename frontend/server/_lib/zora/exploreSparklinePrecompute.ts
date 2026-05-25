@@ -173,7 +173,7 @@ export async function precomputeExploreSparklinesForCoins(
     return { attempted: 0, refreshed: 0, skippedFresh, failed: 0 }
   }
 
-  const fulfilled: Awaited<ReturnType<typeof fetchCoinPriceSparkline>>[] = []
+  const fulfilled: Awaited<ReturnType<typeof resolveCoinPriceSparkline>>[] = []
   let failed = 0
 
   await mapWithConcurrency(targets, concurrency, async (coinAddress) => {
