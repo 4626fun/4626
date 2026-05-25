@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildCreatorProfileFromTableContext,
   buildMediaContentFromAvatarUrl,
+  buildTrend30dFromTableContext,
 } from './exploreCoinTableContext.js'
 
 describe('exploreCoinTableContext helpers', () => {
@@ -29,6 +30,8 @@ describe('exploreCoinTableContext helpers', () => {
           symbol: 'jesse',
           avatarImageUrl: 'https://example.com/avatar.png',
           zoraHandle: 'jessepollak',
+          sparkline30dValues: [],
+          sparkline30dChangePct: null,
         },
       ),
     ).toEqual({
@@ -40,6 +43,26 @@ describe('exploreCoinTableContext helpers', () => {
           medium: 'https://example.com/avatar.png',
         },
       },
+    })
+  })
+
+  it('builds trend30d payload from indexed table context', () => {
+    expect(
+      buildTrend30dFromTableContext({
+        coinAddress: '0x123',
+        fees24hUsd: null,
+        uniqueHolders: null,
+        marketCapDelta24h: null,
+        name: null,
+        symbol: null,
+        avatarImageUrl: null,
+        zoraHandle: null,
+        sparkline30dValues: [1, 1.1, 1.2],
+        sparkline30dChangePct: 20,
+      }),
+    ).toEqual({
+      values: [1, 1.1, 1.2],
+      changePercent: 20,
     })
   })
 })

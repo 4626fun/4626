@@ -13,6 +13,7 @@ import { fetchFreshEthosScoresByUserkeys } from '../../../server/_lib/chat/ethos
 import {
   buildCreatorProfileFromTableContext,
   buildMediaContentFromAvatarUrl,
+  buildTrend30dFromTableContext,
   loadExploreCoinTableContextByAddresses,
   type ExploreCoinTableContext,
 } from '../../../server/_lib/zora/exploreCoinTableContext.js'
@@ -105,19 +106,7 @@ function toFiniteNumberOrNull(value: unknown): number | null {
   return null
 }
 
-async function loadCreatorCoinFeesByAddresses(
-  db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
-  coinAddresses: string[],
-): Promise<Map<string, string>> {
-  const contextMap = await loadExploreCoinTableContextByAddresses(db, coinAddresses)
-  const map = new Map<string, string>()
-  for (const [address, ctx] of contextMap) {
-    if (ctx.fees24hUsd) map.set(address, ctx.fees24hUsd)
-  }
-  return map
-}
-
-async function attachIndexedFeesToCreatorEdges(
+async function attachIndexedCoinTableFieldsToCreatorEdges(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>> | null,
   edges: any[],
 ): Promise<void> {
@@ -125,12 +114,14 @@ async function attachIndexedFeesToCreatorEdges(
   const coinAddresses = edges
     .map((edge) => (typeof edge?.node?.address === 'string' ? edge.node.address : null))
     .filter((value): value is string => Boolean(value))
-  const feesMap = await loadCreatorCoinFeesByAddresses(db, coinAddresses)
+  const contextMap = await loadExploreCoinTableContextByAddresses(db, coinAddresses)
   for (const edge of edges) {
     const address = typeof edge?.node?.address === 'string' ? edge.node.address.toLowerCase() : ''
     if (!address || !edge?.node) continue
-    const fees = feesMap.get(address)
-    if (fees) edge.node.fees24hUsd = fees
+    const ctx = contextMap.get(address)
+    if (ctx?.fees24hUsd) edge.node.fees24hUsd = ctx.fees24hUsd
+    const trend30d = buildTrend30dFromTableContext(ctx)
+    if (trend30d) edge.node.trend30d = trend30d
   }
 }
 
@@ -386,6 +377,7 @@ async function assembleEthosSortedCreatorResponse(params: {
     const mediaContent =
       detail?.mediaContent ?? buildMediaContentFromAvatarUrl(ctx?.avatarImageUrl)
     const ethos = params.resolveNodeEthos(row)
+    const trend30d = buildTrend30dFromTableContext(ctx)
     return {
       cursor: String(params.offset + idx + 1),
       node: {
@@ -409,6 +401,7 @@ async function assembleEthosSortedCreatorResponse(params: {
         ethosScore: ethos.score,
         ethosLevel: ethos.level,
         ethosScoreSource: ethos.source,
+        ...(trend30d ? { trend30d } : {}),
       },
     }
   })
@@ -927,7 +920,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       }
 
-      await attachIndexedFeesToCreatorEdges(db, Array.isArray(data?.edges) ? data.edges : [])
+      await attachIndexedCoinTableFieldsToCreatorEdges(db, Array.isArray(data?.edges) ? data.edges : [])
     }
 
     setCache(res, 300)

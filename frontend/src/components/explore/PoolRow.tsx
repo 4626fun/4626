@@ -16,12 +16,15 @@ import {
 } from './rowFormatting'
 import { useIdentity } from '@/hooks/useIdentity'
 import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
+import { ExploreTableSparkline } from '@/components/explore/ExploreTableSparkline'
+import type { ExploreTableSparkline as ExploreTableSparklineData } from '@/features/explore/exploreTableSparklines'
 
 type PoolRowProps = {
   coin: ZoraCoin
   timeframe?: string
   /** Set of migrated coin addresses (lowercase) for accurate fee detection */
   migratedCoins?: Set<string>
+  trend30d?: ExploreTableSparklineData | null
   isExpanded?: boolean
   onToggleFees?: () => void
 }
@@ -36,6 +39,7 @@ export function PoolRow({
   coin,
   timeframe = '1d',
   migratedCoins,
+  trend30d,
   isExpanded,
   onToggleFees,
 }: PoolRowProps) {
@@ -121,6 +125,15 @@ export function PoolRow({
       <span className={`tabular-nums px-3 py-2 text-right ${deltaToneClass}`}>
         {change.text}
       </span>
+
+      {/* 30D trend */}
+      <div className="px-3 py-2 flex items-center justify-center">
+        {trend30d ? (
+          <ExploreTableSparkline values={trend30d.values} changePercent={trend30d.changePercent} />
+        ) : (
+          <span className="text-zinc-600">—</span>
+        )}
+      </div>
 
       {/* Volume */}
       <span className="text-white tabular-nums px-3 py-2 text-right">{formatCompactNumber(volumeDisplay)}</span>
@@ -239,6 +252,8 @@ export function PoolTableHeader({ timeframe = '1d', currentSort, onSortChange }:
           const labelNode =
             c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
+            ) : c.id === 'trend30d' ? (
+              <span title="30-day price trend from indexed Zora swap activity">{c.label}</span>
             ) : c.id === 'totalFees' ? (
               <span className="inline-flex items-center justify-center gap-0.5" title={EXPLORE_FEE_VERSION_HEADER_HINT}>
                 {c.label}

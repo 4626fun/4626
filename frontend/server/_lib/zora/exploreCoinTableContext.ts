@@ -1,5 +1,10 @@
 import type { getDb } from '../../../packages/server-core/src/index.js'
 
+import {
+  isSparklineDbRowFresh,
+  parseSparklineValuesFromDb,
+} from './exploreSparklineCache.js'
+
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>
 
 export type ExploreCoinTableContext = {
@@ -11,6 +16,8 @@ export type ExploreCoinTableContext = {
   symbol: string | null
   avatarImageUrl: string | null
   zoraHandle: string | null
+  sparkline30dValues: number[]
+  sparkline30dChangePct: number | null
 }
 
 function toNumericString(value: unknown): string | null {
@@ -27,6 +34,15 @@ function toIntegerOrNull(value: unknown): number | null {
   if (typeof value === 'string') {
     const n = Number(value)
     return Number.isFinite(n) ? Math.trunc(n) : null
+  }
+  return null
+}
+
+function toFiniteNumberOrNull(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string') {
+    const n = Number(value)
+    return Number.isFinite(n) ? n : null
   }
   return null
 }
@@ -66,6 +82,9 @@ export async function loadExploreCoinTableContextByAddresses(
       cc.fees_24h_usd,
       cc.unique_holders AS coin_unique_holders,
       cc.market_cap_delta_24h,
+      cc.sparkline_30d_values,
+      cc.sparkline_30d_change_pct,
+      cc.sparkline_30d_updated_at,
       pm.zora_creator_coin_name,
       pm.zora_creator_coin_symbol,
       pm.profile_unique_holders,
@@ -86,6 +105,12 @@ export async function loadExploreCoinTableContextByAddresses(
 
     const coinUniqueHolders = toIntegerOrNull(row.coin_unique_holders)
     const profileUniqueHolders = toIntegerOrNull(row.profile_unique_holders)
+    const sparklineValues = isSparklineDbRowFresh(row.sparkline_30d_updated_at)
+      ? parseSparklineValuesFromDb(row.sparkline_30d_values)
+      : []
+    const sparklineChangePct = isSparklineDbRowFresh(row.sparkline_30d_updated_at)
+      ? toFiniteNumberOrNull(row.sparkline_30d_change_pct)
+      : null
     map.set(coinAddress, {
       coinAddress,
       fees24hUsd: toNumericString(row.fees_24h_usd),
@@ -95,6 +120,8 @@ export async function loadExploreCoinTableContextByAddresses(
       symbol: normalizeText(row.zora_creator_coin_symbol),
       avatarImageUrl: normalizeText(row.avatar_image_url),
       zoraHandle: normalizeText(row.zora_handle),
+      sparkline30dValues: sparklineValues,
+      sparkline30dChangePct: sparklineChangePct,
     })
   }
   return map
@@ -107,6 +134,16 @@ export function buildMediaContentFromAvatarUrl(url: string | null | undefined) {
       small: url,
       medium: url,
     },
+  }
+}
+
+export function buildTrend30dFromTableContext(
+  ctx: ExploreCoinTableContext | null | undefined,
+): { values: number[]; changePercent: number | null } | undefined {
+  if (!ctx || ctx.sparkline30dValues.length < 2) return undefined
+  return {
+    values: ctx.sparkline30dValues,
+    changePercent: ctx.sparkline30dChangePct,
   }
 }
 

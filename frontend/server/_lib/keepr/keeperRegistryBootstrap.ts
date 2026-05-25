@@ -56,8 +56,12 @@ async function seedAjnaRegistry(params: {
     params.strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
     params.strategyDetails.find((entry) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress)
 
-  if (!ajna?.ajna.innerVault || !ajna.ajna.auth || !ajna.ajna.ajnaPool) {
+  if (!ajna?.ajna.innerVault || !ajna.ajna.ajnaPool) {
     warnings.push('ajna_registry_seed_skipped_missing_onchain_wiring')
+    return { seeded: false, warnings }
+  }
+  if (!ajna.ajna.auth) {
+    warnings.push('ajna_registry_seed_skipped_missing_auth')
     return { seeded: false, warnings }
   }
 

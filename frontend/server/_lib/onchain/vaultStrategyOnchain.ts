@@ -118,6 +118,16 @@ const AJNA_AUTH_VIEW_ABI = [
   },
 ] as const
 
+const AJNA_POOL_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'ajnaPool',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 const SOLANA_STRATEGY_VIEW_ABI = [
   {
     type: 'function',
@@ -310,10 +320,36 @@ async function readCharmVaultAddress(params: {
   return isZeroAddress(charmVault) ? null : charmVault
 }
 
+async function readDirectAjnaPool(params: {
+  client: PublicClient
+  strategy: Address
+}): Promise<Address | null> {
+  const ajnaPool = normalizeAddress(
+    await readContractSafe<Address>({
+      client: params.client,
+      address: params.strategy,
+      abi: AJNA_POOL_VIEW_ABI,
+      functionName: 'ajnaPool',
+    }),
+  )
+  return isZeroAddress(ajnaPool) ? null : ajnaPool
+}
+
 async function readNestedAjnaDetails(params: {
   client: PublicClient
   strategy: Address
 }): Promise<VaultStrategyScan['ajna']> {
+  const directAjnaPool = await readDirectAjnaPool(params)
+  if (directAjnaPool) {
+    return {
+      ajnaPool: directAjnaPool,
+      innerVault: params.strategy,
+      auth: null,
+      bufferRatioBps: null,
+      minBucketIndex: null,
+    }
+  }
+
   const innerVault = normalizeAddress(
     await readContractSafe<Address>({
       client: params.client,
@@ -486,6 +522,14 @@ export async function enrichVaultArtifactsFromOnChain(params: {
       if (ajna.ajna.innerVault) assignIfMissing(artifacts, 'ajnaInnerVault', ajna.ajna.innerVault)
       if (ajna.ajna.auth) assignIfMissing(artifacts, 'ajnaAuth', ajna.ajna.auth)
       if (ajna.ajna.ajnaPool) assignIfMissing(artifacts, 'ajnaPool', ajna.ajna.ajnaPool)
+    } else {
+      const directAjna = strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool))
+      if (directAjna?.ajna.ajnaPool) {
+        assignIfMissing(artifacts, 'strategyAdapter', directAjna.strategy)
+        assignIfMissing(artifacts, 'ajnaAdapter', directAjna.strategy)
+        assignIfMissing(artifacts, 'ajnaInnerVault', directAjna.strategy)
+        assignIfMissing(artifacts, 'ajnaPool', directAjna.ajna.ajnaPool)
+      }
     }
     if (solana?.bridgeAddress) {
       assignIfMissing(artifacts, 'solanaBridgeAdapter', solana.bridgeAddress)

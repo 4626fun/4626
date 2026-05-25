@@ -8,12 +8,12 @@ const {
   ensureKeeprSchemaMock,
   getDbMock,
   isDbConfiguredMock,
-  validateCreatorRegistryBindingMock,
+  validateKeeperVaultListingMock,
 } = vi.hoisted(() => ({
   ensureKeeprSchemaMock: vi.fn(async () => {}),
   getDbMock: vi.fn(),
   isDbConfiguredMock: vi.fn(() => true),
-  validateCreatorRegistryBindingMock: vi.fn(async () => ({ ok: true as const })),
+  validateKeeperVaultListingMock: vi.fn(async () => ({ ok: true as const })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -32,7 +32,7 @@ vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
 }))
 
 vi.mock('../../server/_lib/onchain/creatorRegistryVerification.js', () => ({
-  validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
+  validateKeeperVaultListing: validateKeeperVaultListingMock,
 }))
 
 type MockVaultRow = {
@@ -146,7 +146,7 @@ describe('/api/vaults/active automation exposure', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    validateCreatorRegistryBindingMock.mockImplementation(async () => ({ ok: true }))
+    validateKeeperVaultListingMock.mockImplementation(async () => ({ ok: true }))
     isDbConfiguredMock.mockReturnValue(true)
     restoreEnv = applyEnv({ KPR_API_KEY: 'test-keepr-key' })
   })

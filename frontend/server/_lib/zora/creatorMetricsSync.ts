@@ -23,6 +23,7 @@ import {
   type ExploreCoinFinancialSnapshot,
   type ExploreList,
 } from './creatorMetricsSyncHelpers.js'
+import { precomputeExploreSparklinesForCoins } from './exploreSparklinePrecompute.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
@@ -203,6 +204,9 @@ async function fetchCountCandidate(sdk: any, list: ExploreList, pageSize: number
 async function ensureCreatorCoinsDisplayColumns(db: Db): Promise<void> {
   await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS unique_holders INTEGER;`
   await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS market_cap_delta_24h NUMERIC(38, 12);`
+  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_values JSONB;`
+  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_change_pct NUMERIC(12, 4);`
+  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS sparkline_30d_updated_at TIMESTAMPTZ;`
 }
 
 async function ensureCreatorMetricsStateColumns(db: Db): Promise<void> {
@@ -453,9 +457,10 @@ async function refreshHotFinancialsFromExploreLists(
   sdk: any,
   db: Db,
   options: { pageSize: number; maxPagesPerList: number; lists: readonly ExploreList[] },
-): Promise<{ coinsRefreshed: number; pagesFetched: number }> {
+): Promise<{ coinsRefreshed: number; pagesFetched: number; coinAddresses: string[] }> {
   let coinsRefreshed = 0
   let pagesFetched = 0
+  const coinAddresses: string[] = []
 
   for (const list of options.lists) {
     let after: string | null = null
@@ -472,6 +477,9 @@ async function refreshHotFinancialsFromExploreLists(
         if (!snapshot) continue
         await withRetry('upsert_hot_financial_snapshot', () => upsertHotFinancialSnapshot(db, snapshot))
         coinsRefreshed += 1
+        if (!coinAddresses.includes(snapshot.coinAddress)) {
+          coinAddresses.push(snapshot.coinAddress)
+        }
       }
 
       if (!pageInfo.hasNextPage) break
@@ -480,7 +488,7 @@ async function refreshHotFinancialsFromExploreLists(
     }
   }
 
-  return { coinsRefreshed, pagesFetched }
+  return { coinsRefreshed, pagesFetched, coinAddresses }
 }
 
 async function upsertExploreSnapshotBatch(db: Db, snapshots: readonly ExploreCoinFinancialSnapshot[]): Promise<void> {
@@ -959,18 +967,28 @@ export async function runCreatorMetricsHotSync(): Promise<CreatorMetricsHotSyncR
       maxPagesPerList: hotRefreshPagesPerList,
       lists: DEFAULT_HOT_REFRESH_LISTS,
     })
+    const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
+      coinAddresses: hotRefresh.coinAddresses,
+    })
     await recomputeAndCacheCreatorMetricsTotals(db)
     await db.sql`
       UPDATE creator_metrics_state
       SET last_hot_refresh_at = NOW()
       WHERE id = 1;
     `
-    log.info('[creator-metrics-hot-sync] completed', hotRefresh)
+    log.info('[creator-metrics-hot-sync] completed', {
+      ...hotRefresh,
+      sparklinePrecompute,
+    })
     return {
       ok: true,
       runId,
       coinsRefreshed: hotRefresh.coinsRefreshed,
       pagesFetched: hotRefresh.pagesFetched,
+      sparklinesRefreshed: sparklinePrecompute.refreshed,
+      sparklinesAttempted: sparklinePrecompute.attempted,
+      sparklinesSkippedFresh: sparklinePrecompute.skippedFresh,
+      sparklinesFailed: sparklinePrecompute.failed,
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'creator_metrics_hot_sync_failed'
@@ -1254,6 +1272,10 @@ export type CreatorMetricsHotSyncResult = {
   runId: string
   coinsRefreshed: number
   pagesFetched: number
+  sparklinesRefreshed?: number
+  sparklinesAttempted?: number
+  sparklinesSkippedFresh?: number
+  sparklinesFailed?: number
   skipped?: boolean
   error?: string
 }
@@ -1385,7 +1407,13 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
       })
       coinsUpserted += hotRefresh.coinsRefreshed
       pagesProcessed += hotRefresh.pagesFetched
-      log.info('[creator-metrics-sync] hot financial refresh completed', hotRefresh)
+      const sparklinePrecompute = await precomputeExploreSparklinesForCoins(sdk, db, {
+        coinAddresses: hotRefresh.coinAddresses,
+      })
+      log.info('[creator-metrics-sync] hot financial refresh completed', {
+        ...hotRefresh,
+        sparklinePrecompute,
+      })
     }
 
     const blockTimestampCache = new Map<string, string>()

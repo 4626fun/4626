@@ -19,6 +19,7 @@ import {
   useExploreSubnavParams,
 } from '@/features/explore/exploreShared'
 import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
+import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_24H',
@@ -89,6 +90,11 @@ export function ExploreContent() {
     return allCoins.filter((coin) => matchesCoinSearchQuery(coin, searchQuery))
   }, [allCoins, searchQuery])
 
+  const { sparklines: tableSparklines } = useExploreTableSparklines(
+    filteredCoins.map((coin) => coin.address),
+    filteredCoins,
+  )
+
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
     isFetchingNextPage,
@@ -156,6 +162,11 @@ export function ExploreContent() {
                         coin={coin}
                         timeframe={currentTimeFilter}
                         migratedCoins={migratedCoins ?? undefined}
+                        trend30d={
+                          coin.address
+                            ? tableSparklines.get(String(coin.address).toLowerCase()) ?? null
+                            : null
+                        }
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

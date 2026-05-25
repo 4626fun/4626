@@ -13,6 +13,7 @@ export const zoraRouteLoaders: ApiRouteLoaders = {
   [zoraCliRouteSubpaths.get]: () => import('./zora/cli/_get.js'),
   [zoraCliRouteSubpaths.priceHistory]: () => import('./zora/cli/_priceHistory.js'),
   [zoraCliRouteSubpaths.profile]: () => import('./zora/cli/_profile.js'),
+  'exploreSparklines': () => import('./zora/_exploreSparklines.js'),
   'explore': () => import('./zora/_explore.js'),
   'link/status': () => import('./zora/link/_status.js'),
   'metrics': () => import('./zora/_metrics.js'),

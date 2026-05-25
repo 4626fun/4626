@@ -27,6 +27,7 @@ import {
 } from '@/features/explore/exploreShared'
 import { shouldShowExploreTableLoading } from '@/features/explore/exploreListNavigation'
 import { useExploreCreatorsHeroMetrics } from '@/features/explore/useExploreCreatorsHeroMetrics'
+import { useExploreTableSparklines } from '@/features/explore/useExploreTableSparklines'
 
 const SORT_TO_LIST_TYPE: Record<string, ZoraExploreListType> = {
   volume: 'TOP_VOLUME_CREATORS_24H',
@@ -503,6 +504,11 @@ export function ExploreCreators() {
 
   useScreenshotReady(screenshotReady)
 
+  const { sparklines: tableSparklines } = useExploreTableSparklines(
+    displayCoins.map((coin) => coin.address),
+    displayCoins,
+  )
+
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
     isFetchingNextPage,
@@ -611,6 +617,11 @@ export function ExploreCreators() {
                         migratedCoins={migratedCoins ?? undefined}
                         ethosUserkey={ethos?.userkey ?? null}
                         ethosScore={ethos?.score ?? null}
+                        trend30d={
+                          coin.address
+                            ? tableSparklines.get(String(coin.address).toLowerCase()) ?? null
+                            : null
+                        }
                         isExpanded={isExpanded}
                         onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
                       />

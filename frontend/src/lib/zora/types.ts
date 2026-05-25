@@ -68,6 +68,10 @@ export type ZoraCoin = {
   ethosScore?: number | null
   ethosLevel?: string | null
   ethosScoreSource?: string | null
+  trend30d?: {
+    values: number[]
+    changePercent?: number | null
+  }
 }
 
 export type ZoraEdge<T> = { node?: T; cursor?: string }

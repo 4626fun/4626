@@ -11,6 +11,7 @@ export type ExploreTableColumnId =
   | 'marketCap'
   | 'volume'
   | 'priceChange'
+  | 'trend30d'
   | 'totalFees'
   | 'payoutTo'
 
@@ -63,6 +64,7 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
   const marketCapWidth = opts.variant === 'creators' ? 112 : 120
   const volumeWidth = opts.variant === 'creators' ? 112 : 120
   const deltaWidth = opts.variant === 'creators' ? 102 : 110
+  const trend30dWidth = 88
 
   // A DeFiLlama-like table is intentionally dense and fixed-width, with horizontal scroll.
   return [
@@ -79,6 +81,7 @@ export function getExploreColumns(opts: { variant: ExploreTableVariant; timefram
     { id: 'holders', label: 'Holders', group: 'market', widthPx: holdersWidth, align: centerMarket ? 'center' : 'right' },
     { id: 'marketCap', label: 'MCap', group: 'market', widthPx: marketCapWidth, align: centerMarket ? 'center' : 'right', sortKey: 'marketCap' },
     { id: 'priceChange', label: 'MCap Δ 24H', group: 'market', widthPx: deltaWidth, align: centerMarket ? 'center' : 'right', sortKey: 'priceChange' },
+    { id: 'trend30d', label: '30D', group: 'market', widthPx: trend30dWidth, align: centerMarket ? 'center' : 'right' },
     { id: 'volume', label: getVolumeLabel(timeframe), group: 'market', widthPx: volumeWidth, align: centerMarket ? 'center' : 'right', sortKey: 'volume' },
 
     { id: 'totalFees', label: 'Fees (24h)', group: 'fees', widthPx: 118, align: 'center' },

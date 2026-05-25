@@ -19,7 +19,7 @@ import {
 import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keepr/keeprAutomation.js'
 
 import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
-import { validateCreatorRegistryBinding } from '../../../server/_lib/onchain/creatorRegistryVerification.js'
+import { validateKeeperVaultListing } from '../../../server/_lib/onchain/creatorRegistryVerification.js'
 
 export interface VaultAutomationConfig {
   automationEnabled: boolean
@@ -155,7 +155,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let registryValidation
       try {
-        registryValidation = await validateCreatorRegistryBinding({
+        registryValidation = await validateKeeperVaultListing({
           creatorCoinAddress: String(row.creator_coin_address ?? ''),
           vaultAddress: String(row.vault_address ?? ''),
           shareTokenAddress,

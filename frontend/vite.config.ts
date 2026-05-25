@@ -357,6 +357,7 @@ function localApiRoutesPlugin(): Plugin {
         [zoraCliRoutePaths.get]: apiImport('./api/_handlers/zora/cli/_get'),
         [zoraCliRoutePaths.priceHistory]: apiImport('./api/_handlers/zora/cli/_priceHistory'),
         [zoraCliRoutePaths.profile]: apiImport('./api/_handlers/zora/cli/_profile'),
+        '/api/zora/exploreSparklines': apiImport('./api/_handlers/zora/_exploreSparklines'),
         '/api/zora/explore': apiImport('./api/_handlers/zora/_explore'),
         '/api/zora/link/status': apiImport('./api/_handlers/zora/link/_status'),
         '/api/zora/metrics': apiImport('./api/_handlers/zora/_metrics'),

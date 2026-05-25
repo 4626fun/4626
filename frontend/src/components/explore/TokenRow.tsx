@@ -23,7 +23,8 @@ import { useIdentity } from '@/hooks/useIdentity'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { type EthosScoreValue } from '@/components/chat/EthosScorePill'
 import { CreatorEthosAvatar } from '@/components/explore/CreatorEthosAvatar'
-import { ExploreFeeInfoHint, EXPLORE_FEE_VERSION_HEADER_HINT } from '@/components/explore/ExploreFeeInfoHint'
+import { ExploreTableSparkline } from '@/components/explore/ExploreTableSparkline'
+import type { ExploreTableSparkline as ExploreTableSparklineData } from '@/features/explore/exploreTableSparklines'
 
 type TokenRowProps = {
   coin: ZoraCoin
@@ -34,6 +35,7 @@ type TokenRowProps = {
   migratedCoins?: Set<string>
   ethosUserkey?: string | null
   ethosScore?: EthosScoreValue | null
+  trend30d?: ExploreTableSparklineData | null
   isExpanded?: boolean
   onToggleFees?: () => void
 }
@@ -70,6 +72,7 @@ export function TokenRow({
   migratedCoins,
   ethosUserkey,
   ethosScore,
+  trend30d,
   isExpanded,
   onToggleFees,
 }: TokenRowProps) {
@@ -232,6 +235,15 @@ export function TokenRow({
           {change.text}
         </span>
 
+        {/* 30D trend */}
+        <div className="px-3 py-2 flex items-center justify-center">
+          {trend30d ? (
+            <ExploreTableSparkline values={trend30d.values} changePercent={trend30d.changePercent} />
+          ) : (
+            <span className="text-zinc-600">—</span>
+          )}
+        </div>
+
         {/* Volume */}
         <span className="text-white tabular-nums px-3 py-2 text-center">{formatCompactNumber(volumeDisplay)}</span>
 
@@ -368,6 +380,8 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
           const labelNode =
             c.id === 'priceChange' ? (
               <span title="Market cap % change over 24H">{c.label}</span>
+            ) : c.id === 'trend30d' ? (
+              <span title="30-day price trend from indexed Zora swap activity">{c.label}</span>
             ) : c.id === 'name' && c.sortKey === 'ethosScore' ? (
               <span title="Sort by Ethos score (highest first). Score badge appears on the avatar.">{c.label}</span>
             ) : c.id === 'totalFees' ? (
