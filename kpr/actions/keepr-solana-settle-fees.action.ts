@@ -108,7 +108,7 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
 
       const accountsWithFees: Array<InstanceType<typeof PublicKey>> = [];
 
-      let allAccounts: Array<{ pubkey: InstanceType<typeof PublicKey> }> = [];
+      let allAccounts: ReadonlyArray<{ pubkey: InstanceType<typeof PublicKey> }> = [];
       try {
         allAccounts = await connection.getProgramAccounts(TOKEN_2022_PROGRAM_ID, {
           filters: [

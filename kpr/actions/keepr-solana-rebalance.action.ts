@@ -36,6 +36,10 @@ import { getAddress, isAddress, parseAbi, type Abi, type Address } from 'viem'
 import { requireEnv, SOLANA_BRIDGE_ADAPTER_ABI } from '../config.js'
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js'
 import { getPublicClient, writeContract } from '../utils/onchain.js'
+import {
+  normalizeSolanaBridgeAdapter,
+  readLegacySolanaBridgeAdaptersFromEnv,
+} from '../utils/solanaCanonicalAddresses.js'
 import { solanaPubkeyToBytes32 } from '../utils/solana.js'
 
 const WORKFLOW_NAME = 'keepr-solana-rebalance'
@@ -94,9 +98,21 @@ const SOLANA_BRIDGE_OUTBOUND_ABI = [
   },
 ] as const
 
+const SOLANA_STRATEGY_BRIDGE_ABI = [
+  {
+    type: 'function',
+    name: 'bridgeAdapter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
 export type RebalancePlanEntry = {
   creatorToken: Address
   adapterBalance: string
+  /** Adapter that holds the balance and receives bridgeToSolana. */
+  bridgeAdapter?: Address
   dispatchMode: 'skip_below_threshold' | 'bridge_plain' | 'bridge_with_meteora_ixs'
   destination: string | null
   meteoraAlphaVault: string | null
@@ -123,6 +139,76 @@ type CreatorRegistration = {
    *  downstream path will layer the Alpha Vault deposit ixs in the same
    *  bridge tx via `bridgeToSolanaWithIxs`. */
   meteoraAlphaVault: string | null
+  /** Override bridge adapter when the vault strategy still points at legacy infra. */
+  bridgeAdapter?: Address | null
+  /** Optional on-chain SolanaStrategy address — bridgeAdapter() is read when set. */
+  solanaStrategyAddress?: Address | null
+}
+
+function uniqueAddresses(values: Array<Address | null | undefined>): Address[] {
+  const out: Address[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    if (!value || !isAddress(value)) continue
+    const normalized = getAddress(value).toLowerCase()
+    if (seen.has(normalized)) continue
+    seen.add(normalized)
+    out.push(getAddress(value))
+  }
+  return out
+}
+
+export async function resolveBridgeAdapterCandidates(params: {
+  canonicalAdapter: Address
+  registration: CreatorRegistration
+  publicClient: ReturnType<typeof getPublicClient>
+}): Promise<Address[]> {
+  const { canonicalAdapter, registration, publicClient } = params
+  let strategyAdapter: Address | null = null
+  if (registration.solanaStrategyAddress && isAddress(registration.solanaStrategyAddress)) {
+    try {
+      strategyAdapter = getAddress(
+        (await publicClient.readContract({
+          address: getAddress(registration.solanaStrategyAddress),
+          abi: SOLANA_STRATEGY_BRIDGE_ABI,
+          functionName: 'bridgeAdapter',
+        })) as Address,
+      )
+    } catch {
+      strategyAdapter = null
+    }
+  }
+
+  return uniqueAddresses([
+    registration.bridgeAdapter ?? null,
+    strategyAdapter,
+    canonicalAdapter,
+    ...readLegacySolanaBridgeAdaptersFromEnv(),
+  ])
+}
+
+export async function findLargestAdapterBalance(params: {
+  creatorToken: Address
+  adapters: Address[]
+  publicClient: ReturnType<typeof getPublicClient>
+}): Promise<{ adapter: Address; balance: bigint } | null> {
+  let best: { adapter: Address; balance: bigint } | null = null
+  for (const adapter of params.adapters) {
+    try {
+      const balance = (await params.publicClient.readContract({
+        address: params.creatorToken,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [adapter],
+      })) as bigint
+      if (!best || balance > best.balance) {
+        best = { adapter, balance }
+      }
+    } catch {
+      // skip unreadable adapter
+    }
+  }
+  return best
 }
 
 function readCreatorRegistrations(): CreatorRegistration[] {
@@ -141,6 +227,14 @@ function readCreatorRegistrations(): CreatorRegistration[] {
         creatorToken: getAddress(entry.creatorToken as Address),
         destinationPubkey: entry.destinationPubkey ?? null,
         meteoraAlphaVault: entry.meteoraAlphaVault ?? null,
+        bridgeAdapter:
+          typeof entry.bridgeAdapter === 'string' && isAddress(entry.bridgeAdapter)
+            ? getAddress(entry.bridgeAdapter)
+            : null,
+        solanaStrategyAddress:
+          typeof entry.solanaStrategyAddress === 'string' && isAddress(entry.solanaStrategyAddress)
+            ? getAddress(entry.solanaStrategyAddress)
+            : null,
       }))
   } catch {
     return []
@@ -187,7 +281,7 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
   if (!isAddress(adapterAddressRaw)) {
     throw new Error(`invalid SOLANA_BRIDGE_ADAPTER: ${adapterAddressRaw}`)
   }
-  const adapterAddress = getAddress(adapterAddressRaw)
+  const canonicalAdapter = getAddress(normalizeSolanaBridgeAdapter(adapterAddressRaw))
   const publicClient = getPublicClient()
   const bridgeFeeValue = readBridgeFeeValueWei()
   const registrations = readCreatorRegistrations()
@@ -201,16 +295,33 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
 
   for (const entry of registrations) {
     const minAmount = readMinAmount(entry.creatorToken)
+    const adapterCandidates = await resolveBridgeAdapterCandidates({
+      canonicalAdapter,
+      registration: entry,
+      publicClient,
+    })
 
-    // ── Read adapter-held balance for this creator's coin. ──
     let adapterBalance: bigint
+    let adapterAddress: Address
     try {
-      adapterBalance = (await publicClient.readContract({
-        address: entry.creatorToken,
-        abi: ERC20_BALANCE_ABI,
-        functionName: 'balanceOf',
-        args: [adapterAddress],
-      })) as bigint
+      const largest = await findLargestAdapterBalance({
+        creatorToken: entry.creatorToken,
+        adapters: adapterCandidates,
+        publicClient,
+      })
+      if (!largest) {
+        result.plan.push({
+          creatorToken: entry.creatorToken,
+          adapterBalance: '0',
+          dispatchMode: 'skip_below_threshold',
+          destination: entry.destinationPubkey,
+          meteoraAlphaVault: entry.meteoraAlphaVault,
+          notes: 'no adapter balance readable',
+        })
+        continue
+      }
+      adapterBalance = largest.balance
+      adapterAddress = largest.adapter
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       result.plan.push({
@@ -219,7 +330,7 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
         dispatchMode: 'skip_below_threshold',
         destination: entry.destinationPubkey,
         meteoraAlphaVault: entry.meteoraAlphaVault,
-        notes: `balanceOf RPC failed: ${message}`,
+        notes: `adapter balance scan failed: ${message}`,
       })
       continue
     }
@@ -228,10 +339,11 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
       result.plan.push({
         creatorToken: entry.creatorToken,
         adapterBalance: adapterBalance.toString(),
+        bridgeAdapter: adapterAddress,
         dispatchMode: 'skip_below_threshold',
         destination: entry.destinationPubkey,
         meteoraAlphaVault: entry.meteoraAlphaVault,
-        notes: `below threshold ${minAmount.toString()}`,
+        notes: `below threshold ${minAmount.toString()} (scanned ${adapterCandidates.length} adapter(s))`,
       })
       continue
     }
@@ -248,6 +360,7 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
       result.plan.push({
         creatorToken: entry.creatorToken,
         adapterBalance: adapterBalance.toString(),
+        bridgeAdapter: adapterAddress,
         dispatchMode: 'bridge_with_meteora_ixs',
         destination: entry.destinationPubkey ?? entry.meteoraAlphaVault,
         meteoraAlphaVault: entry.meteoraAlphaVault,
@@ -294,10 +407,11 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
     const planEntry: RebalancePlanEntry = {
       creatorToken: entry.creatorToken,
       adapterBalance: adapterBalance.toString(),
+      bridgeAdapter: adapterAddress,
       dispatchMode: 'bridge_plain',
       destination: entry.destinationPubkey,
       meteoraAlphaVault: null,
-      notes: `bridgeToSolana(${entry.creatorToken}, ${adapterBalance.toString()}, ${destinationBytes32})`,
+      notes: `bridgeToSolana(${adapterAddress}, ${entry.creatorToken}, ${adapterBalance.toString()}, ${destinationBytes32})`,
     }
 
     if (executeWrites) {

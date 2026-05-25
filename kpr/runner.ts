@@ -81,6 +81,9 @@ async function main() {
       case 'bridge-integrity-monitor':
         workflow = await import('./workflows/bridge-integrity-monitor.workflow.js');
         break;
+      case 'keepr-solana-rebalance':
+        workflow = await import('./workflows/keepr-solana-rebalance.workflow.js');
+        break;
       default:
         console.error(`Unknown workflow: ${workflowName}`);
         console.error('');
@@ -96,6 +99,7 @@ async function main() {
         console.error('  keepr-action-queue   — process queued Keepr actions');
         console.error('  strategy-signal-listener — always-on WS listener for Ajna/Charm triggers');
         console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
+        console.error('  keepr-solana-rebalance   — bridge adapter-held CREATOR to Solana');
         process.exit(1);
     }
 

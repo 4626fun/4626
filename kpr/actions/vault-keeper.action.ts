@@ -22,6 +22,11 @@ import {
   type WriteResult,
 } from '../utils/onchain.js';
 import {
+  postKeeperReport,
+  postKeeperTend,
+  shouldUseKeeperHttpBridge,
+} from '../utils/keeperHttpBridge.js';
+import {
   alertInfo,
   alertWarning,
   alertCritical,
@@ -148,6 +153,29 @@ export function shouldReport(state: VaultState): boolean {
 // Single vault execution
 // ---------------------------------------------------------------------------
 
+async function invokeKeeperWrite(params: {
+  vaultAddress: `0x${string}`;
+  action: 'tend' | 'report';
+}): Promise<WriteResult> {
+  if (shouldUseKeeperHttpBridge()) {
+    const bridge =
+      params.action === 'tend'
+        ? await postKeeperTend(params.vaultAddress)
+        : await postKeeperReport(params.vaultAddress);
+    return {
+      txHash: (bridge.txHash ?? '0x0') as `0x${string}`,
+      success: bridge.success,
+      error: bridge.error,
+    };
+  }
+
+  return writeContract({
+    address: params.vaultAddress,
+    abi: VAULT_ABI,
+    functionName: params.action,
+  });
+}
+
 /**
  * Execute keeper logic for a single vault.
  */
@@ -171,11 +199,7 @@ export async function executeKeeperForVault(vaultAddress: `0x${string}`): Promis
   if (shouldTend(state)) {
     console.log(`[${shortAddr}] Calling tend() — coinBalance: ${formatTokens(state.coinBalance)}`);
 
-    const tendResult = await writeContract({
-      address: vaultAddress,
-      abi: VAULT_ABI,
-      functionName: 'tend',
-    });
+    const tendResult = await invokeKeeperWrite({ vaultAddress, action: 'tend' });
 
     result.tended = tendResult.success;
     result.tendResult = tendResult;
@@ -196,11 +220,7 @@ export async function executeKeeperForVault(vaultAddress: `0x${string}`): Promis
     const secondsSinceReport = state.blockTimestamp - state.lastReport;
     console.log(`[${shortAddr}] Calling report() — ${Number(secondsSinceReport)}s since last report`);
 
-    const reportResult = await writeContract({
-      address: vaultAddress,
-      abi: VAULT_ABI,
-      functionName: 'report',
-    });
+    const reportResult = await invokeKeeperWrite({ vaultAddress, action: 'report' });
 
     result.reported = reportResult.success;
     result.reportResult = reportResult;

@@ -120,7 +120,7 @@ interface VaultsResponse {
  * @param chainId Optional chain ID filter (defaults to Base mainnet 8453)
  */
 export async function fetchActiveVaults(chainId?: number): Promise<VaultConfig[]> {
-  const baseUrl = process.env.KPR_API_BASE_URL || 'https://4626.fun/api';
+  const baseUrl = process.env.KPR_API_BASE_URL || 'https://app.4626.fun/api';
   const secret = requireEnv('KPR_API_KEY');
 
   const url = new URL(`${baseUrl}/vaults/active`);

@@ -139,7 +139,7 @@ export const AKITA_DEFAULTS = {
   // NOTE: This is an example creator coin stack.
   // If/when you redeploy the AKITA vault stack, update these addresses to the new deployment outputs.
   token: addr('5b674196812451b7cec024fe9d22d2c0b172fa75'),
-  vault: addr('A015954E2606d08967Aee3787456bB3A86a46A42'),
+  vault: addr('82C06EaAE27B1Ca31fA29F22341A162A670A4471'),
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
@@ -151,7 +151,7 @@ export const ERC4626_DEFAULTS = {
   // Canonical protocol token defaults currently point to the live Base protocol stack.
   // Keep explicit addresses here so this default set remains independent from AKITA aliases.
   token: addr('5b674196812451b7cec024fe9d22d2c0b172fa75'),
-  vault: addr('A015954E2606d08967Aee3787456bB3A86a46A42'),
+  vault: addr('82C06EaAE27B1Ca31fA29F22341A162A670A4471'),
   wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
   shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
   gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
