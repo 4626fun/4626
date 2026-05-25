@@ -22,6 +22,7 @@ import {
   type PrivyUserLike,
 } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
+import { resolveStoredCanonicalCswAddress } from './canonicalCswPersistence.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -463,16 +464,26 @@ export async function resolveCanonicalCsw(params: {
     const persistedFromHints = profileId ? await readPersistedDelegationState(db, profileId) : null
     const fallbackPersisted = persistedFromHints?.canonicalCswAddress ? persistedFromHints : persisted
     if (fallbackPersisted?.canonicalCswAddress && profileId) {
+      const canonicalCswAddress =
+        resolveStoredCanonicalCswAddress({
+          candidate: fallbackPersisted.canonicalCswAddress,
+          embeddedEoa: extractPrivyEmbeddedEoaAddress(privyUser),
+        }) ?? fallbackPersisted.canonicalCswAddress
       return {
         profileId,
-        canonicalCswAddress: fallbackPersisted.canonicalCswAddress,
+        canonicalCswAddress,
         canonicalSource: normalizeCanonicalSource(fallbackPersisted.canonicalSource, 'wallet_sync'),
       }
     }
     if (persisted?.canonicalCswAddress && profileId) {
+      const canonicalCswAddress =
+        resolveStoredCanonicalCswAddress({
+          candidate: persisted.canonicalCswAddress,
+          embeddedEoa: extractPrivyEmbeddedEoaAddress(privyUser),
+        }) ?? persisted.canonicalCswAddress
       return {
         profileId,
-        canonicalCswAddress: persisted.canonicalCswAddress,
+        canonicalCswAddress,
         canonicalSource: normalizeCanonicalSource(persisted.canonicalSource, 'wallet_sync'),
       }
     }
@@ -489,7 +500,15 @@ export async function resolveCanonicalCsw(params: {
   // Once a canonical CSW is persisted, it remains the product source of truth
   // for asset custody. Fresh Privy payloads can include app-scoped or
   // counterfactual smart wallets; those must not displace the canonical CSW.
-  const canonical = persisted?.canonicalCswAddress ?? syncedCanonical ?? null
+  const rawCanonical = persisted?.canonicalCswAddress ?? syncedCanonical ?? null
+  const canonical = resolveStoredCanonicalCswAddress({
+    candidate: rawCanonical,
+    embeddedEoa: syncResult?.embeddedEoa?.address ?? null,
+    activeOwnerEoa:
+      syncResult?.primaryWalletAddress ??
+      syncResult?.activeOwnerWallet?.address ??
+      extractPrivyEmbeddedEoaAddress(privyUser),
+  })
   if (!canonical) {
     throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
       needsBaseAppSetup: true,

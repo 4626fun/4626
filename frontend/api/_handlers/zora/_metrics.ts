@@ -274,32 +274,6 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
     `
     totalsResult.rows[0].creators_new_24h = newCreatorsResult.rows?.[0]?.creators_new_24h ?? null
   }
-  let ethosScoredCreators: number | null = null
-  let ethos1200Creators: number | null = null
-  let ethos1600Creators: number | null = null
-  let ethos1800Creators: number | null = null
-  try {
-    const projectionCheck = await db.sql`
-      SELECT to_regclass('public.creator_ethos_projection') IS NOT NULL AS has_projection;
-    `
-    if (Boolean(projectionCheck.rows?.[0]?.has_projection)) {
-      const ethosResult = await db.sql`
-        SELECT
-          COUNT(*)::BIGINT FILTER (WHERE ethos_score IS NOT NULL) AS ethos_scored_creators,
-          COUNT(*)::BIGINT FILTER (WHERE ethos_score >= 1200) AS ethos_1200_creators,
-          COUNT(*)::BIGINT FILTER (WHERE ethos_score >= 1600) AS ethos_1600_creators,
-          COUNT(*)::BIGINT FILTER (WHERE ethos_score >= 1800) AS ethos_1800_creators
-        FROM public.creator_ethos_projection;
-      `
-      const ethosAgg = ethosResult.rows?.[0] ?? {}
-      ethosScoredCreators = toNumber(ethosAgg.ethos_scored_creators)
-      ethos1200Creators = toNumber(ethosAgg.ethos_1200_creators)
-      ethos1600Creators = toNumber(ethosAgg.ethos_1600_creators)
-      ethos1800Creators = toNumber(ethosAgg.ethos_1800_creators)
-    }
-  } catch {
-    // Ethos coverage is optional; keep canonical metrics available even if ethos tables are unavailable.
-  }
 
   const agg = totalsResult.rows?.[0] ?? {}
   const syncStatus = parseSyncStatus(state.sync_status)
@@ -320,8 +294,18 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const creatorCoinsVolume24hUsd = toNumber(agg.volume_24h_usd)
   const creatorCoinsFees24hUsd = toNumber(agg.fees_24h_usd)
 
-  // Persist one daily canonical snapshot and return the latest 30-day market-cap series.
-  // This keeps the dashboard trend independent from client-side sort/view state.
+  // Read sparkline history before optional snapshot write so the dashboard can paint sooner.
+  const historyResult = await db.sql`
+    SELECT day::text AS day, creator_coins_market_cap_usd
+    FROM creator_metrics_daily_snapshots
+    WHERE day >= CURRENT_DATE - INTERVAL '29 days'
+    ORDER BY day ASC;
+  `
+  const history30d = mapHistoryRows(
+    Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
+  )
+
+  // Persist one daily canonical snapshot (non-blocking for response assembly).
   await db.sql`
     INSERT INTO creator_metrics_daily_snapshots (
       day,
@@ -353,16 +337,6 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       OR creator_metrics_daily_snapshots.updated_at < NOW() - make_interval(secs => ${SNAPSHOT_WRITE_MIN_INTERVAL_SECONDS});
   `
 
-  const historyResult = await db.sql`
-    SELECT day::text AS day, creator_coins_market_cap_usd
-    FROM creator_metrics_daily_snapshots
-    WHERE day >= CURRENT_DATE - INTERVAL '29 days'
-    ORDER BY day ASC;
-  `
-  const history30d = mapHistoryRows(
-    Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
-  )
-
   return {
     scope,
     updatedAt: new Date().toISOString(),
@@ -386,10 +360,10 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       creatorCoinsMarketCapUsd,
       creatorCoinsVolume24hUsd,
       creatorCoinsFees24hUsd,
-      ethosScoredCreators,
-      ethos1200Creators,
-      ethos1600Creators,
-      ethos1800Creators,
+      ethosScoredCreators: null,
+      ethos1200Creators: null,
+      ethos1600Creators: null,
+      ethos1800Creators: null,
       partial: !exact,
       sampledCreators,
     },

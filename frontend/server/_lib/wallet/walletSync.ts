@@ -6,6 +6,11 @@ import {
   assertNoWalletPrivyCollision,
 } from '../identity/identityRecovery.js'
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
+import { resolveProfilesPrimaryWalletColumn } from './disconnectExternalWallet.js'
+import {
+  applyCanonicalCswPolicyToClassification,
+  resolveStoredCanonicalCswAddress,
+} from './canonicalCswPersistence.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
@@ -444,7 +449,11 @@ function applyPersistedIdentity(params: {
   // fresh Privy payload even though it remains the deployed account on Base.
   // Keep the persisted CSW as source of truth so a newly surfaced Privy smart
   // wallet/counterfactual address cannot silently replace it.
-  const persistedCanonical = normalizeAddress(persistedCanonicalRaw)
+  const persistedCanonical = resolveStoredCanonicalCswAddress({
+    candidate: persistedCanonicalRaw,
+    embeddedEoa: persisted?.embeddedEoa ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persisted?.activeOwnerWallet ?? classification.activeOwnerWallet?.address ?? null,
+  })
   const persistedCanonicalSolana =
     persisted?.canonicalSolanaWallet &&
     isSolanaWalletAddressInClassification(classification, persisted.canonicalSolanaWallet)
@@ -584,12 +593,15 @@ function applyPersistedIdentity(params: {
     ? { address: operationalSolanaFromPersisted.address, provider: operationalSolanaFromPersisted.provider }
     : operationalSolanaFromClassification
 
-  const primaryWalletAddress =
-    persisted.primaryWallet ??
-    classification.primaryWalletAddress ??
-    embeddedEoa?.address ??
-    canonicalSmartWallet?.address ??
-    null
+  const primaryWalletAddress = resolveProfilesPrimaryWalletColumn({
+    embedded: embeddedEoa?.address ?? persisted.embeddedEoa ?? null,
+    canonical: canonicalSmartWallet?.address ?? null,
+    activeOwner: activeOwnerWallet?.address ?? persisted.activeOwnerWallet ?? null,
+    classificationPrimary:
+      classification.primaryWalletAddress ??
+      persisted.primaryWallet ??
+      null,
+  })
 
   allWallets = withWalletIfMissing(
     allWallets,
@@ -723,7 +735,12 @@ async function insertOrUpdateProfile(params: {
   const canonicalSolana = classification.canonicalSolanaWallet?.address ?? null
   const operationalSolana = classification.operationalSolanaWallet?.address ?? null
   const embedded = classification.embeddedEoa?.address ?? null
-  const primary = activeOwner ?? canonical ?? classification.primaryWalletAddress ?? null
+  const primary = resolveProfilesPrimaryWalletColumn({
+    embedded,
+    canonical,
+    activeOwner,
+    classificationPrimary: classification.primaryWalletAddress ?? null,
+  })
 
   if (existing?.id) {
     await db.sql`
@@ -857,7 +874,12 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
   const existing = await findExistingProfile(db, privyUserId, classification.allWallets)
   const persisted = existing?.id ? await readPersistedIdentity(db, existing.id) : null
 
-  const zoraCanonical = await resolveCanonicalSmartWalletFromZora({ classification, persisted })
+  const zoraCanonicalRaw = await resolveCanonicalSmartWalletFromZora({ classification, persisted })
+  const zoraCanonical = resolveStoredCanonicalCswAddress({
+    candidate: zoraCanonicalRaw,
+    embeddedEoa: persisted?.embeddedEoa ?? classification.embeddedEoa?.address ?? null,
+    activeOwnerEoa: persisted?.activeOwnerWallet ?? classification.activeOwnerWallet?.address ?? null,
+  })
   const persistedWithZora: PersistedIdentity | null = zoraCanonical
     ? {
         primaryWallet: persisted?.primaryWallet ?? null,
@@ -870,7 +892,9 @@ export async function syncUserWallets(db: Db, privyUser: PrivyUserLike): Promise
       }
     : persisted
 
-  const effectiveClassification = applyPersistedIdentity({ classification, persisted: persistedWithZora })
+  const effectiveClassification = applyCanonicalCswPolicyToClassification(
+    applyPersistedIdentity({ classification, persisted: persistedWithZora }),
+  )
   const profileId = await insertOrUpdateProfile({ db, existing, privyUserId, email, classification: effectiveClassification })
 
   await clearRoleFlags(db, profileId, effectiveClassification)

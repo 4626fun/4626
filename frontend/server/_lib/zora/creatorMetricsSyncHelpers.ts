@@ -8,6 +8,8 @@ export type ExploreCoinFinancialSnapshot = {
   marketCapUsd: number | null
   volume24hUsd: number | null
   fees24hUsd: number | null
+  uniqueHolders: number | null
+  marketCapDelta24h: number | null
   feeModel: FeeModel
 }
 
@@ -18,7 +20,15 @@ type CoinCandidate = {
   createdAt?: unknown
   marketCap?: unknown
   volume24h?: unknown
+  marketCapDelta24h?: unknown
+  uniqueHolders?: unknown
   market?: { protocolVersion?: unknown; feeBps?: unknown } | null
+}
+
+export function toIntegerOrNull(v: unknown): number | null {
+  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN
+  if (!Number.isFinite(n)) return null
+  return Math.trunc(n)
 }
 
 const LEGACY_FEE_RATE = 0.03
@@ -91,6 +101,8 @@ export function parseExploreCoinFinancialSnapshot(coin: unknown): ExploreCoinFin
     marketCapUsd: toFiniteNumber(candidate.marketCap),
     volume24hUsd,
     fees24hUsd: computeFees24hUsd(volume24hUsd, feeModel),
+    uniqueHolders: toIntegerOrNull(candidate.uniqueHolders),
+    marketCapDelta24h: toFiniteNumber(candidate.marketCapDelta24h),
     feeModel,
   }
 }

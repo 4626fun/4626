@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
-import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
+import { useAccountMe } from '@/hooks/useAccountMe'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import {
   OPEN_ACCOUNT_TRAY_EVENT,
@@ -335,6 +335,8 @@ export function ConnectButton({
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
   const canonicalIdentity = useCanonicalIdentity()
+  const accountMe = useAccountMe()
+  const [disconnectingMainWallet, setDisconnectingMainWallet] = useState(false)
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
   const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
   const privyStatus = usePrivyClientStatus()
@@ -367,6 +369,30 @@ export function ConnectButton({
       },
     }
   }, [isPhoneViewport])
+
+  const disconnectMainWallet = useCallback(async () => {
+    const externalAddress = canonicalIdentity.externalEoaAddress
+    if (disconnectingMainWallet) return
+    setDisconnectingMainWallet(true)
+    try {
+      if (externalAddress) {
+        await apiFetch('/api/wallet/disconnect-external', {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ address: externalAddress }),
+          withCredentials: true,
+        })
+      }
+      disconnect()
+      accountMe.refresh()
+      setShowMenu(false)
+    } finally {
+      setDisconnectingMainWallet(false)
+    }
+  }, [accountMe, canonicalIdentity.externalEoaAddress, disconnect, disconnectingMainWallet])
 
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
@@ -654,9 +680,9 @@ export function ConnectButton({
                     }}
                     signingOut={auth.busy}
                     onRequestDisconnectMainWallet={() => {
-                      disconnect()
-                      setShowMenu(false)
+                      void disconnectMainWallet()
                     }}
+                    disconnectingMainWallet={disconnectingMainWallet}
                   />
                   <div className="h-px bg-white/8 my-2" />
                 </>
@@ -806,9 +832,9 @@ export function ConnectButton({
                         }}
                         signingOut={auth.busy}
                         onRequestDisconnectMainWallet={() => {
-                          disconnect()
-                          setShowMenu(false)
+                          void disconnectMainWallet()
                         }}
+                        disconnectingMainWallet={disconnectingMainWallet}
                       />
                       <div className="h-px bg-white/8 my-2" />
                     </>

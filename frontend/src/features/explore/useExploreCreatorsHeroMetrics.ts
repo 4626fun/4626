@@ -14,7 +14,7 @@ export function useExploreCreatorsHeroMetrics() {
   const metricsQuery = useQuery({
     queryKey: EXPLORE_CREATORS_METRICS_QUERY_KEY,
     queryFn: fetchExploreCreatorsMetrics,
-    initialData: readCachedExploreCreatorsMetrics() ?? undefined,
+    initialData: () => readCachedExploreCreatorsMetrics() ?? undefined,
     staleTime: 30_000,
     gcTime: 30 * 60_000,
     refetchInterval: LIVE_HERO_METRICS_REFETCH_MS,
@@ -60,6 +60,7 @@ export function useExploreCreatorsHeroMetrics() {
     syncStatus: metrics?.syncStatus ?? 'running',
     creatorsTotalCount: creatorsTotal ?? 0,
     isLoading: metricsQuery.isLoading && !metricsQuery.data,
+    isRefreshing: metricsQuery.isFetching && Boolean(metricsQuery.data),
     isFetching: metricsQuery.isFetching,
   }
 }

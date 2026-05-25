@@ -24,7 +24,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
     partial,
     history30d,
     isLoading,
-    isFetching,
+    isRefreshing,
   } = useExploreCreatorsHeroMetrics()
 
   const creatorsMetricHint =
@@ -54,8 +54,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
           hint={financialHint}
           accent
           title={`Indexed creator-coin market cap${financialTitleSuffix} · 30D trend uses daily Supabase snapshots`}
-          trailing={
+          background={
             <ExploreHeroSparkline
+              fill
               history={history30d}
               title={`Indexed creator-coin market cap trend · last ${history30d.length} daily snapshots`}
             />
@@ -81,7 +82,7 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         ) : (
           <>
             {statusLine}
-            {isFetching ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
+            {isRefreshing ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
           </>
         )}
       </div>

@@ -46,9 +46,13 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   const canEnterNow = canEnterApp && setupComplete
   const waitlistChatStatus = useWaitlistChatJoin({
     canonicalCswAddress: controller.canonicalCswAddress,
-    enabled: setupComplete,
+    enabled: setupComplete && signingStepComplete,
   })
-  const chatStatusMessage = setupComplete ? waitlistChatStatusMessage(waitlistChatStatus) : null
+  const chatStatusMessage = setupComplete
+    ? signingStepComplete
+      ? waitlistChatStatusMessage(waitlistChatStatus)
+      : 'Enable 4626 signing to join waitlist chat.'
+    : null
 
   return (
     <>

@@ -18,6 +18,7 @@ import {
   parseTimestamp,
   serializeExploreBackfillCheckpoints,
   toFiniteNumber,
+  toIntegerOrNull,
   type ExploreBackfillCheckpoints,
   type ExploreCoinFinancialSnapshot,
   type ExploreList,
@@ -199,6 +200,11 @@ async function fetchCountCandidate(sdk: any, list: ExploreList, pageSize: number
   return count
 }
 
+async function ensureCreatorCoinsDisplayColumns(db: Db): Promise<void> {
+  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS unique_holders INTEGER;`
+  await db.sql`ALTER TABLE creator_coins ADD COLUMN IF NOT EXISTS market_cap_delta_24h NUMERIC(38, 12);`
+}
+
 async function ensureCreatorMetricsStateColumns(db: Db): Promise<void> {
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_block BIGINT;`
   await db.sql`ALTER TABLE creator_metrics_state ADD COLUMN IF NOT EXISTS checkpoint_log_index INTEGER;`
@@ -329,6 +335,7 @@ export async function ensureCreatorMetricsSchema(db: Db): Promise<void> {
 
     // Existing deployments may have base tables from SQL migrations but miss later columns.
     await ensureCreatorMetricsStateColumns(db)
+    await ensureCreatorCoinsDisplayColumns(db)
     await ensureCreatorMetricsConstraints(db)
     await db.sql`INSERT INTO creator_metrics_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`
     creatorMetricsSchemaEnsured = true
@@ -399,6 +406,8 @@ async function upsertHotFinancialSnapshot(db: Db, snapshot: ReturnType<typeof pa
       market_cap_usd,
       volume_24h_usd,
       fees_24h_usd,
+      unique_holders,
+      market_cap_delta_24h,
       fee_model,
       last_seen_at
     ) VALUES (
@@ -409,6 +418,8 @@ async function upsertHotFinancialSnapshot(db: Db, snapshot: ReturnType<typeof pa
       ${snapshot.marketCapUsd},
       ${snapshot.volume24hUsd},
       ${snapshot.fees24hUsd},
+      ${snapshot.uniqueHolders},
+      ${snapshot.marketCapDelta24h},
       ${snapshot.feeModel},
       NOW()
     )
@@ -419,6 +430,8 @@ async function upsertHotFinancialSnapshot(db: Db, snapshot: ReturnType<typeof pa
       market_cap_usd = EXCLUDED.market_cap_usd,
       volume_24h_usd = EXCLUDED.volume_24h_usd,
       fees_24h_usd = EXCLUDED.fees_24h_usd,
+      unique_holders = COALESCE(EXCLUDED.unique_holders, creator_coins.unique_holders),
+      market_cap_delta_24h = COALESCE(EXCLUDED.market_cap_delta_24h, creator_coins.market_cap_delta_24h),
       fee_model = EXCLUDED.fee_model,
       last_seen_at = NOW();
   `
@@ -1189,6 +1202,8 @@ async function fetchCoinSnapshot(sdk: any, coinAddress: string): Promise<{
   createdAt: string | null
   marketCapUsd: number | null
   volume24hUsd: number | null
+  uniqueHolders: number | null
+  marketCapDelta24h: number | null
   feeModel: 'legacy' | 'v4'
 }> {
   const response = await sdk.getCoin({ address: coinAddress, chain: BASE_CHAIN_ID })
@@ -1199,6 +1214,8 @@ async function fetchCoinSnapshot(sdk: any, coinAddress: string): Promise<{
       createdAt: null,
       marketCapUsd: null,
       volume24hUsd: null,
+      uniqueHolders: null,
+      marketCapDelta24h: null,
       feeModel: 'v4',
     }
   }
@@ -1209,6 +1226,8 @@ async function fetchCoinSnapshot(sdk: any, coinAddress: string): Promise<{
     createdAt: coin?.createdAt,
     marketCap: coin?.marketCap,
     volume24h: coin?.volume24h,
+    marketCapDelta24h: coin?.marketCapDelta24h,
+    uniqueHolders: coin?.uniqueHolders,
     market: (coin as any)?.market ?? null,
   }
   return {
@@ -1216,6 +1235,8 @@ async function fetchCoinSnapshot(sdk: any, coinAddress: string): Promise<{
     createdAt: parseTimestamp(coinLike.createdAt),
     marketCapUsd: toFiniteNumber(coinLike.marketCap),
     volume24hUsd: toFiniteNumber(coinLike.volume24h),
+    uniqueHolders: toIntegerOrNull(coinLike.uniqueHolders),
+    marketCapDelta24h: toFiniteNumber(coinLike.marketCapDelta24h),
     feeModel: detectFeeModel(coinLike),
   }
 }
@@ -1502,6 +1523,8 @@ export async function runCreatorMetricsSync(options: RunOptions = {}): Promise<C
                 market_cap_usd = COALESCE(${snap.marketCapUsd}, market_cap_usd),
                 volume_24h_usd = COALESCE(${snap.volume24hUsd}, volume_24h_usd),
                 fees_24h_usd = COALESCE(${fees24hUsd}, fees_24h_usd),
+                unique_holders = COALESCE(${snap.uniqueHolders}, unique_holders),
+                market_cap_delta_24h = COALESCE(${snap.marketCapDelta24h}, market_cap_delta_24h),
                 fee_model = COALESCE(${feeModel}, fee_model),
                 last_seen_at = NOW()
               WHERE coin_address = ${candidate.coinAddress};

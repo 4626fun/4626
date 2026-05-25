@@ -11,6 +11,7 @@ import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from '../wallet/walletMapping.js'
 import { resolveCanonicalCsw } from '../wallet/canonicalCswDelegation.js'
+import { resolveStoredCanonicalCswAddress } from '../wallet/canonicalCswPersistence.js'
 import {
   resolveExecutionTrack,
   summarizeBaseSubAccount,
@@ -830,6 +831,13 @@ export async function resolveAndPersistZoraSignals(params: {
   }
 
   const classification = classifyLinkedAccounts(privyUser)
+  canonical =
+    resolveStoredCanonicalCswAddress({
+      candidate: canonical,
+      embeddedEoa: classification.embeddedEoa?.address ?? null,
+      activeOwnerEoa: classification.primaryWalletAddress ?? null,
+    }) ?? canonical
+
   const allEvmEoas = classification.allWallets
     .filter((w) => w.chain === 'evm' && w.walletType === 'external_eoa')
     .map((w) => w.address)

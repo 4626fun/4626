@@ -156,7 +156,7 @@ describe('GET /api/zora/explore', () => {
     expect(loadCreatorEthosProjectionByAddressesMock).toHaveBeenCalled()
   })
 
-  it('enriches Ethos-sorted projection rows with Zora coin media', async () => {
+  it('serves indexed display parity for Ethos-sorted projection rows without getCoin', async () => {
     getCoinMock.mockResolvedValue({
       data: {
         zora20Token: {
@@ -194,9 +194,27 @@ describe('GET /api/zora/explore', () => {
                 created_at: '2025-01-01T00:00:00Z',
                 market_cap_usd: '1000',
                 volume_24h_usd: '100',
+                fees_24h_usd: '12.5',
                 ethos_score: 1979,
                 ethos_level: 'reputable',
                 ethos_score_source: 'creator_ethos_projection',
+              },
+            ],
+          }
+        }
+        if (query.includes('zora_profiles')) {
+          return {
+            rows: [
+              {
+                coin_address: '0x0000000000000000000000000000000000000123',
+                fees_24h_usd: '12.5',
+                coin_unique_holders: 420,
+                market_cap_delta_24h: '8.4',
+                zora_creator_coin_name: 'jesse',
+                zora_creator_coin_symbol: 'jesse',
+                profile_unique_holders: 420,
+                avatar_image_url: 'https://example.com/jesse-avatar.png',
+                zora_handle: 'jessepollak',
               },
             ],
           }
@@ -215,8 +233,15 @@ describe('GET /api/zora/explore', () => {
 
     expect(res.statusCode).toBe(200)
     expect(getCoinMock).not.toHaveBeenCalled()
-    expect(res.body?.data?.edges?.[0]?.node?.symbol).toBe('jessepollak')
-    expect(res.body?.data?.edges?.[0]?.node?.ethosScore).toBe(1979)
+    const node = res.body?.data?.edges?.[0]?.node
+    expect(node?.symbol).toBe('jesse')
+    expect(node?.name).toBe('jesse')
+    expect(node?.ethosScore).toBe(1979)
+    expect(node?.fees24hUsd).toBe('12.5')
+    expect(node?.uniqueHolders).toBe(420)
+    expect(node?.marketCapDelta24h).toBe('8.4')
+    expect(node?.mediaContent?.previewImage?.small).toBe('https://example.com/jesse-avatar.png')
+    expect(node?.creatorProfile?.handle).toBe('jessepollak')
   })
 
   it.each([

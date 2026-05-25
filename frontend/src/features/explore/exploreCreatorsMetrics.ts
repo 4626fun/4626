@@ -6,6 +6,10 @@ export const EXPLORE_CREATORS_METRICS_QUERY_KEY = ['explore', 'creators', 'metri
 /** Align with server metrics cache (~5 min) to avoid redundant polls. */
 export const LIVE_HERO_METRICS_REFETCH_MS = 120_000
 
+const METRICS_STORAGE_KEY = '4626:explore:creators:metrics:v1'
+/** Keep persisted hero metrics for instant paint across reloads; server remains source of truth. */
+const METRICS_STORAGE_MAX_AGE_MS = 10 * 60_000
+
 export type ExploreCreatorsMetrics = {
   scope: 'creators'
   updatedAt: string
@@ -42,12 +46,35 @@ export type ExploreCreatorsMetrics = {
 
 let cachedExploreMetrics: ExploreCreatorsMetrics | null = null
 
+function readPersistedExploreCreatorsMetrics(): ExploreCreatorsMetrics | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(METRICS_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { savedAt?: number; data?: ExploreCreatorsMetrics } | null
+    if (!parsed?.data || typeof parsed.savedAt !== 'number') return null
+    if (Date.now() - parsed.savedAt > METRICS_STORAGE_MAX_AGE_MS) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
 export function readCachedExploreCreatorsMetrics(): ExploreCreatorsMetrics | null {
-  return cachedExploreMetrics
+  return cachedExploreMetrics ?? readPersistedExploreCreatorsMetrics()
 }
 
 export function writeCachedExploreCreatorsMetrics(metrics: ExploreCreatorsMetrics | null): void {
   cachedExploreMetrics = metrics
+  if (typeof window === 'undefined' || !metrics) return
+  try {
+    window.localStorage.setItem(
+      METRICS_STORAGE_KEY,
+      JSON.stringify({ savedAt: Date.now(), data: metrics }),
+    )
+  } catch {
+    // Quota/private mode — in-memory cache still applies for this session.
+  }
 }
 
 export async function fetchExploreCreatorsMetrics(): Promise<ExploreCreatorsMetrics | null> {

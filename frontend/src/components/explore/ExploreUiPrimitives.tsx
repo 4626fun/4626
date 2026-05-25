@@ -214,7 +214,8 @@ type ExploreHeroMetricProps = {
   hint?: string | null
   title?: string
   accent?: boolean
-  trailing?: ReactNode
+  /** Full-bleed layer behind label/value (e.g. indexed sparkline). */
+  background?: ReactNode
 }
 
 type ExploreTableLoadingOverlayProps = {
@@ -240,22 +241,26 @@ export function ExploreTableLoadingOverlay({
   )
 }
 
-export function ExploreHeroMetric({ label, value, hint, title, accent = false, trailing }: ExploreHeroMetricProps) {
+export function ExploreHeroMetric({ label, value, hint, title, accent = false, background }: ExploreHeroMetricProps) {
   return (
     <div
-      className={`vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
+      className={`relative overflow-hidden vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 ${
         accent ? 'bg-blue-950/16' : 'bg-white/[0.03]'
       }`}
       title={title}
     >
-      <div className="flex items-start justify-between gap-2">
+      {background ? (
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {background}
+        </div>
+      ) : null}
+      <div className="relative z-[1]">
         <div className="text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-500">{label}</div>
-        {trailing ? <div className="shrink-0 pt-0.5">{trailing}</div> : null}
+        <div className="mt-1 text-xl sm:text-[26px] font-semibold tracking-tight text-white tabular-nums lining-nums">
+          {value}
+        </div>
+        {hint ? <div className="app-meta-value mt-1 text-zinc-500">{hint}</div> : null}
       </div>
-      <div className="mt-1 text-xl sm:text-[26px] font-semibold tracking-tight text-white tabular-nums lining-nums">
-        {value}
-      </div>
-      {hint ? <div className="app-meta-value mt-1 text-zinc-500">{hint}</div> : null}
     </div>
   )
 }

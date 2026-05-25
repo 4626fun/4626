@@ -10,6 +10,12 @@ import {
   resolveEthosScoreSource,
 } from '../../../server/_lib/zora/resolveCreatorEthosByAddress.js'
 import { fetchFreshEthosScoresByUserkeys } from '../../../server/_lib/chat/ethosClient.js'
+import {
+  buildCreatorProfileFromTableContext,
+  buildMediaContentFromAvatarUrl,
+  loadExploreCoinTableContextByAddresses,
+  type ExploreCoinTableContext,
+} from '../../../server/_lib/zora/exploreCoinTableContext.js'
 
 type ExploreList =
   | 'TOP_GAINERS'
@@ -103,21 +109,10 @@ async function loadCreatorCoinFeesByAddresses(
   db: NonNullable<Awaited<ReturnType<typeof getDb>>>,
   coinAddresses: string[],
 ): Promise<Map<string, string>> {
-  const normalized = [...new Set(coinAddresses.map((address) => address.toLowerCase()).filter(Boolean))]
-  if (normalized.length === 0) return new Map()
-
-  const result = await db.sql`
-    SELECT lower(coin_address) AS coin_address, fees_24h_usd
-    FROM creator_coins
-    WHERE chain_id = 8453
-      AND lower(coin_address) = ANY(${normalized}::text[])
-  `
-
+  const contextMap = await loadExploreCoinTableContextByAddresses(db, coinAddresses)
   const map = new Map<string, string>()
-  for (const row of result.rows ?? []) {
-    const coinAddress = typeof row.coin_address === 'string' ? row.coin_address.toLowerCase() : ''
-    const fees = toNumericString(row.fees_24h_usd)
-    if (coinAddress && fees) map.set(coinAddress, fees)
+  for (const [address, ctx] of contextMap) {
+    if (ctx.fees24hUsd) map.set(address, ctx.fees24hUsd)
   }
   return map
 }
@@ -324,6 +319,7 @@ async function assembleEthosSortedCreatorResponse(params: {
   hasNextPage: boolean
   usingProjectionRows: boolean
   key: string | null
+  db?: NonNullable<Awaited<ReturnType<typeof getDb>>> | null
   /** When true, skip per-row Zora getCoin calls and serve indexed projection fields only. */
   skipZoraCoinEnrichment?: boolean
   resolveNodeEthos: (
@@ -350,22 +346,45 @@ async function assembleEthosSortedCreatorResponse(params: {
     }
   }
 
+  let tableContext = new Map<string, ExploreCoinTableContext>()
+  if (params.skipZoraCoinEnrichment && params.db && params.pageRows.length > 0) {
+    tableContext = await loadExploreCoinTableContextByAddresses(
+      params.db,
+      params.pageRows.map((row) => String(row.coin_address)),
+    )
+  }
+
   const edges = params.pageRows.map((row, idx) => {
     const detail = coinDetails.get(String(row.coin_address).toLowerCase()) ?? null
+    const ctx = tableContext.get(String(row.coin_address).toLowerCase()) ?? null
     const address = String(row.coin_address).toLowerCase()
     const creatorAddress = String(row.creator_address).toLowerCase()
     const displayName =
       typeof detail?.name === 'string' && detail.name.trim()
         ? detail.name.trim()
-        : exploreRowDisplayLabel(row, address)
+        : ctx?.name?.trim() || exploreRowDisplayLabel(row, address)
     const displaySymbol =
       typeof detail?.symbol === 'string' && detail.symbol.trim()
         ? detail.symbol.trim()
-        : exploreRowDisplayLabel(row, address)
+        : ctx?.symbol?.trim() || exploreRowDisplayLabel(row, address)
     const marketCap = toNumericString(detail?.marketCap) ?? toNumericString(row.market_cap_usd)
     const volume24h = toNumericString(detail?.volume24h) ?? toNumericString(row.volume_24h_usd)
-    const fees24hUsd = toNumericString(row.fees_24h_usd)
-    const creatorProfile = detail?.creatorProfile ?? buildCreatorProfileFromExploreRow(row)
+    const fees24hUsd =
+      toNumericString(row.fees_24h_usd) ?? (ctx?.fees24hUsd ? ctx.fees24hUsd : undefined)
+    const creatorProfile =
+      detail?.creatorProfile ?? buildCreatorProfileFromTableContext(row, ctx) ?? buildCreatorProfileFromExploreRow(row)
+    const marketCapDelta24h =
+      typeof detail?.marketCapDelta24h === 'string'
+        ? detail.marketCapDelta24h
+        : ctx?.marketCapDelta24h ?? undefined
+    const uniqueHolders =
+      typeof detail?.uniqueHolders === 'number'
+        ? detail.uniqueHolders
+        : typeof ctx?.uniqueHolders === 'number'
+          ? ctx.uniqueHolders
+          : undefined
+    const mediaContent =
+      detail?.mediaContent ?? buildMediaContentFromAvatarUrl(ctx?.avatarImageUrl)
     const ethos = params.resolveNodeEthos(row)
     return {
       cursor: String(params.offset + idx + 1),
@@ -380,13 +399,12 @@ async function assembleEthosSortedCreatorResponse(params: {
         chainId: 8453,
         createdAt: (typeof detail?.createdAt === 'string' && detail.createdAt) || row.created_at || undefined,
         marketCap,
-        marketCapDelta24h:
-          typeof detail?.marketCapDelta24h === 'string' ? detail.marketCapDelta24h : undefined,
+        marketCapDelta24h,
         volume24h,
         fees24hUsd,
         totalVolume: typeof detail?.totalVolume === 'string' ? detail.totalVolume : undefined,
-        uniqueHolders: typeof detail?.uniqueHolders === 'number' ? detail.uniqueHolders : undefined,
-        mediaContent: detail?.mediaContent,
+        uniqueHolders,
+        mediaContent,
         creatorProfile,
         ethosScore: ethos.score,
         ethosLevel: ethos.level,
@@ -464,6 +482,7 @@ async function buildEthosSortedCreatorList(params: {
       usingProjectionRows: true,
       skipZoraCoinEnrichment: true,
       key: params.key,
+      db,
       resolveNodeEthos: (row) => ({
         score: toFiniteNumberOrNull(row.ethos_score),
         level: typeof row.ethos_level === 'string' ? row.ethos_level : null,
@@ -754,6 +773,7 @@ async function buildEthosSortedCreatorList(params: {
     hasNextPage,
     usingProjectionRows: false,
     key: params.key,
+    db,
     resolveNodeEthos: (row) => {
       const merged = mergedEthosForRow(row)
       const fresh = getFreshScoreForRow(row)

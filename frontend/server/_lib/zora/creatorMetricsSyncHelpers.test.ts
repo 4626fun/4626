@@ -21,6 +21,8 @@ describe('creatorMetricsSyncHelpers', () => {
       createdAt: '2025-07-01T00:00:00.000Z',
       marketCap: '125000.5',
       volume24h: '494592.77',
+      uniqueHolders: 321,
+      marketCapDelta24h: '4.2',
       market: { feeBps: 100, protocolVersion: 'v4' },
     })
 
@@ -30,6 +32,8 @@ describe('creatorMetricsSyncHelpers', () => {
       marketCapUsd: 125000.5,
       volume24hUsd: 494592.77,
       fees24hUsd: 4945.9277,
+      uniqueHolders: 321,
+      marketCapDelta24h: 4.2,
       feeModel: 'v4',
     })
   })
