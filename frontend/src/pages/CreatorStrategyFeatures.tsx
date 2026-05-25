@@ -2,82 +2,21 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 import { isAddress, type Address } from 'viem'
-import { ArrowRight, Check, Clock, Info, X } from 'lucide-react'
+import { ArrowRight, Check, ChevronDown, Clock, Info, Sparkles, X } from 'lucide-react'
 
+import { Button } from '@/components/ui/Button'
 import { usePayWithX402 } from '@/lib/creatorStrategy/usePayWithX402'
-
-/**
- * Creator strategy features paywall page.
- *
- * Lets a creator (or anyone on their team) pay $100 USDC per premium
- * feature to unlock it on their vault. Reads the full catalog +
- * existing activations from `GET /api/creator/strategy/list` and shows
- * a card per feature with one of three states:
- *
- *   - active    — already paid and provisioned (green checkmark)
- *   - pending   — payment verified, operator not yet provisioned (yellow clock)
- *   - unpaid    — show three payment-path buttons (USDC tx hash / x402 / Stripe)
- *
- * The three payment paths are all fully wired server-side already:
- *   - POST /api/creator/strategy/activate       (legacy, USDC tx hash)
- *   - POST /api/creator/strategy/x402-activate  (EIP-3009, gasless, one round-trip)
- *   - POST /api/creator/strategy/stripe/checkout (card checkout via Stripe)
- *
- * See `docs/operations/creator-strategy-features.md` for the full spec.
- */
-
-type DeployPlanDto = {
-  creatorToken: Address
-  deployable: boolean
-  charmWeightBps: string
-  ajnaWeightBps: string
-  solanaWeightBps: string
-  idleReserveBps: string
-  reasons: {
-    charm: 'paid' | 'unpaid'
-    ajna: 'paid' | 'unpaid'
-    solana: 'paid' | 'unpaid'
-  }
-  activeFeatureKeys: string[]
-  blockedReason: 'no_paid_strategies' | null
-}
-
-type ActivationDto = {
-  creatorToken: Address
-  featureKey: string
-  status: 'pending' | 'active' | 'failed' | 'refunded'
-  priceUsdcPaid: string
-  paymentTxHash: string | null
-  paymentVerifiedAt: string | null
-  provisionedAt: string | null
-  failedAt: string | null
-  failureReason: string | null
-  provisionerRef: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-type CatalogDto = {
-  key: string
-  displayName: string
-  tagline: string
-  description: string
-  priceUsdc: string
-  priceUsdcDisplay: string
-  provisionerTag: string
-  requires: readonly string[]
-  estimatedActivationWindow: string
-}
-
-type FeatureListResponse = {
-  creatorToken: Address
-  treasury: Address
-  catalog: CatalogDto[]
-  activations: ActivationDto[]
-  deployPlan: DeployPlanDto
-}
-
-type PaymentPath = 'usdc_txhash' | 'x402' | 'stripe'
+import {
+  partitionCreatorStrategyCatalog,
+  vanityTierLabel,
+  type VanityFeatureGroup,
+} from '@/lib/creatorStrategy/featuresPageLayout'
+import type {
+  ActivationDto,
+  CatalogDto,
+  FeatureListResponse,
+  PaymentPath,
+} from '@/pages/CreatorStrategyFeatures.types'
 
 function getApiBase(): string {
   const envBase = (import.meta as any)?.env?.VITE_PUBLIC_API_BASE
@@ -100,9 +39,9 @@ function describeStatus(activation: ActivationDto | null): {
     case 'active':
       return { label: 'Active', tone: 'good' }
     case 'pending':
-      return { label: 'Pending provisioning', tone: 'pending' }
+      return { label: 'Pending', tone: 'pending' }
     case 'failed':
-      return { label: 'Failed — contact support', tone: 'bad' }
+      return { label: 'Failed', tone: 'bad' }
     case 'refunded':
       return { label: 'Refunded', tone: 'neutral' }
     default:
@@ -126,6 +65,7 @@ export function CreatorStrategyFeatures() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [inflightFeature, setInflightFeature] = useState<string | null>(null)
   const [inflightMessage, setInflightMessage] = useState<string | null>(null)
+  const [expandedVanityKey, setExpandedVanityKey] = useState<string | null>(null)
   const x402 = usePayWithX402()
 
   const loadFeatures = useCallback(async () => {
@@ -159,7 +99,6 @@ export function CreatorStrategyFeatures() {
   const activationsByKey = useMemo(() => {
     const map = new Map<string, ActivationDto>()
     for (const a of data?.activations ?? []) {
-      // Keep the most recent live row per feature
       const existing = map.get(a.featureKey)
       if (!existing || new Date(a.createdAt) > new Date(existing.createdAt)) {
         map.set(a.featureKey, a)
@@ -167,6 +106,11 @@ export function CreatorStrategyFeatures() {
     }
     return map
   }, [data])
+
+  const layout = useMemo(
+    () => (data ? partitionCreatorStrategyCatalog(data.catalog) : null),
+    [data],
+  )
 
   const startPayment = useCallback(
     async (feature: CatalogDto, path: PaymentPath) => {
@@ -198,12 +142,6 @@ export function CreatorStrategyFeatures() {
             return
           }
           case 'x402': {
-            // In-dapp wallet-signing flow: usePayWithX402 handles the full
-            // round-trip (fetch 402, build EIP-3009 typed data, sign via
-            // connected wallet, base64-encode into X-PAYMENT, re-POST).
-            // Works natively with Coinbase Wallet + Rainbow; older
-            // MetaMask will still sign but warns about unverified typed
-            // data.
             setInflightMessage('Building payment authorization; please sign in your wallet…')
             const result = await x402.pay({
               creatorToken,
@@ -221,10 +159,9 @@ export function CreatorStrategyFeatures() {
             return
           }
           case 'usdc_txhash': {
-            // Open a modal asking for the creator to paste a tx hash.
             const txHash = window.prompt(
               `Paste the Base mainnet tx hash of your USDC transfer to the 4626 protocol treasury.\n\n` +
-                `(Send ${feature.priceUsdcDisplay} USDC from your wallet to the treasury address shown on the dashboard, then paste the tx hash here.)`,
+                `(Send ${feature.priceUsdcDisplay} USDC from your wallet to the treasury, then paste the tx hash here.)`,
             )
             if (!txHash) return
             const res = await fetch(`${base}/api/creator/strategy/activate`, {
@@ -262,7 +199,8 @@ export function CreatorStrategyFeatures() {
       <div className="mx-auto max-w-3xl px-4 py-16">
         <h1 className="text-2xl font-light tracking-tight text-white">Creator strategy features</h1>
         <p className="mt-4 text-sm text-zinc-400">
-          Missing or invalid <code className="mono text-brand-accent">creator</code> query parameter. Example:{' '}
+          Add{' '}
+          <code className="mono text-brand-accent">?creator=0x…</code> with your creator coin address. Example:{' '}
           <code className="mono text-zinc-300">/creator/strategy/features?creator=0x…</code>
         </p>
       </div>
@@ -273,30 +211,22 @@ export function CreatorStrategyFeatures() {
     <div className="mx-auto max-w-5xl px-4 py-12">
       <header className="mb-8">
         <h1 className="text-2xl font-light tracking-tight text-white">Creator strategy features</h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Pay-to-enable strategies for vault <code className="mono text-brand-accent">{shortHex(creatorToken, 8)}</code>.
-          Each feature is a one-time USDC payment; post-payment activation is automatic for deploy-gating features and
-          operator-run for post-deploy extras. See the{' '}
-          <a
-            href="https://github.com/wenakita/4626/blob/main/docs/operations/creator-strategy-features.md"
-            target="_blank"
-            rel="noreferrer"
-            className="underline decoration-dotted hover:text-zinc-300"
-          >
-            operator spec
-          </a>{' '}
-          for the full contract.
+        <p className="mt-2 max-w-2xl text-sm text-zinc-400">
+          Choose which strategies and optional upgrades apply to vault{' '}
+          <code className="mono text-brand-accent">{shortHex(creatorToken, 8)}</code>. Strategies are required
+          before deploy; vanity address options are optional extras.
         </p>
         {connectedAddress && (
           <p className="mt-1 text-xs text-zinc-500">
-            Signed in as <span className="mono">{shortHex(connectedAddress)}</span>. Payments are billed to this wallet
-            (or your card, for Stripe).
+            Signed in as <span className="mono">{shortHex(connectedAddress)}</span>
           </p>
         )}
       </header>
 
       {loading && (
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-6 text-sm text-zinc-500">Loading features…</div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-6 text-sm text-zinc-500">
+          Loading features…
+        </div>
       )}
 
       {loadError && (
@@ -305,111 +235,71 @@ export function CreatorStrategyFeatures() {
             <X className="h-4 w-4 shrink-0" />
             <div>Failed to load features: {loadError}</div>
           </div>
-          <button
-            type="button"
-            onClick={loadFeatures}
-            className="mt-3 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-200 hover:bg-red-500/10"
-          >
+          <Button type="button" variant="secondary" size="sm" className="mt-3" onClick={loadFeatures}>
             Retry
-          </button>
+          </Button>
         </div>
       )}
 
-      {!loading && !loadError && data && (
+      {!loading && !loadError && data && layout && (
         <>
           {data.deployPlan.blockedReason === 'no_paid_strategies' && (
             <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm text-amber-200">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 shrink-0" />
-                <div>
-                  This creator hasn't activated any strategy yet. A vault can't be deployed until at least one paid
-                  strategy below is activated.
-                </div>
+                <div>Activate at least one vault strategy below before you can deploy.</div>
               </div>
             </div>
           )}
 
-          <div className="space-y-4">
-            {data.catalog.map((feature) => {
-              const activation = activationsByKey.get(feature.key) ?? null
-              const status = describeStatus(activation)
-              const isActive = activation?.status === 'active' || activation?.status === 'pending'
-              const isInflight = inflightFeature === feature.key
+          <div className="space-y-8">
+            {layout.sections.map((section) => (
+              <section key={section.id}>
+                <div className="mb-3">
+                  <h2 className="text-sm font-medium text-zinc-200">{section.title}</h2>
+                  {section.subtitle ? (
+                    <p className="mt-1 text-xs text-zinc-500">{section.subtitle}</p>
+                  ) : null}
+                </div>
+                <div className="space-y-3">
+                  {section.features.map((feature) => (
+                    <StrategyFeatureCard
+                      key={feature.key}
+                      feature={feature}
+                      activation={activationsByKey.get(feature.key) ?? null}
+                      isInflight={inflightFeature === feature.key}
+                      onPay={(path) => startPayment(feature, path)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
 
-              return (
-                <article
-                  key={feature.key}
-                  className="rounded-xl border border-white/5 bg-white/[0.02] p-5 hover:border-white/10 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base font-medium text-white">{feature.displayName}</h2>
-                        <StatusPill tone={status.tone}>{status.label}</StatusPill>
-                      </div>
-                      <p className="mt-1 text-sm text-zinc-400">{feature.tagline}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className="text-sm text-zinc-500">Price</div>
-                      <div className="font-medium text-zinc-200">{feature.priceUsdcDisplay} USDC</div>
-                    </div>
-                  </div>
-
-                  <details className="mt-3 text-xs text-zinc-500">
-                    <summary className="cursor-pointer text-zinc-400 hover:text-zinc-300">What it does</summary>
-                    <p className="mt-2 whitespace-pre-line leading-relaxed">{feature.description}</p>
-                    {feature.requires.length > 0 && (
-                      <ul className="mt-2 space-y-1">
-                        {feature.requires.map((req, idx) => (
-                          <li key={idx} className="flex gap-2">
-                            <span className="text-zinc-600">•</span>
-                            <span>{req}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <p className="mt-2 text-zinc-600">Activation window: {feature.estimatedActivationWindow}</p>
-                  </details>
-
-                  {activation?.paymentTxHash && (
-                    <p className="mt-3 text-xs text-zinc-500">
-                      Payment:{' '}
-                      <a
-                        href={`https://basescan.org/tx/${activation.paymentTxHash}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mono underline decoration-dotted hover:text-zinc-300"
-                      >
-                        {shortHex(activation.paymentTxHash, 8)}
-                      </a>
-                    </p>
-                  )}
-
-                  {!isActive && (
-                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <PaymentPathButton
-                        label="Pay with USDC on Base"
-                        sub="Send USDC → paste tx hash"
-                        disabled={isInflight}
-                        onClick={() => startPayment(feature, 'usdc_txhash')}
-                      />
-                      <PaymentPathButton
-                        label="Pay with x402"
-                        sub="Gasless EIP-3009 (Coinbase Wallet, Rainbow)"
-                        disabled={isInflight}
-                        onClick={() => startPayment(feature, 'x402')}
-                      />
-                      <PaymentPathButton
-                        label="Pay with card"
-                        sub="Stripe Checkout; 2.9 % + $0.30 fee"
-                        disabled={isInflight}
-                        onClick={() => startPayment(feature, 'stripe')}
-                      />
-                    </div>
-                  )}
-                </article>
-              )
-            })}
+            {layout.vanityGroups.length > 0 && (
+              <section>
+                <div className="mb-3">
+                  <h2 className="text-sm font-medium text-zinc-200">Address vanity (optional)</h2>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Custom vault prefix or share suffix — skip this section if defaults work for you.
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  {layout.vanityGroups.map((group) => (
+                    <VanityFeatureGroupCard
+                      key={group.id}
+                      group={group}
+                      activationsByKey={activationsByKey}
+                      expandedFeatureKey={expandedVanityKey}
+                      inflightFeature={inflightFeature}
+                      onToggleExpand={(key) =>
+                        setExpandedVanityKey((current) => (current === key ? null : key))
+                      }
+                      onPay={startPayment}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
 
           {inflightMessage && (
@@ -420,21 +310,229 @@ export function CreatorStrategyFeatures() {
 
           <footer className="mt-10 border-t border-white/5 pt-6 text-xs text-zinc-500">
             <p>
-              USDC treasury: <code className="mono">{data.treasury}</code>. Strategy weight plan is computed server-side
-              from your paid activations; see the{' '}
-              <a
-                href="https://github.com/wenakita/4626/blob/main/docs/operations/creator-strategy-features.md#strategy-gating-phase-3"
-                target="_blank"
-                rel="noreferrer"
-                className="underline decoration-dotted"
-              >
-                weight-scaling docs
-              </a>{' '}
-              for the rules (1/2/3 paid → 90/45/30 % productive weight each).
+              USDC treasury: <code className="mono">{data.treasury}</code>. Paid strategies split productive vault
+              weight evenly at deploy time.
             </p>
           </footer>
         </>
       )}
+    </div>
+  )
+}
+
+function StrategyFeatureCard({
+  feature,
+  activation,
+  isInflight,
+  onPay,
+}: {
+  feature: CatalogDto
+  activation: ActivationDto | null
+  isInflight: boolean
+  onPay: (path: PaymentPath) => void
+}) {
+  const status = describeStatus(activation)
+  const isActive = activation?.status === 'active' || activation?.status === 'pending'
+
+  return (
+    <article className="rounded-xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:border-white/10">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-medium text-white">{feature.displayName}</h3>
+            <StatusPill tone={status.tone}>{status.label}</StatusPill>
+          </div>
+          <p className="mt-1 text-sm text-zinc-400">{feature.tagline}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-xs text-zinc-500">Price</div>
+          <div className="font-medium text-zinc-200">{feature.priceUsdcDisplay} USDC</div>
+        </div>
+      </div>
+
+      <FeatureDetails feature={feature} activation={activation} />
+
+      {!isActive && (
+        <PaymentPathGrid disabled={isInflight} onPay={onPay} priceDisplay={feature.priceUsdcDisplay} />
+      )}
+    </article>
+  )
+}
+
+function VanityFeatureGroupCard({
+  group,
+  activationsByKey,
+  expandedFeatureKey,
+  inflightFeature,
+  onToggleExpand,
+  onPay,
+}: {
+  group: VanityFeatureGroup
+  activationsByKey: Map<string, ActivationDto>
+  expandedFeatureKey: string | null
+  inflightFeature: string | null
+  onToggleExpand: (featureKey: string) => void
+  onPay: (feature: CatalogDto, path: PaymentPath) => void
+}) {
+  const activeCount = group.features.filter((f) => {
+    const a = activationsByKey.get(f.key)
+    return a?.status === 'active' || a?.status === 'pending'
+  }).length
+
+  return (
+    <details className="group rounded-xl border border-white/5 bg-white/[0.02] open:border-white/10">
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4 p-5 [&::-webkit-details-marker]:hidden">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <Sparkles className="h-4 w-4 text-zinc-500" aria-hidden />
+            <h3 className="text-base font-medium text-white">{group.title}</h3>
+            {activeCount > 0 ? (
+              <StatusPill tone="good">{activeCount} tier{activeCount === 1 ? '' : 's'} active</StatusPill>
+            ) : (
+              <StatusPill tone="neutral">Optional</StatusPill>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-zinc-400">{group.subtitle}</p>
+          <p className="mt-2 text-xs text-zinc-500">{group.defaultNote}</p>
+        </div>
+        <ChevronDown className="mt-1 h-4 w-4 shrink-0 text-zinc-500 transition-transform group-open:rotate-180" />
+      </summary>
+
+      <div className="border-t border-white/5 px-5 pb-5 pt-4">
+        <div className="overflow-hidden rounded-lg border border-white/5">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 border-b border-white/5 bg-white/[0.02] px-3 py-2 text-[11px] uppercase tracking-wide text-zinc-500">
+            <span>Length</span>
+            <span className="text-right">Price</span>
+            <span className="text-right">Action</span>
+          </div>
+          {group.features.map((feature) => {
+            const activation = activationsByKey.get(feature.key) ?? null
+            const status = describeStatus(activation)
+            const isActive = activation?.status === 'active' || activation?.status === 'pending'
+            const isExpanded = expandedFeatureKey === feature.key
+            const isInflight = inflightFeature === feature.key
+
+            return (
+              <div key={feature.key} className="border-b border-white/5 last:border-b-0">
+                <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 px-3 py-3">
+                  <div>
+                    <div className="text-sm text-zinc-200">{vanityTierLabel(feature)}</div>
+                    <div className="mt-0.5">
+                      <StatusPill tone={status.tone}>{status.label}</StatusPill>
+                    </div>
+                  </div>
+                  <div className="text-right text-sm font-medium text-zinc-300">
+                    {feature.priceUsdcDisplay}
+                  </div>
+                  <div className="text-right">
+                    {isActive ? (
+                      <span className="text-xs text-zinc-500">Included</span>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant={isExpanded ? 'secondary' : 'primary'}
+                        size="sm"
+                        disabled={isInflight}
+                        onClick={() => onToggleExpand(feature.key)}
+                      >
+                        {isExpanded ? 'Close' : 'Activate'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {isExpanded && !isActive && (
+                  <div className="border-t border-white/5 bg-black/20 px-3 py-3">
+                    <p className="mb-3 text-xs text-zinc-500">{feature.tagline}</p>
+                    <PaymentPathGrid
+                      disabled={isInflight}
+                      onPay={(path) => onPay(feature, path)}
+                      priceDisplay={feature.priceUsdcDisplay}
+                      compact
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </details>
+  )
+}
+
+function FeatureDetails({
+  feature,
+  activation,
+}: {
+  feature: CatalogDto
+  activation: ActivationDto | null
+}) {
+  return (
+    <>
+      <details className="mt-3 text-xs text-zinc-500">
+        <summary className="cursor-pointer text-zinc-400 hover:text-zinc-300">What it does</summary>
+        <p className="mt-2 whitespace-pre-line leading-relaxed">{feature.description}</p>
+        {feature.requires.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {feature.requires.map((req, idx) => (
+              <li key={idx} className="flex gap-2">
+                <span className="text-zinc-600">•</span>
+                <span>{req}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
+
+      {activation?.paymentTxHash && (
+        <p className="mt-3 text-xs text-zinc-500">
+          Payment:{' '}
+          <a
+            href={`https://basescan.org/tx/${activation.paymentTxHash}`}
+            target="_blank"
+            rel="noreferrer"
+            className="mono underline decoration-dotted hover:text-zinc-300"
+          >
+            {shortHex(activation.paymentTxHash, 8)}
+          </a>
+        </p>
+      )}
+    </>
+  )
+}
+
+function PaymentPathGrid({
+  disabled,
+  onPay,
+  priceDisplay,
+  compact = false,
+}: {
+  disabled?: boolean
+  onPay: (path: PaymentPath) => void
+  priceDisplay: string
+  compact?: boolean
+}) {
+  return (
+    <div className={`grid grid-cols-1 gap-2 ${compact ? 'sm:grid-cols-3' : 'sm:grid-cols-3'}`}>
+      <PaymentPathButton
+        label="USDC on Base"
+        sub={compact ? 'Paste tx hash' : `Send ${priceDisplay} → paste tx hash`}
+        disabled={disabled}
+        onClick={() => onPay('usdc_txhash')}
+      />
+      <PaymentPathButton
+        label="x402"
+        sub={compact ? 'Gasless wallet sign' : 'Gasless EIP-3009 (Coinbase Wallet, Rainbow)'}
+        disabled={disabled}
+        onClick={() => onPay('x402')}
+      />
+      <PaymentPathButton
+        label="Card"
+        sub={compact ? 'Stripe' : 'Stripe Checkout; 2.9 % + $0.30 fee'}
+        disabled={disabled}
+        onClick={() => onPay('stripe')}
+      />
     </div>
   )
 }
@@ -450,10 +548,10 @@ function StatusPill({
     tone === 'good'
       ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
       : tone === 'pending'
-      ? 'border-amber-400/30 bg-amber-400/10 text-amber-200'
-      : tone === 'bad'
-      ? 'border-red-400/30 bg-red-400/10 text-red-200'
-      : 'border-white/10 bg-white/[0.02] text-zinc-400'
+        ? 'border-amber-400/30 bg-amber-400/10 text-amber-200'
+        : tone === 'bad'
+          ? 'border-red-400/30 bg-red-400/10 text-red-200'
+          : 'border-white/10 bg-white/[0.02] text-zinc-400'
   const icon =
     tone === 'good' ? (
       <Check className="h-3 w-3" />
@@ -463,7 +561,9 @@ function StatusPill({
       <X className="h-3 w-3" />
     ) : null
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${toneClass}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] ${toneClass}`}
+    >
       {icon}
       {children}
     </span>
