@@ -6,8 +6,9 @@ Turn-on checklist for live vault `0x82C06EaAE27B1Ca31fA29F22341A162A670A4471` (c
 
 | Layer | Host | What it runs |
 |-------|------|----------------|
-| Control plane | **Vercel** (`akita-llc/4626`) | Crons, `/api/keeper/*`, `/api/vaults/active`, Ajna enqueue |
-| Base keeper writes | **Vercel** (`KPR_PRIVATE_KEY`) | `tend` / `report` via HTTP bridge |
+| Control plane | **Vercel** (`akita-llc/4626`) | Crons, `/api/keeper/*`, `/api/keepr/actions/*`, Ajna/Charm enqueue + queue processing |
+| Base keeper writes | **Vercel** (`KPR_PRIVATE_KEY`) | `tend` / `report` via HTTP bridge; Charm `rebalance()` via protocol treasury Safe when `manager` is treasury |
+| XMTP agent | **Railway** (`4626-keepr-agent`) | Eliza/XMTP primary only — **not** Charm automation |
 | Solana execution | **Vultr** (`orchestrator.4626.fun`) | `/reconcile` relay/settle/winner/rebalance |
 | Local operator | **`kpr/.env`** | Dry-run + manual workflow runs against prod APIs |
 
@@ -31,6 +32,10 @@ Set in [Vercel → 4626 → Settings → Environment Variables](https://vercel.c
 | `KEEPER_SOLANA_RECONCILE_ACTIONS` | `relay_entries,settle_fees,winner_relay` (add `,rebalance` after Phase 2) |
 | `SOLANA_ORCHESTRATOR_URL` | `https://orchestrator.4626.fun` (no path suffix) |
 | `SOLANA_ORCHESTRATOR_API_KEY` | Same secret as Vultr orchestrator env |
+| `KEEPER_PROCESS_KPR_ACTIONS_ENABLED` | `1` — Vercel cron executes `keepr_actions` queue (Charm/Ajna writes) |
+| `KEEPER_PROCESS_KPR_ACTIONS_LIMIT` | `1` until each strategy action has run cleanly |
+| `KEEPER_STRATEGY_SIGNALS_ENABLED` | `1` (optional Pattern A) — cron-polled Charm/Ajna signal enqueue instead of websocket listener |
+| `KPR_PRIVATE_KEY` | EOA owner on protocol treasury Safe `0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3` (required for Charm treasury-manager lane) |
 
 Redeploy production after changes (`[force-vercel]` commit or manual promote).
 
@@ -62,7 +67,16 @@ pnpm exec tsx runner.ts ajna-bucket-manager --dry-run
 pnpm exec tsx runner.ts charm-rebalance-manager --dry-run
 ```
 
-Charm live path: Railway primary `strategy-signal-listener` + `keepr-action-queue`, or enable `KEEPER_STRATEGY_SIGNALS_ENABLED=1` on Vercel.
+**Charm live path (Vercel control plane — not Railway):**
+
+1. **Enqueue** — one of:
+   - **Pattern A (Vercel-only):** `KEEPER_STRATEGY_SIGNALS_ENABLED=1` + cron `/api/keeper/jobs/enqueue-strategy-signals`, or `KEEPER_STRATEGY_CANARY_ENABLED=1` for canary vaults
+   - **Pattern B (ops VPS):** long-lived `strategy-signal-listener` + `keepr-action-queue` via `kpr/runner.ts` (systemd on ops host) — still calls Vercel `/api/keepr/actions/enqueue`
+   - **Operator:** `pnpm exec tsx runner.ts charm-rebalance-manager`
+2. **Process** — `KEEPER_PROCESS_KPR_ACTIONS_ENABLED=1` on Vercel (`/api/keeper/jobs/process-keepr-actions`) or Pattern B `keepr-action-queue` worker
+3. **Execute** — `/api/keepr/actions/execute` → treasury Safe `rebalance()` when Charm vault `manager` is protocol treasury Safe
+
+Railway deploys the XMTP Eliza agent only (`railway.toml`); it does not run Charm listeners or the action queue. See `docs/operations/automation/keeper-job-coordination.md` for env details.
 
 ### 6. Ajna Vault Manager P0
 
