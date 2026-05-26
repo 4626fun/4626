@@ -79,7 +79,7 @@ function parseFeatureKeys(): CreatorStrategyFeatureKey[] {
     return Object.values(DEPLOY_GATING_FEATURE_KEYS)
   }
   const raw = argValue('--features')
-  if (!raw) return ['solana_bridge_strategy']
+  if (!raw) return ['solana_ovault_mesh']
   return raw
     .split(',')
     .map((s) => s.trim())

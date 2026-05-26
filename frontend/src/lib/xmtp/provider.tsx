@@ -65,6 +65,7 @@ import {
   shouldAttemptXmtpRestore,
   shouldRefuseAutoCreateAfterFailedRestore,
 } from '@/lib/xmtp/xmtpConnectPolicy'
+import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
 import {
   Client,
   LogLevel,
@@ -1833,99 +1834,86 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           closeClientSafe(buildClient)
           return
         }
-        try {
-          clientRef.current = buildClient
-          setInboxId(buildClient.inboxId ?? null)
-          await setupConversations(buildClient)
-          return // fully connected via restore — done, zero updates consumed
-        } catch (syncErr) {
-          const syncMsg = syncErr instanceof Error ? syncErr.message : String(syncErr)
-          const isUninitialized = syncMsg.toLowerCase().includes('uninitialized')
-          console.warn('[xmtp] Client.build restored but setupConversations failed:', syncMsg)
 
-          if (isLocalXmtpStateInvalidError(syncMsg)) {
-            markLocalStateInvalid(syncMsg)
+        clientRef.current = buildClient
+        setInboxId(buildClient.inboxId ?? null)
+
+        const finishResult = await finishRestoredXmtpClient({
+          setupConversations: () => setupConversations(buildClient),
+          registerWithFallback: async () => {
+            const signerSelection = await getSignerSelection()
+            let registrationSigner = signerSelection.signer
+            try {
+              await registerRestoredInstallation(buildClient, registrationSigner)
+              writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
+            } catch (registerErr) {
+              const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
+              if (registrationSigner.type === 'EOA' && isWrongChainIdError(registerMsg)) {
+                console.warn(
+                  '[xmtp] Wrong chain id while registering restored installation with EOA; retrying SCW on Base (8453)…',
+                )
+                registrationSigner = signerSelection.scwSigner
+                await registerRestoredInstallation(buildClient, registrationSigner)
+                writeStoredSignerType(xmtpIdentityAddress, 'SCW')
+              } else if (
+                registrationSigner.type === 'SCW' &&
+                isScwSignatureValidationError(registerMsg)
+              ) {
+                console.warn(
+                  '[xmtp] SCW signature validation failed while registering restored installation; retrying EOA…',
+                )
+                registrationSigner = signerSelection.eoaSigner
+                await registerRestoredInstallation(buildClient, registrationSigner)
+                writeStoredSignerType(xmtpIdentityAddress, 'EOA')
+              } else {
+                throw registerErr
+              }
+            }
+          },
+          isLocalStateInvalidError,
+        })
+
+        if (finishResult.ok) {
+          return
+        }
+
+        console.warn('[xmtp] Client.build restored but finishRestoredXmtpClient failed:', finishResult.message)
+        try {
+          buildClient.close()
+        } catch {}
+        clientRef.current = null
+
+        if (finishResult.kind === 'invalid_local') {
+          markLocalStateInvalid(finishResult.message)
+          return
+        }
+
+        if (finishResult.kind === 'register_failed') {
+          if (finishResult.stillUninitialized) {
+            setStatus('error')
+            setLocalStateResetRequired(true)
+            setError(
+              'XMTP restored local state but identity registration failed. ' +
+              'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
+              'Use "Reset local messaging state" only if you intentionally want a fresh installation.',
+            )
             return
           }
 
-          if (isUninitialized) {
-            // Critical anti-churn path: register the restored installation in-place.
-            // Do NOT fall through to Client.create here — that would burn a new
-            // installation each retry and quickly hit 10/10.
-            xmtpDebug(
-              '[xmtp] Uninitialized identity on restored installation — attempting in-place register (no new installation)…',
-            )
-            try {
-              const signerSelection = await getSignerSelection()
-              let registrationSigner = signerSelection.signer
-              try {
-                await registerRestoredInstallation(buildClient, registrationSigner)
-                writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
-              } catch (registerErr) {
-                const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-                if (registrationSigner.type === 'EOA' && isWrongChainIdError(registerMsg)) {
-                  console.warn(
-                    '[xmtp] Wrong chain id while registering restored installation with EOA; retrying SCW on Base (8453)…',
-                  )
-                  registrationSigner = signerSelection.scwSigner
-                  await registerRestoredInstallation(buildClient, registrationSigner)
-                  writeStoredSignerType(xmtpIdentityAddress, 'SCW')
-                } else if (
-                  registrationSigner.type === 'SCW' &&
-                  isScwSignatureValidationError(registerMsg)
-                ) {
-                  console.warn(
-                    '[xmtp] SCW signature validation failed while registering restored installation; retrying EOA…',
-                  )
-                  registrationSigner = signerSelection.eoaSigner
-                  await registerRestoredInstallation(buildClient, registrationSigner)
-                  writeStoredSignerType(xmtpIdentityAddress, 'EOA')
-                } else {
-                  throw registerErr
-                }
-              }
-
-              await setupConversations(buildClient)
-              return
-            } catch (registerErr) {
-              const regMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-              console.error('[xmtp] In-place registration for restored installation failed:', registerErr)
-              try { buildClient.close() } catch {}
-              clientRef.current = null
-
-              if (regMsg.toLowerCase().includes('uninitialized')) {
-                setStatus('error')
-                setLocalStateResetRequired(true)
-                setError(
-                  'XMTP restored local state but identity registration failed. ' +
-                  'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
-                  'Use "Reset local messaging state" only if you intentionally want a fresh installation.',
-                )
-                return
-              } else {
-                setStatus('error')
-                setError(
-                  'XMTP restored your local installation but identity registration failed. ' +
-                  'Refusing to create a new installation to avoid churn. Retry after reconnecting wallet, or use Reset XMTP installations.',
-                )
-                return
-              }
-            }
-          } else {
-            // Transient error (network timeout, server error, etc.).
-            // Retry once — do NOT fall through to Client.create.
-            xmtpDebug('[xmtp] Retrying setupConversations once…')
-            try {
-              await setupConversations(buildClient)
-              return // retry succeeded
-            } catch (retryErr) {
-              console.error('[xmtp] setupConversations retry also failed:', retryErr)
-              try { buildClient.close() } catch {}
-              clientRef.current = null
-              throw retryErr
-            }
-          }
+          setStatus('error')
+          setLocalStateResetRequired(true)
+          const regHint = /reject|denied|cancel/i.test(finishResult.message)
+            ? 'Approve the wallet signature when prompted, then click Connect Messaging again.'
+            : 'Reconnect your wallet, approve the signing prompt, then click Connect Messaging again. If it keeps failing, use Reset local XMTP state — not Reset XMTP installations unless you are at the 10/10 cap.'
+          setError(
+            `XMTP restored your local installation but identity registration failed (${finishResult.message}). ` +
+            'Refusing to create a new installation to avoid churn. ' +
+            regHint,
+          )
+          return
         }
+
+        throw new Error(finishResult.message)
       }
 
       setStatus('connecting')

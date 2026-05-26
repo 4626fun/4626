@@ -18,7 +18,6 @@ export type VanityFeatureGroup = {
 const STRATEGY_KEYS = new Set([
   'charm_active_lp',
   'ajna_sleeve',
-  'solana_bridge_strategy',
   'solana_ovault_mesh',
 ])
 

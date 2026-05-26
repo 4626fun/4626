@@ -9,9 +9,10 @@ Related: [AKITA Solana share-mesh audit](./akita-solana-share-mesh-audit.md), [A
 | # | Policy |
 |---|--------|
 | 1 | Tradable Solana shares come from **bridging ShareOFT from Base** (LayerZero share mesh via `solana_ovault_mesh` + `OVaultHubComposer` wiring). Not from a creator re-deposit loop. |
-| 2 | **Lottery fires only on pool buy** of the share mesh token. Not on compose deposit, not on bridge receipt, not on creator-coin trades. |
-| 3 | **Meteora DLMM** (or successor venue) pairs **share mesh** as the base asset — not bridge-wrapped creator SPL from the legacy `wrap-token` provisioner path. Pool parameters TBD. |
-| 4 | **`relay_entries` is paused** until a share-mesh pool exists and the transfer hook (or equivalent) fires on **share mesh pool buys**. |
+| 2 | **30% of minted ShareOFT auto-bridges to Solana at finalizePhase2** (LayerZero `send` to `solanaDestination` when OVault runtime is enabled on the batcher). This replaces the deprecated `solana_bridge_strategy` Phase-3 TVL lane. |
+| 3 | **Lottery fires only on pool buy** of the share mesh token. Not on compose deposit, not on bridge receipt, not on creator-coin trades. |
+| 4 | **Meteora DLMM** (or successor venue) pairs **share mesh** as the base asset — not bridge-wrapped creator SPL from the legacy `wrap-token` provisioner path. Pool parameters TBD. |
+| 5 | **`relay_entries` is paused** until a share-mesh pool exists and the transfer hook (or equivalent) fires on **share mesh pool buys**. |
 
 ## Three pipes (do not conflate)
 

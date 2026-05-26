@@ -64,6 +64,7 @@ import {
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
+import { quoteFinalizeShareBridgeNativeFee } from '@/lib/deploy/finalizeShareBridgeFee'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
@@ -145,17 +146,15 @@ const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
 
 // Uniswap CCA uses Q96 fixed-point prices + a compact step schedule.
 const DEFAULT_REQUIRED_RAISE_WEI = 100_000_000_000_000_000n // 0.1 ETH
-// Phase-2 split in the deployment batcher is 50% auction / 50% vesting.
-// Keep this as a boolean gate for deferred launch wiring.
-const DEFAULT_AUCTION_PERCENT = 50
-// Strategy deployment targets (of total deposited creator tokens):
-// - 30% Charm
-// - 30% Ajna
-// - 30% SolanaStrategy
-// - 10% idle operational buffer
-const DEFAULT_CHARM_WEIGHT_BPS = 3_000n
-const DEFAULT_AJNA_WEIGHT_BPS = 3_000n
-const DEFAULT_SOLANA_WEIGHT_BPS = 3_000n
+// Phase-2 share split in the deployment batcher: 30% CCA / 30% vesting / 30% Solana / 10% LP.
+const DEFAULT_AUCTION_PERCENT = 30
+const DEFAULT_VESTING_PERCENT = 30
+const DEFAULT_SOLANA_SHARE_PERCENT = 30
+const DEFAULT_LP_RESERVE_PERCENT = 10
+// Phase-3 strategy weights (vault TVL): Charm + Ajna only at 45/45; Solana is share auto-bridge at finalize.
+const DEFAULT_CHARM_WEIGHT_BPS = 4_500n
+const DEFAULT_AJNA_WEIGHT_BPS = 4_500n
+const DEFAULT_SOLANA_WEIGHT_BPS = 0n
 const DEFAULT_IDLE_PERCENT_BPS = 1_000n // 10% explicit idle target
 const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SOLANA_MAX_NAV_AGE = 3_600n
@@ -5481,13 +5480,13 @@ function DeployVaultBatcher({
           solanaIxs: [],
         } as const
 
-        // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna + SolanaStrategy
+        // Phase 3 (strategies): Charm CREATOR/USDC + nested Ajna only (Solana share seed is Phase 2 auto-bridge)
         const charmWeightBps = DEFAULT_CHARM_WEIGHT_BPS
         const ajnaWeightBps = DEFAULT_AJNA_WEIGHT_BPS
         const solanaWeightBps = DEFAULT_SOLANA_WEIGHT_BPS
         if (charmWeightBps <= 0n) throw new Error('Charm strategy is required')
         if (ajnaWeightBps <= 0n) throw new Error('Ajna strategy is required')
-        if (solanaWeightBps <= 0n) throw new Error('Solana strategy is required')
+        if (solanaWeightBps !== 0n) throw new Error('Solana vault strategy weight must remain zero')
         if (charmWeightBps + ajnaWeightBps + solanaWeightBps > 10_000n) {
           throw new Error('Strategy weights exceed 100%')
         }
@@ -5704,6 +5703,23 @@ function DeployVaultBatcher({
           )
         }
 
+        const finalizePhase2Calldata = encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_ABI,
+          functionName: 'finalizePhase2',
+          args: [phase2FinalizeParams],
+        })
+        const finalizeShareBridgeQuote = await quoteFinalizeShareBridgeNativeFee({
+          publicClient,
+          batcherAddress,
+          finalizeCallData: finalizePhase2Calldata,
+        })
+        if ('code' in finalizeShareBridgeQuote) {
+          throw new Error(finalizeShareBridgeQuote.message)
+        }
+        const finalizeBridgeNativeFee = finalizeShareBridgeQuote.required
+          ? finalizeShareBridgeQuote.nativeFee
+          : 0n
+
         const phase1Calls: Array<{ target: Address; value: bigint; data: Hex }> = phase1CallsPrepared
 
         const phase2Calls: Array<{ target: Address; value: bigint; data: Hex }> = []
@@ -5745,7 +5761,7 @@ function DeployVaultBatcher({
             })
             const phase2FinalizeCall = {
               target: batcherAddress,
-              value: 0n,
+              value: finalizeBridgeNativeFee,
               data: encodeFunctionData({
                 abi: CREATOR_VAULT_BATCHER_ABI,
                 functionName: 'finalizePhase2WithPermit2',
@@ -5841,12 +5857,8 @@ function DeployVaultBatcher({
           ? (phase2Calls[0] as { target: Address; value: bigint; data: Hex })
           : ({
               target: batcherAddress,
-              value: 0n,
-              data: encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
-                functionName: 'finalizePhase2',
-                args: [phase2FinalizeParams],
-              }),
+              value: finalizeBridgeNativeFee,
+              data: finalizePhase2Calldata,
             } as const)
 
         const phase2CoreNeeded = !phase2CoreAll

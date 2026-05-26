@@ -31,7 +31,7 @@ import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { usePrivyClientStatus } from '@/lib/privy/client'
-import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
+import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
@@ -437,6 +437,7 @@ export function Swap() {
   const [showSwapWalletOptions, setShowSwapWalletOptions] = useState(false)
   const walletRecoveryAttemptKeyRef = useRef('')
   const accountMe = useAccountMe()
+  const { embeddedEoaAddress: ensuredEmbeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
   // `privy.user` (`linkedAccounts` / `user.wallets`). Those records do NOT
@@ -627,7 +628,7 @@ export function Swap() {
   const privyEmbeddedEoaWallet = useMemo(() => {
     const wallets = Array.isArray(privyWallets) ? (privyWallets as any[]) : []
     const fallbackAddresses = new Set(
-      [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser]
+      [privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, ensuredEmbeddedEoaAddress, authAddress]
         .filter((value): value is Address => Boolean(value))
         .map((value) => value.toLowerCase()),
     )
@@ -644,7 +645,14 @@ export function Swap() {
         return fallbackAddresses.has(address.toLowerCase())
       }) ?? null
     )
-  }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyWallets])
+  }, [
+    authAddress,
+    canonicalAddress,
+    ensuredEmbeddedEoaAddress,
+    privyCrossAppEmbeddedEoaAddress,
+    privyEmbeddedEoaAddressFromUser,
+    privyWallets,
+  ])
 
   const privyEmbeddedEoaAddressInfo = useMemo(() => {
     const fromWallet = normalizeAddressOrNull((privyEmbeddedEoaWallet as any)?.address)
@@ -675,11 +683,40 @@ export function Swap() {
       }
     }
 
+    if (
+      ensuredEmbeddedEoaAddress &&
+      (!canonicalAddress || ensuredEmbeddedEoaAddress.toLowerCase() !== canonicalAddress.toLowerCase())
+    ) {
+      return {
+        address: ensuredEmbeddedEoaAddress,
+        source: 'privy-embedded-hook' as const,
+      }
+    }
+
+    if (
+      privyAuthenticated === true &&
+      authAddress &&
+      (!canonicalAddress || authAddress.toLowerCase() !== canonicalAddress.toLowerCase())
+    ) {
+      return {
+        address: authAddress,
+        source: 'session-auth-address' as const,
+      }
+    }
+
     return {
       address: null,
       source: null as null,
     }
-  }, [canonicalAddress, privyCrossAppEmbeddedEoaAddress, privyEmbeddedEoaAddressFromUser, privyEmbeddedEoaWallet])
+  }, [
+    authAddress,
+    canonicalAddress,
+    ensuredEmbeddedEoaAddress,
+    privyAuthenticated,
+    privyCrossAppEmbeddedEoaAddress,
+    privyEmbeddedEoaAddressFromUser,
+    privyEmbeddedEoaWallet,
+  ])
 
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
@@ -781,6 +818,19 @@ export function Swap() {
     })
   }, [privyEmbeddedEoaCanSign, privyEmbeddedEoaWallet, recoverEmbeddedWalletProvider])
 
+  const embeddedWalletEnsureRef = useRef(false)
+  useEffect(() => {
+    if (embeddedWalletEnsureRef.current) return
+    if (privyAuthenticated !== true) return
+    if (privyEmbeddedEoaWallet) return
+    if (!privyEmbeddedEoaAddress && !authAddress) return
+    embeddedWalletEnsureRef.current = true
+    void ensureEmbeddedWallet()
+      .catch(() => {
+        embeddedWalletEnsureRef.current = false
+      })
+  }, [authAddress, ensureEmbeddedWallet, privyAuthenticated, privyEmbeddedEoaAddress, privyEmbeddedEoaWallet])
+
   const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
     queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
     enabled: Boolean(
@@ -800,19 +850,24 @@ export function Swap() {
     },
   })
 
-  const effectiveExecutionTrack = useMemo(
-    () =>
-      resolveEffectiveExecutionTrack({
-        executionTrack: executionTrack ?? undefined,
-        parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
-        privyEmbeddedEoaIsOwnerOfCanonicalCsw: accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
-      }),
-    [
-      executionTrack,
-      accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
-      privyEmbeddedEoaCanOperateCanonicalQuery.data,
-    ],
-  )
+  const effectiveExecutionTrack = useMemo(() => {
+    const resolved = resolveEffectiveExecutionTrack({
+      executionTrack: executionTrack ?? undefined,
+      parentEmbeddedOwnerOnChain: privyEmbeddedEoaCanOperateCanonicalQuery.data === true,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+    })
+    // Avoid flashing "Open waitlist setup" while `/api/accounts/me` is still in flight.
+    // The gate treats an unset track differently from explicit `none-yet`.
+    if (accountMe.loading && executionTrack == null && resolved === 'none-yet') {
+      return undefined
+    }
+    return resolved
+  }, [
+    executionTrack,
+    accountSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+    privyEmbeddedEoaCanOperateCanonicalQuery.data,
+    accountMe.loading,
+  ])
   const subAccountTrack =
     effectiveExecutionTrack === 'sub-account' || effectiveExecutionTrack === 'migration-pending'
   const subAccountFlowEnabled = useMemo(() => waitlistSubAccountFlowFlag(), [])
@@ -1047,6 +1102,7 @@ export function Swap() {
   )
   const needsCanonicalSetupAction =
     executionMode === 'canonical' &&
+    !accountMe.loading &&
     subAccountFlowEnabled &&
     canonicalSetupGateCodes.has(canonicalSignerGate.code) &&
     !(

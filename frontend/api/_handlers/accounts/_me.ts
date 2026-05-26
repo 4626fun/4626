@@ -15,6 +15,7 @@ import {
   syncEmailIdentity,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
+import { isDeployDryRunDbDisabled } from '../../../server/_lib/dev/localDevEnv.js'
 
 type AccountsMeResponse = Awaited<ReturnType<typeof buildAccountsMePayload>>
 
@@ -29,7 +30,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const db = await getDb()
   if (!db) {
-    return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
+    const error = isDeployDryRunDbDisabled()
+      ? 'Database unavailable for deploy dry-run. Set DEPLOY_DRY_RUN_KEEP_DB_ENV=1 in frontend/.env.deploy-dry-run.local and restart dev-deploy-dry-run.'
+      : 'Database unavailable'
+    return res.status(503).json({ success: false, error } satisfies ApiEnvelope<never>)
   }
 
   try {

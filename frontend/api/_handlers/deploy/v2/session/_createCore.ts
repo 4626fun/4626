@@ -15,6 +15,8 @@ import {
 } from 'viem'
 import { base } from 'viem/chains'
 
+import { attachFinalizeShareBridgeValueToCalls } from '../../../../../src/lib/deploy/finalizeShareBridgeFee.js'
+import { assertShareBridgeOftWiringForFinalize } from '../../../../../src/lib/deploy/shareBridgeOftWiring.js'
 import { resolveDeploySessionRpcUrl } from './deploySessionRpc.js'
 import {
   handleOptions,
@@ -2641,6 +2643,41 @@ export async function validateDeploySessionRequest(params: {
     phase2FinalizeCalls: distributedPhase2FinalizeCalls,
     targetVersion: phase1Version,
   })
+  if (phase2FinalizeCalls.length > 0) {
+    const rpc = resolveDeploySessionRpcUrl()
+    const readClient = createPublicClient({
+      chain: base,
+      transport: http(rpc, { timeout: 12_000 }),
+    })
+    try {
+      if (params.requireCalls) {
+        const finalizeBridgeCall = phase2FinalizeCalls.find((call) => {
+          const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
+          return (
+            data.startsWith('0xbd4583fb') ||
+            data.startsWith('0xab56c176') ||
+            data.startsWith('0xcafc9348')
+          )
+        })
+        if (finalizeBridgeCall?.to && isAddress(finalizeBridgeCall.to)) {
+          await assertShareBridgeOftWiringForFinalize({
+            publicClient: readClient,
+            batcherAddress: getAddress(finalizeBridgeCall.to as Address),
+            finalizeCallData: finalizeBridgeCall.data,
+          })
+        }
+      }
+      phase2FinalizeCalls = await attachFinalizeShareBridgeValueToCalls({
+        publicClient: readClient,
+        calls: phase2FinalizeCalls,
+      })
+    } catch (error) {
+      throw new DeploySessionRequestError(
+        409,
+        error instanceof Error ? error.message : 'finalize share bridge fee quote failed',
+      )
+    }
+  }
   const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
   const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
@@ -2737,7 +2774,7 @@ export async function validateDeploySessionRequest(params: {
     }
     const ovaultPolicy = DEPLOY_FEATURE_POLICY_MATRIX.find((entry) => entry.key === 'solana_ovault_mesh')
     const requiredFeatureKeys =
-      ovaultPolicy?.requiresAnyOf ?? (['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const)
+      ovaultPolicy?.requiresAnyOf ?? (['solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const)
     const entitled = await hasAnyFeatureActivation({
       db: db as any,
       creatorToken,

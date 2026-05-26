@@ -20,7 +20,7 @@ export const DEPLOY_FEATURE_POLICY_MATRIX: DeployFeaturePolicy[] = [
   {
     key: 'solana_ovault_mesh',
     stages: ['create', 'phase2b'],
-    requiresAnyOf: ['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'],
+    requiresAnyOf: ['solana_ovault_mesh', 'solana_meteora_alpha_vault'],
     failureCode: 'feature_policy:ovault_mesh_entitlement_missing',
   },
   {
@@ -40,12 +40,6 @@ export const DEPLOY_FEATURE_POLICY_MATRIX: DeployFeaturePolicy[] = [
     stages: ['phase3'],
     requiresAnyOf: ['ajna_sleeve'],
     failureCode: 'feature_policy:phase3_ajna_missing',
-  },
-  {
-    key: 'solana_bridge_strategy',
-    stages: ['phase3'],
-    requiresAnyOf: ['solana_bridge_strategy'],
-    failureCode: 'feature_policy:phase3_solana_missing',
   },
 ]
 
@@ -140,12 +134,12 @@ export function validateFeatureCompatibility(activeFeatureKeys: readonly Creator
   message: string
 } {
   const set = new Set(activeFeatureKeys)
-  if (set.has('solana_meteora_alpha_vault') && !set.has('solana_bridge_strategy')) {
+  if (set.has('solana_meteora_alpha_vault') && !set.has('solana_ovault_mesh')) {
     return {
       ok: false,
-      code: 'feature_policy:meteora_requires_solana_bridge',
+      code: 'feature_policy:meteora_requires_ovault_mesh',
       message:
-        'Meteora Alpha Vault requires Solana bridge strategy to be active first. Activate `solana_bridge_strategy` and retry.',
+        'Meteora Alpha Vault requires Solana OVault mesh to be active first. Activate `solana_ovault_mesh` and retry.',
     }
   }
   return { ok: true }

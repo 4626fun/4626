@@ -60,6 +60,7 @@ import {
   resolveCreatorStrategyPlan,
 } from '../../../server/_lib/creatorStrategy/resolveWeights.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import { assertFinalizeShareBridgeCallValue } from '../../../src/lib/deploy/finalizeShareBridgeFee.js'
 import { resolveProtocolAjnaKeeperAddress } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -516,7 +517,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'params',
@@ -553,7 +554,7 @@ const CREATOR_VAULT_BATCHER_PHASE_ABI = [
   {
     type: 'function',
     name: 'finalizePhase2WithPermit2',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [
       {
         name: 'params',
@@ -2077,7 +2078,16 @@ async function validateInnerCalls(params: {
     if (c.value === 0n) continue
     const selector = getSelector(c.data)
     const isWethDeposit = c.target === expectedWethToken && selector === SELECTOR_WETH_DEPOSIT
-    if (!isWethDeposit) throw new Error('value_transfer_not_allowed')
+    if (isWethDeposit) {
+      if (c.value <= 0n) throw new Error('weth_deposit_value_invalid')
+      continue
+    }
+    const isFinalizeShareBridge =
+      c.target === creatorVaultBatcher &&
+      (selector === SELECTOR_BATCHER_FINALIZE_PHASE2 ||
+        selector === SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2)
+    if (isFinalizeShareBridge) continue
+    throw new Error('value_transfer_not_allowed')
   }
 
   const erc8004Registry = getErc8004RegistryAddress()
@@ -2855,6 +2865,22 @@ async function validateInnerCalls(params: {
       if (!shareVault || getAddress(shareVault) !== expectedVault) throw new Error('shareoft_vault_mismatch')
       if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) throw new Error('wrapper_owner_mismatch')
       if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) throw new Error('shareoft_owner_mismatch')
+      for (const c of innerCalls) {
+        if (c.target !== creatorVaultBatcher) continue
+        const selector = getSelector(c.data)
+        if (
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2 &&
+          selector !== SELECTOR_BATCHER_FINALIZE_PHASE2_WITH_PERMIT2
+        ) {
+          continue
+        }
+        await assertFinalizeShareBridgeCallValue({
+          publicClient: client,
+          batcherAddress: creatorVaultBatcher,
+          callData: c.data,
+          value: c.value,
+        })
+      }
     }
     const [vaultName, vaultSymbol] = (await Promise.all([
       client.readContract({ address: expectedVault, abi: ERC20_METADATA_ABI, functionName: 'name' }),

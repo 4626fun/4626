@@ -15,6 +15,8 @@ import {ICreatorOVault} from "../../interfaces/core/ICreatorOVault.sol";
 import {IAjnaPoolFactory} from "../../interfaces/IAjnaPool.sol";
 import {IBaseSolanaBridge} from "../../interfaces/IBaseSolanaBridge.sol";
 import {CreatorLinearVesting} from "../../utilities/vesting/CreatorLinearVesting.sol";
+import {IOFT, SendParam, MessagingFee, OFTReceipt} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 interface IUniversalCreate2DeployerFromStore {
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr);
@@ -53,6 +55,7 @@ contract DeploymentBatcherPhase3Helper {
     error CharmVaultManagerMismatch(address expected, address actual);
     error Phase3HelperLostAdmin();
     error ZeroAddress();
+    error InvalidWeight();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     address public immutable protocolTreasury;
@@ -166,27 +169,10 @@ contract DeploymentBatcherPhase3Helper {
             IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolAutomation);
         }
 
-        // Solana bridge strategy is an OPT-IN paid feature
-        // (`solana_bridge_strategy`, $100 USDC). Skipping it at weight=0
-        // follows the same pattern as Charm/Ajna above — no deploy, no
-        // addStrategy, result address stays zero. Creators who skip this
-        // also cannot enable the post-deploy `solana_meteora_alpha_vault`
-        // add-on (there's no SolanaStrategy for Meteora to route through).
-        if (params.solanaWeightBps != 0) {
-            bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
-            bytes memory solanaArgs = abi.encode(
-                params.vault,
-                params.creatorToken,
-                address(this),
-                params.solanaKeeper,
-                params.solanaMaxNavAge,
-                params.solanaMaxNavDeltaBpsPerUpdate,
-                params.solanaMinBaseLiquidityBps,
-                params.solanaBridgeAddress
-            );
-            out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
-            IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
-        }
+        // Solana vault strategy (Pipe C) is removed for greenfield deploys.
+        // Solana share liquidity is seeded via the 30% ShareOFT auto-bridge at
+        // finalizePhase2 instead of a Phase-3 SolanaBridgeStrategy allocation.
+        if (params.solanaWeightBps != 0) revert InvalidWeight();
     }
 
     function _deployCharmPipeline(
@@ -596,19 +582,51 @@ interface IVaultRolePolicyManager {
     ) external view;
 }
 
+interface IDeploymentBatcherSolanaConfig {
+    struct OVaultRuntimeConfig {
+        address hubComposer;
+        uint32 solanaEid;
+        bool enabled;
+    }
+
+    function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory);
+
+    function solanaDestination() external view returns (bytes32);
+
+    function solanaShareOftPeer() external view returns (bytes32);
+}
+
+interface IERC20MetadataLite {
+    function name() external view returns (string memory);
+    function symbol() external view returns (string memory);
+}
+
+interface IOFTPeerConfig {
+    function peers(uint32 eid) external view returns (bytes32 peer);
+    function setPeer(uint32 _eid, bytes32 _peer) external;
+}
+
 contract DeploymentBatcherPhase2Module {
     using SafeERC20 for IERC20;
 
-    uint8 internal constant AUCTION_PERCENT = 40;
-    uint8 internal constant VESTING_PERCENT = 40;
+    uint8 internal constant AUCTION_PERCENT = 30;
+    uint8 internal constant VESTING_PERCENT = 30;
+    uint8 internal constant SOLANA_ALLOC_PERCENT = 30;
+    uint8 internal constant LP_RESERVE_PERCENT = 10;
     uint16 internal constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000;
     uint16 internal constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100;
+    uint128 internal constant DEFAULT_SHARE_BRIDGE_GAS_LIMIT = 200_000;
 
     error NotBatcherContext();
+    error SolanaShareBridgeNotConfigured();
+    error SolanaShareOftPeerNotConfigured();
+    error InsufficientSolanaBridgeFee(uint256 required, uint256 provided);
+    error SolanaBridgeRefundFailed();
 
     struct FinalizeExecutionResult {
         uint256 auctionAmount;
         uint256 lpReserveAmount;
+        uint256 solanaAmount;
         uint256 vestingAmount;
         address vestingAddress;
         uint64 vestingStartTimestamp;
@@ -708,10 +726,19 @@ contract DeploymentBatcherPhase2Module {
 
         result.auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;
         result.vestingAmount = (shareTokens * VESTING_PERCENT) / 100;
-        result.lpReserveAmount = shareTokens - result.auctionAmount - result.vestingAmount;
+        result.solanaAmount = (shareTokens * SOLANA_ALLOC_PERCENT) / 100;
+        result.lpReserveAmount =
+            shareTokens - result.auctionAmount - result.vestingAmount - result.solanaAmount;
 
         if (result.lpReserveAmount > 0) {
             IERC20(params.shareOFT).safeTransfer(params.ccaStrategy, result.lpReserveAmount);
+        }
+
+        if (result.solanaAmount > 0) {
+            IDeploymentBatcherSolanaConfig config = IDeploymentBatcherSolanaConfig(batcher);
+            IDeploymentBatcherSolanaConfig.OVaultRuntimeConfig memory runtime = config.getOVaultRuntimeConfig();
+            _ensureRegistryAndShareOftPeerWired(params, runtime.solanaEid);
+            _bridgeShareAllocationToSolana(params.shareOFT, params.owner, result.solanaAmount);
         }
 
         if (result.vestingAmount > 0) {
@@ -732,6 +759,95 @@ contract DeploymentBatcherPhase2Module {
         ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
         ICCALaunchStrategy(params.ccaStrategy).transferOwnership(protocolTreasury);
         IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
+    }
+
+    function _readTokenMetadata(address token) internal view returns (string memory name, string memory symbol) {
+        try IERC20MetadataLite(token).name() returns (string memory tokenName) {
+            name = tokenName;
+        } catch {
+            name = "Unknown";
+        }
+        try IERC20MetadataLite(token).symbol() returns (string memory tokenSymbol) {
+            symbol = tokenSymbol;
+        } catch {
+            symbol = "UNK";
+        }
+    }
+
+    function _ensureRegistryAndShareOftPeerWired(
+        DeploymentBatcher.Phase2FinalizeParams calldata params,
+        uint32 solanaEid
+    ) internal {
+        if (solanaEid == 0) revert SolanaShareBridgeNotConfigured();
+
+        ICreatorRegistry reg = ICreatorRegistry(registry);
+        ICreatorRegistry.CreatorCoinInfo memory info = reg.getCreatorCoin(params.creatorToken);
+        if (info.token == address(0)) {
+            (string memory name, string memory symbol) = _readTokenMetadata(params.creatorToken);
+            reg.registerCreatorCoin(params.creatorToken, name, symbol, params.owner, address(0), 0);
+            info = reg.getCreatorCoin(params.creatorToken);
+        }
+        if (info.vault == address(0)) {
+            reg.setVault(params.creatorToken, params.vault);
+        }
+        if (info.wrapper == address(0)) {
+            reg.setCreatorWrapper(params.creatorToken, params.wrapper);
+        }
+        if (info.shareOFT == address(0)) {
+            reg.setCreatorShareOFT(params.creatorToken, params.shareOFT);
+        }
+        if (info.gaugeController == address(0)) {
+            reg.setCreatorGaugeController(params.creatorToken, params.gaugeController);
+        }
+        if (info.oracle == address(0)) {
+            reg.setCreatorOracle(params.creatorToken, params.oracle);
+        }
+
+        bytes32 peer = reg.getRemoteOFTPeerBytes32(params.creatorToken, solanaEid);
+        if (peer == bytes32(0)) {
+            peer = IDeploymentBatcherSolanaConfig(batcher).solanaShareOftPeer();
+            if (peer != bytes32(0)) {
+                reg.setRemoteOFTPeerBytes32(params.creatorToken, solanaEid, peer);
+            }
+        }
+        if (peer == bytes32(0)) revert SolanaShareOftPeerNotConfigured();
+
+        bytes32 currentPeer = IOFTPeerConfig(params.shareOFT).peers(solanaEid);
+        if (currentPeer != peer) {
+            IOFTPeerConfig(params.shareOFT).setPeer(solanaEid, peer);
+        }
+    }
+
+    function _bridgeShareAllocationToSolana(address shareOFT, address refundAddress, uint256 amount) internal {
+        IDeploymentBatcherSolanaConfig config = IDeploymentBatcherSolanaConfig(batcher);
+        IDeploymentBatcherSolanaConfig.OVaultRuntimeConfig memory runtime = config.getOVaultRuntimeConfig();
+        if (!runtime.enabled || runtime.solanaEid == 0) revert SolanaShareBridgeNotConfigured();
+        bytes32 destination = config.solanaDestination();
+        if (destination == bytes32(0)) revert SolanaShareBridgeNotConfigured();
+
+        SendParam memory sendParam = SendParam({
+            dstEid: runtime.solanaEid,
+            to: destination,
+            amountLD: amount,
+            minAmountLD: 0,
+            extraOptions: OptionsBuilder.addExecutorLzReceiveOption(
+                OptionsBuilder.newOptions(), DEFAULT_SHARE_BRIDGE_GAS_LIMIT, 0
+            ),
+            composeMsg: "",
+            oftCmd: ""
+        });
+        (, , OFTReceipt memory oftReceipt) = IOFT(shareOFT).quoteOFT(sendParam);
+        sendParam.minAmountLD = oftReceipt.amountReceivedLD;
+        MessagingFee memory fee = IOFT(shareOFT).quoteSend(sendParam, false);
+        if (msg.value < fee.nativeFee) revert InsufficientSolanaBridgeFee(fee.nativeFee, msg.value);
+
+        IOFT(shareOFT).send{value: fee.nativeFee}(sendParam, fee, refundAddress);
+
+        uint256 surplus = msg.value - fee.nativeFee;
+        if (surplus > 0) {
+            (bool ok,) = payable(refundAddress).call{value: surplus}("");
+            if (!ok) revert SolanaBridgeRefundFailed();
+        }
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -760,17 +876,19 @@ contract DeploymentBatcher is ReentrancyGuard {
     /// @notice Charm Finance Alpha Vault Factory on Base.
     address public constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
 
-    // ── Fixed Three-Way Split Constants ──────────────────────────────
+    // ── Fixed Four-Way Share Split Constants ─────────────────────────
     /// @notice Minimum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MIN_DEPOSIT = 50_000_000e18;
     /// @notice Maximum deposit amount (50M tokens, 18 decimals)
     uint256 public constant MAX_DEPOSIT = 50_000_000e18;
     /// @notice Percentage of ■TOKENs allocated to CCA auction
-    uint8 public constant AUCTION_PERCENT = 40;
+    uint8 public constant AUCTION_PERCENT = 30;
     /// @notice Percentage of ■TOKENs vested to the creator
-    uint8 public constant VESTING_PERCENT = 40;
+    uint8 public constant VESTING_PERCENT = 30;
+    /// @notice Percentage of ■TOKENs auto-bridged to Solana share mesh at finalize
+    uint8 public constant SOLANA_ALLOC_PERCENT = 30;
     /// @notice Percentage of ■TOKENs reserved on strategy for LP migration
-    uint8 public constant LP_RESERVE_PERCENT = 20;
+    uint8 public constant LP_RESERVE_PERCENT = 10;
     /// @notice Default launch discount (80% of oracle-derived reference price).
     uint16 public constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000;
     /// @notice Default launch tick spacing (1% of derived floor price).
@@ -1045,6 +1163,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     address public solanaBridgeAdapter;
     /// @notice Solana deployer/multisig wallet address (bytes32 pubkey) to receive bridged tokens.
     bytes32 public solanaDestination;
+    /// @notice Default LayerZero remote ShareOFT peer (bytes32) for greenfield finalize wiring.
+    bytes32 public solanaShareOftPeer;
     /// @notice OVault runtime wiring used for Solana compose orchestration.
     OVaultRuntimeConfig private ovaultRuntimeConfig;
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
@@ -1145,6 +1265,14 @@ contract DeploymentBatcher is ReentrancyGuard {
         uint256 amount,
         uint64 startTimestamp,
         uint64 durationSeconds
+    );
+
+    event ShareAllocationBridgedToSolana(
+        address indexed creatorToken,
+        address indexed owner,
+        address indexed shareOFT,
+        uint256 amount,
+        bytes32 solanaDestination
     );
 
     event SolanaConfigSet(address indexed adapter, bytes32 solanaDestination);
@@ -1521,6 +1649,7 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     function finalizePhase2(Phase2FinalizeParams calldata params)
         external
+        payable
         nonReentrant
         returns (Phase2Result memory out)
     {
@@ -1533,7 +1662,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         Phase2FinalizeParams calldata params,
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
-    ) external nonReentrant returns (Phase2Result memory out) {
+    ) external payable nonReentrant returns (Phase2Result memory out) {
         _requireOwner(params.owner);
         _permit2Pull(params.creatorToken, params.depositAmount, permit, signature);
         out = _finalizePhase2Internal(params);
@@ -1660,6 +1789,12 @@ contract DeploymentBatcher is ReentrancyGuard {
             );
         }
 
+        if (execution.solanaAmount > 0) {
+            emit ShareAllocationBridgedToSolana(
+                params.creatorToken, params.owner, params.shareOFT, execution.solanaAmount, solanaDestination
+            );
+        }
+
         emit Phase2DeployedAndLaunched(
             params.creatorToken, params.owner, params.gaugeController, params.ccaStrategy, params.oracle, out.auction
         );
@@ -1670,8 +1805,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     // ================================
 
     /**
-     * @notice Deploy + register initial yield strategies (Charm + Ajna + SolanaStrategy).
-     * @dev Uses UniversalBytecodeStore + CREATE2 deployer to avoid embedding initcode in this batcher.
+     * @notice Deploy + register initial yield strategies (Charm + Ajna).
+     * @dev Solana share liquidity is seeded at finalizePhase2 via ShareOFT auto-bridge.
      */
     function deployPhase3Strategies(Phase3Params calldata params, StrategyCodeIds calldata codeIds)
         external
@@ -1690,21 +1825,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (vaultManagement != address(this)) {
             revert Phase3ManagementMismatch(address(this), vaultManagement);
         }
-        // All three productive strategies are OPT-IN paid features. A
-        // `weightBps == 0` means the creator did not activate that
-        // strategy; we skip the deploy AND the `addStrategy` call
-        // entirely. Sum-cap still applies (idle reserve absorbs the
-        // remainder). At least ONE strategy is required at deploy time —
-        // a vault with zero productive strategies would accrue no yield
-        // and is disallowed as a product invariant. Creators who want to
-        // start lean pick one strategy (e.g. Charm at 9_000 bps, 1_000
-        // idle) and can add more post-deploy via `addStrategy` +
-        // `setStrategyWeight` on the live vault.
+        // Charm and Ajna are OPT-IN paid features. Solana vault strategy weight is
+        // permanently disabled — share mesh seeding happens at finalizePhase2 instead.
+        if (params.solanaWeightBps != 0) revert InvalidWeight();
         if (params.charmWeightBps > 10_000) revert InvalidWeight();
         if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
-        if (params.solanaWeightBps > 10_000) revert InvalidWeight();
-        uint256 totalProductiveWeight =
-            params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps;
+        uint256 totalProductiveWeight = params.charmWeightBps + params.ajnaWeightBps;
         if (totalProductiveWeight == 0) revert InvalidWeight();
         if (totalProductiveWeight > 10_000) revert InvalidWeight();
 
@@ -1724,12 +1850,6 @@ contract DeploymentBatcher is ReentrancyGuard {
                 revert InvalidCodeId();
             }
         }
-        if (params.solanaWeightBps != 0) {
-            if (codeIds.solanaStrategy == bytes32(0)) revert InvalidCodeId();
-            if (params.solanaKeeper == address(0) || params.solanaBridgeAddress == address(0)) {
-                revert ZeroAddress();
-            }
-        }
 
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         out = phase3Helper.deployPhase3Strategies(params, codeIds, baseSalt);
@@ -1743,9 +1863,6 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
         if (params.ajnaWeightBps != 0) {
             ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
-        }
-        if (params.solanaWeightBps != 0) {
-            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
         }
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
@@ -1816,11 +1933,20 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /**
      * @notice Set Solana bridge adapter + destination configuration.
-     * @dev finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
+     * @dev `solanaDestination` is the LayerZero recipient for the 30% share allocation
+     *      auto-bridge executed during finalizePhase2 (Solana seed wallet / mesh custody).
      */
     function setSolanaConfig(address _adapter, bytes32 _destination) external onlyProtocolTreasury {
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
+    }
+
+    /**
+     * @notice Set the platform default Solana ShareOFT peer used when registry peer is unset.
+     * @dev Finalize auto-registers the creator coin, seeds registry from this default, then setPeer on ShareOFT.
+     */
+    function setSolanaShareOftPeer(bytes32 _peer) external onlyProtocolTreasury {
+        solanaShareOftPeer = _peer;
     }
 
     /**

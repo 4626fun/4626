@@ -93,10 +93,21 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
   const subAccountTrack = isSubAccountTrack(input.executionTrack)
 
   if (input.executionTrack === 'none-yet') {
-    return gateFailure(
-      'execution-setup-required',
-      'Enable 4626 signing in account setup before canonical swaps.',
-    )
+    if (input.ownerCheckStatus === 'owner') {
+      // Server track can lag behind on-chain owner confirmation (e.g. stale
+      // `/api/accounts/me` during local dev). Do not block swaps when the
+      // embedded owner is already verified.
+    } else if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {
+      return gateFailure(
+        'owner-check-pending',
+        'Loading account execution status before canonical swaps.',
+      )
+    } else {
+      return gateFailure(
+        'execution-setup-required',
+        'Enable 4626 signing in account setup before canonical swaps.',
+      )
+    }
   }
 
   if ((input.authStatus ?? 'unknown') === 'unauthenticated') {

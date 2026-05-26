@@ -15,11 +15,11 @@ describe('deploy feature policy matrix', () => {
     }
   })
 
-  it('keeps ovault mesh entitlement lane aligned to bridge-compatible features', () => {
+  it('keeps ovault mesh entitlement lane aligned to mesh-compatible features', () => {
     const ovault = DEPLOY_FEATURE_POLICY_MATRIX.find((entry) => entry.key === 'solana_ovault_mesh')
     expect(ovault).toBeTruthy()
     expect(ovault?.requiresAnyOf).toEqual(
-      expect.arrayContaining(['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault']),
+      expect.arrayContaining(['solana_ovault_mesh', 'solana_meteora_alpha_vault']),
     )
   })
 })
@@ -27,16 +27,16 @@ describe('deploy feature policy matrix', () => {
 describe('validateFeatureCompatibility', () => {
   it('passes when no conflicting feature combination exists', () => {
     expect(validateFeatureCompatibility(['charm_active_lp'])).toEqual({ ok: true })
-    expect(validateFeatureCompatibility(['solana_bridge_strategy', 'solana_meteora_alpha_vault'])).toEqual({
+    expect(validateFeatureCompatibility(['solana_ovault_mesh', 'solana_meteora_alpha_vault'])).toEqual({
       ok: true,
     })
   })
 
-  it('fails when meteora is active without solana bridge strategy', () => {
+  it('fails when meteora is active without ovault mesh', () => {
     const result = validateFeatureCompatibility(['solana_meteora_alpha_vault'])
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.code).toBe('feature_policy:meteora_requires_solana_bridge')
+      expect(result.code).toBe('feature_policy:meteora_requires_ovault_mesh')
     }
   })
 })

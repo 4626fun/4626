@@ -2,18 +2,20 @@
  * Resolve which Phase 3 strategy slots a creator has paid for.
  *
  * Reads active `creator_strategy_features` rows for the given creator
- * token and returns the Phase-3 weight triple the deploy session should
+ * token and returns the Phase-3 weight pair the deploy session should
  * pass to `DeploymentBatcher.deployPhase3Strategies`. Strategies the
  * creator has not activated are returned with `weightBps = 0`, which the
  * patched `DeploymentBatcher` interprets as "skip this strategy
  * entirely" (no deploy, no addStrategy call, result address stays zero).
  *
- * Every productive strategy is opt-in and paid: Charm, Ajna, and Solana
- * are all gated behind $100 USDC activations. **At least one paid
- * strategy is required** — the contract rejects a weight sum of zero,
- * and this resolver returns `ok: false` when nothing is active so the
- * deploy page can block submission until the creator activates at least
- * one feature.
+ * Charm and Ajna are opt-in paid features. Solana vault strategy weight
+ * is permanently zero — share mesh seeding happens via the fixed 30%
+ * ShareOFT auto-bridge at finalizePhase2 instead of Phase-3 TVL.
+ *
+ * **At least one paid strategy is required** — the contract rejects a
+ * weight sum of zero, and this resolver returns `ok: false` when
+ * nothing is active so the deploy page can block submission until the
+ * creator activates at least one feature.
  *
  * Weight scaling: paid strategies split a fixed productive budget
  * (`TOTAL_ALLOCATION_BPS - DEFAULT_IDLE_RESERVE_BPS` = `9_000` bps)
@@ -21,14 +23,12 @@
  * strategy count. So:
  *   1 strategy : 9_000 bps → that strategy gets 90 %  (idle 10 %)
  *   2 strategies : 4_500 bps each → 45 % / 45 %        (idle 10 %)
- *   3 strategies : 3_000 bps each → 30 % / 30 % / 30 % (idle 10 %)
  *
  * Note: the server-side deploy session is the AUTHORITATIVE enforcement
  * point for weight gating. A client that constructs a UserOp with
  * `charmWeightBps > 0` but no `charm_active_lp` activation must be
  * refused by the paymaster / deploy-continue handler using this
- * resolver's output as the truth. Enforcement wiring lives in
- * `deploy/v2/session/_continueCore.ts` (follow-up).
+ * resolver's output as the truth.
  */
 
 import type { Address } from 'viem'
@@ -45,23 +45,17 @@ type Db = {
 
 /**
  * Fixed idle reserve in bps. Kept constant across strategy counts so
- * creators always have a predictable withdrawal buffer. If we later let
- * creators customize this, it becomes a per-creator column rather than
- * a constant — but the resolver's API shape doesn't change.
+ * creators always have a predictable withdrawal buffer.
  */
 export const DEFAULT_IDLE_RESERVE_BPS = 1_000n
 export const TOTAL_ALLOCATION_BPS = 10_000n
 export const PRODUCTIVE_ALLOCATION_BPS = TOTAL_ALLOCATION_BPS - DEFAULT_IDLE_RESERVE_BPS // 9_000
 
-/**
- * Per-strategy weights for the canonical 3-strategy split. Exported as
- * named constants for test-time reference, but the runtime resolver
- * computes them dynamically by dividing `PRODUCTIVE_ALLOCATION_BPS` by
- * the number of active strategies (so 1 active ⇒ 9_000, not 3_000).
- */
-export const DEFAULT_CHARM_WEIGHT_BPS = PRODUCTIVE_ALLOCATION_BPS / 3n // 3_000
-export const DEFAULT_AJNA_WEIGHT_BPS = PRODUCTIVE_ALLOCATION_BPS / 3n // 3_000
-export const DEFAULT_SOLANA_WEIGHT_BPS = PRODUCTIVE_ALLOCATION_BPS / 3n // 3_000
+/** Default 45/45 split when both Charm and Ajna are paid. */
+export const DEFAULT_CHARM_WEIGHT_BPS = PRODUCTIVE_ALLOCATION_BPS / 2n // 4_500
+export const DEFAULT_AJNA_WEIGHT_BPS = PRODUCTIVE_ALLOCATION_BPS / 2n // 4_500
+/** Solana vault strategy weight is always zero on greenfield deploys. */
+export const DEFAULT_SOLANA_WEIGHT_BPS = 0n
 
 export type StrategyWeights = {
   charmWeightBps: bigint
@@ -72,25 +66,17 @@ export type StrategyWeights = {
 
 export type ResolvedStrategyPlan = StrategyWeights & {
   creatorToken: Address
-  /**
-   * Human-friendly reason string for each strategy (why it's included / skipped).
-   * Useful for surfacing in the UI and for support triage.
-   */
   reasons: {
     charm: 'paid' | 'unpaid'
     ajna: 'paid' | 'unpaid'
-    solana: 'paid' | 'unpaid'
+    solana: 'share_auto_bridge'
   }
   activeFeatureKeys: CreatorStrategyFeatureKey[]
 }
 
 /**
  * Read which gated features the creator currently has active or pending
- * payment for. Both `pending` (payment verified, awaiting operator
- * provisioning) and `active` count as "paid" — because payment is
- * authoritative and provisioning is an internal-ops concern. Returning
- * pending as paid lets the creator deploy their vault the instant their
- * USDC transfer clears rather than blocking on an operator step.
+ * payment for. Both `pending` and `active` count as "paid".
  */
 export async function readActiveCreatorFeatureKeys(
   db: Db,
@@ -109,7 +95,7 @@ export async function readActiveCreatorFeatureKeys(
     if (
       raw === 'charm_active_lp' ||
       raw === 'ajna_sleeve' ||
-      raw === 'solana_bridge_strategy' ||
+      raw === 'solana_ovault_mesh' ||
       raw === 'solana_meteora_alpha_vault'
     ) {
       keys.add(raw)
@@ -118,23 +104,6 @@ export async function readActiveCreatorFeatureKeys(
   return keys
 }
 
-/**
- * Turn a set of active feature keys into the Phase 3 weight triple.
- * Pure function — no I/O — so it's trivially testable.
- */
-/**
- * Turn a set of active feature keys into the Phase 3 weight triple.
- *
- * Returns `{ ok: false }` when zero strategies are paid — the contract
- * rejects a zero-weight deploy so we bail out early rather than
- * producing a plan that will revert.
- *
- * Weight scaling splits `PRODUCTIVE_ALLOCATION_BPS` (9_000) evenly
- * across the active strategies. 9_000 is divisible cleanly by 1, 2, and
- * 3 (9_000 / 9_000 / 4_500 / 3_000 respectively), so there are no
- * rounding remainders to allocate; total always sums to exactly
- * `TOTAL_ALLOCATION_BPS`. Pure function — no I/O — easily testable.
- */
 export type ComputeStrategyWeightsResult =
   | { ok: true; weights: StrategyWeights }
   | { ok: false; reason: 'no_paid_strategies' }
@@ -144,16 +113,13 @@ export function computeStrategyWeights(
 ): ComputeStrategyWeightsResult {
   const charmPaid = activeKeys.has(DEPLOY_GATING_FEATURE_KEYS.charm)
   const ajnaPaid = activeKeys.has(DEPLOY_GATING_FEATURE_KEYS.ajna)
-  const solanaPaid = activeKeys.has(DEPLOY_GATING_FEATURE_KEYS.solana)
-  const activeCount = BigInt(
-    (charmPaid ? 1 : 0) + (ajnaPaid ? 1 : 0) + (solanaPaid ? 1 : 0),
-  )
+  const activeCount = BigInt((charmPaid ? 1 : 0) + (ajnaPaid ? 1 : 0))
   if (activeCount === 0n) return { ok: false, reason: 'no_paid_strategies' }
 
   const perStrategyBps = PRODUCTIVE_ALLOCATION_BPS / activeCount
   const charmWeightBps = charmPaid ? perStrategyBps : 0n
   const ajnaWeightBps = ajnaPaid ? perStrategyBps : 0n
-  const solanaWeightBps = solanaPaid ? perStrategyBps : 0n
+  const solanaWeightBps = 0n
   const idleReserveBps = TOTAL_ALLOCATION_BPS - (charmWeightBps + ajnaWeightBps + solanaWeightBps)
   return {
     ok: true,
@@ -170,13 +136,6 @@ export type ResolveCreatorStrategyPlanResult =
       activeFeatureKeys: CreatorStrategyFeatureKey[]
     }
 
-/**
- * Convenience: read DB + compute weights in one call.
- *
- * Returns a tagged result so callers can handle the "no strategies
- * paid" case explicitly rather than getting a zero-weight plan that
- * would revert on-chain.
- */
 export async function resolveCreatorStrategyPlan(
   db: Db,
   creatorTokenRaw: Address,
@@ -200,24 +159,13 @@ export async function resolveCreatorStrategyPlan(
       reasons: {
         charm: active.has(DEPLOY_GATING_FEATURE_KEYS.charm) ? 'paid' : 'unpaid',
         ajna: active.has(DEPLOY_GATING_FEATURE_KEYS.ajna) ? 'paid' : 'unpaid',
-        solana: active.has(DEPLOY_GATING_FEATURE_KEYS.solana) ? 'paid' : 'unpaid',
+        solana: 'share_auto_bridge',
       },
       activeFeatureKeys: Array.from(active),
     },
   }
 }
 
-/**
- * Assert that a client-supplied Phase 3 weight triple matches the
- * server's authoritative plan for this creator. Returns an error shape
- * (not throwing) so the deploy-continue handler can produce a clean API
- * envelope.
- *
- * The check is strict: requested weights must equal the resolver's
- * defaults for paid strategies (so the client can't request 9_900 bps
- * for Charm with a $100 payment). If we later let creators customize
- * weights, extend this to enforce sane minima / maxima per strategy.
- */
 export type WeightGateResult =
   | { ok: true }
   | {
@@ -271,7 +219,7 @@ export function gateRequestedStrategyWeights(
       requested,
     }
   }
-  if (plan.reasons.solana === 'unpaid' && requested.solanaWeightBps !== 0n) {
+  if (requested.solanaWeightBps !== 0n) {
     return {
       ok: false,
       reason: 'solana_unpaid_but_requested',
@@ -301,19 +249,6 @@ export function gateRequestedStrategyWeights(
     return {
       ok: false,
       reason: 'ajna_weight_mismatch',
-      expected: {
-        charmWeightBps: plan.charmWeightBps,
-        ajnaWeightBps: plan.ajnaWeightBps,
-        solanaWeightBps: plan.solanaWeightBps,
-        idleReserveBps: plan.idleReserveBps,
-      },
-      requested,
-    }
-  }
-  if (requested.solanaWeightBps !== plan.solanaWeightBps) {
-    return {
-      ok: false,
-      reason: 'solana_weight_mismatch',
       expected: {
         charmWeightBps: plan.charmWeightBps,
         ajnaWeightBps: plan.ajnaWeightBps,

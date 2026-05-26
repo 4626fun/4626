@@ -187,7 +187,7 @@ describe('evaluateCanonicalSignerGate', () => {
     expect(result.code).toBe('owner-check-pending')
   })
 
-  it('fails for none-yet track before swap execution setup', () => {
+  it('allows none-yet track when embedded owner is already confirmed', () => {
     const result = evaluateCanonicalSignerGate({
       executionMode: 'canonical',
       executionTrack: 'none-yet',
@@ -198,6 +198,24 @@ describe('evaluateCanonicalSignerGate', () => {
       embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
       embeddedWalletCanSign: true,
       ownerCheckStatus: 'owner',
+    })
+
+    expect(result.required).toBe(true)
+    expect(result.ready).toBe(true)
+    expect(result.code).toBe('ok')
+  })
+
+  it('fails for none-yet track when owner is not confirmed', () => {
+    const result = evaluateCanonicalSignerGate({
+      executionMode: 'canonical',
+      executionTrack: 'none-yet',
+      canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+      clientStatus: 'ready',
+      authStatus: 'authenticated',
+      embeddedWalletDetected: true,
+      embeddedWalletAddress: '0x1111111111111111111111111111111111111111',
+      embeddedWalletCanSign: true,
+      ownerCheckStatus: 'not-owner',
     })
 
     expect(result.required).toBe(true)

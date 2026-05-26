@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/api/apiBase'
@@ -30,8 +30,100 @@ import type { AccountSetupMe } from '@/features/accountSetup/types'
 
 type GetAccessTokenFn = () => Promise<string | null>
 
+type BootstrapExecutionSignals = {
+  canonicalCswAddress: string
+  privyEmbeddedEoaAddress: string
+  executionTrack: AccountSetupMe['accountSignals']['executionTrack']
+  privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean
+  baseSubAccount: AccountSetupMe['accountSignals']['baseSubAccount']
+}
+
 let inFlight: Promise<AccountSetupMe | null> | null = null
 let cached: AccountSetupMe | null | undefined = undefined
+
+async function fetchBootstrapExecutionSignals(
+  getAccessToken: GetAccessTokenFn,
+): Promise<BootstrapExecutionSignals | null> {
+  const token = await getAccessToken().catch(() => null)
+  if (!token) return null
+  try {
+    const res = await apiFetch('/api/onboarding/bootstrap', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'X-Privy-Token': token,
+      },
+      body: JSON.stringify({}),
+    })
+    const body = (await res.json().catch(() => null)) as
+      | {
+          success: boolean
+          data: {
+            canonicalCswAddress?: string
+            privyEmbeddedEoaAddress?: string
+            executionTrack?: AccountSetupMe['accountSignals']['executionTrack']
+            privyEmbeddedEoaIsOwnerOfCanonicalCsw?: boolean
+            privyIsOwner?: boolean
+            baseSubAccount?: AccountSetupMe['accountSignals']['baseSubAccount']
+          } | null
+        }
+      | null
+    if (!res.ok || !body?.success || !body.data) return null
+    const ownerFlag =
+      body.data.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true || body.data.privyIsOwner === true
+    return {
+      canonicalCswAddress: String(body.data.canonicalCswAddress ?? ''),
+      privyEmbeddedEoaAddress: String(body.data.privyEmbeddedEoaAddress ?? ''),
+      executionTrack: body.data.executionTrack ?? 'none-yet',
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: ownerFlag,
+      baseSubAccount: body.data.baseSubAccount ?? {
+        address: null,
+        registered: false,
+        isDistinctFromCsw: false,
+      },
+    }
+  } catch {
+    return null
+  }
+}
+
+function mergeBootstrapSignals(
+  payload: AccountSetupMe | null,
+  bootstrap: BootstrapExecutionSignals,
+): AccountSetupMe {
+  const baseSignals = payload?.accountSignals
+  const executionTrack =
+    baseSignals?.executionTrack && baseSignals.executionTrack !== 'none-yet'
+      ? baseSignals.executionTrack
+      : bootstrap.executionTrack
+  const privyEmbeddedEoaIsOwnerOfCanonicalCsw =
+    baseSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw === true
+      ? true
+      : bootstrap.privyEmbeddedEoaIsOwnerOfCanonicalCsw
+        ? true
+        : baseSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
+
+  return {
+    privyUserId: payload?.privyUserId ?? '',
+    email: payload?.email ?? null,
+    emailVerified: payload?.emailVerified ?? false,
+    appAccessStatus: payload?.appAccessStatus ?? null,
+    baseSubAccount: payload?.baseSubAccount ?? bootstrap.baseSubAccount.address,
+    linkedMethods: payload?.linkedMethods ?? {},
+    score: payload?.score ?? { points: 0, tier: 0 },
+    accountSignals: {
+      linked: baseSignals?.linked ?? false,
+      canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,
+      creatorCoin: baseSignals?.creatorCoin ?? null,
+      zoraHandle: baseSignals?.zoraHandle ?? null,
+      lastResolvedAt: baseSignals?.lastResolvedAt ?? null,
+      baseSubAccount: baseSignals?.baseSubAccount ?? bootstrap.baseSubAccount,
+      executionTrack,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+    },
+  }
+}
 
 async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<AccountSetupMe | null> {
   if (inFlight) return inFlight
@@ -41,16 +133,28 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
       // No token → user isn't authenticated yet. Skip the request rather
       // than burn a predictable 401 that pollutes logs and browser tabs.
       if (!token) return null
+
+      let payload: AccountSetupMe | null = null
       const res = await apiFetch('/api/accounts/me', {
         method: 'GET',
         headers: { 'X-Privy-Token': token },
       })
-      if (!res.ok) return null
-      const body = (await res.json().catch(() => null)) as
-        | { success: boolean; data: AccountSetupMe | null }
-        | null
-      if (!body || !body.success) return null
-      return body.data ?? null
+      if (res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { success: boolean; data: AccountSetupMe | null }
+          | null
+        if (body?.success) payload = body.data ?? null
+      }
+
+      if (!getAccessToken) return payload
+      const needsBootstrap =
+        !payload ||
+        payload.accountSignals.executionTrack === 'none-yet' ||
+        payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw == null
+      if (!needsBootstrap) return payload
+      const bootstrap = await fetchBootstrapExecutionSignals(getAccessToken)
+      if (!bootstrap) return payload
+      return mergeBootstrapSignals(payload, bootstrap)
     } catch {
       return null
     } finally {
@@ -91,25 +195,51 @@ export function useAccountMe(): {
   refresh: () => void
 } {
   const [me, setMe] = useState<AccountSetupMe | null>(cached ?? null)
-  const [loading, setLoading] = useState<boolean>(cached === undefined)
   const [refreshCounter, setRefreshCounter] = useState(0)
+  const [settledCounter, setSettledCounter] = useState<number>(() => (cached !== undefined ? 0 : -1))
   const getAccessToken = useSafePrivyAccessToken()
+  const loading = useMemo(() => {
+    if (cached != null && refreshCounter === 0) return false
+    if (!getAccessToken) return true
+    return settledCounter !== refreshCounter
+  }, [getAccessToken, refreshCounter, settledCounter])
 
   useEffect(() => {
     let cancelled = false
-    if (cached !== undefined && refreshCounter === 0) {
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined
+    // Reuse a successful module cache on first mount only. Do not skip when
+    // `cached === null` — that often means Privy was not ready on the first
+    // tick and we must refetch once `getAccessToken` becomes available.
+    if (cached != null && refreshCounter === 0) {
+      return () => {
+        cancelled = true
+      }
+    }
+    if (!getAccessToken) {
       return () => {
         cancelled = true
       }
     }
     fetchAccountMe(getAccessToken).then((result) => {
       if (cancelled) return
-      cached = result
+      if (result !== null) {
+        cached = result
+      } else {
+        // Do not cache failed/null responses — a transient 503 or Privy-not-ready
+        // window should not stick the whole app on `me === null` until focus.
+        cached = undefined
+      }
       setMe(result)
-      setLoading(false)
+      setSettledCounter(refreshCounter)
+      if (result === null && refreshCounter < 3) {
+        retryTimeout = window.setTimeout(() => {
+          if (!cancelled) setRefreshCounter((count) => count + 1)
+        }, 1_500)
+      }
     })
     return () => {
       cancelled = true
+      if (retryTimeout !== undefined) window.clearTimeout(retryTimeout)
     }
   }, [getAccessToken, refreshCounter])
 
@@ -117,7 +247,6 @@ export function useAccountMe(): {
     if (typeof window === 'undefined') return
     const onFocus = () => {
       clearAccountMeCache()
-      setLoading(true)
       setRefreshCounter((c) => c + 1)
     }
     window.addEventListener('focus', onFocus)
@@ -129,7 +258,6 @@ export function useAccountMe(): {
     loading,
     refresh: () => {
       clearAccountMeCache()
-      setLoading(true)
       setRefreshCounter((c) => c + 1)
     },
   }

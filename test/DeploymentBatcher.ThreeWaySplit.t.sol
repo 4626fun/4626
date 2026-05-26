@@ -283,9 +283,10 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     function test_phase2ShareSplitAndDepositBounds_remainFixed() public view {
         assertEq(batcher.MIN_DEPOSIT(), 50_000_000e18, "minimum first deposit drifted");
         assertEq(batcher.MAX_DEPOSIT(), 50_000_000e18, "maximum first deposit drifted");
-        assertEq(batcher.AUCTION_PERCENT(), 40, "CCA split drifted");
-        assertEq(batcher.VESTING_PERCENT(), 40, "creator vesting split drifted");
-        assertEq(100 - batcher.AUCTION_PERCENT() - batcher.VESTING_PERCENT(), 20, "LP reserve split drifted");
+        assertEq(batcher.AUCTION_PERCENT(), 30, "CCA split drifted");
+        assertEq(batcher.VESTING_PERCENT(), 30, "creator vesting split drifted");
+        assertEq(batcher.SOLANA_ALLOC_PERCENT(), 30, "Solana share split drifted");
+        assertEq(batcher.LP_RESERVE_PERCENT(), 10, "LP reserve split drifted");
     }
 
     function _seedPhase1State()
