@@ -27,5 +27,8 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Oracle Post-Deploy QA](/operations/oracle-post-deploy-qa)** | Read-only post-deploy oracle verification runbook and triage guide |
 | **[Ethos Canonical Score Cache](/operations/ethos-canonical-score-cache)** | Rollout and operations runbook for canonical Ethos identity-key caching, sync, and read cutover |
 | **[XMTP Browser Connect Canary](/operations/xmtp-browser-connect-canary)** | Layer 3 manual canary — real wallet connect, reload restore, Smart Wallet path, and recovery checklist |
+| **[Greenfield Launch Readiness](/operations/greenfield-launch-readiness)** | Repeatable gate before opening vault deploy to creators (Pipe A batcher, Solana infra, keeper defaults) |
+| **[Batcher Pipe A Cutover](/operations/deployment/batcher-pipe-a-cutover)** | Payable finalize + ShareOFT auto-bridge batcher deploy, Safe config, and readiness verification |
+| **[Solana Share Mesh + Lottery Policy](/operations/solana-share-mesh-lottery-policy)** | Locked Pipe A/B/C policy — 30% finalize bridge, pool-buy lottery, keeper relay gating |
 | **[Domain Setup](/operations/domain-setup)** | Custom domain configuration |
 | **[Supabase Setup](/operations/supabase-setup)** | Database configuration |

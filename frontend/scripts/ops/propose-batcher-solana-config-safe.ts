@@ -326,13 +326,15 @@ async function main() {
   const txServiceApiBase = resolveTxServiceApiBase(safeServiceUrl)
   const chainId = parseChainId(getArg('--chain-id', process.env.CHAIN_ID || '8453'))
 
-  const includeOvaultRuntime = hasFlag('--only-ovault-runtime')
-    ? true
-    : hasFlag('--include-ovault-runtime')
-    ? true
-    : hasFlag('--no-ovault-runtime')
-      ? false
-      : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
+  const includeOvaultRuntime = hasFlag('--only-share-oft-peer')
+    ? false
+    : hasFlag('--only-ovault-runtime')
+      ? true
+      : hasFlag('--include-ovault-runtime')
+        ? true
+        : hasFlag('--no-ovault-runtime')
+          ? false
+          : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
   const includeShareOftPeer = hasFlag('--only-share-oft-peer')
     ? true
     : hasFlag('--include-share-oft-peer')

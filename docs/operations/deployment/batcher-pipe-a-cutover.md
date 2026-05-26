@@ -87,3 +87,28 @@ CONFIGURE_SOLANA_SHARE_OFT_PEER=1 SOLANA_SHARE_OFT_PEER=0x<mesh-peer> \
 ## Known live state (pre-cutover)
 
 Canonical batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` already has OVault runtime + Solana adapter/destination configured, but **`solanaShareOftPeer()` reverts** until bytecode cutover. Greenfield finalize bridge will fail with `SolanaShareOftPeerNotConfigured` until cutover completes.
+
+### v1.11.2-pipe-a epoch attempt (2026-05-26)
+
+CREATE2 infra for epoch `v1.11.2-pipe-a` partially landed; **DeploymentBatcher deploy failed** (`0x84826fad…`, predicted address `0x1C29A839386Bac0fD65B23ae9173D1623bFa9C24` has no code). Store + create2 deployer + vault modules at that epoch **did** deploy — do not reuse the same salts until the batcher failure root cause is fixed.
+
+Safe queue on protocol treasury (`0x7d429e…`):
+
+| Nonce | Action | Status |
+|-------|--------|--------|
+| 76 | `setOVaultRuntimeConfig` | Executed (no-op — already configured) |
+| 77 | `setSolanaShareOftPeer` on **old** batcher | **Do not execute** — GS013 inner revert until Pipe-A bytecode is live; cancel and re-propose against the **new** batcher after successful cutover |
+
+`SOLANA_SHARE_OFT_PEER` must be the Solana **ShareOFT mesh peer** (bytes32), not `SOLANA_DESTINATION` (LZ recipient wallet).
+
+## Test gate (repo)
+
+Before cutover promotion or doc claims:
+
+```bash
+npx vitest run frontend/src/lib/deploy/finalizeShareBridgeFee.test.ts frontend/src/lib/deploy/shareBridgeOftWiring.test.ts
+forge test --match-path test/DeploymentBatcher.ShareOftPeerWiring.t.sol
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+```
+
+Vitest suites include **1000+ iteration** stress loops for fee attach + OFT wiring preflight.
