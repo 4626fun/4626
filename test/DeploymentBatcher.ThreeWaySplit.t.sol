@@ -29,12 +29,14 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
     MockOwnableVaultForPhase3Bounds internal vault;
     VaultRolePolicyManager internal rolePolicyManager;
     address internal protocolTreasury;
+    address internal protocolAutomation;
     uint256 private constant PHASE1_SPLIT_STATES_SLOT = 6;
     uint256 private constant PENDING_AUCTIONS_SLOT = 4;
 
     function setUp() public {
         vm.chainId(8453);
         protocolTreasury = makeAddr("protocolTreasury");
+        protocolAutomation = makeAddr("protocolAutomation");
 
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
         DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
@@ -53,6 +55,7 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
             protocolTreasury,
+            protocolAutomation,
             makeAddr("poolManager"),
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),

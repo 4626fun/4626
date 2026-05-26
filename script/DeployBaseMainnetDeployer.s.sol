@@ -24,6 +24,7 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   PRIVATE_KEY=...
 ///   REGISTRY=...
 ///   PROTOCOL_TREASURY=...
+///   PROTOCOL_AUTOMATION=...   (hot Safe — Charm vault manager)
 ///   POOL_MANAGER=...
 ///   TAX_HOOK=...
 ///   CHAINLINK_ETH_USD=...
@@ -90,6 +91,7 @@ contract DeployBaseMainnetDeployer is Script {
     struct Config {
         address registry;
         address protocolTreasury;
+        address protocolAutomation;
         address poolManager;
         address taxHook;
         address chainlinkEthUsd;
@@ -150,6 +152,8 @@ contract DeployBaseMainnetDeployer is Script {
         Config memory cfg;
         cfg.registry = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
         cfg.protocolTreasury = vm.envOr("PROTOCOL_TREASURY", DEFAULT_PROTOCOL_TREASURY);
+        cfg.protocolAutomation = vm.envAddress("PROTOCOL_AUTOMATION");
+        require(cfg.protocolAutomation != address(0), "PROTOCOL_AUTOMATION required");
         cfg.poolManager = vm.envOr("POOL_MANAGER", DEFAULT_POOL_MANAGER);
         cfg.taxHook = vm.envOr("TAX_HOOK", DEFAULT_TAX_HOOK);
         cfg.chainlinkEthUsd = vm.envOr("CHAINLINK_ETH_USD", DEFAULT_CHAINLINK_ETH_USD);
@@ -244,6 +248,7 @@ contract DeployBaseMainnetDeployer is Script {
             storeAddr,
             create2DeployerAddr,
             cfg.protocolTreasury,
+            cfg.protocolAutomation,
             cfg.poolManager,
             cfg.taxHook,
             cfg.chainlinkEthUsd,

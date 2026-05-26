@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  assertSwapSpendBalancePreflight,
   deriveSwapExecutionReadiness,
   evaluateCanonicalSubmitSession,
   evaluateSwapSessionGate,
   resolveCanonicalSubmitSession,
   shouldDisablePermit2ForSwap,
+  shouldSimulateSwapTransaction,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
@@ -333,5 +335,53 @@ describe('shouldDisablePermit2ForSwap', () => {
         executionAddress: '0x3333333333333333333333333333333333333333',
       }),
     ).toBe(false)
+  })
+})
+
+describe('shouldSimulateSwapTransaction', () => {
+  it('skips simulation when approval or native wrap batching is required', () => {
+    expect(shouldSimulateSwapTransaction(true, false)).toBe(false)
+    expect(shouldSimulateSwapTransaction(false, true)).toBe(false)
+    expect(shouldSimulateSwapTransaction(true, true)).toBe(false)
+  })
+
+  it('allows simulation only for standalone swap builds', () => {
+    expect(shouldSimulateSwapTransaction(false, false)).toBe(true)
+  })
+})
+
+describe('assertSwapSpendBalancePreflight', () => {
+  const wallet = '0x1111111111111111111111111111111111111111' as const
+
+  it('rejects native ETH sells above wallet balance', async () => {
+    await expect(
+      assertSwapSpendBalancePreflight({
+        publicClient: {
+          getBalance: async () => 1_000_000_000_000_000n,
+          readContract: async () => 0n,
+        },
+        executionAddress: wallet,
+        tokenIn: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        amountInUnits: '0.01',
+        wrapNativeEthForCanonical: true,
+        getTokenDecimals: async () => 18,
+      }),
+    ).rejects.toThrow(/Insufficient ETH/)
+  })
+
+  it('allows native ETH sells within wallet balance', async () => {
+    await expect(
+      assertSwapSpendBalancePreflight({
+        publicClient: {
+          getBalance: async () => 10_000_000_000_000_000_000n,
+          readContract: async () => 0n,
+        },
+        executionAddress: wallet,
+        tokenIn: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+        amountInUnits: '0.01',
+        wrapNativeEthForCanonical: true,
+        getTokenDecimals: async () => 18,
+      }),
+    ).resolves.toBeUndefined()
   })
 })

@@ -6,18 +6,47 @@ import { resolveCharmAutomationAuthorization } from '../utils/protocolTreasurySa
 const KEEPER = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const OTHER = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const DELEGATE = '0xcccccccccccccccccccccccccccccccccccccccc';
+const AUTOMATION_SAFE = '0xdddddddddddddddddddddddddddddddddddddddd';
 
 describe('resolveCharmAutomationAuthorization', () => {
-  it('allows enqueue when manager is protocol treasury regardless of keeper slot', () => {
-    const result = resolveCharmAutomationAuthorization({
-      managerAddress: PROTOCOL_TREASURY_ADDRESS,
-      delegateAddress: OTHER,
-      charmKeeper: OTHER,
-      charmOwner: OTHER,
-      keeperAddress: KEEPER,
-    });
+  it('prefers protocol automation Safe lane when manager matches env', () => {
+    const previous = process.env.PROTOCOL_AUTOMATION_SAFE;
+    process.env.PROTOCOL_AUTOMATION_SAFE = AUTOMATION_SAFE;
 
-    expect(result).toEqual({ authorized: true, lane: 'protocol_treasury_manager' });
+    try {
+      const result = resolveCharmAutomationAuthorization({
+        managerAddress: AUTOMATION_SAFE,
+        delegateAddress: OTHER,
+        charmKeeper: OTHER,
+        charmOwner: OTHER,
+        keeperAddress: KEEPER,
+      });
+
+      expect(result).toEqual({ authorized: true, lane: 'protocol_automation_manager' });
+    } finally {
+      if (previous === undefined) delete process.env.PROTOCOL_AUTOMATION_SAFE;
+      else process.env.PROTOCOL_AUTOMATION_SAFE = previous;
+    }
+  });
+
+  it('allows legacy treasury manager lane when automation Safe is not configured', () => {
+    const previous = process.env.PROTOCOL_AUTOMATION_SAFE;
+    delete process.env.PROTOCOL_AUTOMATION_SAFE;
+
+    try {
+      const result = resolveCharmAutomationAuthorization({
+        managerAddress: PROTOCOL_TREASURY_ADDRESS,
+        delegateAddress: OTHER,
+        charmKeeper: OTHER,
+        charmOwner: OTHER,
+        keeperAddress: KEEPER,
+      });
+
+      expect(result).toEqual({ authorized: true, lane: 'protocol_treasury_manager' });
+    } finally {
+      if (previous === undefined) delete process.env.PROTOCOL_AUTOMATION_SAFE;
+      else process.env.PROTOCOL_AUTOMATION_SAFE = previous;
+    }
   });
 
   it('allows legacy direct keeper path when delegate matches keeper', () => {

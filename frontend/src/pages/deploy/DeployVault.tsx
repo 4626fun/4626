@@ -425,6 +425,8 @@ type DeployRuntimeConfigResponse = {
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
+  protocolAutomation: Address | null
+  protocolAjnaKeeper: Address | null
   payoutRouterKeeperAddress: Address | null
   payoutRouterApprovedExternalSwapTargets: Address[]
   payoutRouterApprovedExternalSwapSpenders: Address[]
@@ -1319,6 +1321,16 @@ const BATCHER_PHASE3_CONFIG_ABI = [
   {
     type: 'function',
     name: 'ajnaFactory',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const PHASE3_HELPER_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'protocolAutomation',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ type: 'address' }],
@@ -4026,9 +4038,24 @@ function DeployVaultBatcher({
             functionName: 'ajnaFactory',
           })
           .catch(() => null),
+        null as Address | null,
       ])
 
       const phase3HelperAddress = normalizeAddressLike(phase3HelperRaw) ?? defaultPhase3HelperForBatcher(batcherAddress)
+      let protocolAutomationAddress =
+        normalizeAddressLike((CONTRACTS as { protocolAutomation?: Address }).protocolAutomation) ?? null
+      if (phase3HelperAddress) {
+        try {
+          const onChainAutomation = (await publicClient!.readContract({
+            address: phase3HelperAddress,
+            abi: PHASE3_HELPER_VIEW_ABI,
+            functionName: 'protocolAutomation',
+          })) as Address
+          protocolAutomationAddress = normalizeAddressLike(onChainAutomation) ?? protocolAutomationAddress
+        } catch {
+          // keep env fallback
+        }
+      }
       const usdcAddress = normalizeAddressLike(usdcRaw) ?? fallbackUsdc
       const uniswapRouterAddress = normalizeAddressLike(uniswapRouterRaw) ?? fallbackUniswapRouter
       const uniswapV3FactoryAddress = normalizeAddressLike(uniswapV3FactoryRaw) ?? fallbackUniswapV3Factory
@@ -4108,7 +4135,7 @@ function DeployVaultBatcher({
       }
 
       let charmVaultAddress: Address | null = null
-      if (v3PoolAddress && expectedProtocolTreasury) {
+      if (v3PoolAddress && protocolAutomationAddress) {
         const charmLabel = (depositSymbol || '').toLowerCase()
         const charmVaultName = charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC'
         const charmVaultSymbol = charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC'
@@ -4120,7 +4147,7 @@ function DeployVaultBatcher({
             args: [
               {
                 pool: v3PoolAddress,
-                manager: expectedProtocolTreasury,
+                manager: protocolAutomationAddress,
                 managerFee: 160_000,
                 rebalanceDelegate: owner,
                 maxTotalSupply: (1n << 256n) - 1n,
@@ -4245,6 +4272,7 @@ function DeployVaultBatcher({
 
       return {
         v3Pool: v3PoolAddress,
+        protocolAutomation: protocolAutomationAddress,
         charmVault: charmVaultAddress,
         creatorCharmStrategy: creatorCharmStrategyAddress,
         ajnaPool: ajnaPoolAddress,
@@ -5469,7 +5497,12 @@ function DeployVaultBatcher({
         }
         const solanaBridgeAddress = getAddress(configuredSolanaBridge as Address)
         const solanaKeeper = expectedProtocolTreasury
-        const ajnaKeeper = solanaKeeper
+        const ajnaKeeper = normalizeAddressLike(runtimeConfig?.protocolAjnaKeeper)
+        if (!ajnaKeeper) {
+          throw new Error(
+            'Protocol Ajna keeper is not configured. Set 4626_KEEPER_AUTOMATION_PUBLIC_KEY on the server.',
+          )
+        }
         const ajnaBufferRatioBps = 1_000n
         const ajnaMinBucketIndex = 4_156n
         const charmLabel = (depositSymbol || '').toLowerCase()

@@ -253,6 +253,7 @@ contract DeploymentBatcherPhase1EndpointPoisoningTest is Test {
             address(store),
             address(create2),
             address(this),
+            makeAddr("protocolAutomation"),
             address(0x1001),
             address(0x1002),
             address(0x1003),
@@ -384,6 +385,7 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
             address(0x1002), // bytecodeStore
             address(0x1003), // create2Deployer
             PROTOCOL_TREASURY,
+            makeAddr("protocolAutomation"),
             address(0x1004), // poolManager
             address(0x1005), // taxHook
             address(0x1006), // chainlinkEthUsd

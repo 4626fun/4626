@@ -14,7 +14,7 @@
  *  5) If keeper is auth admin, call setMinBucketIndex.
  */
 
-import { getAddress, isAddress } from 'viem';
+import { encodeFunctionData, getAddress, isAddress, type Hex } from 'viem';
 import {
   AJNA_BUCKET_LIQUIDITY_SEARCH_RADIUS,
   AJNA_BUCKET_MAX_STEP,
@@ -36,6 +36,11 @@ import {
 } from '../utils/onchain.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
+import {
+  executeViaProtocolAutomationSafe,
+  executeViaProtocolTreasurySafe,
+  resolveAjnaRebucketAuthorization,
+} from '../utils/protocolTreasurySafe.js';
 
 const WORKFLOW_NAME = 'ajna-bucket-manager';
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
@@ -92,6 +97,14 @@ const AJNA_AUTH_ADMIN_ABI = [
     outputs: [],
   },
 ] as const;
+
+function encodeSetMinBucketCalldata(targetBucket: number): Hex {
+  return encodeFunctionData({
+    abi: AJNA_AUTH_ADMIN_ABI,
+    functionName: 'setMinBucketIndex',
+    args: [BigInt(targetBucket)],
+  });
+}
 
 const AJNA_POOL_VIEW_ABI = [
   {
@@ -705,9 +718,11 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
         continue;
       }
 
-      if (
-        strategy.authAdmin.toLowerCase() !== vault.executionContext.smartWallet.toLowerCase()
-      ) {
+      const authorization = resolveAjnaRebucketAuthorization({
+        authAdmin: strategy.authAdmin,
+        canonicalCswAddress: vault.executionContext.smartWallet,
+      });
+      if (!authorization.authorized) {
         batch.processed += 1;
         batch.errors += 1;
         batch.results.push({
@@ -723,7 +738,83 @@ export async function executeAjnaBucketManager(): Promise<BatchAjnaBucketResult>
         });
         continue;
       }
+
       const method: 'setMinBucketIndex' = 'setMinBucketIndex';
+      if (authorization.lane === 'protocol_automation_admin') {
+        try {
+          const viaSafe = await executeViaProtocolAutomationSafe({
+            to: strategy.authAddress,
+            data: encodeSetMinBucketCalldata(targetBucket),
+          });
+          batch.processed += 1;
+          batch.moved += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            oracleAddress: vault.oracleAddress,
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            steppedBucket: step.steppedBucket,
+            targetBucket,
+            moved: true,
+            method,
+            txHash: viaSafe.txHash,
+          });
+        } catch (error) {
+          batch.processed += 1;
+          batch.errors += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            oracleAddress: vault.oracleAddress,
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            steppedBucket: step.steppedBucket,
+            targetBucket,
+            moved: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        continue;
+      }
+
+      if (authorization.lane === 'legacy_treasury_admin') {
+        try {
+          const viaSafe = await executeViaProtocolTreasurySafe({
+            to: strategy.authAddress,
+            data: encodeSetMinBucketCalldata(targetBucket),
+          });
+          batch.processed += 1;
+          batch.moved += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            oracleAddress: vault.oracleAddress,
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            steppedBucket: step.steppedBucket,
+            targetBucket,
+            moved: true,
+            method,
+            txHash: viaSafe.txHash,
+          });
+        } catch (error) {
+          batch.processed += 1;
+          batch.errors += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            oracleAddress: vault.oracleAddress,
+            currentBucket: strategy.currentBucket,
+            suggestedBucket,
+            steppedBucket: step.steppedBucket,
+            targetBucket,
+            moved: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+        continue;
+      }
 
       const write: WriteResult = await writeContract({
         address: strategy.authAddress,

@@ -429,6 +429,7 @@ contract BatcherPhaseHandler is Test {
     {
         vm.chainId(8453);
         address protocolTreasury = makeAddr("protocolTreasury");
+        address protocolAutomation = makeAddr("protocolAutomation");
         MockCreate2DeployerForPhase3 create2 = new MockCreate2DeployerForPhase3();
         MockUniswapV3FactoryForPhase3 uniswapFactory = new MockUniswapV3FactoryForPhase3();
         uniswapFactory.setPool(address(new MockUniswapV3PoolForPhase3()));
@@ -477,6 +478,7 @@ contract BatcherPhaseHandler is Test {
             makeAddr("bytecodeStore"),
             address(create2),
             protocolTreasury,
+            protocolAutomation,
             makeAddr("poolManager"),
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),
@@ -502,7 +504,7 @@ contract BatcherPhaseHandler is Test {
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
-            abi.encode(address(new MockCharmVaultForPhase3(protocolTreasury)))
+            abi.encode(address(new MockCharmVaultForPhase3(protocolAutomation)))
         );
         params = DeploymentBatcher.Phase3Params({
             creatorToken: makeAddr("creatorToken"),
@@ -681,6 +683,7 @@ contract BatcherPhase12Handler is Test {
             address(store),
             address(create2),
             address(this),
+            makeAddr("protocolAutomation"),
             address(0x1001),
             address(0x1002),
             address(0x1003),
@@ -832,6 +835,7 @@ contract BatcherPhase2Handler is Test {
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
             makeAddr("protocolTreasury"),
+            makeAddr("protocolAutomation"),
             makeAddr("poolManager"),
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),

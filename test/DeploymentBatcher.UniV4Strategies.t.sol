@@ -145,6 +145,7 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
             makeAddr("bytecodeStore"),
             address(create2Deployer),
             makeAddr("protocolTreasury"),
+            makeAddr("protocolAutomation"),
             poolManager,
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),

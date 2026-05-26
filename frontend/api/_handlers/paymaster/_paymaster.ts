@@ -60,6 +60,7 @@ import {
   resolveCreatorStrategyPlan,
 } from '../../../server/_lib/creatorStrategy/resolveWeights.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import { resolveProtocolAjnaKeeperAddress } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -2028,6 +2029,7 @@ async function validateInnerCalls(params: {
   const expectedWethToken = contracts.weth && isAddress(contracts.weth) ? getAddress(contracts.weth) : BASE_WETH
   const expectedProtocolTreasury =
     contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
+  const expectedProtocolAjnaKeeper = resolveProtocolAjnaKeeperAddress()
   if (!contracts.creatorVaultBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultAuxiliaryDeployBatcher =
@@ -2285,8 +2287,13 @@ async function validateInnerCalls(params: {
           if (solanaWeightBpsBig !== 0n && !solanaKeeperArg) {
             throw new Error('batcher_phase3_keeper_decode_failed')
           }
-          if (ajnaKeeperArg && ajnaKeeperArg !== expectedProtocolTreasury) {
-            throw new Error('batcher_ajna_keeper_mismatch')
+          if (ajnaWeightBpsBig !== 0n) {
+            if (!expectedProtocolAjnaKeeper) {
+              throw new Error('protocol_ajna_keeper_not_configured')
+            }
+            if (ajnaKeeperArg && ajnaKeeperArg !== expectedProtocolAjnaKeeper) {
+              throw new Error('batcher_ajna_keeper_mismatch')
+            }
           }
           if (solanaKeeperArg && solanaKeeperArg !== expectedProtocolTreasury) {
             throw new Error('batcher_solana_keeper_mismatch')

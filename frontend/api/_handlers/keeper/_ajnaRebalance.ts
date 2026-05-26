@@ -20,6 +20,7 @@ import {
   recordAjnaVaultManagerRun,
   type AjnaVaultRegistryRow,
 } from '../../../server/_lib/ajnaVaultManager/registry.js'
+import { resolveKeeperAutomationPrivateKey } from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 const AJNA_INNER_VAULT_REBALANCE_ABI = [
   { type: 'function', name: 'bufferAssets', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -283,9 +284,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RebalanceResponse>)
   }
 
-  const keeperPk = process.env.KPR_PRIVATE_KEY
+  const keeperPk = resolveKeeperAutomationPrivateKey()
   if (!keeperPk) {
-    return res.status(500).json({ success: false, error: 'KPR_PRIVATE_KEY not configured' } satisfies ApiEnvelope<never>)
+    return res.status(500).json({
+      success: false,
+      error: '4626_KEEPER_AUTOMATION_PRIVATE_KEY not configured',
+    } satisfies ApiEnvelope<never>)
   }
   const account = privateKeyToAccount(keeperPk as `0x${string}`)
 

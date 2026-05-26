@@ -128,7 +128,25 @@ async function main() {
     'vaultAdminModule',
   ] as const
 
-  const constructorArgs = await Promise.all(constructorGetterNames.map((name) => readAddressGetter(name)))
+  const protocolAutomation = await (async () => {
+    try {
+      const phase3Helper = await readAddressGetter('phase3Helper')
+      return await publicClient.readContract({
+        address: phase3Helper,
+        abi: [{ type: 'function', name: 'protocolAutomation', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] }],
+        functionName: 'protocolAutomation',
+      }) as Address
+    } catch {
+      const fromEnv = (process.env.PROTOCOL_AUTOMATION_SAFE ?? process.env.PROTOCOL_AUTOMATION ?? '').trim()
+      if (isAddress(fromEnv)) return getAddress(fromEnv) as Address
+      throw new Error('protocolAutomation missing on phase3Helper and PROTOCOL_AUTOMATION_SAFE env')
+    }
+  })()
+
+  const constructorArgs = await Promise.all(
+    constructorGetterNames.map((name) => readAddressGetter(name)),
+  )
+  constructorArgs.splice(4, 0, protocolAutomation)
   const deployedBatcher = runForgeCreate([
     ...constructorArgs,
     '0x0000000000000000000000000000000000000000',

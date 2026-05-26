@@ -15,6 +15,14 @@ describe('normalizeUniswapError', () => {
     expect(normalizeUniswapError('approval required').code).toBe('APPROVAL_REQUIRED')
   })
 
+  it('maps transfer_from_failed simulation errors', () => {
+    const normalized = normalizeUniswapError(
+      'Failed to fetch gas fee and/or simulate transaction: FAILED_TO_ESTIMATE_GAS: TRANSFER_FROM_FAILED',
+    )
+    expect(normalized.code).toBe('INSUFFICIENT_FUNDS')
+    expect(normalized.message).toContain('wrap')
+  })
+
   it('maps missing 4626 session token during canonical submit', () => {
     const normalized = normalizeUniswapError('Missing 4626 session token for paymaster request.')
     expect(normalized.code).toBe('AUTH_REQUIRED')

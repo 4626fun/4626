@@ -23,6 +23,8 @@ import {
 } from '../config.js';
 import { getKeeperAddress, readContract, writeContract, type WriteResult } from '../utils/onchain.js';
 import {
+  executeCharmRebalanceViaProtocolAutomationSafe,
+  executeCharmRebalanceViaProtocolAutomationSafe,
   executeCharmRebalanceViaProtocolTreasurySafe,
 } from '../utils/protocolTreasurySafe.js';
 import { readCharmVaultAuthSnapshot, resolveCharmKeeperAuthorization } from '../utils/charmVaultAuth.js';
@@ -463,6 +465,80 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
           rebalanced: false,
           skippedReason: authorization.reason,
         });
+        continue;
+      }
+
+      if (authorization.lane === 'protocol_automation_manager') {
+        try {
+          const viaSafe = await executeCharmRebalanceViaProtocolAutomationSafe({
+            charmVaultAddress: strategy.charmVaultAddress,
+          });
+          batch.processed += 1;
+          batch.rebalanced += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            charmVaultAddress: strategy.charmVaultAddress,
+            oracleAddress: vault.oracleAddress,
+            oracleTickNormalized: oracleContext.normalizedTick,
+            charmCenterTickNormalized: rangeContext.centerTickNormalized,
+            priceChangeBps,
+            rebalanced: true,
+            txHash: viaSafe.txHash,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          batch.processed += 1;
+          batch.errors += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            charmVaultAddress: strategy.charmVaultAddress,
+            oracleAddress: vault.oracleAddress,
+            oracleTickNormalized: oracleContext.normalizedTick,
+            charmCenterTickNormalized: rangeContext.centerTickNormalized,
+            priceChangeBps,
+            rebalanced: false,
+            error: message,
+          });
+        }
+        continue;
+      }
+
+      if (authorization.lane === 'protocol_automation_manager') {
+        try {
+          const viaSafe = await executeCharmRebalanceViaProtocolAutomationSafe({
+            charmVaultAddress: strategy.charmVaultAddress,
+          });
+          batch.processed += 1;
+          batch.rebalanced += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            charmVaultAddress: strategy.charmVaultAddress,
+            oracleAddress: vault.oracleAddress,
+            oracleTickNormalized: oracleContext.normalizedTick,
+            charmCenterTickNormalized: rangeContext.centerTickNormalized,
+            priceChangeBps,
+            rebalanced: true,
+            txHash: viaSafe.txHash,
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          batch.processed += 1;
+          batch.errors += 1;
+          batch.results.push({
+            vaultAddress: vault.vaultAddress,
+            strategyAddress: strategy.strategyAddress,
+            charmVaultAddress: strategy.charmVaultAddress,
+            oracleAddress: vault.oracleAddress,
+            oracleTickNormalized: oracleContext.normalizedTick,
+            charmCenterTickNormalized: rangeContext.centerTickNormalized,
+            priceChangeBps,
+            rebalanced: false,
+            error: message,
+          });
+        }
         continue;
       }
 

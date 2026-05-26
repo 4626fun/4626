@@ -17,6 +17,10 @@ import {
   resolvePayoutRouterZoraToken,
 } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import {
+  resolveProtocolAjnaKeeperAddress,
+  resolveProtocolAutomationAddress,
+} from '../../../server/_lib/wallet/protocolTreasurySafe.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -27,6 +31,8 @@ type DeployConfigResponse = {
   allowApiContractOverrides: boolean
   deployMode: string
   serverContinue: boolean
+  protocolAutomation: `0x${string}` | null
+  protocolAjnaKeeper: `0x${string}` | null
   payoutRouterKeeperAddress: `0x${string}` | null
   payoutRouterApprovedExternalSwapTargets: `0x${string}`[]
   payoutRouterApprovedExternalSwapSpenders: `0x${string}`[]
@@ -76,6 +82,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),
     deployMode,
     serverContinue: envBool('VITE_DEPLOY_USE_SERVER_CONTINUE'),
+    protocolAutomation: resolveProtocolAutomationAddress() ?? null,
+    protocolAjnaKeeper: resolveProtocolAjnaKeeperAddress() ?? null,
     payoutRouterKeeperAddress: payoutRouterKeeperAddress ?? null,
     payoutRouterApprovedExternalSwapTargets: payoutRouterExternalApprovals.targets,
     payoutRouterApprovedExternalSwapSpenders: payoutRouterExternalApprovals.spenders,

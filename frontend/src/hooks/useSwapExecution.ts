@@ -342,6 +342,64 @@ function hasApprovalTransaction(value: unknown): boolean {
   return typeof tx.to === 'string' && tx.to.length > 0 && typeof tx.data === 'string' && tx.data.length > 0
 }
 
+/** Uniswap simulateTransaction runs the swap tx alone; skip when approval or WETH wrap is batched later. */
+export function shouldSimulateSwapTransaction(
+  requiresApprovalTx: boolean,
+  wrapsNativeEthForCanonical: boolean,
+): boolean {
+  if (requiresApprovalTx) return false
+  if (wrapsNativeEthForCanonical) return false
+  return true
+}
+
+export async function assertSwapSpendBalancePreflight(params: {
+  publicClient: {
+    getBalance: (args: { address: `0x${string}` }) => Promise<bigint>
+    readContract?: (args: Record<string, unknown>) => Promise<unknown>
+  } | null | undefined
+  executionAddress: `0x${string}` | null
+  tokenIn: string
+  amountInUnits: string
+  wrapNativeEthForCanonical: boolean
+  getTokenDecimals: (token: string) => Promise<number>
+}): Promise<void> {
+  if (!params.publicClient || !params.executionAddress) return
+
+  const parsableAmount = toParsableAmount(params.amountInUnits)
+  if (!parsableAmount) {
+    throw new Error('Enter a valid amount greater than 0.')
+  }
+
+  const sellsNativeEth =
+    params.wrapNativeEthForCanonical || params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
+  if (sellsNativeEth) {
+    const required = parseUnits(parsableAmount, 18)
+    const balance = await params.publicClient.getBalance({ address: params.executionAddress })
+    if (balance < required) {
+      throw new Error(
+        'Insufficient ETH on your smart wallet for this swap. Reduce the amount or add ETH on Base, then refresh the quote.',
+      )
+    }
+    return
+  }
+
+  if (!isAddress(params.tokenIn) || typeof params.publicClient.readContract !== 'function') return
+
+  const decimals = await params.getTokenDecimals(params.tokenIn)
+  const required = parseUnits(parsableAmount, decimals)
+  const balance = (await params.publicClient.readContract({
+    address: params.tokenIn as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [params.executionAddress],
+  })) as bigint
+  if (balance < required) {
+    throw new Error(
+      'Insufficient token balance on your smart wallet for this swap. Reduce the amount or add tokens on Base, then refresh the quote.',
+    )
+  }
+}
+
 function isCdpProviderQuote(value: TradeQuoteResponse | null | undefined): boolean {
   return String((value as any)?.provider ?? '')
     .trim()
@@ -1225,8 +1283,10 @@ export function useSwapExecution(params: {
         includeGasInfo: false,
         refreshGasPrice: true,
         permit2Disabled: permit2DisabledForSwap,
-        // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
-        simulateTransaction: !requiresApprovalTx,
+        simulateTransaction: shouldSimulateSwapTransaction(
+          requiresApprovalTx,
+          wrapNativeInputForSponsoredCanonical,
+        ),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
       })
       assertValidSwapTransaction(data.swap)
@@ -1237,7 +1297,15 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired, permit2DisabledForSwap])
+  }, [
+    quote,
+    approvalData,
+    params.parsedDeadlineMinutes,
+    getErrorMessage,
+    signPermitIfRequired,
+    permit2DisabledForSwap,
+    wrapNativeInputForSponsoredCanonical,
+  ])
 
   const handleReviewTrade = useCallback(async () => {
     if (!params.executionAddress) {
@@ -1365,8 +1433,10 @@ export function useSwapExecution(params: {
         includeGasInfo: false,
         refreshGasPrice: true,
         permit2Disabled: permit2DisabledForSwap,
-        // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
-        simulateTransaction: !requiresApprovalTx,
+        simulateTransaction: shouldSimulateSwapTransaction(
+          requiresApprovalTx,
+          wrapNativeInputForSponsoredCanonical,
+        ),
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
       })
       if (runId !== quoteRunRef.current) return
@@ -1407,6 +1477,7 @@ export function useSwapExecution(params: {
     quote,
     isQuoteStale,
     permit2DisabledForSwap,
+    wrapNativeInputForSponsoredCanonical,
   ])
 
   const run7702DryRun = useCallback(
@@ -1654,6 +1725,14 @@ export function useSwapExecution(params: {
       if (wrapTx && BigInt(wrapTx.value ?? '0') <= 0n) {
         throw new Error('Enter a valid amount greater than 0.')
       }
+      await assertSwapSpendBalancePreflight({
+        publicClient: params.publicClient,
+        executionAddress: params.executionAddress,
+        tokenIn: params.tokenIn,
+        amountInUnits: params.amountInUnits,
+        wrapNativeEthForCanonical: wrapNativeInputForSponsoredCanonical,
+        getTokenDecimals,
+      })
       const { routing, send } = wrapTx
         ? await buildAndSendCalls({
             context,
@@ -1714,6 +1793,7 @@ export function useSwapExecution(params: {
     params.executionMode,
     params.executionAddress,
     params.amountInUnits,
+    params.tokenIn,
     params.ensureCanonicalSession,
     params.hasSession,
     params.signerAddress,
@@ -1727,6 +1807,8 @@ export function useSwapExecution(params: {
     wrapNativeInputForSponsoredCanonical,
     normalizedCapabilities,
     getErrorMessage,
+    getTokenDecimals,
+    params.publicClient,
     updateAttemptDebug,
     updateTxDebugError,
   ])

@@ -52,9 +52,11 @@ contract DeploymentBatcherPhase3Helper {
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
     error Phase3HelperLostAdmin();
+    error ZeroAddress();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     address public immutable protocolTreasury;
+    address public immutable protocolAutomation;
     address public immutable usdc;
     address public immutable uniswapV3Factory;
     address public immutable uniswapRouter;
@@ -64,6 +66,7 @@ contract DeploymentBatcherPhase3Helper {
     constructor(
         address _create2Deployer,
         address _protocolTreasury,
+        address _protocolAutomation,
         address _usdc,
         address _uniswapV3Factory,
         address _uniswapRouter,
@@ -79,6 +82,8 @@ contract DeploymentBatcherPhase3Helper {
         require(block.chainid == 8453, "Phase3Helper: Base only");
         create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
         protocolTreasury = _protocolTreasury;
+        if (_protocolAutomation == address(0)) revert ZeroAddress();
+        protocolAutomation = _protocolAutomation;
         usdc = _usdc;
         uniswapV3Factory = _uniswapV3Factory;
         uniswapRouter = _uniswapRouter;
@@ -110,37 +115,7 @@ contract DeploymentBatcherPhase3Helper {
         // addStrategy on the vault). Return zero addresses so downstream
         // callers can detect the skip. See docs/operations/creator-strategy-features.md.
         if (params.charmWeightBps != 0) {
-            _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
-            out.charmVault = ICharmFactory(CHARM_FACTORY)
-                .createVault(
-                    ICharmFactory.VaultParams({
-                    pool: v3Pool,
-                    manager: protocolTreasury,
-                    managerFee: CHARM_MANAGER_FEE_PIPS,
-                    // Creator CSW (params.owner) may trigger rebalance(); protocol treasury
-                    // retains manager controls (parameters, fees, delegate rotation).
-                    rebalanceDelegate: params.owner,
-                    maxTotalSupply: type(uint256).max,
-                    baseThreshold: 3000,
-                    limitThreshold: 6000,
-                    fullRangeWeight: 0,
-                    period: 1800,
-                    minTickMove: CHARM_MIN_TICK_MOVE,
-                    maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
-                    twapDuration: CHARM_TWAP_DURATION,
-                    name: params.charmVaultName,
-                    symbol: params.charmVaultSymbol
-                })
-                );
-            _enforceCharmVaultManager(out.charmVault, protocolTreasury);
-
-            bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
-            bytes memory charmStratArgs =
-                abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
-            out.charmStrategy =
-                create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
-            ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
-            IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
+            (out.charmVault, out.charmStrategy) = _deployCharmPipeline(params, codeIds, baseSalt, v3Pool);
         }
 
         // Ajna lending sleeve is an OPT-IN strategy gated behind the
@@ -187,8 +162,8 @@ contract DeploymentBatcherPhase3Helper {
             // FIX: F-21 — verify this helper is still admin before transferring, to fail explicitly
             // instead of silently leaving auth locked to this helper address
             if (!IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this))) revert Phase3HelperLostAdmin();
-            // FIX: F-04 compatibility — use two-step admin transfer
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolTreasury);
+            // Protocol automation Safe operates Ajna (setMinBucketIndex); treasury keeps adapter ownership only.
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolAutomation);
         }
 
         // Solana bridge strategy is an OPT-IN paid feature
@@ -212,6 +187,42 @@ contract DeploymentBatcherPhase3Helper {
             out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
             IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
         }
+    }
+
+    function _deployCharmPipeline(
+        DeploymentBatcher.Phase3Params calldata params,
+        DeploymentBatcher.StrategyCodeIds calldata codeIds,
+        bytes32 baseSalt,
+        address v3Pool
+    ) internal returns (address charmVault, address charmStrategy) {
+        _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
+        charmVault = ICharmFactory(CHARM_FACTORY)
+            .createVault(
+                ICharmFactory.VaultParams({
+                    pool: v3Pool,
+                    manager: protocolAutomation,
+                    managerFee: CHARM_MANAGER_FEE_PIPS,
+                    rebalanceDelegate: params.owner,
+                    maxTotalSupply: type(uint256).max,
+                    baseThreshold: 3000,
+                    limitThreshold: 6000,
+                    fullRangeWeight: 0,
+                    period: 1800,
+                    minTickMove: CHARM_MIN_TICK_MOVE,
+                    maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                    twapDuration: CHARM_TWAP_DURATION,
+                    name: params.charmVaultName,
+                    symbol: params.charmVaultSymbol
+                })
+            );
+        _enforceCharmVaultManager(charmVault, protocolAutomation);
+
+        bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
+        bytes memory charmStratArgs =
+            abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, charmVault, v3Pool, address(this));
+        charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
+        ICreatorCharmStrategy(charmStrategy).initializeApprovals();
+        IOwnableTransfer(charmStrategy).transferOwnership(protocolTreasury);
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -1037,13 +1048,13 @@ contract DeploymentBatcher is ReentrancyGuard {
     /// @notice OVault runtime wiring used for Solana compose orchestration.
     OVaultRuntimeConfig private ovaultRuntimeConfig;
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
-    DeploymentBatcherPhase3Helper public immutable phase3Helper;
+    DeploymentBatcherPhase3Helper public phase3Helper;
     /// @notice Dedicated phase-2 execution helper (delegatecall) to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherPhase2Module public phase2Module;
     /// @notice Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
-    DeploymentBatcherUniV4Helper public immutable uniV4Helper;
+    DeploymentBatcherUniV4Helper public uniV4Helper;
     /// @notice String/salt/hash helper contract to keep this contract under EIP-170 runtime limits.
-    DeploymentBatcherUtilsHelper public immutable utilsHelper;
+    DeploymentBatcherUtilsHelper public utilsHelper;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -1145,6 +1156,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         address _bytecodeStore,
         address _create2Deployer,
         address _protocolTreasury,
+        address _protocolAutomation,
         address _poolManager,
         address _taxHook,
         address _chainlinkEthUsd,
@@ -1176,6 +1188,8 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         if (_protocolTreasury == address(0)) revert ZeroAddress();
         protocolTreasury = _protocolTreasury;
+
+        if (_protocolAutomation == address(0)) revert ZeroAddress();
 
         if (_poolManager == address(0)) revert ZeroAddress();
         poolManager = _poolManager;
@@ -1211,21 +1225,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (_vaultAdminModule == address(0)) revert ZeroAddress();
         vaultAdminModule = _vaultAdminModule;
 
-        if (_phase2Module == address(0)) {
-            phase2Module = new DeploymentBatcherPhase2Module(
-                address(create2Deployer),
-                _registry,
-                _chainlinkEthUsd,
-                _poolManager,
-                _taxHook,
-                _protocolTreasury,
-                _lotteryManager,
-                _vaultActivationBatcher,
-                address(this)
-            );
-        } else {
-            phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
-        }
+        _initPhase2Module(_phase2Module);
 
         // FIX: L-02 (4626-350) — outer batcher references a hardcoded
         // Base-only Charm factory (CHARM_FACTORY public constant above),
@@ -1234,9 +1234,36 @@ contract DeploymentBatcher is ReentrancyGuard {
         // chains instead of discovering the mismatch mid-Phase3.
         require(block.chainid == 8453, "DeploymentBatcher: Base only");
 
-        // Use state-var reads (calldataload values freed above).
+        _initHelperContracts(_protocolAutomation);
+    }
+
+    function _initPhase2Module(address _phase2Module) internal {
+        if (_phase2Module == address(0)) {
+            phase2Module = new DeploymentBatcherPhase2Module(
+                address(create2Deployer),
+                address(registry),
+                chainlinkEthUsd,
+                poolManager,
+                taxHook,
+                protocolTreasury,
+                lotteryManager,
+                vaultActivationBatcher,
+                address(this)
+            );
+        } else {
+            phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
+        }
+    }
+
+    function _initHelperContracts(address _protocolAutomation) internal {
         phase3Helper = new DeploymentBatcherPhase3Helper(
-            address(create2Deployer), protocolTreasury, usdc, uniswapV3Factory, uniswapRouter, ajnaFactory
+            address(create2Deployer),
+            protocolTreasury,
+            _protocolAutomation,
+            usdc,
+            uniswapV3Factory,
+            uniswapRouter,
+            ajnaFactory
         );
         uniV4Helper = new DeploymentBatcherUniV4Helper(address(create2Deployer), poolManager, permit2);
         utilsHelper = new DeploymentBatcherUtilsHelper();

@@ -69,6 +69,7 @@ export const CONTRACTS = {
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
+  protocolAutomation: envAddress('VITE_PROTOCOL_AUTOMATION', BASE_DEFAULTS.protocolAutomation),
 
   // ve(3,3) + rewards ecosystem (optional until deployed)
   vaultGaugeVoting: envAddress('VITE_VAULT_GAUGE_VOTING'),

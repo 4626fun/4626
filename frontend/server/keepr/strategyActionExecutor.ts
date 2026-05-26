@@ -29,9 +29,13 @@ import {
 import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
 import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
 import {
+  executeViaProtocolAutomationSafe,
   executeViaProtocolTreasurySafe,
   readCharmVaultAuthSnapshot,
   resolveCharmKeeperAuthorization,
+  resolveKeeperAutomationPrivateKey,
+  isProtocolAutomationAjnaAdmin,
+  isProtocolTreasuryManager,
   isSameAddress,
 } from '../_lib/wallet/protocolTreasurySafe.js'
 
@@ -120,11 +124,11 @@ function getBaseRpcUrl(): string {
 }
 
 function getKeeperAccount() {
-  const pk = (process.env.KPR_PRIVATE_KEY ?? '').trim()
-  if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) {
+  const pk = resolveKeeperAutomationPrivateKey()
+  if (!pk) {
     throw new KeeprStrategyError('keeper_private_key_missing', false)
   }
-  return privateKeyToAccount(pk as `0x${string}`)
+  return privateKeyToAccount(pk)
 }
 
 function getBundlerAndPaymasterUrl(): string {
@@ -354,15 +358,6 @@ export async function executeStrategyAction(
     const authAddress = normalizeAddress(action.authAddress ?? action.targetAddress, 'authAddress')
     const strategyAddress =
       action.strategyAddress == null ? null : normalizeAddress(action.strategyAddress, 'strategyAddress')
-    const automationRow =
-      options?.vaultAddress ? await getKeeprVaultAutomationByVaultAddress(options.vaultAddress) : null
-    if (options?.vaultAddress && !automationRow) {
-      const db = await getDb()
-      if (!db) {
-        throw new KeeprStrategyError('ajna_automation_backend_unavailable', true)
-      }
-    }
-    const automation = getAjnaAutomationContextOrThrow(automationRow)
 
     let authAdminRaw: unknown
     try {
@@ -379,8 +374,88 @@ export async function executeStrategyAction(
       throw new KeeprStrategyError('ajna_auth_admin_unreadable', false)
     }
     const authAdmin = normalizeAddress(authAdminRaw, 'authAdmin')
-    if (authAdmin !== automation.canonicalCswAddress) {
-      logger.warn('[keepr/strategy] canonical CSW cannot rebucket Ajna auth', {
+
+    const automationRow =
+      options?.vaultAddress ? await getKeeprVaultAutomationByVaultAddress(options.vaultAddress) : null
+
+    const rebucketCalldata = encodeFunctionData({
+      abi: AJNA_VAULT_AUTH_ADMIN_ABI as unknown as Abi,
+      functionName: 'setMinBucketIndex',
+      args: [targetBucket],
+    })
+
+    const rebucketResultBase = {
+      strategyAddress,
+      authAddress,
+      targetAddress: authAddress,
+      method: 'setMinBucketIndex',
+      targetBucket: targetBucket.toString(),
+    }
+
+    if (isProtocolAutomationAjnaAdmin(authAdmin)) {
+      try {
+        const viaSafe = await executeViaProtocolAutomationSafe({
+          publicClient,
+          rpcUrl,
+          to: authAddress,
+          data: rebucketCalldata,
+        })
+        return {
+          ...rebucketResultBase,
+          txHash: viaSafe.txHash,
+          mode: 'protocol_automation_safe',
+          safeAddress: viaSafe.safeAddress,
+          signerAddress: viaSafe.signerAddress,
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        if (message.startsWith('protocol_automation_safe_owner_key_missing')) {
+          throw new KeeprStrategyError(message, false)
+        }
+        if (message.startsWith('protocol_automation_safe_not_configured')) {
+          throw new KeeprStrategyError(message, false)
+        }
+        if (message.startsWith('protocol_automation_safe_signer_not_owner')) {
+          throw new KeeprStrategyError(message, false)
+        }
+        throw new KeeprStrategyError(
+          `protocol_automation_safe_failed:${message}`,
+          isLikelyRetryableRpcError(message),
+        )
+      }
+    }
+
+    if (isProtocolTreasuryManager(authAdmin)) {
+      try {
+        const viaSafe = await executeViaProtocolTreasurySafe({
+          publicClient,
+          rpcUrl,
+          to: authAddress,
+          data: rebucketCalldata,
+        })
+        return {
+          ...rebucketResultBase,
+          txHash: viaSafe.txHash,
+          mode: 'protocol_treasury_safe',
+          safeAddress: viaSafe.safeAddress,
+          signerAddress: viaSafe.signerAddress,
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new KeeprStrategyError(`protocol_treasury_safe_failed:${message}`, isLikelyRetryableRpcError(message))
+      }
+    }
+
+    if (options?.vaultAddress && !automationRow) {
+      const db = await getDb()
+      if (!db) {
+        throw new KeeprStrategyError('ajna_automation_backend_unavailable', true)
+      }
+      throw new KeeprStrategyError('ajna_automation_context_missing', false)
+    }
+    const automation = getAjnaAutomationContextOrThrow(automationRow)
+    if (!isSameAddress(authAdmin, automation.canonicalCswAddress)) {
+      logger.warn('[keepr/strategy] legacy CSW Ajna rebucket admin mismatch', {
         authAddress,
         authAdmin,
         canonicalCswAddress: automation.canonicalCswAddress,
@@ -390,12 +465,6 @@ export async function executeStrategyAction(
         false,
       )
     }
-
-    const rebucketCalldata = encodeFunctionData({
-      abi: AJNA_VAULT_AUTH_ADMIN_ABI as unknown as Abi,
-      functionName: 'setMinBucketIndex',
-      args: [targetBucket],
-    })
 
     let ownerContext: { ownerAddress: `0x${string}`; ownerIndex: number }
     try {
@@ -451,11 +520,7 @@ export async function executeStrategyAction(
       ownerAddress: viaUserOp.ownerAddress,
       ownerIndex: viaUserOp.ownerIndex,
       mode: 'erc4337_privy',
-      strategyAddress,
-      authAddress,
-      targetAddress: authAddress,
-      method: 'setMinBucketIndex',
-      targetBucket: targetBucket.toString(),
+      ...rebucketResultBase,
     }
   }
 
@@ -485,6 +550,47 @@ export async function executeStrategyAction(
     functionName: 'rebalance',
     args: [],
   })
+
+  if (authorization.lane === 'protocol_automation_manager') {
+    try {
+      const viaSafe = await executeViaProtocolAutomationSafe({
+        publicClient,
+        rpcUrl,
+        to: charmVaultAddress,
+        data: rebalanceCalldata,
+      })
+      return {
+        txHash: viaSafe.txHash,
+        charmVaultAddress,
+        mode: 'protocol_automation_safe',
+        safeAddress: viaSafe.safeAddress,
+        signerAddress: viaSafe.signerAddress,
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      logger.warn('[keepr/strategy] charm rebalance automation Safe path failed', {
+        charmVaultAddress,
+        managerAddress: authSnapshot.managerAddress,
+        error: message,
+      })
+      if (message.startsWith('protocol_automation_safe_owner_key_missing')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      if (message.startsWith('protocol_automation_safe_not_configured')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      if (message.startsWith('protocol_automation_safe_signer_not_owner')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      if (message.startsWith('keeper_automation_key_pair_mismatch')) {
+        throw new KeeprStrategyError(message, false)
+      }
+      throw new KeeprStrategyError(
+        `protocol_automation_safe_failed:${message}`,
+        isLikelyRetryableRpcError(message),
+      )
+    }
+  }
 
   if (authorization.lane === 'protocol_treasury_manager') {
     try {

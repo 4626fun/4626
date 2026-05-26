@@ -28,6 +28,7 @@ export type ApiContracts = {
   vaultActivationBatcher: ContractAddress
   creatorVaultBatcher?: ContractAddress
   protocolTreasury: ContractAddress
+  protocolAutomation?: ContractAddress
   vaultGaugeVoting?: ContractAddress
   voterRewardsDistributor?: ContractAddress
   bribesFactory?: ContractAddress
@@ -104,6 +105,7 @@ export function getApiContracts(): ApiContracts {
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
     creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
+    protocolAutomation: pickAddressProdSafe('PROTOCOL_AUTOMATION_SAFE', BASE_DEFAULTS.protocolAutomation),
     vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),
     voterRewardsDistributor: pickAddressProdSafe('VOTER_REWARDS_DISTRIBUTOR'),
     bribesFactory: pickAddressProdSafe('BRIBES_FACTORY'),

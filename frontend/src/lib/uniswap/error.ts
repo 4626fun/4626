@@ -45,6 +45,19 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // Swap proxy pull failed (often WETH transferFrom before deposit is simulated)
+  if (
+    msg.includes('transfer_from_failed') ||
+    (msg.includes('failed_to_estimate_gas') && msg.includes('transfer_from'))
+  ) {
+    return {
+      code: 'INSUFFICIENT_FUNDS',
+      message:
+        'The swap could not pull tokens from your smart wallet. For ETH sells, keep enough ETH to wrap in the same transaction, or reduce the amount and refresh the quote.',
+      retryable: true,
+    }
+  }
+
   // Token balance
   if (msg.includes('insufficient') || msg.includes('not enough balance') || msg.includes('exceeds balance')) {
     return {

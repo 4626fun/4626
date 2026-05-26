@@ -97,8 +97,10 @@ export const BASE_DEFAULTS = {
   // Optional alias used by env-based rollout/cutover logic.
   creatorVaultBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
 
-  // Treasury
+  // Treasury (cold — custody, strategy ownership, feature payments)
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),
+  // Automation (hot — Charm vault manager; set PROTOCOL_AUTOMATION_SAFE after Safe deploy)
+  protocolAutomation: addr('0000000000000000000000000000000000000000'),
 
   // Uniswap V4 core + hook
   poolManager: addr('498581fF718922c3f8e6A244956aF099B2652b2b'),

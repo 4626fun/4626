@@ -96,10 +96,20 @@ export function normalizeSolanaOrchestratorAction(value: unknown): SolanaOrchest
   }
 }
 
+function parseOrchestratorEnvFlag(raw: string | undefined): boolean | null {
+  const normalized = String(raw ?? '').trim().toLowerCase()
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes') return true
+  if (normalized === '0' || normalized === 'false' || normalized === 'no') return false
+  return null
+}
+
 function actionEnabled(action: SolanaOrchestratorAction): boolean {
-  const global = String(process.env.SOLANA_ORCHESTRATOR_EXECUTE ?? '').trim() === '1'
+  const globalExecute = parseOrchestratorEnvFlag(process.env.SOLANA_ORCHESTRATOR_EXECUTE) === true
   const specificKey = `SOLANA_ORCHESTRATOR_${action.toUpperCase()}_ENABLED`
-  return global || String(process.env[specificKey] ?? '').trim() === '1'
+  const specific = parseOrchestratorEnvFlag(process.env[specificKey])
+  if (specific === false) return false
+  if (specific === true) return true
+  return globalExecute
 }
 
 export async function executeSolanaOrchestratorAction(params: {

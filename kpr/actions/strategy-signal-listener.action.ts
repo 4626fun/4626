@@ -34,6 +34,7 @@ import {
   type CanonicalAjnaAutomationConfig,
   type WriteExecutionContext,
 } from '../utils/onchain.js';
+import { resolveAjnaRebucketAuthorization } from '../utils/protocolTreasurySafe.js';
 import {
   bucketPriceChangeBps,
   computeSteppedBucket,
@@ -220,13 +221,18 @@ export function getAjnaCanonicalEnqueueError(params: {
   authAdmin: Address;
 }): string | null {
   const executionContext = resolveAjnaWatchedVaultExecutionContext(params.watched);
-  if (!executionContext) {
-    return 'canonical_sender_required:missing_execution_context';
+  const authorization = resolveAjnaRebucketAuthorization({
+    authAdmin: params.authAdmin,
+    canonicalCswAddress:
+      executionContext?.smartWallet ?? params.watched.automation?.canonicalCswAddress ?? null,
+  });
+  if (authorization.authorized) {
+    if (authorization.lane === 'legacy_csw_admin' && !executionContext) {
+      return 'canonical_sender_required:missing_execution_context';
+    }
+    return null;
   }
-  if (params.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
-    return 'canonical_sender_required:auth_admin_mismatch';
-  }
-  return null;
+  return 'canonical_sender_required:auth_admin_mismatch';
 }
 
 export function buildAjnaEnqueueAction(params: {

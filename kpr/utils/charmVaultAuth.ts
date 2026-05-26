@@ -3,6 +3,7 @@ import { getAddress, isAddress, type Address } from 'viem';
 import { readContract } from './onchain.js';
 import {
   isProtocolTreasuryManager,
+  isProtocolAutomationManager,
   resolveCharmAutomationAuthorization,
   type CharmAutomationAuthorization,
 } from './protocolTreasurySafe.js';
@@ -52,7 +53,7 @@ export async function readCharmVaultAuthSnapshot(charmVaultAddress: Address): Pr
   const managerAddress = asAddress(managerRaw);
   const delegateAddress = asAddress(delegateRaw);
 
-  if (isProtocolTreasuryManager(managerAddress)) {
+  if (isProtocolAutomationManager(managerAddress) || isProtocolTreasuryManager(managerAddress)) {
     return { managerAddress, delegateAddress, charmKeeper: null, charmOwner: null };
   }
 

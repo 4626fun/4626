@@ -36,4 +36,25 @@ describe('solana keeper orchestrator', () => {
       else process.env.SOLANA_ORCHESTRATOR_PRICE_MONITOR_ENABLED = previousSpecific
     }
   })
+
+  it('fails closed for relay_entries when explicitly disabled even if global execute is on', async () => {
+    const previousExecute = process.env.SOLANA_ORCHESTRATOR_EXECUTE
+    const previousRelay = process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
+    process.env.SOLANA_ORCHESTRATOR_EXECUTE = '1'
+    process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = '0'
+    try {
+      await expect(
+        executeSolanaOrchestratorAction({
+          workflow: 'solana-orchestrator',
+          action: 'relay_entries',
+          checkpointKey: 'test',
+        }),
+      ).rejects.toThrow('action_disabled:relay_entries')
+    } finally {
+      if (previousExecute === undefined) delete process.env.SOLANA_ORCHESTRATOR_EXECUTE
+      else process.env.SOLANA_ORCHESTRATOR_EXECUTE = previousExecute
+      if (previousRelay === undefined) delete process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED
+      else process.env.SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED = previousRelay
+    }
+  })
 })

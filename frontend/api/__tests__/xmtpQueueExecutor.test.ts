@@ -111,6 +111,7 @@ vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
 }))
 
 const PROTOCOL_TREASURY = '0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'
+const PROTOCOL_AUTOMATION = '0xdddddddddddddddddddddddddddddddddddddddd'
 const DELEGATE_CSW = '0x7777777777777777777777777777777777777777'
 
 vi.mock('../../server/_lib/wallet/protocolTreasurySafe.js', async () => {
@@ -119,6 +120,7 @@ vi.mock('../../server/_lib/wallet/protocolTreasurySafe.js', async () => {
   )
   return {
     ...actual,
+    executeViaProtocolAutomationSafe: vi.fn(),
     executeViaProtocolTreasurySafe: vi.fn(),
   }
 })
@@ -153,7 +155,10 @@ vi.mock('viem', async () => {
 })
 
 import { executeKeeprAction } from '../../server/keepr/xmtpQueueExecutor.ts'
-import { executeViaProtocolTreasurySafe } from '../../server/_lib/wallet/protocolTreasurySafe.js'
+import {
+  executeViaProtocolAutomationSafe,
+  executeViaProtocolTreasurySafe,
+} from '../../server/_lib/wallet/protocolTreasurySafe.js'
 
 describe('xmtp queue executor Ajna canonical automation', () => {
   let restoreEnv: (() => void) | null = null
@@ -271,9 +276,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
   it('treats Ajna null automation context as retryable when the backend is unavailable', async () => {
     mocks.getKeeprVaultAutomationByVaultAddress.mockResolvedValueOnce(null)
     mocks.getDb
-      .mockResolvedValueOnce({
-        sql: mocks.sql,
-      })
+      .mockResolvedValueOnce({ sql: mocks.sql })
       .mockResolvedValueOnce(null)
 
     const result = await executeKeeprAction({
@@ -293,7 +296,12 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(result.error).toBe('ajna_automation_backend_unavailable')
     expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).not.toHaveBeenCalled()
     expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
-    expect(mocks.readContract).not.toHaveBeenCalled()
+    expect(mocks.readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: AUTH,
+        functionName: 'admin',
+      }),
+    )
   })
 
   it('fails closed when Ajna embedded signer context is missing', async () => {
@@ -346,7 +354,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
   })
 
-  it('fails fast as non-retryable when Ajna auth admin is not the canonical CSW', async () => {
+  it('fails fast as non-retryable when Ajna auth admin is not authorized', async () => {
     mocks.readContract.mockImplementationOnce(async ({ functionName }: { functionName: string }) => {
       if (functionName === 'admin') return OTHER_ADMIN
       throw new Error(`Unexpected readContract call: ${functionName}`)
@@ -371,6 +379,48 @@ describe('xmtp queue executor Ajna canonical automation', () => {
       expect.objectContaining({
         address: AUTH,
         functionName: 'admin',
+      }),
+    )
+    expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).not.toHaveBeenCalled()
+    expect(mocks.sendPrivyCoinbaseSmartWalletUserOperation).not.toHaveBeenCalled()
+  })
+
+  it('submits Ajna rebucket via the protocol automation Safe when auth admin is the hot Safe', async () => {
+    process.env.PROTOCOL_AUTOMATION_SAFE = PROTOCOL_AUTOMATION
+    vi.mocked(executeViaProtocolAutomationSafe).mockResolvedValueOnce({
+      txHash: TX_HASH,
+      safeAddress: PROTOCOL_AUTOMATION,
+      signerAddress: '0x9999999999999999999999999999999999999999',
+    })
+    mocks.readContract.mockImplementationOnce(async ({ functionName }: { functionName: string }) => {
+      if (functionName === 'admin') return PROTOCOL_AUTOMATION
+      throw new Error(`Unexpected readContract call: ${functionName}`)
+    })
+
+    const result = await executeKeeprAction({
+      id: 6,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'strategy.ajna.rebucket',
+      action: {
+        action: 'strategy.ajna.rebucket',
+        authAddress: AUTH,
+        targetBucket: 1200,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.details).toMatchObject({
+      txHash: TX_HASH,
+      mode: 'protocol_automation_safe',
+      safeAddress: PROTOCOL_AUTOMATION,
+      method: 'setMinBucketIndex',
+      targetBucket: '1200',
+    })
+    expect(executeViaProtocolAutomationSafe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: AUTH,
+        data: expect.any(String),
       }),
     )
     expect(mocks.resolvePrivyCoinbaseSmartWalletOwnerContext).not.toHaveBeenCalled()
@@ -747,7 +797,66 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(executeViaProtocolTreasurySafe).not.toHaveBeenCalled()
   })
 
-  it('rebalances Charm via protocol treasury Safe when manager is treasury', async () => {
+  it('rebalances Charm via protocol automation Safe when manager is automation Safe', async () => {
+    process.env.KPR_PRIVATE_KEY =
+      '0x1111111111111111111111111111111111111111111111111111111111111111'
+    process.env.PROTOCOL_AUTOMATION_SAFE = PROTOCOL_AUTOMATION
+    mocks.privateKeyToAccount.mockReturnValue({
+      address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+    mocks.sql.mockResolvedValueOnce({
+      rows: [
+        {
+          vault_address: VAULT,
+          group_id: 'group-1',
+          canonical_owner_address: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          creator_address: null,
+          agent_type: null,
+          privy_wallet_id: null,
+          csw_address: CANONICAL_CSW,
+          encrypted_private_key_b64: null,
+          encrypted_private_key_iv_b64: null,
+          encrypted_private_key_tag_b64: null,
+        },
+      ],
+    })
+    mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
+      if (functionName === 'manager') return PROTOCOL_AUTOMATION
+      if (functionName === 'rebalanceDelegate') return CANONICAL_CSW
+      throw new Error(`Unexpected readContract call: ${functionName}`)
+    })
+    vi.mocked(executeViaProtocolAutomationSafe).mockResolvedValueOnce({
+      txHash: TX_HASH,
+      safeAddress: PROTOCOL_AUTOMATION,
+      signerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    const result = await executeKeeprAction({
+      id: 13,
+      vaultAddress: VAULT,
+      groupId: 'group-1',
+      actionType: 'strategy.charm.rebalance',
+      action: {
+        action: 'strategy.charm.rebalance',
+        charmVaultAddress: VAULT,
+      },
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.actionType).toBe('strategy.charm.rebalance')
+    expect(result.details).toMatchObject({
+      txHash: TX_HASH,
+      mode: 'protocol_automation_safe',
+      safeAddress: PROTOCOL_AUTOMATION,
+    })
+    expect(executeViaProtocolAutomationSafe).toHaveBeenCalledTimes(1)
+    expect(executeViaProtocolTreasurySafe).not.toHaveBeenCalled()
+    expect(mocks.findCoinbaseSmartWalletOwnerIndex).not.toHaveBeenCalled()
+    expect(mocks.writeContract).not.toHaveBeenCalled()
+  })
+
+  it('rebalances Charm via legacy protocol treasury Safe when manager is treasury', async () => {
+    delete process.env.PROTOCOL_AUTOMATION_SAFE
     process.env.KPR_PRIVATE_KEY =
       '0x1111111111111111111111111111111111111111111111111111111111111111'
     mocks.privateKeyToAccount.mockReturnValue({
@@ -799,6 +908,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
       safeAddress: PROTOCOL_TREASURY,
     })
     expect(executeViaProtocolTreasurySafe).toHaveBeenCalledTimes(1)
+    expect(executeViaProtocolAutomationSafe).not.toHaveBeenCalled()
     expect(mocks.findCoinbaseSmartWalletOwnerIndex).not.toHaveBeenCalled()
     expect(mocks.writeContract).not.toHaveBeenCalled()
   })

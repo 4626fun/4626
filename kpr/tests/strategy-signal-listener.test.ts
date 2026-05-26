@@ -11,6 +11,7 @@ import {
 const CANONICAL_SMART_WALLET = '0x00000000000000000000000000000000000000bb' as `0x${string}`
 const EMBEDDED_OWNER = '0x00000000000000000000000000000000000000cc' as `0x${string}`
 const OTHER_ADMIN = '0x00000000000000000000000000000000000000dd' as `0x${string}`
+const PROTOCOL_AUTOMATION_ADMIN = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as `0x${string}`
 const VAULT_ADDRESS = '0x0000000000000000000000000000000000000011' as `0x${string}`
 const POOL_ADDRESS = '0x0000000000000000000000000000000000000022' as `0x${string}`
 const ORACLE_ADDRESS = '0x0000000000000000000000000000000000000033' as `0x${string}`
@@ -75,13 +76,29 @@ describe('strategy signal listener keys', () => {
     ).toBeNull()
   })
 
-  it('hard-stops Ajna enqueue when auth admin is not the canonical smart wallet', () => {
+  it('hard-stops Ajna enqueue when auth admin is not authorized', () => {
     const error = getAjnaCanonicalEnqueueError({
       watched: watchedVault(),
       authAdmin: OTHER_ADMIN,
     })
 
     expect(error).toBe('canonical_sender_required:auth_admin_mismatch')
+  })
+
+  it('allows Ajna enqueue when auth admin is the protocol automation Safe', () => {
+    const previous = process.env.PROTOCOL_AUTOMATION_SAFE
+    process.env.PROTOCOL_AUTOMATION_SAFE = PROTOCOL_AUTOMATION_ADMIN
+    try {
+      const error = getAjnaCanonicalEnqueueError({
+        watched: watchedVault(),
+        authAdmin: PROTOCOL_AUTOMATION_ADMIN,
+      })
+
+      expect(error).toBeNull()
+    } finally {
+      if (previous === undefined) delete process.env.PROTOCOL_AUTOMATION_SAFE
+      else process.env.PROTOCOL_AUTOMATION_SAFE = previous
+    }
   })
 
   it('includes the canonical execution context in Ajna enqueue payloads', () => {

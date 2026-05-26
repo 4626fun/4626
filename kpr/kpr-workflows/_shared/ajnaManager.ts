@@ -26,6 +26,7 @@ import {
   resolveCanonicalAjnaExecutionContext,
   type WriteExecutionContext,
 } from "../../utils/onchain.js"
+import { resolveAjnaRebucketAuthorization } from "../../utils/protocolTreasurySafe.js"
 
 export type AjnaManagerConfig = {
   apiBaseUrl: string
@@ -538,7 +539,11 @@ export function evaluateAndEnqueueAjnaActions(
           continue
         }
 
-        if (forcedStrategy.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
+        const forcedAuth = resolveAjnaRebucketAuthorization({
+          authAdmin: forcedStrategy.authAdmin,
+          canonicalCswAddress: executionContext.smartWallet,
+        })
+        if (!forcedAuth.authorized) {
           skippedActions += 1
           runtime.log(
             `Skipping forced Ajna enqueue for ${vault.vaultAddress}: canonical sender required (auth admin mismatch)`,
@@ -621,7 +626,11 @@ export function evaluateAndEnqueueAjnaActions(
             continue
           }
 
-          if (strategy.authAdmin.toLowerCase() !== executionContext.smartWallet.toLowerCase()) {
+          const strategyAuth = resolveAjnaRebucketAuthorization({
+            authAdmin: strategy.authAdmin,
+            canonicalCswAddress: executionContext.smartWallet,
+          })
+          if (!strategyAuth.authorized) {
             skippedActions += 1
             runtime.log(
               `Skipping Ajna strategy ${strategy.strategyAddress} for vault ${vault.vaultAddress}: canonical sender required (auth admin mismatch)`,

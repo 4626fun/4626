@@ -200,6 +200,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
 
     address internal immutable ownerAddr = makeAddr("owner");
     address internal immutable protocolTreasury = makeAddr("protocolTreasury");
+    address internal immutable protocolAutomation = makeAddr("protocolAutomation");
 
     MockVaultStrategyManager internal vault;
     MockCreate2Deployer internal create2Deployer;
@@ -233,6 +234,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
             makeAddr("bytecodeStore"),
             address(create2Deployer),
             protocolTreasury,
+            protocolAutomation,
             makeAddr("poolManager"),
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),
@@ -261,7 +263,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.mockCall(
             batcher.CHARM_FACTORY(),
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
-            abi.encode(address(new MockCharmVault(protocolTreasury)))
+            abi.encode(address(new MockCharmVault(protocolAutomation)))
         );
     }
 
@@ -305,8 +307,8 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         assertEq(MockOwnableTransfer(out.ajnaStrategy).owner(), protocolTreasury, "ajna adapter owner should be treasury");
         assertEq(
             MockAjnaVaultAuth(out.ajnaVaultAuth).admin(),
-            protocolTreasury,
-            "ajna auth admin should be treasury"
+            protocolAutomation,
+            "ajna auth admin should be protocol automation Safe"
         );
         assertEq(MockAjnaAdapter(out.ajnaStrategy).idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(MockOwnableTransfer(out.charmStrategy).owner(), protocolTreasury, "charm owner remains treasury");
@@ -352,7 +354,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         address v3Pool = MockUniswapV3Factory(batcher.uniswapV3Factory()).getPool(params.creatorToken, batcher.usdc(), 3000);
         ICharmFactory.VaultParams memory expectedVaultParams = ICharmFactory.VaultParams({
             pool: v3Pool,
-            manager: protocolTreasury,
+            manager: protocolAutomation,
             managerFee: CHARM_MANAGER_FEE_PIPS,
             rebalanceDelegate: params.owner,
             maxTotalSupply: type(uint256).max,
@@ -547,7 +549,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         vm.prank(ownerAddr);
         vm.expectRevert(
             abi.encodeWithSelector(
-                DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager
+                DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolAutomation, wrongManager
             )
         );
         batcher.deployPhase3Strategies(params, codeIds);

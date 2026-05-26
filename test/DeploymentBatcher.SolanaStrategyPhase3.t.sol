@@ -208,6 +208,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     MockOwnableTransferForPhase3 internal solanaStrategy;
 
     address internal protocolTreasury;
+    address internal protocolAutomation;
     address internal creatorToken;
     address internal solanaKeeper;
     address internal solanaBridge;
@@ -217,6 +218,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         vm.chainId(8453);
 
         protocolTreasury = makeAddr("protocolTreasury");
+        protocolAutomation = makeAddr("protocolAutomation");
         creatorToken = makeAddr("creatorToken");
         solanaKeeper = makeAddr("solanaKeeper");
         solanaBridge = makeAddr("solanaBridge");
@@ -256,6 +258,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             makeAddr("bytecodeStore"),
             address(create2Deployer),
             protocolTreasury,
+            protocolAutomation,
             makeAddr("poolManager"),
             makeAddr("taxHook"),
             makeAddr("chainlinkEthUsd"),
@@ -282,7 +285,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
-            abi.encode(address(new MockCharmVaultForPhase3(protocolTreasury)))
+            abi.encode(address(new MockCharmVaultForPhase3(protocolAutomation)))
         );
     }
 
@@ -350,7 +353,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
-        assertEq(ajnaAuth.admin(), protocolTreasury, "ajna auth admin should transfer to treasury");
+        assertEq(ajnaAuth.admin(), protocolAutomation, "ajna auth admin should transfer to automation Safe");
     }
 
     function test_deployPhase3Strategies_callsCharmFactoryWithExpectedManagerFeePips() public {
@@ -358,7 +361,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         address v3Pool = uniswapFactory.pool();
         ICharmFactory.VaultParams memory expectedVaultParams = ICharmFactory.VaultParams({
             pool: v3Pool,
-            manager: protocolTreasury,
+            manager: protocolAutomation,
             managerFee: CHARM_MANAGER_FEE_PIPS,
             rebalanceDelegate: params.owner,
             maxTotalSupply: type(uint256).max,
@@ -552,7 +555,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolTreasury, wrongManager)
+            abi.encodeWithSelector(DeploymentBatcher.CharmVaultManagerMismatch.selector, protocolAutomation, wrongManager)
         );
         batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }
