@@ -112,7 +112,8 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
+          expect(String(values[0] ?? '')).toBe('did:privy:test-user')
           return { rows: [{ id: 42 }] }
         }
 
@@ -120,8 +121,7 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
-          expect(String(values[0] ?? '')).toBe('did:privy:test-user')
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
           return { rows: [{ id: 42, app_access_status: 'approved', base_sub_account: null }] }
         }
 
@@ -209,7 +209,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
           return { rows: [{ id: 77 }] }
         }
 
@@ -217,7 +217,7 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
           // Legacy account: base_sub_account is null (no sub-account was ever set up).
           return { rows: [{ id: 77, app_access_status: 'approved', base_sub_account: null }] }
         }
@@ -270,6 +270,112 @@ describe('buildAccountsMePayload', () => {
       isDistinctFromCsw: false,
       registered: false,
     })
+  })
+
+  it('resolves execution track for merge-alias privy ids without a direct profiles.privy_user_id match', async () => {
+    const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
+    const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
+    const MERGE_ALIAS_PRIVY_ID = 'did:privy:merge-alias-only'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
+        const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+        if (query.includes('to_regclass')) {
+          return {
+            rows: [
+              {
+                has_accounts: true,
+                has_profiles: true,
+                has_account_linked_methods: true,
+                has_account_zora_signals: true,
+                has_canonical_csw_address: true,
+                has_referral_clicks: true,
+                has_referral_conversions: true,
+                has_points: true,
+                has_wallets: true,
+                has_profile_wallets: true,
+                has_app_access_status: true,
+                has_verifications: true,
+                has_profile_completed_at: true,
+                has_primary_smart_wallet: true,
+                has_primary_embedded_eoa: true,
+                has_privy_is_owner: true,
+                has_referral_status: true,
+                has_referral_qualified_at: true,
+                has_canonical_solana_wallet: true,
+                has_profile_wallets_canonical_solana: true,
+                has_profile_wallets_operational_solana: true,
+                has_profiles_referral_code: true,
+                has_profiles_referred_by_signup_id: true,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select email') && query.includes('from accounts')) {
+          return { rows: [{ email: 'alias@example.com', email_verified: true }] }
+        }
+
+        if (query.includes('from account_linked_methods')) return { rows: [] }
+
+        if (query.includes('from account_zora_signals')) {
+          return {
+            rows: [
+              {
+                zora_linked: false,
+                canonical_csw_address: CANONICAL_CSW,
+                creator_coin_address: null,
+                zora_handle: null,
+                last_resolved_at: null,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
+          expect(String(values[0] ?? '')).toBe(MERGE_ALIAS_PRIVY_ID)
+          return { rows: [{ id: 77 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
+        }
+
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
+          return { rows: [{ id: 77, app_access_status: 'approved', base_sub_account: null, csw_address: CANONICAL_CSW }] }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
+          return {
+            rows: [
+              {
+                profile_id: 77,
+                chain_id: 8453,
+                canonical_csw_address: CANONICAL_CSW,
+                canonical_source: 'wallet_sync',
+                privy_embedded_eoa_address: EMBEDDED_EOA,
+                privy_is_owner: true,
+                last_checked_at: new Date().toISOString(),
+                address: CANONICAL_CSW,
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const payload = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: MERGE_ALIAS_PRIVY_ID,
+      privyUser: null,
+    })
+
+    expect(payload.accountSignals.executionTrack).toBe('legacy-owner-install')
+    expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(true)
   })
 
   it('classifies an account as none-yet when a distinct sub-account is persisted but parent owner is not confirmed', async () => {
@@ -333,7 +439,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
           return { rows: [{ id: 88 }] }
         }
 
@@ -341,7 +447,7 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
           return {
             rows: [{ id: 88, app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
           }
@@ -457,7 +563,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
           return { rows: [{ id: 99 }] }
         }
 
@@ -465,7 +571,7 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
           return {
             rows: [{ id: 99, app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
           }
@@ -582,7 +688,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('privy_user_aliases') && query.includes('merged_into_profile_id')) {
           return { rows: [{ id: 4 }] }
         }
 
@@ -590,7 +696,7 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles') && query.includes('where id')) {
           return {
             rows: [{ id: 4, app_access_status: 'approved', base_sub_account: null }],
           }

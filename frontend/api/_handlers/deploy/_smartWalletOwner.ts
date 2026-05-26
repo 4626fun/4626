@@ -25,7 +25,14 @@ function getBaseRpcUrls(): string[] {
   return [...new Set(urls)]
 }
 
-const COINBASE_SMART_WALLET_OWNERS_ABI = [
+const COINBASE_SMART_WALLET_ABI = [
+  {
+    type: 'function',
+    name: 'isOwnerAddress',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
   { type: 'function', name: 'ownerCount', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'ownerAtIndex', stateMutability: 'view', inputs: [{ name: 'index', type: 'uint256' }], outputs: [{ type: 'bytes' }] },
   { type: 'function', name: 'nextOwnerIndex', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -87,42 +94,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         transport: http(rpc, { timeout: 10_000 }),
       })
 
-      const countRaw = (await client.readContract({
-        address: smartWallet as `0x${string}`,
-        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-        functionName: 'ownerCount',
-      })) as bigint
-      const count = Number(countRaw)
-      let upperBound = Number.isFinite(count) ? count : 0
-      try {
-        const nextRaw = (await client.readContract({
-          address: smartWallet as `0x${string}`,
-          abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-          functionName: 'nextOwnerIndex',
-        })) as bigint
-        const next = Number(nextRaw)
-        if (Number.isFinite(next) && next > 0) upperBound = next
-      } catch {
-        // ignore; fallback to ownerCount
-      }
-      const maxScan = Math.min(upperBound, 128)
-      const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress as `0x${string}`])).toLowerCase()
       let isOwner = false
-      for (let i = 0; i < maxScan; i++) {
-        let ownerBytes: string
-        try {
-          ownerBytes = (await client.readContract({
+      try {
+        isOwner = Boolean(
+          await client.readContract({
             address: smartWallet as `0x${string}`,
-            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-            functionName: 'ownerAtIndex',
-            args: [BigInt(i)],
-          })) as string
+            abi: COINBASE_SMART_WALLET_ABI,
+            functionName: 'isOwnerAddress',
+            args: [ownerAddress as `0x${string}`],
+          }),
+        )
+      } catch {
+        const countRaw = (await client.readContract({
+          address: smartWallet as `0x${string}`,
+          abi: COINBASE_SMART_WALLET_ABI,
+          functionName: 'ownerCount',
+        })) as bigint
+        const count = Number(countRaw)
+        let upperBound = Number.isFinite(count) ? count : 0
+        try {
+          const nextRaw = (await client.readContract({
+            address: smartWallet as `0x${string}`,
+            abi: COINBASE_SMART_WALLET_ABI,
+            functionName: 'nextOwnerIndex',
+          })) as bigint
+          const next = Number(nextRaw)
+          if (Number.isFinite(next) && next > 0) upperBound = next
         } catch {
-          continue
+          // ignore; fallback to ownerCount
         }
-        if (String(ownerBytes).toLowerCase() === expected) {
-          isOwner = true
-          break
+        const maxScan = Math.min(upperBound, 128)
+        const expected = String(encodeAbiParameters([{ type: 'address' }], [ownerAddress as `0x${string}`])).toLowerCase()
+        for (let i = 0; i < maxScan; i++) {
+          let ownerBytes: string
+          try {
+            ownerBytes = (await client.readContract({
+              address: smartWallet as `0x${string}`,
+              abi: COINBASE_SMART_WALLET_ABI,
+              functionName: 'ownerAtIndex',
+              args: [BigInt(i)],
+            })) as string
+          } catch {
+            continue
+          }
+          if (String(ownerBytes).toLowerCase() === expected) {
+            isOwner = true
+            break
+          }
         }
       }
 

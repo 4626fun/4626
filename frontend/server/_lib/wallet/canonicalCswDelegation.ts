@@ -23,6 +23,7 @@ import {
 } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
 import { resolveStoredCanonicalCswAddress } from './canonicalCswPersistence.js'
+import { resolvePrimaryProfileIdForPrivyUser } from '../identity/profileIdForPrivyUser.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -144,15 +145,7 @@ function createBasePublicClient(rpcUrl: string) {
 }
 
 async function readProfileIdByPrivyUserId(db: Db, privyUserId: string): Promise<number | null> {
-  const result = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE privy_user_id = ${privyUserId}
-    LIMIT 1;
-  `
-  const idRaw = result.rows?.[0]?.id
-  const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
-  return Number.isFinite(id) && id > 0 ? id : null
+  return resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
 }
 
 async function readProfileIdByEmail(db: Db, email: string): Promise<number | null> {

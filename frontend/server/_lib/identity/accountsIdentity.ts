@@ -20,6 +20,10 @@ import {
 } from '../wallet/executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
+import {
+  listProfileIdsForPrivyUser,
+  resolvePrimaryProfileIdForPrivyUser,
+} from './profileIdForPrivyUser.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -474,45 +478,6 @@ export async function removeLinkedMethod(params: {
   `
 }
 
-async function listProfileIdsForPrivyUser(db: Db, privyUserId: string): Promise<number[]> {
-  // Resolver cascade:
-  //   1. `privy_user_aliases` is the post-merge authoritative mapping.
-  //   2. Direct `profiles.privy_user_id` catches rows from envs that
-  //      haven't run the alias migration yet.
-  //   3. Tombstoned rows (merged_into_profile_id IS NOT NULL) are chased
-  //      through to their canonical target so a stale alias pointing at a
-  //      tombstone still returns the correct live profile.
-  const rows = await db.sql`
-    WITH direct AS (
-      SELECT p.id, p.merged_into_profile_id, p.updated_at, p.created_at
-      FROM profiles p
-      WHERE p.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
-         OR p.privy_user_id = ${privyUserId}
-    ),
-    resolved AS (
-      SELECT p2.id, p2.updated_at, p2.created_at
-      FROM direct d
-      JOIN profiles p2
-        ON p2.id = COALESCE(d.merged_into_profile_id, d.id)
-      WHERE p2.merged_into_profile_id IS NULL
-    )
-    SELECT DISTINCT id, updated_at, created_at FROM resolved
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
-  `
-  const ids: number[] = []
-  const seen = new Set<number>()
-  for (const row of rows.rows ?? []) {
-    const idRaw = row?.id
-    const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
-    if (!Number.isFinite(id) || id <= 0) continue
-    const floored = Math.floor(id)
-    if (seen.has(floored)) continue
-    seen.add(floored)
-    ids.push(floored)
-  }
-  return ids
-}
-
 async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId: string): Promise<number> {
   const existing = await listProfileIdsForPrivyUser(db, privyUserId)
   if (existing.length > 0) return existing[0]
@@ -936,13 +901,15 @@ export async function buildAccountsMePayload(params: {
     LIMIT 1;
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
-  const profileStatusResult = await db.sql`
-    SELECT id, app_access_status, base_sub_account, csw_address
-    FROM profiles
-    WHERE privy_user_id = ${privyUserId}
-    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
-    LIMIT 1;
-  `
+  const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
+  const profileStatusResult = profileId
+    ? await db.sql`
+        SELECT id, app_access_status, base_sub_account, csw_address
+        FROM profiles
+        WHERE id = ${profileId}
+        LIMIT 1;
+      `
+    : { rows: [] }
   const profileStatusRow = profileStatusResult.rows?.[0] ?? null
   const dbMethods = await readLinkedMethods(db, privyUserId)
   const derivedMethods = privyUser ? deriveLinkedMethodsFromPrivyUser(privyUser) : {}
