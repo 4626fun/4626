@@ -128,8 +128,9 @@ async function assertProtocolTreasurySafeOwner(params: {
   }
 }
 
-export async function executeCharmRebalanceViaProtocolTreasurySafe(params: {
-  charmVaultAddress: Address;
+async function executeViaProtocolTreasurySafe(params: {
+  to: Address;
+  data: Hex;
 }): Promise<{ txHash: `0x${string}`; safeAddress: Address; signerAddress: Address }> {
   const privateKey = resolveProtocolTreasurySafeOwnerPrivateKey();
   if (!privateKey) {
@@ -139,11 +140,6 @@ export async function executeCharmRebalanceViaProtocolTreasurySafe(params: {
   const rpcUrl = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org';
   const safeAddress = resolveProtocolTreasuryAddress();
   const signerAddress = getAddress(privateKeyToAccount(privateKey).address);
-  const rebalanceCalldata = encodeFunctionData({
-    abi: CHARM_REBALANCE_ABI,
-    functionName: 'rebalance',
-    args: [],
-  }) as Hex;
 
   await assertProtocolTreasurySafeOwner({ safeAddress, ownerAddress: signerAddress });
 
@@ -156,9 +152,9 @@ export async function executeCharmRebalanceViaProtocolTreasurySafe(params: {
   const safeTransaction = await protocolKit.createTransaction({
     transactions: [
       {
-        to: params.charmVaultAddress,
+        to: params.to,
         value: '0',
-        data: rebalanceCalldata,
+        data: params.data,
         operation: OperationType.Call,
       },
     ],
@@ -180,4 +176,15 @@ export async function executeCharmRebalanceViaProtocolTreasurySafe(params: {
   }
 
   return { txHash, safeAddress, signerAddress };
+}
+
+export async function executeCharmRebalanceViaProtocolTreasurySafe(params: {
+  charmVaultAddress: Address;
+}): Promise<{ txHash: `0x${string}`; safeAddress: Address; signerAddress: Address }> {
+  const data = encodeFunctionData({
+    abi: CHARM_REBALANCE_ABI,
+    functionName: 'rebalance',
+    args: [],
+  }) as Hex;
+  return executeViaProtocolTreasurySafe({ to: params.charmVaultAddress, data });
 }

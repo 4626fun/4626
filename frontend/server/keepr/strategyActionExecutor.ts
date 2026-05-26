@@ -30,7 +30,8 @@ import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
 import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
 import {
   executeViaProtocolTreasurySafe,
-  isProtocolTreasuryManager,
+  readCharmVaultAuthSnapshot,
+  resolveCharmKeeperAuthorization,
   isSameAddress,
 } from '../_lib/wallet/protocolTreasurySafe.js'
 
@@ -65,17 +66,6 @@ const AJNA_VAULT_AUTH_VIEW_ABI = [
 
 const CHARM_VAULT_ADMIN_ABI = [
   { type: 'function', name: 'rebalance', stateMutability: 'nonpayable', inputs: [], outputs: [] },
-] as const
-
-const CHARM_VAULT_AUTH_VIEW_ABI = [
-  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  {
-    type: 'function',
-    name: 'rebalanceDelegate',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'address' }],
-  },
 ] as const
 
 export type StrategyQueueAgentRow = {
@@ -484,29 +474,11 @@ export async function executeStrategyAction(
   }
 
   const keeperAddress = normalizeAddress(account.address, 'keeperAddress')
-  const [managerRaw, delegateRaw] = (await Promise.all([
-    publicClient
-      .readContract({
-        address: charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'manager',
-      })
-      .catch(() => null),
-    publicClient
-      .readContract({
-        address: charmVaultAddress,
-        abi: CHARM_VAULT_AUTH_VIEW_ABI,
-        functionName: 'rebalanceDelegate',
-      })
-      .catch(() => null),
-  ])) as [unknown, unknown]
-
-  const managerAddress = isAddressLike(managerRaw) ? normalizeAddress(managerRaw, 'manager') : null
-  const delegateAddress = isAddressLike(delegateRaw) ? normalizeAddress(delegateRaw, 'rebalanceDelegate') : null
-  const rowCswAddress =
-    options?.queueRow?.cswAddress && isAddressLike(options.queueRow.cswAddress)
-      ? normalizeAddress(options.queueRow.cswAddress, 'cswAddress')
-      : null
+  const authSnapshot = await readCharmVaultAuthSnapshot({ publicClient, charmVaultAddress })
+  const authorization = resolveCharmKeeperAuthorization({ snapshot: authSnapshot, keeperAddress })
+  if (!authorization.authorized) {
+    throw new KeeprStrategyError(authorization.reason, false)
+  }
 
   const rebalanceCalldata = encodeFunctionData({
     abi: CHARM_VAULT_ADMIN_ABI as unknown as Abi,
@@ -514,7 +486,7 @@ export async function executeStrategyAction(
     args: [],
   })
 
-  if (isProtocolTreasuryManager(managerAddress)) {
+  if (authorization.lane === 'protocol_treasury_manager') {
     try {
       const viaSafe = await executeViaProtocolTreasurySafe({
         publicClient,
@@ -533,7 +505,7 @@ export async function executeStrategyAction(
       const message = err instanceof Error ? err.message : String(err)
       logger.warn('[keepr/strategy] charm rebalance treasury Safe path failed', {
         charmVaultAddress,
-        managerAddress,
+        managerAddress: authSnapshot.managerAddress,
         error: message,
       })
       if (message.startsWith('protocol_treasury_safe_owner_key_missing')) {
@@ -549,49 +521,8 @@ export async function executeStrategyAction(
     }
   }
 
-  const cswCandidates = Array.from(
-    new Set(
-      [rowCswAddress, delegateAddress].filter(
-        (addr): addr is `0x${string}` => Boolean(addr && addr !== ZERO_ADDRESS && addr !== keeperAddress),
-      ),
-    ),
-  )
-
-  let lastUserOpError: unknown = null
-  let retryableUserOpError: unknown = null
-  for (const cswAddress of cswCandidates) {
-    try {
-      const viaUserOp = await executeCharmRebalanceViaCswUserOperation({
-        publicClient,
-        ownerAccount: account,
-        charmVaultAddress,
-        cswAddress,
-      })
-      return {
-        txHash: viaUserOp.txHash,
-        userOpHash: viaUserOp.userOpHash,
-        sender: viaUserOp.smartWallet,
-        ownerIndex: viaUserOp.ownerIndex,
-        mode: 'erc4337_paymaster',
-        charmVaultAddress,
-      }
-    } catch (err) {
-      lastUserOpError = err
-      const message = err instanceof Error ? err.message : String(err)
-      const retryable = err instanceof KeeprStrategyError ? err.retryable : isLikelyRetryableRpcError(message)
-      if (!retryableUserOpError && retryable) {
-        retryableUserOpError = err
-      }
-      logger.warn('[keepr/strategy] charm rebalance userop path failed', {
-        charmVaultAddress,
-        cswAddress,
-        error: message,
-      })
-    }
-  }
-
+  const delegateAddress = authSnapshot.delegateAddress
   const keeperCanDirectlyRebalance = Boolean(delegateAddress && isSameAddress(delegateAddress, keeperAddress))
-
   if (keeperCanDirectlyRebalance) {
     const txHash = await walletClient.writeContract({
       address: charmVaultAddress,
@@ -612,18 +543,42 @@ export async function executeStrategyAction(
     }
   }
 
-  if (retryableUserOpError instanceof KeeprStrategyError) throw retryableUserOpError
-  if (retryableUserOpError) {
-    const msg =
-      retryableUserOpError instanceof Error ? retryableUserOpError.message : String(retryableUserOpError)
-    throw new KeeprStrategyError(`charm_rebalance_userop_failed:${msg}`, true)
+  const cswAddress =
+    delegateAddress && delegateAddress !== ZERO_ADDRESS && delegateAddress !== keeperAddress
+      ? delegateAddress
+      : null
+  if (!cswAddress) {
+    throw new KeeprStrategyError('charm_rebalance_not_authorized_for_keeper', false)
   }
-  if (lastUserOpError instanceof KeeprStrategyError) throw lastUserOpError
-  if (lastUserOpError) {
-    const msg = lastUserOpError instanceof Error ? lastUserOpError.message : String(lastUserOpError)
-    throw new KeeprStrategyError(`charm_rebalance_userop_failed:${msg}`, isLikelyRetryableRpcError(msg))
+
+  try {
+    const viaUserOp = await executeCharmRebalanceViaCswUserOperation({
+      publicClient,
+      ownerAccount: account,
+      charmVaultAddress,
+      cswAddress,
+    })
+    return {
+      txHash: viaUserOp.txHash,
+      userOpHash: viaUserOp.userOpHash,
+      sender: viaUserOp.smartWallet,
+      ownerIndex: viaUserOp.ownerIndex,
+      mode: 'erc4337_paymaster',
+      charmVaultAddress,
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.warn('[keepr/strategy] charm rebalance userop path failed', {
+      charmVaultAddress,
+      cswAddress,
+      error: message,
+    })
+    if (err instanceof KeeprStrategyError) throw err
+    throw new KeeprStrategyError(
+      `charm_rebalance_userop_failed:${message}`,
+      isLikelyRetryableRpcError(message),
+    )
   }
-  throw new KeeprStrategyError('charm_rebalance_not_authorized_for_keeper', false)
 }
 
 export async function executeKeeprStrategyAction(

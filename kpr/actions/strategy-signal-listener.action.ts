@@ -57,7 +57,7 @@ import {
   setPoolLastProcessedBlock,
   type StrategyEventState,
 } from '../utils/strategy-event-state.js';
-import { resolveCharmAutomationAuthorization } from '../utils/protocolTreasurySafe.js';
+import { readCharmVaultAuthSnapshot, resolveCharmKeeperAuthorization } from '../utils/charmVaultAuth.js';
 
 const WORKFLOW_NAME = 'strategy-signal-listener';
 
@@ -75,13 +75,6 @@ const UNISWAP_V3_POOL_SWAP_EVENT_ABI = [
       { name: 'tick', type: 'int24', indexed: false },
     ],
   },
-] as const;
-
-const CHARM_VAULT_VIEW_ABI = [
-  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'rebalanceDelegate', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'keeper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const;
 
 interface ListenerConfig {
@@ -577,34 +570,9 @@ async function evaluateCharmForVault(params: {
       continue;
     }
 
-    const [managerRaw, delegateRaw, charmKeeperRaw, charmOwnerRaw] = await Promise.all([
-      readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'manager',
-      }).catch(() => null),
-      readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'rebalanceDelegate',
-      }).catch(() => null),
-      readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'keeper',
-      }).catch(() => null),
-      readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'owner',
-      }).catch(() => null),
-    ]);
-
-    const authorization = resolveCharmAutomationAuthorization({
-      managerAddress: asAddress(managerRaw),
-      delegateAddress: asAddress(delegateRaw),
-      charmKeeper: asAddress(charmKeeperRaw),
-      charmOwner: asAddress(charmOwnerRaw),
+    const authSnapshot = await readCharmVaultAuthSnapshot(strategy.charmVaultAddress);
+    const authorization = resolveCharmKeeperAuthorization({
+      snapshot: authSnapshot,
       keeperAddress,
     });
     if (!authorization.authorized) {
@@ -699,6 +667,7 @@ async function evaluateCharmForVault(params: {
       pool: watched.poolAddress,
       vault: watched.vaultAddress,
       strategy: strategy.strategyAddress,
+      lane: authorization.lane,
       computedDeviationBps: deviationBps,
       dedupeKey,
       actionId: enqueuedResult.id,

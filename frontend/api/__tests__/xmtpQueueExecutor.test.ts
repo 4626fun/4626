@@ -113,17 +113,15 @@ vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
 const PROTOCOL_TREASURY = '0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'
 const DELEGATE_CSW = '0x7777777777777777777777777777777777777777'
 
-vi.mock('../../server/_lib/wallet/protocolTreasurySafe.js', () => ({
-  executeViaProtocolTreasurySafe: vi.fn(),
-  isProtocolTreasuryManager: vi.fn((manager: string | null | undefined) =>
-    Boolean(manager && manager.toLowerCase() === PROTOCOL_TREASURY.toLowerCase()),
-  ),
-  isSameAddress: vi.fn(
-    (a: string | null | undefined, b: string | null | undefined) =>
-      Boolean(a && b && a.toLowerCase() === b.toLowerCase()),
-  ),
-  resolveProtocolTreasuryAddress: vi.fn(() => PROTOCOL_TREASURY),
-}))
+vi.mock('../../server/_lib/wallet/protocolTreasurySafe.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/wallet/protocolTreasurySafe.js')>(
+    '../../server/_lib/wallet/protocolTreasurySafe.js',
+  )
+  return {
+    ...actual,
+    executeViaProtocolTreasurySafe: vi.fn(),
+  }
+})
 
 vi.mock('viem/chains', () => ({
   base: { id: 8453 },
@@ -691,7 +689,7 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     )
   })
 
-  it('keeps Charm fallback retryable when an earlier CSW candidate failed retryably and a later one failed permanently', async () => {
+  it('surfaces retryable Charm userop failures for legacy delegate CSW paths', async () => {
     process.env.KPR_PRIVATE_KEY =
       '0x1111111111111111111111111111111111111111111111111111111111111111'
     mocks.privateKeyToAccount.mockReturnValue({
@@ -716,11 +714,12 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
       if (functionName === 'manager') return '0x6666666666666666666666666666666666666666'
       if (functionName === 'rebalanceDelegate') return DELEGATE_CSW
+      if (functionName === 'keeper' || functionName === 'owner') return null
       throw new Error(`Unexpected readContract call: ${functionName}`)
     })
-    mocks.findCoinbaseSmartWalletOwnerIndex
-      .mockRejectedValueOnce(buildHelperError('csw_owner_scan_incomplete', true))
-      .mockResolvedValueOnce(null)
+    mocks.findCoinbaseSmartWalletOwnerIndex.mockRejectedValueOnce(
+      buildHelperError('csw_owner_scan_incomplete', true),
+    )
 
     const result = await executeKeeprAction({
       id: 12,
@@ -737,14 +736,8 @@ describe('xmtp queue executor Ajna canonical automation', () => {
     expect(result.retryable).toBe(true)
     expect(result.actionType).toBe('strategy.charm.rebalance')
     expect(result.error).toBe('csw_owner_scan_incomplete')
-    expect(mocks.findCoinbaseSmartWalletOwnerIndex).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        smartWallet: CANONICAL_CSW,
-      }),
-    )
-    expect(mocks.findCoinbaseSmartWalletOwnerIndex).toHaveBeenNthCalledWith(
-      2,
+    expect(mocks.findCoinbaseSmartWalletOwnerIndex).toHaveBeenCalledTimes(1)
+    expect(mocks.findCoinbaseSmartWalletOwnerIndex).toHaveBeenCalledWith(
       expect.objectContaining({
         smartWallet: DELEGATE_CSW,
       }),

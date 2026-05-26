@@ -24,9 +24,8 @@ import {
 import { getKeeperAddress, readContract, writeContract, type WriteResult } from '../utils/onchain.js';
 import {
   executeCharmRebalanceViaProtocolTreasurySafe,
-  isProtocolTreasuryManager,
-  resolveCharmAutomationAuthorization,
 } from '../utils/protocolTreasurySafe.js';
+import { readCharmVaultAuthSnapshot, resolveCharmKeeperAuthorization } from '../utils/charmVaultAuth.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
 
@@ -60,10 +59,6 @@ const CHARM_STRATEGY_VIEW_ABI = [
 const CHARM_VAULT_VIEW_ABI = [
   { type: 'function', name: 'baseLower', stateMutability: 'view', inputs: [], outputs: [{ type: 'int24' }] },
   { type: 'function', name: 'baseUpper', stateMutability: 'view', inputs: [], outputs: [{ type: 'int24' }] },
-  { type: 'function', name: 'keeper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
-  { type: 'function', name: 'rebalanceDelegate', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const;
 
 const CHARM_VAULT_ADMIN_ABI = [
@@ -449,22 +444,29 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
         continue;
       }
 
-      const [managerRaw, delegateRaw] = await Promise.all([
-        readContract<unknown>({
-          address: strategy.charmVaultAddress,
-          abi: CHARM_VAULT_VIEW_ABI,
-          functionName: 'manager',
-        }).catch(() => null),
-        readContract<unknown>({
-          address: strategy.charmVaultAddress,
-          abi: CHARM_VAULT_VIEW_ABI,
-          functionName: 'rebalanceDelegate',
-        }).catch(() => null),
-      ]);
-      const managerAddress = asAddress(managerRaw);
-      const delegateAddress = asAddress(delegateRaw);
+      const authSnapshot = await readCharmVaultAuthSnapshot(strategy.charmVaultAddress);
+      const authorization = resolveCharmKeeperAuthorization({
+        snapshot: authSnapshot,
+        keeperAddress,
+      });
+      if (!authorization.authorized) {
+        batch.processed += 1;
+        batch.skipped += 1;
+        batch.results.push({
+          vaultAddress: vault.vaultAddress,
+          strategyAddress: strategy.strategyAddress,
+          charmVaultAddress: strategy.charmVaultAddress,
+          oracleAddress: vault.oracleAddress,
+          oracleTickNormalized: oracleContext.normalizedTick,
+          charmCenterTickNormalized: rangeContext.centerTickNormalized,
+          priceChangeBps,
+          rebalanced: false,
+          skippedReason: authorization.reason,
+        });
+        continue;
+      }
 
-      if (isProtocolTreasuryManager(managerAddress)) {
+      if (authorization.lane === 'protocol_treasury_manager') {
         try {
           const viaSafe = await executeCharmRebalanceViaProtocolTreasurySafe({
             charmVaultAddress: strategy.charmVaultAddress,
@@ -482,7 +484,6 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
             rebalanced: true,
             txHash: viaSafe.txHash,
           });
-          continue;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           batch.processed += 1;
@@ -498,43 +499,7 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
             rebalanced: false,
             error: message,
           });
-          continue;
         }
-      }
-
-      const [charmKeeperRaw, charmOwnerRaw] = await Promise.all([
-        readContract<unknown>({
-          address: strategy.charmVaultAddress,
-          abi: CHARM_VAULT_VIEW_ABI,
-          functionName: 'keeper',
-        }).catch(() => null),
-        readContract<unknown>({
-          address: strategy.charmVaultAddress,
-          abi: CHARM_VAULT_VIEW_ABI,
-          functionName: 'owner',
-        }).catch(() => null),
-      ]);
-      const authorization = resolveCharmAutomationAuthorization({
-        managerAddress,
-        delegateAddress,
-        charmKeeper: asAddress(charmKeeperRaw),
-        charmOwner: asAddress(charmOwnerRaw),
-        keeperAddress,
-      });
-      if (!authorization.authorized) {
-        batch.processed += 1;
-        batch.skipped += 1;
-        batch.results.push({
-          vaultAddress: vault.vaultAddress,
-          strategyAddress: strategy.strategyAddress,
-          charmVaultAddress: strategy.charmVaultAddress,
-          oracleAddress: vault.oracleAddress,
-          oracleTickNormalized: oracleContext.normalizedTick,
-          charmCenterTickNormalized: rangeContext.centerTickNormalized,
-          priceChangeBps,
-          rebalanced: false,
-          skippedReason: authorization.reason,
-        });
         continue;
       }
 

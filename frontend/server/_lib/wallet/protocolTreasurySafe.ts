@@ -1,17 +1,11 @@
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
-import { getAddress, type Address, type Hex } from 'viem'
+import { getAddress, isAddress, type Address, type Hex } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 
 import { getApiContracts } from '../onchain/contracts.js'
 
 declare const process: { env: Record<string, string | undefined> }
-
-/** Documented owners on the 1-of-2 protocol treasury Safe (reference only). */
-export const PROTOCOL_TREASURY_SAFE_OWNER_ADDRESSES = [
-  '0xab6d5c10b03300326cd7fab7267ae192842967b5',
-  '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
-] as const
 
 const GNOSIS_SAFE_ABI = [
   {
@@ -21,6 +15,19 @@ const GNOSIS_SAFE_ABI = [
     inputs: [],
     outputs: [{ type: 'address[]' }],
   },
+] as const
+
+const CHARM_VAULT_AUTH_ABI = [
+  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  {
+    type: 'function',
+    name: 'rebalanceDelegate',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  { type: 'function', name: 'keeper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const
 
 export function resolveProtocolTreasuryAddress(): Address {
@@ -89,6 +96,81 @@ export function resolveCharmAutomationAuthorization(params: {
   }
 
   return { authorized: true, lane: 'keeper_direct' }
+}
+
+export type CharmVaultAuthSnapshot = {
+  managerAddress: Address | null
+  delegateAddress: Address | null
+  charmKeeper: Address | null
+  charmOwner: Address | null
+}
+
+function asAddress(value: unknown): Address | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null
+  return getAddress(value)
+}
+
+type CharmAuthReader = {
+  readContract: (args: {
+    address: Address
+    abi: typeof CHARM_VAULT_AUTH_ABI
+    functionName: 'manager' | 'rebalanceDelegate' | 'keeper' | 'owner'
+  }) => Promise<unknown>
+}
+
+async function readAuthField(
+  publicClient: CharmAuthReader,
+  charmVaultAddress: Address,
+  functionName: 'manager' | 'rebalanceDelegate' | 'keeper' | 'owner',
+): Promise<unknown> {
+  try {
+    return await publicClient.readContract({
+      address: charmVaultAddress,
+      abi: CHARM_VAULT_AUTH_ABI,
+      functionName,
+    })
+  } catch {
+    return null
+  }
+}
+
+/** Reads on-chain Charm auth slots; skips keeper/owner when manager is protocol treasury. */
+export async function readCharmVaultAuthSnapshot(params: {
+  publicClient: CharmAuthReader
+  charmVaultAddress: Address
+}): Promise<CharmVaultAuthSnapshot> {
+  const [managerRaw, delegateRaw] = await Promise.all([
+    readAuthField(params.publicClient, params.charmVaultAddress, 'manager'),
+    readAuthField(params.publicClient, params.charmVaultAddress, 'rebalanceDelegate'),
+  ])
+  const managerAddress = asAddress(managerRaw)
+  const delegateAddress = asAddress(delegateRaw)
+
+  if (isProtocolTreasuryManager(managerAddress)) {
+    return { managerAddress, delegateAddress, charmKeeper: null, charmOwner: null }
+  }
+
+  const [charmKeeperRaw, charmOwnerRaw] = await Promise.all([
+    readAuthField(params.publicClient, params.charmVaultAddress, 'keeper'),
+    readAuthField(params.publicClient, params.charmVaultAddress, 'owner'),
+  ])
+
+  return {
+    managerAddress,
+    delegateAddress,
+    charmKeeper: asAddress(charmKeeperRaw),
+    charmOwner: asAddress(charmOwnerRaw),
+  }
+}
+
+export function resolveCharmKeeperAuthorization(params: {
+  snapshot: CharmVaultAuthSnapshot
+  keeperAddress: Address
+}): CharmAutomationAuthorization {
+  return resolveCharmAutomationAuthorization({
+    ...params.snapshot,
+    keeperAddress: params.keeperAddress,
+  })
 }
 
 async function assertProtocolTreasurySafeOwner(params: {
