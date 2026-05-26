@@ -27,6 +27,7 @@ Also verify:
 | Check | Command / URL |
 |-------|----------------|
 | Batcher OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` → hub + EID `30168` + `true` |
+| Pipe A batcher readiness | `pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts` → exit 0 |
 | Provisioner | `curl -H "Authorization: Bearer $SECRET" https://provisioner.4626.fun/healthz` → `ok: true`, payer healthy |
 | Orchestrator | `curl https://orchestrator.4626.fun/healthz` → `ok: true` |
 | Release target | `bash test/current-release-target-guard.sh` |
@@ -71,9 +72,17 @@ SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 2. **50M+** creator tokens for vault deposit  
 3. Wallet **execution-ready** (parent CSW + embedded owner, or EOA track)  
 4. Paid features at `/creator/strategy/features`:
-   - At least one Phase 3 strategy (`charm_active_lp`, `ajna_sleeve`, or `solana_bridge_strategy`)
+   - At least one Phase 3 strategy (`charm_active_lp` or `ajna_sleeve`)
    - `solana_ovault_mesh` if Solana mesh is wanted  
 5. Optional: fork dry-run — `pnpm -C frontend run dev:deploy-dry-run`
+
+Pipe A (30% ShareOFT auto-bridge at finalize) additionally requires a **Pipe-A-ready batcher** — see [batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md):
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+```
+
+Expect `readyForPipeAFinalizeBridge: true`. The deprecated `solana_bridge_strategy` Phase-3 TVL lane is removed; Solana share seeding happens in Phase 2 finalize instead.
 
 ## Deploy session checklist
 
@@ -99,6 +108,11 @@ Redeploy Vercel; restart orchestrator on Vultr.
 # Safe batcher config proposals (dry-run, then --propose)
 pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts
 
+# Read-only Pipe A readiness gate
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+
 # Execute queued Safe txs (1-of-N threshold met)
 pnpm -C frontend exec tsx scripts/ops/execute-pending-safe-txs.ts <safeTxHash>...
 ```
+
+Cutover runbook: [deployment/batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md).

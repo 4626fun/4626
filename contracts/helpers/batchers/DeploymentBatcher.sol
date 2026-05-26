@@ -1128,6 +1128,7 @@ contract DeploymentBatcher is ReentrancyGuard {
     error InvalidTickSpacing();
     error InvalidPoolCurrencies();
     error InvalidRolePolicyManager();
+    error InvalidPhase2Module();
 
     ICreatorRegistry public immutable registry;
     IUniversalBytecodeStore public immutable bytecodeStore;
@@ -1947,6 +1948,16 @@ contract DeploymentBatcher is ReentrancyGuard {
      */
     function setSolanaShareOftPeer(bytes32 _peer) external onlyProtocolTreasury {
         solanaShareOftPeer = _peer;
+    }
+
+    /**
+     * @notice Hot-swap the Phase 2 delegatecall module after deploying a replacement `DeploymentBatcherPhase2Module`.
+     * @dev The replacement module must declare this batcher as its immutable `batcher` context.
+     */
+    function setPhase2Module(address _phase2Module) external onlyProtocolTreasury {
+        if (_phase2Module == address(0)) revert ZeroAddress();
+        if (DeploymentBatcherPhase2Module(_phase2Module).batcher() != address(this)) revert InvalidPhase2Module();
+        phase2Module = DeploymentBatcherPhase2Module(_phase2Module);
     }
 
     /**

@@ -2,6 +2,7 @@ import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 
 import {
   decodeFunctionData,
+  encodeFunctionData,
   encodePacked,
   getAddress,
   isAddress,
@@ -375,6 +376,14 @@ export function decodeFinalizePhase2Call(data: Hex): {
     }
   }
   return null
+}
+
+export function buildFinalizePhase2CallData(params: FinalizePhase2Params): Hex {
+  return encodeFunctionData({
+    abi: FINALIZE_PHASE2_ABI,
+    functionName: 'finalizePhase2',
+    args: [params],
+  })
 }
 
 function readOvaultRuntime(value: unknown): { enabled: boolean; solanaEid: number } {

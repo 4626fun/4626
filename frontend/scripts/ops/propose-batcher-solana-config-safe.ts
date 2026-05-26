@@ -47,6 +47,16 @@ const SET_OVAULT_RUNTIME_CONFIG_ABI = [
   },
 ] as const
 
+const SET_SOLANA_SHARE_OFT_PEER_ABI = [
+  {
+    type: 'function',
+    name: 'setSolanaShareOftPeer',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_peer', type: 'bytes32' }],
+    outputs: [],
+  },
+] as const
+
 type ProposalSpec = {
   label: string
   to: Address
@@ -70,6 +80,9 @@ Options:
   --safe-api-key <key>       Safe API key (default: SAFE_API_KEY env)
   --include-ovault-runtime   Also propose setOVaultRuntimeConfig(...)
   --no-ovault-runtime        Force skipping OVault runtime proposal
+  --include-share-oft-peer   Also propose setSolanaShareOftPeer(...)
+  --only-share-oft-peer      Propose only setSolanaShareOftPeer
+  --share-oft-peer <bytes32> Default ShareOFT mesh peer (default: SOLANA_SHARE_OFT_PEER)
   --ovault-hub-composer <a>  OVault hub composer (default: OVAULT_HUB_COMPOSER)
   --ovault-solana-eid <n>    OVault Solana EID (default: OVAULT_SOLANA_EID)
   --ovault-enabled <bool>    OVault runtime enabled flag (default: true)
@@ -159,6 +172,14 @@ function buildSetOVaultRuntimeCalldata(
     abi: SET_OVAULT_RUNTIME_CONFIG_ABI,
     functionName: 'setOVaultRuntimeConfig',
     args: [hubComposer, solanaEid, enabled],
+  })
+}
+
+function buildSetSolanaShareOftPeerCalldata(peer: `0x${string}`): `0x${string}` {
+  return encodeFunctionData({
+    abi: SET_SOLANA_SHARE_OFT_PEER_ABI,
+    functionName: 'setSolanaShareOftPeer',
+    args: [peer],
   })
 }
 
@@ -270,7 +291,7 @@ async function main() {
     throw new Error(`Deprecated batcher alias is blocked. ${deploymentBatcherNotConfiguredMessage(batcher)}`)
   }
 
-  const includeSolanaConfig = hasFlag('--only-ovault-runtime')
+  const includeSolanaConfig = hasFlag('--only-ovault-runtime') || hasFlag('--only-share-oft-peer')
     ? false
     : hasFlag('--no-solana-config')
       ? false
@@ -312,6 +333,15 @@ async function main() {
     : hasFlag('--no-ovault-runtime')
       ? false
       : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
+  const includeShareOftPeer = hasFlag('--only-share-oft-peer')
+    ? true
+    : hasFlag('--include-share-oft-peer')
+      ? true
+      : parseBool(process.env.CONFIGURE_SOLANA_SHARE_OFT_PEER || '', false)
+  const shareOftPeerRaw = getArg('--share-oft-peer', process.env.SOLANA_SHARE_OFT_PEER || '')
+  if (includeShareOftPeer) {
+    assertBytes32(shareOftPeerRaw)
+  }
   if (includeOvaultRuntime) {
     const canonicalOvaultBatcher = getAddress(SPLIT_PHASE1_DEPLOYMENT_BATCHER)
     if (batcher.toLowerCase() !== canonicalOvaultBatcher.toLowerCase()) {
@@ -356,6 +386,13 @@ async function main() {
       })
     }
   }
+  if (includeShareOftPeer) {
+    proposals.push({
+      label: 'setSolanaShareOftPeer',
+      to: batcher,
+      data: buildSetSolanaShareOftPeerCalldata(assertBytes32(shareOftPeerRaw)),
+    })
+  }
 
   if (proposals.length === 0) {
     throw new Error('No proposals selected. Enable at least one operation.')
@@ -372,7 +409,9 @@ async function main() {
         destination: includeSolanaConfig ? assertBytes32(destination) : null,
         includeSolanaConfig,
         includeOvaultRuntime,
+        includeShareOftPeer,
         ovaultEnabled,
+        shareOftPeer: includeShareOftPeer ? assertBytes32(shareOftPeerRaw) : null,
         safeServiceUrl,
         txServiceApiBase,
         safeApiKeyConfigured: safeApiKey.length > 0,

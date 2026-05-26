@@ -64,7 +64,11 @@ import {
 } from '@/config/contracts.defaults'
 import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
 import { evaluateDeployEligibility } from '@/lib/deploy/deployEligibility'
-import { quoteFinalizeShareBridgeNativeFee } from '@/lib/deploy/finalizeShareBridgeFee'
+import {
+  quoteFinalizeShareBridgeNativeFee,
+  type FinalizePhase2Params,
+} from '@/lib/deploy/finalizeShareBridgeFee'
+import { ShareBridgeFinalizeWiringPanel } from '@/components/deploy/ShareBridgeFinalizeWiringPanel'
 import { useAccountMe } from '@/hooks/useAccountMe'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
@@ -3964,6 +3968,36 @@ function DeployVaultBatcher({
   const expectedPayoutRouter = expected?.payoutRouter ?? null
   const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
 
+  const pipeAFinalizeParams = useMemo<FinalizePhase2Params | null>(() => {
+    if (!expected || !creatorToken || !owner) return null
+    const floorPriceQ96ForBatcher =
+      floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
+    return {
+      creatorToken,
+      owner,
+      vault: expected.vault,
+      wrapper: expected.wrapper,
+      shareOFT: expected.shareOFT,
+      gaugeController: expected.gaugeController,
+      ccaStrategy: expected.ccaStrategy,
+      oracle: expected.oracle,
+      version: deploymentVersion,
+      depositAmount: minFirstDeposit,
+      requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
+      floorPriceQ96: floorPriceQ96ForBatcher,
+      auctionSteps: encodeUniswapCcaLinearSteps(DEFAULT_CCA_DURATION_BLOCKS),
+      meteoraAlphaVault: ZERO_BYTES32 as Hex,
+      solanaIxs: [],
+    }
+  }, [
+    creatorToken,
+    deploymentVersion,
+    expected,
+    floorPriceQ96Aligned,
+    minFirstDeposit,
+    owner,
+  ])
+
   useEffect(() => {
     if (expectedDeploymentVersion && expectedDeploymentVersion !== deploymentVersion) {
       setDeploymentVersionOverride(expectedDeploymentVersion)
@@ -7307,7 +7341,15 @@ function DeployVaultBatcher({
                 <div className={timelineProgressTone('phase2Finalize')}>Finalize + configure payout and ownership routing</div>
                 {renderStageDetailStatus('phase2Finalize')}
               </div>
-              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+              <div className="mb-3">
+                <ShareBridgeFinalizeWiringPanel
+                  enabled={ovaultMeshEnabledForSession}
+                  publicClient={publicClient}
+                  batcherAddress={batcherAddress}
+                  finalizeParams={pipeAFinalizeParams}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3 mt-3">
                 <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
                 {renderStageDetailStatus('phase2bOvaultMesh')}
               </div>

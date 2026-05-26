@@ -46,8 +46,9 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   CONFIGURE_OVAULT_RUNTIME=1
 ///   OVAULT_HUB_COMPOSER=...
 ///   OVAULT_SOLANA_EID=30168
-///
-/// Optional salt overrides (for fresh infra epochs):
+/// Optional default ShareOFT mesh peer (requires broadcaster == protocolTreasury):
+///   CONFIGURE_SOLANA_SHARE_OFT_PEER=1
+///   SOLANA_SHARE_OFT_PEER=0x<32-byte-solana-share-mesh-peer>
 ///   INFRA_STORE_SALT or INFRA_STORE_SALT_TAG
 ///   INFRA_DEPLOYER_FROM_STORE_SALT or INFRA_DEPLOYER_FROM_STORE_SALT_TAG
 ///   INFRA_VAULT_CORE_MODULE_SALT or INFRA_VAULT_CORE_MODULE_SALT_TAG
@@ -107,6 +108,7 @@ contract DeployBaseMainnetDeployer is Script {
         bytes32 solanaDestination;
         address ovaultHubComposer;
         uint32 ovaultSolanaEid;
+        bytes32 solanaShareOftPeer;
     }
 
     struct SaltConfig {
@@ -170,8 +172,10 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
         cfg.ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
         cfg.ovaultSolanaEid = uint32(vm.envOr("OVAULT_SOLANA_EID", uint256(0)));
+        cfg.solanaShareOftPeer = vm.envOr("SOLANA_SHARE_OFT_PEER", bytes32(0));
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
         bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
+        bool configureSolanaShareOftPeer = vm.envOr("CONFIGURE_SOLANA_SHARE_OFT_PEER", uint256(0)) == 1;
         SaltConfig memory salts;
         salts.store = _saltFromEnvOrEpoch("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", STORE_SALT_TAG_PREFIX);
         salts.deployerFromStore = _saltFromEnvOrEpoch(
@@ -401,6 +405,26 @@ contract DeployBaseMainnetDeployer is Script {
             }
         } else {
             console2.log("CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)");
+        }
+
+        if (configureSolanaShareOftPeer) {
+            require(cfg.solanaShareOftPeer != bytes32(0), "SOLANA_SHARE_OFT_PEER required");
+            if (broadcaster != cfg.protocolTreasury) {
+                console2.log(
+                    "CONFIGURE_SOLANA_SHARE_OFT_PEER=1 but broadcaster != protocolTreasury; skipping setSolanaShareOftPeer"
+                );
+            } else {
+                if (deployer.solanaShareOftPeer() != cfg.solanaShareOftPeer) {
+                    vm.startBroadcast(pk);
+                    deployer.setSolanaShareOftPeer(cfg.solanaShareOftPeer);
+                    vm.stopBroadcast();
+                }
+                require(deployer.solanaShareOftPeer() == cfg.solanaShareOftPeer, "Solana ShareOFT peer mismatch");
+                console2.logBytes32(cfg.solanaShareOftPeer);
+                console2.log("Solana ShareOFT default peer configured");
+            }
+        } else {
+            console2.log("CONFIGURE_SOLANA_SHARE_OFT_PEER=0 (skipped setSolanaShareOftPeer)");
         }
     }
 }
