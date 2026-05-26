@@ -1,0 +1,104 @@
+# Greenfield launch readiness
+
+Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md).
+
+## Two launch moments
+
+| Milestone | Ready when | Solana lottery relay |
+|-----------|------------|----------------------|
+| **Base vault live** | Deploy session complete; Base ShareOFT buy → lottery works | Off (`relay_entries` paused) |
+| **Solana lottery live** | Share-mesh Meteora pool + hook; test pool buy confirms Base lottery | On |
+
+Base launch does not require Solana lottery relay.
+
+## Platform gate (once)
+
+Run before opening deploy to creators:
+
+```bash
+KPR_API_KEY=... curl -sS -H "Authorization: Bearer $KPR_API_KEY" \
+  https://app.4626.fun/api/deploy/solanaInfraStatus | jq '.data | {readyForAutoRegistration, blockers}'
+```
+
+Expect `readyForAutoRegistration: true` and `blockers: []`.
+
+Also verify:
+
+| Check | Command / URL |
+|-------|----------------|
+| Batcher OVault runtime | `cast call $BATCHER "getOVaultRuntimeConfig()(address,uint32,bool)"` → hub + EID `30168` + `true` |
+| Provisioner | `curl -H "Authorization: Bearer $SECRET" https://provisioner.4626.fun/healthz` → `ok: true`, payer healthy |
+| Orchestrator | `curl https://orchestrator.4626.fun/healthz` → `ok: true` |
+| Release target | `bash test/current-release-target-guard.sh` |
+| Keeper registry auth | `curl -H "Authorization: Bearer $KPR_API_KEY" https://app.4626.fun/api/vaults/active?chainId=8453` |
+
+### Required Vercel production env (Solana deploy lane)
+
+| Variable | Purpose |
+|----------|---------|
+| `SOLANA_DYNAMIC_ROUTE_ENABLED=1` | Remote provisioner for mesh mints |
+| `SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL` / `_SECRET` / `_HEALTH_URL` | `provisioner.4626.fun` |
+| `SOLANA_ADAPTER_OWNER_PRIVATE_KEY` | Must match `SolanaBridgeAdapter.owner()` (not `KPR_PRIVATE_KEY`) |
+| `DEPLOY_SOLANA_REGISTRATION_SECRET` + `DEPLOY_SOLANA_REGISTRATION_ORIGINS` | Cross-origin session registration |
+| `DEPLOY_SOLANA_PREFLIGHT_ROUTE_MODE=ovault_first` | Mesh-first deploy preflight |
+| `SOLANA_OVAULT_ASSET_MINT_ORIGIN=new` | Greenfield mints (skip legacy existing-mint hint blockers) |
+| `SOLANA_BRIDGE_ADAPTER` + `SOLANA_DESTINATION` | Batcher-aligned adapter + keeper pubkey |
+| `METEORA_IX_PROVISIONER_URL` / `_SECRET` | Optional Meteora ix generation |
+
+Redeploy production after env changes (`vercel deploy --prod --archive=tgz`).
+
+### Keeper env (pre-launch defaults)
+
+**Vercel:**
+
+```bash
+KEEPER_SOLANA_RECONCILE_ENABLED=1
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay
+KEEPER_SOLANA_RECONCILE_WORKFLOW=solana-orchestrator
+SOLANA_ORCHESTRATOR_URL=https://orchestrator.4626.fun
+```
+
+**Vultr** (`/etc/4626/solana-keeper-orchestrator.env`):
+
+```bash
+SOLANA_ORCHESTRATOR_EXECUTE=1
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
+```
+
+## Per-creator prep (before Deploy)
+
+1. Creator coin on Zora; payout recipient correct  
+2. **50M+** creator tokens for vault deposit  
+3. Wallet **execution-ready** (parent CSW + embedded owner, or EOA track)  
+4. Paid features at `/creator/strategy/features`:
+   - At least one Phase 3 strategy (`charm_active_lp`, `ajna_sleeve`, or `solana_bridge_strategy`)
+   - `solana_ovault_mesh` if Solana mesh is wanted  
+5. Optional: fork dry-run — `pnpm -C frontend run dev:deploy-dry-run`
+
+## Deploy session checklist
+
+- Phases 1–3 complete (+ Phase 4 if deferred launch)  
+- If Solana enabled: session reaches `ovault_mesh_confirmed`  
+- Base smoke: deposit, withdraw, ShareOFT **buy** → lottery entry  
+
+## Solana lottery flip (Phase B)
+
+After share-mesh Meteora pool + hook and one verified pool buy:
+
+```bash
+KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay,relay_entries
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
+# SOLANA_CREATOR_MINTS + SOLANA_SHARE_OFT_MAPPING → share mesh mint (not creator SPL)
+```
+
+Redeploy Vercel; restart orchestrator on Vultr.
+
+## Ops helpers
+
+```bash
+# Safe batcher config proposals (dry-run, then --propose)
+pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts
+
+# Execute queued Safe txs (1-of-N threshold met)
+pnpm -C frontend exec tsx scripts/ops/execute-pending-safe-txs.ts <safeTxHash>...
+```

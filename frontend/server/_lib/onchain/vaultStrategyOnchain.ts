@@ -506,11 +506,13 @@ export async function enrichVaultArtifactsFromOnChain(params: {
       assignIfMissing(artifacts, 'creatorAddress', owner)
     }
 
-    const charm = strategyDetails.find((entry) => Boolean(entry.charmVault))
+    const charm = strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.charmVault))
     const ajna =
-      strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool)) ??
-      strategyDetails.find((entry) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress)
-    const solana = strategyDetails.find((entry) => Boolean(entry.bridgeAddress))
+      strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.ajna.ajnaPool)) ??
+      strategyDetails.find(
+        (entry: VaultStrategyScan) => entry.ajna.innerVault && entry.ajna.auth && !entry.bridgeAddress,
+      )
+    const solana = strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.bridgeAddress))
 
     if (charm?.charmVault) {
       assignIfMissing(artifacts, 'charmVault', charm.charmVault)
@@ -523,7 +525,7 @@ export async function enrichVaultArtifactsFromOnChain(params: {
       if (ajna.ajna.auth) assignIfMissing(artifacts, 'ajnaAuth', ajna.ajna.auth)
       if (ajna.ajna.ajnaPool) assignIfMissing(artifacts, 'ajnaPool', ajna.ajna.ajnaPool)
     } else {
-      const directAjna = strategyDetails.find((entry) => Boolean(entry.ajna.ajnaPool))
+      const directAjna = strategyDetails.find((entry: VaultStrategyScan) => Boolean(entry.ajna.ajnaPool))
       if (directAjna?.ajna.ajnaPool) {
         assignIfMissing(artifacts, 'strategyAdapter', directAjna.strategy)
         assignIfMissing(artifacts, 'ajnaAdapter', directAjna.strategy)
