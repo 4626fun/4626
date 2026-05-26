@@ -25,7 +25,7 @@ import { getKeeperAddress, readContract, writeContract, type WriteResult } from 
 import {
   executeCharmRebalanceViaProtocolTreasurySafe,
   isProtocolTreasuryManager,
-  isSameAddress,
+  resolveCharmAutomationAuthorization,
 } from '../utils/protocolTreasurySafe.js';
 import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 import { fetchActiveVaults, filterVaultsForWorkflow, type VaultConfig } from '../utils/registry.js';
@@ -502,13 +502,26 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
         }
       }
 
-      const charmKeeperRaw = await readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'keeper',
-      }).catch(() => null);
-      const charmKeeper = asAddress(charmKeeperRaw);
-      if (charmKeeper && !isSameAddress(charmKeeper, keeperAddress)) {
+      const [charmKeeperRaw, charmOwnerRaw] = await Promise.all([
+        readContract<unknown>({
+          address: strategy.charmVaultAddress,
+          abi: CHARM_VAULT_VIEW_ABI,
+          functionName: 'keeper',
+        }).catch(() => null),
+        readContract<unknown>({
+          address: strategy.charmVaultAddress,
+          abi: CHARM_VAULT_VIEW_ABI,
+          functionName: 'owner',
+        }).catch(() => null),
+      ]);
+      const authorization = resolveCharmAutomationAuthorization({
+        managerAddress,
+        delegateAddress,
+        charmKeeper: asAddress(charmKeeperRaw),
+        charmOwner: asAddress(charmOwnerRaw),
+        keeperAddress,
+      });
+      if (!authorization.authorized) {
         batch.processed += 1;
         batch.skipped += 1;
         batch.results.push({
@@ -520,33 +533,7 @@ export async function executeCharmRebalanceManager(): Promise<BatchCharmRebalanc
           charmCenterTickNormalized: rangeContext.centerTickNormalized,
           priceChangeBps,
           rebalanced: false,
-          skippedReason: 'keeper_not_charm_vault_keeper',
-        });
-        continue;
-      }
-
-      const charmOwnerRaw = await readContract<unknown>({
-        address: strategy.charmVaultAddress,
-        abi: CHARM_VAULT_VIEW_ABI,
-        functionName: 'owner',
-      }).catch(() => null);
-      const charmOwner = asAddress(charmOwnerRaw);
-      const keeperCanDirectlyRebalance =
-        isSameAddress(delegateAddress, keeperAddress) ||
-        (!charmKeeper && isSameAddress(charmOwner, keeperAddress));
-      if (!keeperCanDirectlyRebalance) {
-        batch.processed += 1;
-        batch.skipped += 1;
-        batch.results.push({
-          vaultAddress: vault.vaultAddress,
-          strategyAddress: strategy.strategyAddress,
-          charmVaultAddress: strategy.charmVaultAddress,
-          oracleAddress: vault.oracleAddress,
-          oracleTickNormalized: oracleContext.normalizedTick,
-          charmCenterTickNormalized: rangeContext.centerTickNormalized,
-          priceChangeBps,
-          rebalanced: false,
-          skippedReason: 'keeper_not_authorized_for_charm_rebalance',
+          skippedReason: authorization.reason,
         });
         continue;
       }

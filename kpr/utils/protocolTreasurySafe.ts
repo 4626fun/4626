@@ -70,6 +70,46 @@ export function isProtocolTreasuryManager(managerAddress: string | null | undefi
   return isSameAddress(managerAddress, resolveProtocolTreasuryAddress());
 }
 
+export type CharmAutomationAuthorization =
+  | { authorized: true; lane: 'protocol_treasury_manager' }
+  | { authorized: true; lane: 'keeper_direct' }
+  | { authorized: false; reason: string };
+
+/** Gate Charm enqueue/execute: protocol treasury manager lane, or legacy keeper/direct paths. */
+export function resolveCharmAutomationAuthorization(params: {
+  managerAddress: string | null | undefined;
+  delegateAddress: string | null | undefined;
+  charmKeeper: string | null | undefined;
+  charmOwner: string | null | undefined;
+  keeperAddress: string;
+}): CharmAutomationAuthorization {
+  if (isProtocolTreasuryManager(params.managerAddress)) {
+    return { authorized: true, lane: 'protocol_treasury_manager' };
+  }
+
+  if (params.delegateAddress && isSameAddress(params.delegateAddress, params.keeperAddress)) {
+    return { authorized: true, lane: 'keeper_direct' };
+  }
+
+  if (params.charmKeeper && !isSameAddress(params.charmKeeper, params.keeperAddress)) {
+    return { authorized: false, reason: 'keeper_not_charm_vault_keeper' };
+  }
+
+  if (
+    !params.charmKeeper &&
+    params.charmOwner &&
+    !isSameAddress(params.charmOwner, params.keeperAddress)
+  ) {
+    return { authorized: false, reason: 'keeper_not_charm_vault_owner' };
+  }
+
+  if (!params.charmKeeper && !params.charmOwner && !params.delegateAddress) {
+    return { authorized: false, reason: 'charm_automation_not_configured' };
+  }
+
+  return { authorized: true, lane: 'keeper_direct' };
+}
+
 async function assertProtocolTreasurySafeOwner(params: {
   safeAddress: Address;
   ownerAddress: Address;

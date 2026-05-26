@@ -57,6 +57,7 @@ import {
   setPoolLastProcessedBlock,
   type StrategyEventState,
 } from '../utils/strategy-event-state.js';
+import { resolveCharmAutomationAuthorization } from '../utils/protocolTreasurySafe.js';
 
 const WORKFLOW_NAME = 'strategy-signal-listener';
 
@@ -77,6 +78,8 @@ const UNISWAP_V3_POOL_SWAP_EVENT_ABI = [
 ] as const;
 
 const CHARM_VAULT_VIEW_ABI = [
+  { type: 'function', name: 'manager', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  { type: 'function', name: 'rebalanceDelegate', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'keeper', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
 ] as const;
@@ -574,7 +577,17 @@ async function evaluateCharmForVault(params: {
       continue;
     }
 
-    const [charmKeeperRaw, charmOwnerRaw] = await Promise.all([
+    const [managerRaw, delegateRaw, charmKeeperRaw, charmOwnerRaw] = await Promise.all([
+      readContract<unknown>({
+        address: strategy.charmVaultAddress,
+        abi: CHARM_VAULT_VIEW_ABI,
+        functionName: 'manager',
+      }).catch(() => null),
+      readContract<unknown>({
+        address: strategy.charmVaultAddress,
+        abi: CHARM_VAULT_VIEW_ABI,
+        functionName: 'rebalanceDelegate',
+      }).catch(() => null),
       readContract<unknown>({
         address: strategy.charmVaultAddress,
         abi: CHARM_VAULT_VIEW_ABI,
@@ -587,23 +600,17 @@ async function evaluateCharmForVault(params: {
       }).catch(() => null),
     ]);
 
-    const charmKeeper = asAddress(charmKeeperRaw);
-    const charmOwner = asAddress(charmOwnerRaw);
-    if (charmKeeper && charmKeeper.toLowerCase() !== keeperAddress.toLowerCase()) {
+    const authorization = resolveCharmAutomationAuthorization({
+      managerAddress: asAddress(managerRaw),
+      delegateAddress: asAddress(delegateRaw),
+      charmKeeper: asAddress(charmKeeperRaw),
+      charmOwner: asAddress(charmOwnerRaw),
+      keeperAddress,
+    });
+    if (!authorization.authorized) {
       logDecision({
         event: 'charm.skip',
-        reason: 'keeper_not_charm_keeper',
-        pool: watched.poolAddress,
-        vault: watched.vaultAddress,
-        strategy: strategy.strategyAddress,
-        computedDeviationBps: deviationBps,
-      });
-      continue;
-    }
-    if (!charmKeeper && charmOwner && charmOwner.toLowerCase() !== keeperAddress.toLowerCase()) {
-      logDecision({
-        event: 'charm.skip',
-        reason: 'keeper_not_charm_owner',
+        reason: authorization.reason,
         pool: watched.poolAddress,
         vault: watched.vaultAddress,
         strategy: strategy.strategyAddress,
