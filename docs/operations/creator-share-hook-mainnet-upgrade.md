@@ -183,10 +183,28 @@ curl -sS https://orchestrator.4626.fun/healthz
 
 ### Smoke (devnet first, then mainnet B2 mint)
 
-Devnet hook is **not** at mainnet program ID — use `COST_PROBE_HOOK_PROGRAM_KEYPAIR` for a devnet deploy, then:
+Devnet hook is **not** pre-deployed at the mainnet program id. Deploy canonical bytecode first:
 
 ```bash
+# Requires COST_PROBE_HOOK_PROGRAM_KEYPAIR (derives to Ejpzi…WCSXX) + funded devnet payer
+COST_PROBE_HOOK_PROGRAM_KEYPAIR=/path/to/program-id.json \
+SOLANA_PRIVATE_KEY=... \
+  bash programs/creator-share-hook/scripts/deploy-devnet.sh
+
 pnpm -C frontend ops:pipe-b-devnet-rehearsal -- --live-devnet
+```
+
+### Post-upgrade orchestrator
+
+After mainnet `--execute`, align keeper env with on-chain bytecode:
+
+```bash
+pnpm -C frontend ops:post-hook-upgrade-preflight   # prints env + restart checklist
+
+sudo bash kpr/deploy/seed-solana-orchestrator-env.sh \
+  --source /opt/4626/kpr/.env \
+  --dest /etc/4626/solana-keeper-orchestrator.env \
+  --hook-schema auto
 ```
 
 Mainnet B2 (after share-mesh pool exists):

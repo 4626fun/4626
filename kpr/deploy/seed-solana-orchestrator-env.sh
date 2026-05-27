@@ -12,6 +12,7 @@ set -euo pipefail
 SOURCE=""
 DEST="/etc/4626/solana-keeper-orchestrator.env"
 DRY_RUN=0
+HOOK_SCHEMA="auto"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,12 +28,21 @@ while [[ $# -gt 0 ]]; do
       DRY_RUN=1
       shift
       ;;
+    --hook-schema)
+      HOOK_SCHEMA="${2:-}"
+      shift 2
+      ;;
     *)
       echo "Unknown arg: $1" >&2
       exit 1
       ;;
   esac
 done
+
+if [[ ! "${HOOK_SCHEMA}" =~ ^(auto|legacy|canonical)$ ]]; then
+  echo "--hook-schema must be auto, legacy, or canonical" >&2
+  exit 1
+fi
 
 if [[ -z "${SOURCE}" || ! -f "${SOURCE}" ]]; then
   echo "--source must point to an existing kpr/.env file" >&2
@@ -168,6 +178,36 @@ TWIN_MAP="$(quote_json_if_needed "$(optional_from_source SOLANA_TWIN_TO_PUBKEY_M
 
 ALERT_WEBHOOK_URL="$(optional_from_source ALERT_WEBHOOK_URL)"
 
+HOOK_PROGRAM_ID="EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU"
+
+classify_hook_schema() {
+  if ! command -v solana >/dev/null 2>&1 || ! command -v strings >/dev/null 2>&1; then
+    echo "legacy"
+    return
+  fi
+  local rpc="${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}"
+  local tmp
+  tmp="$(mktemp -d)"
+  if ! solana program dump "${HOOK_PROGRAM_ID}" "${tmp}/hook.so" --url "${rpc}" >/dev/null 2>&1; then
+    rm -rf "${tmp}"
+    echo "legacy"
+    return
+  fi
+  if strings "${tmp}/hook.so" | rg -q 'relay_entries|RelayEntries' && ! strings "${tmp}/hook.so" | rg -q 'drain_entries|DrainEntries'; then
+    rm -rf "${tmp}"
+    echo "canonical"
+    return
+  fi
+  rm -rf "${tmp}"
+  echo "legacy"
+}
+
+RESOLVED_HOOK_SCHEMA="${HOOK_SCHEMA}"
+if [[ "${RESOLVED_HOOK_SCHEMA}" == "auto" ]]; then
+  RESOLVED_HOOK_SCHEMA="$(classify_hook_schema)"
+  echo "note: auto-detected SOLANA_HOOK_IX_SCHEMA=${RESOLVED_HOOK_SCHEMA} from mainnet bytecode" >&2
+fi
+
 tmp="$(mktemp)"
 chmod 0640 "${tmp}"
 
@@ -179,6 +219,10 @@ cat >"${tmp}" <<EOF
 SOLANA_ORCHESTRATOR_PORT=8789
 SOLANA_ORCHESTRATOR_API_KEY=${api_key}
 SOLANA_ORCHESTRATOR_EXECUTE=1
+SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
+SOLANA_ORCHESTRATOR_SETTLE_FEES_ENABLED=1
+SOLANA_ORCHESTRATOR_WINNER_RELAY_ENABLED=1
+SOLANA_HOOK_IX_SCHEMA=${RESOLVED_HOOK_SCHEMA}
 
 BASE_RPC_URL=${BASE_RPC_URL}
 SOLANA_RPC_URL=${SOLANA_RPC_URL}
@@ -219,5 +263,6 @@ rm -f "${tmp}"
 
 echo "Wrote ${DEST}"
 echo "Next:"
+echo "  pnpm -C frontend ops:post-hook-upgrade-preflight"
 echo "  cd /opt/4626/kpr && pnpm preflight-orchestrator"
 echo "  sudo systemctl restart solana-keeper-orchestrator"
