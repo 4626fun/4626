@@ -111,17 +111,14 @@ Safe queue on protocol treasury (`0x7d429e…`):
 |-------|--------|--------|
 | 76 | `setOVaultRuntimeConfig` on old batcher | Executed (no-op) |
 | 77 | `setSolanaShareOftPeer` on **old** batcher | **Cancel** — pre–Pipe-A bytecode |
-| 78 | `wireDeploymentHelpers` on **new** batcher | Proposed — execute after review |
-| 79 | `setPhase1Module` | Proposed |
-| 80 | `setSolanaConfig` | Proposed |
-| 81 | `setOVaultRuntimeConfig` | Proposed |
+| 78 | `wireDeploymentHelpers` on **new** batcher | **Executed** — `0xdef6356c…328a7` (direct Safe exec, bypassed stale queue) |
+| 79 | `setPhase1Module` | **Executed** — `0x3717c916…0fd1a` |
+| 80 | `setSolanaConfig` | **Executed** — `0x5294eabc…5e53` |
+| 81 | `setOVaultRuntimeConfig` | **Executed** — `0xe572a78d…d7c6` |
 
-**Still required after Safe 78–81 execute:**
+Create2 authorization completed via second `DeployBaseMainnetDeployer.s.sol` broadcast after wiring.
 
-1. Re-run `DeployBaseMainnetDeployer.s.sol` to authorize batcher + helpers on create2 deployer.
-2. Propose `setSolanaShareOftPeer` when ShareOFT mesh peer is known (separate Safe tx; do not reuse nonce 77).
-3. Update Vercel `CREATOR_VAULT_BATCHER*` env + production redeploy.
-4. Re-run `verify-batcher-pipe-a-readiness.ts` → exit 0.
+**Still blocked for full Pipe A readiness:** `solanaShareOftPeer` unset — ShareOFT mesh mint/peer for EID `30168` is not provisioned yet (`read-akita-ovault-mesh-onchain.ts` → mesh configured: NO). Propose `setSolanaShareOftPeer` only after mesh peer bytes32 is known.
 
 Safe wiring dry-run:
 
