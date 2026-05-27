@@ -2,6 +2,7 @@ import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
+import { resolveCanonicalScoreDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import { ReferralShareBlock } from './ReferralShareBlock'
 import { useMyReferralCode } from './useMyReferralCode'
 import { computeProgress } from './waitlistTiers'
@@ -17,12 +18,9 @@ export function WaitlistUnlocksPanel({
   email,
   className = '',
 }: WaitlistUnlocksPanelProps) {
-  const waitlistPoints = typeof score?.points === 'number' ? Math.max(0, Math.floor(score.points)) : 0
-  const amoeCredits =
-    typeof score?.amoeCredits === 'number' ? Math.max(0, Math.floor(score.amoeCredits)) : waitlistPoints
-  const progress = computeProgress(waitlistPoints)
+  const scoreDisplay = resolveCanonicalScoreDisplay({ score: score ?? null })
+  const progress = computeProgress(scoreDisplay.waitlistPoints)
   const referral = useMyReferralCode(email)
-  const showAmoeNote = amoeCredits !== waitlistPoints
 
   return (
     <div className={`space-y-3.5 ${className}`}>
@@ -45,9 +43,9 @@ export function WaitlistUnlocksPanel({
               {progress.points === 1 ? 'waitlist point' : 'waitlist points'}
             </span>
           </div>
-          {showAmoeNote ? (
+          {scoreDisplay.showLotteryCreditsNote ? (
             <span className="text-[10px] text-zinc-500 tabular-nums">
-              {amoeCredits.toLocaleString()} lottery credits
+              {scoreDisplay.amoeCredits.toLocaleString()} lottery credits
             </span>
           ) : null}
         </div>

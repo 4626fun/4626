@@ -18,6 +18,7 @@ import {
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
+import { resolveCanonicalScoreDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import { fetchWaitlistPointsActivity, type PointsActivityRow } from '@/lib/waitlist/pointsActivity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
@@ -337,7 +338,7 @@ export function ConnectButton({
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
   const canonicalIdentity = useCanonicalIdentity()
-  const accountMe = useAccountMe()
+  const { me: accountProfile, loading: accountProfileLoading, refresh: refreshAccountProfile } = useAccountMe()
   const [disconnectingMainWallet, setDisconnectingMainWallet] = useState(false)
   const [trayTab, setTrayTab] = useState<'tokens' | 'activity'>('tokens')
   const [traySection, setTraySection] = useState<'account' | 'portfolio' | 'points'>('account')
@@ -389,12 +390,12 @@ export function ConnectButton({
         })
       }
       disconnect()
-      accountMe.refresh()
+      refreshAccountProfile()
       setShowMenu(false)
     } finally {
       setDisconnectingMainWallet(false)
     }
-  }, [accountMe, canonicalIdentity.externalEoaAddress, disconnect, disconnectingMainWallet])
+  }, [refreshAccountProfile, canonicalIdentity.externalEoaAddress, disconnect, disconnectingMainWallet])
 
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
@@ -529,8 +530,10 @@ export function ConnectButton({
     retry: 0,
     queryFn: async () => fetchWaitlistPointsActivity(24),
   })
-  const canonicalWaitlistPoints = accountMe?.score.points ?? trayPointsQuery.data?.points.total ?? 0
-  const canonicalAmoeCredits = accountMe?.score.amoeCredits ?? canonicalWaitlistPoints
+  const trayScoreDisplay = resolveCanonicalScoreDisplay({
+    score: accountProfile?.score ?? null,
+    positionWaitlistTotal: trayPointsQuery.data?.points.total ?? null,
+  })
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
     isConnected,
@@ -715,10 +718,10 @@ export function ConnectButton({
               ) : null}
               {auth.hasSession && traySection === 'points' ? (
                 <RelayTrayPointsModule
-                  waitlistPoints={canonicalWaitlistPoints}
-                  amoeCredits={canonicalAmoeCredits}
+                  waitlistPoints={trayScoreDisplay.waitlistPoints}
+                  amoeCredits={trayScoreDisplay.amoeCredits}
                   points={trayPointsQuery.data ?? null}
-                  pointsLoading={trayPointsQuery.isLoading && !accountMe}
+                  pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
                   activity={trayPointsActivityQuery.data?.activity ?? []}
                   activityLoading={trayPointsActivityQuery.isLoading}
                 />
@@ -878,10 +881,10 @@ export function ConnectButton({
                 />
               ) : (
                 <RelayTrayPointsModule
-                  waitlistPoints={canonicalWaitlistPoints}
-                  amoeCredits={canonicalAmoeCredits}
+                  waitlistPoints={trayScoreDisplay.waitlistPoints}
+                  amoeCredits={trayScoreDisplay.amoeCredits}
                   points={trayPointsQuery.data ?? null}
-                  pointsLoading={trayPointsQuery.isLoading && !accountMe}
+                  pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
                   activity={trayPointsActivityQuery.data?.activity ?? []}
                   activityLoading={trayPointsActivityQuery.isLoading}
                 />

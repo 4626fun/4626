@@ -14,7 +14,7 @@ import { isAuthorizedWalletForProfile } from '../../../server/_lib/wallet/canoni
 
 
 
-import { readWaitlistPointsBreakdown } from '../../../server/_lib/onboarding/waitlistScoring.js'
+import { readAmoeEligibleCreditsForSignupId, readWaitlistPointsBreakdown } from '../../../server/_lib/onboarding/waitlistScoring.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
@@ -25,6 +25,8 @@ type WaitlistPositionResponse = {
   referralCode: string | null
   borderTier: number
 
+  /** Always `waitlist_weighted` — do not treat as AMOE lottery credits. */
+  scoringLane: 'waitlist_weighted'
   points: {
     total: number
     invite: number
@@ -34,6 +36,8 @@ type WaitlistPositionResponse = {
     social: number    // Points from verified social actions
     bonus: number     // Points from honor system actions
   }
+  /** AMOE lottery credits (`points_amoe_eligible_balance`); may differ from `points.total`. */
+  lotteryCredits: number
 
   rank: {
     invite: number | null
@@ -167,6 +171,7 @@ export default async function handler(req: any, res: any) {
   const borderTier = safeInt(row?.border_tier)
 
   const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
+  const lotteryCredits = await readAmoeEligibleCreditsForSignupId(db as any, signupId)
   const points = {
     total: breakdown.total,
     invite: breakdown.invite,
@@ -367,7 +372,9 @@ export default async function handler(req: any, res: any) {
     profileCompletedAt,
     referralCode,
     borderTier,
+    scoringLane: 'waitlist_weighted',
     points,
+    lotteryCredits,
     rank: { invite: inviteRank, total: totalRank },
     totalCount,
     totalAheadInvite,

@@ -59,7 +59,7 @@ describe('GET /api/accounts/me', () => {
       email: 'user@example.com',
       linkedMethods: { email: ['user@example.com'] },
       accountSignals: defaultAccountSignals(),
-      score: { points: 10, tier: 1 },
+      score: { points: 10, tier: 1, amoeCredits: 8 },
     })
   })
 
@@ -92,7 +92,7 @@ describe('GET /api/accounts/me', () => {
       emailVerified: false,
       linkedMethods: { email: ['user@example.com'], telegram: ['akita'] },
       accountSignals: defaultAccountSignals(),
-      score: { points: 10, tier: 1 },
+      score: { points: 10, tier: 1, amoeCredits: 8 },
     })
 
     const req = createMockReq({

@@ -108,6 +108,10 @@ function createPositionDb(params: { id: string | number; email: string }) {
         }
       }
 
+      if (text.includes('from points_amoe_eligible_balance')) {
+        return { rows: [{ credits: 99 }] }
+      }
+
       if (text.includes('from points')) {
         return {
           rows: [{ total: 150, invite: 50, signup: 100, tasks: 0, csw: 0, social: 0, bonus: 0 }],
@@ -186,6 +190,10 @@ function createPositionDbHistoricalLinkedWallet(params: { id: string | number; e
         return { rows: [{ exists: 1 }] }
       }
 
+      if (text.includes('from points_amoe_eligible_balance')) {
+        return { rows: [{ credits: 99 }] }
+      }
+
       if (text.includes('from points')) {
         return {
           rows: [{ total: 150, invite: 50, signup: 100, tasks: 0, csw: 0, social: 0, bonus: 0 }],
@@ -239,7 +247,9 @@ describe('waitlist/position', () => {
     expect(res.body?.data?.signupId).toBe(42)
     expect(res.body?.data?.email).toBe('akitav2@proton.me')
     expect(res.body?.data?.borderTier).toBe(1)
+    expect(res.body?.data?.scoringLane).toBe('waitlist_weighted')
     expect(res.body?.data?.points?.total).toBe(150)
+    expect(res.body?.data?.lotteryCredits).toBe(99)
   })
 
   it('redacts email for wallet-address lookup and checks extended wallet fields', async () => {

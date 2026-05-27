@@ -20,6 +20,7 @@ import {
 } from '../wallet/executionTrack.js'
 import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
+import { buildAccountScoreFromBreakdown } from '../onboarding/accountScore.js'
 import {
   readAmoeEligibleCreditsForSignupId,
   readWaitlistPointsBreakdown,
@@ -179,13 +180,6 @@ function isPrivyUserIdUniqueViolation(error: unknown): boolean {
     lower.includes('profiles_privy_user_id_unique') ||
     (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
   )
-}
-
-function toScoreTier(points: number): number {
-  if (points >= 250) return 3
-  if (points >= 120) return 2
-  if (points >= 40) return 1
-  return 0
 }
 
 function linkedAccounts(user: unknown): any[] {
@@ -522,12 +516,7 @@ async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountSco
 
   const breakdown = await readWaitlistPointsBreakdown(db, profileId)
   const amoeCredits = await readAmoeEligibleCreditsForSignupId(db, profileId)
-  const points = breakdown.total
-  return {
-    points,
-    tier: toScoreTier(points),
-    amoeCredits,
-  }
+  return buildAccountScoreFromBreakdown(breakdown, amoeCredits)
 }
 
 async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {
