@@ -2,7 +2,7 @@ import { ArrowUpRight, Check } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
-import { resolveCanonicalScoreDisplay } from '@/lib/waitlist/canonicalAccountScore'
+import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import { ReferralShareBlock } from './ReferralShareBlock'
 import { useMyReferralCode } from './useMyReferralCode'
 import { computeProgress } from './waitlistTiers'
@@ -18,8 +18,8 @@ export function WaitlistUnlocksPanel({
   email,
   className = '',
 }: WaitlistUnlocksPanelProps) {
-  const scoreDisplay = resolveCanonicalScoreDisplay({ score: score ?? null })
-  const progress = computeProgress(scoreDisplay.waitlistPoints)
+  const { points } = resolvePublicPointsDisplay({ score: score ?? null })
+  const progress = computeProgress(points)
   const referral = useMyReferralCode(email)
 
   return (
@@ -34,20 +34,11 @@ export function WaitlistUnlocksPanel({
           </span>
           <ArrowUpRight className="h-3 w-3 text-zinc-400 transition-colors group-hover:text-brand-200" aria-hidden="true" />
         </Link>
-        <div className="flex flex-col items-end gap-0.5">
-          <div className="flex items-baseline gap-2">
-            <span className="font-display text-xl leading-none text-white tabular-nums">
-              {progress.points.toLocaleString()}
-            </span>
-            <span className="text-[11px] text-zinc-400">
-              {progress.points === 1 ? 'waitlist point' : 'waitlist points'}
-            </span>
-          </div>
-          {scoreDisplay.showLotteryCreditsNote ? (
-            <span className="text-[10px] text-zinc-500 tabular-nums">
-              {scoreDisplay.amoeCredits.toLocaleString()} lottery credits
-            </span>
-          ) : null}
+        <div className="flex items-baseline gap-2">
+          <span className="font-display text-xl leading-none text-white tabular-nums">
+            {progress.points.toLocaleString()}
+          </span>
+          <span className="text-[11px] text-zinc-400">{progress.points === 1 ? 'point' : 'points'}</span>
         </div>
       </div>
 

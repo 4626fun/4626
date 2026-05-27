@@ -1,24 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveCanonicalScoreDisplay } from './canonicalAccountScore'
+import { resolvePublicPointsDisplay } from './canonicalAccountScore'
 
-describe('resolveCanonicalScoreDisplay', () => {
+describe('resolvePublicPointsDisplay', () => {
   it('prefers session score over position fallback', () => {
-    const display = resolveCanonicalScoreDisplay({
-      score: { points: 382, tier: 3, amoeCredits: 225 },
-      positionWaitlistTotal: 225,
+    const display = resolvePublicPointsDisplay({
+      score: { points: 225, tier: 2, amoeCredits: 382 },
+      positionTotal: 200,
     })
-    expect(display.waitlistPoints).toBe(382)
-    expect(display.amoeCredits).toBe(225)
-    expect(display.showLotteryCreditsNote).toBe(true)
+    expect(display.points).toBe(225)
+    expect(display.tier).toBe(2)
   })
 
   it('uses position total only when score is absent', () => {
-    const display = resolveCanonicalScoreDisplay({
-      positionWaitlistTotal: 382,
+    const display = resolvePublicPointsDisplay({
+      positionTotal: 225,
     })
-    expect(display.waitlistPoints).toBe(382)
-    expect(display.amoeCredits).toBe(382)
-    expect(display.showLotteryCreditsNote).toBe(false)
+    expect(display.points).toBe(225)
   })
 })

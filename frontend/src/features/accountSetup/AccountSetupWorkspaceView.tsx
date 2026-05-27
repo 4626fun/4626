@@ -1178,13 +1178,8 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl bg-white/[0.03] px-3 py-3">
-                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Waitlist points</div>
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Points</div>
                     <div className="mt-1 text-xl font-semibold text-zinc-100">{me.score.points}</div>
-                    {typeof me.score.amoeCredits === 'number' && me.score.amoeCredits !== me.score.points ? (
-                      <div className="mt-1 text-[10px] text-zinc-500 tabular-nums">
-                        {me.score.amoeCredits.toLocaleString()} lottery credits
-                      </div>
-                    ) : null}
                   </div>
                   <div className="rounded-xl bg-white/[0.03] px-3 py-3">
                     <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Tier</div>

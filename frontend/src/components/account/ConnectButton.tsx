@@ -18,7 +18,7 @@ import {
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { fetchAccountTrayPortfolioBatch } from '@/lib/debank/client'
-import { resolveCanonicalScoreDisplay } from '@/lib/waitlist/canonicalAccountScore'
+import { resolvePublicPointsDisplay } from '@/lib/waitlist/canonicalAccountScore'
 import { fetchWaitlistPointsActivity, type PointsActivityRow } from '@/lib/waitlist/pointsActivity'
 import { apiFetch } from '@/lib/api/apiBase'
 import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
@@ -530,9 +530,9 @@ export function ConnectButton({
     retry: 0,
     queryFn: async () => fetchWaitlistPointsActivity(24),
   })
-  const trayScoreDisplay = resolveCanonicalScoreDisplay({
+  const trayPointsDisplay = resolvePublicPointsDisplay({
     score: accountProfile?.score ?? null,
-    positionWaitlistTotal: trayPointsQuery.data?.points.total ?? null,
+    positionTotal: trayPointsQuery.data?.points.total ?? null,
   })
   const buttonState = deriveConnectButtonState({
     sessionHydrated: auth.sessionHydrated,
@@ -718,9 +718,8 @@ export function ConnectButton({
               ) : null}
               {auth.hasSession && traySection === 'points' ? (
                 <RelayTrayPointsModule
-                  waitlistPoints={trayScoreDisplay.waitlistPoints}
-                  amoeCredits={trayScoreDisplay.amoeCredits}
-                  points={trayPointsQuery.data ?? null}
+                  pointsTotal={trayPointsDisplay.points}
+                  position={trayPointsQuery.data ?? null}
                   pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
                   activity={trayPointsActivityQuery.data?.activity ?? []}
                   activityLoading={trayPointsActivityQuery.isLoading}
@@ -881,9 +880,8 @@ export function ConnectButton({
                 />
               ) : (
                 <RelayTrayPointsModule
-                  waitlistPoints={trayScoreDisplay.waitlistPoints}
-                  amoeCredits={trayScoreDisplay.amoeCredits}
-                  points={trayPointsQuery.data ?? null}
+                  pointsTotal={trayPointsDisplay.points}
+                  position={trayPointsQuery.data ?? null}
                   pointsLoading={trayPointsQuery.isLoading && accountProfileLoading}
                   activity={trayPointsActivityQuery.data?.activity ?? []}
                   activityLoading={trayPointsActivityQuery.isLoading}
@@ -1216,31 +1214,31 @@ function RelayTrayHoldingRow(props: { token: TrayAssetHolding; subtitle?: string
 }
 
 function RelayTrayPointsModule(props: {
-  waitlistPoints: number
-  amoeCredits: number
-  points: WaitlistPositionSnapshot | null
+  pointsTotal: number
+  position: WaitlistPositionSnapshot | null
   pointsLoading: boolean
   activity: PointsActivityRow[]
   activityLoading: boolean
 }) {
-  const totalRank = props.points?.rank.total ?? null
-  const inviteRank = props.points?.rank.invite ?? null
-  const totalCount = props.points?.totalCount ?? 0
-  const showAmoeNote = props.amoeCredits !== props.waitlistPoints
+  const totalRank = props.position?.rank.total ?? null
+  const inviteRank = props.position?.rank.invite ?? null
+  const totalCount = props.position?.totalCount ?? 0
   const breakdown = [
-    { label: 'Invites', value: props.points?.points.invite ?? 0 },
-    { label: 'Signup', value: props.points?.points.signup ?? 0 },
-    { label: 'Tasks', value: props.points?.points.tasks ?? 0 },
-    { label: 'CSW', value: props.points?.points.csw ?? 0 },
-    { label: 'Social', value: props.points?.points.social ?? 0 },
-    { label: 'Bonus', value: props.points?.points.bonus ?? 0 },
+    { label: 'Invites', value: props.position?.points.invite ?? 0 },
+    { label: 'Signup', value: props.position?.points.signup ?? 0 },
+    { label: 'Tasks', value: props.position?.points.tasks ?? 0 },
+    { label: 'CSW', value: props.position?.points.csw ?? 0 },
+    { label: 'Social', value: props.position?.points.social ?? 0 },
+    { label: 'Bonus', value: props.position?.points.bonus ?? 0 },
   ]
-  const activityRows = props.activity.slice(0, 24)
+  const activityRows = props.activity
+    .filter((row) => row.waitlistPoints > 0)
+    .slice(0, 24)
 
   return (
     <div className="px-4 pt-2 pb-3">
       <div className="rounded-xl bg-white/[0.02] p-3">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Waitlist points</div>
+        <div className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">Points</div>
         {props.pointsLoading ? (
           <div className="mt-2 rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
             Loading points…
@@ -1248,17 +1246,11 @@ function RelayTrayPointsModule(props: {
         ) : (
           <>
             <div className="mt-2 text-[30px] font-semibold leading-none tracking-tight text-white tabular-nums">
-              {props.waitlistPoints.toLocaleString()}
+              {props.pointsTotal.toLocaleString()}
             </div>
-            {showAmoeNote ? (
-              <div className="mt-1 text-[10px] text-zinc-500 tabular-nums">
-                {props.amoeCredits.toLocaleString()} lottery credits (AMOE entry)
-              </div>
-            ) : (
-              <div className="mt-1 text-[10px] text-zinc-500">Matches leaderboard rank score</div>
-            )}
+            <div className="mt-1 text-[10px] text-zinc-500">Same total as waitlist and leaderboard</div>
 
-            {props.points ? (
+            {props.position ? (
               <>
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
@@ -1304,7 +1296,7 @@ function RelayTrayPointsModule(props: {
                 </div>
               ) : activityRows.length === 0 ? (
                 <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                  No point awards yet. Link accounts, invite friends, and complete tasks to earn waitlist points.
+                  No point awards yet. Link accounts, invite friends, and complete tasks to earn points.
                 </div>
               ) : (
                 <div className="space-y-1 max-h-52 overflow-y-auto">
@@ -1316,17 +1308,14 @@ function RelayTrayPointsModule(props: {
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-[11px] text-zinc-200">{row.label}</span>
                         <span className="text-[11px] tabular-nums text-emerald-300/90">
-                          +{row.waitlistPoints > 0 ? row.waitlistPoints : row.amoeCredits}
+                          +{row.waitlistPoints}
                         </span>
                       </div>
-                      <div className="mt-0.5 text-[10px] text-zinc-500">
-                        {row.waitlistPoints > 0
-                          ? `${row.waitlistPoints} waitlist`
-                          : row.amoeCredits > 0
-                            ? `${row.amoeCredits} lottery`
-                            : 'Recorded'}
-                        {row.createdAt ? ` · ${formatPointsActivityWhen(Date.parse(row.createdAt))}` : ''}
-                      </div>
+                      {row.createdAt ? (
+                        <div className="mt-0.5 text-[10px] text-zinc-500">
+                          {formatPointsActivityWhen(Date.parse(row.createdAt))}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>

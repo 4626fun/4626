@@ -1,11 +1,9 @@
 import type { AccountScore } from '@/features/accountSetup/types'
 import { tierFromPoints } from '@/features/waitlist/waitlistTiers'
 
-export type CanonicalScoreDisplay = {
-  waitlistPoints: number
-  amoeCredits: number
+export type PublicPointsDisplay = {
+  points: number
   tier: number
-  showLotteryCreditsNote: boolean
 }
 
 function normalizeNonNegativeInt(value: unknown): number {
@@ -14,25 +12,19 @@ function normalizeNonNegativeInt(value: unknown): number {
   return Math.max(0, Math.floor(n))
 }
 
-/** Single client source of truth for waitlist vs lottery credit display. */
-export function resolveCanonicalScoreDisplay(input: {
+/** One public points total for tray, waitlist tiers, and account setup (leaderboard score). */
+export function resolvePublicPointsDisplay(input: {
   score?: AccountScore | null
-  /** Fallback from `/api/waitlist/position` when session score is not hydrated yet. */
-  positionWaitlistTotal?: number | null
-}): CanonicalScoreDisplay {
-  const fromScore = input.score
-  const waitlistPoints = fromScore
-    ? normalizeNonNegativeInt(fromScore.points)
-    : normalizeNonNegativeInt(input.positionWaitlistTotal)
-  const amoeCredits = fromScore
-    ? normalizeNonNegativeInt(fromScore.amoeCredits)
-    : waitlistPoints
-  const tier = fromScore ? normalizeNonNegativeInt(fromScore.tier) : tierFromPoints(waitlistPoints)
-  const tierFromWaitlist = tierFromPoints(waitlistPoints)
+  /** Fallback from `/api/waitlist/position` before `/api/accounts/me` hydrates. */
+  positionTotal?: number | null
+}): PublicPointsDisplay {
+  const points = input.score
+    ? normalizeNonNegativeInt(input.score.points)
+    : normalizeNonNegativeInt(input.positionTotal)
+  const tierFromScore = input.score ? normalizeNonNegativeInt(input.score.tier) : null
+  const tierForPoints = tierFromPoints(points)
   return {
-    waitlistPoints,
-    amoeCredits,
-    tier: tier === tierFromWaitlist ? tier : tierFromWaitlist,
-    showLotteryCreditsNote: amoeCredits !== waitlistPoints,
+    points,
+    tier: tierFromScore === tierForPoints ? tierFromScore : tierForPoints,
   }
 }
