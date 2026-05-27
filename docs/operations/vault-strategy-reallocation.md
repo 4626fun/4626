@@ -52,10 +52,16 @@ Default off-chain trigger band: **500 bps (5%)** via `VAULT_STRATEGY_REALLOC_MIN
 | Surface | Path |
 |---------|------|
 | Pure planner (TS) | `kpr/utils/strategyAllocation.ts` |
-| KPR action | `kpr/actions/vault-strategy-reallocator.action.ts` |
+| KPR action (multi-pass) | `kpr/actions/vault-strategy-reallocator.action.ts` |
 | KPR workflow | `kpr/workflows/vault-strategy-reallocator.workflow.ts` (every 15 min) |
-| Unified keeper | `kpr/workflows/4626.workflow.ts` step 8 |
+| Unified keeper | `kpr/workflows/4626.workflow.ts` step 8 (every 5 min, up to 4 passes/vault) |
+| Keeper jobs enqueue | `GET|POST /api/keeper/jobs/enqueue-active-vaults` with `KEEPER_ACTIVE_VAULT_WORKFLOWS=...,rebalance,...` |
 | HTTP bridge | `POST /api/keeper/rebalance-strategies` |
+
+Env tuning:
+
+- `VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS` — default **500** (5% overweight band)
+- `VAULT_STRATEGY_REALLOC_MAX_PASSES` — default **4** on-chain calls per vault per tick
 
 ## Charm ↔ Ajna full synergy (greenfield deploy)
 

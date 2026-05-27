@@ -486,7 +486,7 @@ abstract contract RebalanceTestHarness is Test {
         uint256 totalBefore = idleBefore + charmBefore + ajnaBefore + thirdBefore;
         uint256 driftBefore = _maxPairDriftBps(ctx);
 
-        address caller = scenario.caller == address(0) ? KEEPER : scenario.caller;
+        address caller = scenario.caller == address(0) ? address(this) : scenario.caller;
         uint8 passes = scenario.passes == 0 ? 1 : scenario.passes;
 
         if (scenario.revertSelector != bytes4(0)) {
@@ -931,7 +931,6 @@ abstract contract RebalanceTestHarness is Test {
 
     function _keeperRebalance(ScenarioVaultCtx memory ctx, uint16 minDeviationBps, uint8 passes) internal {
         for (uint8 i = 0; i < passes; i++) {
-            vm.prank(KEEPER);
             ctx.vault.rebalanceStrategies(minDeviationBps);
         }
     }
@@ -1032,6 +1031,19 @@ abstract contract RebalanceTestHarness is Test {
             vaultEnd.assetsPerShare
         );
         _logDepositorSnapshot("participant", ledger, snap);
+    }
+
+    function _logDepositorTimelineCheckpoint(
+        ScenarioVaultCtx memory ctx,
+        string memory checkpoint,
+        string memory label,
+        DepositorLedger memory ledger
+    ) internal view {
+        VaultTimelineSnapshot memory vaultSnap = _snapshotTimeline(ctx);
+        console2.log("");
+        console2.log("--- Depositor checkpoint: %s ---", checkpoint);
+        console2.log("vault share price (1e18): %s", vaultSnap.assetsPerShare);
+        _logDepositorSnapshot(label, ledger, _depositorSnapshot(ctx, ledger));
     }
 
     /// @dev Approximate USD mark using MC / 1B supply (6-decimal USD scale in logs).

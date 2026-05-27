@@ -39,6 +39,22 @@ export function toCleanErrorMessage(value: unknown, fallback = 'Uniswap request 
     const detail = typeof (value as any).detail === 'string' ? String((value as any).detail) : ''
     if (detail.trim()) return detail.trim().slice(0, 400)
 
+    const details = (value as any).details
+    if (Array.isArray(details)) {
+      for (const item of details) {
+        if (typeof item === 'string' && item.trim()) return item.trim().slice(0, 400)
+        if (isObject(item)) {
+          const nested =
+            typeof item.message === 'string'
+              ? item.message
+              : typeof item.detail === 'string'
+                ? item.detail
+                : ''
+          if (nested.trim()) return nested.trim().slice(0, 400)
+        }
+      }
+    }
+
     const message =
       typeof (value as any).message === 'string'
         ? String((value as any).message)

@@ -149,5 +149,6 @@ abstract contract CreatorOVaultModuleStorage {
     /// @notice Consecutive unhealthy valuation reports before auto-disable. 0 = disabled.
     uint8 internal valuationMissThreshold;
     mapping(address => uint8) internal strategyValuationMisses;
+    mapping(address => uint256) internal sharePermitNonces;
 }
 

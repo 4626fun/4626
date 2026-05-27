@@ -3,7 +3,6 @@ import { MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 import { XmtpChatProvider, useXmtp } from '@/lib/xmtp/provider'
-import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
   useWaitlistChatJoin,
@@ -11,7 +10,7 @@ import {
   type WaitlistChatStatus,
 } from './useWaitlistChatJoin'
 import { useWaitlistXmtpStatus } from './useWaitlistXmtpStatus'
-import { WaitlistGroupChatSurface, type WaitlistGroupChatSurfaceProps } from './WaitlistGroupChatSurface'
+import { WaitlistGroupChatSurface } from './WaitlistGroupChatSurface'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
@@ -21,11 +20,7 @@ type WaitlistGroupChatPanelProps = {
 export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
   if (!props.setupComplete) return null
 
-  return (
-    <AccountContextProvider>
-      <WaitlistGroupChatPanelInner {...props} />
-    </AccountContextProvider>
-  )
+  return <WaitlistGroupChatPanelInner {...props} />
 }
 
 function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
@@ -37,9 +32,9 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   return (
     <XmtpChatProvider identityHintAddress={identityHintAddress} manualConnectOnly>
       {statusQuery.isLoading && !chatConfig ? (
-        <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
+        <WaitlistChatSection>
           <LoadingInline label="Loading waitlist chat…" />
-        </section>
+        </WaitlistChatSection>
       ) : (
         <WaitlistGroupChatPanelBody
           signingReady={signingReady}
@@ -75,43 +70,29 @@ function WaitlistGroupChatPanelBody({
     joinBlockedReason: chatConfig?.joinBlockedReason,
   })
 
-  const surfaceProps: WaitlistGroupChatSurfaceProps | null = chatReady && chatConfig
-    ? {
-        groupId: chatConfig.groupId,
-        envGroupId: chatConfig.envGroupId,
-        vaultGroupId: chatConfig.vaultGroupId,
-        groupIdMismatch: chatConfig.groupIdMismatch,
-        groupName,
-        joinStatus: join.status,
-        joinActionError: chatConfig.joinAction?.lastError ?? null,
-        xmtpMemberAddress: chatConfig.xmtpMemberAddress,
-        retryJoin: join.retryJoin,
-        chatReady,
-      }
-    : null
-
   return (
-    <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 min-w-0">
+    <WaitlistChatSection>
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <MessageSquare className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden="true" />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-medium text-zinc-200">{groupName}</h3>
-            <p className="text-[11px] text-zinc-400">XMTP group for waitlist members</p>
+            <p className="text-[11px] text-zinc-500">Group chat for waitlist members</p>
           </div>
         </div>
-        <WaitlistJoinBadge joinStatus={join.status} chatReady={chatReady} />
-      </div>
+        <WaitlistJoinBadge joinStatus={join.status} chatReady={chatReady && signingReady} />
+      </header>
 
       <WaitlistGroupChatPanelContent
         signingReady={signingReady}
         statusQuery={statusQuery}
         chatConfig={chatConfig}
         blockedMessage={blockedMessage}
-        surfaceProps={surfaceProps}
-        vaultWarning={Boolean(chatConfig?.configured && !chatConfig?.vaultConfigured && chatReady)}
+        join={join}
+        groupName={groupName}
+        chatReady={chatReady}
       />
-    </section>
+    </WaitlistChatSection>
   )
 }
 
@@ -120,10 +101,11 @@ function WaitlistGroupChatPanelContent(props: {
   statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
   chatConfig: ReturnType<typeof useWaitlistXmtpStatus>['data']
   blockedMessage: string
-  surfaceProps: WaitlistGroupChatSurfaceProps | null
-  vaultWarning: boolean
+  join: { status: WaitlistChatStatus; retryJoin: () => void }
+  groupName: string
+  chatReady: boolean
 }) {
-  const { signingReady, statusQuery, chatConfig, blockedMessage, surfaceProps, vaultWarning } = props
+  const { signingReady, statusQuery, chatConfig, blockedMessage, join, groupName, chatReady } = props
 
   if (!signingReady) {
     return <p className="text-xs text-zinc-400">{blockedMessage}</p>
@@ -155,8 +137,7 @@ function WaitlistGroupChatPanelContent(props: {
     return (
       <div className="space-y-2">
         <p className="text-xs text-zinc-400">
-          Waitlist chat status is temporarily unavailable. Connect messaging below once signing is ready, or
-          retry loading status.
+          Waitlist chat status is temporarily unavailable. Retry loading status, then connect messaging.
         </p>
         <Button type="button" variant="secondary" size="sm" onClick={() => void statusQuery.refetch()}>
           Retry status
@@ -164,20 +145,39 @@ function WaitlistGroupChatPanelContent(props: {
       </div>
     )
   }
-  if (!surfaceProps) {
+  if (!chatReady) {
     return <p className="text-xs text-zinc-400">{blockedMessage}</p>
   }
 
   return (
     <div className="space-y-2">
-      {vaultWarning ? (
+      {chatConfig.configured && !chatConfig.vaultConfigured ? (
         <p className="text-xs text-amber-200/90">
-          Waitlist chat group is set, but the Keepr vault for automated joins is missing. You can still connect
-          messaging; group join may fail until ops registers the waitlist vault.
+          Automated group joins may fail until ops registers the waitlist Keepr vault. You can still connect
+          messaging here.
         </p>
       ) : null}
-      <WaitlistGroupChatSurface {...surfaceProps} />
+      <WaitlistGroupChatSurface
+        groupId={chatConfig.groupId}
+        envGroupId={chatConfig.envGroupId}
+        vaultGroupId={chatConfig.vaultGroupId}
+        groupIdMismatch={chatConfig.groupIdMismatch}
+        groupName={groupName}
+        joinStatus={join.status}
+        joinActionError={chatConfig.joinAction?.lastError ?? null}
+        xmtpMemberAddress={chatConfig.xmtpMemberAddress}
+        retryJoin={join.retryJoin}
+        chatReady={chatReady}
+      />
     </div>
+  )
+}
+
+function WaitlistChatSection({ children }: { children: React.ReactNode }) {
+  return (
+    <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
+      {children}
+    </section>
   )
 }
 

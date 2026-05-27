@@ -19,6 +19,7 @@
  *   tsx runner.ts keepr-action-queue     # Run the Keepr action queue
  *   tsx runner.ts strategy-signal-listener # Run always-on strategy signal listener
  *   tsx runner.ts bridge-integrity-monitor # Run bridge integrity monitor
+ *   tsx runner.ts vault-strategy-reallocator # Cross-strategy Charm/Ajna TVL rebalance
  *
  * Environment:
  *   - Loads .env file from kpr/ directory
@@ -81,6 +82,9 @@ async function main() {
       case 'bridge-integrity-monitor':
         workflow = await import('./workflows/bridge-integrity-monitor.workflow.js');
         break;
+      case 'vault-strategy-reallocator':
+        workflow = await import('./workflows/vault-strategy-reallocator.workflow.js');
+        break;
       case 'keepr-solana-rebalance':
         workflow = await import('./workflows/keepr-solana-rebalance.workflow.js');
         break;
@@ -100,6 +104,7 @@ async function main() {
         console.error('  strategy-signal-listener — always-on WS listener for Ajna/Charm triggers');
         console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
         console.error('  keepr-solana-rebalance   — bridge adapter-held CREATOR to Solana');
+        console.error('  vault-strategy-reallocator — cross-strategy Charm/Ajna TVL rebalance');
         process.exit(1);
     }
 

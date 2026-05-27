@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import { isXmtpRateLimitError } from '@/lib/xmtp/xmtpHelpers'
 import type { ChatConversation } from '@/lib/xmtp/provider'
 
 import type { WaitlistChatStatus } from './waitlistChatCopy'
-import { WAITLIST_GROUP_SYNC_DELAY_MS } from './waitlistGroupChatConstants'
+import { formatWaitlistChatError } from './waitlistChatErrors'
+import { WAITLIST_GROUP_SYNC_BACKOFF_MS } from './waitlistGroupChatConstants'
 import {
   collectWaitlistGroupIdCandidates,
   findWaitlistGroupConversation,
 } from './waitlistXmtpGroupIds'
 import { resyncWaitlistGroupMembership } from './waitlistXmtpResync'
-import { formatWaitlistChatError } from './waitlistChatErrors'
-import { isXmtpRateLimitError } from '@/lib/xmtp/xmtpHelpers'
 
 type UseWaitlistGroupSyncParams = {
   groupId: string | null
@@ -40,7 +40,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
   const [refreshBusy, setRefreshBusy] = useState(false)
   const [syncTimedOut, setSyncTimedOut] = useState(false)
   const [resyncError, setResyncError] = useState<string | null>(null)
-  const groupSyncAttemptRef = useRef(false)
+  const groupSyncStartedRef = useRef(false)
   const groupSyncInFlightRef = useRef(false)
   const groupConversationRef = useRef<ChatConversation | null>(null)
 
@@ -69,7 +69,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
 
   useEffect(() => {
     if (groupConversation) {
-      groupSyncAttemptRef.current = false
+      groupSyncStartedRef.current = false
       setSyncTimedOut(false)
     }
   }, [groupConversation])
@@ -120,22 +120,34 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
       joinStatus !== 'executed' ||
       groupIdCandidates.length === 0 ||
       groupConversation ||
-      groupSyncAttemptRef.current
+      groupSyncStartedRef.current
     ) {
       return
     }
 
-    groupSyncAttemptRef.current = true
-    const timeoutId = window.setTimeout(() => {
-      void syncWaitlistGroups({ resyncMembership: false }).finally(() => {
-        if (!groupConversationRef.current) {
-          setSyncTimedOut(true)
+    groupSyncStartedRef.current = true
+    let cancelled = false
+    let attempt = 0
+
+    const runBackoffSync = async () => {
+      while (!cancelled && !groupConversationRef.current && attempt < WAITLIST_GROUP_SYNC_BACKOFF_MS.length) {
+        const delay = WAITLIST_GROUP_SYNC_BACKOFF_MS[attempt] ?? 0
+        if (delay > 0) {
+          await new Promise((resolve) => window.setTimeout(resolve, delay))
         }
-      })
-    }, WAITLIST_GROUP_SYNC_DELAY_MS)
+        if (cancelled || groupConversationRef.current) return
+        await syncWaitlistGroups({ resyncMembership: false })
+        attempt += 1
+      }
+      if (!cancelled && !groupConversationRef.current) {
+        setSyncTimedOut(true)
+      }
+    }
+
+    void runBackoffSync()
 
     return () => {
-      window.clearTimeout(timeoutId)
+      cancelled = true
     }
   }, [
     groupConversation,
@@ -152,6 +164,7 @@ export function useWaitlistGroupSync(params: UseWaitlistGroupSyncParams) {
     }
     setRefreshBusy(true)
     setSyncTimedOut(false)
+    groupSyncStartedRef.current = false
     try {
       await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' })
       await refreshConversations({ force: true })

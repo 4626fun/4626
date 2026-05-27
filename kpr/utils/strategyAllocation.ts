@@ -162,6 +162,10 @@ export function shouldRebalanceStrategies(plan: StrategyAllocationRow[]): boolea
   );
 }
 
+export function computeMaxDriftBps(plan: StrategyAllocationRow[]): bigint {
+  return plan.reduce((max, row) => (row.driftBps > max ? row.driftBps : max), 0n);
+}
+
 export function sumSuggestedWithdrawals(plan: StrategyAllocationRow[]): bigint {
   return plan.reduce(
     (sum, row) => (row.action === 'withdraw' ? sum + row.suggestedMove : sum),

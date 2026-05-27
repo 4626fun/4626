@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import "forge-std/Test.sol";
 import {DeploymentBatcher, DeploymentBatcherUtilsHelper, DeploymentBatcherPhase1Module, DeploymentBatcherPhase2Module, DeploymentBatcherPhase3Helper, DeploymentBatcherUniV4Helper} from "../../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {ICreatorRegistry} from "../../contracts/interfaces/core/ICreatorRegistry.sol";
 
 contract DeploymentBatcherFixture is Test {
     struct Helpers {
@@ -102,6 +103,17 @@ contract DeploymentBatcherFixture is Test {
         require(address(batcher) == predicted, "DeploymentBatcherFixture: prediction mismatch");
         vm.prank(cfg.protocolTreasury);
         batcher.setPhase1Module(address(helpers.phase1));
+    }
+
+    function mockRegistryCreatorCoin(address registry, address creatorToken, address oracle) public {
+        ICreatorRegistry.CreatorCoinInfo memory info;
+        info.token = creatorToken;
+        info.oracle = oracle;
+        vm.mockCall(
+            registry,
+            abi.encodeWithSelector(ICreatorRegistry.getCreatorCoin.selector, creatorToken),
+            abi.encode(info)
+        );
     }
 
     function deployShell(BatcherConfig memory cfg) public returns (DeploymentBatcher batcher, Helpers memory helpers) {

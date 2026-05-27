@@ -14,6 +14,7 @@ import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 interface ICreatorOVaultStrategiesModuleInternal {
     function __withdrawFromStrategies(uint256 amountNeeded) external returns (uint256 totalWithdrawn);
     function __autoAllocateToStrategy() external;
+    function __ejectDisabledStrategy(address strategy) external;
 }
 
 /// @notice Core ERC-4626 + queue + profit unlocking + reporting logic for CreatorOVault.
@@ -30,6 +31,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
     uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000;
     uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
+    uint8 internal constant MAX_VALUATION_MISS_THRESHOLD = 30;
 
     // ---- events (must match vault signatures) ----
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
@@ -192,11 +194,13 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         }
     }
 
-    function _firstStrategyValuationNotReady() internal view returns (address bad) {
+    function _firstStrategyValuationNotReady(bool allowMissGrace) internal view returns (address bad) {
+        uint8 threshold = valuationMissThreshold;
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
             address strategy = strategyList[i];
             if (!activeStrategies[strategy]) continue;
+            if (allowMissGrace && threshold > 0 && strategyValuationMisses[strategy] > 0) continue;
 
             try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
                 if (!ok) return strategy;
@@ -212,8 +216,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         return address(0);
     }
 
-    function _requireStrategyValuationsReady() internal view {
-        address bad = _firstStrategyValuationNotReady();
+    function _requireStrategyValuationsReady(bool allowMissGrace) internal view {
+        address bad = _firstStrategyValuationNotReady(allowMissGrace);
         if (bad != address(0)) revert StrategyValuationNotReady(bad);
     }
 
@@ -230,14 +234,14 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
 
-        _requireStrategyValuationsReady();
+        _requireStrategyValuationsReady(false);
         if (!isFirstDeposit) {
             _checkTrustedPpsDeviation(priceBefore);
         }
 
         shares = IERC4626(address(this)).previewDeposit(assets);
         if (shares == 0) revert ZeroShares();
-        if (supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
+        if (!isFirstDeposit && supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
 
         if (!isFirstDeposit && shares > assets * 10_000) {
             revert InflationAttackDetected(assets, shares);
@@ -269,14 +273,14 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         bool isFirstDeposit = supplyBefore == 0;
         uint256 priceBefore = isFirstDeposit ? 0 : pricePerShare();
 
-        _requireStrategyValuationsReady();
+        _requireStrategyValuationsReady(false);
         if (!isFirstDeposit) {
             _checkTrustedPpsDeviation(priceBefore);
         }
 
         assets = IERC4626(address(this)).previewMint(shares);
         if (assets == 0) revert ZeroAmount();
-        if (supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
+        if (!isFirstDeposit && supplyBefore + shares > maxTotalSupply) revert InvalidAmount();
 
         if (isFirstDeposit && assets < MINIMUM_FIRST_DEPOSIT) {
             revert FirstDepositTooSmall(assets, MINIMUM_FIRST_DEPOSIT);
@@ -440,7 +444,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     function maxDeposit(address receiver) external view onlyDelegateCall returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
-        if (_firstStrategyValuationNotReady() != address(0)) return 0;
+        if (_firstStrategyValuationNotReady(false) != address(0)) return 0;
 
         uint256 currentSupply = _totalSupply;
         if (currentSupply >= maxTotalSupply) return 0;
@@ -457,7 +461,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     function maxMint(address receiver) external view onlyDelegateCall returns (uint256) {
         if (paused || isShutdown) return 0;
         if (whitelistEnabled && !whitelist[receiver]) return 0;
-        if (_firstStrategyValuationNotReady() != address(0)) return 0;
+        if (_firstStrategyValuationNotReady(false) != address(0)) return 0;
 
         uint256 currentSupply = _totalSupply;
         if (currentSupply >= maxTotalSupply) return 0;
@@ -592,7 +596,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     function report() external onlyDelegateCall returns (uint256 profit, uint256 loss) {
         _processProfitUnlock();
         _processValuationHealth();
-        _requireStrategyValuationsReady();
+        _requireStrategyValuationsReady(true);
 
         uint256 currentTotalAssets = totalAssets();
         _accrueManagementFee(currentTotalAssets);
@@ -681,7 +685,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (elapsed == 0 || currentTotalAssets == 0) return;
 
         uint256 feeAssets = (currentTotalAssets * feeBps * elapsed) / (MAX_BPS * SECONDS_PER_YEAR);
-        if (feeAssets == 0) return;
+        if (feeAssets == 0 || feeAssets > currentTotalAssets) return;
 
         address recipient = managementFeeRecipient;
         if (recipient == address(0)) recipient = performanceFeeRecipient;
@@ -699,8 +703,13 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint8 threshold = valuationMissThreshold;
         if (threshold == 0) return;
 
-        uint256 len = strategyList.length;
-        for (uint256 i = 0; i < len; i++) {
+        // Backward iteration: `_ejectDisabledStrategy` swap-pops `strategyList[i]`, which
+        // would skip or OOB-revert under a forward loop with a cached length.
+        uint256 i = strategyList.length;
+        while (i > 0) {
+            unchecked {
+                --i;
+            }
             address strategy = strategyList[i];
             if (!activeStrategies[strategy]) continue;
 
@@ -709,18 +718,25 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
                 continue;
             }
 
-            uint8 misses = strategyValuationMisses[strategy] + 1;
+            uint8 prior = strategyValuationMisses[strategy];
+            uint8 misses = prior < type(uint8).max ? prior + 1 : prior;
             strategyValuationMisses[strategy] = misses;
             if (misses < threshold) continue;
 
-            uint256 weight = strategyWeights[strategy];
-            activeStrategies[strategy] = false;
-            totalStrategyWeight -= weight;
-            strategyWeights[strategy] = 0;
             strategyValuationMisses[strategy] = 0;
-
+            _ejectDisabledStrategy(strategy);
             emit StrategyValuationAutoDisabled(strategy, misses);
         }
+    }
+
+    function _ejectDisabledStrategy(address strategy) internal {
+        address module = _strategiesModule;
+        if (module == address(0)) revert ModulesNotSet();
+
+        (bool ok, bytes memory ret) = module.delegatecall(
+            abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__ejectDisabledStrategy.selector, strategy)
+        );
+        if (!ok) _revertBytes(ret);
     }
 
     function _isValuationReady(address strategy) internal view returns (bool) {

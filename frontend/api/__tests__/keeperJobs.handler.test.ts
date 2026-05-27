@@ -628,7 +628,7 @@ describe('keeper job coordination handlers', () => {
     const restoreEnv = applyEnv({
       CRON_SECRET: 'cron-secret-for-active-vaults',
       KEEPER_ACTIVE_VAULT_ENQUEUE_ENABLED: '1',
-      KEEPER_ACTIVE_VAULT_WORKFLOWS: 'sweep,tend,report,payout',
+      KEEPER_ACTIVE_VAULT_WORKFLOWS: 'sweep,tend,report,rebalance,payout',
       KEEPER_ACTIVE_VAULT_LIMIT: '5',
       KEEPER_ACTIVE_VAULT_VALIDATE_LISTING: 'false',
     })
@@ -659,7 +659,8 @@ describe('keeper job coordination handlers', () => {
         .mockResolvedValueOnce({ rows: [jobRow({ id: 301, dedupe_key: 'active-sweep:0x1111111111111111111111111111111111111111' })], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [jobRow({ id: 302, dedupe_key: 'active-tend:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
         .mockResolvedValueOnce({ rows: [jobRow({ id: 303, dedupe_key: 'active-report:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
-        .mockResolvedValueOnce({ rows: [jobRow({ id: 304, dedupe_key: 'active-payout:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [jobRow({ id: 304, dedupe_key: 'active-rebalance:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
+        .mockResolvedValueOnce({ rows: [jobRow({ id: 305, dedupe_key: 'active-payout:0x5555555555555555555555555555555555555555' })], rowCount: 1 })
       const req = createMockReq({
         method: 'GET',
         headers: { authorization: 'Bearer cron-secret-for-active-vaults' },
@@ -675,6 +676,7 @@ describe('keeper job coordination handlers', () => {
         'active-sweep:0x1111111111111111111111111111111111111111',
         'active-tend:0x5555555555555555555555555555555555555555',
         'active-report:0x5555555555555555555555555555555555555555',
+        'active-rebalance:0x5555555555555555555555555555555555555555',
         'active-payout:0x5555555555555555555555555555555555555555',
       ])
     } finally {

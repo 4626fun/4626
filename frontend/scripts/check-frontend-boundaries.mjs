@@ -14,7 +14,7 @@ const importRegex =
 // Allowed cross-feature pairs: Map<from, Set<to>>.
 // Keep tight: only add when two features are part of the same product flow.
 const ALLOWED_CROSS_FEATURE = new Map([
-  ['accountSetup', new Set(['waitlist'])],
+  ['accountSetup', new Set(['waitlist', 'archB'])],
   ['waitlist', new Set(['accountSetup'])],
 ])
 
@@ -22,6 +22,11 @@ const ALLOWED_CROSS_FEATURE = new Map([
 // These are pure policy helpers shared between server + client surfaces.
 const ALLOWED_API_TO_SRC = new Set([
   'src/lib/agent/erc8004AgentUriPolicy',
+  'src/lib/deploy/finalizeShareBridgeFee',
+  'src/lib/deploy/shareBridgeOftWiring',
+  'src/config/contracts.defaults',
+  'src/deploy/bytecode.generated',
+  'src/lib/uniswap/swapQuoteSanitize',
 ])
 
 async function walk(dir) {

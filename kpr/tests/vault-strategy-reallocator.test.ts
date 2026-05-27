@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeDeployableBase,
   computeDriftBps,
+  computeMaxDriftBps,
   computeMinIdle,
   computeStrategyAllocationPlan,
   computeTotalAssets,
@@ -216,6 +217,22 @@ describe('computeDriftBps', () => {
   });
 });
 
+describe('computeMaxDriftBps', () => {
+  it('returns the largest per-strategy drift in the plan', () => {
+    const plan = computeStrategyAllocationPlan(
+      twoStrategyInput({ charmAssets: 810n, ajnaAssets: 90n }),
+    );
+    expect(computeMaxDriftBps(plan)).toBeGreaterThan(500n);
+  });
+
+  it('returns zero when all strategies are on target', () => {
+    const plan = computeStrategyAllocationPlan(
+      twoStrategyInput({ charmAssets: 450n, ajnaAssets: 450n }),
+    );
+    expect(computeMaxDriftBps(plan)).toBe(0n);
+  });
+});
+
 describe('defaultWithdrawalQueueOrder', () => {
   it('documents phase-3 charm-first queue order', () => {
     const resolved = defaultWithdrawalQueueOrder({
@@ -251,5 +268,26 @@ describe('computeTotalAssets', () => {
         ],
       }),
     ).toBe(1_000n);
+  });
+});
+
+describe('parseMaxRebalancePasses', () => {
+  it('defaults to 4 and clamps invalid values', async () => {
+    const { parseMaxRebalancePasses } = await import('../actions/vault-strategy-reallocator.action.js');
+    const original = process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES;
+    delete process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES;
+    expect(parseMaxRebalancePasses()).toBe(4);
+
+    process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES = '0';
+    expect(parseMaxRebalancePasses()).toBe(4);
+
+    process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES = '6';
+    expect(parseMaxRebalancePasses()).toBe(6);
+
+    process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES = '99';
+    expect(parseMaxRebalancePasses()).toBe(8);
+
+    if (original === undefined) delete process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES;
+    else process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES = original;
   });
 });

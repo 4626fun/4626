@@ -34,7 +34,7 @@ export type CharmVaultAuthSnapshot = {
 };
 
 async function readAuthField(
-  charmVaultAddress: Address,
+  charmVaultAddress: `0x${string}`,
   functionName: 'manager' | 'rebalanceDelegate' | 'keeper' | 'owner',
 ): Promise<unknown> {
   return readContract<unknown>({
@@ -45,7 +45,9 @@ async function readAuthField(
 }
 
 /** Reads on-chain Charm auth slots; skips keeper/owner when manager is protocol treasury. */
-export async function readCharmVaultAuthSnapshot(charmVaultAddress: Address): Promise<CharmVaultAuthSnapshot> {
+export async function readCharmVaultAuthSnapshot(
+  charmVaultAddress: `0x${string}`,
+): Promise<CharmVaultAuthSnapshot> {
   const [managerRaw, delegateRaw] = await Promise.all([
     readAuthField(charmVaultAddress, 'manager'),
     readAuthField(charmVaultAddress, 'rebalanceDelegate'),

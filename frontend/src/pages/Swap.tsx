@@ -53,7 +53,9 @@ import {
 } from '@/lib/swap/zoraTokenSearch'
 import { enrichSwapTokenOption, swapTokenOptionNeedsLabelEnrichment } from '@/lib/swap/swapTokenLabels'
 import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
+import { deriveSwapUsdEstimates } from '@/lib/swap/swapAmountUsd'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
+import { useSwapTokenUsdPrices } from '@/lib/swap/useSwapTokenUsdPrices'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
@@ -1625,6 +1627,19 @@ export function Swap() {
 
   const buyQuoteLoading = busy === 'quote' && !buyAmountDisplay
 
+  const { prices: swapUsdPrices } = useSwapTokenUsdPrices(tokenIn, tokenOut)
+  const swapUsdEstimates = useMemo(
+    () =>
+      deriveSwapUsdEstimates({
+        amountInUnits,
+        estimatedOut: buyAmountDisplay,
+        tokenIn,
+        tokenOut,
+        prices: swapUsdPrices,
+      }),
+    [amountInUnits, buyAmountDisplay, tokenIn, tokenOut, swapUsdPrices],
+  )
+
   const tokenOutBalanceLabel = useMemo(() => {
     if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return undefined
     return fmtBalFromAmount(tokenOutBalanceQuery.data.formatted, tokenOutSymbol)
@@ -2035,7 +2050,8 @@ export function Swap() {
                         amountInUnits={amountInUnits}
                         estimatedOut={buyAmountDisplay}
                         buyQuoteLoading={buyQuoteLoading}
-                        estimatedOutUsd={null}
+                        amountInUsd={swapUsdEstimates.amountInUsd}
+                        estimatedOutUsd={swapUsdEstimates.estimatedOutUsd}
                         tokenInSymbol={tokenInSymbol}
                         tokenOutSymbol={tokenOutSymbol}
                         tokenInBalanceLabel={tokenInBalanceLabel}

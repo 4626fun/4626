@@ -108,6 +108,16 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // Uniswap Trading API schema validation (often transaction `value` typed as number in JSON)
+  if (msg.includes('does not match any of the allowed types') && msg.includes('value')) {
+    return {
+      code: 'UNKNOWN',
+      message:
+        'Swap build failed due to an invalid transaction payload from the router. Refresh the quote and try again.',
+      retryable: true,
+    }
+  }
+
   // Quote expired
   if (msg.includes('expired') || msg.includes('stale quote') || msg.includes('deadline')) {
     return {

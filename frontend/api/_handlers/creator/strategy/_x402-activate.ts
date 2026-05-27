@@ -181,9 +181,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // ─── X-PAYMENT present: parse, validate, settle. ───
   const parsed = parseXPaymentHeader(paymentHeaderStr)
   if (!parsed.ok) {
-    return res
-      .status(400)
-      .json({ success: false, error: `x402 header parse failed: ${parsed.reason}` } satisfies ApiEnvelope<never>)
+    return res.status(400).json({
+      success: false,
+      error: 'x402_header_parse_failed',
+      reason: parsed.reason,
+    } satisfies ApiEnvelope<never>)
   }
 
   const staticValidation = validateX402Authorization({
@@ -195,7 +197,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!staticValidation.ok) {
     return res.status(400).json({
       success: false,
-      error: `x402 authorization invalid: ${staticValidation.reason}`,
+      error: 'x402_authorization_invalid',
+      reason: staticValidation.reason,
     } satisfies ApiEnvelope<never>)
   }
 
@@ -210,7 +213,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const status = statusByReason[settlement.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `x402 settlement failed (${settlement.reason}): ${settlement.message}`,
+      error: 'x402_settlement_failed',
+      reason: settlement.reason,
+      message: settlement.message,
     } satisfies ApiEnvelope<never>)
   }
 
@@ -245,7 +250,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const status = statusByReason[insertResult.reason] ?? 500
     return res.status(status).json({
       success: false,
-      error: `Activation failed (${insertResult.reason}): ${insertResult.message}`,
+      error: 'activation_insert_failed',
+      reason: insertResult.reason,
+      message: insertResult.message,
     } satisfies ApiEnvelope<never>)
   }
 

@@ -29,7 +29,6 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
         ghostTotalBefore = _economicTotal();
         ghostDriftBefore = _maxPairDriftBps(ctx);
 
-        vm.prank(KEEPER);
         ctx.vault.rebalanceStrategies(minDeviationBps);
 
         ghostTotalAfter = _economicTotal();
@@ -80,7 +79,6 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
 
         ghostTotalBefore = _economicTotal();
         ghostDriftBefore = _maxPairDriftBps(ctx);
-        vm.prank(KEEPER);
         ctx.vault.rebalanceStrategies(500);
         ghostTotalAfter = _economicTotal();
         ghostDriftAfter = _maxPairDriftBps(ctx);
@@ -90,7 +88,6 @@ contract RebalanceInvariantHandler is RebalanceTestHarness {
 
         ghostTotalBefore = _economicTotal();
         ghostDriftBefore = _maxPairDriftBps(ctx);
-        vm.prank(KEEPER);
         ctx.vault.rebalanceStrategies(500);
         ghostTotalAfter = _economicTotal();
         ghostDriftAfter = _maxPairDriftBps(ctx);

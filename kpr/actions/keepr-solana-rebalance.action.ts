@@ -417,7 +417,7 @@ export async function executeSolanaRebalance(): Promise<RebalanceResult> {
     if (executeWrites) {
       try {
         const tx = await writeContract({
-          address: adapterAddress,
+          address: adapterAddress as `0x${string}`,
           abi: [...SOLANA_BRIDGE_ADAPTER_ABI, ...SOLANA_BRIDGE_OUTBOUND_ABI] as Abi,
           functionName: 'bridgeToSolana',
           args: [entry.creatorToken, adapterBalance, destinationBytes32],

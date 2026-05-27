@@ -1623,17 +1623,28 @@ export function useSwapExecution(params: {
     ],
   )
 
-  const toExecutionTransaction = useCallback((tx: Record<string, unknown>): TransactionRequest => ({
+  const toExecutionTransaction = useCallback((tx: Record<string, unknown>): TransactionRequest => {
+    const rawValue = tx.value
+    const normalizedValue =
+      typeof rawValue === 'bigint'
+        ? rawValue.toString()
+        : typeof rawValue === 'number' && Number.isFinite(rawValue)
+          ? String(Math.trunc(rawValue))
+          : typeof rawValue === 'string' && rawValue.trim()
+            ? rawValue
+            : '0'
+    return {
     to: tx.to as string,
     from: (tx.from as string) ?? params.signerAddress ?? '',
     data: tx.data as string,
-    value: typeof tx.value === 'string' && tx.value.trim() ? tx.value : '0',
+    value: normalizedValue,
     chainId: swapChainId,
     gasLimit: typeof tx.gasLimit === 'string' ? tx.gasLimit : undefined,
     maxFeePerGas: typeof tx.maxFeePerGas === 'string' ? tx.maxFeePerGas : undefined,
     maxPriorityFeePerGas: typeof tx.maxPriorityFeePerGas === 'string' ? tx.maxPriorityFeePerGas : undefined,
     gasPrice: typeof tx.gasPrice === 'string' ? tx.gasPrice : undefined,
-  }), [params.signerAddress, swapChainId])
+  }
+  }, [params.signerAddress, swapChainId])
 
   const getApprovalExecutionTx = useCallback((): TransactionRequest | null => {
     if (!approvalData) return null

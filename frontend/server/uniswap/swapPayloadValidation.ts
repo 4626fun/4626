@@ -1,3 +1,5 @@
+import { coerceSwapTransactionValue, normalizeSwapApiResponsePayload } from '../../src/lib/uniswap/swapQuoteSanitize.js'
+
 import { isObject } from './trading.js'
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
@@ -5,10 +7,15 @@ const HEX_RE = /^0x[0-9a-fA-F]+$/
 const DECIMAL_RE = /^\d+$/
 
 function isNumericString(value: unknown): boolean {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && Number.isInteger(value)) {
+    return true
+  }
   if (typeof value !== 'string' || !value.trim()) return false
   const raw = value.trim()
   return HEX_RE.test(raw) || DECIMAL_RE.test(raw)
 }
+
+export { normalizeSwapApiResponsePayload }
 
 export function validateSwapTransactionPayload(payload: unknown): string | null {
   if (!isObject(payload)) return 'Invalid swap response from Uniswap API'
@@ -32,6 +39,10 @@ export function validateSwapTransactionPayload(payload: unknown): string | null 
 
   if ('value' in tx && tx.value != null && !isNumericString(tx.value)) {
     return 'Uniswap swap response contains invalid transaction value'
+  }
+  // Normalize for downstream viem/ERC-4337 callers (API may return JSON numbers).
+  if ('value' in tx) {
+    ;(tx as Record<string, unknown>).value = coerceSwapTransactionValue(tx.value)
   }
   if ('gasLimit' in tx && tx.gasLimit != null && !isNumericString(tx.gasLimit)) {
     return 'Uniswap swap response contains invalid gas limit'

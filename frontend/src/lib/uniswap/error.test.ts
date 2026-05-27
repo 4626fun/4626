@@ -41,6 +41,14 @@ describe('normalizeUniswapError', () => {
     expect(normalized.message).toContain('session does not match')
   })
 
+  it('maps Uniswap transaction value schema validation errors', () => {
+    const normalized = normalizeUniswapError(
+      'RequestValidationError: "value" does not match any of the allowed types',
+    )
+    expect(normalized.message).toContain('invalid transaction payload from the router')
+    expect(normalized.retryable).toBe(true)
+  })
+
   it('falls back safely', () => {
     const normalized = normalizeUniswapError('weird edge case')
     expect(normalized.code).toBe('UNKNOWN')

@@ -4,6 +4,7 @@ import { getAddress, isAddress } from 'viem'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 
 import { pickCanonicalSmartWalletAddress } from '@/hooks/canonicalWalletUtils'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { WAITLIST_ME_QUERY_KEY, fetchWaitlistMe } from '@/lib/waitlist/waitlistMeQuery'
 import { probeWalletCapabilities } from './getCapabilities'
 import { detectSignerType } from './detectSignerType'
@@ -51,6 +52,7 @@ export function AccountContextProvider(props: { children: ReactNode }) {
   const { address: connectedAddress, chainId } = useAccount()
   const { data: walletClient } = useWalletClient()
   const publicClient = usePublicClient()
+  const auth = useSiweAuth()
 
   const signerAddress = useMemo(() => normalizeAddress(connectedAddress), [connectedAddress])
   const chainIdValue = typeof chainId === 'number' ? chainId : null
@@ -58,7 +60,7 @@ export function AccountContextProvider(props: { children: ReactNode }) {
 
   const waitlistMeQuery = useQuery({
     queryKey: WAITLIST_ME_QUERY_KEY,
-    enabled: Boolean(signerAddress),
+    enabled: Boolean(signerAddress) || auth.hasSession,
     queryFn: fetchWaitlistMe,
     staleTime: 15_000,
   })
@@ -107,13 +109,21 @@ export function AccountContextProvider(props: { children: ReactNode }) {
     return picked ? normalizeAddress(picked) : undefined
   }, [waitlistMeQuery.data])
 
+  const policySignerAddress = useMemo(() => {
+    const embedded = waitlistMeQuery.data?.primaryEmbeddedEoa
+    if (typeof embedded === 'string' && isAddress(embedded)) {
+      return normalizeAddress(embedded)
+    }
+    return signerAddress
+  }, [signerAddress, waitlistMeQuery.data?.primaryEmbeddedEoa])
+
   const policyCanonicalAddress = useMemo(
     () =>
       resolvePolicyCanonicalAddress({
         canonicalAddress: profileCswAddress,
-        signerAddress,
+        signerAddress: policySignerAddress,
       }) ?? undefined,
-    [profileCswAddress, signerAddress],
+    [policySignerAddress, profileCswAddress],
   )
 
   const canonicalPolicyApplies = useMemo(

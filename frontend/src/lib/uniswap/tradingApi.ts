@@ -6,6 +6,11 @@ import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
 import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
+import {
+  coerceSwapTransactionValue,
+  normalizeSwapApiResponsePayload,
+  sanitizeClassicQuoteForSwap,
+} from '@/lib/uniswap/swapQuoteSanitize'
 
 const DEFAULT_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 500
@@ -268,7 +273,7 @@ function extractCdpSwapTransaction(payload: Record<string, unknown>): Transactio
     to,
     from,
     data,
-    value: typeof transaction.value === 'string' && transaction.value.trim() ? transaction.value : '0',
+    value: coerceSwapTransactionValue(transaction.value),
     chainId: (Number.isFinite(Number(transaction.chainId)) && Number(transaction.chainId) > 0
       ? Number(transaction.chainId)
       : 8453) as TransactionRequest['chainId'],
@@ -509,9 +514,14 @@ export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapRespon
     return { swap: tx } as CreateSwapResponse
   }
 
-  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, normalizedBody)
-  assertValidSwapTransaction(response.swap)
-  return response
+  const swapBody: Record<string, unknown> = {
+    ...normalizedBody,
+    quote: sanitizeClassicQuoteForSwap(normalizedBody.quote as Record<string, unknown>),
+  }
+  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, swapBody)
+  const normalized = normalizeSwapApiResponsePayload(response) as CreateSwapResponse
+  assertValidSwapTransaction(normalized.swap)
+  return normalized
 }
 
 export type CreateOrderParams = Omit<OrderRequest, 'quote'> & {
@@ -540,6 +550,8 @@ export function assertValidSwapTransaction(tx: TransactionRequest): void {
   if (tx.maxFeePerGas && tx.gasPrice) {
     throw new Error('Invalid swap transaction: cannot set both maxFeePerGas and gasPrice')
   }
+  const raw = tx as TransactionRequest & { value?: unknown }
+  raw.value = coerceSwapTransactionValue(raw.value) as TransactionRequest['value']
 }
 
 export async function buildSwap5792(body: Record<string, unknown>): Promise<Record<string, unknown>> {

@@ -107,8 +107,6 @@ export function TokenInput({
             </div>
           ) : amountUsd ? (
             <div className="mt-2 text-sm font-medium tabular-nums text-zinc-500">{amountUsd}</div>
-          ) : !amountLoading ? (
-            <div className="mt-2 text-sm font-medium tabular-nums text-zinc-600">$0</div>
           ) : null}
         </div>
 
@@ -116,7 +114,7 @@ export function TokenInput({
           <button
             type="button"
             onClick={onSelectToken}
-            className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-full border border-white/10 bg-[rgb(var(--vault-card)/0.85)] px-3 py-2 transition-colors hover:border-white/16 hover:bg-white/[0.08]"
+            className="inline-flex h-10 w-full items-center justify-between gap-2 rounded-full bg-[rgb(var(--vault-card)/0.85)] px-3 py-2 transition-colors hover:bg-white/[0.08]"
             aria-label={`Select ${label} token`}
           >
             <span className="flex min-w-0 items-center gap-2">

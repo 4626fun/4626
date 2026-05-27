@@ -106,6 +106,9 @@ export const VRF_MIN_BALANCE_WEI = BigInt('5000000000000000'); // 0.005 ETH
 /** Minimum overweight drift before cross-strategy rebalance executes */
 export const VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS = 500; // 5%
 
+/** Max on-chain rebalanceStrategies() calls per vault per keeper tick */
+export const VAULT_STRATEGY_REALLOC_MAX_PASSES = 4;
+
 export const VAULT_STRATEGY_VIEW_ABI = [
   {
     type: 'function',

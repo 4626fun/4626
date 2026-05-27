@@ -71,13 +71,13 @@ function normalizeAddress(value: string | null | undefined): Address | null {
   return getAddress(raw);
 }
 
-function getCreatorRegistryAddress(): Address {
+function getCreatorRegistryAddress(): `0x${string}` {
   const configured = String(process.env.CREATOR_REGISTRY ?? '').trim();
   const candidate = configured || DEFAULT_CREATOR_REGISTRY;
   if (!isAddress(candidate)) {
     throw new Error('CREATOR_REGISTRY is not a valid address');
   }
-  return getAddress(candidate);
+  return getAddress(candidate) as `0x${string}`;
 }
 
 async function verifyGrandfatheredVaultBinding(vault: VaultConfig): Promise<RegistryVerificationResult> {

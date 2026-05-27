@@ -19,10 +19,22 @@ contract MockOwnableTransfer {
 
 contract MockCharmStrategy is MockOwnableTransfer {
     bool public approvalsInitialized;
+    address public creatorOracle;
+    address public ajnaPool;
 
     function initializeApprovals() external {
         approvalsInitialized = true;
     }
+
+    function setCreatorOracle(address _creatorOracle) external {
+        creatorOracle = _creatorOracle;
+    }
+
+    function setAjnaPool(address _ajnaPool) external {
+        ajnaPool = _ajnaPool;
+    }
+
+    function setAjnaBorrowConfig(bool, uint256, uint256, uint256, uint256, uint256) external {}
 }
 
 contract MockAjnaVaultAuth {
@@ -242,6 +254,7 @@ contract DeploymentBatcherPhase3OwnershipTest is Test {
         });
         (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
+        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("creatorOracle"));
 
         vm.mockCall(
             batcher.CHARM_FACTORY(),

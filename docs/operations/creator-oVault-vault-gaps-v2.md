@@ -30,11 +30,20 @@ Integrators should treat **`instantIdleBps`** as “redeemable without strategy 
 
 ## P2 — Valuation auto-disable
 
-- `valuationMissThreshold` (0 = off)
-- `strategyValuationMisses`
-- On `report()`, consecutive unhealthy valuations **deactivate** the strategy (weight zeroed, no new deploys) and emit `StrategyValuationAutoDisabled`.
+- `valuationMissThreshold` (0 = off, max **30** consecutive misses)
+- `strategyValuationMisses` (saturates at `uint8` max; does not wrap)
+- On `report()`, consecutive unhealthy valuations trigger **`__ejectDisabledStrategy`**: best-effort withdraw, debt zeroed, strategy removed from list + default queue, emit `StrategyValuationAutoDisabled`.
 
-Management must `removeStrategy` / `migrateStrategy` to unwind remaining strategy TVL.
+Use `forceRemoveStrategy` for active strategies with irrecoverable shortfall; inactive ejected strategies are already off the list.
+
+## Audit hardening (v2.1)
+
+- **Valuation health loop** iterates `strategyList` **backward** so swap-pop ejection cannot skip strategies or OOB-revert when multiple strategies eject in one `report()`.
+- **First deposit** skips `maxTotalSupply` cap check (avoids virtual-shares / layout footguns on bootstrap).
+- **Management fee recipient** routes through the same risk timelock as fees (`scheduleSetManagementFeeRecipient` / `setManagementFeeRecipient`).
+- **Risk schedule** `pendingRiskUnlockTime` rejects `block.timestamp + delay` overflow past `uint64`.
+- **Share `permit`** uses `SignatureChecker` (EOA + ERC-1271 smart wallets).
+- **`migrateStrategy`** ejects inactive-but-listed strategies before adding the replacement.
 
 ## P3 — `migrateStrategy`
 

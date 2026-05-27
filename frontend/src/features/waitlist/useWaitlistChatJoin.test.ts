@@ -47,12 +47,42 @@ describe('useWaitlistChatJoin', () => {
     expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 
+  it('does not auto-join when messaging becomes ready', async () => {
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useWaitlistChatJoin>[0]) => useWaitlistChatJoin(props),
+      {
+        initialProps: {
+          xmtpMemberAddress: IDENTITY,
+          chatReady: true,
+          enabled: true,
+          messagingReady: false,
+          serverJoinActionStatus: null,
+        },
+      },
+    )
+
+    expect(result.current.status).toBe('awaiting_messaging')
+
+    rerender({
+      xmtpMemberAddress: IDENTITY,
+      chatReady: true,
+      enabled: true,
+      messagingReady: true,
+      serverJoinActionStatus: null,
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('awaiting_messaging')
+    })
+    expect(mockedApiFetch).not.toHaveBeenCalled()
+  })
+
   it('maps joining copy without Zora/XMTP jargon', () => {
     expect(waitlistChatStatusMessage('joining')).toBe('Adding your wallet to waitlist chat…')
     expect(waitlistChatStatusMessage('executed')).toContain('Pulling the group')
   })
 
-  it('resolves to executed after an immediate server add', async () => {
+  it('resolves to executed after an explicit join request', async () => {
     mockedApiFetch.mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -71,6 +101,10 @@ describe('useWaitlistChatJoin', () => {
         messagingReady: true,
       }),
     )
+
+    act(() => {
+      result.current.retryJoin()
+    })
 
     await waitFor(() => {
       expect(result.current.status).toBe('executed')
@@ -91,6 +125,10 @@ describe('useWaitlistChatJoin', () => {
         }),
       { wrapper: StrictMode },
     )
+
+    act(() => {
+      result.current.retryJoin()
+    })
 
     await waitFor(() => {
       expect(result.current.status).toBe('joining')
@@ -129,6 +167,10 @@ describe('useWaitlistChatJoin', () => {
       }),
     )
 
+    act(() => {
+      result.current.retryJoin()
+    })
+
     await waitFor(() => {
       expect(result.current.status).toBe('blocked')
     })
@@ -149,6 +191,10 @@ describe('useWaitlistChatJoin', () => {
         messagingReady: true,
       }),
     )
+
+    act(() => {
+      result.current.retryJoin()
+    })
 
     await waitFor(() => {
       expect(result.current.status).toBe('blocked')
@@ -183,45 +229,6 @@ describe('useWaitlistChatJoin', () => {
       expect(result.current.status).toBe('executed')
     })
     expect(mockedApiFetch).not.toHaveBeenCalled()
-  })
-
-  it('clears stale awaiting_messaging once messaging is ready for a completed identity', async () => {
-    mockedApiFetch.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          success: true,
-          data: { execution: 'executed' },
-        }),
-        { status: 200 },
-      ),
-    )
-
-    const { result, rerender } = renderHook(
-      (props: Parameters<typeof useWaitlistChatJoin>[0]) => useWaitlistChatJoin(props),
-      {
-        initialProps: {
-          xmtpMemberAddress: IDENTITY,
-          chatReady: true,
-          enabled: true,
-          messagingReady: false,
-          serverJoinActionStatus: null,
-        },
-      },
-    )
-
-    expect(result.current.status).toBe('awaiting_messaging')
-
-    rerender({
-      xmtpMemberAddress: IDENTITY,
-      chatReady: true,
-      enabled: true,
-      messagingReady: true,
-      serverJoinActionStatus: null,
-    })
-
-    await waitFor(() => {
-      expect(result.current.status).toBe('executed')
-    })
   })
 
   it('does not re-post join when the server action is already pending', async () => {
@@ -261,6 +268,10 @@ describe('useWaitlistChatJoin', () => {
         messagingReady: true,
       }),
     )
+
+    act(() => {
+      result.current.retryJoin()
+    })
 
     expect(result.current.status).toBe('joining')
 

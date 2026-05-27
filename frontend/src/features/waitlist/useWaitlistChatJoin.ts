@@ -50,7 +50,6 @@ export function useWaitlistChatJoin(params: {
   const [joinRequestNonce, setJoinRequestNonce] = useState(0)
   const completedIdentityRef = useRef<string | null>(null)
   const joinRequestIdRef = useRef(0)
-  const autoJoinScheduledRef = useRef<string | null>(null)
   const trackedIdentityRef = useRef<string | null>(null)
 
   const identity = xmtpMemberAddress?.toLowerCase() ?? null
@@ -63,7 +62,6 @@ export function useWaitlistChatJoin(params: {
 
   const retryJoin = useCallback(() => {
     completedIdentityRef.current = null
-    autoJoinScheduledRef.current = null
     requestJoin()
   }, [requestJoin])
 
@@ -71,7 +69,6 @@ export function useWaitlistChatJoin(params: {
     if (identity === trackedIdentityRef.current) return
     trackedIdentityRef.current = identity
     completedIdentityRef.current = null
-    autoJoinScheduledRef.current = null
     setJoinRequestNonce(0)
     setStatus('idle')
   }, [identity])
@@ -79,7 +76,6 @@ export function useWaitlistChatJoin(params: {
   useEffect(() => {
     if (!enabled || !chatReady || !identity) {
       setStatus('idle')
-      autoJoinScheduledRef.current = null
       return
     }
 
@@ -108,13 +104,12 @@ export function useWaitlistChatJoin(params: {
       return
     }
 
-    if (autoJoinScheduledRef.current === identity) {
-      return
-    }
-
-    autoJoinScheduledRef.current = identity
-    requestJoin()
-  }, [chatReady, enabled, identity, messagingReady, requestJoin, serverMapped])
+    setStatus((current) => {
+      if (current === 'joining' || current === 'pending' || current === 'executing') return current
+      if (isTerminalWaitlistJoinStatus(current)) return current
+      return 'awaiting_messaging'
+    })
+  }, [chatReady, enabled, identity, messagingReady, serverMapped])
 
   useEffect(() => {
     if (!enabled || !chatReady || !identity || !messagingReady || joinRequestNonce === 0) {

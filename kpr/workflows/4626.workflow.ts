@@ -11,6 +11,7 @@
  *   5. Auction Settle  — sweepCurrency() graduated auctions (per CCA strategy)
  *   6. Keepr Queue     — execute pending XMTP/Neynar group actions
  *   7. Bridge Integrity — monitor bridge signer/route/scalar/liveness drift
+ *   8. Strategy Reallocator — cross-strategy Charm/Ajna TVL via rebalanceStrategies (multi-pass)
  *
  * All vaults are fetched from the registry API (keepr_vaults table).
  * Falls back to single-vault env vars if KPR_API_KEY is not set.

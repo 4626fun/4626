@@ -132,4 +132,55 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
     expect(forwarded.quote.permitData).toBeUndefined()
     expect(forwardedRequest?.headers).toMatchObject({ 'x-permit2-disabled': 'true' })
   })
+
+  it('coerces numeric gas and amount fields before forwarding to Uniswap', async () => {
+    restoreEnv = applyEnv({
+      UNISWAP_API_KEY: 'test-key',
+      UNISWAP_TRADE_API_BASE: 'https://trade.example.test/v1',
+    })
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          swap: {
+            to: '0x0000000000000000000000000000000000000001',
+            from: '0x0000000000000000000000000000000000000002',
+            data: '0x1234',
+            value: '0',
+            chainId: 8453,
+          },
+        }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = await loadSwapHandler()
+    const req = createMockReq({
+      method: 'POST',
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.102' },
+      body: {
+        quote: {
+          routing: 'CLASSIC',
+          quote: {
+            input: { token: '0x0000000000000000000000000000000000000001', amount: 100 },
+            output: { token: '0x0000000000000000000000000000000000000002', amount: 200 },
+            gasPrice: 999,
+            maxFeePerGas: 10,
+          },
+        },
+        refreshGasPrice: true,
+        simulateTransaction: false,
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const forwarded = JSON.parse(String((fetchMock as any).mock.calls[0]?.[1]?.body ?? '{}'))
+    expect(forwarded.quote.routing).toBeUndefined()
+    expect(forwarded.quote.gasPrice).toBe('999')
+    expect(forwarded.quote.maxFeePerGas).toBe('10')
+    expect(forwarded.quote.input.amount).toBe('100')
+    expect(forwarded.quote.output.amount).toBe('200')
+  })
 })

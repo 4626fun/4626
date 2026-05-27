@@ -10,6 +10,7 @@ import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
 import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
 import "./helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
@@ -414,8 +415,9 @@ contract BatcherPhaseHandler is Test {
     }
 
     function _valid(uint256 charm, uint256 ajna, uint256 solana) internal pure returns (bool) {
-        if (charm > 10_000 || ajna > 10_000 || solana > 10_000) return false;
-        uint256 total = charm + ajna + solana;
+        if (solana != 0) return false;
+        if (charm > 10_000 || ajna > 10_000) return false;
+        uint256 total = charm + ajna;
         return total > 0 && total <= 10_000;
     }
 
@@ -486,6 +488,7 @@ contract BatcherPhaseHandler is Test {
         });
         (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
+        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("creatorOracle"));
         vm.mockCall(
             CHARM_FACTORY,
             abi.encodeWithSelector(GOVERNANCE_SELECTOR),
@@ -763,7 +766,7 @@ contract BatcherPhase2Handler is Test {
         ISignatureTransfer.PermitTransferFrom memory permit = _permit(address(creatorToken), permitAmount);
 
         vm.prank(ownerAddr);
-        try IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2(params, permit, hex"abcd") {
+        try IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2{value: 1}(params, permit, hex"abcd") {
             if (!sufficientPermit) {
                 badAccepted++;
                 return;
@@ -778,8 +781,8 @@ contract BatcherPhase2Handler is Test {
             (address pendingShareOFT, address pendingCca, uint256 pendingAmount, uint256 pendingLpReserveAmount) =
                 batcher.pendingAuctions(baseSalt);
             if (pendingShareOFT != address(shareOFT) || pendingCca != address(cca)) badAccepted++;
-            if (pendingAmount != (depositAmount * 40) / 100) badAccepted++;
-            if (pendingLpReserveAmount != (depositAmount * 20) / 100) badAccepted++;
+            if (pendingAmount != (depositAmount * 30) / 100) badAccepted++;
+            if (pendingLpReserveAmount != (depositAmount * 10) / 100) badAccepted++;
         } catch {
             sufficientPermit ? badRejected++ : rejected++;
         }
@@ -811,11 +814,13 @@ contract BatcherPhase2Handler is Test {
         oracle = new MockOwnableTransferPermit2();
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
+        CreatorRegistry registry = new CreatorRegistry(address(this));
+        address protocolTreasury = makeAddr("protocolTreasury");
         batcher = new DeploymentBatcherHarness(
-            makeAddr("registry"),
+            address(registry),
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
-            makeAddr("protocolTreasury"),
+            protocolTreasury,
             makeAddr("protocolAutomation"),
             makeAddr("poolManager"),
             makeAddr("taxHook"),
@@ -834,18 +839,27 @@ contract BatcherPhase2Handler is Test {
         );
         DeploymentBatcherPhase2Module phase2 = new DeploymentBatcherPhase2Module(
             makeAddr("create2Deployer"),
-            makeAddr("registry"),
+            address(registry),
             makeAddr("chainlinkEthUsd"),
             makeAddr("poolManager"),
             makeAddr("taxHook"),
-            makeAddr("protocolTreasury"),
+            protocolTreasury,
             makeAddr("lotteryManager"),
             makeAddr("vaultActivationBatcher"),
             address(batcher)
         );
         batcher.setPhase2ModuleForTest(phase2);
+        batcher.setUtilsHelperForTest(new DeploymentBatcherUtilsHelper());
+        vm.startPrank(protocolTreasury);
+        batcher.setOVaultRuntimeConfig(makeAddr("hubComposer"), 30_168, true);
+        batcher.setSolanaConfig(makeAddr("solanaAdapter"), bytes32(uint256(0xABCD)));
+        batcher.setSolanaShareOftPeer(bytes32(uint256(0x5678)));
+        vm.stopPrank();
+        registry.setAuthorizedFactory(address(batcher), true);
+        shareOFT.transferOwnership(address(batcher));
 
         creatorToken.mint(ownerAddr, 100_000_000 ether);
+        vm.deal(ownerAddr, 1 ether);
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
 

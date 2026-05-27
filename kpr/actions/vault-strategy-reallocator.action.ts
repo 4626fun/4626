@@ -8,12 +8,14 @@
 import { getAddress, isAddress } from 'viem';
 import {
   CHAINS,
+  VAULT_STRATEGY_REALLOC_MAX_PASSES,
   VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS,
   VAULT_STRATEGY_VIEW_ABI,
   VAULT_ABI,
 } from '../config.js';
 import {
   computeDeployableBase,
+  computeMaxDriftBps,
   computeMinIdle,
   computeStrategyAllocationPlan,
   shouldRebalanceStrategies,
@@ -66,6 +68,8 @@ export type VaultStrategyReallocateResult = {
   rebalanced: boolean;
   skippedReason?: string;
   txHash?: `0x${string}`;
+  passesExecuted?: number;
+  finalMaxDriftBps?: bigint;
   plan?: ReturnType<typeof computeStrategyAllocationPlan>;
   error?: string;
 };
@@ -79,10 +83,16 @@ export type BatchVaultStrategyReallocateResult = {
   results: VaultStrategyReallocateResult[];
 };
 
-function parseMinDeviationBps(): bigint {
+export function parseMinDeviationBps(): bigint {
   const raw = Number(process.env.VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS ?? VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS);
   if (!Number.isFinite(raw) || raw < 0) return BigInt(VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS);
   return BigInt(Math.min(10_000, Math.floor(raw)));
+}
+
+export function parseMaxRebalancePasses(): number {
+  const raw = Number(process.env.VAULT_STRATEGY_REALLOC_MAX_PASSES ?? VAULT_STRATEGY_REALLOC_MAX_PASSES);
+  if (!Number.isFinite(raw) || raw < 1) return VAULT_STRATEGY_REALLOC_MAX_PASSES;
+  return Math.min(8, Math.floor(raw));
 }
 
 async function readDefaultQueue(vaultAddress: `0x${string}`): Promise<`0x${string}`[]> {
@@ -96,7 +106,7 @@ async function readDefaultQueue(vaultAddress: `0x${string}`): Promise<`0x${strin
         args: [BigInt(i)],
       });
       if (!entry || entry === '0x0000000000000000000000000000000000000000') break;
-      queue.push(getAddress(entry));
+      queue.push(getAddress(entry) as `0x${string}`);
     } catch {
       break;
     }
@@ -117,7 +127,7 @@ async function readStrategySnapshots(vaultAddress: `0x${string}`): Promise<Strat
           functionName: 'strategyList',
           args: [BigInt(i)],
         }),
-      );
+      ) as `0x${string}`;
     } catch {
       break;
     }
@@ -244,7 +254,12 @@ async function invokeRebalanceWrite(params: {
   minDeviationBps: bigint;
 }): Promise<WriteResult> {
   if (shouldUseKeeperHttpBridge()) {
-    return postKeeperRebalanceStrategies(params.vaultAddress, params.minDeviationBps);
+    const bridge = await postKeeperRebalanceStrategies(params.vaultAddress, params.minDeviationBps);
+    return {
+      success: bridge.success,
+      txHash: (bridge.txHash ?? '0x0000000000000000000000000000000000000000') as `0x${string}`,
+      error: bridge.error,
+    };
   }
 
   return writeContract({
@@ -255,24 +270,11 @@ async function invokeRebalanceWrite(params: {
   });
 }
 
-export async function executeVaultStrategyReallocatorForVault(
-  vaultAddress: `0x${string}`,
-): Promise<VaultStrategyReallocateResult> {
-  const minDeviationBps = parseMinDeviationBps();
-  const state = await readVaultStrategyAllocationState(vaultAddress);
-  const shortAddr = `${vaultAddress.slice(0, 6)}...${vaultAddress.slice(-4)}`;
-
-  if (state.isShutdown) {
-    return { vaultAddress, rebalanced: false, skippedReason: 'vault_shutdown' };
-  }
-  if (state.paused) {
-    return { vaultAddress, rebalanced: false, skippedReason: 'vault_paused' };
-  }
-  if (state.strategies.length < 2) {
-    return { vaultAddress, rebalanced: false, skippedReason: 'single_strategy_vault' };
-  }
-
-  const plan = computeStrategyAllocationPlan({
+function buildAllocationPlan(
+  state: VaultStrategyAllocationState,
+  minDeviationBps: bigint,
+): ReturnType<typeof computeStrategyAllocationPlan> {
+  return computeStrategyAllocationPlan({
     strategies: state.strategies,
     coinBalance: state.coinBalance,
     minimumTotalIdle: state.minimumTotalIdle,
@@ -280,47 +282,127 @@ export async function executeVaultStrategyReallocatorForVault(
     totalStrategyWeight: state.totalStrategyWeight,
     minDeviationBps,
   });
+}
 
-  if (!shouldRebalanceStrategies(plan)) {
-    console.log(`[${shortAddr}] No cross-strategy drift above ${minDeviationBps} bps`);
-    return { vaultAddress, rebalanced: false, skippedReason: 'within_deviation_band', plan };
+export async function executeVaultStrategyReallocatorForVault(
+  vaultAddress: `0x${string}`,
+): Promise<VaultStrategyReallocateResult> {
+  const minDeviationBps = parseMinDeviationBps();
+  const maxPasses = parseMaxRebalancePasses();
+  const shortAddr = `${vaultAddress.slice(0, 6)}...${vaultAddress.slice(-4)}`;
+
+  const initialState = await readVaultStrategyAllocationState(vaultAddress);
+
+  if (initialState.isShutdown) {
+    return { vaultAddress, rebalanced: false, skippedReason: 'vault_shutdown' };
+  }
+  if (initialState.paused) {
+    return { vaultAddress, rebalanced: false, skippedReason: 'vault_paused' };
+  }
+  if (initialState.strategies.length < 2) {
+    return { vaultAddress, rebalanced: false, skippedReason: 'single_strategy_vault' };
   }
 
-  console.log(
-    `[${shortAddr}] Calling rebalanceStrategies(${minDeviationBps}) — queue=${state.defaultQueue.join(',')}`,
-  );
-
-  const writeResult = await invokeRebalanceWrite({ vaultAddress, minDeviationBps });
-  if (!writeResult.success) {
-    await alertCritical(WORKFLOW_NAME, `rebalanceStrategies failed for ${shortAddr}`, {
-      vaultAddress,
-      error: writeResult.error,
-    });
+  const initialPlan = buildAllocationPlan(initialState, minDeviationBps);
+  if (!shouldRebalanceStrategies(initialPlan)) {
+    console.log(`[${shortAddr}] No cross-strategy drift above ${minDeviationBps} bps`);
     return {
       vaultAddress,
       rebalanced: false,
-      plan,
-      error: writeResult.error,
+      skippedReason: 'within_deviation_band',
+      plan: initialPlan,
+      finalMaxDriftBps: computeMaxDriftBps(initialPlan),
+    };
+  }
+
+  let passesExecuted = 0;
+  let lastTxHash: `0x${string}` | undefined;
+  let lastPlan = initialPlan;
+  let lastQueue = initialState.defaultQueue.join(',');
+
+  for (let pass = 1; pass <= maxPasses; pass++) {
+    const state = pass === 1 ? initialState : await readVaultStrategyAllocationState(vaultAddress);
+    lastQueue = state.defaultQueue.join(',');
+    lastPlan = buildAllocationPlan(state, minDeviationBps);
+
+    if (!shouldRebalanceStrategies(lastPlan)) {
+      break;
+    }
+
+    const maxDriftBefore = computeMaxDriftBps(lastPlan);
+    console.log(
+      `[${shortAddr}] Pass ${pass}/${maxPasses}: rebalanceStrategies(${minDeviationBps}) ` +
+        `maxDrift=${maxDriftBefore}bps queue=${lastQueue}`,
+    );
+
+    const writeResult = await invokeRebalanceWrite({ vaultAddress, minDeviationBps });
+    if (!writeResult.success) {
+      await alertCritical(WORKFLOW_NAME, `rebalanceStrategies failed for ${shortAddr}`, {
+        vaultAddress,
+        pass,
+        error: writeResult.error,
+      });
+      return {
+        vaultAddress,
+        rebalanced: passesExecuted > 0,
+        passesExecuted,
+        txHash: lastTxHash,
+        plan: lastPlan,
+        finalMaxDriftBps: maxDriftBefore,
+        error: writeResult.error,
+      };
+    }
+
+    passesExecuted += 1;
+    lastTxHash = writeResult.txHash;
+  }
+
+  const finalState = await readVaultStrategyAllocationState(vaultAddress);
+  const finalPlan = buildAllocationPlan(finalState, minDeviationBps);
+  const finalMaxDriftBps = computeMaxDriftBps(finalPlan);
+
+  if (passesExecuted === 0) {
+    return {
+      vaultAddress,
+      rebalanced: false,
+      plan: finalPlan,
+      finalMaxDriftBps,
+      skippedReason: 'within_deviation_band',
     };
   }
 
   await alertInfo(WORKFLOW_NAME, `rebalanceStrategies succeeded for ${shortAddr}`, {
     vaultAddress,
-    txHash: writeResult.txHash,
+    txHash: lastTxHash,
+    passesExecuted,
+    finalMaxDriftBps: finalMaxDriftBps.toString(),
+    queue: lastQueue,
   });
+
+  if (shouldRebalanceStrategies(finalPlan) && passesExecuted >= maxPasses) {
+    console.warn(
+      `[${shortAddr}] Rebalance hit max passes (${maxPasses}); remaining maxDrift=${finalMaxDriftBps}bps`,
+    );
+  } else {
+    console.log(
+      `[${shortAddr}] Rebalance converged in ${passesExecuted} pass(es); final maxDrift=${finalMaxDriftBps}bps`,
+    );
+  }
 
   return {
     vaultAddress,
     rebalanced: true,
-    txHash: writeResult.txHash,
-    plan,
+    txHash: lastTxHash,
+    passesExecuted,
+    finalMaxDriftBps,
+    plan: finalPlan,
   };
 }
 
 export async function executeVaultStrategyReallocator(): Promise<BatchVaultStrategyReallocateResult> {
   const singleVault = process.env.VAULT_ADDRESS;
   if (singleVault && isAddress(singleVault)) {
-    const result = await executeVaultStrategyReallocatorForVault(getAddress(singleVault));
+    const result = await executeVaultStrategyReallocatorForVault(getAddress(singleVault) as `0x${string}`);
     return {
       totalVaults: 1,
       processed: 1,

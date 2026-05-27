@@ -15,6 +15,7 @@ type SwapCardProps = {
   tokenInIdentityLoading: boolean
   tokenOutIdentityLoading: boolean
   amountInUnits: string
+  amountInUsd?: string | null
   estimatedOut: string
   buyQuoteLoading?: boolean
   estimatedOutUsd: string | null
@@ -101,6 +102,7 @@ export function SwapCard(props: SwapCardProps) {
         <TokenInput
           label="Sell"
           amount={props.amountInUnits}
+          amountUsd={props.amountInUsd || undefined}
           token={props.tokenInDisplay}
           tokenAddress={props.tokenInAddress}
           isLoadingToken={props.tokenInIdentityLoading}

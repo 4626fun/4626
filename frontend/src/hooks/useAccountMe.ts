@@ -3,6 +3,7 @@ import { usePrivy } from '@privy-io/react-auth'
 
 import { apiFetch } from '@/lib/api/apiBase'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
+import { mergeCanonicalWaitlistAccount } from '@/features/waitlist/waitlistFlowState'
 
 /**
  * Lightweight cache-aware hook over `GET /api/accounts/me`.
@@ -104,25 +105,30 @@ function mergeBootstrapSignals(
         ? true
         : baseSignals?.privyEmbeddedEoaIsOwnerOfCanonicalCsw ?? null
 
-  return {
-    privyUserId: payload?.privyUserId ?? '',
-    email: payload?.email ?? null,
-    emailVerified: payload?.emailVerified ?? false,
-    appAccessStatus: payload?.appAccessStatus ?? null,
-    baseSubAccount: payload?.baseSubAccount ?? bootstrap.baseSubAccount.address,
-    linkedMethods: payload?.linkedMethods ?? {},
-    score: payload?.score ?? { points: 0, tier: 0 },
-    accountSignals: {
-      linked: baseSignals?.linked ?? false,
-      canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,
-      creatorCoin: baseSignals?.creatorCoin ?? null,
-      zoraHandle: baseSignals?.zoraHandle ?? null,
-      lastResolvedAt: baseSignals?.lastResolvedAt ?? null,
-      baseSubAccount: baseSignals?.baseSubAccount ?? bootstrap.baseSubAccount,
-      executionTrack,
-      privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+  const mergedAccount = mergeCanonicalWaitlistAccount(
+    {
+      privyUserId: payload?.privyUserId ?? '',
+      email: payload?.email ?? null,
+      emailVerified: payload?.emailVerified ?? false,
+      appAccessStatus: payload?.appAccessStatus ?? null,
+      baseSubAccount: payload?.baseSubAccount ?? bootstrap.baseSubAccount.address,
+      linkedMethods: payload?.linkedMethods ?? {},
+      score: payload?.score ?? { points: 0, tier: 0 },
+      accountSignals: {
+        linked: baseSignals?.linked ?? false,
+        canonicalCswAddress: baseSignals?.canonicalCswAddress ?? bootstrap.canonicalCswAddress ?? null,
+        creatorCoin: baseSignals?.creatorCoin ?? null,
+        zoraHandle: baseSignals?.zoraHandle ?? null,
+        lastResolvedAt: baseSignals?.lastResolvedAt ?? null,
+        baseSubAccount: baseSignals?.baseSubAccount ?? bootstrap.baseSubAccount,
+        executionTrack,
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw,
+      },
     },
-  }
+    bootstrap,
+  )
+
+  return mergedAccount
 }
 
 async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<AccountSetupMe | null> {
@@ -147,11 +153,6 @@ async function fetchAccountMe(getAccessToken: GetAccessTokenFn | null): Promise<
       }
 
       if (!getAccessToken) return payload
-      const needsBootstrap =
-        !payload ||
-        payload.accountSignals.executionTrack === 'none-yet' ||
-        payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw == null
-      if (!needsBootstrap) return payload
       const bootstrap = await fetchBootstrapExecutionSignals(getAccessToken)
       if (!bootstrap) return payload
       return mergeBootstrapSignals(payload, bootstrap)

@@ -14,7 +14,6 @@ type UseWaitlistMessagingConnectParams = {
   disconnect: () => void
   joinStatus: WaitlistChatStatus
   retryJoin: () => void
-  syncWaitlistGroups: (options?: { resyncMembership?: boolean }) => Promise<unknown>
   walletReady: boolean
 }
 
@@ -27,7 +26,6 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
     disconnect,
     joinStatus,
     retryJoin,
-    syncWaitlistGroups,
     walletReady,
   } = params
 
@@ -50,14 +48,14 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
     (!messagingConnected && !isConnecting && !messagingEverConnected) ||
     (xmtpStatus === 'error' && !isConnecting)
 
-  const connectMessaging = useCallback(
+  const connectAndJoin = useCallback(
     async (options?: { skipJoinRetry?: boolean; reconnect?: boolean }) => {
       if (connectInFlightRef.current) return
 
       setPrepareError(null)
       if (!privyAuthenticated) {
         setPrepareError(
-          'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry Connect messaging.',
+          'Your 4626 session is active, but Privy sign-in is not loaded in this browser. Sign in with email again, then retry.',
         )
         return
       }
@@ -81,10 +79,6 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
         if (!options?.skipJoinRetry && shouldRequestJoin) {
           retryJoin()
         }
-
-        await syncWaitlistGroups({
-          resyncMembership: !(joinStatus === 'executed' || !shouldRequestJoin),
-        })
       } catch (err) {
         setPrepareError(err instanceof Error ? err.message : String(err))
       } finally {
@@ -92,23 +86,14 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
         setPrepareBusy(false)
       }
     },
-    [
-      connect,
-      disconnect,
-      joinStatus,
-      prepare,
-      privyAuthenticated,
-      retryJoin,
-      shouldRequestJoin,
-      syncWaitlistGroups,
-    ],
+    [connect, disconnect, prepare, privyAuthenticated, retryJoin, shouldRequestJoin],
   )
 
   const reconnectMessaging = useCallback(async () => {
     const skipJoinRetry =
       joinStatus === 'executed' || joinStatus === 'pending' || joinStatus === 'executing'
-    await connectMessaging({ skipJoinRetry, reconnect: true })
-  }, [connectMessaging, joinStatus])
+    await connectAndJoin({ skipJoinRetry, reconnect: true })
+  }, [connectAndJoin, joinStatus])
 
   return {
     prepareError,
@@ -117,7 +102,7 @@ export function useWaitlistMessagingConnect(params: UseWaitlistMessagingConnectP
     isConnecting,
     messagingConnected,
     needsConnectMessaging,
-    connectMessaging,
+    connectAndJoin,
     reconnectMessaging,
   }
 }

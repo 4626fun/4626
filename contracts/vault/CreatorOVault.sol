@@ -8,7 +8,6 @@ import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.so
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
@@ -45,7 +44,7 @@ import {CreatorOVaultLiquidityLib} from "./libraries/CreatorOVaultLiquidityLib.s
  *      - _name: Vault name (e.g., "Creator OVault - AKITA")
  *      - _symbol: Vault symbol (e.g., "▢AKITA")
  */
-contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IERC20Permit {
+contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, IERC20Permit {
     using SafeERC20 for IERC20;
 
     // =================================
@@ -66,6 +65,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IER
     uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
     uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2;
     uint8 internal constant RISK_KIND_STRATEGY_MAX_ASSETS = 3;
+    uint8 internal constant RISK_KIND_MANAGEMENT_FEE_RECIPIENT = 4;
 
     bytes32 private constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
@@ -362,6 +362,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IER
     uint64 public pendingRiskUnlockTime;
     uint8 public valuationMissThreshold;
     mapping(address => uint8) public strategyValuationMisses;
+    mapping(address => uint256) public sharePermitNonces;
 
     // =================================
     // EVENTS
@@ -1800,6 +1801,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IER
         _delegate(_adminModule);
     }
 
+    function scheduleSetManagementFeeRecipient(address recipient) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
     function executePendingRiskConfig() external onlyManagement {
         _delegate(_adminModule);
     }
@@ -1943,17 +1948,18 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IER
     {
         if (block.timestamp > deadline) revert PermitExpired(deadline);
 
-        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner_, spender, value, _useNonce(owner_), deadline));
+        uint256 nonce = sharePermitNonces[owner_]++;
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner_, spender, value, nonce, deadline));
         bytes32 hash = _hashTypedDataV4(structHash);
-        address signer = ecrecover(hash, v, r, s);
-        if (signer == address(0) || signer != owner_) revert InvalidPermitSignature();
+        bytes memory signature = abi.encodePacked(r, s, v);
+        if (!SignatureChecker.isValidSignatureNow(owner_, hash, signature)) revert InvalidPermitSignature();
 
         _approve(owner_, spender, value);
     }
 
     /// @inheritdoc IERC20Permit
-    function nonces(address owner_) public view override(Nonces, IERC20Permit) returns (uint256) {
-        return super.nonces(owner_);
+    function nonces(address owner_) public view returns (uint256) {
+        return sharePermitNonces[owner_];
     }
 
     /// @inheritdoc IERC20Permit

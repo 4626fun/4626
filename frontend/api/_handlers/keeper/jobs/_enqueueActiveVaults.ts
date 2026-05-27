@@ -30,7 +30,7 @@ type ActiveVaultRow = {
   config_json: Record<string, unknown> | string | null
 }
 
-const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout'])
+const VALID_WORKFLOWS = new Set(['sweep', 'tend', 'report', 'payout', 'rebalance'])
 
 function env(name: string): string {
   return String(process.env[name] ?? '').trim()
@@ -213,6 +213,16 @@ function vaultActionPayload(row: ActiveVaultRow, action: 'tend' | 'report'): Rec
   }
 }
 
+function rebalancePayload(row: ActiveVaultRow): Record<string, unknown> | null {
+  const vaultAddress = normalizeAddress(row.vault_address)
+  if (!vaultAddress) return null
+  const minDeviationBps = env('VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS') || '500'
+  return {
+    path: '/api/keeper/rebalance-strategies',
+    body: { vaultAddress, minDeviationBps },
+  }
+}
+
 function payoutPayload(row: ActiveVaultRow): Record<string, unknown> | null {
   const contracts = contractsFromConfig(row.config_json)
   const payoutRouterAddress = normalizeAddress(contracts.payoutRouter)
@@ -292,6 +302,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         jobs.push(await enqueueKeeperJob({
           kind: 'internal_api',
           dedupeKey: `active-${action}:${vaultAddress}`,
+          source: 'keeper-active-vaults',
+          payload,
+          maxAttempts: 3,
+        }))
+      }
+    }
+    if (workflows.includes('rebalance')) {
+      const payload = rebalancePayload(row)
+      const vaultAddress = normalizeAddress(row.vault_address)
+      if (payload && vaultAddress) {
+        jobs.push(await enqueueKeeperJob({
+          kind: 'internal_api',
+          dedupeKey: `active-rebalance:${vaultAddress}`,
           source: 'keeper-active-vaults',
           payload,
           maxAttempts: 3,

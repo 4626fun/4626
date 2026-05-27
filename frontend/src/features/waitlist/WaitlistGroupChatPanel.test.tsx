@@ -23,14 +23,6 @@ vi.mock('@/lib/xmtp/provider', () => ({
   }),
 }))
 
-vi.mock('@/wallet/accountContext', () => ({
-  AccountContextProvider: ({ children }: { children: React.ReactNode }) => children,
-  useAccountContext: () => ({
-    signerAddress: '0x1234567890123456789012345678901234567890',
-    loading: false,
-  }),
-}))
-
 vi.mock('@/components/chat/ChatWindow', () => ({
   ChatWindow: () => <div data-testid="chat-window">chat</div>,
 }))
@@ -79,9 +71,9 @@ describe('WaitlistGroupChatPanel', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('prompts to connect messaging before join can run', () => {
+  it('prompts to connect and join before messaging is ready', () => {
     renderPanel(<WaitlistGroupChatPanel setupComplete signingReady />)
     expect(screen.getByRole('region', { name: 'Waitlist group chat' })).toBeTruthy()
-    expect(screen.getByText(/Click Connect messaging below/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /Connect & join waitlist chat/i })).toBeTruthy()
   })
 })

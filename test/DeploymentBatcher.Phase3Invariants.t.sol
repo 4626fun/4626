@@ -154,6 +154,7 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
         });
         (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
+        deployerLib.mockRegistryCreatorCoin(cfg.registry, makeAddr("creatorToken"), makeAddr("creatorOracle"));
 
         vm.mockCall(
             CHARM_FACTORY,

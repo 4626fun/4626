@@ -379,19 +379,25 @@ export function AccountSetupWorkspaceView(props: {
                 <CheckCircle2 className="h-3 w-3" />
                 Step 1 complete
               </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-200">
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 ${
+                  signingStepComplete
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200'
+                    : 'border-white/10 bg-white/[0.03] text-zinc-400'
+                }`}
+              >
                 <CheckCircle2 className="h-3 w-3" />
-                Step 2 complete
+                {signingStepComplete ? 'Step 2 complete' : 'Step 2 optional'}
               </span>
             </div>
           </div>
 
-          <div className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+          <div className="space-y-2 pt-1">
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 text-[11px] text-zinc-400">
                   <CheckCircle2 className="h-3.5 w-3.5 text-zinc-500" />
-                  Zora linked · Signing enabled
+                  {signingStepComplete ? 'Zora linked · Signing enabled' : 'Zora linked · Signing optional'}
                 </div>
                 {(normalizedZoraHandle || canonicalCswAddress) ? (
                   <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
@@ -430,11 +436,7 @@ export function AccountSetupWorkspaceView(props: {
             </div>
           </div>
 
-          {summaryActions ? (
-            <section className="rounded-[13px] border border-white/[0.08] bg-white/[0.02] px-4 py-4">
-              {summaryActions}
-            </section>
-          ) : null}
+          {summaryActions ? <div className="space-y-4">{summaryActions}</div> : null}
 
           <WaitlistAdvancedSection controller={controller} label="Account settings" />
 

@@ -882,7 +882,14 @@ export async function buildAccountsMePayload(params: {
   const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
   const profileStatusResult = profileId
     ? await db.sql`
-        SELECT id, app_access_status, base_sub_account, csw_address
+        SELECT
+          id,
+          app_access_status,
+          base_sub_account,
+          csw_address,
+          primary_smart_wallet,
+          primary_embedded_eoa,
+          primary_wallet
         FROM profiles
         WHERE id = ${profileId}
         LIMIT 1;
@@ -898,8 +905,22 @@ export async function buildAccountsMePayload(params: {
 
   const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
   const profileCswAddress = normalizeEvmAddress(profileStatusRow?.csw_address)
+  const profilePrimarySmartWallet = normalizeEvmAddress(profileStatusRow?.primary_smart_wallet)
+  const profileEmbeddedEoa =
+    normalizeEvmAddress(delegationState?.privyEmbeddedEoaAddress) ??
+    normalizeEvmAddress(profileStatusRow?.primary_embedded_eoa)
+  const profilePrimaryWallet = normalizeEvmAddress(profileStatusRow?.primary_wallet)
+  const rawCanonicalCswAddress =
+    delegationState?.canonicalCswAddress ??
+    zoraRow.canonicalCswAddress ??
+    profileCswAddress ??
+    profilePrimarySmartWallet
   const canonicalCswAddressForTrack =
-    delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress ?? profileCswAddress
+    resolveStoredCanonicalCswAddress({
+      candidate: rawCanonicalCswAddress,
+      embeddedEoa: profileEmbeddedEoa,
+      activeOwnerEoa: profilePrimaryWallet ?? profileEmbeddedEoa,
+    }) ?? rawCanonicalCswAddress
   const profileIdForTrack = (() => {
     const raw = profileStatusRow?.id ?? delegationState?.profileId ?? null
     const numeric = Number(raw)

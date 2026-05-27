@@ -82,6 +82,8 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
         if (activeStrategies[oldStrategy]) {
             _removeStrategy(oldStrategy);
+        } else if (_isStrategyListed(oldStrategy)) {
+            _ejectStrategyFromList(oldStrategy);
         }
         _addStrategy(newStrategy, weight, addToQueue);
     }
@@ -147,24 +149,38 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     // FIX: M-02 — force-remove a strategy even when withdrawal has shortfall
     function forceRemoveStrategy(address strategy) external onlyDelegateCall {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
+        _ejectStrategyFromList(strategy);
+    }
+
+    /// @notice Best-effort unwind + list/queue removal for valuation-disabled strategies (core module only).
+    function __ejectDisabledStrategy(address strategy) external onlyDelegateCall {
+        _ejectStrategyFromList(strategy);
+    }
+
+    function _ejectStrategyFromList(address strategy) internal {
+        if (!_isStrategyListed(strategy)) revert StrategyNotActive();
+
+        if (activeStrategies[strategy]) {
+            totalStrategyWeight -= strategyWeights[strategy];
+            activeStrategies[strategy] = false;
+            strategyWeights[strategy] = 0;
+        } else if (strategyWeights[strategy] > 0) {
+            totalStrategyWeight -= strategyWeights[strategy];
+            strategyWeights[strategy] = 0;
+        }
 
         uint256 currentDebt = strategyDebt[strategy];
         if (currentDebt > 0) {
-            // Best-effort withdrawal; ignore shortfall
             IERC20 coin = _creatorCoin();
-            try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {}
-            uint256 afterBal = coin.balanceOf(address(this));
-            coinBalance = afterBal;
+            try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {
+                try IStrategy(strategy).emergencyWithdraw() returns (uint256) {} catch {}
+            }
+            coinBalance = coin.balanceOf(address(this));
 
-            // Zero out debt regardless of how much was recovered
             totalDebt -= currentDebt;
             strategyDebt[strategy] = 0;
             emit DebtUpdated(strategy, currentDebt, 0);
         }
-
-        activeStrategies[strategy] = false;
-        totalStrategyWeight -= strategyWeights[strategy];
-        strategyWeights[strategy] = 0;
 
         uint256 length = strategyList.length;
         for (uint256 i = 0; i < length; i++) {
@@ -177,6 +193,14 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
         _removeFromQueue(strategy);
         emit StrategyRemoved(strategy);
+    }
+
+    function _isStrategyListed(address strategy) internal view returns (bool) {
+        uint256 length = strategyList.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (strategyList[i] == strategy) return true;
+        }
+        return false;
     }
 
     function updateStrategyWeight(address strategy, uint256 newWeight) external onlyDelegateCall {
