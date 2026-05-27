@@ -91,8 +91,26 @@ When queries stabilize:
 
 Ramses keeps protocol-specific SQL in-repo so dashboards survive UI refactors — same model for 4626.
 
+## Server API (after `DUNE_API_KEY` is set)
+
+Local probe (loads `frontend/.env` if exported in shell):
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/dune-probe.ts
+pnpm -C frontend exec tsx scripts/ops/dune-probe.ts --metric=batcher-tx
+```
+
+HTTP (15 min cache per metric):
+
+- `GET /api/analytics/dune` — configured + allowed metric keys
+- `GET /api/analytics/dune?probe=1` — `SELECT 1` health check
+- `GET /api/analytics/dune?metric=batcher-tx` — runs SQL from `docs/operations/dune/queries/`
+
+Copy `DUNE_API_KEY` to **Vercel** (`akita-llc/4626`, Production) — local `.env` does not apply in prod.
+
 ## Checklist before linking in production
 
+- [ ] `DUNE_API_KEY` on Vercel production (server-only, not `VITE_`)
 - [ ] Dashboard marked **public** (or team-visible with share link)
 - [ ] Each chart caption states chain (Base) and contract version epoch
 - [ ] AKITA / legacy vaults labeled separately from greenfield batcher

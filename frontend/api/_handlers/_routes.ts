@@ -116,6 +116,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'flags/evaluate': () => import('./flags/_evaluate.js'),
   'health': () => import('./health/_health.js'),
   'analytics/event': () => import('./analytics/_event.js'),
+  'analytics/dune': () => import('./analytics/_dune.js'),
 
   'onchain/coinTradeRewardsBatch': () => import('./onchain/_coinTradeRewardsBatch.js'),
   'onchain/protocolRewardsClaimable': () => import('./onchain/_protocolRewardsClaimable.js'),

@@ -366,6 +366,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/waitlist/xmtp-join': apiImport('./api/_handlers/waitlist/_xmtpJoin'),
         '/api/waitlist/xmtp-status': apiImport('./api/_handlers/waitlist/_xmtpStatus'),
         '/api/analytics/event': apiImport('./api/_handlers/analytics/_event'),
+        '/api/analytics/dune': apiImport('./api/_handlers/analytics/_dune'),
         '/api/onchain/coinTradeRewardsBatch': apiImport('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': apiImport('./api/_handlers/token/_metadata'),
         '/api/token/image': apiImport('./api/_handlers/token/_image'),

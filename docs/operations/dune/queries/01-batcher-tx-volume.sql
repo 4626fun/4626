@@ -7,7 +7,7 @@ SELECT
   count(*) AS tx_count,
   count(DISTINCT "from") AS unique_senders
 FROM base.transactions
-WHERE lower("to") = lower('0xa99058f424FB3ACC639F59355C65C40149030651')
+WHERE "to" = 0xa99058f424fb3acc639f59355c65c40149030651
   AND block_time >= now() - interval '90' day
   AND success = true
 GROUP BY 1
