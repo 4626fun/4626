@@ -101,6 +101,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'keeper/alert': () => import('./keeper/_alert.js'),
   'keeper/aiAssess': () => import('./keeper/_aiAssess.js'),
   'keeper/solana/reconcile': () => import('./keeper/_solanaReconcile.js'),
+  'keeper/solana/provision-creator': () => import('./keeper/_solanaProvisionCreator.js'),
   'keeper/ajna/rebalance': () => import('./keeper/_ajnaRebalance.js'),
   'keeper/control-plane/status': () => import('./keeper/_controlPlaneStatus.js'),
   'keeper/control-plane/provision': () => import('./keeper/control-plane/_provision.js'),

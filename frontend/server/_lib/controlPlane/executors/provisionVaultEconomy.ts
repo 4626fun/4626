@@ -19,6 +19,10 @@ import {
 } from '../../messaging/creatorXmtpAgents.js'
 import { enrichVaultArtifactsFromOnChain } from '../../onchain/vaultStrategyOnchain.js'
 import { resolveStrategyProfile } from './strategyRegistry.js'
+import {
+  enqueueSolanaShareMeshProvisioning,
+  creatorHasSolanaShareMeshEntitlement,
+} from '../../creatorStrategy/solanaShareMeshProvisioning.js'
 
 export class ProvisionVaultEconomyError extends Error {
   code: string
@@ -250,6 +254,30 @@ export async function provisionVaultEconomy(
 
   const existing = await getKeeprVaultByVaultAddress(vaultAddress)
   const configHash = existing?.configHash ?? computeConfigHash(config)
+
+  try {
+    const creatorToken =
+      normalizeKeeprAddress(artifacts.creatorToken) ??
+      normalizeKeeprAddress(artifacts.creatorCoin) ??
+      creatorAddress
+    if (creatorToken && (await creatorHasSolanaShareMeshEntitlement(creatorToken))) {
+      const solanaQueue = await enqueueSolanaShareMeshProvisioning({
+        creatorToken,
+        activationId: 0,
+        paymentSource: 'post_deploy',
+        trigger: 'post_deploy',
+        vaultAddress,
+        deploySessionId: session?.id ?? null,
+      })
+      if (!solanaQueue.enqueued) {
+        warnings.push(`solana_post_deploy_queue_skipped:${solanaQueue.reason ?? 'unknown'}`)
+      }
+    }
+  } catch (error) {
+    warnings.push(
+      `solana_post_deploy_queue_failed:${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
 
   return {
     provisioned: true,

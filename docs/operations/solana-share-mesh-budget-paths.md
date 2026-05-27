@@ -18,7 +18,7 @@ Reused on mainnet: `creator-share-hook` (`EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tq
 | Delivers | 30% ShareOFT → Solana share mint | Meteora trading (+ B2: pool-buy lottery relay) |
 | Solana lottery | No (Base ShareOFT buys) | B2: yes; B1: trading only |
 | Platform SOL (one-time) | **~4.0** | + **~0.25–0.6** pool; + **~0.10** hook if B2 |
-| Per vault | `solana_ovault_mesh` $100 USDC + LZ finalize fee | Same |
+| Per vault | **`vault_full_deploy` $499 USDC** (bundles Charm + Ajna + share mesh + Meteora add-on) + LZ finalize fee | Same |
 | Ready when | `verify-batcher-pipe-a-readiness.ts` exit **0** | Path 1 + pool + LP (+ B2 env) |
 
 ## Measured costs (2026-05-27, local validator)
@@ -48,7 +48,7 @@ Rent formula matches mainnet. Reproduce: `pnpm -C kpr solana:cost-probe-devnet` 
    pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
      --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
    ```
-4. Creator activates `solana_ovault_mesh`; `finalizePhase2` bridges 30% ShareOFT.
+4. Creator pays **`vault_full_deploy`** ($499); deploy preflight uses share-mesh OVault checks (not legacy creator-SPL registration). `finalizePhase2` bridges 30% ShareOFT.
 5. Keeper until Path 2: `KEEPER_SOLANA_RECONCILE_ACTIONS=settle_fees,winner_relay`, `SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0`.
 
 ## Path 2 — Meteora (+ optional B2 lottery)
@@ -92,6 +92,25 @@ pnpm -C kpr solana:prepare-token-badge
 ```
 
 **Do not use:** creator SPL lowercase wraps (`akita`/`akita`), `ws*` tickers, or `SOLANA_AUTO_POOL=1` provisioner path (creator SPL + 7-day activation).
+
+
+
+## App wiring (4626 backend)
+
+After **`vault_full_deploy`** payment or post-deploy vault economy provision:
+
+1. `dispatchProvisioning` → `enqueueSolanaShareMeshProvisioning` inserts a keeper `internal_api` job.
+2. Keeper worker (`pnpm -C frontend keeper:jobs:worker`) POSTs `/api/keeper/solana/provision-creator` (machine auth).
+3. Handler confirms entitlement, stamps activation metadata, pings `SOLANA_ORCHESTRATOR_URL/healthz`, returns operator checklist.
+
+Deploy session preflight (`_continueCore` / `_statusCore`) defaults to **`ensureShareMeshOvaultPreflight`**:
+
+- `getOVaultRuntimeConfig` on the deployment batcher must be enabled.
+- `assertShareBridgeOftWiringForFinalize` validates Pipe A wiring for the finalize call.
+
+Set `DEPLOY_SOLANA_LEGACY_BRIDGE_PREFLIGHT=1` only when intentionally running the retired creator-SPL `/api/deploy/registerSolanaBridgeToken` path.
+
+Disable automatic queue enqueue with `SOLANA_SHARE_MESH_PROVISIONING_ENABLED=0` (operator manual follow-up only).
 
 ## Sequencing
 

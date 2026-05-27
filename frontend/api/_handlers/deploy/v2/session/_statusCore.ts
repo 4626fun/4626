@@ -35,6 +35,10 @@ import {
 } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../../token/_managedTokenList.js'
+import {
+  ensureShareMeshOvaultPreflight,
+  isLegacySolanaBridgePreflightEnabled,
+} from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { upsertAjnaVaultRegistryEntry } from '../../../../../server/_lib/ajnaVaultManager/registry.js'
@@ -1697,6 +1701,14 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       throw new Error('Solana preflight failed: OVault mesh requires a decodable finalizePhase2 call.')
     }
     return defaultStatus
+  }
+
+  if (!isLegacySolanaBridgePreflightEnabled()) {
+    return ensureShareMeshOvaultPreflight({
+      publicClient: params.publicClient,
+      finalizeCall: finalizeEntry.call,
+      ovaultRequested,
+    })
   }
 
   const { call: finalizeCall, info: finalizeInfo } = finalizeEntry

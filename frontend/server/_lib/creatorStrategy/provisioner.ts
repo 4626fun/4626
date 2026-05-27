@@ -37,6 +37,7 @@ import {
   getCreatorStrategyFeature,
   type CreatorStrategyFeatureKey,
 } from './catalog.js'
+import { enqueueSolanaShareMeshProvisioning } from './solanaShareMeshProvisioning.js'
 
 export type ProvisioningRequest = {
   creatorToken: Address
@@ -98,16 +99,26 @@ export async function dispatchProvisioning(
   // `status = 'pending'` rows and provisions manually.
 
   switch (feature.provisionerTag) {
-    case 'vault_full_deploy_bundle':
+    case 'vault_full_deploy_bundle': {
+      const queue = await enqueueSolanaShareMeshProvisioning({
+        creatorToken: request.creatorToken,
+        activationId: request.activationId,
+        paymentSource: request.paymentSource,
+        trigger: 'payment',
+      })
       return {
         ok: true,
         outcome: 'enqueued',
-        ref: null,
+        ref: queue.jobId ? String(queue.jobId) : null,
         note:
-          `Full deploy bundle for ${request.creatorToken} includes Charm, Ajna, Solana share mesh, ` +
-          'and Meteora entitlement. Vault deploy unlocks immediately; operator follow-up for ' +
-          'Meteora pool provisioning follows docs/operations/solana-share-mesh-budget-paths.md.',
+          queue.enqueued
+            ? `Full deploy bundle for ${request.creatorToken} queued Solana share-mesh provisioning ` +
+              `(keeper job ${queue.jobId ?? 'pending'}). Vault deploy unlocks immediately; Path 1/2 ` +
+              'follow-up runs via keeper worker + docs/operations/solana-share-mesh-budget-paths.md.'
+            : `Full deploy bundle active for ${request.creatorToken}; Solana queue skipped (${queue.reason ?? 'unknown'}). ` +
+              'Follow docs/operations/solana-share-mesh-budget-paths.md for Path 1/2 operator steps.',
       }
+    }
 
     case 'phase3_strategy_charm':
     case 'phase3_strategy_ajna':

@@ -43,6 +43,18 @@ by virtue of not being allocated elsewhere. The vault's own
 `minimumTotalIdle` parameter is the real on-chain knob for how much
 CREATOR the vault is willing to leave un-deployed.
 
+## Primary purchase: `vault_full_deploy` ($499 USDC)
+
+The live catalog sells one deploy bundle at **$499 USDC** on Base. Payment
+grants `charm_active_lp`, `ajna_sleeve`, `solana_ovault_mesh`, and
+`solana_meteora_alpha_vault` via entitlement expansion. Individual à la carte
+deploy-gating purchases return HTTP 410.
+
+After payment, `dispatchProvisioning` enqueues a keeper job to
+`/api/keeper/solana/provision-creator` for Solana share-mesh operator follow-up.
+Deploy preflight uses share-mesh OVault checks by default (see
+[ solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md)).
+
 Paid features fall into two buckets:
 
 1. **Deploy-gating features** — installed during Phase 3 of vault deploy;

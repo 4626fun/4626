@@ -28,6 +28,10 @@ import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deplo
 import { ensureLaunchImageReady } from '../../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
+import {
+  ensureShareMeshOvaultPreflight,
+  isLegacySolanaBridgePreflightEnabled,
+} from '../../../../../server/_lib/deploy/solanaShareMeshPreflight.js'
 import { validateSponsoredSmartWalletCalls } from '../../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
@@ -507,6 +511,13 @@ async function ensureOvaultPreflight(params: {
       throw new Error('Solana preflight failed: OVault mesh requires a decodable finalizePhase2 call.')
     }
     return defaultStatus
+  }
+  if (!isLegacySolanaBridgePreflightEnabled()) {
+    return ensureShareMeshOvaultPreflight({
+      publicClient: params.publicClient,
+      finalizeCall: finalizeEntry.call,
+      ovaultRequested,
+    })
   }
   const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
   if (ovaultRequested) {
