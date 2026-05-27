@@ -1,3 +1,5 @@
+import { ExploreAnalyticsMethodology } from '@/components/explore/ExploreAnalyticsMethodology'
+import { ExploreAnalyticsSyncBadge } from '@/components/explore/ExploreAnalyticsSyncBadge'
 import { ExploreHeroMetric } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreHeroSparkline } from '@/components/explore/ExploreHeroSparkline'
 import { LoadingText } from '@/components/ui/LoadingState'
@@ -25,6 +27,8 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
     history30d,
     isLoading,
     isRefreshing,
+    exact,
+    syncStatus,
   } = useExploreCreatorsHeroMetrics()
 
   const creatorsMetricHint =
@@ -76,16 +80,21 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         />
       </div>
 
-      <div className="app-meta-value text-right text-zinc-500/90">
-        {isLoading ? (
-          <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
-        ) : (
-          <>
-            {statusLine}
-            {isRefreshing ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
-          </>
-        )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="app-meta-value text-zinc-500/90 sm:flex-1">
+          {isLoading ? (
+            <LoadingText intent="processing" size="sm" labelOverride="Loading explore metrics…" />
+          ) : (
+            <>
+              {statusLine}
+              {isRefreshing ? <span className="ml-2 text-zinc-600">Updating…</span> : null}
+            </>
+          )}
+        </div>
+        {!isLoading ? <ExploreAnalyticsSyncBadge exact={exact} syncStatus={syncStatus} /> : null}
       </div>
+
+      <ExploreAnalyticsMethodology className="mt-1" />
     </div>
   )
 }

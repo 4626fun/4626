@@ -17,6 +17,7 @@ export type ExploreCreatorsMetrics = {
   syncStatus: 'idle' | 'running' | 'error'
   sync: {
     backfillComplete: boolean
+    exploreBackfillComplete: boolean
     sampledCreators: number
     lastSyncStartedAt: string | null
     lastSyncFinishedAt: string | null

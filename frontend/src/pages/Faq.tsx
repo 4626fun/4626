@@ -777,6 +777,18 @@ export function Faq() {
                     </div>
                     <ArrowRight className="w-4 h-4 text-zinc-600" />
                   </Link>
+                  <a
+                    href="https://docs.4626.fun/users/explore-analytics"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-4 rounded-xl px-3 py-3 hover:bg-white/3 transition-colors"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-white font-light">Explore analytics</div>
+                      <div className="text-xs text-zinc-600 font-light">How indexed totals and charts are built</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-zinc-600" />
+                  </a>
                 </div>
               </div>
 

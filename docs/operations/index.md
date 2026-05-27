@@ -25,6 +25,8 @@ For XMTP agent operations, use the **[Eliza Runtime](/operations/deployment/eliz
 | **[Coinbase In-App SignatureWrapper Bug](/operations/coinbase-inapp-signaturewrapper-bug)** | Incident note for in-app owner-index/signature mismatch and mitigations |
 | **[Sponsored Canonical Swap Pattern](/operations/sponsored-canonical-swap-pattern)** | Known-good ERC-4337/paymaster path for canonical WETH-backed swaps |
 | **[Oracle Post-Deploy QA](/operations/oracle-post-deploy-qa)** | Read-only post-deploy oracle verification runbook and triage guide |
+| **[Explore metrics operations](/operations/explore-metrics-operations)** | Indexed Explore sync, crons, Looker ops dashboard, and health checks |
+| **[Dune analytics runbook](/operations/dune-analytics-runbook)** | Public on-chain dashboards (Ramses-style spellbook path) and `VITE_DUNE_DASHBOARD_URL` wiring |
 | **[Ethos Canonical Score Cache](/operations/ethos-canonical-score-cache)** | Rollout and operations runbook for canonical Ethos identity-key caching, sync, and read cutover |
 | **[XMTP Browser Connect Canary](/operations/xmtp-browser-connect-canary)** | Layer 3 manual canary — real wallet connect, reload restore, Smart Wallet path, and recovery checklist |
 | **[Greenfield Launch Readiness](/operations/greenfield-launch-readiness)** | Repeatable gate before opening vault deploy to creators (Pipe A batcher, Solana infra, keeper defaults) |

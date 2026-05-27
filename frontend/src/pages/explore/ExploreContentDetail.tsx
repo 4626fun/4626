@@ -14,6 +14,7 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
+import { ExploreChartDataSourceNote } from '@/components/explore/ExploreChartDataSourceNote'
 import { MetricChartPlot } from '@/components/explore/MetricChartPlot'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
@@ -413,6 +414,8 @@ function MetricChart({
           Composition based on the pool's current token split, applied across {period}.
         </div>
       ) : null}
+
+      <ExploreChartDataSourceNote className="mt-2" feesUnavailable={metric === 'fees'} />
     </div>
   )
 }

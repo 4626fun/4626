@@ -23,6 +23,7 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'users/index' },
       items: [
         'getting-started/index',
+        'users/explore-analytics',
         {
           type: 'category',
           label: 'Guides',
@@ -236,6 +237,8 @@ const sidebars: SidebarsConfig = {
             },
           ],
         },
+        'operations/explore-metrics-operations',
+        'operations/dune-analytics-runbook',
         'operations/domain-setup',
         'operations/supabase-setup',
         'operations/telegram-canonical-link-preservation',
