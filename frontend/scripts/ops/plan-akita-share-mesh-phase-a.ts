@@ -137,17 +137,19 @@ Options:
 
   process.stdout.write('--- Known blockers (2026-05-25 audit) ---\n\n')
   process.stdout.write('1. creatorMesh(AKITA) unset on OVaultHubComposer\n')
-  process.stdout.write('2. Split batcher OVault runtime disabled (hubComposer=0)\n')
+  process.stdout.write(
+    '2. Batcher solanaShareOftPeer() unset — greenfield finalize bridge reverts until LZ share-mesh peer bytes32 is wired\n',
+  )
   process.stdout.write('3. Grandfathered AKITA wrapper lacks isBeneficiaryOperator — configureCreatorMesh reverts until wrapper upgrade/wiring\n')
-  process.stdout.write('4. Solana LZ asset mesh + share mesh mints/peers not recorded in repo env yet\n')
+  process.stdout.write('4. Solana LZ asset mesh + share mesh OFTs/peers not deployed — no OVAULT_ASSET_MESH_TOKEN / OVAULT_SHARE_MESH_TOKEN in env\n')
   process.stdout.write('5. ShareOFT not registered on canonical SolanaBridgeAdapter\n')
-  process.stdout.write('6. relay_entries paused on Vultr; Vercel cron should omit relay_entries\n\n')
+  process.stdout.write('6. relay_entries paused — KEEPER_SOLANA_RECONCILE_ACTIONS must stay settle_fees,winner_relay only\n\n')
 
   process.stdout.write('--- Operator sequence ---\n\n')
   process.stdout.write('A. Deploy/peers: Solana asset mesh + share mesh OFTs (LayerZero), record Base addresses + Solana peers\n')
   process.stdout.write('B. Wrapper: upgrade AKITA wrapper OR set composer as beneficiary operator (ComposerNotBeneficiaryOperator guard)\n')
   process.stdout.write('C. Composer owner: configureCreatorMesh(...)\n')
-  process.stdout.write('D. Batcher owner: setOVaultRuntimeConfig(hubComposer, 30168, true)\n')
+  process.stdout.write('D. Batcher owner: setSolanaShareOftPeer(shareMeshPeerBytes32) — done via execute-batcher-share-oft-peer-safe.ts\n')
   process.stdout.write('E. Bridge ShareOFT Base → Solana share mesh (seed LP later in Phase B)\n\n')
 
   const assetMesh = getArg('--asset-mesh')
@@ -163,7 +165,21 @@ Options:
     'Existing helper: pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts --only-ovault-runtime --ovault-hub-composer <composer> --ovault-solana-eid 30168\n',
   )
   process.stdout.write(
-    'After mesh peer bytes32 exists: pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts --share-oft-peer 0x<peer>\n\n',
+    'After mesh peer bytes32 exists: pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts --share-oft-peer 0x<peer>\n',
+  )
+  process.stdout.write('\n--- Registry / mesh forge wiring (when Base mesh OFTs + Solana peers exist) ---\n\n')
+  process.stdout.write(`REGISTRY=${BASE_DEFAULTS.registry}\n`)
+  process.stdout.write(`CREATOR_TOKEN=${AKITA_DEFAULTS.token}\n`)
+  process.stdout.write('SOLANA_EID=30168\n')
+  process.stdout.write('SOLANA_REMOTE_OFT_PEER_BYTES32=0x<asset-mesh-solana-peer>\n')
+  process.stdout.write(`OVAULT_HUB_COMPOSER=${HUB_COMPOSER}\n`)
+  process.stdout.write('OVAULT_ASSET_MESH_TOKEN=0x<base-asset-mesh-oft>\n')
+  process.stdout.write('OVAULT_SHARE_MESH_TOKEN=0x<base-share-mesh-oft>\n')
+  process.stdout.write('OVAULT_SOLANA_ASSET_MINT=0x<asset-mesh-solana-mint-bytes32>\n')
+  process.stdout.write('\nforge script script/SeedCreatorRegistrySolanaPeer.s.sol:SeedCreatorRegistrySolanaPeer \\\n')
+  process.stdout.write('  --rpc-url base --broadcast -vvvv\n\n')
+  process.stdout.write(
+    'Then configureCreatorMesh on composer + setSolanaShareOftPeer(shareMeshPeerBytes32) on batcher.\n\n',
   )
     return
   }

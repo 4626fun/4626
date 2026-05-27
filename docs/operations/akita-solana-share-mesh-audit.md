@@ -24,7 +24,8 @@ Base ShareOFT lottery on Uniswap buys is the **live** jackpot path today.
 | `OVAULT_HUB_COMPOSER` | Deployed on Base | `0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1` |
 | `OVAULT_SOLANA_EID` | In repo env | `30168` |
 | `creatorMesh(akitaToken)` on composer | **NOT configured** | All zeros — verified 2026-05-25 via `read-akita-ovault-mesh-onchain.ts` |
-| Split batcher `getOVaultRuntimeConfig` | **NOT enabled** | `hubComposer=0`, `enabled=false` on `0x16aEA…F1D8` |
+| Split batcher `getOVaultRuntimeConfig` | **Enabled on v1.11.2-pipe-a** | `0xa99058…0651` — `hubComposer=0x7dF44…CD1`, `solanaEid=30168`, `enabled=true` (verified 2026-05-26) |
+| Batcher `solanaShareOftPeer()` | **Unset** | Zero — blocks greenfield Pipe A finalize until LZ share-mesh peer bytes32 is wired |
 | AKITA wrapper `isBeneficiaryOperator(composer)` | **N/A** | Grandfathered wrapper predates beneficiary-operator gate |
 | `solana_ovault_mesh` paid feature | Unknown for AKITA | Grandfathered vault; may predate paid strategy rows |
 | `shareMeshMint` / `assetMeshMint` | **Not in repo for AKITA** | No deploy-session mesh mint pubkeys recorded |

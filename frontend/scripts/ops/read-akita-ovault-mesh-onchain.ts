@@ -56,7 +56,30 @@ const batcherAbi = [
       { name: 'enabled', type: 'bool' },
     ],
   },
+  {
+    type: 'function',
+    name: 'solanaShareOftPeer',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
 ] as const
+
+const registryPeerAbi = [
+  {
+    type: 'function',
+    name: 'getRemoteOFTPeerBytes32',
+    stateMutability: 'view',
+    inputs: [
+      { name: '_token', type: 'address' },
+      { name: '_chainEid', type: 'uint32' },
+    ],
+    outputs: [{ type: 'bytes32' }],
+  },
+] as const
+
+const SOLANA_EID = 30168
+const REGISTRY = BASE_DEFAULTS.registry as Address
 
 const wrapperAbi = [
   {
@@ -89,6 +112,13 @@ const adapterAbi = [
 const shareOftAbi = [
   { type: 'function', name: 'isHub', stateMutability: 'view', inputs: [], outputs: [{ type: 'bool' }] },
   { type: 'function', name: 'totalSupply', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
+  {
+    type: 'function',
+    name: 'peers',
+    stateMutability: 'view',
+    inputs: [{ name: 'eid', type: 'uint32' }],
+    outputs: [{ type: 'bytes32' }],
+  },
 ] as const
 
 function isZero(a: string) {
@@ -103,7 +133,7 @@ async function main() {
   console.log('Solana adapter:', BASE_DEFAULTS.solanaBridgeAdapter)
   console.log('')
 
-  const [composerCode, mesh, batcherCfg, wrapperCode] = await Promise.all([
+  const [composerCode, mesh, batcherCfg, batcherSharePeer, wrapperCode] = await Promise.all([
     client.getBytecode({ address: HUB_COMPOSER }),
     client.readContract({
       address: HUB_COMPOSER,
@@ -115,6 +145,11 @@ async function main() {
       address: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
       abi: batcherAbi,
       functionName: 'getOVaultRuntimeConfig',
+    }),
+    client.readContract({
+      address: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+      abi: batcherAbi,
+      functionName: 'solanaShareOftPeer',
     }),
     client.getBytecode({ address: AKITA_DEFAULTS.wrapper }),
   ])
@@ -138,6 +173,11 @@ async function main() {
   console.log('hubComposer:', batcherCfg[0])
   console.log('solanaEid:', batcherCfg[1])
   console.log('enabled:', batcherCfg[2])
+  console.log('solanaShareOftPeer():', batcherSharePeer)
+  console.log(
+    'pipe-a peer gate:',
+    batcherSharePeer !== `0x${'00'.repeat(32)}` ? 'configured' : 'BLOCKED (zero)',
+  )
   console.log('')
 
   console.log('=== AKITA wrapper ===')
@@ -203,6 +243,18 @@ async function main() {
   const shareCode = await client.getBytecode({ address: AKITA_DEFAULTS.shareOFT })
   console.log('=== ShareOFT ===')
   console.log('deployed:', shareCode && shareCode !== '0x' ? 'yes' : 'no')
+  let registrySharePeer: `0x${string}` | null = null
+  try {
+    registrySharePeer = await client.readContract({
+      address: REGISTRY,
+      abi: registryPeerAbi,
+      functionName: 'getRemoteOFTPeerBytes32',
+      args: [AKITA_DEFAULTS.token, SOLANA_EID],
+    })
+    console.log(`registry.getRemoteOFTPeerBytes32(AKITA, ${SOLANA_EID}):`, registrySharePeer)
+  } catch {
+    console.log('registry peer read: failed')
+  }
   try {
     const shareHub = await client.readContract({
       address: AKITA_DEFAULTS.shareOFT,
@@ -218,6 +270,17 @@ async function main() {
     console.log('totalSupply:', shareSupply.toString())
   } catch {
     console.log('isHub/totalSupply: (pre-OFT mesh revision or non-ShareOFT bytecode at address)')
+  }
+  try {
+    const shareOftSolanaPeer = await client.readContract({
+      address: AKITA_DEFAULTS.shareOFT,
+      abi: shareOftAbi,
+      functionName: 'peers',
+      args: [SOLANA_EID],
+    })
+    console.log(`ShareOFT.peers(${SOLANA_EID}):`, shareOftSolanaPeer)
+  } catch {
+    console.log(`ShareOFT.peers(${SOLANA_EID}): (no peers() on this revision)`)
   }
 }
 
