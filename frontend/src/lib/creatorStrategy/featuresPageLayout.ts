@@ -1,7 +1,7 @@
 import type { CatalogDto } from '@/pages/CreatorStrategyFeatures.types'
 
 export type StrategyFeatureSection = {
-  id: 'strategies' | 'post_deploy' | 'other'
+  id: 'deploy' | 'other'
   title: string
   subtitle: string
   features: CatalogDto[]
@@ -15,13 +15,7 @@ export type VanityFeatureGroup = {
   features: CatalogDto[]
 }
 
-const STRATEGY_KEYS = new Set([
-  'charm_active_lp',
-  'ajna_sleeve',
-  'solana_ovault_mesh',
-])
-
-const POST_DEPLOY_KEYS = new Set(['solana_meteora_alpha_vault'])
+const DEPLOY_BUNDLE_KEY = 'vault_full_deploy'
 
 function vanityLength(key: string, prefix: string): number {
   const match = key.match(new RegExp(`^${prefix}(\\d+)$`))
@@ -38,8 +32,7 @@ export function partitionCreatorStrategyCatalog(catalog: CatalogDto[]): {
   sections: StrategyFeatureSection[]
   vanityGroups: VanityFeatureGroup[]
 } {
-  const strategies: CatalogDto[] = []
-  const postDeploy: CatalogDto[] = []
+  const deploy: CatalogDto[] = []
   const other: CatalogDto[] = []
   const vaultPrefix: CatalogDto[] = []
   const shareSuffix: CatalogDto[] = []
@@ -53,32 +46,21 @@ export function partitionCreatorStrategyCatalog(catalog: CatalogDto[]): {
       shareSuffix.push(feature)
       continue
     }
-    if (STRATEGY_KEYS.has(feature.key)) {
-      strategies.push(feature)
-      continue
-    }
-    if (POST_DEPLOY_KEYS.has(feature.key)) {
-      postDeploy.push(feature)
+    if (feature.key === DEPLOY_BUNDLE_KEY) {
+      deploy.push(feature)
       continue
     }
     other.push(feature)
   }
 
   const sections: StrategyFeatureSection[] = []
-  if (strategies.length > 0) {
+  if (deploy.length > 0) {
     sections.push({
-      id: 'strategies',
-      title: 'Vault strategies',
-      subtitle: 'Activate at least one before deploy. Each strategy receives a share of vault TVL at launch.',
-      features: strategies,
-    })
-  }
-  if (postDeploy.length > 0) {
-    sections.push({
-      id: 'post_deploy',
-      title: 'Post-deploy add-ons',
-      subtitle: 'Optional extras you can enable after the vault is live.',
-      features: postDeploy,
+      id: 'deploy',
+      title: 'Vault deploy',
+      subtitle:
+        'One $499 payment unlocks the full stack: Charm + Ajna on Base, Solana share mesh, and Meteora entitlement.',
+      features: deploy,
     })
   }
   if (other.length > 0) {

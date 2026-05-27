@@ -32,6 +32,10 @@ describe('validateFeatureCompatibility', () => {
     })
   })
 
+  it('passes when vault_full_deploy expands to full stack', () => {
+    expect(validateFeatureCompatibility(['vault_full_deploy'])).toEqual({ ok: true })
+  })
+
   it('fails when meteora is active without ovault mesh', () => {
     const result = validateFeatureCompatibility(['solana_meteora_alpha_vault'])
     expect(result.ok).toBe(false)

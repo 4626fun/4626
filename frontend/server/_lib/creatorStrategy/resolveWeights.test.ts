@@ -116,6 +116,21 @@ describe('resolveCreatorStrategyPlan', () => {
     expect(plan.reasons.solana).toBe('share_auto_bridge')
     expect(plan.activeFeatureKeys).toEqual(['charm_active_lp'])
   })
+
+  it('expands vault_full_deploy into full deploy entitlements with 45/45 weights', async () => {
+    const db = mockDb(['vault_full_deploy'])
+    const result = await resolveCreatorStrategyPlan(db, CREATOR)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const { plan } = result
+    expect(plan.charmWeightBps).toBe(4_500n)
+    expect(plan.ajnaWeightBps).toBe(4_500n)
+    expect(plan.reasons.charm).toBe('paid')
+    expect(plan.reasons.ajna).toBe('paid')
+    expect(plan.activeFeatureKeys).toContain('vault_full_deploy')
+    expect(plan.activeFeatureKeys).toContain('charm_active_lp')
+    expect(plan.activeFeatureKeys).toContain('solana_ovault_mesh')
+  })
 })
 
 describe('gateRequestedStrategyWeights', () => {

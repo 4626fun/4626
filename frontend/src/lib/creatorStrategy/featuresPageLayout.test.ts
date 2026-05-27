@@ -23,18 +23,17 @@ function mockFeature(key: string): CatalogDto {
 describe('partitionCreatorStrategyCatalog', () => {
   it('groups vanity tiers and keeps strategies separate', () => {
     const catalog = [
-      mockFeature('charm_active_lp'),
+      mockFeature('vault_full_deploy'),
       mockFeature('deploy_vanity_vault_prefix_len_2'),
       mockFeature('deploy_vanity_vault_prefix_len_1'),
       mockFeature('deploy_vanity_share_suffix_len_3'),
       mockFeature('deploy_vanity_share_suffix_len_1'),
-      mockFeature('solana_meteora_alpha_vault'),
     ]
 
     const { sections, vanityGroups } = partitionCreatorStrategyCatalog(catalog)
 
-    expect(sections.map((s) => s.id)).toEqual(['strategies', 'post_deploy'])
-    expect(sections[0]?.features.map((f) => f.key)).toEqual(['charm_active_lp'])
+    expect(sections.map((s) => s.id)).toEqual(['deploy'])
+    expect(sections[0]?.features.map((f) => f.key)).toEqual(['vault_full_deploy'])
     expect(vanityGroups.map((g) => g.id)).toEqual(['vault_prefix', 'share_suffix'])
     expect(vanityGroups[0]?.features.map((f) => f.key)).toEqual([
       'deploy_vanity_vault_prefix_len_1',

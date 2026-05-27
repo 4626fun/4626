@@ -20,6 +20,7 @@ import {
   getCreatorStrategyFeature,
   getRetiredCreatorStrategyFeatureMessage,
 } from '../../../../server/_lib/creatorStrategy/catalog.js'
+import { getAlacarteDeployPurchaseBlockedMessage } from '../../../../server/_lib/creatorStrategy/bundleEntitlements.js'
 import {
   insertPendingActivation,
   toCreatorStrategyFeatureDto as toActivationDto,
@@ -110,6 +111,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res
       .status(400)
       .json({ success: false, error: `Unknown featureKey "${featureKey}"` } satisfies ApiEnvelope<never>)
+  }
+  const alacarteBlocked = getAlacarteDeployPurchaseBlockedMessage(featureKey)
+  if (alacarteBlocked) {
+    return res
+      .status(410)
+      .json({ success: false, error: alacarteBlocked } satisfies ApiEnvelope<never>)
   }
 
   const paymentTxHashRaw = typeof body.paymentTxHash === 'string' ? body.paymentTxHash.trim() : ''

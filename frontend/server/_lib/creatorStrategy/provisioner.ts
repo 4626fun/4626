@@ -98,6 +98,17 @@ export async function dispatchProvisioning(
   // `status = 'pending'` rows and provisions manually.
 
   switch (feature.provisionerTag) {
+    case 'vault_full_deploy_bundle':
+      return {
+        ok: true,
+        outcome: 'enqueued',
+        ref: null,
+        note:
+          `Full deploy bundle for ${request.creatorToken} includes Charm, Ajna, Solana share mesh, ` +
+          'and Meteora entitlement. Vault deploy unlocks immediately; operator follow-up for ' +
+          'Meteora pool provisioning follows docs/operations/solana-share-mesh-budget-paths.md.',
+      }
+
     case 'phase3_strategy_charm':
     case 'phase3_strategy_ajna':
       return {

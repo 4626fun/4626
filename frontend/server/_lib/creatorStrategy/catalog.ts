@@ -34,12 +34,36 @@
  */
 
 export type CreatorStrategyFeatureKey =
+  | 'vault_full_deploy'
   | 'charm_active_lp'
   | 'ajna_sleeve'
   | 'solana_ovault_mesh'
   | 'solana_meteora_alpha_vault'
   | `deploy_vanity_vault_prefix_len_${DeployVanityLength}`
   | `deploy_vanity_share_suffix_len_${DeployVanityLength}`
+
+/** Single SKU for new vault deploys — includes all bundled sub-features below. */
+export const FULL_VAULT_DEPLOY_FEATURE_KEY = 'vault_full_deploy' as const satisfies CreatorStrategyFeatureKey
+
+/** $499.00 USDC at 6 decimals. */
+export const FULL_VAULT_DEPLOY_PRICE_USDC = 499_000_000n
+
+/**
+ * Entitlements granted by `vault_full_deploy`. Legacy rows for these keys
+ * still work; new purchases should use the bundle only.
+ */
+export const FULL_DEPLOY_BUNDLE_GRANTED_KEYS = [
+  'charm_active_lp',
+  'ajna_sleeve',
+  'solana_ovault_mesh',
+  'solana_meteora_alpha_vault',
+] as const satisfies readonly CreatorStrategyFeatureKey[]
+
+const ALACARTE_DEPLOY_FEATURE_KEYS = new Set<string>(FULL_DEPLOY_BUNDLE_GRANTED_KEYS)
+
+export function isAlacarteDeployFeatureKey(key: string): boolean {
+  return ALACARTE_DEPLOY_FEATURE_KEYS.has(String(key ?? '').trim())
+}
 
 export const DEPLOY_VANITY_ALLOWED_LENGTHS = [1, 2, 3, 4, 5] as const
 export type DeployVanityLength = (typeof DEPLOY_VANITY_ALLOWED_LENGTHS)[number]
@@ -162,6 +186,24 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
   CreatorStrategyFeatureKey,
   CreatorStrategyFeatureDefinition
 > = {
+  vault_full_deploy: {
+    key: 'vault_full_deploy',
+    displayName: 'Full vault deploy',
+    tagline: 'One payment unlocks your complete 4626 vault on Base + Solana share mesh.',
+    description:
+      'The all-in-one deploy package: Charm active LP and Ajna lending on Base, Solana OVault ' +
+      'composer mesh with 30% ShareOFT auto-bridge at finalizePhase2, and Meteora DLMM entitlement ' +
+      'on the share-mesh mint. Pay once, deploy once — no separate strategy SKUs.',
+    priceUsdc: FULL_VAULT_DEPLOY_PRICE_USDC,
+    provisionerTag: 'vault_full_deploy_bundle',
+    requires: [
+      'Creator coin must be deployable before payment',
+      'Includes Charm + Ajna Phase 3 strategies (45% / 45% productive split, 10% idle)',
+      'Includes Solana share mesh + Meteora add-on entitlement',
+      'Vanity address tiers remain optional add-ons',
+    ],
+    estimatedActivationWindow: 'Instant — deploy unlocks as soon as payment is verified.',
+  },
   charm_active_lp: {
     key: 'charm_active_lp',
     displayName: 'Charm active LP (CREATOR/USDC)',
@@ -408,6 +450,15 @@ export function getCreatorStrategyFeature(
 
 export function listCreatorStrategyFeatures(): CreatorStrategyFeatureDefinition[] {
   return Object.values(CREATOR_STRATEGY_FEATURE_CATALOG)
+}
+
+/** Public purchase catalog: full deploy bundle + optional vanity tiers only. */
+export function listCreatorStrategyFeaturesForPurchase(): CreatorStrategyFeatureDefinition[] {
+  return listCreatorStrategyFeatures().filter(
+    (feature) =>
+      feature.key === FULL_VAULT_DEPLOY_FEATURE_KEY ||
+      feature.key.startsWith('deploy_vanity_'),
+  )
 }
 
 /**

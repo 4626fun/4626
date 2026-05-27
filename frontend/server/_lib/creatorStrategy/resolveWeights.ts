@@ -38,6 +38,7 @@ import {
   DEPLOY_GATING_FEATURE_KEYS,
   type CreatorStrategyFeatureKey,
 } from './catalog.js'
+import { expandCreatorFeatureKeys } from './bundleEntitlements.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
@@ -89,19 +90,12 @@ export async function readActiveCreatorFeatureKeys(
     WHERE creator_token = ${key}
       AND status IN ('pending', 'active')
   `
-  const keys = new Set<CreatorStrategyFeatureKey>()
+  const rawKeys: string[] = []
   for (const row of result.rows ?? []) {
-    const raw = String(row.feature_key ?? '')
-    if (
-      raw === 'charm_active_lp' ||
-      raw === 'ajna_sleeve' ||
-      raw === 'solana_ovault_mesh' ||
-      raw === 'solana_meteora_alpha_vault'
-    ) {
-      keys.add(raw)
-    }
+    const raw = String(row.feature_key ?? '').trim()
+    if (raw) rawKeys.push(raw)
   }
-  return keys
+  return expandCreatorFeatureKeys(rawKeys)
 }
 
 export type ComputeStrategyWeightsResult =

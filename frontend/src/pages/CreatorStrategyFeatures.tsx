@@ -212,9 +212,8 @@ export function CreatorStrategyFeatures() {
       <header className="mb-8">
         <h1 className="text-2xl font-light tracking-tight text-white">Creator strategy features</h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Choose which strategies and optional upgrades apply to vault{' '}
-          <code className="mono text-brand-accent">{shortHex(creatorToken, 8)}</code>. Strategies are required
-          before deploy; vanity address options are optional extras.
+          Pay once to unlock vault deploy for{' '}
+          <code className="mono text-brand-accent">{shortHex(creatorToken, 8)}</code>. Vanity address options below are optional extras.
         </p>
         {connectedAddress && (
           <p className="mt-1 text-xs text-zinc-500">
@@ -247,7 +246,7 @@ export function CreatorStrategyFeatures() {
             <div className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 text-sm text-amber-200">
               <div className="flex items-center gap-2">
                 <Info className="h-4 w-4 shrink-0" />
-                <div>Activate at least one vault strategy below before you can deploy.</div>
+                <div>Pay $499 for full vault deploy below before you can deploy your vault.</div>
               </div>
             </div>
           )}
@@ -310,8 +309,7 @@ export function CreatorStrategyFeatures() {
 
           <footer className="mt-10 border-t border-white/5 pt-6 text-xs text-zinc-500">
             <p>
-              USDC treasury: <code className="mono">{data.treasury}</code>. Paid strategies split productive vault
-              weight evenly at deploy time.
+              USDC treasury: <code className="mono">{data.treasury}</code>. Full deploy includes Charm and Ajna at 45% / 45% productive weight (10% idle).
             </p>
           </footer>
         </>
@@ -333,9 +331,16 @@ function StrategyFeatureCard({
 }) {
   const status = describeStatus(activation)
   const isActive = activation?.status === 'active' || activation?.status === 'pending'
+  const isDeployBundle = feature.key === 'vault_full_deploy'
 
   return (
-    <article className="rounded-xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:border-white/10">
+    <article
+      className={
+        isDeployBundle
+          ? 'rounded-xl border border-amber-500/30 bg-gradient-to-br from-amber-500/[0.08] to-white/[0.02] p-5 transition-colors hover:border-amber-500/45'
+          : 'rounded-xl border border-white/5 bg-white/[0.02] p-5 transition-colors hover:border-white/10'
+      }
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

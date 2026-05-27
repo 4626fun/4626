@@ -16,7 +16,7 @@ import {
 import { getAddress, isAddress, type Address } from 'viem'
 
 import {
-  listCreatorStrategyFeatures,
+  listCreatorStrategyFeaturesForPurchase,
   toCreatorStrategyFeatureDto as toCatalogDto,
 } from '../../../../server/_lib/creatorStrategy/catalog.js'
 import {
@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const creatorToken = getAddress(creatorParam as Address)
 
-  const catalog = listCreatorStrategyFeatures().map(toCatalogDto)
+  const catalog = listCreatorStrategyFeaturesForPurchase().map(toCatalogDto)
   const treasury = resolveProtocolTreasuryForUsdcPayments()
 
   let activations: ReturnType<typeof toActivationDto>[] = []

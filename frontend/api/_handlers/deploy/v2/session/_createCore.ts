@@ -2812,7 +2812,7 @@ export async function validateDeploySessionRequest(params: {
     if (!hasDeployGatingFeature) {
       throw new DeploySessionRequestError(
         402,
-        `Phase 3 strategy deploy requires at least one paid deploy feature activation: ${phase3Eligible.join(', ')}. ` +
+        `Phase 3 strategy deploy requires the $499 full vault deploy package (vault_full_deploy) or legacy paid strategy activations: ${phase3Eligible.join(', ')}. ` +
           `Activate at /creator/strategy/features?creator=${creatorToken}.`,
       )
     }
