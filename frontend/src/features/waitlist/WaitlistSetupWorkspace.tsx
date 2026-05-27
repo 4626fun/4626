@@ -6,7 +6,7 @@ import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { WalletProviders } from '@/web3/Web3Providers'
 import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
-import { useWaitlistChatJoin, waitlistChatStatusMessage } from './useWaitlistChatJoin'
+import { WaitlistGroupChatPanel } from './WaitlistGroupChatPanel'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -44,15 +44,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
   }, [])
   const setupComplete = controller.zoraLinked && Boolean(controller.canonicalCswAddress)
   const canEnterNow = canEnterApp && setupComplete
-  const waitlistChatStatus = useWaitlistChatJoin({
-    canonicalCswAddress: controller.canonicalCswAddress,
-    enabled: setupComplete && signingStepComplete,
-  })
-  const chatStatusMessage = setupComplete
-    ? signingStepComplete
-      ? waitlistChatStatusMessage(waitlistChatStatus)
-      : 'Enable 4626 signing to join waitlist chat.'
-    : null
 
   return (
     <>
@@ -64,9 +55,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
         <div className="w-full space-y-4">
           <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
 
-          {chatStatusMessage ? (
-            <p className="text-xs text-zinc-400">{chatStatusMessage}</p>
-          ) : null}
+          <WaitlistGroupChatPanel setupComplete={setupComplete} signingReady={signingStepComplete} />
 
           {canEnterNow ? (
             <Button

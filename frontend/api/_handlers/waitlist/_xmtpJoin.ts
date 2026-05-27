@@ -12,28 +12,42 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
-import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../../../server/_lib/keepr/keeprRegistry.js'
-import { isCswOwner } from '../../../server/_lib/wallet/cswOwner.js'
-
-const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
-const WAITLIST_CHAT_VAULT_ADDRESS = '0x0000000000000000000000000000000000004626'
+import { enqueueKeeprAction } from '../../../server/_lib/keepr/keeprRegistry.js'
+import {
+  getWaitlistGroupId,
+  isWaitlistChatVaultConfigured,
+  resolveWaitlistChatEligibility,
+  WAITLIST_CHAT_VAULT_ADDRESS,
+} from '../../../server/_lib/waitlist/waitlistXmtpChat.js'
+import {
+  buildWaitlistChatDedupeKey,
+  executeWaitlistChatJoinActionNow,
+  type WaitlistChatJoinExecutionOutcome,
+} from '../../../server/_lib/waitlist/waitlistXmtpChatJoinExecution.js'
 
 type WaitlistXmtpJoinResponse = {
   queued: boolean
   actionId: number
   groupId: string
   identityAddress: `0x${string}`
+  executionTrack: 'legacy-owner-install' | 'sub-account'
+  execution: WaitlistChatJoinExecutionOutcome
+  executionError: string | null
 }
 
-function normalizeAddress(value: unknown): `0x${string}` | null {
-  const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
-  if (!ADDRESS_RE.test(raw)) return null
-  return raw as `0x${string}`
-}
-
-function getWaitlistGroupId(): string | null {
-  const groupId = String(process.env.WAITLIST_XMTP_GROUP_ID ?? '').trim()
-  return groupId.length > 0 ? groupId : null
+function joinBlockedStatusCode(reason: string | null): number {
+  switch (reason) {
+    case 'owner_check_failed':
+      return 502
+    case 'canonical_csw_missing':
+    case 'embedded_eoa_missing':
+      return 409
+    case 'sub_account_not_registered':
+    case 'embedded_owner_not_installed':
+      return 403
+    default:
+      return 403
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -67,8 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const waitlistVault = await getKeeprVaultByVaultAddress(WAITLIST_CHAT_VAULT_ADDRESS as `0x${string}`)
-  if (!waitlistVault) {
+  if (!(await isWaitlistChatVaultConfigured())) {
     return res.status(503).json({
       success: false,
       error: 'waitlist_chat_vault_not_configured',
@@ -80,67 +93,59 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const profileResult = await db.sql`
-    SELECT csw_address, primary_embedded_eoa
-    FROM profiles
-    WHERE id = ${authorizedPrincipal.profileId}
-    LIMIT 1;
-  `
-  const row = profileResult.rows?.[0] ?? null
-  const canonicalCswAddress = normalizeAddress(row?.csw_address)
-  const embeddedEoaAddress = normalizeAddress(row?.primary_embedded_eoa)
+  const eligibility = await resolveWaitlistChatEligibility(db, authorizedPrincipal.profileId)
+  const { joinBlockedReason, xmtpMemberAddress, executionTrack } = eligibility
 
-  if (!canonicalCswAddress) {
-    return res.status(409).json({
+  if (!eligibility.chatReady || !xmtpMemberAddress || joinBlockedReason) {
+    return res.status(joinBlockedStatusCode(joinBlockedReason)).json({
       success: false,
-      error: 'canonical_csw_missing',
-    } satisfies ApiEnvelope<never>)
-  }
-  if (!embeddedEoaAddress) {
-    return res.status(409).json({
-      success: false,
-      error: 'embedded_eoa_missing',
+      error: joinBlockedReason ?? 'chat_not_ready',
     } satisfies ApiEnvelope<never>)
   }
 
-  let embeddedIsOwner = false
-  try {
-    embeddedIsOwner = await isCswOwner(embeddedEoaAddress, canonicalCswAddress)
-  } catch (error) {
-    const message = error instanceof Error && error.message ? error.message : 'owner_check_failed'
-    return res.status(502).json({
-      success: false,
-      error: message,
-    } satisfies ApiEnvelope<never>)
-  }
-
-  if (!embeddedIsOwner) {
+  if (executionTrack !== 'legacy-owner-install' && executionTrack !== 'sub-account') {
     return res.status(403).json({
       success: false,
-      error: 'embedded_owner_not_installed',
+      error: 'chat_not_ready',
     } satisfies ApiEnvelope<never>)
   }
 
+  const actionPayload = {
+    action: 'xmtp.group.add_member',
+    wallet: xmtpMemberAddress,
+    reason:
+      executionTrack === 'sub-account'
+        ? 'waitlist_subaccount_auto_join'
+        : 'waitlist_owner_gated_auto_join',
+  }
+  const dedupeKey = buildWaitlistChatDedupeKey(groupId, xmtpMemberAddress)
+
   const action = await enqueueKeeprAction({
-    vaultAddress: WAITLIST_CHAT_VAULT_ADDRESS as `0x${string}`,
+    vaultAddress: WAITLIST_CHAT_VAULT_ADDRESS,
     groupId,
     actionType: 'xmtp.group.add_member',
-    action: {
-      action: 'xmtp.group.add_member',
-      wallet: canonicalCswAddress,
-      reason: 'waitlist_owner_gated_auto_join',
-    },
-    dedupeKey: `waitlist-chat:add:${groupId}:${canonicalCswAddress}`,
+    action: actionPayload,
+    dedupeKey,
+  })
+
+  const execution = await executeWaitlistChatJoinActionNow({
+    db,
+    actionId: action.id,
+    groupId,
+    action: actionPayload,
+    actionType: 'xmtp.group.add_member',
   })
 
   return res.status(200).json({
     success: true,
     data: {
-      queued: true,
+      queued: execution.outcome !== 'executed',
       actionId: action.id,
       groupId,
-      identityAddress: canonicalCswAddress,
+      identityAddress: xmtpMemberAddress,
+      executionTrack,
+      execution: execution.outcome,
+      executionError: execution.error ?? null,
     },
   } satisfies ApiEnvelope<WaitlistXmtpJoinResponse>)
 }
-

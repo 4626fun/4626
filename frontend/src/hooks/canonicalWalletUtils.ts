@@ -48,3 +48,21 @@ export function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null | und
   }
   return null
 }
+
+export function pickExecutionSubAccountAddress(row: WaitlistMeData | null | undefined): string | null {
+  if (!row) return null
+
+  const canonical = pickCanonicalSmartWalletAddress(row)
+  const fromAccount = (row.connectedAccounts ?? []).find(
+    (item) => item?.isExecutionSubAccount && isAddressLike(item?.address),
+  )?.address
+
+  const candidates: Array<string | null | undefined> = [fromAccount, row.baseSubAccount]
+  for (const value of candidates) {
+    if (!isAddressLike(value)) continue
+    const normalized = getAddress(value).toLowerCase()
+    if (canonical && normalized === canonical) continue
+    return normalized
+  }
+  return null
+}

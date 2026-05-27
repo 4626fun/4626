@@ -33,21 +33,47 @@ describe('useWaitlistChatJoin', () => {
     vi.useRealTimers()
   })
 
-  it('maps joining copy without Zora/XMTP jargon', () => {
-    expect(waitlistChatStatusMessage('joining')).toBe('Adding your wallet to waitlist chat...')
+  it('waits for messaging before joining', () => {
+    const { result } = renderHook(() =>
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: false,
+      }),
+    )
+
+    expect(result.current).toBe('awaiting_messaging')
+    expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 
-  it('resolves to queued after a successful join', async () => {
+  it('maps joining copy without Zora/XMTP jargon', () => {
+    expect(waitlistChatStatusMessage('joining')).toBe('Adding your wallet to waitlist chat…')
+    expect(waitlistChatStatusMessage('executed')).toContain('Syncing the group')
+  })
+
+  it('resolves to executed after an immediate server add', async () => {
     mockedApiFetch.mockResolvedValue(
-      new Response(JSON.stringify({ success: true, data: { queued: true } }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { execution: 'executed' },
+        }),
+        { status: 200 },
+      ),
     )
 
     const { result } = renderHook(() =>
-      useWaitlistChatJoin({ canonicalCswAddress: IDENTITY, enabled: true }),
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: true,
+      }),
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('queued')
+      expect(result.current).toBe('executed')
     })
   })
 
@@ -56,7 +82,13 @@ describe('useWaitlistChatJoin', () => {
     mockedApiFetch.mockReturnValue(pending.promise)
 
     const { result } = renderHook(
-      () => useWaitlistChatJoin({ canonicalCswAddress: IDENTITY, enabled: true }),
+      () =>
+        useWaitlistChatJoin({
+          xmtpMemberAddress: IDENTITY,
+          chatReady: true,
+          enabled: true,
+          messagingReady: true,
+        }),
       { wrapper: StrictMode },
     )
 
@@ -65,13 +97,20 @@ describe('useWaitlistChatJoin', () => {
     })
 
     pending.resolve(
-      new Response(JSON.stringify({ success: true, data: { queued: true } }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { execution: 'deferred' },
+        }),
+        { status: 200 },
+      ),
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('queued')
+      expect(result.current).toBe('pending')
     })
-    expect(mockedApiFetch).toHaveBeenCalledTimes(2)
+    const joinCalls = mockedApiFetch.mock.calls.filter(([path]) => path === '/api/waitlist/xmtp-join')
+    expect(joinCalls).toHaveLength(2)
   })
 
   it('maps embedded owner missing to blocked', async () => {
@@ -82,7 +121,33 @@ describe('useWaitlistChatJoin', () => {
     )
 
     const { result } = renderHook(() =>
-      useWaitlistChatJoin({ canonicalCswAddress: IDENTITY, enabled: true }),
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: true,
+      }),
+    )
+
+    await waitFor(() => {
+      expect(result.current).toBe('blocked')
+    })
+  })
+
+  it('maps sub-account missing to blocked', async () => {
+    mockedApiFetch.mockResolvedValue(
+      new Response(JSON.stringify({ success: false, error: 'sub_account_not_registered' }), {
+        status: 403,
+      }),
+    )
+
+    const { result } = renderHook(() =>
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: true,
+      }),
     )
 
     await waitFor(() => {
@@ -102,7 +167,12 @@ describe('useWaitlistChatJoin', () => {
     )
 
     const { result } = renderHook(() =>
-      useWaitlistChatJoin({ canonicalCswAddress: IDENTITY, enabled: true }),
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: true,
+      }),
     )
 
     expect(result.current).toBe('joining')

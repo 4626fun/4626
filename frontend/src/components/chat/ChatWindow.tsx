@@ -59,7 +59,7 @@ type Props = {
   onMinimize: () => void
   onClose: () => void
   onConversationRekey?: (oldConversationId: string, newConversationId: string) => void
-  variant?: 'desktop' | 'mobile'
+  variant?: 'desktop' | 'mobile' | 'embedded'
   seedCommandId?: string | null
   onSeedConsumed?: () => void
 }
@@ -753,7 +753,9 @@ export function ChatWindow({
     }
   }
 
-  const isMobile = variant === 'mobile'
+  const isEmbedded = variant === 'embedded'
+  const isMobile = variant === 'mobile' || isEmbedded
+  const isMobileShell = variant === 'mobile'
   const showCommandCenter = conversationType === 'dm' && Boolean(agentIdentity)
   const showCommandCenterPanel = resolveCommandCenterVisibility({
     isMobile,
@@ -1155,7 +1157,11 @@ export function ChatWindow({
   return (
     <div
       className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
-        isMobile ? 'h-full w-full rounded-none' : 'rounded-t-xl'
+        isEmbedded
+          ? 'h-[min(480px,55vh)] w-full rounded-xl'
+          : isMobile
+            ? 'h-full w-full rounded-none'
+            : 'rounded-t-xl'
       }`}
       style={
         isMobile
@@ -1167,7 +1173,23 @@ export function ChatWindow({
       }
     >
       {/* Header */}
-      {isMobile ? (
+      {isEmbedded ? (
+        <div className="flex items-center gap-2 px-4 py-3 bg-black/60 border-b border-white/10 shrink-0">
+          <ChatHeaderAvatar
+            avatar={headerAvatar}
+            initialsValue={headerInitials}
+            addressValue={copyablePeerAddress}
+            interactive={Boolean(peerProfileHref)}
+            onOpenProfile={handleOpenPeerProfile}
+          />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-zinc-100">{headerName}</div>
+            {headerSubline ? (
+              <div className="truncate text-[10px] text-zinc-500">{headerSubline}</div>
+            ) : null}
+          </div>
+        </div>
+      ) : isMobileShell ? (
         <div className="flex items-center justify-between gap-2 px-4 py-3 bg-black border-b border-white/10 shrink-0">
           <button
             type="button"

@@ -743,7 +743,6 @@ function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | n
   const candidates: Array<string | null | undefined> = [
     row.cswAddress,
     row.primarySmartWallet,
-    row.baseSubAccount,
   ]
   for (const c of candidates) {
     const normalized = normalizeEvmAddress(c)
@@ -1286,11 +1285,13 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       ) ?? null
 
     let waitlistCanonicalAddress: string | null = null
+    let waitlistXmtpMemberAddress: string | null = null
     let preferredSelection = resolveModePreferredIdentity({
       connectedAddress: connected,
       modeOverride,
       accountContextSmartAddress,
       waitlistCanonicalAddress: null,
+      waitlistXmtpMemberAddress: null,
     })
 
     let preferred = preferredSelection.preferredAddress
@@ -1298,21 +1299,37 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     let policyApplies = enforceCanonicalForConnectedSigner
     let waitlistResolved = false
     try {
-      const res = await apiFetch('/api/waitlist/me', {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
-      const row = res.ok && json?.success ? (json.data ?? null) : null
-      waitlistResolved = Boolean(res.ok && json?.success)
+      const [meRes, statusRes] = await Promise.all([
+        apiFetch('/api/waitlist/me', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        }),
+        apiFetch('/api/waitlist/xmtp-status', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+        }),
+      ])
+      const json = (await meRes.json().catch(() => null)) as ApiEnvelope<WaitlistMeData | null> | null
+      const row = meRes.ok && json?.success ? (json.data ?? null) : null
+      waitlistResolved = Boolean(meRes.ok && json?.success)
       const canonical = pickCanonicalSmartWalletAddress(row)
       waitlistCanonicalAddress = canonical
+
+      const statusJson = (await statusRes.json().catch(() => null)) as {
+        success?: boolean
+        data?: { xmtpMemberAddress?: string | null }
+      } | null
+      waitlistXmtpMemberAddress =
+        statusRes.ok && statusJson?.success
+          ? normalizeEvmAddress(statusJson.data?.xmtpMemberAddress ?? null)
+          : null
 
       preferredSelection = resolveModePreferredIdentity({
         connectedAddress: connected,
         modeOverride,
         accountContextSmartAddress,
         waitlistCanonicalAddress: canonical,
+        waitlistXmtpMemberAddress,
       })
       preferred = preferredSelection.preferredAddress
       isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
@@ -1330,6 +1347,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       modeOverride,
       accountContextSmartAddress,
       waitlistCanonicalAddress,
+      waitlistXmtpMemberAddress,
       enforceCanonicalForConnectedSigner: policyApplies,
     })
 

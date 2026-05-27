@@ -363,6 +363,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/waitlist/leaderboard': apiImport('./api/_handlers/waitlist/_leaderboard'),
         '/api/waitlist/position': apiImport('./api/_handlers/waitlist/_position'),
         '/api/waitlist/points-activity': apiImport('./api/_handlers/waitlist/_pointsActivity'),
+        '/api/waitlist/xmtp-join': apiImport('./api/_handlers/waitlist/_xmtpJoin'),
+        '/api/waitlist/xmtp-status': apiImport('./api/_handlers/waitlist/_xmtpStatus'),
         '/api/analytics/event': apiImport('./api/_handlers/analytics/_event'),
         '/api/onchain/coinTradeRewardsBatch': apiImport('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': apiImport('./api/_handlers/token/_metadata'),
