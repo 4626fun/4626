@@ -4,7 +4,9 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher, DeploymentBatcherPhase2Module, DeploymentBatcherUtilsHelper} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {CreatorRegistry} from "../contracts/core/CreatorRegistry.sol";
+import {IOFT, SendParam, MessagingFee, MessagingReceipt, OFTReceipt, OFTLimit, OFTFeeDetail} from "@layerzerolabs/oft-evm/contracts/interfaces/IOFT.sol";
 import {IBaseSolanaBridge} from "../contracts/interfaces/IBaseSolanaBridge.sol";
 import {ISignatureTransfer} from "permit2/src/interfaces/ISignatureTransfer.sol";
 
@@ -13,7 +15,7 @@ interface IDeploymentBatcherPermit2 {
         DeploymentBatcher.Phase2FinalizeParams calldata params,
         ISignatureTransfer.PermitTransferFrom calldata permit,
         bytes calldata signature
-    ) external returns (DeploymentBatcher.Phase2Result memory out);
+    ) external payable returns (DeploymentBatcher.Phase2Result memory out);
 }
 
 contract MockCreatorTokenPermit2 is ERC20 {
@@ -26,6 +28,7 @@ contract MockCreatorTokenPermit2 is ERC20 {
 
 contract MockShareOFTPermit2 is ERC20 {
     address public owner;
+    mapping(uint32 => bytes32) public peers;
 
     constructor() ERC20("Share Token", "SHARE") {
         owner = msg.sender;
@@ -37,6 +40,34 @@ contract MockShareOFTPermit2 is ERC20 {
 
     function transferOwnership(address newOwner) external {
         owner = newOwner;
+    }
+
+    function setPeer(uint32 eid, bytes32 peer) external {
+        require(msg.sender == owner, "not owner");
+        peers[eid] = peer;
+    }
+
+    function quoteOFT(SendParam calldata sendParam)
+        external
+        pure
+        returns (OFTLimit memory oftLimit, OFTFeeDetail[] memory oftFeeDetails, OFTReceipt memory receipt)
+    {
+        oftLimit = OFTLimit({minAmountLD: 0, maxAmountLD: sendParam.amountLD});
+        oftFeeDetails = new OFTFeeDetail[](0);
+        receipt = OFTReceipt({amountSentLD: sendParam.amountLD, amountReceivedLD: sendParam.amountLD});
+    }
+
+    function quoteSend(SendParam calldata, bool) external pure returns (MessagingFee memory fee) {
+        fee = MessagingFee({nativeFee: 1, lzTokenFee: 0});
+    }
+
+    function send(SendParam calldata, MessagingFee calldata, address)
+        external
+        payable
+        returns (MessagingReceipt memory receipt, OFTReceipt memory oftReceipt)
+    {
+        receipt = MessagingReceipt({guid: bytes32(0), nonce: 0, fee: MessagingFee({nativeFee: 0, lzTokenFee: 0})});
+        oftReceipt = OFTReceipt({amountSentLD: 0, amountReceivedLD: 0});
     }
 }
 
@@ -197,12 +228,19 @@ contract DeploymentBatcherHarness is DeploymentBatcher {
             _vaultCoreModule,
             _vaultStrategiesModule,
             _vaultAdminModule,
-            _phase2Module
+            address(0),
+            address(0),
+            address(0),
+            address(0)
         )
     {}
 
     function setPhase2ModuleForTest(DeploymentBatcherPhase2Module module_) external {
         phase2Module = module_;
+    }
+
+    function setUtilsHelperForTest(DeploymentBatcherUtilsHelper helper_) external {
+        utilsHelper = helper_;
     }
 
     function seedPhase1StateForTest(
@@ -234,10 +272,13 @@ contract DeploymentBatcherPermit2Test is Test {
     MockOwnableTransferPermit2 internal oracle;
     MockPermit2Deployment internal permit2;
     DeploymentBatcherHarness internal batcher;
+    CreatorRegistry internal registry;
+    address internal protocolTreasury = makeAddr("protocolTreasury");
 
     function setUp() public {
         vm.chainId(8453);
 
+        registry = new CreatorRegistry(address(this));
         creatorToken = new MockCreatorTokenPermit2();
         shareOFT = new MockShareOFTPermit2();
         wrapper = new MockWrapperPermit2(address(creatorToken), address(shareOFT));
@@ -248,10 +289,10 @@ contract DeploymentBatcherPermit2Test is Test {
         permit2 = new MockPermit2Deployment(address(creatorToken));
 
         batcher = new DeploymentBatcherHarness(
-            makeAddr("registry"),
+            address(registry),
             makeAddr("bytecodeStore"),
             makeAddr("create2Deployer"),
-            makeAddr("protocolTreasury"),
+            protocolTreasury,
             makeAddr("protocolAutomation"),
             makeAddr("poolManager"),
             makeAddr("taxHook"),
@@ -266,22 +307,31 @@ contract DeploymentBatcherPermit2Test is Test {
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
             makeAddr("vaultAdminModule"),
-            makeAddr("phase2Module")
+            address(0)
         );
+        shareOFT.transferOwnership(address(batcher));
         DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
             makeAddr("create2Deployer"),
-            makeAddr("registry"),
+            address(registry),
             makeAddr("chainlinkEthUsd"),
             makeAddr("poolManager"),
             makeAddr("taxHook"),
-            makeAddr("protocolTreasury"),
+            protocolTreasury,
             makeAddr("lotteryManager"),
             makeAddr("vaultActivationBatcher"),
             address(batcher)
         );
         batcher.setPhase2ModuleForTest(phase2Fixture);
+        batcher.setUtilsHelperForTest(new DeploymentBatcherUtilsHelper());
+        registry.setAuthorizedFactory(address(batcher), true);
+        vm.startPrank(protocolTreasury);
+        batcher.setOVaultRuntimeConfig(makeAddr("hubComposer"), 30_168, true);
+        batcher.setSolanaConfig(makeAddr("solanaAdapter"), bytes32(uint256(0xABCD)));
+        batcher.setSolanaShareOftPeer(bytes32(uint256(0x5678)));
+        vm.stopPrank();
 
         creatorToken.mint(ownerAddr, 100_000_000e18);
+        vm.deal(ownerAddr, 1 ether);
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
 
@@ -312,7 +362,7 @@ contract DeploymentBatcherPermit2Test is Test {
         ISignatureTransfer.PermitTransferFrom memory permit = _permit(depositAmount);
 
         vm.prank(ownerAddr);
-        IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2(params, permit, hex"abcd");
+        IDeploymentBatcherPermit2(address(batcher)).finalizePhase2WithPermit2{value: 1}(params, permit, hex"abcd");
 
         bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
         (address pendingShareOFT, address pendingCca, uint256 pendingAmount, uint256 pendingLpReserveAmount) =
@@ -324,8 +374,8 @@ contract DeploymentBatcherPermit2Test is Test {
         assertEq(creatorToken.balanceOf(address(wrapper)), depositAmount);
         assertEq(pendingShareOFT, address(shareOFT));
         assertEq(pendingCca, address(cca));
-        assertEq(pendingAmount, (depositAmount * 40) / 100);
-        assertEq(pendingLpReserveAmount, (depositAmount * 20) / 100);
+        assertEq(pendingAmount, (depositAmount * 30) / 100);
+        assertEq(pendingLpReserveAmount, (depositAmount * 10) / 100);
     }
 
     function _permit(uint256 amount) internal view returns (ISignatureTransfer.PermitTransferFrom memory permit) {

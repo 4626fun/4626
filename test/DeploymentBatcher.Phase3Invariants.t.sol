@@ -3,7 +3,8 @@ pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 
-import {DeploymentBatcher, DeploymentBatcherPhase2Module} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
     MockAjnaPoolFactoryForPhase3,
@@ -79,9 +80,10 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
         pure
         returns (bool)
     {
-        if (charmWeight > 10_000 || ajnaWeight > 10_000 || solanaWeight > 10_000) return false;
-        uint256 totalWeight = charmWeight + ajnaWeight + solanaWeight;
-        return totalWeight > 0 && totalWeight <= 10_000;
+        if (solanaWeight != 0) return false;
+        if (charmWeight > 10_000 || ajnaWeight > 10_000) return false;
+        uint256 totalProductiveWeight = charmWeight + ajnaWeight;
+        return totalProductiveWeight > 0 && totalProductiveWeight <= 10_000;
     }
 
     function _freshFixture(uint256 charmWeight, uint256 ajnaWeight, uint256 solanaWeight)
@@ -129,38 +131,28 @@ contract DeploymentBatcherPhase3WeightHandler is Test {
             create2Deployer.setDeployment(SOLANA_STRATEGY_CODE_ID, address(solanaStrategy));
         }
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(create2Deployer),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            address(create2Deployer),
-            protocolTreasury,
-            protocolAutomation,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            address(uniswapFactory),
-            makeAddr("uniswapRouter"),
-            address(ajnaFactory),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: address(create2Deployer),
+            protocolTreasury: protocolTreasury,
+            protocolAutomation: protocolAutomation,
+            poolManager: makeAddr("poolManager"),
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: makeAddr("permit2"),
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: address(uniswapFactory),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: address(ajnaFactory),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
 
         vm.mockCall(
@@ -269,11 +261,11 @@ contract DeploymentBatcherPhase3WeightGateSymbolicTest is Test {
         pure
         returns (bool)
     {
+        if (solanaWeight != 0) return false;
         if (charmWeight > 10_000) return false;
         if (ajnaWeight > 10_000) return false;
-        if (solanaWeight > 10_000) return false;
 
-        uint256 totalProductiveWeight = charmWeight + ajnaWeight + solanaWeight;
+        uint256 totalProductiveWeight = charmWeight + ajnaWeight;
         if (totalProductiveWeight == 0) return false;
         if (totalProductiveWeight > 10_000) return false;
 
@@ -285,8 +277,9 @@ contract DeploymentBatcherPhase3WeightGateSymbolicTest is Test {
         pure
         returns (bool)
     {
-        if (charmWeight > 10_000 || ajnaWeight > 10_000 || solanaWeight > 10_000) return false;
-        uint256 totalWeight = charmWeight + ajnaWeight + solanaWeight;
-        return totalWeight > 0 && totalWeight <= 10_000;
+        if (solanaWeight != 0) return false;
+        if (charmWeight > 10_000 || ajnaWeight > 10_000) return false;
+        uint256 totalProductiveWeight = charmWeight + ajnaWeight;
+        return totalProductiveWeight > 0 && totalProductiveWeight <= 10_000;
     }
 }

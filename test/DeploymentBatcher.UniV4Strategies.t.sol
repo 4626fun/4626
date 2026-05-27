@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 
@@ -129,38 +130,28 @@ contract DeploymentBatcherUniV4StrategiesTest is Test {
         create2Deployer.setDeployment(LIMIT_ORDER_CODE_ID, address(limitOrder));
         create2Deployer.setDeployment(LP_MANAGER_CODE_ID, address(lpManager));
 
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            address(create2Deployer),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            poolManager,
-            makeAddr("taxHook"),
-            makeAddr("protocolTreasury"),
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            address(create2Deployer),
-            makeAddr("protocolTreasury"),
-            makeAddr("protocolAutomation"),
-            poolManager,
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            permit2,
-            makeAddr("usdc"),
-            makeAddr("uniswapV3Factory"),
-            makeAddr("uniswapRouter"),
-            makeAddr("ajnaFactory"),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: address(create2Deployer),
+            protocolTreasury: makeAddr("protocolTreasury"),
+            protocolAutomation: makeAddr("protocolAutomation"),
+            poolManager: poolManager,
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: permit2,
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: makeAddr("uniswapV3Factory"),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: makeAddr("ajnaFactory"),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
     }
 
     function _uniV4CodeIds() internal pure returns (DeploymentBatcher.UniV4CodeIds memory codeIds) {

@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "../contracts/governance/VaultRolePolicyManager.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 
 contract MockOwnableVaultForPhase3Bounds {
     address public owner;
@@ -39,38 +40,28 @@ contract DeploymentBatcherThreeWaySplitTest is Test {
         protocolAutomation = makeAddr("protocolAutomation");
 
         vault = new MockOwnableVaultForPhase3Bounds(address(this));
-        DeploymentBatcherPhase2Module phase2Fixture = new DeploymentBatcherPhase2Module(
-            makeAddr("create2Deployer"),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            makeAddr("create2Deployer"),
-            protocolTreasury,
-            protocolAutomation,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            makeAddr("uniswapV3Factory"),
-            makeAddr("uniswapRouter"),
-            makeAddr("ajnaFactory"),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2Fixture)
-        );
+        DeploymentBatcherFixture deployer = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: makeAddr("create2Deployer"),
+            protocolTreasury: protocolTreasury,
+            protocolAutomation: protocolAutomation,
+            poolManager: makeAddr("poolManager"),
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: makeAddr("permit2"),
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: makeAddr("uniswapV3Factory"),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: makeAddr("ajnaFactory"),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployer.deployBatcher(cfg);
         rolePolicyManager = new VaultRolePolicyManager(address(this));
         vault.setManagement(address(batcher));
     }

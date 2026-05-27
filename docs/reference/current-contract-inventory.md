@@ -5,8 +5,8 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Generated on: 2026-05-15
-Scope: current live Base infra addresses plus the canonical `v1.11.1` protocol contract release target for new per-creator vaults.
+Generated on: 2026-05-26
+Scope: current live Base infra addresses plus the canonical `v1.11.2-pipe-a` protocol contract release target for new per-creator vaults.
 
 ## Sources
 
@@ -26,16 +26,17 @@ Scope: current live Base infra addresses plus the canonical `v1.11.1` protocol c
 | `lotteryManager` | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
 | `vrfConsumer` | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
 | `solanaBridgeAdapter` | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
-| `bytecodeStore` | `0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69` |
-| `create2DeployerFromStore` | `0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E` |
-| `creatorOVaultCoreModule` | `0x5f6b5E9044179BF3C4d2f38AB5EC5c60b4B6657b` |
-| `creatorOVaultStrategiesModule` | `0x6048eC7103Ce9090Ad3B650931A6113a5369A164` |
-| `creatorOVaultAdminModule` | `0xDBC68d78D2961e4d2ca156D9F0e489B149cb7d73` |
-| `deploymentBatcher` | `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` |
-| `deploymentBatcherPhase2Module` | `0x1A806550070d42d18ad5C5325A8b90BeD647E7BB` |
-| `deploymentBatcherPhase3Helper` | `0x809a20c6655D75C1d408dEd02a6EAB705b7b5153` |
-| `deploymentBatcherUniV4Helper` | `0xD7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b` |
-| `deploymentBatcherUtilsHelper` | `0x158C9925BbC53295675a1b0BB489c7Cfba2cfa73` |
+| `bytecodeStore` | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
+| `create2DeployerFromStore` | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
+| `creatorOVaultCoreModule` | `0x9f8C2c5700A25b76759f3115B96A68f4d079CDbB` |
+| `creatorOVaultStrategiesModule` | `0x98d82B137b7Ff9ba6f9c6fE83Cc2aBFF150782B0` |
+| `creatorOVaultAdminModule` | `0x84cbD15c71f7F8127458eBAFaBBDd12415CA2097` |
+| `deploymentBatcher` | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| `deploymentBatcherPhase1Module` | `0xf3b20557ef8173510693A13EF71F884DB835E8c0` |
+| `deploymentBatcherPhase2Module` | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
+| `deploymentBatcherPhase3Helper` | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
+| `deploymentBatcherUniV4Helper` | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
+| `deploymentBatcherUtilsHelper` | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
@@ -49,11 +50,11 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `lotteryManager` | `0x5c0115589d7F4930A0dc93417aE409f44186f4E7` |
 | `vrfConsumer` | `0xE4AcDD5316EcF4D98301509968F0728EEDaaB68E` |
 | `solanaBridgeAdapter` | `0x700b4BBAf965c013123bAd02a6562FBa487aC0f1` |
-| `universalBytecodeStore` | `0x9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69` |
-| `universalCreate2DeployerFromStore` | `0xF6538d7D18AfFe5057C6f109DBEd33c851A70c7E` |
+| `universalBytecodeStore` | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
+| `universalCreate2DeployerFromStore` | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
 | `vaultActivationBatcher` | `0x5036FB536f53b15307825eB2006B21E22f0F3193` |
-| `creatorVaultBatcher` | `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` |
-| `creatorVaultBatcherAutoHandoff` | `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` |
+| `creatorVaultBatcher` | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| `creatorVaultBatcherAutoHandoff` | `0xa99058f424FB3ACC639F59355C65C40149030651` |
 
 ## Active Deployment Snapshots
 
@@ -75,10 +76,11 @@ Current snapshot set:
 
 Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
 
-- `DeploymentBatcherPhase2Module=0x1A806550070d42d18ad5C5325A8b90BeD647E7BB`
-- `DeploymentBatcherPhase3Helper=0x809a20c6655D75C1d408dEd02a6EAB705b7b5153`
-- `DeploymentBatcherUniV4Helper=0xD7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b`
-- `DeploymentBatcherUtilsHelper=0x158C9925BbC53295675a1b0BB489c7Cfba2cfa73`
+- `DeploymentBatcherPhase1Module=0xf3b20557ef8173510693A13EF71F884DB835E8c0`
+- `DeploymentBatcherPhase2Module=0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f`
+- `DeploymentBatcherPhase3Helper=0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB`
+- `DeploymentBatcherUniV4Helper=0xF71a6236586077CD29C971443D2cce37B543DcBB`
+- `DeploymentBatcherUtilsHelper=0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D`
 
 ## Bytecode / CodeId Evidence
 

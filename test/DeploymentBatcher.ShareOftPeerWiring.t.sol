@@ -195,7 +195,10 @@ contract DeploymentBatcherPeerHarness is DeploymentBatcher {
             _vaultCoreModule,
             _vaultStrategiesModule,
             _vaultAdminModule,
-            _phase2Module
+            address(0),
+            address(0),
+            address(0),
+            address(0)
         )
     {}
 
@@ -285,7 +288,7 @@ contract DeploymentBatcherShareOftPeerWiringTest is Test {
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
             makeAddr("vaultAdminModule"),
-            makeAddr("phase2Module")
+            address(0)
         );
 
         shareOFT = new MockShareOftPeerWiring(address(batcher));

@@ -5,6 +5,11 @@ import { OperationType } from '@safe-global/types-kit'
 import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
 import {
   SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  SPLIT_PHASE1_PHASE1_MODULE,
+  SPLIT_PHASE1_PHASE2_MODULE,
+  SPLIT_PHASE1_PHASE3_HELPER,
+  SPLIT_PHASE1_UNIV4_HELPER,
+  SPLIT_PHASE1_UTILS_HELPER,
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
@@ -57,6 +62,31 @@ const SET_SOLANA_SHARE_OFT_PEER_ABI = [
   },
 ] as const
 
+const WIRE_DEPLOYMENT_HELPERS_ABI = [
+  {
+    type: 'function',
+    name: 'wireDeploymentHelpers',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: '_phase2Module', type: 'address' },
+      { name: '_phase3Helper', type: 'address' },
+      { name: '_uniV4Helper', type: 'address' },
+      { name: '_utilsHelper', type: 'address' },
+    ],
+    outputs: [],
+  },
+] as const
+
+const SET_PHASE1_MODULE_ABI = [
+  {
+    type: 'function',
+    name: 'setPhase1Module',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: '_phase1Module', type: 'address' }],
+    outputs: [],
+  },
+] as const
+
 type ProposalSpec = {
   label: string
   to: Address
@@ -82,6 +112,13 @@ Options:
   --no-ovault-runtime        Force skipping OVault runtime proposal
   --include-share-oft-peer   Also propose setSolanaShareOftPeer(...)
   --only-share-oft-peer      Propose only setSolanaShareOftPeer
+  --include-wire-helpers     Propose wireDeploymentHelpers + setPhase1Module (default for new batcher cutover)
+  --only-wire-helpers        Propose only helper wiring (no solana/ovault config)
+  --phase1-module <address>  Phase1 module (default: SPLIT_PHASE1_PHASE1_MODULE)
+  --phase2-module <address>  Phase2 module (default: SPLIT_PHASE1_PHASE2_MODULE)
+  --phase3-helper <address>    Phase3 helper (default: SPLIT_PHASE1_PHASE3_HELPER)
+  --uni-v4-helper <address>    UniV4 helper (default: SPLIT_PHASE1_UNIV4_HELPER)
+  --utils-helper <address>     Utils helper (default: SPLIT_PHASE1_UTILS_HELPER)
   --share-oft-peer <bytes32> Default ShareOFT mesh peer (default: SOLANA_SHARE_OFT_PEER)
   --ovault-hub-composer <a>  OVault hub composer (default: OVAULT_HUB_COMPOSER)
   --ovault-solana-eid <n>    OVault Solana EID (default: OVAULT_SOLANA_EID)
@@ -180,6 +217,27 @@ function buildSetSolanaShareOftPeerCalldata(peer: `0x${string}`): `0x${string}` 
     abi: SET_SOLANA_SHARE_OFT_PEER_ABI,
     functionName: 'setSolanaShareOftPeer',
     args: [peer],
+  })
+}
+
+function buildWireDeploymentHelpersCalldata(params: {
+  phase2Module: Address
+  phase3Helper: Address
+  uniV4Helper: Address
+  utilsHelper: Address
+}): `0x${string}` {
+  return encodeFunctionData({
+    abi: WIRE_DEPLOYMENT_HELPERS_ABI,
+    functionName: 'wireDeploymentHelpers',
+    args: [params.phase2Module, params.phase3Helper, params.uniV4Helper, params.utilsHelper],
+  })
+}
+
+function buildSetPhase1ModuleCalldata(phase1Module: Address): `0x${string}` {
+  return encodeFunctionData({
+    abi: SET_PHASE1_MODULE_ABI,
+    functionName: 'setPhase1Module',
+    args: [phase1Module],
   })
 }
 
@@ -291,11 +349,18 @@ async function main() {
     throw new Error(`Deprecated batcher alias is blocked. ${deploymentBatcherNotConfiguredMessage(batcher)}`)
   }
 
-  const includeSolanaConfig = hasFlag('--only-ovault-runtime') || hasFlag('--only-share-oft-peer')
-    ? false
-    : hasFlag('--no-solana-config')
+  const onlyWireHelpers = hasFlag('--only-wire-helpers')
+  const includeWireHelpers = onlyWireHelpers
+    ? true
+    : hasFlag('--include-wire-helpers') ||
+      parseBool(process.env.CONFIGURE_BATCHER_WIRE_HELPERS || '', false)
+
+  const includeSolanaConfig =
+    onlyWireHelpers || hasFlag('--only-ovault-runtime') || hasFlag('--only-share-oft-peer')
       ? false
-      : true
+      : hasFlag('--no-solana-config')
+        ? false
+        : true
   const adapter = normalizeAddress(getArg('--adapter', process.env.SOLANA_BRIDGE_ADAPTER || ''))
   const destination = getArg('--destination', process.env.SOLANA_DESTINATION || '')
   if (includeSolanaConfig) {
@@ -326,30 +391,46 @@ async function main() {
   const txServiceApiBase = resolveTxServiceApiBase(safeServiceUrl)
   const chainId = parseChainId(getArg('--chain-id', process.env.CHAIN_ID || '8453'))
 
-  const includeOvaultRuntime = hasFlag('--only-share-oft-peer')
+  const includeOvaultRuntime = onlyWireHelpers
     ? false
-    : hasFlag('--only-ovault-runtime')
-      ? true
-      : hasFlag('--include-ovault-runtime')
+    : hasFlag('--only-share-oft-peer')
+      ? false
+      : hasFlag('--only-ovault-runtime')
         ? true
-        : hasFlag('--no-ovault-runtime')
-          ? false
-          : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
-  const includeShareOftPeer = hasFlag('--only-share-oft-peer')
-    ? true
-    : hasFlag('--include-share-oft-peer')
+        : hasFlag('--include-ovault-runtime')
+          ? true
+          : hasFlag('--no-ovault-runtime')
+            ? false
+            : parseBool(process.env.CONFIGURE_OVAULT_RUNTIME || '', false)
+  const includeShareOftPeer = onlyWireHelpers
+    ? false
+    : hasFlag('--only-share-oft-peer')
       ? true
-      : parseBool(process.env.CONFIGURE_SOLANA_SHARE_OFT_PEER || '', false)
+      : hasFlag('--include-share-oft-peer')
+        ? true
+        : parseBool(process.env.CONFIGURE_SOLANA_SHARE_OFT_PEER || '', false)
   const shareOftPeerRaw = getArg('--share-oft-peer', process.env.SOLANA_SHARE_OFT_PEER || '')
   if (includeShareOftPeer) {
     assertBytes32(shareOftPeerRaw)
   }
-  if (includeOvaultRuntime) {
-    const canonicalOvaultBatcher = getAddress(SPLIT_PHASE1_DEPLOYMENT_BATCHER)
-    if (batcher.toLowerCase() !== canonicalOvaultBatcher.toLowerCase()) {
-      throw new Error(
-        `OVault runtime proposals require canonical deployment batcher ${canonicalOvaultBatcher}; received ${batcher}.`,
-      )
+  const phase1Module = normalizeAddress(
+    getArg('--phase1-module', process.env.SPLIT_PHASE1_PHASE1_MODULE || SPLIT_PHASE1_PHASE1_MODULE),
+  )
+  const phase2Module = normalizeAddress(
+    getArg('--phase2-module', process.env.SPLIT_PHASE1_PHASE2_MODULE || SPLIT_PHASE1_PHASE2_MODULE),
+  )
+  const phase3Helper = normalizeAddress(
+    getArg('--phase3-helper', process.env.SPLIT_PHASE1_PHASE3_HELPER || SPLIT_PHASE1_PHASE3_HELPER),
+  )
+  const uniV4Helper = normalizeAddress(
+    getArg('--uni-v4-helper', process.env.SPLIT_PHASE1_UNIV4_HELPER || SPLIT_PHASE1_UNIV4_HELPER),
+  )
+  const utilsHelper = normalizeAddress(
+    getArg('--utils-helper', process.env.SPLIT_PHASE1_UTILS_HELPER || SPLIT_PHASE1_UTILS_HELPER),
+  )
+  if (includeWireHelpers) {
+    if (!phase1Module || !phase2Module || !phase3Helper || !uniV4Helper || !utilsHelper) {
+      throw new Error('Wire helpers requires all module/helper addresses')
     }
   }
   const ovaultHubComposer = normalizeAddress(
@@ -359,6 +440,23 @@ async function main() {
   const ovaultEnabled = parseBool(getArg('--ovault-enabled', process.env.OVAULT_RUNTIME_ENABLED || ''), true)
 
   const proposals: ProposalSpec[] = []
+  if (includeWireHelpers) {
+    proposals.push({
+      label: 'wireDeploymentHelpers',
+      to: batcher,
+      data: buildWireDeploymentHelpersCalldata({
+        phase2Module: phase2Module!,
+        phase3Helper: phase3Helper!,
+        uniV4Helper: uniV4Helper!,
+        utilsHelper: utilsHelper!,
+      }),
+    })
+    proposals.push({
+      label: 'setPhase1Module',
+      to: batcher,
+      data: buildSetPhase1ModuleCalldata(phase1Module!),
+    })
+  }
   if (includeSolanaConfig) {
     proposals.push({
       label: 'setSolanaConfig',
@@ -409,9 +507,15 @@ async function main() {
         batcher,
         adapter: adapter ?? null,
         destination: includeSolanaConfig ? assertBytes32(destination) : null,
+        includeWireHelpers,
         includeSolanaConfig,
         includeOvaultRuntime,
         includeShareOftPeer,
+        phase1Module: includeWireHelpers ? phase1Module : null,
+        phase2Module: includeWireHelpers ? phase2Module : null,
+        phase3Helper: includeWireHelpers ? phase3Helper : null,
+        uniV4Helper: includeWireHelpers ? uniV4Helper : null,
+        utilsHelper: includeWireHelpers ? utilsHelper : null,
         ovaultEnabled,
         shareOftPeer: includeShareOftPeer ? assertBytes32(shareOftPeerRaw) : null,
         safeServiceUrl,

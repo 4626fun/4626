@@ -20,6 +20,13 @@ declare const process: {
 const BATCHER_VIEW_ABI = [
   {
     type: 'function',
+    name: 'phase1Module',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
     name: 'phase2Module',
     stateMutability: 'view',
     inputs: [],
@@ -145,7 +152,8 @@ async function main() {
   const rpcUrl = getArg('--rpc', process.env.BASE_RPC_URL || 'https://mainnet.base.org')
   const client = createPublicClient({ chain: base, transport: http(rpcUrl) })
 
-  const [phase2Module, adapter, destination, runtime, peerRead] = await Promise.all([
+  const [phase1Module, phase2Module, adapter, destination, runtime, peerRead] = await Promise.all([
+    client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase1Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'phase2Module' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaBridgeAdapter' }),
     client.readContract({ address: batcher, abi: BATCHER_VIEW_ABI, functionName: 'solanaDestination' }),
@@ -155,6 +163,11 @@ async function main() {
 
   const runtimeTuple = runtime as { hubComposer: Address; solanaEid: number; enabled: boolean }
   const checks: CheckResult[] = [
+    {
+      id: 'phase1_module',
+      ok: isAddress(String(phase1Module)),
+      detail: String(phase1Module),
+    },
     {
       id: 'phase2_module',
       ok: isAddress(String(phase2Module)),

@@ -18,7 +18,7 @@ Registry peer OR batcher default peer must resolve before finalize; the module s
 
 ```bash
 pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
-  --batcher 0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
 ```
 
 Exit `0` = ready. Exit `2` = blocked (typical failure: `solana_share_oft_peer_selector` on pre-Pipe-A batcher).
@@ -84,22 +84,48 @@ CONFIGURE_SOLANA_SHARE_OFT_PEER=1 SOLANA_SHARE_OFT_PEER=0x<mesh-peer> \
 | Deploy UI | `/deploy/vault` → Pipe A wiring panel shows peer + quoted LZ fee |
 | Dry-run | `pnpm -C frontend run dev:deploy-dry-run` → phase2 finalize passes |
 
-## Known live state (pre-cutover)
+## Known live state
 
-Canonical batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` already has OVault runtime + Solana adapter/destination configured, but **`solanaShareOftPeer()` reverts** until bytecode cutover. Greenfield finalize bridge will fail with `SolanaShareOftPeerNotConfigured` until cutover completes.
+### Pre-cutover (deprecated)
 
-### v1.11.2-pipe-a epoch attempt (2026-05-26)
+Batcher `0x16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8` (v1.11.1) had OVault runtime + Solana adapter/destination configured, but **`solanaShareOftPeer()` reverts** on pre–Pipe-A bytecode. Do not use for greenfield deploys.
 
-CREATE2 infra for epoch `v1.11.2-pipe-a` partially landed; **DeploymentBatcher deploy failed** (`0x84826fad…`, predicted address `0x1C29A839386Bac0fD65B23ae9173D1623bFa9C24` has no code). Store + create2 deployer + vault modules at that epoch **did** deploy — do not reuse the same salts until the batcher failure root cause is fixed.
+### v1.11.2-pipe-a epoch (2026-05-26)
 
-Safe queue on protocol treasury (`0x7d429e…`):
+CREATE2 infra + helpers + batcher shell deployed at epoch `v1.11.2-pipe-a`:
 
-| Nonce | Action | Status |
-|-------|--------|--------|
-| 76 | `setOVaultRuntimeConfig` | Executed (no-op — already configured) |
-| 77 | `setSolanaShareOftPeer` on **old** batcher | **Do not execute** — GS013 inner revert until Pipe-A bytecode is live; cancel and re-propose against the **new** batcher after successful cutover |
+| Contract | Address |
+|----------|---------|
+| UniversalBytecodeStoreV2 | `0x8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4` |
+| UniversalCreate2DeployerFromStore | `0x4760216AFd59B843671E0FdFCe6498Ec8CFf38a7` |
+| DeploymentBatcher (shell) | `0xa99058f424FB3ACC639F59355C65C40149030651` |
+| DeploymentBatcherPhase1Module | `0xf3b20557ef8173510693A13EF71F884DB835E8c0` |
+| DeploymentBatcherPhase2Module | `0x67FD8A34E5b26F875a9513DFf37521A1ca92d80f` |
+| DeploymentBatcherPhase3Helper | `0x3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB` |
+| DeploymentBatcherUniV4Helper | `0xF71a6236586077CD29C971443D2cce37B543DcBB` |
+| DeploymentBatcherUtilsHelper | `0xD71C4910C7bB38FB1089Cca42b0883F1BFFfa28D` |
 
-`SOLANA_SHARE_OFT_PEER` must be the Solana **ShareOFT mesh peer** (bytes32), not `SOLANA_DESTINATION` (LZ recipient wallet).
+**Still required before greenfield Pipe A finalize:**
+
+1. Protocol treasury Safe: `wireDeploymentHelpers` + `setPhase1Module` + `setSolanaConfig` + `setOVaultRuntimeConfig` (+ `setSolanaShareOftPeer` when mesh peer is known).
+2. Re-run `DeployBaseMainnetDeployer.s.sol` (or manual `setAuthorizedDeployer`) to authorize batcher on create2 deployer after wiring.
+3. Cancel Safe nonce **77** (`setSolanaShareOftPeer` on old batcher) — do not execute.
+4. Production Vercel env + redeploy after config promotion.
+
+Safe wiring dry-run:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651 \\
+  --include-wire-helpers \\
+  --include-ovault-runtime \\
+  --ovault-hub-composer 0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1 \\
+  --ovault-solana-eid 30168
+```
+
+### Failed v1.11.2-pipe-a attempt (2026-05-26, initcode fix)
+
+First attempt predicted batcher `0x1C29A839386Bac0fD65B23ae9173D1623bFa9C24` — **no code** (EIP-3860 initcode limit). Infra salts from that attempt are superseded by the successful redeploy above; do not reuse failed batcher address.
 
 ## Test gate (repo)
 

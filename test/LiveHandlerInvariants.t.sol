@@ -10,6 +10,7 @@ import {MessagingFee, Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.
 import {MessagingReceipt} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
 import {DeploymentBatcher} from "../contracts/helpers/batchers/DeploymentBatcher.sol";
+import "./helpers/DeploymentBatcherFixture.sol";
 import {
     MockAjnaAdapterForPhase3,
     MockAjnaPoolFactoryForPhase3,
@@ -462,38 +463,28 @@ contract BatcherPhaseHandler is Test {
         }
         if (solana != 0) create2.setDeployment(solanaCode, address(solanaStrategy));
 
-        DeploymentBatcherPhase2Module phase2 = new DeploymentBatcherPhase2Module(
-            address(create2),
-            makeAddr("registry"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            protocolTreasury,
-            makeAddr("lotteryManager"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("batcher")
-        );
-        batcher = new DeploymentBatcher(
-            makeAddr("registry"),
-            makeAddr("bytecodeStore"),
-            address(create2),
-            protocolTreasury,
-            protocolAutomation,
-            makeAddr("poolManager"),
-            makeAddr("taxHook"),
-            makeAddr("chainlinkEthUsd"),
-            makeAddr("vaultActivationBatcher"),
-            makeAddr("lotteryManager"),
-            makeAddr("permit2"),
-            makeAddr("usdc"),
-            address(uniswapFactory),
-            makeAddr("uniswapRouter"),
-            address(ajnaFactory),
-            makeAddr("vaultCoreModule"),
-            makeAddr("vaultStrategiesModule"),
-            makeAddr("vaultAdminModule"),
-            address(phase2)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: makeAddr("registry"),
+            bytecodeStore: makeAddr("bytecodeStore"),
+            create2Deployer: address(create2),
+            protocolTreasury: protocolTreasury,
+            protocolAutomation: protocolAutomation,
+            poolManager: makeAddr("poolManager"),
+            taxHook: makeAddr("taxHook"),
+            chainlinkEthUsd: makeAddr("chainlinkEthUsd"),
+            vaultActivationBatcher: makeAddr("vaultActivationBatcher"),
+            lotteryManager: makeAddr("lotteryManager"),
+            permit2: makeAddr("permit2"),
+            usdc: makeAddr("usdc"),
+            uniswapV3Factory: address(uniswapFactory),
+            uniswapRouter: makeAddr("uniswapRouter"),
+            ajnaFactory: address(ajnaFactory),
+            vaultCoreModule: makeAddr("vaultCoreModule"),
+            vaultStrategiesModule: makeAddr("vaultStrategiesModule"),
+            vaultAdminModule: makeAddr("vaultAdminModule")
+        });
+        (batcher,) = deployerLib.deployBatcher(cfg);
         vault.setManagement(address(batcher));
         vm.mockCall(
             CHARM_FACTORY,
@@ -667,38 +658,28 @@ contract BatcherPhase12Handler is Test {
         create2.setCodeKind(WRAPPER_CODE_ID, 2);
         create2.setCodeKind(SHARE_OFT_CODE_ID, 3);
 
-        DeploymentBatcherPhase2Module phase2 = new DeploymentBatcherPhase2Module(
-            address(create2),
-            address(registry),
-            address(0x1003),
-            address(0x1001),
-            address(0x1002),
-            address(this),
-            address(0x1005),
-            address(0x1004),
-            makeAddr("batcher")
-        );
-        deployer = new DeploymentBatcher(
-            address(registry),
-            address(store),
-            address(create2),
-            address(this),
-            makeAddr("protocolAutomation"),
-            address(0x1001),
-            address(0x1002),
-            address(0x1003),
-            address(0x1004),
-            address(0x1005),
-            address(0x1006),
-            address(0x1007),
-            address(0x1008),
-            address(0x1009),
-            address(0x1010),
-            address(0x2001),
-            address(0x2002),
-            address(0x2003),
-            address(phase2)
-        );
+        DeploymentBatcherFixture deployerLib = new DeploymentBatcherFixture();
+        DeploymentBatcherFixture.BatcherConfig memory cfg = DeploymentBatcherFixture.BatcherConfig({
+            registry: address(registry),
+            bytecodeStore: address(store),
+            create2Deployer: address(create2),
+            protocolTreasury: address(this),
+            protocolAutomation: makeAddr("protocolAutomation"),
+            poolManager: address(0x1001),
+            taxHook: address(0x1002),
+            chainlinkEthUsd: address(0x1003),
+            vaultActivationBatcher: address(0x1004),
+            lotteryManager: address(0x1005),
+            permit2: address(0x1006),
+            usdc: address(0x1007),
+            uniswapV3Factory: address(0x1008),
+            uniswapRouter: address(0x1009),
+            ajnaFactory: address(0x1010),
+            vaultCoreModule: address(0x2001),
+            vaultStrategiesModule: address(0x2002),
+            vaultAdminModule: address(0x2003)
+        });
+        (deployer,) = deployerLib.deployBatcher(cfg);
     }
 
     function _predeployShareOft(
@@ -849,7 +830,7 @@ contract BatcherPhase2Handler is Test {
             makeAddr("vaultCoreModule"),
             makeAddr("vaultStrategiesModule"),
             makeAddr("vaultAdminModule"),
-            makeAddr("phase2Module")
+            address(0)
         );
         DeploymentBatcherPhase2Module phase2 = new DeploymentBatcherPhase2Module(
             makeAddr("create2Deployer"),

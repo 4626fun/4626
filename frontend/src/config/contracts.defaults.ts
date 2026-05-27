@@ -22,16 +22,18 @@ export const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bd
 export const PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
 export const PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('004684670d284EF607E1B2424fcf8ccBda8ef828')
 export const PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('271Ab2C53D79d52ddB14506a44133Fe3FA395332')
-export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
-/** Constructor-created child of the live v1.11.1 `DeploymentBatcher`. */
-export const SPLIT_PHASE1_PHASE2_MODULE = addr('1A806550070d42d18ad5C5325A8b90BeD647E7BB')
-export const SPLIT_PHASE1_PHASE3_HELPER = addr('809a20c6655D75C1d408dEd02a6EAB705b7b5153')
-export const SPLIT_PHASE1_UNIV4_HELPER = addr('D7A2F1c2C5d73EeB19B495D2Bbe29A9bE2112F0b')
-export const SPLIT_PHASE1_UTILS_HELPER = addr('158C9925BbC53295675a1b0BB489c7Cfba2cfa73')
+export const PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('16aEA859bd709D16Cd1F94c1C349A9E8A315F1D8')
+/** v1.11.2-pipe-a epoch: slim shell + post-deploy helper wiring + payable finalize / ShareOFT peer. */
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('a99058f424FB3ACC639F59355C65C40149030651')
+export const SPLIT_PHASE1_PHASE1_MODULE = addr('f3b20557ef8173510693A13EF71F884DB835E8c0')
+export const SPLIT_PHASE1_PHASE2_MODULE = addr('67FD8A34E5b26F875a9513DFf37521A1ca92d80f')
+export const SPLIT_PHASE1_PHASE3_HELPER = addr('3c89e20AbccE3d8F6344AFf6c63c82F5619EFFCB')
+export const SPLIT_PHASE1_UNIV4_HELPER = addr('F71a6236586077CD29C971443D2cce37B543DcBB')
+export const SPLIT_PHASE1_UTILS_HELPER = addr('D71C4910C7bB38FB1089Cca42b0883F1BFFfa28D')
 export const CREATOR_OVAULT_FACTORY = addr('09a2fd817F30D2599fb13520d06751259b6AdcFE')
-export const CREATOR_OVAULT_CORE_MODULE = addr('5f6b5E9044179BF3C4d2f38AB5EC5c60b4B6657b')
-export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('6048eC7103Ce9090Ad3B650931A6113a5369A164')
-export const CREATOR_OVAULT_ADMIN_MODULE = addr('DBC68d78D2961e4d2ca156D9F0e489B149cb7d73')
+export const CREATOR_OVAULT_CORE_MODULE = addr('9f8C2c5700A25b76759f3115B96A68f4d079CDbB')
+export const CREATOR_OVAULT_STRATEGIES_MODULE = addr('98d82B137b7Ff9ba6f9c6fE83Cc2aBFF150782B0')
+export const CREATOR_OVAULT_ADMIN_MODULE = addr('84cbD15c71f7F8127458eBAFaBBDd12415CA2097')
 
 const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
@@ -39,6 +41,7 @@ const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
   PRE_CURRENT_MODULE_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1110_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
   PRE_V1111_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
+  PRE_V1112_PIPE_A_SPLIT_PHASE1_DEPLOYMENT_BATCHER.toLowerCase(),
 ])
 
 export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
@@ -63,7 +66,7 @@ export function normalizeCreatorVaultBatcherAddress(
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // v1.11.1 protocol cutover addresses.
+  // v1.11.2-pipe-a protocol cutover addresses.
   registry: addr('3f64087dc361Ad52300409E5873b26941D6418B6'),
   lotteryManager: addr('5c0115589d7F4930A0dc93417aE409f44186f4E7'),
   vrfConsumer: addr('E4AcDD5316EcF4D98301509968F0728EEDaaB68E'),
@@ -83,8 +86,8 @@ export const BASE_DEFAULTS = {
   // active Base DeploymentBatcher. Keep these paired with
   // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
   // batcher's onchain getters.
-  universalBytecodeStore: addr('9C3e2A7bd73690d5b5DC0C47f8dB74c4dc5D1c69'),
-  universalCreate2DeployerFromStore: addr('F6538d7D18AfFe5057C6f109DBEd33c851A70c7E'),
+  universalBytecodeStore: addr('8B51E6784A0C6681F5de25bAC4f9B2fDCEDE72b4'),
+  universalCreate2DeployerFromStore: addr('4760216AFd59B843671E0FdFCe6498Ec8CFf38a7'),
   vaultAuxiliaryDeployBatcher: addr('a3986F2F812a80a4Ee4A33646bE5248D9e22eb88'),
 
   // AA helpers
