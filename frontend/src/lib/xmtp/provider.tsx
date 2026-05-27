@@ -1396,10 +1396,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       preferred = preferredSelection.preferredAddress
       isCanonicalSmartWallet = preferredSelection.isSmartWalletIdentity
 
-      policyApplies = shouldApplyCanonicalEnforcement({
-        canonicalAddress: canonical,
-        signerAddress: connected,
-      })
+      if (waitlistXmtpMemberAddress) {
+        preferred = waitlistXmtpMemberAddress
+        isCanonicalSmartWallet = waitlistXmtpMemberAddress !== connected
+        policyApplies = false
+      } else {
+        policyApplies = shouldApplyCanonicalEnforcement({
+          canonicalAddress: canonical,
+          signerAddress: connected,
+        })
+      }
     } catch {
       waitlistResolved = false
     }
@@ -2645,6 +2651,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   // ------- disconnect -------
   const disconnect = useCallback(() => {
     void cleanup()
+    resolvedIdentityByWalletRef.current.clear()
     setStatus('idle')
     setError(null)
     setLocalStateResetRequired(false)

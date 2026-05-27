@@ -16,6 +16,10 @@ vi.mock('@/lib/xmtp/provider', () => ({
     resetLocalState: vi.fn(),
     resetInstallations: vi.fn(),
     installationLimitInboxId: null,
+    identityAddress: null,
+    refreshConversations: vi.fn(async () => []),
+    ensureConversationById: vi.fn(async () => null),
+    disconnect: vi.fn(),
   }),
 }))
 
@@ -32,7 +36,7 @@ vi.mock('@/components/chat/ChatWindow', () => ({
 }))
 
 vi.mock('./useWaitlistChatJoin', () => ({
-  useWaitlistChatJoin: () => 'awaiting_messaging',
+  useWaitlistChatJoin: () => ({ status: 'awaiting_messaging', retryJoin: vi.fn() }),
   waitlistChatStatusMessage: (status: string) => status,
   waitlistChatBlockedMessage: () => 'Enable 4626 signing to join waitlist chat.',
 }))

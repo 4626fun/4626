@@ -8,6 +8,8 @@ export type WaitlistXmtpStatus = {
   configured: boolean
   vaultConfigured: boolean
   groupId: string | null
+  groupIdSource: 'vault' | 'env' | null
+  groupIdMismatch: boolean
   groupName: string
   chatReady: boolean
   canJoin: boolean

@@ -43,13 +43,13 @@ describe('useWaitlistChatJoin', () => {
       }),
     )
 
-    expect(result.current).toBe('awaiting_messaging')
+    expect(result.current.status).toBe('awaiting_messaging')
     expect(mockedApiFetch).not.toHaveBeenCalled()
   })
 
   it('maps joining copy without Zora/XMTP jargon', () => {
     expect(waitlistChatStatusMessage('joining')).toBe('Adding your wallet to waitlist chat…')
-    expect(waitlistChatStatusMessage('executed')).toContain('Syncing the group')
+    expect(waitlistChatStatusMessage('executed')).toContain('Pulling the group')
   })
 
   it('resolves to executed after an immediate server add', async () => {
@@ -73,7 +73,7 @@ describe('useWaitlistChatJoin', () => {
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('executed')
+      expect(result.current.status).toBe('executed')
     })
   })
 
@@ -93,7 +93,7 @@ describe('useWaitlistChatJoin', () => {
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('joining')
+      expect(result.current.status).toBe('joining')
     })
 
     pending.resolve(
@@ -107,7 +107,7 @@ describe('useWaitlistChatJoin', () => {
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('pending')
+      expect(result.current.status).toBe('pending')
     })
     const joinCalls = mockedApiFetch.mock.calls.filter(([path]) => path === '/api/waitlist/xmtp-join')
     expect(joinCalls).toHaveLength(2)
@@ -130,7 +130,7 @@ describe('useWaitlistChatJoin', () => {
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('blocked')
+      expect(result.current.status).toBe('blocked')
     })
   })
 
@@ -151,7 +151,7 @@ describe('useWaitlistChatJoin', () => {
     )
 
     await waitFor(() => {
-      expect(result.current).toBe('blocked')
+      expect(result.current.status).toBe('blocked')
     })
   })
 
@@ -175,12 +175,12 @@ describe('useWaitlistChatJoin', () => {
       }),
     )
 
-    expect(result.current).toBe('joining')
+    expect(result.current.status).toBe('joining')
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
 
-    expect(result.current).toBe('error')
+    expect(result.current.status).toBe('error')
   })
 })

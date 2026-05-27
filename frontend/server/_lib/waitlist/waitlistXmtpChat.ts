@@ -23,6 +23,41 @@ export function getWaitlistGroupId(): string | null {
   return groupId.length > 0 ? groupId : null
 }
 
+
+
+export type WaitlistGroupIdResolution = {
+  groupId: string | null
+  source: 'vault' | 'env' | null
+  envGroupId: string | null
+  vaultGroupId: string | null
+  mismatched: boolean
+}
+
+/** Keepr executes against the vault row's group_id; prefer that over env drift. */
+export async function resolveWaitlistGroupId(): Promise<WaitlistGroupIdResolution> {
+  const envGroupId = getWaitlistGroupId()
+  const vault = await getKeeprVaultByVaultAddress(WAITLIST_CHAT_VAULT_ADDRESS)
+  const vaultGroupId = vault?.groupId?.trim() ? vault.groupId.trim() : null
+
+  if (vaultGroupId) {
+    return {
+      groupId: vaultGroupId,
+      source: 'vault',
+      envGroupId,
+      vaultGroupId,
+      mismatched: Boolean(envGroupId && envGroupId !== vaultGroupId),
+    }
+  }
+
+  return {
+    groupId: envGroupId,
+    source: envGroupId ? 'env' : null,
+    envGroupId,
+    vaultGroupId: null,
+    mismatched: false,
+  }
+}
+
 export function getWaitlistGroupName(): string {
   const configured = String(process.env.WAITLIST_XMTP_GROUP_NAME ?? '').trim()
   return configured.length > 0 ? configured : 'Waitlist chat'

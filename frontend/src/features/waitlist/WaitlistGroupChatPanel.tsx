@@ -39,12 +39,14 @@ function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelPro
   const statusQuery = useWaitlistXmtpStatus(signingReady)
   const chatConfig = statusQuery.data
   const chatReady = chatConfig?.chatReady ?? false
-  const joinStatus = useWaitlistChatJoin({
+  const join = useWaitlistChatJoin({
     xmtpMemberAddress: chatConfig?.xmtpMemberAddress,
     chatReady,
     enabled: signingReady,
     messagingReady,
   })
+  const joinStatus = join.status
+  const retryJoin = join.retryJoin
 
   const groupName = chatConfig?.groupName ?? 'Waitlist chat'
   const blockedMessage = waitlistChatBlockedMessage({
@@ -83,6 +85,9 @@ function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelPro
           groupId={chatConfig.groupId}
           groupName={groupName}
           joinStatus={joinStatus}
+          joinActionError={chatConfig.joinAction?.lastError ?? null}
+          xmtpMemberAddress={chatConfig.xmtpMemberAddress}
+          retryJoin={retryJoin}
           signingReady={signingReady}
           chatReady={chatReady}
         />
@@ -130,6 +135,9 @@ function WaitlistGroupChatSurface(props: {
   groupId: string | null
   groupName: string
   joinStatus: WaitlistChatStatus
+  joinActionError: string | null
+  xmtpMemberAddress: string | null
+  retryJoin: () => void
   signingReady: boolean
   chatReady: boolean
 }) {
@@ -138,12 +146,14 @@ function WaitlistGroupChatSurface(props: {
     connect,
     conversations,
     error,
+    identityAddress,
     localStateResetRequired,
     resetLocalState,
     resetInstallations,
     installationLimitInboxId,
     refreshConversations,
     ensureConversationById,
+    disconnect,
   } = useXmtp()
   const { prepare, walletReady } = usePrepareWaitlistMessagingWallet(props.signingReady && props.chatReady)
   const [prepareError, setPrepareError] = useState<string | null>(null)
@@ -165,6 +175,19 @@ function WaitlistGroupChatSurface(props: {
       setPrepareBusy(false)
     }
   }, [connect, prepare])
+
+  const handleReconnectMessaging = useCallback(async () => {
+    disconnect()
+    props.retryJoin()
+    await handleConnectMessaging()
+  }, [disconnect, handleConnectMessaging, props])
+
+  const identityMismatch = useMemo(() => {
+    const expected = props.xmtpMemberAddress?.trim().toLowerCase() ?? null
+    const actual = identityAddress?.trim().toLowerCase() ?? null
+    if (!expected || !actual) return false
+    return expected !== actual
+  }, [identityAddress, props.xmtpMemberAddress])
 
   const groupConversation = useMemo(() => {
     const groupId = props.groupId
@@ -289,21 +312,42 @@ function WaitlistGroupChatSurface(props: {
             {statusMessage}
           </p>
         ) : null}
-        {syncTimedOut ? (
+        {props.joinActionError && (props.joinStatus === 'failed' || props.joinStatus === 'error') ? (
+          <p className="text-xs text-red-300">{props.joinActionError}</p>
+        ) : null}
+        {identityMismatch ? (
           <p className="text-xs text-amber-200/90">
-            The group is still syncing. Try refresh below, or close other 4626 tabs and reconnect messaging.
+            Messaging opened the wrong wallet inbox for waitlist chat. Reconnect messaging so we use your
+            waitlist wallet, then retry join.
           </p>
         ) : null}
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          loading={refreshBusy}
-          disabled={refreshBusy}
-          onClick={() => void handleRefreshGroup()}
-        >
-          Refresh conversations
-        </Button>
+        {syncTimedOut ? (
+          <p className="text-xs text-amber-200/90">
+            The group is still syncing. Try refresh below, reconnect messaging, or retry join.
+          </p>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={refreshBusy}
+            disabled={refreshBusy}
+            onClick={() => void handleRefreshGroup()}
+          >
+            Refresh conversations
+          </Button>
+          {identityMismatch || syncTimedOut ? (
+            <Button type="button" variant="secondary" size="sm" onClick={() => void handleReconnectMessaging()}>
+              Reconnect messaging
+            </Button>
+          ) : null}
+          {(props.joinStatus === 'failed' || props.joinStatus === 'error' || syncTimedOut) && (
+            <Button type="button" variant="primary" size="sm" onClick={props.retryJoin}>
+              Retry join
+            </Button>
+          )}
+        </div>
       </div>
     )
   }

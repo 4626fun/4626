@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { apiFetch } from '@/lib/api/apiBase'
 
@@ -100,7 +100,7 @@ function resolveJoinFailureStatus(reason: string): WaitlistChatStatus {
 }
 
 function shouldPersistJoinOutcome(status: WaitlistChatStatus): boolean {
-  return status === 'blocked' || status === 'config' || status === 'executed' || status === 'failed'
+  return status === 'blocked' || status === 'config' || status === 'executed'
 }
 
 export function useWaitlistChatJoin(params: {
@@ -108,11 +108,18 @@ export function useWaitlistChatJoin(params: {
   chatReady: boolean
   enabled: boolean
   messagingReady: boolean
-}): WaitlistChatStatus {
+}): { status: WaitlistChatStatus; retryJoin: () => void } {
   const { xmtpMemberAddress, chatReady, enabled, messagingReady } = params
   const [status, setStatus] = useState<WaitlistChatStatus>('idle')
+  const [retryNonce, setRetryNonce] = useState(0)
   const completedIdentityRef = useRef<string | null>(null)
   const joinRequestIdRef = useRef(0)
+
+  const retryJoin = useCallback(() => {
+    completedIdentityRef.current = null
+    setRetryNonce((value) => value + 1)
+    setStatus('idle')
+  }, [])
 
   useEffect(() => {
     const identity = xmtpMemberAddress?.toLowerCase() ?? null
@@ -169,7 +176,6 @@ export function useWaitlistChatJoin(params: {
         }
         if (execution === 'failed') {
           setStatus('failed')
-          completedIdentityRef.current = identity
           return
         }
         setStatus('pending')
@@ -190,7 +196,7 @@ export function useWaitlistChatJoin(params: {
       controller.abort()
       if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
-  }, [chatReady, enabled, messagingReady, xmtpMemberAddress])
+  }, [chatReady, enabled, messagingReady, retryNonce, xmtpMemberAddress])
 
   useEffect(() => {
     if (!enabled || !chatReady || !messagingReady) return
@@ -225,5 +231,5 @@ export function useWaitlistChatJoin(params: {
     }
   }, [chatReady, enabled, messagingReady, status, xmtpMemberAddress])
 
-  return status
+  return { status, retryJoin }
 }

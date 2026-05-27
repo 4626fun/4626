@@ -14,8 +14,8 @@ import {
 } from '../../../packages/server-core/src/index.js'
 import { enqueueKeeprAction } from '../../../server/_lib/keepr/keeprRegistry.js'
 import {
-  getWaitlistGroupId,
   isWaitlistChatVaultConfigured,
+  resolveWaitlistGroupId,
   resolveWaitlistChatEligibility,
   WAITLIST_CHAT_VAULT_ADDRESS,
 } from '../../../server/_lib/waitlist/waitlistXmtpChat.js'
@@ -73,7 +73,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const groupId = getWaitlistGroupId()
+  const groupResolution = await resolveWaitlistGroupId()
+  const groupId = groupResolution.groupId
   if (!groupId) {
     return res.status(503).json({
       success: false,

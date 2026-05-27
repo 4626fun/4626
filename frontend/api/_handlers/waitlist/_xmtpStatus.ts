@@ -14,8 +14,8 @@ import {
 } from '../../../packages/server-core/src/index.js'
 import type { WaitlistChatExecutionTrack } from '../../../server/_lib/waitlist/waitlistXmtpChatEligibility.js'
 import {
-  getWaitlistGroupId,
   getWaitlistGroupName,
+  resolveWaitlistGroupId,
   isWaitlistChatVaultConfigured,
   resolveWaitlistChatEligibility,
 } from '../../../server/_lib/waitlist/waitlistXmtpChat.js'
@@ -28,6 +28,8 @@ type WaitlistXmtpStatusResponse = {
   configured: boolean
   vaultConfigured: boolean
   groupId: string | null
+  groupIdSource: 'vault' | 'env' | null
+  groupIdMismatch: boolean
   groupName: string
   chatReady: boolean
   canJoin: boolean
@@ -65,7 +67,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const groupId = getWaitlistGroupId()
+  const groupResolution = await resolveWaitlistGroupId()
+  const groupId = groupResolution.groupId
   const vaultConfigured = await isWaitlistChatVaultConfigured()
   const configured = Boolean(groupId && vaultConfigured)
 
@@ -89,6 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       configured,
       vaultConfigured,
       groupId,
+      groupIdSource: groupResolution.source,
+      groupIdMismatch: groupResolution.mismatched,
       groupName: getWaitlistGroupName(),
       chatReady: eligibility.chatReady,
       canJoin: configured && eligibility.chatReady,
