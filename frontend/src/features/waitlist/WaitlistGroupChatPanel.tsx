@@ -283,13 +283,15 @@ function WaitlistGroupChatSurface(props: {
   )
 
   const syncWaitlistGroups = useCallback(async (options?: { resyncMembership?: boolean }) => {
-    if (options?.resyncMembership && joinStatus === 'executed') {
+    if (options?.resyncMembership && joinStatus !== 'executed') {
       const resync = await resyncWaitlistGroupMembership()
       if (!resync.ok) {
         setResyncError(resync.error)
       } else {
         setResyncError(null)
       }
+    } else if (options?.resyncMembership) {
+      setResyncError(null)
     }
     let resolved = null
     for (const candidateId of groupIdCandidates) {

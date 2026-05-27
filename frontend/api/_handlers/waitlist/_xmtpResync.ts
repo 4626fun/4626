@@ -12,18 +12,23 @@ import {
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
-import { executeKeeprAction } from '../../../server/keepr/xmtpQueueExecutor.js'
+import { enqueueKeeprAction } from '../../../server/_lib/keepr/keeprRegistry.js'
 import {
   isWaitlistChatVaultConfigured,
   resolveWaitlistGroupId,
   resolveWaitlistChatEligibility,
   WAITLIST_CHAT_VAULT_ADDRESS,
 } from '../../../server/_lib/waitlist/waitlistXmtpChat.js'
+import {
+  buildWaitlistChatDedupeKey,
+  readWaitlistChatJoinAction,
+} from '../../../server/_lib/waitlist/waitlistXmtpChatJoinExecution.js'
 
 type WaitlistXmtpResyncResponse = {
   groupId: string
   identityAddress: `0x${string}`
   reapplied: boolean
+  queued: boolean
   error: string | null
 }
 
@@ -108,23 +113,55 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     wallet: xmtpMemberAddress,
     reason: 'waitlist_browser_resync',
   }
+  const dedupeKey = buildWaitlistChatDedupeKey(groupId, xmtpMemberAddress)
 
-  const result = await executeKeeprAction({
-    id: 0,
+  const existingJoin = await readWaitlistChatJoinAction(db, dedupeKey)
+  if (existingJoin?.status === 'executed') {
+    return res.status(200).json({
+      success: true,
+      data: {
+        groupId,
+        identityAddress: xmtpMemberAddress,
+        reapplied: false,
+        queued: false,
+        error: null,
+      },
+    } satisfies ApiEnvelope<WaitlistXmtpResyncResponse>)
+  }
+
+  if (
+    existingJoin?.status === 'pending' ||
+    existingJoin?.status === 'executing' ||
+    existingJoin?.status === 'retry'
+  ) {
+    return res.status(200).json({
+      success: true,
+      data: {
+        groupId,
+        identityAddress: xmtpMemberAddress,
+        reapplied: false,
+        queued: true,
+        error: null,
+      },
+    } satisfies ApiEnvelope<WaitlistXmtpResyncResponse>)
+  }
+
+  await enqueueKeeprAction({
     vaultAddress: WAITLIST_CHAT_VAULT_ADDRESS,
     groupId,
     actionType: 'xmtp.group.add_member',
     action: actionPayload,
+    dedupeKey,
   })
 
-  return res.status(result.success ? 200 : 502).json({
-    success: result.success,
+  return res.status(200).json({
+    success: true,
     data: {
       groupId,
       identityAddress: xmtpMemberAddress,
-      reapplied: result.success,
-      error: result.success ? null : (result.error ?? 'resync_failed'),
+      reapplied: false,
+      queued: true,
+      error: null,
     },
-    ...(result.success ? {} : { error: result.error ?? 'resync_failed' }),
   } satisfies ApiEnvelope<WaitlistXmtpResyncResponse>)
 }
