@@ -21,9 +21,7 @@ import {
 } from '../../../server/_lib/waitlist/waitlistXmtpChat.js'
 import {
   buildWaitlistChatDedupeKey,
-  executeWaitlistChatJoinActionNow,
   readWaitlistChatJoinAction,
-  type WaitlistChatJoinExecutionOutcome,
 } from '../../../server/_lib/waitlist/waitlistXmtpChatJoinExecution.js'
 
 type WaitlistXmtpJoinResponse = {
@@ -32,7 +30,7 @@ type WaitlistXmtpJoinResponse = {
   groupId: string
   identityAddress: `0x${string}`
   executionTrack: 'legacy-owner-install' | 'sub-account'
-  execution: WaitlistChatJoinExecutionOutcome
+  execution: 'executed' | 'deferred'
   executionError: string | null
 }
 
@@ -146,31 +144,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dedupeKey,
   })
 
-  void executeWaitlistChatJoinActionNow({
-    db,
-    actionId: action.id,
-    groupId,
-    action: actionPayload,
-    actionType: 'xmtp.group.add_member',
-  }).catch((err) => {
-    console.warn('waitlist_chat.join_execute_background_failed', {
-      actionId: action.id,
-      groupId,
-      message: err instanceof Error ? err.message : String(err),
-    })
-  })
-
-  const execution: WaitlistChatJoinExecutionOutcome = 'deferred'
-
   return res.status(200).json({
     success: true,
     data: {
-      queued: execution !== 'executed',
+      queued: true,
       actionId: action.id,
       groupId,
       identityAddress: xmtpMemberAddress,
       executionTrack,
-      execution,
+      execution: 'deferred',
       executionError: null,
     },
   } satisfies ApiEnvelope<WaitlistXmtpJoinResponse>)

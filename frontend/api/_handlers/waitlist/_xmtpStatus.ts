@@ -23,6 +23,7 @@ import {
   buildWaitlistChatDedupeKey,
   readWaitlistChatJoinAction,
 } from '../../../server/_lib/waitlist/waitlistXmtpChatJoinExecution.js'
+import { formatWaitlistChatJoinError } from '../../../server/_lib/waitlist/waitlistChatErrors.js'
 
 type WaitlistXmtpStatusResponse = {
   configured: boolean
@@ -128,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? {
             actionId: joinAction.actionId,
             status: joinAction.status,
-            lastError: joinAction.lastError,
+            lastError: formatWaitlistChatJoinError(joinAction.lastError, joinAction.status),
           }
         : null,
     },

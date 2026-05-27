@@ -20,6 +20,7 @@ import {
   findWaitlistGroupConversation,
 } from './waitlistXmtpGroupIds'
 import { resyncWaitlistGroupMembership } from './waitlistXmtpResync'
+import { formatWaitlistChatError } from './waitlistChatErrors'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
@@ -270,6 +271,17 @@ function WaitlistGroupChatSurface(props: {
   const autoRecoveryRef = useRef(false)
   const [autoRecoveryBusy, setAutoRecoveryBusy] = useState(false)
   const [resyncError, setResyncError] = useState<string | null>(null)
+
+  const displayJoinActionError = useMemo(() => {
+    if (joinStatus === 'executed') return null
+    return formatWaitlistChatError(joinActionError)
+  }, [joinActionError, joinStatus])
+
+  useEffect(() => {
+    if (joinStatus === 'executed') {
+      setResyncError(null)
+    }
+  }, [joinStatus])
 
   const groupIdCandidates = useMemo(
     () =>
@@ -544,12 +556,12 @@ function WaitlistGroupChatSurface(props: {
           </p>
         ) : null}
         {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
-        {joinActionError &&
+        {displayJoinActionError &&
         (joinStatus === 'failed' ||
           joinStatus === 'error' ||
           joinStatus === 'pending' ||
           joinStatus === 'executing') ? (
-          <p className="text-xs text-red-300">{joinActionError}</p>
+          <p className="text-xs text-red-300">{displayJoinActionError}</p>
         ) : null}
         {groupIdMismatch && joinStatus !== 'executed' ? (
           <p className="text-xs text-amber-200/90">
