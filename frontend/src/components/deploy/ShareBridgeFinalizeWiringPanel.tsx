@@ -144,9 +144,16 @@ export function ShareBridgeFinalizeWiringPanel({
         </div>
       </div>
       {!ready ? (
-        <div className="text-[10px] text-amber-300/90">
-          Finalize will revert until batcher Pipe A cutover completes and a mesh peer is configured.
-          See <span className="font-mono">docs/operations/deployment/batcher-pipe-a-cutover.md</span>.
+        <div className="text-[10px] text-amber-300/90 space-y-1">
+          <p>
+            Finalize stays blocked until Pipe A wiring can quote a LayerZero send fee on this ShareOFT.
+          </p>
+          <p>
+            After Phase 1, run LZ Base <span className="font-mono">init-config</span> +{' '}
+            <span className="font-mono">wire</span> on the <strong>new</strong> ShareOFT (not legacy wsAKITA),
+            then re-check here. Ops script:{' '}
+            <span className="font-mono">pnpm -C frontend ops:verify-post-phase1-mesh --share-oft …</span>
+          </p>
         </div>
       ) : null}
     </div>

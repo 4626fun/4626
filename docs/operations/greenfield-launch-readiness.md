@@ -2,6 +2,8 @@
 
 Repeatable gate for **new vault deploys** (not grandfather migrations). Policy: [solana-share-mesh-lottery-policy.md](./solana-share-mesh-lottery-policy.md).
 
+**AKITA full-stack redeploy:** use the dedicated checklist and one-command gate in [akita-full-stack-prelaunch.md](./akita-full-stack-prelaunch.md) (`pnpm -C frontend ops:verify-akita-prelaunch --production`).
+
 ## Two launch moments
 
 | Milestone | Ready when | Solana lottery relay |
