@@ -1874,7 +1874,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               }
             }
           },
-          isLocalStateInvalidError,
+          isLocalStateInvalidError: isLocalXmtpStateInvalidError,
         })
 
         if (finishResult.ok) {
