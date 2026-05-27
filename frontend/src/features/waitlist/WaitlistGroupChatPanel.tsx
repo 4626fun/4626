@@ -280,7 +280,7 @@ function WaitlistGroupChatSurface(props: {
     return resolved
   }, [ensureConversationById, groupIdCandidates, refreshConversations])
 
-  const handleConnectMessaging = useCallback(async () => {
+  const handleConnectMessaging = useCallback(async (options?: { skipJoinRetry?: boolean }) => {
     setPrepareError(null)
     setPrepareBusy(true)
     try {
@@ -295,14 +295,16 @@ function WaitlistGroupChatSurface(props: {
         return
       }
       await connect('user')
-      retryJoin()
+      if (!options?.skipJoinRetry && joinStatus !== 'executed') {
+        retryJoin()
+      }
       await syncWaitlistGroups()
     } catch (err) {
       setPrepareError(err instanceof Error ? err.message : String(err))
     } finally {
       setPrepareBusy(false)
     }
-  }, [connect, disconnect, identityAddress, prepare, retryJoin, status, syncWaitlistGroups, xmtpMemberAddress])
+  }, [connect, disconnect, identityAddress, joinStatus, prepare, retryJoin, status, syncWaitlistGroups, xmtpMemberAddress])
 
   const handleReconnectMessaging = useCallback(async () => {
     disconnect()
@@ -348,6 +350,11 @@ function WaitlistGroupChatSurface(props: {
         : joinStatus !== 'idle'
           ? waitlistChatStatusMessage(joinStatus)
           : null
+
+  useEffect(() => {
+    if (joinStatus !== 'executed' || !messagingReady || groupConversation) return
+    void syncWaitlistGroups()
+  }, [groupConversation, joinStatus, messagingReady, syncWaitlistGroups])
 
   useEffect(() => {
     if (
@@ -428,7 +435,7 @@ function WaitlistGroupChatSurface(props: {
         setSyncTimedOut(false)
         disconnect()
         await resetLocalState()
-        await handleConnectMessaging()
+        await handleConnectMessaging({ skipJoinRetry: true })
       } finally {
         setAutoRecoveryBusy(false)
       }

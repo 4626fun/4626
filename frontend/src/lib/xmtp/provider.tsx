@@ -52,6 +52,7 @@ import {
   conversationIdsEqual,
   resolveConversationById,
   resolveConversationByIdWithSyncRetries,
+  syncConversationsForGroupDiscovery,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
   buildXmtpDbPath,
@@ -1285,12 +1286,15 @@ export function XmtpChatProvider({
   const refreshConversations = useCallback(async (): Promise<ChatConversation[]> => {
     const client = clientRef.current
     if (!client) return conversationsRef.current
-    await client.conversations.sync()
-    const convos = await client.conversations.list()
-    let mergedConvos = [...convos]
     const conversationsApi = client.conversations as {
+      sync: () => Promise<unknown>
+      syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+      list: () => Promise<Array<Conversation | Dm | Group>>
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>
     }
+    await syncConversationsForGroupDiscovery(conversationsApi)
+    const convos = await client.conversations.list()
+    let mergedConvos = [...convos]
     if (typeof conversationsApi.listGroups === 'function') {
       try {
         const groups = await conversationsApi.listGroups()
@@ -1326,6 +1330,7 @@ export function XmtpChatProvider({
 
     const conversationsApi = client.conversations as {
       sync: () => Promise<unknown>
+      syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
       getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
       list: () => Promise<Array<Conversation | Dm | Group>>
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>

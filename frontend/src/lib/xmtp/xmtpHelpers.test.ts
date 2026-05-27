@@ -78,4 +78,28 @@ describe('resolveConversationById', () => {
     const resolved = await resolveConversationById(api, 'groupabc')
     expect(resolved?.id).toBe('GroupABC')
   })
+
+  it('uses syncAll and listGroups when resolving waitlist group memberships', async () => {
+    const { ConsentState } = await import('@xmtp/browser-sdk')
+    const { resolveConversationById } = await import('./xmtpHelpers')
+
+    const group = {
+      id: 'ed6fbda34f2614536df5cec08dff2266',
+      sync: vi.fn(async () => undefined),
+      consentState: vi.fn(async () => ConsentState.Unknown),
+      updateConsentState: vi.fn(async () => undefined),
+    }
+    const api = {
+      sync: vi.fn(async () => undefined),
+      syncAll: vi.fn(async () => undefined),
+      getConversationById: vi.fn(async () => null),
+      list: vi.fn(async () => []),
+      listGroups: vi.fn(async () => [group]),
+    }
+
+    const resolved = await resolveConversationById(api, 'ed6fbda34f2614536df5cec08dff2266')
+    expect(resolved?.id).toBe(group.id)
+    expect(api.syncAll).toHaveBeenCalled()
+    expect(group.updateConsentState).toHaveBeenCalledWith(ConsentState.Allowed)
+  })
 })

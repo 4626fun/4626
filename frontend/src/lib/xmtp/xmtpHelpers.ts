@@ -2,6 +2,7 @@
 // No React, no XMTP client instantiation, no module-level singleton state.
 // Safe for unit testing in isolation.
 
+import { ConsentState } from '@xmtp/browser-sdk'
 import { getAddress, isAddress } from 'viem'
 
 // Re-declared locally to avoid a circular import with provider.tsx.
@@ -299,19 +300,90 @@ export function conversationIdsEqual(
 export type ConversationLike = {
   id: string
   sync?: () => Promise<unknown>
+  consentState?: () => Promise<ConsentState>
+  updateConsentState?: (state: ConsentState) => Promise<unknown>
 }
 
 export type ConversationsApiLike = {
   sync: () => Promise<unknown>
+  syncAll?: (consentStates?: ConsentState[]) => Promise<unknown>
   getConversationById: (id: string) => Promise<ConversationLike | null>
   list: () => Promise<ConversationLike[]>
   listGroups?: () => Promise<ConversationLike[]>
 }
 
+/** Consent states included when pulling server-side group memberships into a fresh browser install. */
+export const GROUP_MEMBERSHIP_CONSENT_SYNC_STATES = [
+  ConsentState.Unknown,
+  ConsentState.Allowed,
+] as const
+
 async function syncConversationIfSupported(convo: ConversationLike): Promise<void> {
   if (typeof convo.sync === 'function') {
     await convo.sync().catch(() => undefined)
   }
+}
+
+export async function allowConversationIfUnknown(convo: ConversationLike): Promise<void> {
+  if (typeof convo.consentState !== 'function' || typeof convo.updateConsentState !== 'function') {
+    return
+  }
+  try {
+    const state = await convo.consentState()
+    if (state === ConsentState.Unknown) {
+      await convo.updateConsentState(ConsentState.Allowed)
+    }
+  } catch {
+    // best effort
+  }
+}
+
+export async function syncConversationsForGroupDiscovery(
+  conversationsApi: ConversationsApiLike,
+): Promise<void> {
+  if (typeof conversationsApi.syncAll === 'function') {
+    try {
+      await conversationsApi.syncAll([...GROUP_MEMBERSHIP_CONSENT_SYNC_STATES])
+      return
+    } catch {
+      // fall through to lightweight sync
+    }
+  }
+  try {
+    await conversationsApi.sync()
+  } catch {
+    // best effort
+  }
+}
+
+async function findConversationInLists(
+  conversationsApi: ConversationsApiLike,
+  normalizedId: string,
+): Promise<ConversationLike | null> {
+  const sources: Array<() => Promise<ConversationLike[]>> = [
+    () => conversationsApi.list(),
+    ...(typeof conversationsApi.listGroups === 'function'
+      ? [() => conversationsApi.listGroups!()]
+      : []),
+  ]
+
+  for (const load of sources) {
+    try {
+      const convos = await load()
+      const match = convos.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
+      if (match) return match
+    } catch {
+      // continue
+    }
+  }
+
+  return null
+}
+
+async function finalizeResolvedConversation(convo: ConversationLike): Promise<ConversationLike> {
+  await syncConversationIfSupported(convo)
+  await allowConversationIfUnknown(convo)
+  return convo
 }
 
 export async function resolveConversationById(
@@ -325,8 +397,7 @@ export async function resolveConversationById(
     try {
       const convo = await conversationsApi.getConversationById(normalizedId)
       if (!convo) return null
-      await syncConversationIfSupported(convo)
-      return convo
+      return finalizeResolvedConversation(convo)
     } catch {
       return null
     }
@@ -335,24 +406,14 @@ export async function resolveConversationById(
   const direct = await tryGet()
   if (direct) return direct
 
-  try {
-    await conversationsApi.sync()
-  } catch {
-    // best effort
-  }
+  await syncConversationsForGroupDiscovery(conversationsApi)
 
   const afterSync = await tryGet()
   if (afterSync) return afterSync
 
-  try {
-    const convos = await conversationsApi.list()
-    const match = convos.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
-    if (match) {
-      await syncConversationIfSupported(match)
-      return match
-    }
-  } catch {
-    // continue
+  const fromList = await findConversationInLists(conversationsApi, normalizedId)
+  if (fromList) {
+    return finalizeResolvedConversation(fromList)
   }
 
   return null
@@ -370,11 +431,7 @@ export async function resolveConversationByIdWithSyncRetries(
     const resolved = await resolveConversationById(conversationsApi, conversationId)
     if (resolved) return resolved
     if (round + 1 >= rounds) break
-    try {
-      await conversationsApi.sync()
-    } catch {
-      // best effort
-    }
+    await syncConversationsForGroupDiscovery(conversationsApi)
     if (delayMs > 0) {
       await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
