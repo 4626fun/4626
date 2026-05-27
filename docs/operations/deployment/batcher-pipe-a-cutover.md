@@ -123,15 +123,29 @@ pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --list
 pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --nonces 81
 ```
 
-When the Solana share-mesh peer bytes32 exists:
+**Pipe A batcher readiness: PASS (2026-05-27).** Platform default share-mesh peer wired on batcher `0xa99058…`.
+
+| Item | Value |
+|------|--------|
+| Solana LZ OFT program | `6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s` |
+| OFT store (peer source) | `G3rfXFKvARH8emUVkiu6RrdSkXZQFGfsqKbF9P7EqXeN` |
+| Share mesh SPL mint | `5puVV8bQZp4YoEfGq4RitQFRVC3SJiHBSydFuFZUXHQv` |
+| `solanaShareOftPeer` bytes32 | `0xdf9a9ef76562adbfe0231e2c5cee77f24a1f9eac519d3fbb029fe5b454d9cd3f` |
+| Safe `setSolanaShareOftPeer` tx | `0xe3c4687a1878202c796f571e4becc85fe0e1c06413c2ba8c6652ba0198610537` (block `46542482`) |
+
+Verify:
 
 ```bash
-pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts \\
-  --share-oft-peer 0x<mesh-peer-bytes32>
-pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts \
+  --batcher 0xa99058f424FB3ACC639F59355C65C40149030651
+# exit 0
 ```
 
-**Still blocked for full Pipe A readiness:** `solanaShareOftPeer` unset — ShareOFT mesh mint/peer for EID `30168` is not provisioned yet (`read-akita-ovault-mesh-onchain.ts` → mesh configured: NO). Propose `setSolanaShareOftPeer` only after mesh peer bytes32 is known.
+**Still before first live finalize bridge message:** Base↔Solana LZ DVN wire (6-of-9), Base-side `MyOFT` / per-creator `ShareOFT` peer to the Solana oftStore, registry peer seed, and AKITA `configureCreatorMesh` (composer beneficiary-operator). See [solana-share-mesh-creator-provisioning.md](../solana-share-mesh-creator-provisioning.md).
+
+Mainnet OFT scaffold (operator-local, not committed): `/tmp/4626-oft-mainnet`. Rebuild with `OFT_ID=6ste36Y7fcbzJXkVQj3ApEqYb3wFZsZX63gT6wymhy3s anchor build` before program upgrade. If Hardhat `setAuthority` CU simulation fails on public RPC, use `spl-token authorize` (documented in creator provisioning Step 1).
+
+When the Solana share-mesh peer bytes32 exists (done for platform default):
 
 Safe wiring dry-run:
 
