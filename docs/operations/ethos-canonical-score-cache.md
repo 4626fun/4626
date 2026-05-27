@@ -156,6 +156,10 @@ Compare to `ethosScoredCreators` on `/api/zora/metrics?scope=creators`.
 
 Volume/mcap sorts attach `ethosScore` from projection when the creator is in `creator_coins` and has been refreshed; Ethos sort reads projection directly.
 
+**Explore Ethos sort UX:** `GET /api/zora/explore?sort=ETHOS_SCORE` defaults to `ethosMin=1`, so only creators with a non-null projection score are returned (no long tail of unscored rows with empty pills). The Explore UI passes `ethosMin=1` explicitly. To include unscored creators after the scored page (legacy behavior), pass `includeUnscored=1` or `ethosMin=0` with a resolver that allows nulls.
+
+After wallet backfill, expect on the order of **~10k** scored creators in projection for the top-volume cohort; the remaining ~20k+ Base creators need another backfill tranche (`--offset 10000`) or time for cron/Twitter refresh.
+
 **Single-address trace (ops)**
 
 ```bash

@@ -306,7 +306,9 @@ export function ExploreCreators() {
         list: listType,
         count: PAGE_SIZE,
         after: pageParam,
-        ...(currentSort === 'ethosScore' ? { sort: 'ETHOS_SCORE' as const } : {}),
+        ...(currentSort === 'ethosScore'
+          ? { sort: 'ETHOS_SCORE' as const, ethosMin: 1 }
+          : {}),
       })
       return result
     },

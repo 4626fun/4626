@@ -27,9 +27,27 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0xb4f54111': 'DeployFailed()',
 }
 
+export function isAccountNonceMismatchError(error: unknown): boolean {
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return lower.includes('aa25') || lower.includes('invalid account nonce')
+}
+
+export function isRpcRateLimitError(error: unknown): boolean {
+  const code = (error as { code?: number })?.code
+  if (code === -32016 || code === -32011 || code === 429) return true
+  const lower = getErrorDiagnosticMessage(error).toLowerCase()
+  return (
+    lower.includes('429') ||
+    lower.includes('too many requests') ||
+    lower.includes('over rate limit') ||
+    lower.includes('rate limit')
+  )
+}
+
 export function classifyUserOpErrorCode(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
+  if (isAccountNonceMismatchError(error)) return 'aa25_nonce'
   if (lower.includes('aa23')) return 'aa23_validation'
   if (lower.includes('signtypeddata') && lower.includes('timed out')) return 'typed_data_timeout'
   if (lower.includes('paymaster')) return 'paymaster_error'

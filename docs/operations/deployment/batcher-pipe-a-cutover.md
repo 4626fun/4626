@@ -1,6 +1,6 @@
 # Batcher Pipe A cutover (payable finalize + ShareOFT auto-bridge)
 
-Operator runbook for greenfield vault deploys that auto-bridge **30% of ShareOFT** to Solana during `finalizePhase2` (Pipe A). Policy: [solana-share-mesh-lottery-policy.md](../solana-share-mesh-lottery-policy.md).
+Operator runbook for greenfield vault deploys that auto-bridge **30% of ShareOFT** to Solana during `finalizePhase2` (Pipe A). Policy: [solana-share-mesh-lottery-policy.md](../solana-share-mesh-lottery-policy.md). Budget paths: [solana-share-mesh-budget-paths.md](../solana-share-mesh-budget-paths.md).
 
 ## What “ready” means
 

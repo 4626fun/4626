@@ -91,6 +91,7 @@ function buildReadTransport(url: string) {
       // Deploy page can fire bursts of `eth_getCode`; allow enough time for
       // proxy-side failover before viem aborts the request.
       timeout: 20_000,
+      fetchOptions: { credentials: 'include' },
     })
   }
   return http(normalized)

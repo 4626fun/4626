@@ -835,9 +835,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const sort = parseSort(getStringQuery(req, 'sort'))
   const count = Math.min(Math.max(getNumberQuery(req, 'count') ?? 20, 1), 50)
   const after = getStringQuery(req, 'after') ?? undefined
+  const includeUnscoredEthos = getStringQuery(req, 'includeUnscored') === '1'
   const ethosMin = (() => {
     const raw = getNumberQuery(req, 'ethosMin')
-    return Number.isFinite(raw ?? NaN) ? Number(raw) : null
+    if (Number.isFinite(raw ?? NaN)) return Number(raw)
+    // Ethos sort should rank scored creators only; unscored projection rows belong on volume lists.
+    if (sort === 'ETHOS_SCORE' && !includeUnscoredEthos) return 1
+    return null
   })()
 
   if (sort === 'ETHOS_SCORE' && isCreatorList(list)) {

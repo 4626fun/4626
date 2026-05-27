@@ -9,7 +9,8 @@ import {
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
-import { isImmediateUserOpRetrySuppressedError } from './coinbaseErc4337ErrorUtils'
+import { isImmediateUserOpRetrySuppressedError, isAccountNonceMismatchError } from './coinbaseErc4337ErrorUtils'
+import { deriveEphemeralNonceKey, waitForEntryPointNonceAdvance } from './coinbaseErc4337'
 
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
 const OWNER_ADDRESS = '0x2222222222222222222222222222222222222222'
@@ -272,5 +273,48 @@ describe('coinbaseErc4337 latency helpers', () => {
     })
 
     expect(result).toEqual({ status: 'timeout' })
+  })
+})
+
+describe('coinbaseErc4337 nonce mismatch helpers', () => {
+  it('detects AA25 invalid account nonce errors', () => {
+    expect(isAccountNonceMismatchError(new Error('AA25 invalid account nonce'))).toBe(true)
+    expect(isAccountNonceMismatchError(new Error('network error'))).toBe(false)
+  })
+
+  it('waitForEntryPointNonceAdvance resolves when nonce advances', async () => {
+    vi.useFakeTimers()
+    let nonce = 5n
+    const promise = waitForEntryPointNonceAdvance({
+      readNonce: async () => nonce,
+      startingNonce: 5n,
+      maxWaitMs: 10_000,
+      pollIntervalMs: 1_000,
+    })
+    await vi.advanceTimersByTimeAsync(1_000)
+    nonce = 6n
+    await vi.advanceTimersByTimeAsync(1_000)
+    await expect(promise).resolves.toEqual({ advanced: true, nonce: 6n })
+    vi.useRealTimers()
+  })
+
+  it('waitForEntryPointNonceAdvance returns advanced=false when nonce stays stuck', async () => {
+    vi.useFakeTimers()
+    const promise = waitForEntryPointNonceAdvance({
+      readNonce: async () => 5n,
+      startingNonce: 5n,
+      maxWaitMs: 3_000,
+      pollIntervalMs: 1_000,
+    })
+    await vi.advanceTimersByTimeAsync(4_000)
+    await expect(promise).resolves.toEqual({ advanced: false, nonce: 5n })
+    vi.useRealTimers()
+  })
+
+  it('deriveEphemeralNonceKey avoids replayable key 8453', () => {
+    const key = deriveEphemeralNonceKey(18)
+    expect(key).toBeGreaterThan(0n)
+    expect(key).not.toBe(8453n)
+    expect(key).toBeLessThan(1n << 192n)
   })
 })

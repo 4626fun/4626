@@ -22,7 +22,6 @@ import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAcc
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
 import { buildAccountScoreFromBreakdown } from '../onboarding/accountScore.js'
 import {
-  readAmoeEligibleCreditsForSignupId,
   readWaitlistPointsBreakdown,
 } from '../onboarding/waitlistScoring.js'
 import {
@@ -45,11 +44,9 @@ export type AccountLinkProvider =
   | 'zora_cross_app'
 
 export type AccountScore = {
-  /** Canonical waitlist points (leaderboard, tiers, tray, setup). */
+  /** Canonical public points (waitlist, leaderboard, tray, lottery). */
   points: number
   tier: number
-  /** AMOE lottery credits — only for lottery entry surfaces. */
-  amoeCredits: number
   multipliers?: Record<string, number>
 }
 
@@ -512,11 +509,10 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
 async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountScore> {
   await ensureWaitlistSchema(db)
   const profileId = await resolvePrimaryProfileIdForPrivyUser(db, privyUserId)
-  if (!profileId) return { points: 0, tier: 0, amoeCredits: 0 }
+  if (!profileId) return { points: 0, tier: 0 }
 
   const breakdown = await readWaitlistPointsBreakdown(db, profileId)
-  const amoeCredits = await readAmoeEligibleCreditsForSignupId(db, profileId)
-  return buildAccountScoreFromBreakdown(breakdown, amoeCredits)
+  return buildAccountScoreFromBreakdown(breakdown)
 }
 
 async function refreshScore(db: Db, privyUserId: string): Promise<AccountScore> {

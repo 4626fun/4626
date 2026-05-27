@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
-
 import { CONTRACTS } from '@/config/contracts'
+
+import { pollCanonicalUserOpTransactionHash } from '@/lib/aa/coinbaseErc4337'
+import { appendAppSwapActivity } from '@/lib/account/appActivityJournal'
+import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import {
   buildAndSendApproval,
   buildAndSendCalls,
@@ -55,6 +58,14 @@ const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' 
 const WETH_DEPOSIT_SELECTOR = '0xd0e30db0'
 
 type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
+
+export type SwapCompletion = {
+  txHash: string | null
+  userOpHash?: string | null
+  amountInUnits: string
+  estimatedOut: string
+  completedAt: number
+}
 
 type Swap7702Diagnostics = {
   at: number
@@ -489,6 +500,7 @@ export function useSwapExecution(params: {
   const [swapProvider, setSwapProvider] = useState<'uniswap' | 'cdp'>('uniswap')
   const [txState, setTxState] = useState<TxLifecycleState>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
+  const [swapCompletion, setSwapCompletion] = useState<SwapCompletion | null>(null)
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
   const [diagnosticsResult, setDiagnosticsResult] = useState<Swap7702Diagnostics | null>(null)
   const [txDebug, setTxDebug] = useState<SwapTxDebugState>({
@@ -527,6 +539,7 @@ export function useSwapExecution(params: {
   })
   const txDebugSnapshotRef = useRef<string>('')
   const quoteRunRef = useRef(0)
+  const swapReceiptPollRef = useRef<AbortController | null>(null)
   const quoteFailureTrackerRef = useRef<{ count: number; windowStartedAt: number }>({
     count: 0,
     windowStartedAt: 0,
@@ -775,6 +788,7 @@ export function useSwapExecution(params: {
         return {
           ...prev,
           lastMethod: event.method ?? prev.lastMethod,
+          lastError: event.event === 'send_success' ? null : prev.lastError,
         }
       }
       return prev
@@ -834,6 +848,8 @@ export function useSwapExecution(params: {
       connectorName: params.connectorName,
       capabilities: normalizedCapabilities,
       debug: onTxRouterDebug,
+      onSubmissionStatus: setStatus,
+      waitForOnChainReceipt: params.executionMode !== 'canonical',
     }
   }, [
     assertCanonicalSwapExecutionContext,
@@ -850,6 +866,7 @@ export function useSwapExecution(params: {
     params.connectorName,
     normalizedCapabilities,
     onTxRouterDebug,
+    setStatus,
   ])
 
   const tokensEquivalent = useMemo(
@@ -1068,6 +1085,7 @@ export function useSwapExecution(params: {
     setError('')
     setTxState('idle')
     setTxHash(null)
+    setSwapCompletion(null)
     resetQuoteFailureTracker()
     if (swapDebugEnabled) {
       setTxDebug((prev) => ({
@@ -1085,6 +1103,7 @@ export function useSwapExecution(params: {
 
   const handleQuote = useCallback(async () => {
     if (!params.address || !params.executionAddress) return
+    if (swapCompletion) return
     if (!swapSessionGate.ok) {
       if (swapSessionGate.code === 'session-hydrating') {
         setStatus(swapSessionGate.message)
@@ -1101,7 +1120,7 @@ export function useSwapExecution(params: {
     const runId = ++quoteRunRef.current
     setBusy('quote')
     setError('')
-    setStatus('')
+    setStatus((currentStatus) => (swapCompletion ? currentStatus : ''))
     try {
       const parsableAmount = toParsableAmount(params.amountInUnits)
       if (!parsableAmount) throw new Error('Enter a valid amount greater than 0.')
@@ -1143,7 +1162,7 @@ export function useSwapExecution(params: {
       } else {
         setEstimatedOut('')
       }
-      setTxState('review')
+      setTxState((prev) => (prev === 'success' ? prev : 'review'))
     } catch (e: any) {
       if (runId !== quoteRunRef.current) return
       setEstimatedOut('')
@@ -1173,6 +1192,7 @@ export function useSwapExecution(params: {
     resetQuoteFailureTracker,
     syncPermitRequirement,
     swapSessionGate,
+    swapCompletion,
   ])
 
   const handleCheckApproval = useCallback(async () => {
@@ -1310,6 +1330,10 @@ export function useSwapExecution(params: {
   const handleReviewTrade = useCallback(async () => {
     if (!params.executionAddress) {
       setError('Connect your execution wallet before swapping.')
+      return
+    }
+    if (busy === 'executeSwap' || txState === 'signing' || txState === 'pending') {
+      setStatus('Swap already in progress. Wait for the current transaction to finish.')
       return
     }
     if (!params.executionReady) {
@@ -1478,6 +1502,8 @@ export function useSwapExecution(params: {
     isQuoteStale,
     permit2DisabledForSwap,
     wrapNativeInputForSponsoredCanonical,
+    busy,
+    txState,
   ])
 
   const run7702DryRun = useCallback(
@@ -1669,9 +1695,14 @@ export function useSwapExecution(params: {
 
   const executeSwapNow = useCallback(async (options?: { approvalTx?: TransactionRequest | null }) => {
     if (!swapTx) return
+    if (busy === 'executeSwap' || txState === 'signing' || txState === 'pending') {
+      throw new Error('Swap already in progress. Wait for the current transaction to finish.')
+    }
     assertValidSwapTransaction(swapTx)
     setBusy('executeSwap')
+    setSwapCompletion(null)
     setError('')
+    setStatus('Signing and submitting swap…')
     try {
       const approvalTx = options?.approvalTx ?? null
       if (params.executionMode === 'canonical') {
@@ -1743,14 +1774,14 @@ export function useSwapExecution(params: {
             swapTx,
             approvalTx,
           })
+      const userOpHash = send.userOpHash ?? null
       const nextHash = send.transactionHash ?? send.txHashes[send.txHashes.length - 1] ?? null
-      setTxHash(nextHash)
-      setTxState('pending')
-      setStatus(
-        `Swap submitted via ${routing.mode} (${send.method})${nextHash ? `: ${nextHash}` : ''}`,
-      )
+      const debugHash = nextHash ?? userOpHash
+      setTxHash(debugHash)
+      setTxState('success')
+      setStatus(nextHash ? '' : 'Swap submitted. Confirming on Base…')
 
-      const approvalHash = approvalTx ? send.txHashes[0] ?? nextHash : null
+      const approvalHash = approvalTx ? send.txHashes[0] ?? debugHash : null
       if (approvalTx) {
         updateAttemptDebug({
           stage: 'approval',
@@ -1768,12 +1799,71 @@ export function useSwapExecution(params: {
         mode: routing.mode,
         method: send.method,
         sender: send.sender,
-        txHash: nextHash,
+        txHash: debugHash,
         callsId: send.callsId,
         callTargets: [wrapTx?.to, swapTx.to].filter(Boolean) as string[],
         at: Date.now(),
       })
-      setTxState('success')
+      setSwapCompletion({
+        txHash: nextHash,
+        userOpHash,
+        amountInUnits: params.amountInUnits,
+        estimatedOut,
+        completedAt: Date.now(),
+      })
+      const activityWallet =
+        params.executionAddress ?? params.canonicalAddress ?? params.address ?? null
+      if (activityWallet && isAddress(activityWallet)) {
+        appendAppSwapActivity({
+          walletAddress: activityWallet,
+          txHash: nextHash,
+          userOpHash,
+          amountInUnits: params.amountInUnits,
+          estimatedOut,
+          tokenIn: params.tokenIn,
+          tokenOut: params.tokenOut,
+          completedAtMs: Date.now(),
+        })
+      }
+      setError('')
+      if (!nextHash && userOpHash && params.publicClient && routing.mode === 'canonical4337') {
+        swapReceiptPollRef.current?.abort()
+        const pollController = new AbortController()
+        swapReceiptPollRef.current = pollController
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        void pollCanonicalUserOpTransactionHash({
+          publicClient: params.publicClient as any,
+          bundlerUrl,
+          userOpHash: userOpHash as `0x${string}`,
+          signal: pollController.signal,
+        })
+          .then((confirmedTxHash) => {
+            if (pollController.signal.aborted) return
+            setTxHash(confirmedTxHash)
+            setSwapCompletion((prev) =>
+              prev ? { ...prev, txHash: confirmedTxHash, userOpHash: prev.userOpHash ?? userOpHash } : prev,
+            )
+            if (activityWallet && isAddress(activityWallet)) {
+              appendAppSwapActivity({
+                walletAddress: activityWallet,
+                txHash: confirmedTxHash,
+                userOpHash,
+                amountInUnits: params.amountInUnits,
+                estimatedOut,
+                tokenIn: params.tokenIn,
+                tokenOut: params.tokenOut,
+                completedAtMs: Date.now(),
+              })
+            }
+            setStatus('')
+          })
+          .catch((pollError: unknown) => {
+            if (pollController.signal.aborted) return
+            const message = getErrorMessage(pollError, 'Swap submitted but confirmation timed out')
+            setStatus(message)
+          })
+      }
     } catch (e: any) {
       const message = getErrorMessage(e, 'Swap transaction failed')
       setError(message)
@@ -1785,6 +1875,8 @@ export function useSwapExecution(params: {
     }
   }, [
     swapTx,
+    busy,
+    txState,
     buildRouterContext,
     canary7702Eligible,
     run7702DryRun,
@@ -1794,11 +1886,13 @@ export function useSwapExecution(params: {
     params.executionAddress,
     params.amountInUnits,
     params.tokenIn,
+    params.tokenOut,
     params.ensureCanonicalSession,
     params.hasSession,
     params.signerAddress,
     params.expectedSessionAddress,
     params.canonicalAddress,
+    params.address,
     params.connectorId,
     params.connectorName,
     params.sessionAddress,
@@ -1808,6 +1902,7 @@ export function useSwapExecution(params: {
     normalizedCapabilities,
     getErrorMessage,
     getTokenDecimals,
+    estimatedOut,
     params.publicClient,
     updateAttemptDebug,
     updateTxDebugError,
@@ -1901,6 +1996,12 @@ export function useSwapExecution(params: {
     isQuoteStale,
   ])
 
+  const clearSwapCompletion = useCallback(() => {
+    setSwapCompletion(null)
+    setTxState((prev) => (prev === 'success' ? 'review' : prev))
+    setStatus('')
+  }, [])
+
   return {
     estimatedOut,
     quote,
@@ -1913,6 +2014,7 @@ export function useSwapExecution(params: {
     quoteUpdatedAt,
     txState,
     txHash,
+    swapCompletion,
     fallbackActive,
     swapProvider,
     swapProviderLabel: getSwapProviderLabel(swapProvider),
@@ -1944,5 +2046,6 @@ export function useSwapExecution(params: {
     confirmAndExecute,
     run7702DryRun,
     resetTradeState,
+    clearSwapCompletion,
   }
 }

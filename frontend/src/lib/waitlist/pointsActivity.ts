@@ -7,7 +7,6 @@ export type PointsActivityRow = {
   label: string
   amount: number
   waitlistPoints: number
-  amoeCredits: number
   createdAt: string
 }
 

@@ -37,6 +37,14 @@ vi.mock('./useWaitlistChatJoin', () => ({
   waitlistChatBlockedMessage: () => 'Enable 4626 signing to join waitlist chat.',
 }))
 
+vi.mock('./usePrepareWaitlistMessagingWallet', () => ({
+  usePrepareWaitlistMessagingWallet: () => ({
+    prepare: vi.fn(async () => ({ ok: true })),
+    walletReady: false,
+    embeddedEoaAddress: '0x1234567890123456789012345678901234567890',
+  }),
+}))
+
 vi.mock('./useWaitlistXmtpStatus', () => ({
   useWaitlistXmtpStatus: () => ({
     data: {
@@ -68,6 +76,6 @@ describe('WaitlistGroupChatPanel', () => {
   it('prompts to connect messaging before join can run', () => {
     renderPanel(<WaitlistGroupChatPanel setupComplete signingReady />)
     expect(screen.getByRole('region', { name: 'Waitlist group chat' })).toBeTruthy()
-    expect(screen.getByText(/Connect messaging on 4626.fun first/i)).toBeTruthy()
+    expect(screen.getByText(/Click Connect messaging below/i)).toBeTruthy()
   })
 })

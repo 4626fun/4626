@@ -107,7 +107,7 @@ describe('AMOE points eligibility bifurcation', () => {
       expect(lotteryAmoeSource.includes('readAmoeEligibleCreditsForSignup')).toBe(true)
     })
 
-    it('AMOE spend (consumeAmoeCreditsForEntry) reads from the eligible balance view, not an inline weighted CASE', () => {
+    it('AMOE spend (consumeAmoeCreditsForEntry) gates on the same waitlist-weighted balance as public points', () => {
       const fnStart = lotteryAmoeSource.indexOf(
         'export async function consumeAmoeCreditsForEntry',
       )
@@ -118,14 +118,20 @@ describe('AMOE points eligibility bifurcation', () => {
       )
       const fnBody = lotteryAmoeSource.slice(fnStart, fnEnd > -1 ? fnEnd : undefined)
 
-      // Must read from the view.
-      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(true)
-      // Must NOT compute eligibility inline anymore — that path used to
-      // weight has_creator_coin and referral_* which is non-compliant.
-      expect(fnBody.includes("'has_creator_coin'")).toBe(false)
-      expect(fnBody.includes("'referral_signup'")).toBe(false)
-      expect(fnBody.includes("'referral_csw_link'")).toBe(false)
-      expect(fnBody.includes("'referral_qualified'")).toBe(false)
+      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(false)
+      expect(fnBody.includes("'referral_passthrough'")).toBe(true)
+      expect(fnBody.includes("'amoe_entry_spend'")).toBe(true)
+    })
+
+    it('readAmoeEligibleCreditsForSignup uses waitlist breakdown (one public points total)', () => {
+      const fnStart = lotteryAmoeSource.indexOf(
+        'async function readAmoeEligibleCreditsForSignup',
+      )
+      expect(fnStart).toBeGreaterThan(-1)
+      const fnEnd = lotteryAmoeSource.indexOf('\n}', fnStart)
+      const fnBody = lotteryAmoeSource.slice(fnStart, fnEnd)
+      expect(fnBody.includes('readWaitlistPointsBreakdown')).toBe(true)
+      expect(fnBody.includes('FROM points_amoe_eligible_balance')).toBe(false)
     })
 
     it('getAmoeCreditSnapshot uses the AMOE-eligible reader', () => {

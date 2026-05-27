@@ -42,6 +42,7 @@ import {
   formatMetaMessages,
   getErrorDiagnosticMessage,
   getRpcErrorDetails,
+  isAccountNonceMismatchError,
   isExpectedUserOpTimeoutError,
   isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
@@ -56,6 +57,7 @@ import {
   findCoinbaseSmartWalletOwnerIndex,
   resetOwnerIndexCacheForTests,
 } from './coinbaseErc4337Owners'
+import { writePersistedCswOwnerIndex } from './cswOwnerIndexPersistence'
 import { recordUserOpTelemetry, type UserOpTelemetrySample } from './coinbaseErc4337Telemetry'
 import {
   hexByteLength,
@@ -351,14 +353,82 @@ async function logUserOpEstimate(params: {
 }
 
 const TRANSIENT_USER_OP_RETRY_DELAYS_MS = [250, 750, 1500] as const
+const NONCE_MISMATCH_WAIT_BUDGETS_MS = [8_000, 15_000, 30_000, 45_000] as const
+const NONCE_MISMATCH_POLL_INTERVAL_MS = 2_000
+const PENDING_USEROP_STORAGE_PREFIX = 'cv:canonical4337:pending:'
+const REPLAYABLE_NONCE_KEY = 8453n
+const UINT192_MASK = (1n << 192n) - 1n
+
+/** Fresh EntryPoint nonce key when the owner-index lane is blocked by AA25. */
+export function deriveEphemeralNonceKey(ownerIndex: number): bigint {
+  let key =
+    (BigInt(Date.now()) << 20n) |
+    BigInt(Math.floor(Math.random() * 0xfffff)) |
+    BigInt(ownerIndex & 0xff)
+  key &= UINT192_MASK
+  if (key === REPLAYABLE_NONCE_KEY) key = 8454n
+  if (key === 0n) key = 1n
+  return key
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function pendingUserOpStorageKey(smartWallet: Address, ownerIndex: number): string {
+  return `${PENDING_USEROP_STORAGE_PREFIX}${smartWallet.toLowerCase()}:${ownerIndex}`
+}
+
+function storePendingUserOpHash(smartWallet: Address, ownerIndex: number, userOpHash: Hex): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(pendingUserOpStorageKey(smartWallet, ownerIndex), userOpHash)
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+function clearPendingUserOpHash(smartWallet: Address, ownerIndex: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.removeItem(pendingUserOpStorageKey(smartWallet, ownerIndex))
+  } catch {
+    // ignore
+  }
+}
+
+function transientUserOpRetryDelayMs(attemptIndex: number): number {
+  return TRANSIENT_USER_OP_RETRY_DELAYS_MS[attemptIndex] ?? TRANSIENT_USER_OP_RETRY_DELAYS_MS.at(-1) ?? 1500
+}
+
+/** Poll EntryPoint nonce until it advances past a stuck in-flight UserOp. */
+export async function waitForEntryPointNonceAdvance(params: {
+  readNonce: () => Promise<bigint>
+  startingNonce: bigint
+  maxWaitMs?: number
+  pollIntervalMs?: number
+}): Promise<{ advanced: boolean; nonce: bigint }> {
+  const maxWaitMs = params.maxWaitMs ?? 30_000
+  const pollIntervalMs = params.pollIntervalMs ?? NONCE_MISMATCH_POLL_INTERVAL_MS
+  const deadline = Date.now() + maxWaitMs
+  let latest = params.startingNonce
+
+  while (Date.now() < deadline) {
+    await delay(pollIntervalMs)
+    latest = await params.readNonce().catch(() => latest)
+    if (latest !== params.startingNonce) {
+      return { advanced: true, nonce: latest }
+    }
+  }
+
+  latest = await params.readNonce().catch(() => latest)
+  return { advanced: latest !== params.startingNonce, nonce: latest }
+}
+
 function isTransientUserOpSubmissionError(error: unknown): boolean {
   if (isUserRejection(error)) return false
   if (isImmediateUserOpRetrySuppressedError(error)) return false
+  if (isAccountNonceMismatchError(error)) return false
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   const code = (error as any)?.code
@@ -1057,7 +1127,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     attempt?: number | null
     customOwnerPolicyToken?: string | null
   }
-}): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
+  onSubmissionStatus?: (message: string) => void
+  /** When false, return after bundler accepts the UserOp; receipt can be polled separately. */
+  waitForOnChainReceipt?: boolean
+}): Promise<{ userOpHash: Hex; transactionHash: Hex | null }> {
   const {
     publicClient,
     walletClient,
@@ -1082,6 +1155,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ownerIndexOverride: ownerIndexOverrideRaw,
     skipPasskeyOwnerSlotsInProbe = false,
     ownerApprovalContext,
+    waitForOnChainReceipt = true,
   } = params
 
   const submissionStartedAt = Date.now()
@@ -1312,6 +1386,17 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       `Connected wallet (${ownerAddressForLookup}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
       'Add this wallet as an owner first, or connect with a wallet that is already an owner.'
     )
+  }
+
+  const resolvedChainId = Number((publicClient as any)?.chain?.id ?? 0)
+  if (resolvedChainId > 0 && ownerIndex !== null) {
+    writePersistedCswOwnerIndex({
+      chainId: resolvedChainId,
+      smartWallet,
+      ownerAddress: ownerAddressForLookup,
+      ownerIndex,
+      ownerCountSnapshot: Math.max(ownerCount, 1),
+    })
   }
 
   // Detect smart wallet owners (EIP-1271) to tune gas + sign mode.
@@ -1682,42 +1767,52 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     outputs: [{ type: 'uint256' as const }],
     stateMutability: 'view' as const,
   }]
-  const readOwnerIndexNonce = async (): Promise<bigint | undefined> => {
+  let activeNonceKey = BigInt(ownerIndex)
+  let triedEphemeralNonceKey = false
+  const readEntryPointNonceForKey = async (nonceKey: bigint): Promise<bigint | undefined> => {
     try {
       const entryPointNonce = await withTimeout(
         (publicClient as any).readContract({
           address: entryPoint06Address,
           abi: ENTRYPOINT_GET_NONCE_ABI,
           functionName: 'getNonce',
-          args: [smartWallet, BigInt(ownerIndex)],
+          args: [smartWallet, nonceKey],
         }),
         RPC_READ_TIMEOUT_MS,
         'EntryPoint getNonce',
       ) as bigint
       if (AA_DEBUG) {
-        logger.debug('[ERC-4337] EntryPoint nonce for ownerIndex', {
+        logger.debug('[ERC-4337] EntryPoint nonce read', {
           smartWallet,
           ownerIndex,
           nonce: String(entryPointNonce),
-          nonceKey: String(BigInt(ownerIndex)),
+          nonceKey: String(nonceKey),
         })
       }
       return entryPointNonce
     } catch (nonceError: unknown) {
       if (AA_DEBUG) {
         const msg = nonceError instanceof Error ? nonceError.message : String(nonceError ?? '')
-        logger.warn('[ERC-4337] Failed to read EntryPoint nonce; falling back to account default', {
+        logger.warn('[ERC-4337] Failed to read EntryPoint nonce', {
           smartWallet,
           ownerIndex,
+          nonceKey: String(nonceKey),
           error: msg,
         })
       }
-      // If we can't read the nonce, return undefined so the default path runs.
-      // This will likely AA23 but is no worse than the pre-fix behavior.
       return undefined
     }
   }
-  let correctNonce = await readOwnerIndexNonce()
+  const readEntryPointNonceForKeyRequired = async (nonceKey: bigint): Promise<bigint> => {
+    const maxAttempts = 3
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const nonce = await readEntryPointNonceForKey(nonceKey)
+      if (typeof nonce === 'bigint') return nonce
+      if (attempt < maxAttempts - 1) await delay(250 * (attempt + 1))
+    }
+    throw new Error('Could not read smart wallet transaction nonce. Refresh the page and try again.')
+  }
+  let correctNonce = await readEntryPointNonceForKeyRequired(activeNonceKey)
 
   let userOpHash: Hex | null = null
   let lastError: unknown = null
@@ -1756,7 +1851,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       account,
       calls: attributedCalls,
       verificationGasLimit,
-      ...(typeof correctNonce === 'bigint' ? { nonce: correctNonce } : {}),
+      nonce: correctNonce,
       ...(usePaymaster
         ? {
             paymaster: {
@@ -1778,19 +1873,72 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       const limit = uniqueVerificationGasLimits[i]!
       try {
         let sent = false
-        const maxTransientAttempts = 1 + TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
-        for (let transientAttempt = 0; transientAttempt < maxTransientAttempts; transientAttempt += 1) {
+        let nonceWaitAttempt = 0
+        for (let transientAttempt = 0; ; transientAttempt += 1) {
           try {
             userOpHash = await sendWithVerificationGasLimit(limit, usePaymaster)
+            storePendingUserOpHash(smartWallet, ownerIndex, userOpHash)
             sent = true
             break
           } catch (e: unknown) {
             lastError = e
+            if (isAccountNonceMismatchError(e)) {
+              params.onSubmissionStatus?.(
+                'Prior swap still confirming. Waiting for your smart wallet nonce…',
+              )
+              let nonceAdvanced = false
+              while (nonceWaitAttempt < NONCE_MISMATCH_WAIT_BUDGETS_MS.length) {
+                const waitBudgetMs = NONCE_MISMATCH_WAIT_BUDGETS_MS[nonceWaitAttempt]!
+                nonceWaitAttempt += 1
+                if (AA_DEBUG) {
+                  logger.debug('[ERC-4337] AA25 nonce mismatch; waiting for in-flight UserOp', {
+                    attempt: nonceWaitAttempt,
+                    waitBudgetMs,
+                    startingNonce: String(correctNonce),
+                    activeNonceKey: String(activeNonceKey),
+                    ownerIndex,
+                    smartWallet,
+                  })
+                }
+                const waitResult = await waitForEntryPointNonceAdvance({
+                  readNonce: () => readEntryPointNonceForKeyRequired(activeNonceKey),
+                  startingNonce: correctNonce,
+                  maxWaitMs: waitBudgetMs,
+                })
+                if (waitResult.advanced) {
+                  correctNonce = waitResult.nonce
+                  nonceAdvanced = true
+                  break
+                }
+              }
+              if (nonceAdvanced) {
+                continue
+              }
+              if (!triedEphemeralNonceKey) {
+                triedEphemeralNonceKey = true
+                activeNonceKey = deriveEphemeralNonceKey(ownerIndex)
+                correctNonce = await readEntryPointNonceForKeyRequired(activeNonceKey)
+                nonceWaitAttempt = 0
+                params.onSubmissionStatus?.(
+                  'Retrying swap on a fresh smart wallet nonce lane…',
+                )
+                if (AA_DEBUG) {
+                  logger.debug('[ERC-4337] AA25 persisted; switching to ephemeral nonce key', {
+                    smartWallet,
+                    ownerIndex,
+                    ephemeralNonceKey: String(activeNonceKey),
+                    nonce: String(correctNonce),
+                  })
+                }
+                continue
+              }
+              break
+            }
             const hasNextTransientAttempt = transientAttempt < TRANSIENT_USER_OP_RETRY_DELAYS_MS.length
             if (!hasNextTransientAttempt || !isTransientUserOpSubmissionError(e)) {
               break
             }
-            const retryInMs = TRANSIENT_USER_OP_RETRY_DELAYS_MS[transientAttempt] ?? 0
+            const retryInMs = transientUserOpRetryDelayMs(transientAttempt)
             if (AA_DEBUG) {
               logger.debug('[ERC-4337] retrying transient UserOp submission error', {
                 attempt: transientAttempt + 1,
@@ -1801,9 +1949,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               })
             }
             await delay(retryInMs)
-            // Re-read nonce before retry: if the timed-out attempt was actually
-            // received by the bundler and mined, the sequence will have advanced.
-            correctNonce = await readOwnerIndexNonce() ?? correctNonce
+            correctNonce = await readEntryPointNonceForKeyRequired(activeNonceKey).catch(() => correctNonce)
           }
         }
         if (!sent) throw lastError ?? new Error('UserOp submission failed')
@@ -1877,7 +2023,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
     // Refresh nonce before paymaster-fallback retry in case the sponsored
     // attempt was partially processed and the sequence advanced.
-    correctNonce = await readOwnerIndexNonce() ?? correctNonce
+    correctNonce = await readEntryPointNonceForKeyRequired(activeNonceKey).catch(() => correctNonce)
     await attemptSend(false)
   }
 
@@ -2095,8 +2241,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       }
       throw new Error(`Paymaster did not sponsor this operation. Check paymaster configuration.${metaSuffix}${debugSuffix}`)
     }
-    if (lc.includes('aa25') || lc.includes('invalid account nonce')) {
-      throw new Error('Account nonce mismatch. A pending transaction may exist. Wait and retry.')
+    if (isAccountNonceMismatchError(lastError)) {
+      throw new Error(
+        'A swap is already pending for your Coinbase Smart Wallet, or the last one is still confirming. ' +
+          'Wait about 30 seconds, then try again once. Do not click Swap repeatedly.',
+      )
     }
     if (lc.includes('aa10') || lc.includes('sender already constructed')) {
       throw new Error('Smart wallet already exists at this address.')
@@ -2157,7 +2306,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     throw new Error('UserOperation did not return a hash.')
   }
 
-  const receipt = await waitForUserOperationReceipt(bundlerClient, { 
+  if (!waitForOnChainReceipt) {
+    telemetryStatus = 'success'
+    return {
+      userOpHash,
+      transactionHash: null,
+    }
+  }
+
+  const receipt = await waitForUserOperationReceipt(bundlerClient, {
     hash: userOpHash, 
     timeout: 180_000 // 3 minutes for complex operations
   })
@@ -2170,6 +2327,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
   
+  clearPendingUserOpHash(smartWallet, ownerIndex)
   telemetryStatus = 'success'
   return { 
     userOpHash, 
@@ -2300,4 +2458,45 @@ export async function pollUserOperationStatus(params: {
 
   emitStatus('timeout')
   return { status: 'timeout' }
+}
+
+export async function pollCanonicalUserOpTransactionHash(params: {
+  publicClient: PublicClientLike
+  bundlerUrl: string
+  userOpHash: Hex
+  maxDurationMs?: number
+  signal?: AbortSignal
+}): Promise<Hex> {
+  const normalizedBundlerUrl = normalizeUrl(params.bundlerUrl)
+  const bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(
+    normalizedBundlerUrl,
+    (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
+  )
+  const shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
+  const bundlerClient = createBundlerClient({
+    client: params.publicClient as any,
+    dataSuffix: '0x',
+    transport: http(bundlerUrlForBundler, {
+      fetchOptions: {
+        credentials: shouldSendSessionToBundler ? 'include' : 'omit',
+      },
+    }),
+  })
+
+  const result = await pollUserOperationStatus({
+    bundlerClient,
+    userOpHash: params.userOpHash,
+    options: {
+      maxDurationMs: params.maxDurationMs ?? 180_000,
+      signal: params.signal,
+    },
+  })
+
+  if (result.status === 'confirmed' && result.txHash) {
+    return result.txHash
+  }
+  if (result.status === 'failed') {
+    throw new Error('UserOperation failed during confirmation polling')
+  }
+  throw new Error('Timed out waiting for UserOperation confirmation')
 }

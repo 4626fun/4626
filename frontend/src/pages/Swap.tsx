@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, parseUnits, toHex, type Address, type Hex } from 'viem'
-import { useQuery } from '@tanstack/react-query'
-import { useAccount, useBalance, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAccount, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
 import {
   useActiveWallet,
   useBaseAccountSdk,
@@ -20,6 +20,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { ExternalWalletOptions } from '@/components/account/ConnectButton'
 import { AmoeEntryCard, type AmoeSigningWalletClient } from '@/components/lottery/AmoeEntryCard'
 import { SwapCard } from '@/components/swap/SwapCard'
+import { SwapCompletionNotice } from '@/components/swap/SwapCompletionNotice'
 import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
@@ -43,6 +44,8 @@ import {
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
+import { resolveSwapBalanceOwner } from '@/lib/swap/resolveSwapBalanceOwner'
+import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
 import { waitlistSubAccountFlowFlag } from '@/lib/flags/featureFlags'
@@ -311,13 +314,26 @@ function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
   return null
 }
 
-function fmtBal(d: { formatted: string; symbol: string } | undefined): string | undefined {
-  if (!d) return undefined
-  const n = parseFloat(d.formatted)
+/** Numeric token amount for read-only Buy input (no symbol suffix). */
+function formatBalanceForAmountInput(
+  data: { formatted: string } | undefined,
+): string | undefined {
+  if (!data) return undefined
+  const raw = data.formatted.trim()
+  if (!raw) return undefined
+  const n = Number(raw)
   if (!Number.isFinite(n)) return undefined
-  if (n === 0) return `0 ${d.symbol}`
-  if (n < 0.0001) return `<0.0001 ${d.symbol}`
-  return `${parseFloat(n.toPrecision(4))} ${d.symbol}`
+  if (n === 0) return '0'
+  return raw.includes('.') ? raw.replace(/\.?0+$/, '') || '0' : raw
+}
+
+function fmtBalFromAmount(amount: string | null | undefined, symbol: string): string | undefined {
+  if (amount == null || amount === '') return undefined
+  const n = parseFloat(amount)
+  if (!Number.isFinite(n)) return undefined
+  if (n === 0) return `0 ${symbol}`
+  if (n < 0.0001) return `<0.0001 ${symbol}`
+  return `${parseFloat(n.toPrecision(4))} ${symbol}`
 }
 
 function parsePositiveAmountToUnits(value: string, decimals: number): bigint | null {
@@ -419,6 +435,7 @@ function LpPositionCard(props: {
 // ─── Main page ──────────────────────────────────────────────────────────────
 
 export function Swap() {
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -492,9 +509,9 @@ export function Swap() {
     busy: authBusy,
     error: authError,
   } = auth
-  const publicClient = usePublicClient()
   const { switchChainAsync } = useSwitchChain()
   const [swapChainId, setSwapChainId] = useState<SupportedChainId>(DEFAULT_CHAIN_ID)
+  const publicClient = usePublicClient({ chainId: swapChainId })
   const chainMeta = getChainMeta(swapChainId)
   const chainMismatch = isConnected && walletChainId != null && walletChainId !== swapChainId
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
@@ -1396,32 +1413,49 @@ export function Swap() {
   }, [extraTokenOptions, registerTokenForIdentity, tokenOut, tokenOutOption, tokenOutSymbol])
 
   // ─── Token balances ───────────────────────────────────────────────────────
-  const isTokenInNative = tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
-  const isTokenOutNative = tokenOut.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
-  const balanceOwnerAddress =
-    executionMode === 'canonical'
-      ? (canonicalAddress ?? executionAddress)
-      : executionAddress
-  const { data: tokenInBalData } = useBalance({
-    address: balanceOwnerAddress ?? undefined,
-    token: isTokenInNative ? undefined : (tokenIn as `0x${string}`),
+  const balanceOwnerAddress = useMemo(
+    () =>
+      resolveSwapBalanceOwner({
+        accountMeCanonicalCsw: accountSignals?.canonicalCswAddress,
+        accountContextCsw: canonicalAddress,
+        privyEmbeddedEoa: privyEmbeddedEoaAddress,
+        connectedExternalEoa: address,
+        executionAddress,
+      }),
+    [
+      accountSignals?.canonicalCswAddress,
+      address,
+      canonicalAddress,
+      executionAddress,
+      privyEmbeddedEoaAddress,
+    ],
+  )
+  const balanceReadsEnabled = Boolean(hasSession && sessionHydrated && balanceOwnerAddress)
+  const tokenInBalanceQuery = useSwapAssetBalance({
+    ownerAddress: balanceOwnerAddress,
+    tokenAddress: tokenIn,
     chainId: swapChainId,
-    query: { enabled: Boolean(balanceOwnerAddress) && isAddress(tokenIn) },
+    enabled: balanceReadsEnabled,
   })
-  const { data: tokenOutBalData } = useBalance({
-    address: balanceOwnerAddress ?? undefined,
-    token: isTokenOutNative ? undefined : (tokenOut as `0x${string}`),
+  const tokenOutBalanceQuery = useSwapAssetBalance({
+    ownerAddress: balanceOwnerAddress,
+    tokenAddress: tokenOut,
     chainId: swapChainId,
-    query: { enabled: Boolean(balanceOwnerAddress) && isAddress(tokenOut) },
+    enabled: balanceReadsEnabled,
   })
-  const tokenInBalanceLabel = fmtBal(tokenInBalData)
-  const tokenOutBalanceLabel = fmtBal(tokenOutBalData)
+  const tokenInBalanceLabel = useMemo(() => {
+    if (tokenInBalanceQuery.isSuccess && tokenInBalanceQuery.data) {
+      return fmtBalFromAmount(tokenInBalanceQuery.data.formatted, tokenInSymbol)
+    }
+    return undefined
+  }, [tokenInBalanceQuery.data, tokenInBalanceQuery.isSuccess, tokenInSymbol])
   const tokenInAmountExceedsBalance = useMemo(() => {
-    if (!tokenInBalData) return false
-    const amount = parsePositiveAmountToUnits(amountInUnits, tokenInBalData.decimals)
+    const bal = tokenInBalanceQuery.data
+    if (!bal) return false
+    const amount = parsePositiveAmountToUnits(amountInUnits, bal.decimals)
     if (amount === null) return false
-    return amount > tokenInBalData.value
-  }, [amountInUnits, tokenInBalData])
+    return amount > bal.raw
+  }, [amountInUnits, tokenInBalanceQuery.data])
   const tokenInBalanceError = tokenInAmountExceedsBalance
     ? `Insufficient ${tokenInSymbol} balance. You have ${tokenInBalanceLabel ?? 'less than the amount entered'}.`
     : null
@@ -1453,6 +1487,9 @@ export function Swap() {
     confirmAndExecute,
     run7702DryRun,
     resetTradeState,
+    swapCompletion,
+    clearSwapCompletion,
+    txState,
   } = useSwapExecution({
     address,
     walletClient: executionWalletClient,
@@ -1492,6 +1529,50 @@ export function Swap() {
     sessionAddress: authAddress,
     ensureCanonicalSession,
   })
+
+  const outputWalletBalanceAmount = useMemo(() => {
+    if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return null
+    return formatBalanceForAmountInput({ formatted: tokenOutBalanceQuery.data.formatted }) ?? null
+  }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess])
+
+  const buyAmountDisplay = useMemo(() => {
+    const walletBalance = outputWalletBalanceAmount
+
+    if (swapCompletion || txState === 'success') {
+      if (walletBalance != null && balanceOwnerAddress) return walletBalance
+      if (swapCompletion?.estimatedOut) return swapCompletion.estimatedOut
+      return estimatedOut
+    }
+
+    if (estimatedOut) return estimatedOut
+    if (walletBalance != null && balanceOwnerAddress) return walletBalance
+    return estimatedOut
+  }, [
+    balanceOwnerAddress,
+    estimatedOut,
+    outputWalletBalanceAmount,
+    swapCompletion,
+    txState,
+  ])
+
+  const tokenOutBalanceLabel = useMemo(() => {
+    if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return undefined
+    return fmtBalFromAmount(tokenOutBalanceQuery.data.formatted, tokenOutSymbol)
+  }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess, tokenOutSymbol])
+
+  const handleClearSwapCompletion = useCallback(() => {
+    clearSwapCompletion()
+    void tokenOutBalanceQuery.refetch()
+    void tokenInBalanceQuery.refetch()
+  }, [clearSwapCompletion, tokenInBalanceQuery, tokenOutBalanceQuery])
+
+  useEffect(() => {
+    if (!swapCompletion?.txHash) return
+    void queryClient.invalidateQueries({ queryKey: ['swap', 'asset-balance'] })
+    void tokenOutBalanceQuery.refetch()
+    void tokenInBalanceQuery.refetch()
+  }, [queryClient, swapCompletion?.txHash, tokenInBalanceQuery, tokenOutBalanceQuery])
+
   const showCanonicalSessionGuardHint =
     activePanel === 'swap' &&
     executionMode === 'canonical' &&
@@ -1690,6 +1771,7 @@ export function Swap() {
     // Keep submit/build gated by `executionReady`, but still show pricing while
     // the account needs 4626 signing setup.
     if (!executionAddress || !quoteReady || quoteCooldownActive) return
+    if (swapCompletion) return
     if (tokenInAmountExceedsBalance) return
     const timer = window.setTimeout(() => {
       if (busyRef.current) return
@@ -1706,6 +1788,7 @@ export function Swap() {
     quoteReady,
     quoteCooldownActive,
     tokenInAmountExceedsBalance,
+    swapCompletion,
     handleQuote,
   ])
 
@@ -1880,7 +1963,7 @@ export function Swap() {
                         tokenInIdentityLoading={tokenInIdentity.isLoading}
                         tokenOutIdentityLoading={tokenOutIdentity.isLoading}
                         amountInUnits={amountInUnits}
-                        estimatedOut={estimatedOut}
+                        estimatedOut={buyAmountDisplay}
                         estimatedOutUsd={null}
                         tokenInSymbol={tokenInSymbol}
                         tokenOutSymbol={tokenOutSymbol}
@@ -1891,11 +1974,13 @@ export function Swap() {
                         isConnected={isConnected}
                         isReady={isReady && !tokenInAmountExceedsBalance}
                         busy={busy}
-                        status={status}
+                        status={swapCompletion ? null : status}
                         error={
-                          tokenInBalanceError ??
-                          error ??
-                          (needsCanonicalSetupAction ? null : canonicalSignerGuardError)
+                          swapCompletion
+                            ? null
+                            : tokenInBalanceError ??
+                              error ??
+                              (needsCanonicalSetupAction ? null : canonicalSignerGuardError)
                         }
                         quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
                         approvalRequired={approvalRequired}
@@ -2148,6 +2233,15 @@ export function Swap() {
               <div>signer: {txDebug.signerAddress ?? '--'}</div>
               <div>canonical: {txDebug.canonicalAddress ?? '--'}</div>
               <div>balance owner: {balanceOwnerAddress ?? '--'}</div>
+              <div>token out: {tokenOut}</div>
+              <div>
+                token out bal:{' '}
+                {tokenOutBalanceQuery.isSuccess
+                  ? `${tokenOutBalanceQuery.data?.formatted ?? '--'} (${tokenOutBalanceQuery.data?.raw?.toString() ?? '--'})`
+                  : tokenOutBalanceQuery.isError
+                    ? 'error'
+                    : 'loading'}
+              </div>
             </div>
             <div className="rounded-lg border border-cyan-400/15 bg-black/30 p-2">
               <div>supports5792: {txDebug.capabilities.supports5792 ? 'yes' : 'no'}</div>
@@ -2222,6 +2316,15 @@ export function Swap() {
         onClose={() => setTokenSelectorOpen(false)}
         onSelect={onSelectToken}
       />
+
+      {activePanel === 'swap' && swapCompletion ? (
+        <SwapCompletionNotice
+          completion={swapCompletion}
+          tokenInSymbol={tokenInSymbol}
+          tokenOutSymbol={tokenOutSymbol}
+          onDismiss={handleClearSwapCompletion}
+        />
+      ) : null}
 
       {/* ─── Sheets / Modals ────────────────────────────────────────────── */}
       <SwapSettingsModal

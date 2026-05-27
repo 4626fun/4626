@@ -69,7 +69,7 @@ export function weightedWaitlistPoints(source: unknown, amount: unknown): number
   return 0
 }
 
-/** Weighted credits for one `points` row on AMOE lottery surfaces. Mirrors `points_amoe_eligible_balance`. */
+/** Legacy per-row AMOE allowlist weights (view still exists in DB). Runtime balance/spend uses `readWaitlistPointsBreakdown`. */
 export function weightedAmoeEligiblePoints(source: unknown, amount: unknown): number {
   const normalizedSource = String(source ?? '').trim()
   const normalizedAmount = safeInt(amount)
@@ -197,18 +197,16 @@ export async function readWaitlistPointsBreakdown(
   }
 }
 
-/** AMOE lottery credits for one profile (`points_amoe_eligible_balance`). */
+/**
+ * Public points balance for lottery spend and `/api/v1/lottery/amoe/credits`.
+ * Same weighted total as waitlist tiers, leaderboard, and tray (`points.total`).
+ */
 export async function readAmoeEligibleCreditsForSignupId(
   db: ScoringDb,
   signupId: number,
 ): Promise<number> {
-  const result = await db.sql`
-    SELECT COALESCE(credits, 0)::int AS credits
-    FROM points_amoe_eligible_balance
-    WHERE signup_id = ${signupId}
-    LIMIT 1;
-  `
-  return Math.max(0, safeInt(result.rows?.[0]?.credits))
+  const breakdown = await readWaitlistPointsBreakdown(db, signupId)
+  return breakdown.total
 }
 
 export function labelForPointsSource(source: string): string {
@@ -250,7 +248,6 @@ export type PointsActivityRow = {
   label: string
   amount: number
   waitlistPoints: number
-  amoeCredits: number
   createdAt: string
 }
 
@@ -276,7 +273,6 @@ export async function listPointsActivityForSignupId(
       label: labelForPointsSource(source),
       amount,
       waitlistPoints: weightedWaitlistPoints(source, amount),
-      amoeCredits: weightedAmoeEligiblePoints(source, amount),
       createdAt: row.created_at ? String(row.created_at) : '',
     }
   })

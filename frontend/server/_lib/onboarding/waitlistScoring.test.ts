@@ -23,11 +23,17 @@ describe('weightedWaitlistPoints', () => {
 })
 
 describe('weightedAmoeEligiblePoints', () => {
-  it('excludes referral_passthrough from lottery credits', () => {
+  it('excludes referral_passthrough from legacy AMOE view weights', () => {
     expect(weightedAmoeEligiblePoints('referral_passthrough', 40)).toBe(0)
   })
 
-  it('counts daily AMOE credits toward lottery balance', () => {
+  it('counts daily AMOE credits in legacy AMOE view weights', () => {
     expect(weightedAmoeEligiblePoints('amoe_twitter_daily', 1)).toBe(1)
+  })
+})
+
+describe('readAmoeEligibleCreditsForSignupId', () => {
+  it('includes referral_passthrough because it delegates to waitlist breakdown', () => {
+    expect(weightedWaitlistPoints('referral_passthrough', 40)).toBe(40)
   })
 })

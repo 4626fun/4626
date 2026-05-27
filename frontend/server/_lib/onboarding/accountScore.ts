@@ -16,39 +16,24 @@ export function normalizeNonNegativeInt(value: unknown): number {
 }
 
 export type NormalizedAccountScore = {
-  /** Canonical waitlist weighted total (leaderboard + tiers + tray headline). */
+  /** Canonical public points total (waitlist, leaderboard, tray, lottery). */
   points: number
   tier: number
-  /** AMOE lottery credits (`points_amoe_eligible_balance`); never substitutes for waitlist points. */
-  amoeCredits: number
-  /** True when lottery credits differ from waitlist points — UI may show a secondary line. */
-  lotteryCreditsDiffer: boolean
 }
 
 export function normalizeAccountScore(input: {
   points?: unknown
   tier?: unknown
-  amoeCredits?: unknown
 }): NormalizedAccountScore {
   const points = normalizeNonNegativeInt(input.points)
-  const amoeCredits = normalizeNonNegativeInt(input.amoeCredits)
   const tierRaw = normalizeNonNegativeInt(input.tier)
   const tierFromPoints = waitlistTierFromPoints(points)
   const tier = tierRaw === tierFromPoints ? tierRaw : tierFromPoints
-  return {
-    points,
-    tier,
-    amoeCredits,
-    lotteryCreditsDiffer: amoeCredits !== points,
-  }
+  return { points, tier }
 }
 
 export function buildAccountScoreFromBreakdown(
   breakdown: WaitlistPointsBreakdown,
-  amoeCredits: number,
 ): NormalizedAccountScore {
-  return normalizeAccountScore({
-    points: breakdown.total,
-    amoeCredits,
-  })
+  return normalizeAccountScore({ points: breakdown.total })
 }

@@ -60,6 +60,23 @@ describe('xmtpConnectGuard', () => {
     ).toEqual({ allowed: true })
   })
 
+  it('allows marketing waitlist origin for XMTP connect', () => {
+    expect(
+      evaluateXmtpConnectPrecheck({
+        walletAddress: '0x1234567890123456789012345678901234567890',
+        walletClientReady: true,
+        alreadyHasClient: false,
+        connectInFlight: false,
+        resetLocalStateInFlight: false,
+        connectCooldownUntilMs: 0,
+        nowMs: now,
+        currentOrigin: 'https://4626.fun',
+        canonicalAppOrigin: canonical,
+        hostname: '4626.fun',
+      }),
+    ).toEqual({ allowed: true })
+  })
+
   it('blocks preview deployments to prevent install churn', () => {
     const result = evaluateXmtpConnectPrecheck({
       walletAddress: '0x1234567890123456789012345678901234567890',

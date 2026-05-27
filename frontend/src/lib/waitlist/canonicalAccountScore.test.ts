@@ -5,7 +5,7 @@ import { resolvePublicPointsDisplay } from './canonicalAccountScore'
 describe('resolvePublicPointsDisplay', () => {
   it('prefers session score over position fallback', () => {
     const display = resolvePublicPointsDisplay({
-      score: { points: 225, tier: 2, amoeCredits: 382 },
+      score: { points: 225, tier: 2 },
       positionTotal: 200,
     })
     expect(display.points).toBe(225)

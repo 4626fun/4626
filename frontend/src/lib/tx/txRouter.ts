@@ -60,6 +60,9 @@ export type TxRouterContext = {
   connectorName?: string | null
   capabilities?: AccountCapabilities | null
   debug?: (event: TxRouterDebugEvent) => void
+  onSubmissionStatus?: (message: string) => void
+  /** Canonical4337 only: return after bundler accept; poll receipt separately when false. */
+  waitForOnChainReceipt?: boolean
 }
 
 export type TxRoutingDecision = {
@@ -93,6 +96,7 @@ export type TxRouterSendResult = {
   method: TxMethod
   sender: `0x${string}` | null
   transactionHash: string | null
+  userOpHash?: string | null
   callsId: string | null
   txHashes: string[]
 }
@@ -751,6 +755,8 @@ async function sendViaCanonical4337(params: {
       bundlerUrl,
       smartWallet: canonicalIdentity,
       ownerAddress: context.signerAddress,
+      onSubmissionStatus: context.onSubmissionStatus,
+      waitForOnChainReceipt: context.waitForOnChainReceipt ?? true,
       // Let the ERC-4337 helper handle attribution so it can preserve canonical
       // calldata for strict paymaster policies (e.g. Universal Router execute).
       calls: calls.map((call) => ({
@@ -810,8 +816,9 @@ async function sendViaCanonical4337(params: {
     method: 'eth_sendUserOperation',
     sender,
     transactionHash: result.transactionHash,
+    userOpHash: result.userOpHash,
     callsId: null,
-    txHashes: [result.transactionHash],
+    txHashes: result.transactionHash ? [result.transactionHash] : [],
   }
 }
 

@@ -32,12 +32,21 @@ export function isLocalDevHostname(hostname: string): boolean {
   return host === 'localhost' || host === '127.0.0.1'
 }
 
+/** Production hosts where browser XMTP installs are intentionally allowed. */
+const TRUSTED_MESSAGING_HOSTNAMES = new Set(['4626.fun', 'www.4626.fun', 'app.4626.fun'])
+
+export function isTrustedMessagingHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase()
+  if (isLocalDevHostname(host)) return true
+  return TRUSTED_MESSAGING_HOSTNAMES.has(host)
+}
+
 export function isCanonicalMessagingOrigin(input: {
   currentOrigin: string
   canonicalAppOrigin: string
   hostname: string
 }): boolean {
-  if (isLocalDevHostname(input.hostname)) return true
+  if (isTrustedMessagingHostname(input.hostname)) return true
   return normalizeOrigin(input.currentOrigin) === normalizeOrigin(input.canonicalAppOrigin)
 }
 

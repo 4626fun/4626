@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { readWaitlistPointsBreakdown } from '../onboarding/waitlistScoring.js'
 import { resolveAmoePointsProfileId } from './amoeProfileResolve.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
 import {
@@ -487,30 +488,13 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
   return Math.max(0, value)
 }
 
-/**
- * AMOE-eligible weighted points for a signup — the strict-allowlist
- * subset of `readUnifiedPointsForSignup` that excludes paid-action and
- * tainted sources. Used to gate free lottery entries.
- *
- * Compliance contract: the underlying `points_amoe_eligible_balance`
- * view's source allowlist is the database-level enforcement of the
- * "no purchase necessary" wall on the AMOE path. See
- * `docs/security/amoe-points-source-audit.md` for the per-source
- * rationale.
- */
+/** Public points total — same weighted sum as waitlist score and leaderboard. */
 async function readAmoeEligibleCreditsForSignup(
   db: Db,
   signupId: number,
 ): Promise<number> {
-  const result = await db.sql`
-    SELECT credits
-    FROM points_amoe_eligible_balance
-    WHERE signup_id = ${signupId}
-    LIMIT 1;
-  `
-  const valueRaw = Number(result.rows?.[0]?.credits ?? 0)
-  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
-  return Math.max(0, value)
+  const breakdown = await readWaitlistPointsBreakdown(db as any, signupId)
+  return breakdown.total
 }
 
 function normalizeWallet(wallet: `0x${string}`): `0x${string}` {
@@ -858,11 +842,7 @@ export async function consumeAmoeCreditsForEntry(params: {
     normalizeRefId(params.refId) ??
     `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
 
-  // AMOE eligibility: spend is gated on the AMOE-eligible balance only.
-  // The `points_amoe_eligible_balance` view enforces the strict allowlist —
-  // paid-action sources (e.g. has_creator_coin) and referral_* contribute 0,
-  // so they cannot fund AMOE entries even though they still count toward
-  // tier/leaderboard via `readUnifiedPointsForSignup`.
+  // Spend is gated on the same weighted public points total as waitlist/leaderboard.
   //
   // We `RETURNING created_at` from the INSERT so the new-insert path can
   // surface the actual persisted burn time (Fix #2 from PR #457 review).
@@ -876,9 +856,30 @@ export async function consumeAmoeCreditsForEntry(params: {
   // skip. See docs/security/amoe-burn-then-submit-design.md §5.1.1.
   const spendAttempt = await db.sql`
     WITH current AS (
-      SELECT COALESCE(credits, 0)::bigint AS credits
-      FROM points_amoe_eligible_balance
-      WHERE signup_id = ${signupId}
+      SELECT COALESCE(
+        (
+          SELECT ROUND(
+            SUM(
+              CASE
+                WHEN source IN ('amoe_entry_spend', 'amoe_twitter_daily', 'amoe_xmtp_daily', 'amoe_entry_refund') THEN 0
+                WHEN source IN ('waitlist_signup', 'referral_passthrough', 'csw_link', 'amoe_checkin') THEN amount * 1.00
+                WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
+                WHEN source LIKE 'social_%' THEN amount * 0.50
+                WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
+                WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
+                WHEN source IN (
+                  'link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram',
+                  'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin'
+                ) THEN amount * 0.60
+                ELSE 0
+              END
+            )
+          )::bigint
+          FROM points
+          WHERE signup_id = ${signupId}
+        ),
+        0
+      ) AS credits
     ),
     ins AS (
       INSERT INTO points (signup_id, source, source_id, amount, created_at)

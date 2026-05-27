@@ -163,7 +163,7 @@ export function SwapCard(props: SwapCardProps) {
         size="lg"
         className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgb(var(--brand-primary)/0.9)] disabled:cursor-not-allowed disabled:opacity-60"
         onClick={primaryAction}
-        loading={props.busy === 'pending'}
+        loading={props.busy !== null}
         disabled={primaryDisabled}
       >
         {primaryActionLabel}
@@ -171,7 +171,7 @@ export function SwapCard(props: SwapCardProps) {
       {props.primaryActionHint ? <div className="mt-2 text-xs text-vault-subtext">{props.primaryActionHint}</div> : null}
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
-      {props.status && <div className="mt-2 text-xs text-vault-subtext">{props.status}</div>}
+      {props.status && !props.error ? <div className="mt-2 text-xs text-vault-subtext">{props.status}</div> : null}
 
       <SwapDetails
         routeSummary={props.routeSummary}

@@ -1,5 +1,11 @@
 import type { Address, Hex } from 'viem'
 import { decodeAbiParameters, encodeAbiParameters, getAddress, isAddress } from 'viem'
+import {
+  clearPersistedCswOwnerIndex,
+  readPersistedCswOwnerIndex,
+  writePersistedCswOwnerIndex,
+} from './cswOwnerIndexPersistence'
+import { isRpcRateLimitError } from './coinbaseErc4337ErrorUtils'
 
 const RPC_READ_TIMEOUT_MS = 8_000
 const OWNER_INDEX_CACHE_TTL_MS = 5 * 60_000
@@ -69,6 +75,24 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): P
   }
 }
 
+async function readContractWithRpcRetry<T>(
+  label: string,
+  read: () => Promise<T>,
+  maxAttempts = 3,
+): Promise<T> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      return await withTimeout(read(), RPC_READ_TIMEOUT_MS, label)
+    } catch (error: unknown) {
+      lastError = error
+      if (!isRpcRateLimitError(error) || attempt >= maxAttempts - 1) throw error
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)))
+    }
+  }
+  throw lastError ?? new Error(`${label} failed`)
+}
+
 export function resetOwnerIndexCacheForTests(): void {
   OWNER_INDEX_CACHE.clear()
 }
@@ -85,14 +109,12 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
   const cacheKey = getOwnerIndexCacheKey({ chainId, smartWallet, ownerAddress })
   if (!useCache) OWNER_INDEX_CACHE.delete(cacheKey)
 
-  const countRaw = (await withTimeout(
+  const countRaw = (await readContractWithRpcRetry('ownerCount read', () =>
     publicClient.readContract({
       address: smartWallet,
       abi: COINBASE_SMART_WALLET_OWNERS_ABI,
       functionName: 'ownerCount',
     }),
-    RPC_READ_TIMEOUT_MS,
-    'ownerCount read',
   )) as bigint
   const count = Number(countRaw)
   if (!Number.isFinite(count) || count <= 0) {
@@ -114,14 +136,12 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
   // Use nextOwnerIndex when available to avoid missing owners after removals.
   let upperBound = count
   try {
-    const nextRaw = (await withTimeout(
+    const nextRaw = (await readContractWithRpcRetry('nextOwnerIndex read', () =>
       publicClient.readContract({
         address: smartWallet,
         abi: COINBASE_SMART_WALLET_OWNERS_ABI,
         functionName: 'nextOwnerIndex',
       }),
-      RPC_READ_TIMEOUT_MS,
-      'nextOwnerIndex read',
     )) as bigint
     const next = Number(nextRaw)
     if (Number.isFinite(next) && next > 0) upperBound = next
@@ -130,17 +150,52 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
   }
 
   const expected = asOwnerBytes(ownerAddress).toLowerCase()
+
+  if (useCache) {
+    const persisted = readPersistedCswOwnerIndex({ chainId, smartWallet, ownerAddress })
+    if (persisted && persisted.ownerIndex >= 0 && persisted.ownerIndex < scanLimit) {
+      try {
+        const atIndex = (await readContractWithRpcRetry(`ownerAtIndex(${persisted.ownerIndex}) persisted verify`, () =>
+          publicClient.readContract({
+            address: smartWallet,
+            abi: COINBASE_SMART_WALLET_OWNERS_ABI,
+            functionName: 'ownerAtIndex',
+            args: [BigInt(persisted.ownerIndex)],
+          }),
+        )) as Hex
+        if (String(atIndex).toLowerCase() === expected) {
+          OWNER_INDEX_CACHE.set(cacheKey, {
+            ownerIndex: persisted.ownerIndex,
+            ownerCountSnapshot: count,
+            expiresAt: Date.now() + OWNER_INDEX_CACHE_TTL_MS,
+          })
+          if (persisted.ownerCountSnapshot !== count) {
+            writePersistedCswOwnerIndex({
+              chainId,
+              smartWallet,
+              ownerAddress,
+              ownerIndex: persisted.ownerIndex,
+              ownerCountSnapshot: count,
+            })
+          }
+          return { ownerIndex: persisted.ownerIndex, ownerCount: count }
+        }
+        clearPersistedCswOwnerIndex({ chainId, smartWallet, ownerAddress })
+      } catch {
+        clearPersistedCswOwnerIndex({ chainId, smartWallet, ownerAddress })
+      }
+    }
+  }
+
   const limit = Math.min(upperBound, scanLimit)
   for (let i = 0; i < limit; i += 1) {
-    const b = (await withTimeout(
+    const b = (await readContractWithRpcRetry(`ownerAtIndex(${i}) read`, () =>
       publicClient.readContract({
         address: smartWallet,
         abi: COINBASE_SMART_WALLET_OWNERS_ABI,
         functionName: 'ownerAtIndex',
         args: [BigInt(i)],
       }),
-      RPC_READ_TIMEOUT_MS,
-      `ownerAtIndex(${i}) read`,
     )) as Hex
     if (String(b).toLowerCase() === expected) {
       if (useCache) {
@@ -148,6 +203,13 @@ export async function findCoinbaseSmartWalletOwnerIndex(params: {
           ownerIndex: i,
           ownerCountSnapshot: count,
           expiresAt: Date.now() + OWNER_INDEX_CACHE_TTL_MS,
+        })
+        writePersistedCswOwnerIndex({
+          chainId,
+          smartWallet,
+          ownerAddress,
+          ownerIndex: i,
+          ownerCountSnapshot: count,
         })
       }
       return { ownerIndex: i, ownerCount: count }

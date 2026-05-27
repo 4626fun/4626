@@ -247,9 +247,7 @@ describe('waitlist/position', () => {
     expect(res.body?.data?.signupId).toBe(42)
     expect(res.body?.data?.email).toBe('akitav2@proton.me')
     expect(res.body?.data?.borderTier).toBe(1)
-    expect(res.body?.data?.scoringLane).toBe('waitlist_weighted')
     expect(res.body?.data?.points?.total).toBe(150)
-    expect(res.body?.data?.lotteryCredits).toBe(99)
   })
 
   it('redacts email for wallet-address lookup and checks extended wallet fields', async () => {

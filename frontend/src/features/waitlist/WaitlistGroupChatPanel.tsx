@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { ChatWindow } from '@/components/chat/ChatWindow'
@@ -14,6 +14,7 @@ import {
   waitlistChatStatusMessage,
 } from './useWaitlistChatJoin'
 import { useWaitlistXmtpStatus } from './useWaitlistXmtpStatus'
+import { usePrepareWaitlistMessagingWallet } from './usePrepareWaitlistMessagingWallet'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
@@ -82,6 +83,8 @@ function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelPro
           groupId={chatConfig.groupId}
           groupName={groupName}
           joinStatus={joinStatus}
+          signingReady={signingReady}
+          chatReady={chatReady}
         />
       )}
     </section>
@@ -127,6 +130,8 @@ function WaitlistGroupChatSurface(props: {
   groupId: string | null
   groupName: string
   joinStatus: WaitlistChatStatus
+  signingReady: boolean
+  chatReady: boolean
 }) {
   const {
     status,
@@ -138,6 +143,24 @@ function WaitlistGroupChatSurface(props: {
     resetInstallations,
     installationLimitInboxId,
   } = useXmtp()
+  const { prepare, walletReady } = usePrepareWaitlistMessagingWallet(props.signingReady && props.chatReady)
+  const [prepareError, setPrepareError] = useState<string | null>(null)
+  const [prepareBusy, setPrepareBusy] = useState(false)
+
+  const handleConnectMessaging = useCallback(async () => {
+    setPrepareError(null)
+    setPrepareBusy(true)
+    try {
+      const prepared = await prepare()
+      if (!prepared.ok) {
+        setPrepareError(prepared.error)
+        return
+      }
+      await connect('user')
+    } finally {
+      setPrepareBusy(false)
+    }
+  }, [connect, prepare])
 
   const groupConversation = useMemo(() => {
     const groupId = props.groupId
@@ -164,16 +187,26 @@ function WaitlistGroupChatSurface(props: {
   }
 
   if (!messagingReady && !isConnecting) {
+    const displayError = prepareError ?? error
     return (
       <div className="space-y-3 rounded-xl border border-white/10 bg-black/40 p-4 text-center">
         <p className="text-xs text-zinc-400">
-          {error ? (
-            <span className="text-red-300">{error}</span>
+          {displayError ? (
+            <span className="text-red-300">{displayError}</span>
+          ) : walletReady ? (
+            'Wallet signer is ready. Click Connect messaging and approve one signature to create your inbox.'
           ) : (
-            'Connect messaging on 4626.fun first. After your inbox is ready, we add you to the waitlist group.'
+            'Click Connect messaging below to create your XMTP inbox in this browser. After signing once, we add you to the waitlist group automatically.'
           )}
         </p>
-        <Button type="button" variant="primary" size="sm" onClick={() => void connect('user')}>
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          loading={prepareBusy}
+          disabled={prepareBusy}
+          onClick={() => void handleConnectMessaging()}
+        >
           Connect messaging
         </Button>
         {installationLimitInboxId ? (

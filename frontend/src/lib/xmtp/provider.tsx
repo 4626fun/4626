@@ -1460,12 +1460,19 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       hostname,
     })
     if (!precheck.allowed) {
-      if (precheck.reason === 'cooldown' && mountedRef.current) {
-        setStatus('error')
-        setError(`XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`)
-      } else if (precheck.reason === 'wrong_origin' && mountedRef.current) {
-        setStatus('error')
-        setError(buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin))
+      if (mountedRef.current) {
+        if (precheck.reason === 'cooldown') {
+          setStatus('error')
+          setError(`XMTP reconnect is cooling down. Retry in ${precheck.retryInSeconds ?? 1}s.`)
+        } else if (precheck.reason === 'wrong_origin') {
+          setStatus('error')
+          setError(buildWrongOriginConnectError(currentOrigin, canonicalAppOrigin))
+        } else if (precheck.reason === 'no_wallet') {
+          setStatus('error')
+          setError(
+            'Connect your 4626 wallet (Privy email sign-in or embedded signer) before enabling messaging, then retry.',
+          )
+        }
       }
       return
     }
