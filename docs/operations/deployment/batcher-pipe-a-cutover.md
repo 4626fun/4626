@@ -114,9 +114,22 @@ Safe queue on protocol treasury (`0x7d429e…`):
 | 78 | `wireDeploymentHelpers` on **new** batcher | **Executed** — `0xdef6356c…328a7` (direct Safe exec, bypassed stale queue) |
 | 79 | `setPhase1Module` | **Executed** — `0x3717c916…0fd1a` |
 | 80 | `setSolanaConfig` | **Executed** — `0x5294eabc…5e53` |
-| 81 | `setOVaultRuntimeConfig` | **Executed** — `0xe572a78d…d7c6` |
+| 81 | `setOVaultRuntimeConfig` | **Executed** — `0xe572a78d…d7c6`; stale tx-service row **rejected** at nonce 81 (`0xfc1d6780…48ee`) |
 
-Create2 authorization completed via second `DeployBaseMainnetDeployer.s.sol` broadcast after wiring.
+Clear stale Safe queue rows after direct on-chain exec:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --list
+pnpm -C frontend exec tsx scripts/ops/reject-stale-safe-transactions.ts --nonces 81
+```
+
+When the Solana share-mesh peer bytes32 exists:
+
+```bash
+pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts \\
+  --share-oft-peer 0x<mesh-peer-bytes32>
+pnpm -C frontend exec tsx scripts/ops/verify-batcher-pipe-a-readiness.ts
+```
 
 **Still blocked for full Pipe A readiness:** `solanaShareOftPeer` unset — ShareOFT mesh mint/peer for EID `30168` is not provisioned yet (`read-akita-ovault-mesh-onchain.ts` → mesh configured: NO). Propose `setSolanaShareOftPeer` only after mesh peer bytes32 is known.
 

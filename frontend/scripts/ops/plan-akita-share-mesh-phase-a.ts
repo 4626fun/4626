@@ -159,9 +159,12 @@ Options:
     process.stdout.write(
       'Calldata preview skipped — pass --asset-mesh, --share-mesh, --solana-asset-peer, --solana-share-peer when mesh tokens exist.\n',
     )
-    process.stdout.write(
-      'Existing helper: pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts --only-ovault-runtime --ovault-hub-composer <composer> --ovault-solana-eid 30168\n\n',
-    )
+  process.stdout.write(
+    'Existing helper: pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts --only-ovault-runtime --ovault-hub-composer <composer> --ovault-solana-eid 30168\n',
+  )
+  process.stdout.write(
+    'After mesh peer bytes32 exists: pnpm -C frontend exec tsx scripts/ops/execute-batcher-share-oft-peer-safe.ts --share-oft-peer 0x<peer>\n\n',
+  )
     return
   }
 
