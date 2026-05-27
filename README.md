@@ -148,7 +148,7 @@ flowchart TD
   Salt --> P1["Phase 1\nDeploy vault + wrapper + OFT"]
   P1 --> P2Core["Phase 2 Core\nDeploy gauge + strategy + oracle"]
   P2Core --> P2Final["Phase 2 Finalize\nRegister + wire + configure"]
-  P2Final --> P3["Phase 3\nOptional strategy/post-config"]
+  P2Final --> P3["Phase 3\nCharm + Ajna (bundle-gated)"]
   P3 --> P4{"Phase 4 required?\nDeferred launch path"}
   P4 -->|Yes| Launch["Phase 4\nActivate deferred launch"]
   P4 -->|No| Ready["Deployment ready"]
@@ -167,6 +167,8 @@ flowchart TD
   class Ready,Ops,Start success;
   class Blocked blocked;
 ```
+
+Greenfield deploy is gated on paid **`vault_full_deploy`** ($499 USDC, all-or-nothing at `/creator/strategy/features`). That bundle expands to Charm + Ajna Phase 3 strategies (45%/45%), Solana mesh (Pipe A finalize bridge), and Meteora entitlement. Legacy per-key comp rows still resolve for grandfathered creators. Canonical spec: [`docs/operations/creator-strategy-features.md`](docs/operations/creator-strategy-features.md).
 
 ### 3) Fee + Incentive Routing
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/accountSetup/useAccountSetupController
+[4626-web](../../../index.md) / src/features/accountSetup/useAccountSetupController
 
 # src/features/accountSetup/useAccountSetupController
 
@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L125)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L102)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:125](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:113](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L113)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L90)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:113](https:/
 
 ###### ownerDelegationFlags
 
-[`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`
+[`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`
 
 ###### privyAuthed
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:113](https:/
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L190)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/useAccountSetupController.ts#L159)
 
 #### Parameters
 
@@ -124,11 +124,15 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 ##### connectedAddress
 
-> **connectedAddress**: `` `0x${string}` `` \| `undefined`
+> **connectedAddress**: `string` \| `undefined`
 
 ##### connectedCanonicalWalletSelected
 
 > **connectedCanonicalWalletSelected**: `boolean`
+
+##### connectedOnchainEoaOwner
+
+> **connectedOnchainEoaOwner**: \{ `index`: `number`; `ownerAddress`: `` `0x${string}` ``; \} \| `null`
 
 ##### connectedOwnerReady
 
@@ -162,25 +166,13 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 > **cswOwnersState**: [`CswOwnersState`](types.md#cswownersstate)
 
-##### customOwnerGasPreflight
-
-> **customOwnerGasPreflight**: `OwnerInstallGasPreflight` \| `null`
-
-##### customOwnerPreparedAddress
-
-> **customOwnerPreparedAddress**: `string` \| `null`
-
-##### customOwnerPreparedTxRequest
-
-> **customOwnerPreparedTxRequest**: [`PreparedOwnerTxRequest`](../../lib/wallet/onboardingWallet.md#preparedownertxrequest) \| `null`
-
 ##### ensureEmbeddedWallet()
 
-> **ensureEmbeddedWallet**: () => `Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>
+> **ensureEmbeddedWallet**: () => `Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>
 
 ###### Returns
 
-`Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>
+`Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>
 
 ##### error
 
@@ -234,10 +226,6 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 > **me**: [`AccountSetupMe`](types.md#accountsetupme) \| `null`
 
-##### needsBaseAccountReconnect
-
-> **needsBaseAccountReconnect**: `boolean`
-
 ##### needsBaseAppSetup
 
 > **needsBaseAppSetup**: `boolean`
@@ -252,11 +240,11 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 ##### onAddRabbyCoOwner()
 
-> **onAddRabbyCoOwner**: (`advancedOwnerAddress`) => `Promise`\<`void`\>
+> **onAddRabbyCoOwner**: (`_advancedOwnerAddress`) => `Promise`\<`void`\>
 
 ###### Parameters
 
-###### advancedOwnerAddress
+###### \_advancedOwnerAddress
 
 `string`
 
@@ -264,13 +252,9 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 `Promise`\<`void`\>
 
-##### onEnable4626Signing()
+##### onchainEoaOwnerCandidates
 
-> **onEnable4626Signing**: () => `Promise`\<`void`\>
-
-###### Returns
-
-`Promise`\<`void`\>
+> **onchainEoaOwnerCandidates**: `object`[]
 
 ##### onLinkProvider()
 
@@ -346,11 +330,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 ##### ownerDelegationFlags
 
-> **ownerDelegationFlags**: [`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`
-
-##### ownerInstallIntent
-
-> **ownerInstallIntent**: [`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent)
+> **ownerDelegationFlags**: [`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`
 
 ##### ownerInstallResumeState
 
@@ -408,6 +388,18 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 > **readableCswOwners**: `object`[]
 
+##### refreshCswOwners()
+
+> **refreshCswOwners**: () => `Promise`\<`void`\>
+
+###### Returns
+
+`Promise`\<`void`\>
+
+##### requiresBaseAppForOwnerInstall
+
+> **requiresBaseAppForOwnerInstall**: `boolean`
+
 ##### retryOwnerCheck()
 
 > **retryOwnerCheck**: () => `Promise`\<`void`\>
@@ -418,69 +410,11 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 ##### sendPreparedOwnerTx()
 
-> **sendPreparedOwnerTx**: (`txRequest`, `ownerAddress?`, `ownerIndexLookupAddress?`, `opts?`) => `Promise`\<`void`\>
-
-###### Parameters
-
-###### txRequest
-
-###### chainId
-
-`8453`
-
-###### data
-
-`` `0x${string}` ``
-
-###### to
-
-`` `0x${string}` ``
-
-###### value
-
-`"0x0"`
-
-###### ownerAddress?
-
-`string` | `null`
-
-###### ownerIndexLookupAddress?
-
-`string` | `null`
-
-###### opts?
-
-###### approvalRunId?
-
-`string` \| `null`
-
-###### customOwnerPolicyToken?
-
-`string` \| `null`
-
-###### onStageEvent?
-
-(`event`) => `void` \| `null`
-
-###### ownerInstallIntent?
-
-[`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent)
-
-###### preferSponsoredFirst?
-
-`boolean`
-
-###### signerAddressOverride?
-
-`string` \| `null`
-
-###### signerWalletOverride?
-
-`any`
+> **sendPreparedOwnerTx**: () => `Promise`\<`never`\>
 
 ###### Returns
 
-`Promise`\<`void`\>
+`Promise`\<`never`\>
 
 ##### setAdvancedBusy
 
@@ -508,7 +442,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 ##### setOwnerDelegationFlags
 
-> **setOwnerDelegationFlags**: `Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`\>\>
+> **setOwnerDelegationFlags**: `Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`\>\>
 
 ##### setZoraStatus
 
@@ -518,25 +452,19 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:190](https:/
 
 > **signerClientReady**: `boolean`
 
-##### subAccountAddress
+##### submitOwnerInstallViaOnchainEoa()
 
-> **subAccountAddress**: `null` = `null`
+> **submitOwnerInstallViaOnchainEoa**: (`txRequest`) => `Promise`\<`` `0x${string}` ``\>
 
-##### subAccountError
+###### Parameters
 
-> **subAccountError**: `null` = `null`
+###### txRequest
 
-##### subAccountReady
+[`PreparedOwnerTxRequest`](../../lib/wallet/zoraAddOwnerApi.md#preparedownertxrequest)
 
-> **subAccountReady**: `boolean`
+###### Returns
 
-##### subAccountSettingUp
-
-> **subAccountSettingUp**: `boolean` = `false`
-
-##### subAccountStage
-
-> **subAccountStage**: `null` = `null`
+`Promise`\<`` `0x${string}` ``\>
 
 ##### switchChainAsync
 

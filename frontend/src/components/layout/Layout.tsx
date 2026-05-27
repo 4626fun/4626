@@ -140,7 +140,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     )
   const baseItems = publicMode || hostMode === 'marketing' || isWaitlistSurface ? navItemsPublic : navItems
   const items = isAdminRoute && hostMode !== 'marketing' ? [...baseItems, adminNavItem] : baseItems
-  const shouldEnableChat = interactive && chatEnabled && hostMode === 'app'
+  const shouldEnableChat = interactive && chatEnabled && hostMode === 'app' && !isWaitlistSurface
 
   useEffect(() => {
     if (typeof window === 'undefined') return

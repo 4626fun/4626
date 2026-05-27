@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './chatWindowState'
+import { resolveCommandCenterVisibility, shouldAttemptGroupConversationRecovery, shouldAttemptInactiveDmRecovery } from './chatWindowState'
 
 describe('shouldAttemptInactiveDmRecovery', () => {
   it('returns true for DM inactive-group errors with a peer address', () => {
@@ -87,6 +87,26 @@ describe('shouldAttemptInactiveDmRecovery', () => {
         conversationType: 'dm',
         dmPeerAddress: '0x1111111111111111111111111111111111111111',
         dmPeerInboxId: null,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('shouldAttemptGroupConversationRecovery', () => {
+  it('returns true for missing group conversations', () => {
+    expect(
+      shouldAttemptGroupConversationRecovery({
+        reason: 'conversation_not_found',
+        conversationType: 'group',
+      }),
+    ).toBe(true)
+  })
+
+  it('returns false for DMs', () => {
+    expect(
+      shouldAttemptGroupConversationRecovery({
+        reason: 'conversation_not_found',
+        conversationType: 'dm',
       }),
     ).toBe(false)
   })

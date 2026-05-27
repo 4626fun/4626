@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 
+import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.sol";
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "./helpers/DeploymentBatcherFixture.sol";
 
@@ -69,9 +70,37 @@ contract MockOwnableTransferForPhase3 {
 
 contract MockCharmStrategyForPhase3 is MockOwnableTransferForPhase3 {
     bool public approvalsInitialized;
+    address public creatorOracle;
+    address public ajnaPool;
+    bool public ajnaBorrowEnabled;
+    uint256 public ajnaMaxDebt;
+    uint256 public ajnaMaxBorrowPerWithdraw;
+    uint256 public ajnaMinCollateralRatioBps;
 
     function initializeApprovals() external {
         approvalsInitialized = true;
+    }
+
+    function setCreatorOracle(address _creatorOracle) external {
+        creatorOracle = _creatorOracle;
+    }
+
+    function setAjnaPool(address _ajnaPool) external {
+        ajnaPool = _ajnaPool;
+    }
+
+    function setAjnaBorrowConfig(
+        bool _enabled,
+        uint256 _maxDebt,
+        uint256 _maxBorrowPerWithdraw,
+        uint256 _minCollateralRatioBps,
+        uint256,
+        uint256
+    ) external {
+        ajnaBorrowEnabled = _enabled;
+        ajnaMaxDebt = _maxDebt;
+        ajnaMaxBorrowPerWithdraw = _maxBorrowPerWithdraw;
+        ajnaMinCollateralRatioBps = _minCollateralRatioBps;
     }
 }
 
@@ -214,6 +243,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     address internal solanaKeeper;
     address internal solanaBridge;
     address internal ajnaKeeper;
+    address internal creatorOracle;
 
     function setUp() public {
         vm.chainId(8453);
@@ -224,6 +254,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         solanaKeeper = makeAddr("solanaKeeper");
         solanaBridge = makeAddr("solanaBridge");
         ajnaKeeper = makeAddr("ajnaKeeper");
+        creatorOracle = makeAddr("creatorOracle");
 
         create2Deployer = new MockCreate2DeployerForPhase3();
         uniswapFactory = new MockUniswapV3FactoryForPhase3();
@@ -277,6 +308,17 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
             CHARM_FACTORY,
             abi.encodeWithSelector(CREATE_VAULT_SELECTOR),
             abi.encode(address(new MockCharmVaultForPhase3(protocolAutomation)))
+        );
+        _mockCreatorOracle(creatorOracle);
+    }
+
+    function _mockCreatorOracle(address oracle) internal {
+        ICreatorRegistry.CreatorCoinInfo memory info;
+        info.oracle = oracle;
+        vm.mockCall(
+            address(batcher.registry()),
+            abi.encodeWithSelector(ICreatorRegistry.getCreatorCoin.selector, creatorToken),
+            abi.encode(info)
         );
     }
 
@@ -336,6 +378,10 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
 
         assertTrue(charmStrategy.approvalsInitialized(), "charm strategy approvals not initialized");
         assertEq(charmStrategy.lastOwner(), protocolTreasury, "charm strategy ownership not transferred");
+        assertTrue(charmStrategy.ajnaBorrowEnabled(), "charm ajna borrow backstop should be enabled");
+        assertEq(charmStrategy.ajnaPool(), makeAddr("ajnaPool"), "charm ajna pool mismatch");
+        assertEq(charmStrategy.creatorOracle(), creatorOracle, "charm creator oracle mismatch");
+        assertEq(charmStrategy.ajnaMinCollateralRatioBps(), 12_500, "charm min collateral ratio mismatch");
         assertEq(ajnaStrategy.lastOwner(), protocolTreasury, "ajna adapter ownership not transferred");
         assertEq(ajnaStrategy.idleBufferBps(), 0, "adapter idle buffer should be disabled");
         assertEq(ajnaAuth.bufferRatio(), 1_500, "ajna buffer ratio mismatch");
@@ -428,6 +474,15 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(out.ajnaStrategy, address(0), "ajnaStrategy should be zero when skipped");
         assertTrue(out.charmStrategy != address(0), "charm should still deploy");
         assertEq(out.solanaStrategy, address(0), "solana strategy removed from Phase 3");
+        assertFalse(charmStrategy.ajnaBorrowEnabled(), "charm-only deploy should not wire ajna backstop");
+        assertEq(charmStrategy.ajnaPool(), address(0), "charm-only deploy should not set ajna pool");
+    }
+
+    function test_deployPhase3Strategies_revertsWhenSynergyOracleMissing() public {
+        _mockCreatorOracle(address(0));
+
+        vm.expectRevert(DeploymentBatcherPhase3Helper.MissingCreatorOracleForSynergy.selector);
+        batcher.deployPhase3Strategies(_phase3Params(), _strategyCodeIds());
     }
 
     function test_deployPhase3Strategies_skipsCharmWhenWeightIsZero() public {

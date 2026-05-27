@@ -1,14 +1,15 @@
+import type { Config } from 'wagmi'
 import { injected } from 'wagmi/connectors'
 
+import {
+  isWaitlistMessagingWagmiConnector,
+  waitForMessagingWallet,
+  WAITLIST_EMBEDDED_CONNECTOR_ID,
+  WAITLIST_MESSAGING_WALLET_VERIFY_MS,
+} from '@/lib/xmtp/waitForMessagingWallet'
 import { isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 
-export const WAITLIST_EMBEDDED_CONNECTOR_ID = 'privy-embedded-waitlist'
-
-export function isWaitlistMessagingWagmiConnector(connectorId: string | null | undefined): boolean {
-  const id = String(connectorId ?? '').trim().toLowerCase()
-  if (!id) return false
-  return id === WAITLIST_EMBEDDED_CONNECTOR_ID || id.includes('privy')
-}
+export { isWaitlistMessagingWagmiConnector, WAITLIST_EMBEDDED_CONNECTOR_ID }
 
 export type PrepareWaitlistMessagingWalletInput = {
   wallets: unknown[]
@@ -20,6 +21,7 @@ export type PrepareWaitlistMessagingWalletInput = {
   disconnectAsync?: () => Promise<unknown>
   activeConnectorId?: string | null
   messagingWalletReady: boolean
+  wagmiConfig: Config
 }
 
 export type PrepareWaitlistMessagingWalletResult =
@@ -89,8 +91,9 @@ async function resolveEmbeddedProvider(wallet: Record<string, unknown>): Promise
 }
 
 async function connectEmbeddedWaitlistProvider(
-  input: Pick<PrepareWaitlistMessagingWalletInput, 'connectAsync'>,
+  input: Pick<PrepareWaitlistMessagingWalletInput, 'connectAsync' | 'wagmiConfig'>,
   provider: { request: (args: unknown) => Promise<unknown> },
+  embeddedAddress: string | null,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
   try {
     await input.connectAsync({
@@ -102,21 +105,39 @@ async function connectEmbeddedWaitlistProvider(
         },
       }),
     })
-    return { ok: true }
   } catch (error) {
-    if (isConnectorAlreadyConnectedError(error)) return { ok: true }
-    const message = error instanceof Error ? error.message : String(error)
-    return {
-      ok: false,
-      error: message || 'Could not connect your embedded signer for messaging.',
+    if (!isConnectorAlreadyConnectedError(error)) {
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        ok: false,
+        error: message || 'Could not connect your embedded signer for messaging.',
+      }
     }
+  }
+
+  const settled = await waitForMessagingWallet(input.wagmiConfig, {
+    expectedAddress: embeddedAddress,
+    connectorPredicate: isWaitlistMessagingWagmiConnector,
+  })
+  if (settled) return { ok: true }
+
+  return {
+    ok: false,
+    error: 'Embedded signer connected but wagmi is still syncing. Wait a moment and retry Connect messaging.',
   }
 }
 
 export async function prepareWaitlistMessagingWallet(
   input: PrepareWaitlistMessagingWalletInput,
 ): Promise<PrepareWaitlistMessagingWalletResult> {
-  if (input.messagingWalletReady) return { ok: true }
+  if (input.messagingWalletReady) {
+    const settled = await waitForMessagingWallet(input.wagmiConfig, {
+      expectedAddress: input.embeddedEoaAddress,
+      connectorPredicate: isWaitlistMessagingWagmiConnector,
+      timeoutMs: WAITLIST_MESSAGING_WALLET_VERIFY_MS,
+    })
+    if (settled) return { ok: true }
+  }
 
   let embeddedAddress = normalizeAddress(input.embeddedEoaAddress)
   try {
@@ -167,7 +188,7 @@ export async function prepareWaitlistMessagingWallet(
     }
   }
 
-  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider)
+  const embeddedConnect = await connectEmbeddedWaitlistProvider(input, provider, embeddedAddress)
   if (embeddedConnect.ok) return embeddedConnect
 
   const privyConnector = input.connectors.find((connector) => {
@@ -179,10 +200,17 @@ export async function prepareWaitlistMessagingWallet(
   if (privyConnector) {
     try {
       await input.connectAsync({ connector: privyConnector })
-      return { ok: true }
     } catch (error) {
-      if (isConnectorAlreadyConnectedError(error)) return { ok: true }
+      if (!isConnectorAlreadyConnectedError(error)) {
+        return embeddedConnect
+      }
     }
+
+    const settled = await waitForMessagingWallet(input.wagmiConfig, {
+      expectedAddress: embeddedAddress,
+      connectorPredicate: isWaitlistMessagingWagmiConnector,
+    })
+    if (settled) return { ok: true }
   }
 
   return embeddedConnect

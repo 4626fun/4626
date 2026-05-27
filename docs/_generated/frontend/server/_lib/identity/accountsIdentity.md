@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/accountsIdentity
+[4626-web](../../../index.md) / server/\_lib/identity/accountsIdentity
 
 # server/\_lib/identity/accountsIdentity
 
@@ -12,7 +12,7 @@
 
 > **AccountLinkProvider** = `"google"` \| `"apple"` \| `"twitter"` \| `"telegram"` \| `"tiktok"` \| `"external_eoa"` \| `"email"` \| `"zora_cross_app"`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L27)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L36)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:27](https://github.com/we
 
 > **AccountScore** = `object`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L37)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L46)
 
 #### Properties
 
@@ -28,19 +28,21 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:37](https://github.com/we
 
 > `optional` **multipliers**: `Record`\<`string`, `number`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L40)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L50)
 
 ##### points
 
 > **points**: `number`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L38)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L48)
+
+Canonical public points (waitlist, leaderboard, tray, lottery).
 
 ##### tier
 
 > **tier**: `number`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L39)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L49)
 
 ***
 
@@ -48,7 +50,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:39](https://github.com/we
 
 > **AccountsMePayload** = `object`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L43)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L53)
 
 #### Properties
 
@@ -56,7 +58,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:43](https://github.com/we
 
 > **accountSignals**: `object`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L55)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L65)
 
 ###### baseSubAccount
 
@@ -108,13 +110,13 @@ primed yet or the account has no canonical CSW.
 
 > **appAccessStatus**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L47)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L57)
 
 ##### baseSubAccount
 
 > **baseSubAccount**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L53)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L63)
 
 Raw `profiles.base_sub_account` column. May legitimately mirror the
 canonical CSW for legacy accounts; prefer `accountSignals.baseSubAccount`
@@ -124,31 +126,31 @@ for distinctness + registration signal.
 
 > **email**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L45)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L55)
 
 ##### emailVerified
 
 > **emailVerified**: `boolean`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L46)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L56)
 
 ##### linkedMethods
 
 > **linkedMethods**: `Record`\<`string`, `string`[]\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L54)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L64)
 
 ##### privyUserId
 
 > **privyUserId**: `string`
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L44)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L54)
 
 ##### score
 
 > **score**: [`AccountScore`](#accountscore)
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L82)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L92)
 
 ## Functions
 
@@ -156,7 +158,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:82](https://github.com/we
 
 > **applyPointEvent**(`params`): `Promise`\<`PointEventResult`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:602](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L602)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:527](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L527)
 
 #### Parameters
 
@@ -192,7 +194,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:602](https://github.com/w
 
 > **buildAccountsMePayload**(`params`): `Promise`\<[`AccountsMePayload`](#accountsmepayload)\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:936](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L936)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:868](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L868)
 
 #### Parameters
 
@@ -220,7 +222,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:936](https://github.com/w
 
 > **deriveLinkedMethodsFromPrivyUser**(`user`): `Record`\<`string`, `string`[]\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L313)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:316](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L316)
 
 #### Parameters
 
@@ -238,7 +240,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:313](https://github.com/w
 
 > **ensureAccountsIdentitySchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:323](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L323)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:326](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L326)
 
 #### Parameters
 
@@ -256,7 +258,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:323](https://github.com/w
 
 > **extractZoraCrossAppAccounts**(`user`): `object`[]
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:293](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L293)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:296](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L296)
 
 #### Parameters
 
@@ -274,7 +276,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:293](https://github.com/w
 
 > **fetchCreatorCoinSummary**(`address`): `Promise`\<`CoinSummary` \| `null`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:761](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L761)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:686](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L686)
 
 #### Parameters
 
@@ -292,7 +294,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:761](https://github.com/w
 
 > **recordProviderLink**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:1038](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L1038)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:974](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L974)
 
 #### Parameters
 
@@ -328,7 +330,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:1038](https://github.com/
 
 > **recordProviderUnlink**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:1114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L1114)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:1050](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L1050)
 
 #### Parameters
 
@@ -360,7 +362,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:1114](https://github.com/
 
 > **removeLinkedMethod**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:449](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L449)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:452](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L452)
 
 #### Parameters
 
@@ -392,7 +394,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:449](https://github.com/w
 
 > **resolveAndPersistZoraSignals**(`params`): `Promise`\<`ResolveZoraSignalsResult`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:788](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L788)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:713](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L713)
 
 #### Parameters
 
@@ -428,7 +430,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:788](https://github.com/w
 
 > **syncEmailIdentity**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:736](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L736)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:661](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L661)
 
 #### Parameters
 
@@ -456,7 +458,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:736](https://github.com/w
 
 > **upsertAccount**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:375](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L375)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:378](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L378)
 
 #### Parameters
 
@@ -488,7 +490,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:375](https://github.com/w
 
 > **upsertLinkedMethod**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:412](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L412)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:415](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L415)
 
 #### Parameters
 
@@ -524,7 +526,7 @@ Defined in: [server/\_lib/identity/accountsIdentity.ts:412](https://github.com/w
 
 > **verifyPrivyForAccounts**(`req`): `Promise`\<`PrivyRequestContext`\>
 
-Defined in: [server/\_lib/identity/accountsIdentity.ts:1137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/accountsIdentity.ts#L1137)
+Defined in: [server/\_lib/identity/accountsIdentity.ts:1073](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/accountsIdentity.ts#L1073)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/explore/ExploreContentTransactions
+[4626-web](../../../index.md) / src/pages/explore/ExploreContentTransactions
 
 # src/pages/explore/ExploreContentTransactions
 
@@ -12,7 +12,7 @@
 
 > **ExploreContentTransactions**(): `Element`
 
-Defined in: [src/pages/explore/ExploreContentTransactions.tsx:57](https://github.com/wenakita/4626/blob/main/frontend/src/pages/explore/ExploreContentTransactions.tsx#L57)
+Defined in: [src/pages/explore/ExploreContentTransactions.tsx:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/explore/ExploreContentTransactions.tsx#L59)
 
 #### Returns
 

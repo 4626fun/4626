@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onboarding/baseAppInvite
+[4626-web](../../../index.md) / server/\_lib/onboarding/baseAppInvite
 
 # server/\_lib/onboarding/baseAppInvite
 
@@ -12,7 +12,7 @@
 
 > `const` **DEFAULT\_BASE\_APP\_INVITE\_URL**: `"https://base.app/invite/4626/T9Y9BZYK"` = `'https://base.app/invite/4626/T9Y9BZYK'`
 
-Defined in: [server/\_lib/onboarding/baseAppInvite.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/baseAppInvite.ts#L3)
+Defined in: [server/\_lib/onboarding/baseAppInvite.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/baseAppInvite.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onboarding/baseAppInvite.ts:3](https://github.com/wena
 
 > **resolveBaseAppInviteUrl**(): `string`
 
-Defined in: [server/\_lib/onboarding/baseAppInvite.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/baseAppInvite.ts#L9)
+Defined in: [server/\_lib/onboarding/baseAppInvite.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/baseAppInvite.ts#L9)
 
 #### Returns
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/cdp/guards
+[4626-web](../../index.md) / server/cdp/guards
 
 # server/cdp/guards
 
@@ -12,7 +12,7 @@
 
 > **validateCdpAddress**(`value`, `field`): `string` \| `null`
 
-Defined in: [server/cdp/guards.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/guards.ts#L6)
+Defined in: [server/cdp/guards.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/guards.ts#L6)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/cdp/guards.ts:6](https://github.com/wenakita/4626/blob/main/
 
 > **validateCdpAmount**(`value`, `field`): `string` \| `null`
 
-Defined in: [server/cdp/guards.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/guards.ts#L12)
+Defined in: [server/cdp/guards.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/guards.ts#L12)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/cdp/guards.ts:12](https://github.com/wenakita/4626/blob/main
 
 > **validateCdpNetwork**(`value`): `string` \| `null`
 
-Defined in: [server/cdp/guards.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/guards.ts#L22)
+Defined in: [server/cdp/guards.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/guards.ts#L22)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/cdp/guards.ts:22](https://github.com/wenakita/4626/blob/main
 
 > **validateCdpSlippageBps**(`value`): `string` \| `null`
 
-Defined in: [server/cdp/guards.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/guards.ts#L32)
+Defined in: [server/cdp/guards.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/cdp/guards.ts#L32)
 
 #### Parameters
 

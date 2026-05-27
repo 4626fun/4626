@@ -1,18 +1,12 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/agent/eliza
+[4626-web](../../index.md) / server/agents/eliza
 
-# server/agent/eliza
+# server/agents/eliza
 
 ## References
-
-### keeprOpsPlugin
-
-Re-exports [keeprOpsPlugin](eliza/plugins/keeperOps.md#keepropsplugin)
-
-***
 
 ### discordPlugin
 
@@ -29,6 +23,12 @@ Re-exports [erc8004Identity](eliza/identity.md#erc8004identity-1)
 ### Erc8004Identity
 
 Re-exports [Erc8004Identity](eliza/identity.md#erc8004identity)
+
+***
+
+### keeprOpsPlugin
+
+Re-exports [keeprOpsPlugin](eliza/plugins/kpr.md#keepropsplugin)
 
 ***
 

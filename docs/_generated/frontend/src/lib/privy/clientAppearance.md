@@ -1,10 +1,20 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/privy/clientAppearance
+[4626-web](../../../index.md) / src/lib/privy/clientAppearance
 
 # src/lib/privy/clientAppearance
+
+## Variables
+
+### BASE\_ACCOUNT\_WALLET\_LOGIN\_LIST
+
+> `const` **BASE\_ACCOUNT\_WALLET\_LOGIN\_LIST**: readonly \[`"coinbase_wallet"`, `"base_account"`\]
+
+Defined in: [src/lib/privy/clientAppearance.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/clientAppearance.ts#L6)
+
+Wallet connectors used for Coinbase Smart Wallet / Base Account sign-in.
 
 ## Functions
 
@@ -12,7 +22,7 @@
 
 > **createPrivyAppearance**(`options?`): `object`
 
-Defined in: [src/lib/privy/clientAppearance.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/clientAppearance.ts#L5)
+Defined in: [src/lib/privy/clientAppearance.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/privy/clientAppearance.ts#L8)
 
 #### Parameters
 

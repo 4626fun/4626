@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useRemoteFlags
+[4626-web](../../index.md) / src/hooks/useRemoteFlags
 
 # src/hooks/useRemoteFlags
 
@@ -12,7 +12,7 @@
 
 > **useRemoteFlag**\<`T`\>(`key`): `T` \| `undefined`
 
-Defined in: [src/hooks/useRemoteFlags.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useRemoteFlags.ts#L48)
+Defined in: [src/hooks/useRemoteFlags.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useRemoteFlags.ts#L48)
 
 Get a specific remote flag value. Returns undefined until the fetch
 completes or if the flag isn't Vercel-managed.
@@ -39,7 +39,7 @@ completes or if the flag isn't Vercel-managed.
 
 > **useRemoteFlags**(): `RemoteFlagValues` \| `null`
 
-Defined in: [src/hooks/useRemoteFlags.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useRemoteFlags.ts#L40)
+Defined in: [src/hooks/useRemoteFlags.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useRemoteFlags.ts#L40)
 
 Subscribe to the remote flags cache. Returns null until the fetch completes,
 then returns the resolved values.
@@ -54,7 +54,7 @@ then returns the resolved values.
 
 > **useRemoteFlagsInit**(): `void`
 
-Defined in: [src/hooks/useRemoteFlags.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useRemoteFlags.ts#L28)
+Defined in: [src/hooks/useRemoteFlags.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useRemoteFlags.ts#L28)
 
 Kicks off the remote flags fetch once.
 Call this near the app root so flag values are available quickly.

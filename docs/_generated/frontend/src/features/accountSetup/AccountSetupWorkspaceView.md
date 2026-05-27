@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/accountSetup/AccountSetupWorkspaceView
+[4626-web](../../../index.md) / src/features/accountSetup/AccountSetupWorkspaceView
 
 # src/features/accountSetup/AccountSetupWorkspaceView
 
@@ -12,7 +12,7 @@
 
 > **AccountSetupWorkspaceView**(`props`): `Element` \| `null`
 
-Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx#L134)
+Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx#L176)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 ###### controller
 
-\{ `activeExternalOwnerWallet`: `any`; `activePrivyWallet`: `any`; `advancedBusy`: `boolean`; `authHeaders`: () => `Promise`\<`Record`\<`string`, `string`\>\>; `baseAppUrl`: `string` \| `null`; `busyProvider`: `string` \| `null`; `canonicalCswAddress`: `string` \| `null`; `canShowAdvanced`: `boolean`; `chainId`: `number` \| `undefined`; `connectedAddress`: `` `0x${string}` `` \| `undefined`; `connectedCanonicalWalletSelected`: `boolean`; `connectedOwnerReady`: `boolean`; `connectedOwnerState`: [`ConnectedOwnerState`](types.md#connectedownerstate); `connectedSignerDetail`: `string`; `connectedSignerLabel`: `string`; `connectOwnerWallet`: () => `Promise`\<`void`\>; `connectWallet`: `any`; `cswOwnersState`: [`CswOwnersState`](types.md#cswownersstate); `customOwnerGasPreflight`: `OwnerInstallGasPreflight` \| `null`; `customOwnerPreparedAddress`: `string` \| `null`; `customOwnerPreparedTxRequest`: [`PreparedOwnerTxRequest`](../../lib/wallet/onboardingWallet.md#preparedownertxrequest) \| `null`; `ensureEmbeddedWallet`: () => `Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>; `error`: `string` \| `null`; `getAccessToken`: () => `Promise`\<`string` \| `null`\>; `inTelegramMiniApp`: `boolean`; `linkCrossAppAccount`: `any`; `loading`: `boolean`; `loadMe`: (`options?`) => `Promise`\<`void`\>; `login`: `any`; `loginWithCrossAppAccount`: `any`; `me`: [`AccountSetupMe`](types.md#accountsetupme) \| `null`; `needsBaseAccountReconnect`: `boolean`; `needsBaseAppSetup`: `boolean`; `needsEmbeddedWallet`: `boolean`; `notice`: `string` \| `null`; `onAddRabbyCoOwner`: (`advancedOwnerAddress`) => `Promise`\<`void`\>; `onEnable4626Signing`: () => `Promise`\<`void`\>; `onLinkProvider`: (`provider`) => `Promise`\<`void`\>; `onLinkZora`: () => `Promise`\<`void`\>; `onRefreshZora`: () => `Promise`\<`void`\>; `onResetOwnerApproval`: () => `Promise`\<`void`\>; `onSwitchAccount`: () => `Promise`\<`void`\>; `onUnlinkProvider`: (`provider`) => `Promise`\<`void`\>; `ownerApprovalReady`: `boolean`; `ownerAuthorityState`: [`OwnerAuthorityState`](types.md#ownerauthoritystate); `ownerChecklist`: [`OwnerChecklistItem`](types.md#ownerchecklistitem)[]; `ownerDelegationFlags`: [`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`; `ownerInstallIntent`: [`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent); `ownerInstallResumeState`: [`OwnerInstallResumeState`](types.md#ownerinstallresumestate); `ownerInstallSectionRef`: `RefObject`\<`HTMLElement` \| `null`\>; `ownerPrimaryCtaLabel`: `string`; `ownerSignerAddress`: `any`; `ownerSignerChainId`: `number` \| `null`; `prefersWalletConnectQr`: `boolean`; `privy`: `any`; `privyAuthed`: `boolean`; `privySignerClientReady`: `boolean`; `privyWallets`: `Record`\<`string`, `unknown`\>[]; `providerCards`: `object`[]; `providerCollision`: `EthereumProviderCollisionState`; `publicClient`: \{ \} \| \{ \} \| \{ \} \| \{ \} \| \{ \}; `readableCswOwners`: `object`[]; `retryOwnerCheck`: () => `Promise`\<`void`\>; `sendPreparedOwnerTx`: (`txRequest`, `ownerAddress?`, `ownerIndexLookupAddress?`, `opts?`) => `Promise`\<`void`\>; `setAdvancedBusy`: `Dispatch`\<`SetStateAction`\<`boolean`\>\>; `setBusyProvider`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setConnectedOwnerState`: `Dispatch`\<`SetStateAction`\<[`ConnectedOwnerState`](types.md#connectedownerstate)\>\>; `setError`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setMe`: `Dispatch`\<`SetStateAction`\<[`AccountSetupMe`](types.md#accountsetupme) \| `null`\>\>; `setNotice`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setOwnerDelegationFlags`: `Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`\>\>; `setZoraStatus`: `Dispatch`\<`SetStateAction`\<[`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`\>\>; `signerClientReady`: `boolean`; `subAccountAddress`: `null`; `subAccountError`: `null`; `subAccountReady`: `boolean`; `subAccountSettingUp`: `boolean`; `subAccountStage`: `null`; `switchChainAsync`: `SwitchChainMutateAsync`\<`Config`\<readonly \[\{ \}, \{ \}, \{ \}, \{ \}, \{ \}\], \{ `1`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `10`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `137`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `42161`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `8453`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; \}, `any`\>, `unknown`\>; `telegramLaunchParamsAvailable`: `boolean`; `walletClient`: \{ \} \| `undefined`; `zoraCrossAppCount`: `number`; `zoraHandoffUrl`: `string`; `zoraLinked`: `boolean`; `zoraStatus`: [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`; \}
+\{ `activeExternalOwnerWallet`: `any`; `activePrivyWallet`: `any`; `advancedBusy`: `boolean`; `authHeaders`: () => `Promise`\<`Record`\<`string`, `string`\>\>; `baseAppUrl`: `string` \| `null`; `busyProvider`: `string` \| `null`; `canonicalCswAddress`: `string` \| `null`; `canShowAdvanced`: `boolean`; `chainId`: `number` \| `undefined`; `connectedAddress`: `string` \| `undefined`; `connectedCanonicalWalletSelected`: `boolean`; `connectedOnchainEoaOwner`: \{ `index`: `number`; `ownerAddress`: `` `0x${string}` ``; \} \| `null`; `connectedOwnerReady`: `boolean`; `connectedOwnerState`: [`ConnectedOwnerState`](types.md#connectedownerstate); `connectedSignerDetail`: `string`; `connectedSignerLabel`: `string`; `connectOwnerWallet`: () => `Promise`\<`void`\>; `connectWallet`: `any`; `cswOwnersState`: [`CswOwnersState`](types.md#cswownersstate); `ensureEmbeddedWallet`: () => `Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>; `error`: `string` \| `null`; `getAccessToken`: () => `Promise`\<`string` \| `null`\>; `inTelegramMiniApp`: `boolean`; `linkCrossAppAccount`: `any`; `loading`: `boolean`; `loadMe`: (`options?`) => `Promise`\<`void`\>; `login`: `any`; `loginWithCrossAppAccount`: `any`; `me`: [`AccountSetupMe`](types.md#accountsetupme) \| `null`; `needsBaseAppSetup`: `boolean`; `needsEmbeddedWallet`: `boolean`; `notice`: `string` \| `null`; `onAddRabbyCoOwner`: (`_advancedOwnerAddress`) => `Promise`\<`void`\>; `onchainEoaOwnerCandidates`: `object`[]; `onLinkProvider`: (`provider`) => `Promise`\<`void`\>; `onLinkZora`: () => `Promise`\<`void`\>; `onRefreshZora`: () => `Promise`\<`void`\>; `onResetOwnerApproval`: () => `Promise`\<`void`\>; `onSwitchAccount`: () => `Promise`\<`void`\>; `onUnlinkProvider`: (`provider`) => `Promise`\<`void`\>; `ownerApprovalReady`: `boolean`; `ownerAuthorityState`: [`OwnerAuthorityState`](types.md#ownerauthoritystate); `ownerChecklist`: [`OwnerChecklistItem`](types.md#ownerchecklistitem)[]; `ownerDelegationFlags`: [`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`; `ownerInstallResumeState`: [`OwnerInstallResumeState`](types.md#ownerinstallresumestate); `ownerInstallSectionRef`: `RefObject`\<`HTMLElement` \| `null`\>; `ownerPrimaryCtaLabel`: `string`; `ownerSignerAddress`: `any`; `ownerSignerChainId`: `number` \| `null`; `prefersWalletConnectQr`: `boolean`; `privy`: `any`; `privyAuthed`: `boolean`; `privySignerClientReady`: `boolean`; `privyWallets`: `Record`\<`string`, `unknown`\>[]; `providerCards`: `object`[]; `providerCollision`: `EthereumProviderCollisionState`; `publicClient`: \{ \} \| \{ \} \| \{ \} \| \{ \} \| \{ \}; `readableCswOwners`: `object`[]; `refreshCswOwners`: () => `Promise`\<`void`\>; `requiresBaseAppForOwnerInstall`: `boolean`; `retryOwnerCheck`: () => `Promise`\<`void`\>; `sendPreparedOwnerTx`: () => `Promise`\<`never`\>; `setAdvancedBusy`: `Dispatch`\<`SetStateAction`\<`boolean`\>\>; `setBusyProvider`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setConnectedOwnerState`: `Dispatch`\<`SetStateAction`\<[`ConnectedOwnerState`](types.md#connectedownerstate)\>\>; `setError`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setMe`: `Dispatch`\<`SetStateAction`\<[`AccountSetupMe`](types.md#accountsetupme) \| `null`\>\>; `setNotice`: `Dispatch`\<`SetStateAction`\<`string` \| `null`\>\>; `setOwnerDelegationFlags`: `Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`\>\>; `setZoraStatus`: `Dispatch`\<`SetStateAction`\<[`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`\>\>; `signerClientReady`: `boolean`; `submitOwnerInstallViaOnchainEoa`: (`txRequest`) => `Promise`\<`` `0x${string}` ``\>; `switchChainAsync`: `SwitchChainMutateAsync`\<`Config`\<readonly \[\{ \}, \{ \}, \{ \}, \{ \}, \{ \}\], \{ `1`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `10`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `137`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `42161`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; `8453`: `HttpTransport`\<`undefined`, `false`\> \| `FallbackTransport`\<`Transport`[]\>; \}, `any`\>, `unknown`\>; `telegramLaunchParamsAvailable`: `boolean`; `walletClient`: \{ \} \| `undefined`; `zoraCrossAppCount`: `number`; `zoraHandoffUrl`: `string`; `zoraLinked`: `boolean`; `zoraStatus`: [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`; \}
 
 ###### controller.activeExternalOwnerWallet
 
@@ -64,11 +64,15 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 ###### controller.connectedAddress
 
-`` `0x${string}` `` \| `undefined`
+`string` \| `undefined`
 
 ###### controller.connectedCanonicalWalletSelected
 
 `boolean`
+
+###### controller.connectedOnchainEoaOwner
+
+\{ `index`: `number`; `ownerAddress`: `` `0x${string}` ``; \} \| `null`
 
 ###### controller.connectedOwnerReady
 
@@ -98,21 +102,9 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 [`CswOwnersState`](types.md#cswownersstate)
 
-###### controller.customOwnerGasPreflight
-
-`OwnerInstallGasPreflight` \| `null`
-
-###### controller.customOwnerPreparedAddress
-
-`string` \| `null`
-
-###### controller.customOwnerPreparedTxRequest
-
-[`PreparedOwnerTxRequest`](../../lib/wallet/onboardingWallet.md#preparedownertxrequest) \| `null`
-
 ###### controller.ensureEmbeddedWallet
 
-() => `Promise`\<\{ `address`: `` `0x${string}` ``; `created`: `boolean`; \}\>
+() => `Promise`\<\{ `address`: `string`; `created`: `boolean`; \}\>
 
 ###### controller.error
 
@@ -150,10 +142,6 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 [`AccountSetupMe`](types.md#accountsetupme) \| `null`
 
-###### controller.needsBaseAccountReconnect
-
-`boolean`
-
 ###### controller.needsBaseAppSetup
 
 `boolean`
@@ -168,11 +156,11 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 ###### controller.onAddRabbyCoOwner
 
-(`advancedOwnerAddress`) => `Promise`\<`void`\>
+(`_advancedOwnerAddress`) => `Promise`\<`void`\>
 
-###### controller.onEnable4626Signing
+###### controller.onchainEoaOwnerCandidates
 
-() => `Promise`\<`void`\>
+`object`[]
 
 ###### controller.onLinkProvider
 
@@ -212,11 +200,7 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 ###### controller.ownerDelegationFlags
 
-[`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`
-
-###### controller.ownerInstallIntent
-
-[`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent)
+[`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`
 
 ###### controller.ownerInstallResumeState
 
@@ -274,13 +258,21 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 `object`[]
 
+###### controller.refreshCswOwners
+
+() => `Promise`\<`void`\>
+
+###### controller.requiresBaseAppForOwnerInstall
+
+`boolean`
+
 ###### controller.retryOwnerCheck
 
 () => `Promise`\<`void`\>
 
 ###### controller.sendPreparedOwnerTx
 
-(`txRequest`, `ownerAddress?`, `ownerIndexLookupAddress?`, `opts?`) => `Promise`\<`void`\>
+() => `Promise`\<`never`\>
 
 ###### controller.setAdvancedBusy
 
@@ -308,7 +300,7 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 ###### controller.setOwnerDelegationFlags
 
-`Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`\>\>
+`Dispatch`\<`SetStateAction`\<[`OwnerDelegationFlags`](../../lib/wallet/onboardingWalletDelegation.md#ownerdelegationflags) \| `null`\>\>
 
 ###### controller.setZoraStatus
 
@@ -318,25 +310,9 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 `boolean`
 
-###### controller.subAccountAddress
+###### controller.submitOwnerInstallViaOnchainEoa
 
-`null` = `null`
-
-###### controller.subAccountError
-
-`null` = `null`
-
-###### controller.subAccountReady
-
-`boolean`
-
-###### controller.subAccountSettingUp
-
-`boolean` = `false`
-
-###### controller.subAccountStage
-
-`null` = `null`
+(`txRequest`) => `Promise`\<`` `0x${string}` ``\>
 
 ###### controller.switchChainAsync
 
@@ -366,7 +342,15 @@ Defined in: [src/features/accountSetup/AccountSetupWorkspaceView.tsx:134](https:
 
 [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
+###### onSigningStepCompleteChange?
+
+(`complete`) => `void`
+
 ###### summaryActions?
+
+`ReactNode`
+
+###### waitlistFooter?
 
 `ReactNode`
 

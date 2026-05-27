@@ -368,7 +368,7 @@ async function checkStrategyEntitlements(): Promise<Check[]> {
     ok: hasStrategy,
     detail: hasStrategy
       ? `active/pending: ${[...active].join(', ') || '(none)'}`
-      : 'Need vault_full_deploy OR (charm_active_lp + ajna_sleeve) before deploy',
+      : 'Need vault_full_deploy OR legacy (charm_active_lp + ajna_sleeve) before deploy',
   })
   checks.push({
     section: 'creator',
@@ -467,7 +467,7 @@ async function main(): Promise<void> {
   process.stdout.write('\n--- Your checklist (before you launch deploy) ---\n')
   process.stdout.write('  1. Execution-ready wallet (parent CSW + embedded owner on app track)\n')
   process.stdout.write('  2. ≥50,000,000 AKITA creator tokens approved for vault deposit\n')
-  process.stdout.write('  3. Strategy entitlement active (you have charm + ajna + solana_ovault_mesh)\n')
+  process.stdout.write('  3. **`vault_full_deploy`** active/pending (or legacy comp: charm + ajna + solana_ovault_mesh)\n')
   process.stdout.write('  4. Optional fork dry-run: pnpm -C frontend run dev:deploy-dry-run\n')
   process.stdout.write('  5. Launch at https://app.4626.fun/deploy/vault with AKITA creator coin\n')
   process.stdout.write('  6. Use a NEW deploymentVersion salt (not legacy grandfathered addresses)\n')

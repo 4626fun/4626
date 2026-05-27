@@ -168,6 +168,7 @@ export function ExploreVaults() {
     isLoading,
     isFetching,
     hasRows: vaults.length > 0,
+    hasActiveSearch: searchQuery.trim().length > 0,
   })
 
   return (

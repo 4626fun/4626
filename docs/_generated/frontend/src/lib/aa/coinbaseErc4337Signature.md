@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337Signature
+[4626-web](../../../index.md) / src/lib/aa/coinbaseErc4337Signature
 
 # src/lib/aa/coinbaseErc4337Signature
 
@@ -12,7 +12,7 @@
 
 > **ensureSignatureHex**(`value`, `context`, `onExtracted?`): `` `0x${string}` ``
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L65)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L65)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:65](https://github.com/wenak
 
 > **extractSignatureHex**(`value`, `depth`): `SignatureExtraction`
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L32)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L32)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:32](https://github.com/wenak
 
 > **getHexByteLength**(`hex`): `number` \| `null`
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L9)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L9)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:9](https://github.com/wenaki
 
 > **isHexString**(`value`): `` value is `0x${string}` ``
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L5)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L5)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:5](https://github.com/wenaki
 
 > **isUserOpHashLike**(`value`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L26)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L26)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:26](https://github.com/wenak
 
 > **runSignatureExtractionHarness**(): (\{ `byteLength`: `null`; `name`: `string`; `ok`: `boolean`; `signatureLength`: `null`; `source`: `string` \| `null`; \} \| \{ `byteLength`: `number` \| `null`; `name`: `string`; `ok`: `boolean`; `signatureLength`: `number`; `source`: `string` \| `null`; \})[]
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L78)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L78)
 
 #### Returns
 
@@ -126,7 +126,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:78](https://github.com/wenak
 
 > **signatureMeta**(`signature`): `object`
 
-Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L16)
+Defined in: [src/lib/aa/coinbaseErc4337Signature.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Signature.ts#L16)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/image/creatorTokenArtwork
+[4626-web](../../../index.md) / server/\_lib/image/creatorTokenArtwork
 
 # server/\_lib/image/creatorTokenArtwork
 
@@ -12,7 +12,7 @@
 
 > **CreatorTokenArtwork** = `object`
 
-Defined in: [server/\_lib/image/creatorTokenArtwork.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/creatorTokenArtwork.ts#L1)
+Defined in: [server/\_lib/image/creatorTokenArtwork.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/creatorTokenArtwork.ts#L1)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/image/creatorTokenArtwork.ts:1](https://github.com/wen
 
 > **artworkUrl**: `string`
 
-Defined in: [server/\_lib/image/creatorTokenArtwork.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/creatorTokenArtwork.ts#L2)
+Defined in: [server/\_lib/image/creatorTokenArtwork.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/creatorTokenArtwork.ts#L2)
 
 ##### heroCutoutArtworkUrl?
 
 > `optional` **heroCutoutArtworkUrl**: `string`
 
-Defined in: [server/\_lib/image/creatorTokenArtwork.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/creatorTokenArtwork.ts#L3)
+Defined in: [server/\_lib/image/creatorTokenArtwork.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/creatorTokenArtwork.ts#L3)
 
 ## Functions
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/image/creatorTokenArtwork.ts:3](https://github.com/wen
 
 > **resolveCreatorTokenArtwork**(`coinData`): [`CreatorTokenArtwork`](#creatortokenartwork) \| `null`
 
-Defined in: [server/\_lib/image/creatorTokenArtwork.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/creatorTokenArtwork.ts#L60)
+Defined in: [server/\_lib/image/creatorTokenArtwork.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/creatorTokenArtwork.ts#L60)
 
 #### Parameters
 

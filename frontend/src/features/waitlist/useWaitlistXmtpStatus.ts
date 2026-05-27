@@ -45,11 +45,12 @@ export function useWaitlistXmtpStatus(enabled: boolean) {
     queryKey: ['waitlist-xmtp-status'],
     queryFn: fetchWaitlistXmtpStatus,
     enabled,
-    staleTime: 5_000,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
     refetchInterval: (query) => {
       const joinStatus = query.state.data?.joinAction?.status ?? null
       if (joinStatus === 'pending' || joinStatus === 'retry' || joinStatus === 'executing') {
-        return 3_000
+        return 8_000
       }
       return false
     },

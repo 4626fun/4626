@@ -4,10 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreCreators } from './ExploreCreators'
 
-const { useInfiniteQueryMock, useQueriesMock, useQueryMock } = vi.hoisted(() => ({
+const { useInfiniteQueryMock, useQueriesMock, useQueryMock, searchParamsMock } = vi.hoisted(() => ({
   useInfiniteQueryMock: vi.fn(),
   useQueriesMock: vi.fn(),
   useQueryMock: vi.fn(),
+  searchParamsMock: { value: new URLSearchParams() },
 }))
 
 vi.mock('@/features/explore/useExploreCreatorsHeroMetrics', () => ({
@@ -36,8 +37,8 @@ vi.mock('framer-motion', () => ({
 }))
 
 vi.mock('react-router-dom', () => ({
-  useSearchParams: () => [new URLSearchParams(), vi.fn()],
-  useLocation: () => ({ pathname: '/', search: '', hash: '', state: null }),
+  useSearchParams: () => [searchParamsMock.value, vi.fn()],
+  useLocation: () => ({ pathname: '/explore/creators', search: searchParamsMock.value.toString(), hash: '', state: null }),
 }))
 
 vi.mock('@tanstack/react-query', () => ({
@@ -81,21 +82,31 @@ const BASE_COIN = {
   volume24h: '5730',
 }
 
-function configureQueries(params?: { pageEdges?: any[] }) {
+function configureQueries(params?: {
+  pageEdges?: any[]
+  isFetching?: boolean
+  isFetchingNextPage?: boolean
+  hasNextPage?: boolean
+  searchQuery?: string
+}) {
   const pageEdges = params?.pageEdges ?? []
+  searchParamsMock.value = params?.searchQuery
+    ? new URLSearchParams({ q: params.searchQuery })
+    : new URLSearchParams()
 
   useInfiniteQueryMock.mockReturnValue({
     data: {
       pages: [
         {
           edges: pageEdges,
-          pageInfo: { hasNextPage: false, endCursor: null },
+          pageInfo: { hasNextPage: params?.hasNextPage ?? false, endCursor: null },
         },
       ],
     },
     fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
+    hasNextPage: params?.hasNextPage ?? false,
+    isFetchingNextPage: params?.isFetchingNextPage ?? false,
+    isFetching: params?.isFetching ?? false,
     isLoading: false,
     isError: false,
     error: null,
@@ -137,5 +148,18 @@ describe('ExploreCreators', () => {
 
     expect(html).toContain('token-row')
     expect(html).toContain('Showing 1 creators')
+  })
+
+  it('does not stack loading overlay on empty search results while list refetches', () => {
+    configureQueries({
+      isFetching: true,
+      searchQuery: 'zzzznotfound',
+    })
+
+    const html = renderToStaticMarkup(React.createElement(ExploreCreators))
+
+    expect(html).toContain('No creators found matching your search')
+    expect(html).not.toContain('Loading creators')
+    expect(html).not.toContain('aria-busy="true"')
   })
 })

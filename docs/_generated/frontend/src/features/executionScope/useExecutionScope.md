@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/useExecutionScope
+[4626-web](../../../index.md) / src/features/executionScope/useExecutionScope
 
 # src/features/executionScope/useExecutionScope
 
@@ -12,7 +12,7 @@
 
 > **ExecutionScopeData** = `object`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L28)
+Defined in: [src/features/executionScope/useExecutionScope.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L28)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:28](https://github
 
 > **caps**: \{ `dailyCapWei`: `string`; `perTxCapWei`: `string`; \} \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L32)
+Defined in: [src/features/executionScope/useExecutionScope.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L32)
 
 ##### delegated
 
 > **delegated**: `boolean` \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L30)
+Defined in: [src/features/executionScope/useExecutionScope.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L30)
 
 ##### executionReady
 
 > **executionReady**: `"ready"` \| `"revoked"` \| `"not_provisioned"`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L31)
+Defined in: [src/features/executionScope/useExecutionScope.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L31)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L29)
+Defined in: [src/features/executionScope/useExecutionScope.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L29)
 
 ##### quorumId
 
 > **quorumId**: `string`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L34)
+Defined in: [src/features/executionScope/useExecutionScope.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L34)
 
 ##### revokedAt
 
 > **revokedAt**: `string` \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L33)
+Defined in: [src/features/executionScope/useExecutionScope.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L33)
 
 ##### subAccount
 
 > **subAccount**: \{ `address`: `` `0x${string}` ``; `parentCsw`: `` `0x${string}` ``; `spendPermission`: [`ExecutionScopeSpendPermission`](#executionscopespendpermission); \} \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L35)
+Defined in: [src/features/executionScope/useExecutionScope.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L35)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:35](https://github
 
 > **ExecutionScopeSpendPermission** = `object`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L15)
+Defined in: [src/features/executionScope/useExecutionScope.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L15)
 
 Client-side hook over the extended `GET /api/arch-b/status` endpoint.
 Powers the `/accounts` "Execution scopes" card (read-only surface for
@@ -80,31 +80,31 @@ the 4626 product-frontend invariant.
 
 > **allowanceWei**: `string`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L16)
+Defined in: [src/features/executionScope/useExecutionScope.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L16)
 
 ##### currentPeriod
 
 > **currentPeriod**: \{ `endUnix`: `number`; `remainingWei`: `string`; `spendWei`: `string`; `startUnix`: `number`; \} \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L20)
+Defined in: [src/features/executionScope/useExecutionScope.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L20)
 
 ##### endAt
 
 > **endAt**: `string`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L18)
+Defined in: [src/features/executionScope/useExecutionScope.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L18)
 
 ##### periodSeconds
 
 > **periodSeconds**: `number`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L17)
+Defined in: [src/features/executionScope/useExecutionScope.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L17)
 
 ##### revokedAt
 
 > **revokedAt**: `string` \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L19)
+Defined in: [src/features/executionScope/useExecutionScope.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L19)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:19](https://github
 
 > **ExecutionScopeStatus** = `"loading"` \| `"unauthenticated"` \| `"not_provisioned"` \| `"active"` \| `"revoked"` \| `"expired"` \| `"error"`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L42)
+Defined in: [src/features/executionScope/useExecutionScope.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L42)
 
 ***
 
@@ -120,7 +120,7 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:42](https://github
 
 > **UseExecutionScopeReturn** = `object`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L51)
+Defined in: [src/features/executionScope/useExecutionScope.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L51)
 
 #### Properties
 
@@ -128,19 +128,19 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:51](https://github
 
 > **data**: [`ExecutionScopeData`](#executionscopedata) \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L53)
+Defined in: [src/features/executionScope/useExecutionScope.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L53)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L54)
+Defined in: [src/features/executionScope/useExecutionScope.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L54)
 
 ##### refresh()
 
 > **refresh**: () => `void`
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L55)
+Defined in: [src/features/executionScope/useExecutionScope.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L55)
 
 ###### Returns
 
@@ -150,7 +150,7 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:55](https://github
 
 > **status**: [`ExecutionScopeStatus`](#executionscopestatus)
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L52)
+Defined in: [src/features/executionScope/useExecutionScope.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L52)
 
 ## Functions
 
@@ -158,7 +158,7 @@ Defined in: [src/features/executionScope/useExecutionScope.ts:52](https://github
 
 > **useExecutionScope**(): [`UseExecutionScopeReturn`](#useexecutionscopereturn)
 
-Defined in: [src/features/executionScope/useExecutionScope.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/useExecutionScope.ts#L70)
+Defined in: [src/features/executionScope/useExecutionScope.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/useExecutionScope.ts#L70)
 
 #### Returns
 

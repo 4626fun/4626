@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/pages/DistributeCcaLaunch
+[4626-web](../../index.md) / src/pages/DistributeCcaLaunch
 
 # src/pages/DistributeCcaLaunch
 
@@ -12,7 +12,7 @@
 
 > **DistributeCcaLaunch**(): `Element`
 
-Defined in: [src/pages/DistributeCcaLaunch.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/pages/DistributeCcaLaunch.tsx#L26)
+Defined in: [src/pages/DistributeCcaLaunch.tsx:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/DistributeCcaLaunch.tsx#L27)
 
 #### Returns
 

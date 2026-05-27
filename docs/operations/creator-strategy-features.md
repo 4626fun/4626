@@ -27,9 +27,13 @@ active V3 LP, Ajna lends through the creator's ERC-4626 Ajna sleeve,
 Solana bridges it to a wrapped Solana mint. USDC only shows up as the
 counter-asset inside individual strategies, not as a vault-level asset.
 
-Every productive strategy is opt-in and paid. There is no free
-"baseline" strategy — a creator who activates nothing has no strategies,
-which is disallowed (see "At-least-one strategy rule" below).
+Every greenfield vault deploy requires a **paid full stack** — there is
+no free baseline and no à-la-carte strategy pick at purchase time.
+Creators buy **`vault_full_deploy`** ($499 USDC); that single payment
+expands into Charm + Ajna + Solana mesh + Meteora entitlement (see
+below). Legacy individual feature rows from operator comps still resolve
+for grandfathered creators (e.g. AKITA), but new public purchases use
+the bundle only.
 
 "Idle reserve" is **not a feature** — it's just the portion of the
 vault's CREATOR balance that isn't currently allocated to any
@@ -43,43 +47,53 @@ by virtue of not being allocated elsewhere. The vault's own
 `minimumTotalIdle` parameter is the real on-chain knob for how much
 CREATOR the vault is willing to leave un-deployed.
 
-## Primary purchase: `vault_full_deploy` ($499 USDC)
+## Primary purchase: `vault_full_deploy` ($499 USDC, all-or-nothing)
 
-The live catalog sells one deploy bundle at **$499 USDC** on Base. Payment
-grants `charm_active_lp`, `ajna_sleeve`, `solana_ovault_mesh`, and
-`solana_meteora_alpha_vault` via entitlement expansion. Individual à la carte
-deploy-gating purchases return HTTP 410.
+The live catalog sells **one deploy bundle** at **$499 USDC** on Base.
+Payment is all-or-nothing: creators cannot buy Charm, Ajna, or Solana
+mesh as separate SKUs anymore. A successful payment grants all bundled
+sub-entitlements via `expandCreatorFeatureKeys`:
+
+| Sub-entitlement | Role at deploy |
+|-----------------|----------------|
+| `charm_active_lp` | Phase 3 — Charm active LP on CREATOR/USDC (4_500 bps) |
+| `ajna_sleeve` | Phase 3 — Ajna lending sleeve (4_500 bps) |
+| `solana_ovault_mesh` | Phase 2b — OVault compose + 30% ShareOFT auto-bridge at finalize |
+| `solana_meteora_alpha_vault` | Post-deploy — Meteora DLMM entitlement on share-mesh mint |
+
+Individual à-la-carte purchases of the four keys above return **HTTP 410**
+with a message to activate `vault_full_deploy` at
+`/creator/strategy/features` instead.
+
+Optional add-ons remain separate: **vanity address tiers**
+(`deploy_vanity_vault_prefix_len_*`, `deploy_vanity_share_suffix_len_*`).
 
 After payment, `dispatchProvisioning` enqueues a keeper job to
 `/api/keeper/solana/provision-creator` for Solana share-mesh operator follow-up.
 Deploy preflight uses share-mesh OVault checks by default (see
-[ solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md)).
+[solana-share-mesh-budget-paths.md](./solana-share-mesh-budget-paths.md)).
 
-Paid features fall into two buckets:
+### What the bundle installs (not optional at deploy)
 
-1. **Deploy-gating features** — installed during Phase 3 of vault deploy;
-   must be paid BEFORE the deploy runs. Unpaid = the strategy is skipped
-   entirely. At least ONE deploy-gating feature must be paid before deploy
-   (enforced both on-chain and in the resolver — see "At-least-one
-   strategy rule" below). Current deploy-gating features:
-   - `charm_active_lp` — $100 USDC — Charm active-LP on CREATOR/USDC
-   - `ajna_sleeve` — $100 USDC — Ajna lending sleeve (USDC lending
-     collateralized by CREATOR)
-   - `solana_ovault_mesh` — $100 USDC — Phase 2b OVault compose routing +
-     share-mesh finalize bridge entitlement (not Phase 3 TVL)
-2. **Post-deploy features** — enable infra on top of an already-running
-   vault. Current post-deploy features:
-   - `solana_meteora_alpha_vault` — $100 USDC — Meteora DLMM on the
-     **share-mesh mint** (`■<TICKER>`). Requires `solana_ovault_mesh`
-     active first.
+With `vault_full_deploy` (or legacy equivalent entitlements), Phase 3
+always deploys **both** Base strategies at **45% / 45%** productive
+weight with **10% idle** — not pick-one lanes:
 
-**Retired:** `solana_bridge_strategy` (legacy Phase-3 `SolanaBridgeStrategy`).
-New purchases are blocked (HTTP 410). Greenfield Solana share liquidity
-is seeded by the 30% ShareOFT auto-bridge at finalizePhase2.
+1. **Charm (`charm_active_lp`)** — concentrated LP on CREATOR/USDC Uniswap V3
+2. **Ajna (`ajna_sleeve`)** — inner ERC-4626 lending sleeve into Ajna buckets
+3. **Solana mesh (`solana_ovault_mesh`)** — Phase 2b routing + Pipe A finalize
+   bridge (not Phase 3 TVL weight; `solanaWeightBps` stays 0)
+4. **Meteora (`solana_meteora_alpha_vault`)** — entitled post-deploy; operator
+   provisions DLMM + Alpha Vault on the **share-mesh mint** after vault live
 
-All payments are one-time USDC on Base to the protocol treasury. Pricing
-is declared per-feature in the catalog; features can deviate from the
-$100 default without a code change elsewhere.
+**Retired:** `solana_bridge_strategy` (legacy Phase-3 `SolanaBridgeStrategy` TVL).
+New purchases are blocked (HTTP 410). Greenfield Solana share liquidity is
+seeded by the 30% ShareOFT auto-bridge at finalizePhase2.
+
+All payments are one-time USDC on Base to the protocol treasury (or Stripe /
+x402 equivalents for the bundle price). Operator discounts use
+`creator_strategy_price_overrides` scoped to `vault_full_deploy` or the bundle
+price field in the catalog.
 
 **Grandfathering:** AKITA was deployed before this model existed, under
 the old contract that hardcoded all three strategies as required. Its
@@ -89,23 +103,29 @@ vaults that were deployed before the paywall went live. Only deploys
 created after the new `DeploymentBatcher` bytecode is seeded on mainnet
 consume the paywall (see "Mainnet rollout" at the bottom).
 
-## At-least-one strategy rule
+## Full deploy entitlement rule
 
-A vault with zero productive strategies would hold 100 % idle and accrue
-no yield — that's a degenerate product outcome, not a feature. Three
-layers enforce the rule:
+Greenfield deploy requires **`vault_full_deploy`** active or pending (or
+legacy operator-granted rows that expand to the same entitlements). A
+vault with zero productive Phase 3 strategies would hold 100% idle — that
+is blocked. Three layers enforce the rule:
 
 1. **On-chain (hardest):** `DeploymentBatcher.deployPhase3Strategies`
    reverts with `InvalidWeight` when
    `charmWeightBps + ajnaWeightBps + solanaWeightBps == 0`.
 2. **Resolver:** `computeStrategyWeights` returns
-   `{ ok: false, reason: 'no_paid_strategies' }` when the creator has
-   paid for nothing, and `resolveCreatorStrategyPlan` propagates that up
-   as `{ ok: false, reason, creatorToken, activeFeatureKeys }`.
+   `{ ok: false, reason: 'no_paid_strategies' }` when the creator has no
+   Charm or Ajna entitlement (bundle not paid and no legacy rows), and
+   `resolveCreatorStrategyPlan` propagates that up.
 3. **API:** `GET /api/creator/strategy/list` returns a `deployPlan` with
-   `deployable: false` and `blockedReason: 'no_paid_strategies'` — the
-   UI reads this and disables the Deploy button until the creator
-   activates at least one feature.
+   `deployable: false` and `blockedReason: 'no_paid_strategies'` — the UI
+   disables Deploy until `vault_full_deploy` (or legacy equivalent) is active.
+
+**Legacy partial entitlements:** if a creator has only one of
+`charm_active_lp` / `ajna_sleeve` from an old comp row (not the bundle),
+the resolver still supports 90% single-strategy weights. New public
+purchases cannot create partial rows — use operator comp or
+`vault_full_deploy` only.
 
 ## End-to-end flow
 
@@ -149,15 +169,19 @@ layers enforce the rule:
 
 ## Strategy gating (Phase 3)
 
-The server resolves a creator's Phase 3 weight triple from their paid
-activations. Paid strategies split a fixed productive budget (9_000 bps)
-evenly, which leaves the unrouted remainder at 10 % of TVL:
+The server resolves a creator's Phase 3 weight pair from paid
+activations. With **`vault_full_deploy`** (or both legacy Charm + Ajna rows),
+weights are fixed at **45% / 45% / 10% idle**:
 
-| Paid strategies | Per-strategy weight | Example plan                       |
-|-----------------|---------------------|-------------------------------------|
-| 1               | 9_000 bps (90 %)    | Charm 9000 / unrouted 1000          |
-| 2               | 4_500 bps (45 % ea) | Charm 4500 / Ajna 4500 / unrouted 1000 |
-| 3               | 3_000 bps (30 % ea) | Charm 3000 / Ajna 3000 / Solana 3000 / unrouted 1000 |
+| Entitlement shape | Charm | Ajna | Solana Phase 3 | Idle |
+|-------------------|-------|------|----------------|------|
+| **`vault_full_deploy`** (greenfield default) | 4_500 bps | 4_500 bps | 0 (Pipe A at finalize) | 1_000 bps |
+| Legacy Charm only | 9_000 bps | 0 | 0 | 1_000 bps |
+| Legacy Ajna only | 0 | 9_000 bps | 0 | 1_000 bps |
+| Legacy both (no bundle row) | 4_500 bps | 4_500 bps | 0 | 1_000 bps |
+
+Greenfield batchers always pass `solanaWeightBps = 0`; Solana share seeding
+is Pipe A (30% ShareOFT bridge at finalizePhase2), not Phase 3 TVL.
 
 This is computed by `computeStrategyWeights(activeKeys)` in
 [`frontend/server/_lib/creatorStrategy/resolveWeights.ts`](../../frontend/server/_lib/creatorStrategy/resolveWeights.ts)
@@ -191,7 +215,7 @@ Weight constraints the contract enforces:
 - `charmWeightBps <= 10_000`
 - `ajnaWeightBps <= 10_000`
 - `solanaWeightBps <= 10_000`
-- `charm + ajna + solana > 0` (at least one strategy required)
+- `charm + ajna + solana > 0` (Charm and/or Ajna entitled; greenfield bundle expects both)
 - `charm + ajna + solana <= 10_000` (idle absorbs the rest)
 
 The Uniswap V3 CREATOR/USDC pool is still created/fetched unconditionally
@@ -205,18 +229,20 @@ When a strategy is skipped, the corresponding entries in `StrategyCodeIds`
 can be `bytes32(0)`. Phase 3 `solanaWeightBps` is always zero on greenfield
 batchers — pass `address(0)` for `solanaKeeper` / `solanaBridgeAddress`.
 
-## Adding a strategy post-deploy
+## Adding a strategy post-deploy (operator / legacy only)
 
-A creator can activate additional deploy-gating strategies AFTER their
-vault is live (e.g. they deployed with Charm only at 9_000 bps, and
-later want to add Ajna). This is the "grow into your strategies" path.
+Public à-la-carte activation is **disabled** (HTTP 410). Operators can
+still add a missing strategy to a **legacy partial vault** (deployed before
+the bundle) via Safe calldata from
+`scripts/activate-strategy-post-deploy.ts` — not via `/api/creator/strategy/activate`.
 
-### High-level flow
+Example: vault went live with Charm-only from an old comp row; ops adds Ajna
+on-chain and rebalances weights.
 
-1. **Creator pays** $100 USDC to the treasury for the new feature (e.g.
-   `ajna_sleeve`) and POSTs the tx hash to
-   `/api/creator/strategy/activate`. The activation row lands in
-   `creator_strategy_features` with `status = 'pending'`.
+### High-level flow (operator)
+
+1. **Confirm entitlement** — legacy row or operator comp for the missing
+   strategy (creators cannot buy `ajna_sleeve` alone at the API anymore).
 2. **Operator runbook** (manual for v1; see "Operator script" below):
    1. Deploy the strategy contract for the new feature using the same
       CREATE2 salt + `UniversalBytecodeStore` code-id the batcher would
@@ -312,32 +338,37 @@ Until the script is wired, operators run the steps manually via
   that scans pending activations for live vaults, (c) guardrails to
   prevent double-activation during keeper ticks.
 
-## Current feature catalog
+## Bundled sub-entitlements (reference — not sold separately)
 
-### `charm_active_lp` — $100 USDC (deploy-gating)
+These keys appear in `creator_strategy_features` and resolver output.
+**Do not** document or sell them as standalone $100 SKUs; greenfield
+creators buy **`vault_full_deploy`** only.
+
+### `charm_active_lp` (bundled — Phase 3)
 
 Installs the Charm Alpha Vault + `CreatorCharmStrategy` during Phase 3
-and registers it on the vault at `3_000` bps. Without this activation
-the deploy skips the Charm pipeline entirely (no factory call, no
-`addStrategy`).
+and registers it on the vault. With the full bundle, weight is **4_500 bps**
+(45% of productive TVL). Without entitlement, deploy skips Charm entirely.
 
-**Prerequisites:**
-- Must be paid BEFORE the Phase 3 deploy call. Post-deploy enablement is
-  not supported by the v1 resolver (would require a separate admin path
-  that calls `addStrategy` against a live vault).
+**Provisioning:** automatic at deploy when bundle (or legacy row) is active.
 
-**Provisioning:** automatic — the deploy session reads the creator's
-activations and passes the right `charmWeightBps`; no operator step.
+### `ajna_sleeve` (bundled — Phase 3)
 
-### `ajna_sleeve` — $100 USDC (deploy-gating)
+Installs Ajna `AjnaVaultAuth` + inner vault + ERC-4626 adapter during Phase 3.
+With the full bundle, weight is **4_500 bps**. Bucket automation starts
+**paused** until ops enables it (see ajna-vault-manager runbook).
 
-Installs the Ajna `AjnaVaultAuth` + `AjnaVault` + ERC-4626 adapter
-strategy and registers it on the vault at `3_000` bps. Same skip
-semantics as Charm.
+**Provisioning:** automatic at deploy when bundle (or legacy row) is active.
 
-**Prerequisites:** same as Charm — must be paid BEFORE deploy.
+### `solana_ovault_mesh` (bundled — Phase 2b)
 
-**Provisioning:** automatic.
+Phase 2b OVault compose routing + Pipe A 30% ShareOFT auto-bridge at
+finalize. **Not** Phase 3 TVL (`solanaWeightBps` always 0 on greenfield).
+
+### `solana_meteora_alpha_vault` (bundled — post-deploy provision)
+
+Meteora DLMM + Alpha Vault on the **share-mesh mint** (`■<TICKER>`).
+Included in the bundle; operator provisions after vault is live.
 
 ### `solana_bridge_strategy` — RETIRED
 
@@ -345,36 +376,15 @@ Legacy Phase-3 `SolanaBridgeStrategy` TVL lane. **Not purchasable.**
 Greenfield vaults seed Solana via Pipe A (30% ShareOFT auto-bridge at
 finalizePhase2). See `docs/operations/solana-share-mesh-lottery-policy.md`.
 
-### `solana_meteora_alpha_vault` — $100 USDC
+### Meteora operator runbook (post-deploy)
 
-Activates Solana-side liquidity for a creator that already has a
-lowercase-parity bridge-wrapped mint (see
-[`docs/operations/solana-bridge-naming-invariant.md`](./solana-bridge-naming-invariant.md)).
-
-**Prerequisites (checked before accepting payment in the UI):**
-- Creator coin is deployed on Base and has a parity-normalizable name/symbol.
-- Creator coin is registered on the canonical v2 `SolanaBridgeAdapter` — verify with:
-  ```bash
-  pnpm --filter frontend exec tsx scripts/verify-solana-mint-parity.ts \
-    --creator 0xCREATOR_TOKEN
-  ```
-
-**Provisioning runbook (operator, v1 manual):**
 1. Ensure the Solana keeper has ~1.5 SOL for DLMM + Alpha Vault rent.
-2. Create the Meteora DLMM pool against the creator's lowercase-parity
-   Solana mint paired with wrapped SOL. (See Meteora section in
-   [`docs/operations/solana-bridge-naming-invariant.md`](./solana-bridge-naming-invariant.md).)
+2. Create the Meteora DLMM pool on the **share-mesh mint** paired with wrapped SOL.
 3. Create the Alpha Vault against that pool.
-4. Insert / re-enable the row in `creator_meteora_alpha_vaults` so
-   `SolanaStrategy` picks up the routing on its next rebalance.
-5. Update the `creator_strategy_features` row:
-   ```sql
-   UPDATE creator_strategy_features
-     SET status = 'active',
-         provisioned_at = NOW(),
-         provisioner_ref = '<dlmm_pool_pubkey>,<alpha_vault_pubkey>'
-     WHERE id = $activationId;
-   ```
+4. Insert / re-enable `creator_meteora_alpha_vaults`.
+5. Mark the bundled `solana_meteora_alpha_vault` activation `active` when done.
+
+See [`docs/operations/solana-bridge-naming-invariant.md`](./solana-bridge-naming-invariant.md).
 
 ## Payment verification invariants
 
@@ -473,8 +483,8 @@ Benefits:
 - Stripe handles PCI / KYC / chargebacks
 
 Caveats:
-- Stripe fee: **2.9 % + $0.30** per charge ≈ $3.20 on a $100 sale.
-  You net $96.80 vs $100 on the USDC paths.
+- Stripe fee: **2.9 % + $0.30** per charge ≈ **$14.77** on a $499 bundle sale.
+  You net ~$484 on the USDC paths before other costs.
 - Merchant-of-record: you become the seller of record for the card
   transaction. May have tax/VAT implications in some jurisdictions —
   Stripe Tax handles most automatically, but review before launching.
@@ -588,54 +598,39 @@ free-tier deploys will fail. Rollout checklist (operator):
 5. Verify on mainnet with a dry-run deploy that skips Charm (expects
    `Phase3Result.charmStrategy == address(0)`).
 
-Until step 5 passes, the frontend should keep sending the legacy
-full-weight triple (`charm=3_000, ajna=3_000, solana=3_000`) and require
-both paid activations before allowing deploy — this is equivalent to the
-old "all strategies required" behavior and stays compatible with the
-live batcher.
+Until step 5 passes on a new batcher cutover, treat legacy triple-weight
+deploys as operator-only compatibility — greenfield clients must send
+**4_500 / 4_500 / 0** (Charm / Ajna / Solana TVL) from
+`/api/creator/strategy/list` `deployPlan`, not the old 3_000 triple.
 
-## Paymaster enforcement (follow-up, not yet live)
+## Paymaster enforcement (live)
 
 The resolver (`resolveCreatorStrategyPlan`) and gate
-(`gateRequestedStrategyWeights`) are implemented but NOT yet wired into
-the deploy-continue / paymaster sponsorship path. A motivated client
-could still construct a UserOp with `charmWeightBps = 3_000` without
-having paid for `charm_active_lp`; the on-chain patch doesn't check
-payment, only accepts `0` or nonzero. Server-side enforcement (deferred
-to the paymaster sponsorship handler in
-[`frontend/api/_handlers/paymaster/_paymaster.ts`](../../frontend/api/_handlers/paymaster/_paymaster.ts))
-must:
+(`gateRequestedStrategyWeights`) are wired into Phase 3 paymaster sponsorship in
+[`frontend/api/_handlers/paymaster/_paymaster.ts`](../../frontend/api/_handlers/paymaster/_paymaster.ts):
 
-1. Decode the `Phase3Params.charmWeightBps` / `ajnaWeightBps` /
-   `solanaWeightBps` from the UserOp calldata.
+1. Decode `Phase3Params.charmWeightBps` / `ajnaWeightBps` / `solanaWeightBps`
+   from the UserOp calldata.
 2. Call `resolveCreatorStrategyPlan(db, creatorToken)`.
-3. Pass through `gateRequestedStrategyWeights(plan, requested)` and
-   refuse sponsorship if the result is not `{ok: true}`.
+3. Pass through `gateRequestedStrategyWeights(plan, requested)` and refuse
+   sponsorship with `paywall_weight_gate:<reason>` when the result is not
+   `{ok: true}`.
 
-Until this lands, treat the paywall as honor-system — clients that go
-through the official frontend will be gated because the UI reads the
-resolver's plan, but hand-crafted UserOps via the paymaster can bypass.
+On-chain `deployPhase3Strategies` still does not check payment — it only
+accepts zero vs nonzero weights — so paymaster gating is the production
+enforcement boundary for sponsored deploy UserOps.
 
 ## Future work (explicitly not in v1)
 
-- **Marketing / FAQ / explainer copy** still describes the legacy
+- **Marketing / FAQ / explainer copy** may still describe the legacy
   "every vault ships with Charm + Ajna + Solana as baseline" product.
-  Known stale surfaces:
-  - `frontend/src/pages/FaqHowItWorks.tsx` — "deposited tokens earn
-    yield across Charm, Ajna, Solana, and an idle reserve" copy
-    assumes all three are always on. Works for full-paid creators,
-    but a creator who pays for only Charm won't see Ajna/Solana yield.
-  - `frontend/src/pages/deploy/DeployVault.tsx` — client-side
-    `DEFAULT_CHARM_WEIGHT_BPS = 3_000n` / `DEFAULT_AJNA_WEIGHT_BPS` /
-    `DEFAULT_SOLANA_WEIGHT_BPS` are hardcoded. These MUST stay at the
-    legacy 3_000 bps each until the new batcher bytecode is live on
-    mainnet (otherwise the on-chain weight-sum check rejects
-    deploys). Swap to the `/api/creator/strategy/list` `deployPlan`
-    response as part of the batcher rollout.
-  - `docs/integrations/solana-spoke-article.md` — long-form marketing
-    piece (has a product-model-update banner pointing here; the body
-    copy still needs a rewrite).
-- **Paymaster gate wiring** (above).
+  Greenfield truth is **`vault_full_deploy`** (Charm + Ajna at 45%/45%,
+  Solana via Pipe A finalize bridge, not Phase 3 TVL). Known surfaces to
+  keep aligned:
+  - `frontend/src/pages/FaqHowItWorks.tsx` — yield copy should match bundle
+    entitlements, not assume à-la-carte strategy pick.
+  - `docs/integrations/solana-spoke-article.md` — long-form marketing piece
+    (banner points here; body may still need a rewrite).
 - **Admin dashboard UI** for provisioning pending rows. (Today operators use
   `psql` / the Supabase SQL editor.)
 - **Automated provisioning** for `solana_meteora_alpha_vault` — wire a

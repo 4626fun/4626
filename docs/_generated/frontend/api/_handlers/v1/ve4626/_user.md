@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/ve4626/\_user
+[4626-web](../../../../index.md) / api/\_handlers/v1/ve4626/\_user
 
 # api/\_handlers/v1/ve4626/\_user
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/ve4626/\_user.ts:70](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/ve4626/_user.ts#L70)
+Defined in: [api/\_handlers/v1/ve4626/\_user.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/ve4626/_user.ts#L70)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/alfaclub
+[4626-web](../../../index.md) / server/commands/families/alfaclub
 
 # server/commands/families/alfaclub
 
@@ -12,7 +12,7 @@
 
 > **executeAlfaclubCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/alfaclub.ts:969](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/alfaclub.ts#L969)
+Defined in: [server/commands/families/alfaclub.ts:1053](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/alfaclub.ts#L1053)
 
 #### Parameters
 
@@ -20,7 +20,7 @@ Defined in: [server/commands/families/alfaclub.ts:969](https://github.com/wenaki
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

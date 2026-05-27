@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/telegram/telegramMiniAppRouteGuard
+[4626-web](../../../index.md) / src/lib/telegram/telegramMiniAppRouteGuard
 
 # src/lib/telegram/telegramMiniAppRouteGuard
 
@@ -12,7 +12,7 @@
 
 > **getInitialTelegramMiniAppEntryResolution**(`search`): `"ready"` \| `"checking"`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L21)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L21)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.co
 
 > **hasTelegramLinkEntryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L12)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L12)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.co
 
 > **hasTelegramLinkQueryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L4)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L4)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com
 
 > **resolveTelegramMiniAppEntryBootstrap**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L25)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L25)
 
 #### Parameters
 

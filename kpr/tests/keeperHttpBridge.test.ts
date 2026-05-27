@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   postKeeperReport,
+  postKeeperRebalanceStrategies,
   postKeeperTend,
   shouldUseKeeperHttpBridge,
 } from '../utils/keeperHttpBridge.js';
@@ -68,5 +69,33 @@ describe('keeperHttpBridge', () => {
     const result = await postKeeperReport('0x82C06EaAE27B1Ca31fA29F22341A162A670A4471');
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/unauthorized keeper|403/i);
+  });
+
+  it('posts rebalance requests to the keeper API', async () => {
+    process.env.KPR_API_BASE_URL = 'https://app.4626.fun/api';
+    process.env.KPR_API_KEY = 'test-key';
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { txHash: '0xdef', status: 'success' } }), {
+        status: 200,
+      }),
+    );
+
+    const result = await postKeeperRebalanceStrategies(
+      '0x82C06EaAE27B1Ca31fA29F22341A162A670A4471',
+      750n,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.txHash).toBe('0xdef');
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://app.4626.fun/api/keeper/rebalance-strategies',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          vaultAddress: '0x82C06EaAE27B1Ca31fA29F22341A162A670A4471',
+          minDeviationBps: '750',
+        }),
+      }),
+    );
   });
 });

@@ -130,5 +130,24 @@ abstract contract CreatorOVaultModuleStorage {
     // misreporting / oracle-poisoned / donation-exposed strategy cannot inflate
     // `totalAssets()` beyond the value governance has explicitly approved.
     mapping(address => uint256) internal strategyMaxAssets;
+
+    // ---------------------------------------------------------------------
+    // v2: governance timelock, TVL fee, valuation auto-disable (appended)
+    // ---------------------------------------------------------------------
+    uint16 internal managementFee;
+    address internal managementFeeRecipient;
+
+    /// @notice Delay before scheduled risk changes execute. 0 = instant (legacy behavior).
+    uint64 internal riskConfigDelay;
+
+    /// @notice Single-flight pending risk update (Morpho-style governance latency).
+    uint8 internal pendingRiskKind;
+    address internal pendingRiskTarget;
+    uint256 internal pendingRiskValue;
+    uint64 internal pendingRiskUnlockTime;
+
+    /// @notice Consecutive unhealthy valuation reports before auto-disable. 0 = disabled.
+    uint8 internal valuationMissThreshold;
+    mapping(address => uint8) internal strategyValuationMisses;
 }
 

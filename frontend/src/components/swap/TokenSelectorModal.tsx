@@ -1,23 +1,30 @@
 import { Check, Search, X } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useDebounceValue } from 'usehooks-ts'
+import { useQueries } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
-import { erc20Abi, isAddress } from 'viem'
+import { erc20Abi, isAddress, type Address } from 'viem'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { Alert } from '@/components/ui/Alert'
 import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
+import { getChainMeta, type SupportedChainId } from '@/config/chains'
+import { normalizeCoinSearchQuery } from '@/features/explore/exploreShared'
 import { cn } from '@/lib/shared/utils'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
-import type { SupportedChainId } from '@/config/chains'
-import { BASE_CHAIN_ID, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
+import {
+  fetchSwapAssetBalanceViaApi,
+  swapAssetBalanceQueryKey,
+} from '@/lib/swap/useSwapAssetBalance'
+import { isOpaqueInternalTokenLabel } from '@/lib/swap/swapTokenLabels'
+import { BASE_CHAIN_ID, NATIVE_TOKEN_ADDRESS, shortAddress, type TokenDisplay, type TokenOption } from '@/lib/uniswap/swapUtils'
 
 export type SwapTokenOption = TokenOption & {
   sectionTag?: 'core' | 'creator' | 'content'
   verified?: boolean
 }
+
 type AddressMetadataCacheEntry = {
   chainId: number
   symbol: string
@@ -25,6 +32,7 @@ type AddressMetadataCacheEntry = {
   decimals: number
   logoUrl?: string | null
 }
+
 type AddressCandidate = TokenDisplay & {
   address: `0x${string}`
   chainId: SupportedChainId
@@ -32,6 +40,13 @@ type AddressCandidate = TokenDisplay & {
 }
 
 const ADDRESS_METADATA_CACHE_KEY = 'swap.addressMetadataCache.v1'
+const QUICK_PICK_SYMBOLS = ['ETH', 'WETH', 'USDC', 'USDT', 'CBBTC', 'ZORA'] as const
+
+function matchesQuickPickSymbol(symbol: string): boolean {
+  const upper = symbol.trim().toUpperCase()
+  return QUICK_PICK_SYMBOLS.some((candidate) => candidate === upper)
+}
+const MAX_BALANCE_LOOKUPS = 18
 
 type TokenSelectorModalProps = {
   open: boolean
@@ -40,6 +55,11 @@ type TokenSelectorModalProps = {
   selectedToken: string
   recentTokenAddresses: string[]
   chainId?: SupportedChainId
+  balanceOwnerAddress?: Address | null
+  zoraHoldingOptions?: SwapTokenOption[]
+  zoraHoldingBalances?: Record<string, string>
+  zoraHoldingsLoading?: boolean
+  isSearchLoading?: boolean
   onQueryChange: (value: string) => void
   onClose: () => void
   onSelect: (option: SwapTokenOption) => void
@@ -55,13 +75,18 @@ function toSupportedChainId(value: number | undefined, fallback: SupportedChainI
 }
 
 function tokenMatches(option: SwapTokenOption, query: string): boolean {
-  if (!query.trim()) return true
-  const q = query.toLowerCase()
-  return (
-    option.symbol.toLowerCase().includes(q) ||
-    option.name.toLowerCase().includes(q) ||
-    option.address.toLowerCase().includes(q)
+  const normalized = normalizeCoinSearchQuery(query)
+  const candidates = Array.from(
+    new Set([normalized.raw, normalized.withoutAt, normalized.withoutBasenameSuffix].filter(Boolean)),
   )
+  if (candidates.length === 0) return true
+
+  const fields = [
+    option.symbol.toLowerCase(),
+    option.name.toLowerCase(),
+    option.address.toLowerCase(),
+  ]
+  return candidates.some((candidate) => fields.some((field) => field.includes(candidate)))
 }
 
 function isAddressLike(value: string): boolean {
@@ -76,6 +101,132 @@ function tokenSection(option: SwapTokenOption): 'core' | 'creator' | 'content' {
   return 'content'
 }
 
+function formatSectionLabel(section: string): string {
+  switch (section) {
+    case 'Recently used':
+      return 'Recent'
+    case 'Your Zora creator coins':
+      return 'Your Zora creator coins'
+    case 'Your Zora content coins':
+      return 'Your Zora content coins'
+    case 'Curated top tokens':
+      return 'Popular tokens'
+    case 'Creator coins':
+      return 'Creator coins'
+    case 'Content coins':
+      return 'Content coins'
+    case 'Address search':
+      return 'Import token'
+    default:
+      return section
+  }
+}
+
+function NetworkChip({ chainId }: { chainId: SupportedChainId }) {
+  const meta = getChainMeta(chainId)
+  if (!meta) return null
+  return (
+    <div
+      className="flex h-11 shrink-0 items-center gap-1.5 rounded-2xl border border-white/8 bg-white/[0.04] px-2.5"
+      title={meta.name}
+    >
+      <img src={meta.logoUrl} alt="" className="h-5 w-5 rounded-md object-cover" />
+      <span className="text-xs font-medium text-zinc-300">{meta.shortName}</span>
+    </div>
+  )
+}
+
+function TokenSelectorRow(props: {
+  option: SwapTokenOption
+  isActive: boolean
+  isSelected: boolean
+  balanceLabel?: string | null
+  chainLogoUrl?: string
+  onChoose: () => void
+  onHover: () => void
+}) {
+  const { option, isActive, isSelected, balanceLabel, chainLogoUrl, onChoose, onHover } = props
+  const isUnverified = option.verified === false
+  const showAddressHint = isUnverified || option.sectionTag === 'creator' || option.sectionTag === 'content'
+  const subtitleName =
+    option.name &&
+    option.name.toLowerCase() !== option.symbol.toLowerCase() &&
+    !isOpaqueInternalTokenLabel(option.name)
+      ? option.name
+      : option.sectionTag === 'creator'
+        ? 'Creator coin'
+        : option.name
+
+  return (
+    <button
+      type="button"
+      data-token-row={option.address.toLowerCase()}
+      onClick={onChoose}
+      onMouseEnter={onHover}
+      onFocus={onHover}
+      tabIndex={isActive ? 0 : -1}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors',
+        isSelected ? 'bg-brand-primary/14' : isActive ? 'bg-white/[0.06]' : 'hover:bg-white/[0.05]',
+      )}
+    >
+      <div className="relative shrink-0">
+        <TokenAvatar
+          token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
+          symbol={option.symbol}
+          size={40}
+        />
+        {chainLogoUrl ? (
+          <img
+            src={chainLogoUrl}
+            alt=""
+            className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-[5px] border border-[#131313] bg-[#131313] object-cover"
+          />
+        ) : null}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[15px] font-semibold text-white">{option.symbol}</span>
+          {option.sectionTag === 'creator' ? (
+            <span className="shrink-0 rounded-md bg-brand-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-brand-200">
+              Creator
+            </span>
+          ) : null}
+          {option.sectionTag === 'content' ? (
+            <span className="shrink-0 rounded-md bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-200">
+              Content
+            </span>
+          ) : null}
+          {isUnverified ? (
+            <span className="shrink-0 rounded-md bg-amber-500/12 px-1.5 py-0.5 text-[10px] font-medium text-amber-200">
+              Custom
+            </span>
+          ) : null}
+        </div>
+        <div className="truncate text-xs text-zinc-500">
+          {showAddressHint ? (
+            <>
+              {subtitleName}
+              <span className="mx-1 text-zinc-600">·</span>
+              <span className="font-mono text-[11px] text-zinc-600">{shortAddress(option.address)}</span>
+            </>
+          ) : (
+            subtitleName
+          )}
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-0.5 pl-1">
+        {balanceLabel ? (
+          <span className="text-sm font-medium tabular-nums text-zinc-200">{balanceLabel}</span>
+        ) : null}
+        {isSelected ? <Check className="h-4 w-4 text-brand-primary" strokeWidth={2.5} /> : null}
+      </div>
+    </button>
+  )
+}
+
 export function TokenSelectorModal({
   open,
   query,
@@ -83,6 +234,11 @@ export function TokenSelectorModal({
   selectedToken,
   recentTokenAddresses,
   chainId,
+  balanceOwnerAddress,
+  zoraHoldingOptions = [],
+  zoraHoldingBalances = {},
+  zoraHoldingsLoading = false,
+  isSearchLoading = false,
   onQueryChange,
   onClose,
   onSelect,
@@ -102,26 +258,58 @@ export function TokenSelectorModal({
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [activeIndex, setActiveIndex] = useState(0)
 
-  const publicClient = usePublicClient({
-    chainId: chainId ?? undefined,
-  })
+  const publicClient = usePublicClient({ chainId: chainId ?? undefined })
   const isAddressSearchActive = isAddressSearch && Boolean(trimmedQuery)
   const chainIdForLookup = toSupportedChainId(chainId, BASE_CHAIN_ID as SupportedChainId)
+  const chainMeta = getChainMeta(chainIdForLookup)
   const tokenAddressMetadata = useTokenMetadata(
     isAddressSearchActive && trimmedQuery ? (trimmedQuery as `0x${string}`) : undefined,
   )
+
   const matchedTokens = useMemo(() => {
     const filtered = tokenOptions.filter((option) => tokenMatches(option, trimmedQuery))
+    const filteredHoldings = zoraHoldingOptions.filter((option) => tokenMatches(option, trimmedQuery))
     if (!isAddressSearch || !trimmedQuery) {
+      const holdingAddresses = new Set(filteredHoldings.map((option) => option.address.toLowerCase()))
+      const holdingsCreator = filteredHoldings.filter(
+        (o) => o.sectionTag === 'creator' || (o.group === 'creator' && o.sectionTag !== 'content'),
+      )
+      const holdingsContent = filteredHoldings.filter((o) => o.sectionTag === 'content' || o.group === 'share')
       return {
+        holdingsCreator,
+        holdingsContent,
         core: filtered.filter((o) => tokenSection(o) === 'core'),
-        creator: filtered.filter((o) => tokenSection(o) === 'creator'),
+        creator: filtered.filter(
+          (o) => tokenSection(o) === 'creator' && !holdingAddresses.has(o.address.toLowerCase()),
+        ),
         content: filtered.filter((o) => tokenSection(o) === 'content'),
-        recent: filtered.filter((option) => recentTokenAddresses.includes(option.address.toLowerCase())),
+        recent: recentTokenAddresses
+          .map((recentAddress) => {
+            const key = recentAddress.toLowerCase()
+            if (holdingAddresses.has(key)) return null
+            return (
+              filtered.find((option) => option.address.toLowerCase() === key) ??
+              filteredHoldings.find((option) => option.address.toLowerCase() === key) ??
+              null
+            )
+          })
+          .filter((option): option is SwapTokenOption => option != null),
       }
     }
-    return { core: [], creator: [], content: [], recent: [] }
-  }, [isAddressSearch, tokenOptions, trimmedQuery, recentTokenAddresses])
+    return { holdingsCreator: [], holdingsContent: [], core: [], creator: [], content: [], recent: [] }
+  }, [isAddressSearch, tokenOptions, trimmedQuery, recentTokenAddresses, zoraHoldingOptions])
+
+  const quickPickTokens = useMemo(() => {
+    if (trimmedQuery) return []
+    const order = new Map(QUICK_PICK_SYMBOLS.map((symbol, index) => [symbol, index]))
+    return matchedTokens.core
+      .filter((option) => matchesQuickPickSymbol(option.symbol))
+      .sort(
+        (a, b) =>
+          (order.get(a.symbol.trim().toUpperCase() as (typeof QUICK_PICK_SYMBOLS)[number]) ?? 99) -
+          (order.get(b.symbol.trim().toUpperCase() as (typeof QUICK_PICK_SYMBOLS)[number]) ?? 99),
+      )
+  }, [matchedTokens.core, trimmedQuery])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -185,7 +373,8 @@ export function TokenSelectorModal({
 
         if (cancelled) return
 
-        const name = typeof nameResult === 'string' && nameResult.trim() ? nameResult.trim() : `Token ${trimmedQuery.slice(0, 6)}`
+        const name =
+          typeof nameResult === 'string' && nameResult.trim() ? nameResult.trim() : `Token ${trimmedQuery.slice(0, 6)}`
         const symbol = typeof symbolResult === 'string' && symbolResult.trim() ? symbolResult.trim() : 'TOKEN'
         const decimals = Number(decimalsResult)
 
@@ -220,9 +409,7 @@ export function TokenSelectorModal({
           setAddressLookupError('Unable to load token metadata for this address.')
         }
       } finally {
-        if (!cancelled) {
-          setAddressLookupLoading(false)
-        }
+        if (!cancelled) setAddressLookupLoading(false)
       }
     }
 
@@ -240,7 +427,6 @@ export function TokenSelectorModal({
     tokenAddressMetadata.imageUrl,
     addressMetadataCache,
   ])
-
 
   useEffect(() => {
     setAddressLookupError(null)
@@ -269,6 +455,18 @@ export function TokenSelectorModal({
     }
 
     const seen = new Set<string>()
+    matchedTokens.holdingsCreator.forEach((option) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      list.push({ option, section: 'Your Zora creator coins' })
+    })
+    matchedTokens.holdingsContent.forEach((option) => {
+      const key = option.address.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      list.push({ option, section: 'Your Zora content coins' })
+    })
     matchedTokens.recent.forEach((option) => {
       const key = option.address.toLowerCase()
       if (seen.has(key)) return
@@ -295,6 +493,49 @@ export function TokenSelectorModal({
     })
     return list
   }, [addressCandidate, chainIdForLookup, isAddressSearchActive, matchedTokens])
+
+  const balanceLookupAddresses = useMemo(() => {
+    if (!balanceOwnerAddress || chainIdForLookup !== BASE_CHAIN_ID) return []
+    const seen = new Set<string>()
+    const addresses: string[] = []
+    const push = (value: string) => {
+      const key = value.toLowerCase()
+      if (seen.has(key)) return
+      seen.add(key)
+      addresses.push(value)
+    }
+    zoraHoldingOptions.forEach((option) => push(option.address))
+    quickPickTokens.forEach((option) => push(option.address))
+    rows.slice(0, MAX_BALANCE_LOOKUPS).forEach(({ option }) => push(option.address))
+    return addresses.slice(0, MAX_BALANCE_LOOKUPS)
+  }, [balanceOwnerAddress, chainIdForLookup, quickPickTokens, rows, zoraHoldingOptions])
+
+  const balanceQueries = useQueries({
+    queries: balanceLookupAddresses.map((tokenAddress) => ({
+      queryKey: swapAssetBalanceQueryKey({
+        chainId: chainIdForLookup,
+        ownerAddress: balanceOwnerAddress ?? null,
+        tokenAddress,
+      }),
+      enabled: Boolean(open && balanceOwnerAddress && chainIdForLookup === BASE_CHAIN_ID),
+      staleTime: 5_000,
+      queryFn: async () =>
+        fetchSwapAssetBalanceViaApi({
+          ownerAddress: balanceOwnerAddress as Address,
+          tokenAddress,
+        }),
+    })),
+  })
+
+  const balanceByAddress = useMemo(() => {
+    const map = new Map<string, string>()
+    balanceLookupAddresses.forEach((address, index) => {
+      const formatted = balanceQueries[index]?.data?.formatted
+      if (!formatted || formatted === '0') return
+      map.set(address.toLowerCase(), formatted)
+    })
+    return map
+  }, [balanceLookupAddresses, balanceQueries])
 
   useEffect(() => {
     if (!open) return
@@ -359,138 +600,173 @@ export function TokenSelectorModal({
     setAddressLookupAttempt((attempt) => attempt + 1)
   }
 
+  const listLoading =
+    (isSearchLoading && Boolean(trimmedQuery) && !isAddressSearchActive) ||
+    (zoraHoldingsLoading && !trimmedQuery && zoraHoldingOptions.length === 0)
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Select token"
-      className="max-h-[88vh] overflow-hidden border border-[rgb(var(--vault-border-strong)/0.7)] bg-[rgb(var(--vault-card)/0.96)]"
+      title="Select a token"
+      maxWidth="max-w-md"
+      headerClassName="border-b border-white/6 px-4 pb-3 pt-4"
+      className="gap-0 overflow-hidden border border-white/10 bg-[#131313] p-0 shadow-2xl"
     >
-      <div className="space-y-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-vault-muted" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search by name, symbol, or 0x address"
-            className="h-11 w-full rounded-xl border border-[rgb(var(--vault-border-strong)/0.62)] bg-[rgb(var(--vault-card-raised)/0.72)] pl-9 pr-9 text-sm text-vault-text placeholder:text-vault-muted outline-none focus-visible:ring-2 focus-visible:ring-brand-primary"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => onQueryChange('')}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-0.5 text-vault-muted hover:text-vault-text"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
+      <div className="flex max-h-[min(640px,88vh)] flex-col">
+        <div className="border-b border-white/6 px-4 pb-3 pt-2">
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search tokens"
+                className="h-11 w-full rounded-2xl border-0 bg-white/[0.06] pl-10 pr-10 text-sm text-white placeholder:text-zinc-500 outline-none ring-1 ring-white/8 transition focus-visible:ring-brand-primary/50"
+              />
+              {query ? (
+                <button
+                  type="button"
+                  onClick={() => onQueryChange('')}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-zinc-500 transition hover:bg-white/8 hover:text-zinc-200"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <NetworkChip chainId={chainIdForLookup} />
+          </div>
+
+          {quickPickTokens.length > 0 ? (
+            <div className="mt-3 flex gap-2 overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {quickPickTokens.map((option) => (
+                <button
+                  key={option.address}
+                  type="button"
+                  onClick={() => choose(option)}
+                  className="flex min-w-[4.25rem] flex-col items-center gap-1.5 rounded-2xl border border-white/8 bg-white/[0.03] px-2.5 py-2 transition hover:border-white/14 hover:bg-white/[0.06]"
+                >
+                  <div className="relative">
+                    <TokenAvatar
+                      token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }}
+                      symbol={option.symbol}
+                      size={28}
+                    />
+                    {chainMeta?.logoUrl ? (
+                      <img
+                        src={chainMeta.logoUrl}
+                        alt=""
+                        className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-[4px] border border-[#131313] bg-[#131313]"
+                      />
+                    ) : null}
+                  </div>
+                  <span className="text-[11px] font-semibold text-zinc-200">{option.symbol}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {isAddressSearchActive ? (
-          <div className="rounded-xl border border-brand-primary/30 bg-brand-primary/8 p-3 text-sm text-brand-200">
-            <div className="font-semibold tracking-wide">Found by address</div>
-            <div className="text-[11px] text-vault-subtext font-mono">Looking up metadata for {trimmedQuery}</div>
+          <div className="border-b border-white/6 px-4 py-2.5">
             {addressLookupLoading ? (
-              <div className="mt-2 flex items-center gap-2 text-vault-text">
-                <Spinner size="sm" /> Fetching token metadata
+              <div className="flex items-center gap-2 text-xs text-zinc-400">
+                <Spinner size="sm" />
+                Resolving {shortAddress(trimmedQuery)}…
               </div>
-            ) : null}
-            {addressLookupError ? (
-              <div className="mt-2 space-y-2">
-                <Alert variant="error" className="text-left">
+            ) : addressLookupError ? (
+              <div className="space-y-2">
+                <Alert variant="error" className="text-left text-xs">
                   {addressLookupError}
                 </Alert>
                 <button
                   type="button"
                   onClick={retryAddressLookup}
-                  className="rounded-lg border border-amber-400/35 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-100 hover:bg-amber-500/20"
+                  className="text-xs font-medium text-brand-200 hover:text-brand-100"
                 >
                   Retry lookup
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <p className="text-xs text-zinc-500">Paste a contract address to import any Base token.</p>
+            )}
           </div>
         ) : null}
 
-        <div ref={listRef} className="max-h-[45vh] overflow-y-auto pr-1">
-          {rows.length === 0 && !addressLookupLoading ? (
-            <div className="py-8 text-center text-sm text-vault-subtext">No tokens found</div>
+        <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 py-2">
+          {listLoading ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-zinc-500">
+              <Spinner size="sm" />
+              Searching tokens…
+            </div>
           ) : null}
 
-          {rows.map(({ option, section }, idx) => {
-            const isActive = activeIndex === idx
-            const isSelected = option.address.toLowerCase() === selectedToken.toLowerCase()
-            const isUnverified = option.verified === false
-            const showSectionHeader = idx === 0 || rows[idx - 1]?.section !== section
-            return (
-              <div key={`${section}-${option.address}`}>
-                {showSectionHeader ? (
-                  <div className="mb-1 mt-2 px-1 text-[10px] uppercase tracking-[0.18em] text-vault-muted">
-                    {section}
+          {!listLoading && rows.length === 0 && !addressLookupLoading ? (
+            <div className="py-14 text-center">
+              <p className="text-sm font-medium text-zinc-300">No tokens found</p>
+              <p className="mt-1 text-xs text-zinc-500">Try a symbol, creator handle, or 0x address</p>
+            </div>
+          ) : null}
+
+          {!listLoading && zoraHoldingsLoading && !trimmedQuery && rows.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-zinc-500">
+              <Spinner size="sm" />
+              Loading your Zora coins…
+            </div>
+          ) : null}
+
+          {!listLoading
+            ? rows.map(({ option, section }, idx) => {
+                const isActive = activeIndex === idx
+                const isSelected = option.address.toLowerCase() === selectedToken.toLowerCase()
+                const showSectionHeader = idx === 0 || rows[idx - 1]?.section !== section
+                return (
+                  <div key={`${section}-${option.address}`}>
+                    {showSectionHeader ? (
+                      <div className="sticky top-0 z-[1] bg-[#131313]/95 px-2 pb-1 pt-2 text-[11px] font-medium text-zinc-500 backdrop-blur-sm">
+                        {formatSectionLabel(section)}
+                      </div>
+                    ) : null}
+                    <TokenSelectorRow
+                      option={option}
+                      isActive={isActive}
+                      isSelected={isSelected}
+                      balanceLabel={
+                        balanceByAddress.get(option.address.toLowerCase()) ??
+                        zoraHoldingBalances[option.address.toLowerCase()] ??
+                        null
+                      }
+                      chainLogoUrl={chainMeta?.logoUrl}
+                      onChoose={() => choose(option)}
+                      onHover={() => setActiveIndex(idx)}
+                    />
                   </div>
-                ) : null}
-                <motion.button
-                  type="button"
-                  data-token-row={option.address.toLowerCase()}
-                  onClick={() => choose(option)}
-                  onMouseEnter={() => setActiveIndex(idx)}
-                  onFocus={() => setActiveIndex(idx)}
-                  tabIndex={isActive ? 0 : -1}
-                  className={cn(
-                    'group relative flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition',
-                    isSelected
-                      ? 'border-brand-primary/40 bg-brand-primary/10 text-vault-text shadow-[0_8px_24px_-18px_rgb(var(--brand-primary)/0.6)]'
-                      : 'border-[rgb(var(--vault-border-strong)/0.32)] bg-[rgb(var(--vault-card)/0.25)] text-vault-text hover:bg-[rgb(var(--vault-card-raised)/0.7)] hover:border-[rgb(var(--vault-border-strong)/0.7)]',
-                  )}
-                >
-                  <TokenAvatar token={{ address: option.address, logoUrl: option.logoUrl, logoUrls: option.logoUrls }} symbol={option.symbol} size={36} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="truncate text-sm font-medium">{option.symbol}</div>
-                      {option.sectionTag === 'creator' ? (
-                        <span className="rounded-full border border-brand-primary/35 bg-brand-primary/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-brand-200">Creator</span>
-                      ) : null}
-                      {option.sectionTag === 'content' ? (
-                        <span className="rounded-full border border-violet-500/35 bg-violet-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-violet-200">Content</span>
-                      ) : null}
-                      {isUnverified ? (
-                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[9px] uppercase tracking-[0.08em] text-amber-200">Unverified</span>
-                      ) : null}
-                    </div>
-                    <div className="truncate text-[11px] text-vault-muted">
-                      {option.name}
-                      {isUnverified ? <span className="ml-2">- Not in curated list</span> : null}
-                    </div>
-                    <div className="mt-0.5 truncate font-mono text-[10px] text-vault-subtext">{option.address}</div>
-                  </div>
-                  {isSelected ? <Check className="h-4 w-4 text-brand-primary" /> : null}
-                </motion.button>
-              </div>
-            )
-          })}
+                )
+              })
+            : null}
         </div>
 
         {needsUnverifiedConfirm ? (
-          <div className="rounded-xl border border-amber-400/30 bg-amber-500/8 p-3 text-sm text-amber-200">
-            <div className="font-semibold uppercase tracking-widest">Unverified token</div>
-            <p className="mt-1 text-xs text-amber-100/90">
-              {needsUnverifiedConfirm.symbol} is not part of curated tokens. Do you want to proceed and use it for this swap?
+          <div className="border-t border-amber-500/20 bg-amber-500/8 px-4 py-3">
+            <p className="text-sm font-medium text-amber-100">Use unverified token?</p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+              {needsUnverifiedConfirm.symbol} is not in the curated list. Only continue if you trust this contract.
             </p>
-            <div className="mt-2 flex gap-2">
+            <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 onClick={confirmUnverified}
-                className="rounded-lg bg-amber-500/25 px-3 py-1.5 text-xs font-semibold hover:bg-amber-500/35"
+                className="rounded-xl bg-amber-500/25 px-3 py-1.5 text-xs font-semibold text-amber-50 hover:bg-amber-500/35"
               >
-                I understand, continue
+                Continue
               </button>
               <button
                 type="button"
                 onClick={() => setNeedsUnverifiedConfirm(null)}
-                className="rounded-lg border border-white/12 px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/8"
+                className="rounded-xl px-3 py-1.5 text-xs text-zinc-300 hover:bg-white/6"
               >
                 Cancel
               </button>

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/zora/client
+[4626-web](../../../index.md) / src/lib/zora/client
 
 # src/lib/zora/client
 
@@ -12,13 +12,13 @@
 
 > **fetchZoraCoin**(`address`, `chainId`): `Promise`\<[`ZoraCoin`](types.md#zoracoin) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:245](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L245)
+Defined in: [src/lib/zora/client.ts:245](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L245)
 
 #### Parameters
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 ##### chainId
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/zora/client.ts:245](https://github.com/wenakita/4626/blob/m
 
 > **fetchZoraExplore**(`params`): `Promise`\<[`ZoraExploreList`](types.md#zoraexplorelist) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:332](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L332)
+Defined in: [src/lib/zora/client.ts:332](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L332)
 
 #### Parameters
 
@@ -48,9 +48,17 @@ Defined in: [src/lib/zora/client.ts:332](https://github.com/wenakita/4626/blob/m
 
 `number`
 
+###### ethosMin?
+
+`number`
+
 ###### list
 
 [`ZoraExploreListType`](types.md#zoraexplorelisttype)
+
+###### sort?
+
+`"ETHOS_SCORE"`
 
 #### Returns
 
@@ -62,7 +70,7 @@ Defined in: [src/lib/zora/client.ts:332](https://github.com/wenakita/4626/blob/m
 
 > **fetchZoraProfile**(`identifier`): `Promise`\<[`ZoraProfile`](types.md#zoraprofile) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:270](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L270)
+Defined in: [src/lib/zora/client.ts:270](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L270)
 
 #### Parameters
 
@@ -80,7 +88,7 @@ Defined in: [src/lib/zora/client.ts:270](https://github.com/wenakita/4626/blob/m
 
 > **fetchZoraProfileCoins**(`params`): `Promise`\<[`ZoraProfile`](types.md#zoraprofile) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:293](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L293)
+Defined in: [src/lib/zora/client.ts:293](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L293)
 
 #### Parameters
 
@@ -108,7 +116,7 @@ Defined in: [src/lib/zora/client.ts:293](https://github.com/wenakita/4626/blob/m
 
 > **fetchZoraTopCreators**(`params?`): `Promise`\<[`ZoraExploreList`](types.md#zoraexplorelist) \| `null`\>
 
-Defined in: [src/lib/zora/client.ts:401](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L401)
+Defined in: [src/lib/zora/client.ts:405](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L405)
 
 #### Parameters
 
@@ -132,7 +140,7 @@ Defined in: [src/lib/zora/client.ts:401](https://github.com/wenakita/4626/blob/m
 
 > **getZoraClientTelemetrySnapshot**(): `Record`\<`ZoraClientOperation`, `ZoraClientCounters`\>
 
-Defined in: [src/lib/zora/client.ts:135](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L135)
+Defined in: [src/lib/zora/client.ts:135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L135)
 
 #### Returns
 
@@ -142,19 +150,19 @@ Defined in: [src/lib/zora/client.ts:135](https://github.com/wenakita/4626/blob/m
 
 ### normalizeZoraCoinAddress()
 
-> **normalizeZoraCoinAddress**(`address`): `` `0x${string}` ``
+> **normalizeZoraCoinAddress**(`address`): `string`
 
-Defined in: [src/lib/zora/client.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L219)
+Defined in: [src/lib/zora/client.ts:219](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L219)
 
 #### Parameters
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`` `0x${string}` ``
+`string`
 
 ***
 
@@ -162,7 +170,7 @@ Defined in: [src/lib/zora/client.ts:219](https://github.com/wenakita/4626/blob/m
 
 > **normalizeZoraProfileIdentifier**(`identifier`): `string`
 
-Defined in: [src/lib/zora/client.ts:223](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L223)
+Defined in: [src/lib/zora/client.ts:223](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L223)
 
 #### Parameters
 
@@ -180,7 +188,7 @@ Defined in: [src/lib/zora/client.ts:223](https://github.com/wenakita/4626/blob/m
 
 > **resetZoraClientDebugState**(): `void`
 
-Defined in: [src/lib/zora/client.ts:152](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L152)
+Defined in: [src/lib/zora/client.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L152)
 
 #### Returns
 
@@ -192,7 +200,7 @@ Defined in: [src/lib/zora/client.ts:152](https://github.com/wenakita/4626/blob/m
 
 > **resetZoraClientTelemetry**(): `void`
 
-Defined in: [src/lib/zora/client.ts:144](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/client.ts#L144)
+Defined in: [src/lib/zora/client.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/zora/client.ts#L144)
 
 #### Returns
 

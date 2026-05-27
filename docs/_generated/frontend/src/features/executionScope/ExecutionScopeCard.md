@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/ExecutionScopeCard
+[4626-web](../../../index.md) / src/features/executionScope/ExecutionScopeCard
 
 # src/features/executionScope/ExecutionScopeCard
 
@@ -12,7 +12,7 @@
 
 > **ExecutionScopeCard**(): `Element` \| `null`
 
-Defined in: [src/features/executionScope/ExecutionScopeCard.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/ExecutionScopeCard.tsx#L28)
+Defined in: [src/features/executionScope/ExecutionScopeCard.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/ExecutionScopeCard.tsx#L29)
 
 `/accounts` "Execution scopes" card.
 

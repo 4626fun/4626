@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/amoeIdentifiers
+[4626-web](../../../index.md) / server/\_lib/lottery/amoeIdentifiers
 
 # server/\_lib/lottery/amoeIdentifiers
 
@@ -12,7 +12,7 @@
 
 > `const` **AMOE\_SIGNUP\_SALT\_LENGTH\_BYTES**: `32`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L74)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L74)
 
 Length, in bytes, of the AMOE signup salt. Pinned to 32 — matches the
 keccak256 block size and the runbook in
@@ -24,7 +24,7 @@ keccak256 block size and the runbook in
 
 > **bigintToBe32Bytes**(`value`): `Uint8Array`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L120)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:120](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L120)
 
 Encode a non-negative bigint as a 32-byte big-endian buffer.
 
@@ -53,7 +53,7 @@ AmoeServerError if `value` is negative or exceeds 2^256 - 1.
 
 > **deriveSignupIdHash**(`args`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L228)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:228](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L228)
 
 Derive the `signupIdHash` private input.
 
@@ -85,7 +85,7 @@ resolved upstream by `resolveAmoeWallet` (which already follows the
 
 > **deriveSpendRefIdHash**(`args`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:254](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L254)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:254](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L254)
 
 Derive the `spendRefIdHash` private input.
 
@@ -119,7 +119,7 @@ format flexibility (UUID, hex, opaque token) is fine here.
 
 > **deriveTwitterCreditNullifier**(`args`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L204)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:204](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L204)
 
 Derive the `twitterCreditNullifier` private input.
 
@@ -151,7 +151,7 @@ idempotent.
 
 > **normaliseTwitterHandle**(`handle`): `string`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:189](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L189)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:189](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L189)
 
 Normalise a Twitter handle for nullifier derivation: trim, strip a
 leading `@`, lowercase. Same handle entered as `@Wenakita` and
@@ -174,7 +174,7 @@ ledger can dedupe; this function is the single source of truth.
 
 > **readAmoeSignupSalt**(): `Uint8Array`
 
-Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeIdentifiers.ts#L91)
+Defined in: [server/\_lib/lottery/amoeIdentifiers.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeIdentifiers.ts#L91)
 
 Read + validate `AMOE_SIGNUP_SALT` from the environment. The salt is a
 lower- or upper-case hex string of exactly 64 hex chars (32 bytes),

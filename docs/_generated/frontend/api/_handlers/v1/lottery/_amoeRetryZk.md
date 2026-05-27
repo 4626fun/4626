@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeRetryZk
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeRetryZk
 
 # api/\_handlers/v1/lottery/\_amoeRetryZk
 
@@ -10,7 +10,7 @@
 
 ### AmoeRetryZkHandlerHooks
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L67)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L66)
 
 Test seam — pluggable relay for the integration tests.
 
@@ -20,7 +20,7 @@ Test seam — pluggable relay for the integration tests.
 
 > `optional` **relay**: [`RetrySubmissionRelay`](../../../../server/_lib/lottery/amoeReplayRetry.md#retrysubmissionrelay)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L68)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L67)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:68](https://github.com/w
 
 > **\_\_resetAmoeRetryZkHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:77](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L77)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L76)
 
 #### Returns
 
@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:77](https://github.com/w
 
 > **\_\_setAmoeRetryZkHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L73)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L72)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:73](https://github.com/w
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L81)
+Defined in: [api/\_handlers/v1/lottery/\_amoeRetryZk.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeRetryZk.ts#L80)
 
 #### Parameters
 

@@ -352,6 +352,7 @@ export function ExploreTransactions() {
     isLoading,
     isFetching,
     hasRows: filteredActivity.length > 0,
+    hasActiveSearch: trimmedSearchQuery.length > 0,
   })
 
   return (

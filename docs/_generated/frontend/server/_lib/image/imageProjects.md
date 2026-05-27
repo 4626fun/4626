@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/image/imageProjects
+[4626-web](../../../index.md) / server/\_lib/image/imageProjects
 
 # server/\_lib/image/imageProjects
 
@@ -12,7 +12,7 @@
 
 > **ImageGenerationAsset** = `object`
 
-Defined in: [server/\_lib/image/imageProjects.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L31)
+Defined in: [server/\_lib/image/imageProjects.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L31)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/image/imageProjects.ts:31](https://github.com/wenakita
 
 > **blobPathname**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L37)
+Defined in: [server/\_lib/image/imageProjects.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L37)
 
 ##### blobUrl
 
 > **blobUrl**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L38)
+Defined in: [server/\_lib/image/imageProjects.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L38)
 
 ##### byteSize
 
 > **byteSize**: `number`
 
-Defined in: [server/\_lib/image/imageProjects.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L39)
+Defined in: [server/\_lib/image/imageProjects.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L39)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L40)
+Defined in: [server/\_lib/image/imageProjects.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L40)
 
 ##### filename
 
 > **filename**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L35)
+Defined in: [server/\_lib/image/imageProjects.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L35)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L32)
+Defined in: [server/\_lib/image/imageProjects.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L32)
 
 ##### mimeType
 
 > **mimeType**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L36)
+Defined in: [server/\_lib/image/imageProjects.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L36)
 
 ##### projectId
 
 > **projectId**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L33)
+Defined in: [server/\_lib/image/imageProjects.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L33)
 
 ##### role
 
 > **role**: [`ImageGenerationAssetRole`](#imagegenerationassetrole-1)
 
-Defined in: [server/\_lib/image/imageProjects.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L34)
+Defined in: [server/\_lib/image/imageProjects.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L34)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:34](https://github.com/wenakita
 
 > **ImageGenerationAssetRole** = `"frame"` \| `"subject"` \| `"output"`
 
-Defined in: [server/\_lib/image/imageProjects.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L14)
+Defined in: [server/\_lib/image/imageProjects.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L14)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:14](https://github.com/wenakita
 
 > **ImageGenerationAttempt** = `object`
 
-Defined in: [server/\_lib/image/imageProjects.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L43)
+Defined in: [server/\_lib/image/imageProjects.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L43)
 
 #### Properties
 
@@ -92,79 +92,79 @@ Defined in: [server/\_lib/image/imageProjects.ts:43](https://github.com/wenakita
 
 > **attemptNumber**: `number`
 
-Defined in: [server/\_lib/image/imageProjects.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L47)
+Defined in: [server/\_lib/image/imageProjects.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L47)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L56)
+Defined in: [server/\_lib/image/imageProjects.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L56)
 
 ##### evaluation
 
 > **evaluation**: `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L52)
+Defined in: [server/\_lib/image/imageProjects.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L52)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L44)
+Defined in: [server/\_lib/image/imageProjects.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L44)
 
 ##### jobId
 
 > **jobId**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L46)
+Defined in: [server/\_lib/image/imageProjects.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L46)
 
 ##### kind
 
 > **kind**: `"generate"` \| `"refine"`
 
-Defined in: [server/\_lib/image/imageProjects.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L48)
+Defined in: [server/\_lib/image/imageProjects.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L48)
 
 ##### outputAssetId
 
 > **outputAssetId**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L55)
+Defined in: [server/\_lib/image/imageProjects.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L55)
 
 ##### passed
 
 > **passed**: `boolean` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L54)
+Defined in: [server/\_lib/image/imageProjects.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L54)
 
 ##### projectId
 
 > **projectId**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L45)
+Defined in: [server/\_lib/image/imageProjects.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L45)
 
 ##### prompt
 
 > **prompt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L49)
+Defined in: [server/\_lib/image/imageProjects.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L49)
 
 ##### responseId
 
 > **responseId**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L51)
+Defined in: [server/\_lib/image/imageProjects.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L51)
 
 ##### revisedPrompt
 
 > **revisedPrompt**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L50)
+Defined in: [server/\_lib/image/imageProjects.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L50)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L53)
+Defined in: [server/\_lib/image/imageProjects.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L53)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:53](https://github.com/wenakita
 
 > **ImageGenerationProject** = `object`
 
-Defined in: [server/\_lib/image/imageProjects.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L16)
+Defined in: [server/\_lib/image/imageProjects.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L16)
 
 #### Properties
 
@@ -180,73 +180,73 @@ Defined in: [server/\_lib/image/imageProjects.ts:16](https://github.com/wenakita
 
 > **brandContext**: `string`[]
 
-Defined in: [server/\_lib/image/imageProjects.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L22)
+Defined in: [server/\_lib/image/imageProjects.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L22)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L27)
+Defined in: [server/\_lib/image/imageProjects.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L27)
 
 ##### creatorAddress
 
 > **creatorAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L26)
+Defined in: [server/\_lib/image/imageProjects.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L26)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L17)
+Defined in: [server/\_lib/image/imageProjects.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L17)
 
 ##### instruction
 
 > **instruction**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L20)
+Defined in: [server/\_lib/image/imageProjects.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L20)
 
 ##### lastResponseId
 
 > **lastResponseId**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L23)
+Defined in: [server/\_lib/image/imageProjects.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L23)
 
 ##### latestError
 
 > **latestError**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L24)
+Defined in: [server/\_lib/image/imageProjects.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L24)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L18)
+Defined in: [server/\_lib/image/imageProjects.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L18)
 
 ##### status
 
 > **status**: [`ImageGenerationProjectStatus`](#imagegenerationprojectstatus-1)
 
-Defined in: [server/\_lib/image/imageProjects.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L19)
+Defined in: [server/\_lib/image/imageProjects.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L19)
 
 ##### stylePreset
 
 > **stylePreset**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L21)
+Defined in: [server/\_lib/image/imageProjects.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L21)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L28)
+Defined in: [server/\_lib/image/imageProjects.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L28)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L25)
+Defined in: [server/\_lib/image/imageProjects.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L25)
 
 ***
 
@@ -254,7 +254,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:25](https://github.com/wenakita
 
 > **ImageGenerationProjectSnapshot** = `object`
 
-Defined in: [server/\_lib/image/imageProjects.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L59)
+Defined in: [server/\_lib/image/imageProjects.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L59)
 
 #### Properties
 
@@ -262,91 +262,91 @@ Defined in: [server/\_lib/image/imageProjects.ts:59](https://github.com/wenakita
 
 > **assets**: [`ImageGenerationAsset`](#imagegenerationasset)[]
 
-Defined in: [server/\_lib/image/imageProjects.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L72)
+Defined in: [server/\_lib/image/imageProjects.ts:72](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L72)
 
 ##### attempts
 
 > **attempts**: [`ImageGenerationAttempt`](#imagegenerationattempt)[]
 
-Defined in: [server/\_lib/image/imageProjects.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L73)
+Defined in: [server/\_lib/image/imageProjects.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L73)
 
 ##### brandContext
 
 > **brandContext**: `string`[]
 
-Defined in: [server/\_lib/image/imageProjects.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L65)
+Defined in: [server/\_lib/image/imageProjects.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L65)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L70)
+Defined in: [server/\_lib/image/imageProjects.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L70)
 
 ##### creatorAddress
 
 > **creatorAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L69)
+Defined in: [server/\_lib/image/imageProjects.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L69)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L60)
+Defined in: [server/\_lib/image/imageProjects.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L60)
 
 ##### instruction
 
 > **instruction**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L63)
+Defined in: [server/\_lib/image/imageProjects.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L63)
 
 ##### lastResponseId
 
 > **lastResponseId**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L66)
+Defined in: [server/\_lib/image/imageProjects.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L66)
 
 ##### latestError
 
 > **latestError**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L67)
+Defined in: [server/\_lib/image/imageProjects.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L67)
 
 ##### latestJob
 
 > **latestJob**: `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L74)
+Defined in: [server/\_lib/image/imageProjects.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L74)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L61)
+Defined in: [server/\_lib/image/imageProjects.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L61)
 
 ##### status
 
 > **status**: [`ImageGenerationProjectStatus`](#imagegenerationprojectstatus-1)
 
-Defined in: [server/\_lib/image/imageProjects.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L62)
+Defined in: [server/\_lib/image/imageProjects.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L62)
 
 ##### stylePreset
 
 > **stylePreset**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L64)
+Defined in: [server/\_lib/image/imageProjects.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L64)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/image/imageProjects.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L71)
+Defined in: [server/\_lib/image/imageProjects.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L71)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageProjects.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L68)
+Defined in: [server/\_lib/image/imageProjects.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L68)
 
 ***
 
@@ -354,7 +354,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:68](https://github.com/wenakita
 
 > **ImageGenerationProjectStatus** = `"draft"` \| `"queued"` \| `"generating"` \| `"evaluating"` \| `"completed"` \| `"failed"`
 
-Defined in: [server/\_lib/image/imageProjects.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L6)
+Defined in: [server/\_lib/image/imageProjects.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L6)
 
 ## Functions
 
@@ -362,7 +362,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:6](https://github.com/wenakita/
 
 > **attachImageGenerationAsset**(`input`): `Promise`\<[`ImageGenerationAsset`](#imagegenerationasset)\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:300](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L300)
+Defined in: [server/\_lib/image/imageProjects.ts:300](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L300)
 
 #### Parameters
 
@@ -398,7 +398,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:300](https://github.com/wenakit
 
 > **createImageGenerationProject**(`input`): `Promise`\<[`ImageGenerationProject`](#imagegenerationproject)\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:264](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L264)
+Defined in: [server/\_lib/image/imageProjects.ts:264](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L264)
 
 #### Parameters
 
@@ -434,7 +434,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:264](https://github.com/wenakit
 
 > **createOutputImageGenerationAsset**(`input`): `Promise`\<[`ImageGenerationAsset`](#imagegenerationasset)\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:346](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L346)
+Defined in: [server/\_lib/image/imageProjects.ts:346](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L346)
 
 #### Parameters
 
@@ -466,7 +466,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:346](https://github.com/wenakit
 
 > **ensureImageGenerationSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L79)
+Defined in: [server/\_lib/image/imageProjects.ts:79](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L79)
 
 #### Returns
 
@@ -478,7 +478,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:79](https://github.com/wenakita
 
 > **getCompletedImageProjectForVault**(`vaultAddress`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:520](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L520)
+Defined in: [server/\_lib/image/imageProjects.ts:520](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L520)
 
 #### Parameters
 
@@ -496,7 +496,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:520](https://github.com/wenakit
 
 > **getCompletedImageProjectForVaultOwner**(`vaultAddress`, `ownerAddress`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:547](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L547)
+Defined in: [server/\_lib/image/imageProjects.ts:547](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L547)
 
 #### Parameters
 
@@ -518,7 +518,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:547](https://github.com/wenakit
 
 > **getImageGenerationAssetsForProject**(`projectId`): `Promise`\<[`ImageGenerationAsset`](#imagegenerationasset)[]\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:491](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L491)
+Defined in: [server/\_lib/image/imageProjects.ts:491](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L491)
 
 #### Parameters
 
@@ -536,7 +536,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:491](https://github.com/wenakit
 
 > **getImageGenerationProject**(`projectId`): `Promise`\<[`ImageGenerationProjectSnapshot`](#imagegenerationprojectsnapshot) \| `null`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:447](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L447)
+Defined in: [server/\_lib/image/imageProjects.ts:447](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L447)
 
 #### Parameters
 
@@ -554,7 +554,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:447](https://github.com/wenakit
 
 > **recordImageGenerationAttempt**(`input`): `Promise`\<[`ImageGenerationAttempt`](#imagegenerationattempt)\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:405](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L405)
+Defined in: [server/\_lib/image/imageProjects.ts:405](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L405)
 
 #### Parameters
 
@@ -614,7 +614,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:405](https://github.com/wenakit
 
 > **setImageProjectVaultAddress**(`projectId`, `vaultAddress`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:506](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L506)
+Defined in: [server/\_lib/image/imageProjects.ts:506](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L506)
 
 #### Parameters
 
@@ -636,7 +636,7 @@ Defined in: [server/\_lib/image/imageProjects.ts:506](https://github.com/wenakit
 
 > **updateImageGenerationProject**(`input`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/image/imageProjects.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageProjects.ts#L385)
+Defined in: [server/\_lib/image/imageProjects.ts:385](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/image/imageProjects.ts#L385)
 
 #### Parameters
 

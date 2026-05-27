@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/profileMerge
+[4626-web](../../../index.md) / server/\_lib/identity/profileMerge
 
 # server/\_lib/identity/profileMerge
 
@@ -10,7 +10,7 @@
 
 ### ProfileMergeValidationError
 
-Defined in: [server/\_lib/identity/profileMerge.ts:166](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L166)
+Defined in: [server/\_lib/identity/profileMerge.ts:166](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L166)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:166](https://github.com/wenak
 
 > **new ProfileMergeValidationError**(`code`, `detail`): [`ProfileMergeValidationError`](#profilemergevalidationerror)
 
-Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L167)
+Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L167)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenak
 
 > `readonly` **code**: `string`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L167)
+Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L167)
 
 ## Type Aliases
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:167](https://github.com/wenak
 
 > **ProfileMergePlan** = `object`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L99)
+Defined in: [server/\_lib/identity/profileMerge.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L99)
 
 #### Properties
 
@@ -64,13 +64,13 @@ Defined in: [server/\_lib/identity/profileMerge.ts:99](https://github.com/wenaki
 
 > **from**: [`ProfileRow`](#profilerow)
 
-Defined in: [server/\_lib/identity/profileMerge.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L100)
+Defined in: [server/\_lib/identity/profileMerge.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L100)
 
 ##### pointsRowsSkippedAsDuplicate
 
 > **pointsRowsSkippedAsDuplicate**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L106)
+Defined in: [server/\_lib/identity/profileMerge.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L106)
 
 Matching rows that already exist on `to` and would be dropped from
  `from` (no-op writes, safe to delete).
@@ -79,7 +79,7 @@ Matching rows that already exist on `to` and would be dropped from
 
 > **pointsRowsToMove**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L103)
+Defined in: [server/\_lib/identity/profileMerge.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L103)
 
 Rows in `points` that would be re-keyed from `from` → `to`.
 
@@ -87,7 +87,7 @@ Rows in `points` that would be re-keyed from `from` → `to`.
 
 > **refereesToRepoint**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:110](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L110)
+Defined in: [server/\_lib/identity/profileMerge.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L110)
 
 Other profiles whose `referred_by_signup_id` points at `from`.
 
@@ -95,7 +95,7 @@ Other profiles whose `referred_by_signup_id` points at `from`.
 
 > **referralConversionsToRepoint**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L108)
+Defined in: [server/\_lib/identity/profileMerge.ts:108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L108)
 
 `referral_conversions` rows that reference `from` in either position.
 
@@ -103,7 +103,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:108](https://github.com/wenak
 
 > **to**: [`ProfileRow`](#profilerow)
 
-Defined in: [server/\_lib/identity/profileMerge.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L101)
+Defined in: [server/\_lib/identity/profileMerge.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L101)
 
 ***
 
@@ -111,7 +111,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:101](https://github.com/wenak
 
 > **ProfileMergeResult** = `object`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:113](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L113)
+Defined in: [server/\_lib/identity/profileMerge.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L113)
 
 #### Properties
 
@@ -119,55 +119,55 @@ Defined in: [server/\_lib/identity/profileMerge.ts:113](https://github.com/wenak
 
 > **aliasInserted**: `boolean`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L114)
+Defined in: [server/\_lib/identity/profileMerge.ts:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L114)
 
 ##### cswPropagated
 
 > **cswPropagated**: `boolean`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:128](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L128)
+Defined in: [server/\_lib/identity/profileMerge.ts:128](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L128)
 
 ##### fromTombstoned
 
 > **fromTombstoned**: `boolean`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:129](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L129)
+Defined in: [server/\_lib/identity/profileMerge.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L129)
 
 ##### pointsDroppedAsDuplicate
 
 > **pointsDroppedAsDuplicate**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L124)
+Defined in: [server/\_lib/identity/profileMerge.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L124)
 
 ##### pointsMoved
 
 > **pointsMoved**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L123)
+Defined in: [server/\_lib/identity/profileMerge.ts:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L123)
 
 ##### refereesRepointed
 
 > **refereesRepointed**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L126)
+Defined in: [server/\_lib/identity/profileMerge.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L126)
 
 ##### referralCodeCopied
 
 > **referralCodeCopied**: `boolean`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L127)
+Defined in: [server/\_lib/identity/profileMerge.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L127)
 
 ##### referralConversionsRepointed
 
 > **referralConversionsRepointed**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L125)
+Defined in: [server/\_lib/identity/profileMerge.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L125)
 
 ##### walletRowsSwept
 
 > **walletRowsSwept**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L122)
+Defined in: [server/\_lib/identity/profileMerge.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L122)
 
 Rows swept from `profile_wallets` on `from` onto `to`. Distinct from
  `walletsLinked` which copies the single `primary_wallet`/`embedded_wallet`
@@ -180,7 +180,7 @@ Rows swept from `profile_wallets` on `from` onto `to`. Distinct from
 
 > **walletsLinked**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L115)
+Defined in: [server/\_lib/identity/profileMerge.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L115)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:115](https://github.com/wenak
 
 > **ProfileRow** = `object`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L88)
+Defined in: [server/\_lib/identity/profileMerge.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L88)
 
 #### Properties
 
@@ -196,49 +196,49 @@ Defined in: [server/\_lib/identity/profileMerge.ts:88](https://github.com/wenaki
 
 > **cswAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L94)
+Defined in: [server/\_lib/identity/profileMerge.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L94)
 
 ##### email
 
 > **email**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L90)
+Defined in: [server/\_lib/identity/profileMerge.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L90)
 
 ##### embeddedWallet
 
 > **embeddedWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L93)
+Defined in: [server/\_lib/identity/profileMerge.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L93)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L89)
+Defined in: [server/\_lib/identity/profileMerge.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L89)
 
 ##### mergedIntoProfileId
 
 > **mergedIntoProfileId**: `number` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L96)
+Defined in: [server/\_lib/identity/profileMerge.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L96)
 
 ##### primaryWallet
 
 > **primaryWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L92)
+Defined in: [server/\_lib/identity/profileMerge.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L92)
 
 ##### privyUserId
 
 > **privyUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L91)
+Defined in: [server/\_lib/identity/profileMerge.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L91)
 
 ##### referralCode
 
 > **referralCode**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileMerge.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L95)
+Defined in: [server/\_lib/identity/profileMerge.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L95)
 
 ## Functions
 
@@ -246,7 +246,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:95](https://github.com/wenaki
 
 > **ensureProfileMergeSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/profileMerge.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L45)
+Defined in: [server/\_lib/identity/profileMerge.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L45)
 
 Idempotent schema bootstrap. Matches the pattern used by
  `ensureWaitlistSchema` / `ensureAccountsIdentitySchema` elsewhere in this
@@ -271,7 +271,7 @@ Idempotent schema bootstrap. Matches the pattern used by
 
 > **executeProfileMerge**(`db`, `plan`): `Promise`\<[`ProfileMergeResult`](#profilemergeresult)\>
 
-Defined in: [server/\_lib/identity/profileMerge.ts:250](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L250)
+Defined in: [server/\_lib/identity/profileMerge.ts:250](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L250)
 
 #### Parameters
 
@@ -293,7 +293,7 @@ Defined in: [server/\_lib/identity/profileMerge.ts:250](https://github.com/wenak
 
 > **planProfileMerge**(`db`, `fromProfileId`, `toProfileId`): `Promise`\<[`ProfileMergePlan`](#profilemergeplan)\>
 
-Defined in: [server/\_lib/identity/profileMerge.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/profileMerge.ts#L194)
+Defined in: [server/\_lib/identity/profileMerge.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/profileMerge.ts#L194)
 
 #### Parameters
 

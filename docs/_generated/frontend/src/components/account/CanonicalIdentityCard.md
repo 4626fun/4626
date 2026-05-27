@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/account/CanonicalIdentityCard
+[4626-web](../../../index.md) / src/components/account/CanonicalIdentityCard
 
 # src/components/account/CanonicalIdentityCard
 
@@ -12,7 +12,7 @@
 
 > **CanonicalIdentityCard**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CanonicalIdentityCard.tsx:24](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CanonicalIdentityCard.tsx#L24)
+Defined in: [src/components/account/CanonicalIdentityCard.tsx:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CanonicalIdentityCard.tsx#L29)
 
 Top-right identity surface for authenticated users.
 
@@ -30,6 +30,14 @@ See `docs/design/identity-surface-spec.md` for the full design rationale.
 #### Parameters
 
 ##### \_\_namedParameters
+
+###### activeNetworkLabel?
+
+`string` \| `null` = `'Base'`
+
+###### activeNetworkUsd?
+
+`number` \| `null` = `null`
 
 ###### identity
 
@@ -57,15 +65,18 @@ See `docs/design/identity-surface-spec.md` for the full design rationale.
 
 > **CanonicalIdentityDropdown**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CanonicalIdentityCard.tsx:122](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CanonicalIdentityCard.tsx#L122)
+Defined in: [src/components/account/CanonicalIdentityCard.tsx:160](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CanonicalIdentityCard.tsx#L160)
 
 Dropdown body content — canonical smart wallet first, then signer lanes.
-The app-scoped sub-account is intentionally not surfaced here unless a
-future route actively uses it as the transaction sender.
+Sub-account is surfaced only for population (b) when it is the effective swap lane.
 
 #### Parameters
 
 ##### \_\_namedParameters
+
+###### disconnectingMainWallet?
+
+`boolean`
 
 ###### identity
 
@@ -74,6 +85,18 @@ future route actively uses it as the transaction sender.
 ###### onRequestConnectWallet?
 
 () => `void`
+
+###### onRequestDisconnectMainWallet?
+
+() => `void`
+
+###### onRequestSignOut?
+
+() => `void`
+
+###### signingOut?
+
+`boolean`
 
 #### Returns
 

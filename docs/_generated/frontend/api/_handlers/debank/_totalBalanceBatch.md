@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / api/\_handlers/debank/\_totalBalanceBatch
+[4626-web](../../../index.md) / api/\_handlers/debank/\_totalBalanceBatch
 
 # api/\_handlers/debank/\_totalBalanceBatch
 
@@ -12,7 +12,7 @@
 
 > **DebankChainBalance** = `object`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L35)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L35)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:35](https://github.com
 
 > **id**: `string`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L36)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L36)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L38)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L38)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L37)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L37)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L39)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L39)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:39](https://github.com
 
 > **DebankTotalBalance** = `object`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L42)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L42)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:42](https://github.com
 
 > **address**: `string`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L43)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L43)
 
 ##### chains
 
 > **chains**: [`DebankChainBalance`](#debankchainbalance)[]
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L45)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L45)
 
 ##### totalUsdValue
 
 > **totalUsdValue**: `number`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L44)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L44)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:44](https://github.com
 
 > **DebankTotalBalanceBatchResponse** = `object`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L48)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L48)
 
 #### Properties
 
@@ -82,13 +82,13 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:48](https://github.com
 
 > **asOf**: `number`
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L49)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L49)
 
 ##### results
 
 > **results**: `Record`\<`string`, [`DebankTotalBalance`](#debanktotalbalance) \| `null`\>
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L50)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L50)
 
 ## Functions
 
@@ -96,7 +96,7 @@ Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:50](https://github.com
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:127](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L127)
+Defined in: [api/\_handlers/debank/\_totalBalanceBatch.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/debank/_totalBalanceBatch.ts#L127)
 
 #### Parameters
 

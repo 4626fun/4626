@@ -392,6 +392,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/debank/tokenList': apiImport('./api/_handlers/debank/_tokenList'),
         '/api/debank/walletPortfolioBatch': apiImport('./api/_handlers/debank/_walletPortfolioBatch'),
         '/api/wallet/trayPortfolio': apiImport('./api/_handlers/wallet/_trayPortfolio'),
+        '/api/wallet/zora-holdings': apiImport('./api/_handlers/wallet/_zoraHoldings'),
         '/api/status/protocolReport': apiImport('./api/_handlers/status/_protocolReport'),
         '/api/status/vaultReport': apiImport('./api/_handlers/status/_vaultReport'),
         '/api/auth/admin': apiImport('./api/_handlers/auth/_admin'),

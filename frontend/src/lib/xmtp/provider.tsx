@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { wagmiConfig } from '@/config/wagmi'
 import { xmtpDebugFlag } from '@/lib/flags/featureFlags'
 import { APP_ORIGIN } from '@/lib/env/host'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -42,6 +43,7 @@ import {
   isLocalXmtpStateInvalidError,
   isOpfsAccessHandleError,
   isScwSignatureValidationError,
+  isTransientXmtpStreamNetworkError,
   isWrongChainIdError,
   isXmtpEnvironmentMismatchError,
   isXmtpNotRegisteredError,
@@ -73,6 +75,10 @@ import {
   shouldRefuseAutoCreateAfterFailedRestore,
 } from '@/lib/xmtp/xmtpConnectPolicy'
 import { buildWrongOriginConnectError, evaluateXmtpConnectPrecheck } from '@/lib/xmtp/xmtpConnectGuard'
+import {
+  isWaitlistMessagingWagmiConnector,
+  waitForMessagingWallet,
+} from '@/lib/xmtp/waitForMessagingWallet'
 import { finishRestoredXmtpClient } from '@/lib/xmtp/xmtpConnectOrchestrator'
 import {
   Client,
@@ -957,9 +963,12 @@ function showNotification(title: string, body: string) {
 export function XmtpChatProvider({
   children,
   identityHintAddress = null,
+  manualConnectOnly = false,
 }: {
   children: ReactNode
   identityHintAddress?: string | null
+  /** When true, skip auto-connect and stream-driven reconnect (waitlist embedded chat). */
+  manualConnectOnly?: boolean
 }) {
   const { address, isConnected, connector } = useAccount()
   const accountContext = useAccountContext()
@@ -1008,11 +1017,22 @@ export function XmtpChatProvider({
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
   const identityAddressRef = useRef<string | null>(null)
   const identityHintAddressRef = useRef<string | null>(null)
+  const manualConnectOnlyRef = useRef(manualConnectOnly)
+  const statusRef = useRef(status)
+  const refreshConversationsRef = useRef<(() => Promise<ChatConversation[]>) | null>(null)
   const pendingLocalResetHandledRef = useRef(false)
 
   useEffect(() => {
     identityHintAddressRef.current = normalizeEvmAddress(identityHintAddress) ?? null
   }, [identityHintAddress])
+
+  useEffect(() => {
+    manualConnectOnlyRef.current = manualConnectOnly
+  }, [manualConnectOnly])
+
+  useEffect(() => {
+    statusRef.current = status
+  }, [status])
 
   const endActiveStreams = useCallback((): void => {
     endTrackedStreams({
@@ -1284,6 +1304,17 @@ export function XmtpChatProvider({
     return normalizedSummaries
   }, [warmChatPeerIdentities])
 
+  const evictConversationFromCache = useCallback((conversationId: string): void => {
+    const normalizedId = conversationId.trim()
+    if (!normalizedId) return
+    const next = conversationsRef.current.filter(
+      (conversation) => !conversationIdsEqual(conversation.id, normalizedId),
+    )
+    if (next.length === conversationsRef.current.length) return
+    conversationsRef.current = next
+    if (mountedRef.current) setConversations(next)
+  }, [])
+
   const refreshConversations = useCallback(async (): Promise<ChatConversation[]> => {
     const client = clientRef.current
     if (!client) return conversationsRef.current
@@ -1313,21 +1344,35 @@ export function XmtpChatProvider({
     return applyConversationSummaries(summaries)
   }, [applyConversationSummaries, buildConvoSummary])
 
+  useEffect(() => {
+    refreshConversationsRef.current = refreshConversations
+  }, [refreshConversations])
+
   const ensureConversationById = useCallback(async (conversationId: string): Promise<ChatConversation | null> => {
     const normalizedId = conversationId.trim()
     if (!normalizedId) return null
 
-    const existing =
+    const client = clientRef.current
+    const cached =
       conversationsRef.current.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ??
       null
-    if (existing) return existing
+    if (cached && client) {
+      try {
+        const live = await client.conversations.getConversationById(normalizedId)
+        if (live) return cached
+      } catch {
+        // stale React cache — fall through to sync/resolve
+      }
+      evictConversationFromCache(normalizedId)
+    } else if (cached) {
+      return cached
+    }
 
     const summaries = await refreshConversations()
     const fromList =
       summaries.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ?? null
     if (fromList) return fromList
 
-    const client = clientRef.current
     if (!client) return null
 
     const conversationsApi = client.conversations as {
@@ -1360,7 +1405,7 @@ export function XmtpChatProvider({
     } catch {
       return null
     }
-  }, [buildConvoSummary, refreshConversations])
+  }, [buildConvoSummary, evictConversationFromCache, refreshConversations])
 
   // ------- connect -------
   const resolveXmtpIdentityAddress = useCallback(async (
@@ -1577,9 +1622,26 @@ export function XmtpChatProvider({
     const canonicalAppOrigin = APP_ORIGIN.replace(/\/+$/, '')
     const currentOrigin = typeof window !== 'undefined' ? window.location.origin : ''
     const hostname = typeof window !== 'undefined' ? (window.location.hostname ?? '').toLowerCase() : ''
+
+    let connectWalletAddress = address ?? null
+    let connectWalletClient = walletClient ?? null
+    let connectWalletConnector = connector ?? null
+
+    if (!connectWalletAddress || !connectWalletClient) {
+      const settled = await waitForMessagingWallet(wagmiConfig, {
+        timeoutMs: intent === 'user' ? 8_000 : 500,
+        connectorPredicate: isWaitlistMessagingWagmiConnector,
+      })
+      if (settled) {
+        connectWalletAddress = settled.address
+        connectWalletClient = settled.walletClient
+        connectWalletConnector = settled.connector ?? connectWalletConnector
+      }
+    }
+
     const precheck = evaluateXmtpConnectPrecheck({
-      walletAddress: address ?? null,
-      walletClientReady: Boolean(walletClient),
+      walletAddress: connectWalletAddress,
+      walletClientReady: Boolean(connectWalletClient),
       alreadyHasClient: Boolean(clientRef.current),
       connectInFlight: connectInFlightRef.current,
       resetLocalStateInFlight: resetLocalStateInFlightRef.current,
@@ -1619,22 +1681,26 @@ export function XmtpChatProvider({
         } else if (precheck.reason === 'no_wallet') {
           setStatus('error')
           setError(
-            'Connect your 4626 wallet (Privy email sign-in or embedded signer) before enabling messaging, then retry.',
+            'Messaging signer is not ready yet. Use Connect messaging on the waitlist panel, or restore Privy email sign-in and retry.',
           )
         }
       }
       return
     }
 
+    if (!connectWalletAddress || !connectWalletClient) {
+      return
+    }
+
     connectInFlightRef.current = true
     const connectEpoch = connectEpochRef.current
     let tabLockAcquired = false
-    let xmtpIdentityAddress = String(address).toLowerCase()
+    let xmtpIdentityAddress = String(connectWalletAddress).toLowerCase()
     try {
       setError(null)
       setInstallationLimitInboxId(null)
       setLocalStateResetRequired(false)
-      const resolved = await resolveXmtpIdentityAddress(address, xmtpModeOverride)
+      const resolved = await resolveXmtpIdentityAddress(connectWalletAddress, xmtpModeOverride)
       if (connectEpoch !== connectEpochRef.current) return
       xmtpIdentityAddress = resolved.identityAddress
       const normalizedIdentity = normalizeEvmAddress(xmtpIdentityAddress) ?? xmtpIdentityAddress.toLowerCase()
@@ -1676,7 +1742,7 @@ export function XmtpChatProvider({
       const getSignerSelection = async (): Promise<SignerSelection> => {
         if (signerSelectionPromise) return signerSelectionPromise
         signerSelectionPromise = (async () => {
-          const walletChainId = resolveXmtpChainId(walletClient.chain?.id)
+          const walletChainId = resolveXmtpChainId(connectWalletClient!.chain?.id)
           const storedSignerType = readStoredSignerType(xmtpIdentityAddress)
 
           let hasContractCode: boolean | null = null
@@ -1692,14 +1758,14 @@ export function XmtpChatProvider({
           const signerDecision = decideXmtpSignerType({
             isCanonicalSmartWallet: resolved.isCanonicalSmartWallet,
             storedSignerType,
-            connector,
+            connector: connectWalletConnector,
             hasContractCode,
             walletChainId,
             modeOverride: xmtpModeOverride ?? undefined,
           })
 
           const signMessageFn = async (message: string) => {
-            const s = await walletClient.signMessage({ message })
+            const s = await connectWalletClient!.signMessage({ message })
             return hexToBytes(s)
           }
 
@@ -1709,7 +1775,7 @@ export function XmtpChatProvider({
           //    via signTypedData (EIP-712) to produce a signature ecrecover can verify
           // 3. Wrap in the tuple-struct SignatureWrapper the CSW expects
           const scwSignMessageFn = async (message: string) => {
-            const s = await walletClient.signMessage({ message })
+            const s = await connectWalletClient!.signMessage({ message })
             const sigBytes = hexToBytes(s)
             if (sigBytes.length !== 65 || !publicClient) return sigBytes
             let signerAddr: string
@@ -1730,7 +1796,7 @@ export function XmtpChatProvider({
             }
             const msgHash = hashMessage(message)
             try {
-              const typedSig = await walletClient.signTypedData({
+              const typedSig = await connectWalletClient!.signTypedData({
                 domain: {
                   name: 'Coinbase Smart Wallet',
                   version: '1',
@@ -2270,6 +2336,7 @@ export function XmtpChatProvider({
   }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, refreshConversations])
 
   const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
+    if (manualConnectOnlyRef.current) return
     if (connectInFlightRef.current || resetLocalStateInFlightRef.current) return
     const now = Date.now()
     if (streamReconnectCooldownUntilRef.current > now) return
@@ -2285,15 +2352,38 @@ export function XmtpChatProvider({
   }, [cleanup, connect])
 
   useEffect(() => {
+    const recoverSoftly = async (): Promise<void> => {
+      const refresh = refreshConversationsRef.current
+      if (!refresh || !clientRef.current) return
+      try {
+        await refresh()
+      } catch {
+        // best effort — stream may recover on next SDK retry
+      }
+    }
+
     handleStreamErrorRef.current = (error: Error) => {
       const msg = error.message
       if (isLocalXmtpStateInvalidError(msg)) {
         markLocalStateInvalid(msg)
         return
       }
+      if (isTransientXmtpStreamNetworkError(msg)) {
+        return
+      }
       console.warn('[xmtp] stream error (sdk may retry):', msg)
     }
     handleStreamFailRef.current = () => {
+      if (manualConnectOnlyRef.current) {
+        void recoverSoftly()
+        return
+      }
+
+      if (clientRef.current && statusRef.current === 'connected') {
+        void recoverSoftly()
+        return
+      }
+
       console.warn('[xmtp] stream failed after retries; attempting restore reconnect')
       void reconnectFromLocalInstall()
     }
@@ -2301,6 +2391,7 @@ export function XmtpChatProvider({
 
   useEffect(() => {
     if (typeof window === 'undefined') return
+    if (manualConnectOnly) return
     const onAutoConnectRequest = () => {
       if (localStateResetRequired) return
       if (status === 'idle' || status === 'error') {
@@ -2311,9 +2402,10 @@ export function XmtpChatProvider({
     return () => {
       window.removeEventListener('cv:xmtp:autoConnectRequest', onAutoConnectRequest)
     }
-  }, [connect, localStateResetRequired, status])
+  }, [connect, localStateResetRequired, manualConnectOnly, status])
 
   useEffect(() => {
+    if (manualConnectOnly) return
     if (!address || !walletClient) return
     if (readPendingLocalReset()) return
     if (connectInFlightRef.current || clientRef.current) return
@@ -2337,6 +2429,7 @@ export function XmtpChatProvider({
     }
   }, [
     address,
+    manualConnectOnly,
     walletClient,
     status,
     localStateResetRequired,
@@ -2907,22 +3000,24 @@ export function XmtpChatProvider({
     const wireContent = encodeWireContent(trimmed, options)
     const optimisticParsed = parseWireContent(wireContent)
     try {
+      const conversationsApi = client.conversations as {
+        sync: () => Promise<unknown>
+        syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
+        getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+        list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+        listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
+          Array<Conversation | Dm | Group>
+        >
+      }
+
       let convo = await client.conversations.getConversationById(conversationId)
       if (!convo) {
-        const conversationsApi = client.conversations as {
-          sync: () => Promise<unknown>
-          syncAll?: (consentStates?: import('@xmtp/browser-sdk').ConsentState[]) => Promise<unknown>
-          getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
-          list: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
-            Array<Conversation | Dm | Group>
-          >
-          listGroups?: (options?: { consentStates?: import('@xmtp/browser-sdk').ConsentState[] }) => Promise<
-            Array<Conversation | Dm | Group>
-          >
-        }
+        evictConversationFromCache(conversationId)
         const resolved = await resolveConversationByIdWithSyncRetries(conversationsApi, conversationId, {
-          rounds: 5,
-          delayMs: 500,
+          rounds: 8,
+          delayMs: 600,
           preferencesApi: client.preferences,
         })
         if (resolved) {
@@ -2978,7 +3073,7 @@ export function XmtpChatProvider({
       console.error('[xmtp] sendMessage error:', e)
       throw e
     }
-  }, [markLocalStateInvalid])
+  }, [evictConversationFromCache, markLocalStateInvalid])
 
   const sendIntent = useCallback(async (
     conversationId: string,

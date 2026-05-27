@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / server/\_lib/deploy/featurePolicy/policy
+[4626-web](../../../../index.md) / server/\_lib/deploy/featurePolicy/policy
 
 # server/\_lib/deploy/featurePolicy/policy
 
@@ -12,7 +12,7 @@
 
 > **DeployFeaturePolicy** = `object`
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L12)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L13)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:12](https://github.com/
 
 > **failureCode**: `string`
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L16)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L17)
 
 ##### key
 
 > **key**: [`CreatorStrategyFeatureKey`](../../creatorStrategy/catalog.md#creatorstrategyfeaturekey) \| `"deploy_vanity"`
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L13)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L14)
 
 ##### requiresAnyOf
 
 > **requiresAnyOf**: [`CreatorStrategyFeatureKey`](../../creatorStrategy/catalog.md#creatorstrategyfeaturekey)[]
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L15)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L16)
 
 ##### stages
 
 > **stages**: (`"create"` \| `"phase2b"` \| `"phase3"` \| `"phase4"`)[]
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L14)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L15)
 
 ## Variables
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:14](https://github.com/
 
 > `const` **DEPLOY\_FEATURE\_POLICY\_MATRIX**: [`DeployFeaturePolicy`](#deployfeaturepolicy)[]
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L19)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L20)
 
 ## Functions
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:19](https://github.com/
 
 > **hasAnyFeatureActivation**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L59)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L54)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:59](https://github.com/
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### db
 
@@ -82,7 +82,7 @@ readonly [`CreatorStrategyFeatureKey`](../../creatorStrategy/catalog.md#creators
 
 > **listActiveCreatorFeatureKeys**(`params`): `Promise`\<[`CreatorStrategyFeatureKey`](../../creatorStrategy/catalog.md#creatorstrategyfeaturekey)[]\>
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L120)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L115)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:120](https://github.com
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### db
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:120](https://github.com
 
 > **missingDeployVanityFeatureHints**(`params`): `Promise`\<`string`[]\>
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L74)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L69)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:74](https://github.com/
 
 ###### creatorToken
 
-`` `0x${string}` ``
+`string`
 
 ###### db
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:74](https://github.com/
 
 > **readPolicyFlagEnabled**(`envName`, `defaultEnabled`): `boolean`
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L52)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L47)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:52](https://github.com/
 
 > **validateFeatureCompatibility**(`activeFeatureKeys`): \{ `ok`: `true`; \} \| \{ `code`: `string`; `message`: `string`; `ok`: `false`; \}
 
-Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:135](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/featurePolicy/policy.ts#L135)
+Defined in: [server/\_lib/deploy/featurePolicy/policy.ts:129](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/featurePolicy/policy.ts#L129)
 
 #### Parameters
 

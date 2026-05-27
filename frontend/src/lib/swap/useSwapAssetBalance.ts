@@ -17,7 +17,7 @@ type TokenBalanceApiData = {
   formatted: string
 }
 
-async function fetchSwapAssetBalanceViaApi(params: {
+export async function fetchSwapAssetBalanceViaApi(params: {
   ownerAddress: Address
   tokenAddress: string
 }): Promise<SwapAssetBalance> {

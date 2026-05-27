@@ -22,6 +22,7 @@ interface ModalProps {
   description?: string
   children: ReactNode
   className?: string
+  headerClassName?: string
   showClose?: boolean
   maxWidth?: string
   placement?: 'bottom-sheet' | 'center'
@@ -34,6 +35,7 @@ export function Modal({
   description,
   children,
   className,
+  headerClassName,
   showClose = true,
   maxWidth = 'max-w-lg',
   placement = 'center',
@@ -57,10 +59,10 @@ export function Modal({
           data-placement={placement}
         >
           {title || showClose ? (
-            <div className="flex items-start justify-between gap-4">
+            <div className={cn('flex shrink-0 items-start justify-between gap-4', headerClassName)}>
               <div className="min-w-0 space-y-1">
                 {title ? (
-                  <DialogPrimitive.Title className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                  <DialogPrimitive.Title className="text-lg font-semibold leading-tight tracking-tight text-foreground">
                     {title}
                   </DialogPrimitive.Title>
                 ) : null}

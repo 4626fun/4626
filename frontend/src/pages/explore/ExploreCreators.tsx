@@ -545,6 +545,7 @@ export function ExploreCreators() {
     isLoading,
     isFetching,
     hasRows: displayCoins.length > 0,
+    hasActiveSearch: trimmedSearchQuery.length > 0,
   })
 
   return (
@@ -600,7 +601,7 @@ export function ExploreCreators() {
                   />
                 ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isSearchingDirectMatches ? (
                   <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
-                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isFetchingNextPage ? (
+                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && (isFetchingNextPage || shouldAutoFetchForSearch) ? (
                   <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
                 ) : displayCoins.length === 0 ? (
                   <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />

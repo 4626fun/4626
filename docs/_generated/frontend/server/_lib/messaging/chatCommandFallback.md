@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/messaging/chatCommandFallback
+[4626-web](../../../index.md) / server/\_lib/messaging/chatCommandFallback
 
 # server/\_lib/messaging/chatCommandFallback
 
@@ -12,7 +12,7 @@
 
 > **NumberedCommandOption** = `object`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L1)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L1)
 
 #### Properties
 
@@ -20,27 +20,47 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:1](https://github.com
 
 > **command**: `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L3)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L3)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L4)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L4)
 
 ##### index
 
 > **index**: `number`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L2)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L2)
+
+***
+
+### WelcomeMenuResolution
+
+> **WelcomeMenuResolution** = \{ `kind`: `"passthrough"`; \} \| \{ `kind`: `"command"`; `resolvedText`: `string`; \} \| \{ `kind`: `"ai_prompt"`; \} \| \{ `kind`: `"invalid"`; `selection`: `string`; \}
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L46)
 
 ## Functions
+
+### formatAiPromptGuidance()
+
+> **formatAiPromptGuidance**(): `string`
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L40)
+
+#### Returns
+
+`string`
+
+***
 
 ### formatNumberedCommandFallback()
 
 > **formatNumberedCommandFallback**(`params?`): `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L19)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L19)
 
 #### Parameters
 
@@ -64,8 +84,44 @@ Defined in: [server/\_lib/messaging/chatCommandFallback.ts:19](https://github.co
 
 > **formatWelcomeNumberedOptions**(): `string`
 
-Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/chatCommandFallback.ts#L30)
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L30)
 
 #### Returns
 
 `string`
+
+***
+
+### resolveInboundMenuText()
+
+> **resolveInboundMenuText**(`input`): [`WelcomeMenuResolution`](#welcomemenuresolution)
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L63)
+
+#### Parameters
+
+##### input
+
+`string`
+
+#### Returns
+
+[`WelcomeMenuResolution`](#welcomemenuresolution)
+
+***
+
+### resolveWelcomeMenuSelection()
+
+> **resolveWelcomeMenuSelection**(`index`): [`WelcomeMenuResolution`](#welcomemenuresolution)
+
+Defined in: [server/\_lib/messaging/chatCommandFallback.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/chatCommandFallback.ts#L52)
+
+#### Parameters
+
+##### index
+
+`number`
+
+#### Returns
+
+[`WelcomeMenuResolution`](#welcomemenuresolution)

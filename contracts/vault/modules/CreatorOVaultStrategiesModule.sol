@@ -15,7 +15,7 @@ import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.strategies");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -38,6 +38,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     event DebtPurchased(address indexed strategy, uint256 amount, address indexed buyer);
     event UnrealisedLossAssessed(address indexed strategy, uint256 lossAmount);
     event AutoAllocated(address indexed strategy, uint256 amount);
+    event StrategiesRebalanced(uint256 totalWithdrawn, uint256 totalRedeployed);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -69,6 +70,27 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     }
 
     function addStrategy(address strategy, uint256 weight, bool addToQueue) public onlyDelegateCall {
+        _addStrategy(strategy, weight, addToQueue);
+    }
+
+    function migrateStrategy(address oldStrategy, address newStrategy, uint256 weight, bool addToQueue)
+        external
+        onlyDelegateCall
+    {
+        if (oldStrategy == address(0) || newStrategy == address(0)) revert ZeroAddress();
+        if (oldStrategy == newStrategy) revert ZeroAddress();
+
+        if (activeStrategies[oldStrategy]) {
+            _removeStrategy(oldStrategy);
+        }
+        _addStrategy(newStrategy, weight, addToQueue);
+    }
+
+    function removeStrategy(address strategy) external onlyDelegateCall {
+        _removeStrategy(strategy);
+    }
+
+    function _addStrategy(address strategy, uint256 weight, bool addToQueue) internal {
         if (strategy == address(0)) revert ZeroAddress();
         if (activeStrategies[strategy]) revert StrategyAlreadyActive();
         if (strategyList.length >= MAX_STRATEGIES) revert MaxStrategiesReached();
@@ -77,7 +99,6 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
 
         if (!IStrategy(strategy).isActive()) revert StrategyNotActive();
         address strategyAsset = IStrategy(strategy).asset();
-        // NOTE: vault storage doesn't have CREATOR_COIN (immutable); use ERC4626.asset().
         address expected = address(_creatorCoin());
         if (strategyAsset != expected) revert StrategyAssetMismatch(expected, strategyAsset);
 
@@ -94,7 +115,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         emit StrategyAdded(strategy, weight);
     }
 
-    function removeStrategy(address strategy) external onlyDelegateCall {
+    function _removeStrategy(address strategy) internal {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
 
         uint256 currentDebt = strategyDebt[strategy];
@@ -410,6 +431,137 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
     function forceDeployToStrategies() external onlyDelegateCall {
         if (totalStrategyWeight == 0) revert NoStrategies();
         _deployToStrategies();
+    }
+
+    /// @notice Pull overweight strategy TVL back to idle, then redeploy by weight.
+    /// @dev Cross-strategy moves always route vault idle — strategies never transfer directly.
+    /// @param minDeviationBps Minimum overweight drift (bps of target) before withdrawing excess.
+    function rebalanceStrategies(uint256 minDeviationBps) external onlyDelegateCall {
+        if (totalStrategyWeight == 0) revert NoStrategies();
+        if (minDeviationBps > MAX_BPS) revert InvalidWeight();
+
+        _syncCoinBalance();
+
+        uint256 minIdle = minimumTotalIdle > deploymentThreshold ? minimumTotalIdle : deploymentThreshold;
+        uint256 totalAssets = _sumActiveStrategyAssets(coinBalance);
+        uint256 deployableBase = totalAssets > minIdle ? totalAssets - minIdle : 0;
+
+        uint256 totalWithdrawn;
+        uint256 totalRedeployed;
+
+        if (deployableBase > 0) {
+            address[] memory queue =
+                useDefaultQueue && defaultQueue.length > 0 ? defaultQueue : strategyList;
+            uint256 queueLength = queue.length;
+
+            for (uint256 i = 0; i < queueLength; i++) {
+                address strategy = queue[i];
+                if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+
+                uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
+                uint256 actualAssets = _getStrategyAssetsSafe(strategy);
+                if (actualAssets <= targetAssets) continue;
+
+                uint256 excess = actualAssets - targetAssets;
+                if (targetAssets > 0) {
+                    uint256 driftThreshold = (targetAssets * minDeviationBps) / MAX_BPS;
+                    if (excess <= driftThreshold) continue;
+                } else if (minDeviationBps > 0) {
+                    continue;
+                }
+
+                uint256 currentDebt = strategyDebt[strategy];
+                uint256 withdrawn = _tryWithdrawFromStrategyMeasured(strategy, excess);
+                if (withdrawn == 0) continue;
+
+                totalWithdrawn += withdrawn;
+
+                uint256 debtReduction = withdrawn > currentDebt ? currentDebt : withdrawn;
+                uint256 newDebt = currentDebt - debtReduction;
+                strategyDebt[strategy] = newDebt;
+                totalDebt -= debtReduction;
+
+                emit DebtUpdated(strategy, currentDebt, newDebt);
+                emit StrategyWithdrawn(strategy, withdrawn);
+            }
+        }
+
+        uint256 idleBeforeDeploy = _syncCoinBalance();
+        if (idleBeforeDeploy > minIdle) {
+            totalRedeployed = _deployUnderweightStrategies(deployableBase, minIdle);
+        }
+
+        emit StrategiesRebalanced(totalWithdrawn, totalRedeployed);
+    }
+
+    function _deployUnderweightStrategies(uint256 deployableBase, uint256 minIdle)
+        internal
+        returns (uint256 totalDeposited)
+    {
+        if (deployableBase == 0 || totalStrategyWeight == 0) return 0;
+
+        uint256 idleBalance = _syncCoinBalance();
+        uint256 deployable = idleBalance > minIdle ? idleBalance - minIdle : 0;
+        if (deployable == 0) return 0;
+
+        uint256 underweightWeight;
+        uint256 length = strategyList.length;
+        for (uint256 i = 0; i < length; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+
+            uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
+            uint256 actualAssets = _getStrategyAssetsSafe(strategy);
+            if (actualAssets < targetAssets) {
+                underweightWeight += strategyWeights[strategy];
+            }
+        }
+
+        if (underweightWeight == 0) return 0;
+
+        for (uint256 i = 0; i < length && deployable > 0; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy] || strategyWeights[strategy] == 0) continue;
+
+            uint256 targetAssets = (deployableBase * strategyWeights[strategy]) / totalStrategyWeight;
+            uint256 actualAssets = _getStrategyAssetsSafe(strategy);
+            if (actualAssets >= targetAssets) continue;
+
+            uint256 deficit = targetAssets - actualAssets;
+            uint256 weightedSlice = (deployable * strategyWeights[strategy]) / underweightWeight;
+            uint256 amount = weightedSlice > deficit ? deficit : weightedSlice;
+            if (amount > coinBalance) amount = coinBalance;
+            if (amount == 0) continue;
+
+            uint256 currentDebt = strategyDebt[strategy];
+            uint256 deposited = _depositIntoStrategyMeasured(strategy, amount);
+            if (deposited == 0) continue;
+
+            totalDeposited += deposited;
+            deployable = deployable > deposited ? deployable - deposited : 0;
+
+            uint256 newDebt = currentDebt + deposited;
+            strategyDebt[strategy] = newDebt;
+            totalDebt += deposited;
+
+            emit DebtUpdated(strategy, currentDebt, newDebt);
+            emit StrategyDeployed(strategy, deposited);
+        }
+
+        if (totalDeposited > 0) {
+            lastDeployment = block.timestamp;
+        }
+    }
+
+    function _sumActiveStrategyAssets(uint256 idleBalance) internal view returns (uint256 total) {
+        total = idleBalance;
+        uint256 length = strategyList.length;
+        for (uint256 i = 0; i < length; i++) {
+            address strategy = strategyList[i];
+            if (activeStrategies[strategy]) {
+                total += _getStrategyAssetsSafe(strategy);
+            }
+        }
     }
 
     function _deployToStrategies() internal {

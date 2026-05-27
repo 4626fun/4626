@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/onchain/coinTradeRewardsBatch
+[4626-web](../../../index.md) / src/lib/onchain/coinTradeRewardsBatch
 
 # src/lib/onchain/coinTradeRewardsBatch
 
@@ -12,7 +12,7 @@
 
 > **fetchCoinTradeRewardsBatchFromApi**(`params`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/coinTradeRewardsBatch.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/coinTradeRewardsBatch.ts#L4)
+Defined in: [src/lib/onchain/coinTradeRewardsBatch.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/onchain/coinTradeRewardsBatch.ts#L4)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/onchain/coinTradeRewardsBatch.ts:4](https://github.com/wena
 
 ###### recipient
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 

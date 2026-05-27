@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/uniswap/error
+[4626-web](../../../index.md) / src/lib/uniswap/error
 
 # src/lib/uniswap/error
 
@@ -12,7 +12,7 @@
 
 > **NormalizedUniswapError** = `object`
 
-Defined in: [src/lib/uniswap/error.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L17)
+Defined in: [src/lib/uniswap/error.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L17)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/uniswap/error.ts:17](https://github.com/wenakita/4626/blob/
 
 > **code**: [`UniswapErrorCode`](#uniswaperrorcode)
 
-Defined in: [src/lib/uniswap/error.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L18)
+Defined in: [src/lib/uniswap/error.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L18)
 
 ##### message
 
 > **message**: `string`
 
-Defined in: [src/lib/uniswap/error.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L19)
+Defined in: [src/lib/uniswap/error.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L19)
 
 ##### retryable
 
 > **retryable**: `boolean`
 
-Defined in: [src/lib/uniswap/error.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L20)
+Defined in: [src/lib/uniswap/error.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L20)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/uniswap/error.ts:20](https://github.com/wenakita/4626/blob/
 
 > **UniswapErrorCode** = `"INSUFFICIENT_FUNDS"` \| `"INSUFFICIENT_GAS"` \| `"AUTH_REQUIRED"` \| `"FORBIDDEN_ORIGIN"` \| `"APPROVAL_REQUIRED"` \| `"QUOTE_EXPIRED"` \| `"CHAIN_MISMATCH"` \| `"SLIPPAGE_EXCEEDED"` \| `"RATE_LIMITED"` \| `"RPC_UNAVAILABLE"` \| `"WALLET_REJECTED"` \| `"NONCE_CONFLICT"` \| `"NETWORK_TIMEOUT"` \| `"UNKNOWN"`
 
-Defined in: [src/lib/uniswap/error.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L1)
+Defined in: [src/lib/uniswap/error.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L1)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/uniswap/error.ts:1](https://github.com/wenakita/4626/blob/m
 
 > **normalizeUniswapError**(`input`): [`NormalizedUniswapError`](#normalizeduniswaperror)
 
-Defined in: [src/lib/uniswap/error.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/error.ts#L29)
+Defined in: [src/lib/uniswap/error.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/error.ts#L29)
 
 #### Parameters
 

@@ -4,10 +4,14 @@
  */
 
 import type { PortfolioChain, PortfolioToken, WalletPortfolio } from './debankPortfolio.js'
+import {
+  ETHERSCAN_V2_BASE_CHAIN_ID,
+  fetchEtherscanV2Json,
+  getEtherscanApiKey,
+} from './etherscanV2.js'
 
-const ETHERSCAN_V2_BASE = 'https://api.etherscan.io/v2/api'
-const BASE_CHAIN_ID = 8453
 const DEFILLAMA_PRICE_BASE = 'https://coins.llama.fi/prices/current'
+const ETHERSCAN_TOKEN_PAGE_SIZE = 100
 
 type EtherscanTokenRow = {
   TokenAddress?: string
@@ -17,31 +21,33 @@ type EtherscanTokenRow = {
   TokenDivisor?: string
 }
 
-function getEtherscanApiKey(): string {
-  return (process.env.ETHERSCAN_API_KEY ?? '').trim()
-}
+async function fetchAddressTokenBalances(
+  address: string,
+  maxTokens: number,
+): Promise<EtherscanTokenRow[]> {
+  const apiKey = getEtherscanApiKey()
+  if (!apiKey) return []
 
-async function fetchEtherscanJson<T>(params: Record<string, string>, apiKey: string): Promise<T | null> {
-  const url = new URL(ETHERSCAN_V2_BASE)
-  url.searchParams.set('chainid', String(BASE_CHAIN_ID))
-  url.searchParams.set('apikey', apiKey)
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value)
+  const out: EtherscanTokenRow[] = []
+  const maxPages = Math.min(3, Math.ceil(maxTokens / ETHERSCAN_TOKEN_PAGE_SIZE))
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const rows = await fetchEtherscanV2Json<EtherscanTokenRow[]>(
+      {
+        module: 'account',
+        action: 'addresstokenbalance',
+        address,
+        page: String(page),
+        offset: String(ETHERSCAN_TOKEN_PAGE_SIZE),
+      },
+      { chainId: ETHERSCAN_V2_BASE_CHAIN_ID },
+    )
+    if (!Array.isArray(rows) || rows.length === 0) break
+    out.push(...rows)
+    if (rows.length < ETHERSCAN_TOKEN_PAGE_SIZE) break
   }
 
-  const ctrl = new AbortController()
-  const timeout = setTimeout(() => ctrl.abort(), 12_000)
-  try {
-    const res = await fetch(url.toString(), { signal: ctrl.signal })
-    if (!res.ok) return null
-    const data = (await res.json()) as { status?: string; result?: T }
-    if (data.status !== '1') return null
-    return data.result ?? null
-  } catch {
-    return null
-  } finally {
-    clearTimeout(timeout)
-  }
+  return out.slice(0, maxTokens)
 }
 
 async function fetchEthUsdPrice(): Promise<number> {
@@ -103,7 +109,6 @@ function parseTokenRow(row: EtherscanTokenRow, prices: Map<string, number>): Por
 
   const price = prices.get(address) ?? 0
   const usdValue = price > 0 ? amount * price : 0
-  if (usdValue <= 0) return null
 
   return {
     id: address,
@@ -131,18 +136,15 @@ export async function getTrayWalletPortfolioBaseEtherscan(
   const topN = options.topTokenCount ?? 50
 
   const [weiBalance, tokenRows, ethUsd] = await Promise.all([
-    fetchEtherscanJson<string>(
+    fetchEtherscanV2Json<string>(
       { module: 'account', action: 'balance', address: addr, tag: 'latest' },
-      apiKey,
+      { chainId: ETHERSCAN_V2_BASE_CHAIN_ID },
     ),
-    fetchEtherscanJson<EtherscanTokenRow[]>(
-      { module: 'account', action: 'addresstokenbalance', address: addr, page: '1', offset: '100' },
-      apiKey,
-    ),
+    fetchAddressTokenBalances(addr, Math.max(topN, ETHERSCAN_TOKEN_PAGE_SIZE)),
     fetchEthUsdPrice(),
   ])
 
-  const contractAddresses = (Array.isArray(tokenRows) ? tokenRows : [])
+  const contractAddresses = tokenRows
     .map((row) => String(row.TokenAddress ?? '').trim().toLowerCase())
     .filter((a) => /^0x[a-f0-9]{40}$/.test(a))
 
@@ -170,12 +172,12 @@ export async function getTrayWalletPortfolioBaseEtherscan(
     }
   }
 
-  for (const row of Array.isArray(tokenRows) ? tokenRows : []) {
+  for (const row of tokenRows) {
     const parsed = parseTokenRow(row, prices)
     if (parsed) topTokens.push(parsed)
   }
 
-  topTokens.sort((a, b) => b.usdValue - a.usdValue)
+  topTokens.sort((a, b) => b.usdValue - a.usdValue || b.amount - a.amount)
   const trimmed = topTokens.slice(0, topN)
   const totalUsdValue = trimmed.reduce((sum, token) => sum + token.usdValue, 0)
 

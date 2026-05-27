@@ -116,9 +116,18 @@ export function creatorCoinRawLogo(address: string, chainId = BASE_CHAIN_ID): st
   return `/api/v1/token/${getAddress(address).toLowerCase()}/image?chain=${chainId}&format=png&style=raw&tokenKind=creator`
 }
 
+function isOpaqueInternalTokenLabel(value: string | undefined): boolean {
+  const trimmed = String(value ?? '').trim()
+  if (!trimmed) return true
+  if (isAddress(trimmed)) return false
+  if (/^[a-f0-9]{20,}$/i.test(trimmed)) return true
+  return false
+}
+
 function isGenericLabel(value: string | undefined, group: TokenOption['group'] | undefined, address: string): boolean {
   const normalized = String(value ?? '').trim().toLowerCase()
   if (!normalized) return true
+  if (isOpaqueInternalTokenLabel(normalized)) return true
   if (normalized === shortAddress(address).toLowerCase()) return true
   if (normalized === 'token' || normalized === 'unknown') return true
   if (group === 'creator' && normalized === 'creator coin') return true

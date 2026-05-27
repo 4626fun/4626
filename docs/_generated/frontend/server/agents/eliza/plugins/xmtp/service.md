@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / server/agents/eliza/plugins/xmtp/service
+[4626-web](../../../../../index.md) / server/agents/eliza/plugins/xmtp/service
 
 # server/agents/eliza/plugins/xmtp/service
 
@@ -10,7 +10,7 @@
 
 ### XmtpService
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:241](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L241)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:314](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L314)
 
 #### Constructors
 
@@ -18,7 +18,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:241](https://github.com
 
 > **new XmtpService**(`config`): [`XmtpService`](#xmtpservice)
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:255](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L255)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:328](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L328)
 
 ###### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:255](https://github.com
 
 > **get** **address**(): `string` \| `undefined`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:264](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L264)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:337](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L337)
 
 ###### Returns
 
@@ -50,7 +50,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:264](https://github.com
 
 > **get** **isRunning**(): `boolean`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:268](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L268)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:341](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L341)
 
 ###### Returns
 
@@ -62,7 +62,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:268](https://github.com
 
 > **createDm**(`address`): `Promise`\<`string`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:459](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L459)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:534](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L534)
 
 Create a DM with an address
 
@@ -80,7 +80,7 @@ Create a DM with an address
 
 > **deriveConversationArchiveKey**(`conversationId`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:481](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L481)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:556](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L556)
 
 Derive a stable, conversation-scoped archive key from the XMTP signer.
 This avoids using app-level env secrets for Grove archive encryption.
@@ -99,7 +99,7 @@ This avoids using app-level env secrets for Grove archive encryption.
 
 > **getHealth**(): `object`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:272](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L272)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:345](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L345)
 
 ###### Returns
 
@@ -133,7 +133,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:272](https://github.com
 
 > **resolveInboxAddress**(`inboxId`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:466](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L466)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:541](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L541)
 
 Resolve an inbox ID to an Ethereum address
 
@@ -151,7 +151,7 @@ Resolve an inbox ID to an Ethereum address
 
 > **sendToConversation**(`conversationId`, `text`): `Promise`\<`void`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:451](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L451)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:526](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L526)
 
 Send a text message to a conversation
 
@@ -173,7 +173,7 @@ Send a text message to a conversation
 
 > **setMessageHandler**(`handler`): `void`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:260](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L260)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:333](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L333)
 
 Register a callback that receives messages and returns an optional reply
 
@@ -191,7 +191,7 @@ Register a callback that receives messages and returns an optional reply
 
 > **start**(): `Promise`\<`void`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:291](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L291)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:364](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L364)
 
 Start the XMTP agent and begin streaming messages
 
@@ -203,7 +203,7 @@ Start the XMTP agent and begin streaming messages
 
 > **stop**(): `Promise`\<`void`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:437](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L437)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:512](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L512)
 
 Stop the XMTP agent
 
@@ -215,9 +215,9 @@ Stop the XMTP agent
 
 ### OnMessageCallback()
 
-> **OnMessageCallback** = (`msg`) => `Promise`\<`string` \| `null`\>
+> **OnMessageCallback** = (`msg`) => `Promise`\<[`XmtpAgentReply`](../../../../../src/lib/xmtp/xmtpInteractive.md#xmtpagentreply) \| `string` \| `null`\>
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:233](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L233)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:249](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L249)
 
 #### Parameters
 
@@ -227,7 +227,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:233](https://github.com
 
 #### Returns
 
-`Promise`\<`string` \| `null`\>
+`Promise`\<[`XmtpAgentReply`](../../../../../src/lib/xmtp/xmtpInteractive.md#xmtpagentreply) \| `string` \| `null`\>
 
 ***
 
@@ -235,7 +235,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:233](https://github.com
 
 > **XmtpConfig** = `object`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L188)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:197](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L197)
 
 #### Properties
 
@@ -243,7 +243,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:188](https://github.com
 
 > `optional` **dbEncryptionKey**: `` `0x${string}` ``
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:211](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L211)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:220](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L220)
 
 Hex-encoded encryption key for the XMTP local database (0x-prefixed, 32 bytes).
 Required by the SDK to encrypt/decrypt the persisted .db3 files.
@@ -255,7 +255,7 @@ Generate with: `openssl rand -hex 32` (then prefix with 0x).
 
 > `optional` **dbPath**: `string` \| `null` \| (`inboxId`) => `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:203](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L203)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:212](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L212)
 
 Stable path (or factory) for the XMTP local database.
 If provided, the SDK reuses the same installation across restarts
@@ -268,7 +268,7 @@ Can be a string (absolute path to the .db3 file), a function
 
 > `optional` **env**: `"production"` \| `"dev"` \| `"local"`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L194)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:203](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L203)
 
 XMTP network: 'production' | 'dev' | 'local'
 
@@ -276,7 +276,7 @@ XMTP network: 'production' | 'dev' | 'local'
 
 > `optional` **privateKey**: `` `0x${string}` ``
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:190](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L190)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:199](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L199)
 
 Hex-encoded private key for the XMTP agent identity (EOA mode)
 
@@ -284,7 +284,7 @@ Hex-encoded private key for the XMTP agent identity (EOA mode)
 
 > `optional` **revokeOtherInstallations**: `boolean`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:217](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L217)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:226](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L226)
 
 If true, revoke all other installations for this inbox after
 connecting. Use this to recover from the 10/10 installation limit.
@@ -294,7 +294,7 @@ Defaults to false.
 
 > `optional` **signer**: `any`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:192](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L192)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:201](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L201)
 
 Custom signer (CSW mode — passed directly to Agent.create)
 
@@ -304,69 +304,111 @@ Custom signer (CSW mode — passed directly to Agent.create)
 
 > **XmtpMessage** = `object`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:220](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L220)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:229](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L229)
 
 #### Properties
+
+##### clientHint
+
+> **clientHint**: `string` \| `null`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:245](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L245)
+
+##### codec
+
+> **codec**: `string` \| `null`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:244](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L244)
 
 ##### content
 
 > **content**: `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:226](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L226)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:236](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L236)
+
+##### contentType
+
+> **contentType**: `string` \| `null`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:243](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L243)
 
 ##### conversationArchiveKey?
 
 > `optional` **conversationArchiveKey**: `string` \| `null`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:230](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L230)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:240](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L240)
 
 ##### conversationId
 
 > **conversationId**: `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:221](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L221)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:230](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L230)
 
 ##### conversationType
 
 > **conversationType**: `"dm"` \| `"group"`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:222](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L222)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:231](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L231)
 
 ##### isSelf
 
 > **isSelf**: `boolean`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:229](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L229)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:239](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L239)
 
 ##### messageId
 
 > **messageId**: `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:225](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L225)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:235](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L235)
+
+##### parseStatus
+
+> **parseStatus**: `"ok"` \| `"non_text_coerced"`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:246](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L246)
+
+##### recipientAddress
+
+> **recipientAddress**: `string` \| `null`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:232](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L232)
 
 ##### senderAddress
 
 > **senderAddress**: `string` \| `null`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:224](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L224)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:234](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L234)
 
 ##### senderInboxId
 
 > **senderInboxId**: `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:223](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L223)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:233](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L233)
 
 ##### sentAt
 
 > **sentAt**: `Date`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:227](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L227)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:237](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L237)
 
 ##### sentAtMs
 
 > **sentAtMs**: `number`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L228)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:238](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L238)
+
+##### source
+
+> **source**: `"xmtp"`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:241](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L241)
+
+##### sourceHint
+
+> **sourceHint**: `"unknown"` \| `"zora_likely"` \| `"app_likely"`
+
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:242](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L242)
 
 ## Functions
 
@@ -374,7 +416,7 @@ Defined in: [server/agents/eliza/plugins/xmtp/service.ts:228](https://github.com
 
 > **deriveInboundMessageDedupeKey**(`input`): `string`
 
-Defined in: [server/agents/eliza/plugins/xmtp/service.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/xmtp/service.ts#L59)
+Defined in: [server/agents/eliza/plugins/xmtp/service.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/xmtp/service.ts#L68)
 
 #### Parameters
 

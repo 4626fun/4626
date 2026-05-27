@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lens/lensGrove
+[4626-web](../../../index.md) / server/\_lib/lens/lensGrove
 
 # server/\_lib/lens/lensGrove
 
@@ -12,7 +12,7 @@
 
 > **GroveSigner** = `object`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:212](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L212)
+Defined in: [server/\_lib/lens/lensGrove.ts:212](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L212)
 
 Signer for mutable Grove operations (matches the SDK's `Signer` interface).
 
@@ -22,13 +22,13 @@ Signer for mutable Grove operations (matches the SDK's `Signer` interface).
 
 > **address**: `HexAddress`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:214](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L214)
+Defined in: [server/\_lib/lens/lensGrove.ts:214](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L214)
 
 ##### signMessage()
 
 > **signMessage**: (`args`) => `Promise`\<`string`\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:213](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L213)
+Defined in: [server/\_lib/lens/lensGrove.ts:213](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L213)
 
 ###### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:213](https://github.com/wenakita/462
 
 > **GroveUploadAttempt** = \{ `ok`: `true`; `result`: [`GroveUploadResult`](#groveuploadresult); \} \| \{ `error`: `string`; `ok`: `false`; \}
 
-Defined in: [server/\_lib/lens/lensGrove.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L91)
+Defined in: [server/\_lib/lens/lensGrove.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L91)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:91](https://github.com/wenakita/4626
 
 > **GroveUploadResult** = `object`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L45)
+Defined in: [server/\_lib/lens/lensGrove.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L45)
 
 #### Properties
 
@@ -64,25 +64,25 @@ Defined in: [server/\_lib/lens/lensGrove.ts:45](https://github.com/wenakita/4626
 
 > **gatewayUrl**: `string`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L47)
+Defined in: [server/\_lib/lens/lensGrove.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L47)
 
 ##### lensUri
 
 > **lensUri**: `string`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L48)
+Defined in: [server/\_lib/lens/lensGrove.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L48)
 
 ##### statusUrl
 
 > **statusUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L49)
+Defined in: [server/\_lib/lens/lensGrove.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L49)
 
 ##### storageKey
 
 > **storageKey**: `string`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L46)
+Defined in: [server/\_lib/lens/lensGrove.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L46)
 
 ***
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:46](https://github.com/wenakita/4626
 
 > **MutableAclType** = `"wallet"` \| `"lensAccount"`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:151](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L151)
+Defined in: [server/\_lib/lens/lensGrove.ts:151](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L151)
 
 ## Variables
 
@@ -98,7 +98,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:151](https://github.com/wenakita/462
 
 > `const` **BASE\_CHAIN\_ID**: `8453` = `8453`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L11)
+Defined in: [server/\_lib/lens/lensGrove.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L11)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:11](https://github.com/wenakita/4626
 
 > `const` **LENS\_MAINNET\_CHAIN\_ID**: `232` = `232`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L10)
+Defined in: [server/\_lib/lens/lensGrove.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L10)
 
 ## Functions
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:10](https://github.com/wenakita/4626
 
 > **getGroveChainId**(): `number`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L17)
+Defined in: [server/\_lib/lens/lensGrove.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L17)
 
 Returns the configured Grove chain ID from the environment.
 Defaults to Lens Mainnet (232). Set `GROVE_CHAIN_ID=8453` for Base-specific data.
@@ -129,7 +129,7 @@ Defaults to Lens Mainnet (232). Set `GROVE_CHAIN_ID=8453` for Base-specific data
 
 > **getStorageClient**(): `StorageClient`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L32)
+Defined in: [server/\_lib/lens/lensGrove.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L32)
 
 #### Returns
 
@@ -141,7 +141,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:32](https://github.com/wenakita/4626
 
 > **resolveLensUri**(`uri`): `string`
 
-Defined in: [server/\_lib/lens/lensGrove.ts:275](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L275)
+Defined in: [server/\_lib/lens/lensGrove.ts:275](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L275)
 
 #### Parameters
 
@@ -159,7 +159,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:275](https://github.com/wenakita/462
 
 > **tryUploadImmutableFile**(`file`, `chainId`): `Promise`\<[`GroveUploadAttempt`](#groveuploadattempt)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L127)
+Defined in: [server/\_lib/lens/lensGrove.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L127)
 
 Try to upload a file to Grove with one automatic retry.
 Returns `{ ok: true, result }` on success or `{ ok: false, error }` on
@@ -185,7 +185,7 @@ failure — never throws.
 
 > **tryUploadImmutableJson**(`data`, `chainId`): `Promise`\<[`GroveUploadAttempt`](#groveuploadattempt)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L100)
+Defined in: [server/\_lib/lens/lensGrove.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L100)
 
 Try to upload JSON to Grove with one automatic retry.
 Returns `{ ok: true, result }` on success or `{ ok: false, error }` on
@@ -211,7 +211,7 @@ failure — never throws.
 
 > **tryUploadMutableJson**(`data`, `opts`): `Promise`\<[`GroveUploadAttempt`](#groveuploadattempt)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:247](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L247)
+Defined in: [server/\_lib/lens/lensGrove.ts:247](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L247)
 
 Graceful mutable JSON upload — retry once, return null on failure.
 
@@ -245,7 +245,7 @@ Graceful mutable JSON upload — retry once, return null on failure.
 
 > **updateMutableJson**(`storageKey`, `data`, `signer`, `opts`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:223](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L223)
+Defined in: [server/\_lib/lens/lensGrove.ts:223](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L223)
 
 Update existing mutable JSON content on Grove.
 
@@ -290,7 +290,7 @@ a signer that matches the original ACL, and the ACL for the updated content.
 
 > **uploadImmutableFile**(`file`, `chainId`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L78)
+Defined in: [server/\_lib/lens/lensGrove.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L78)
 
 #### Parameters
 
@@ -312,7 +312,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:78](https://github.com/wenakita/4626
 
 > **uploadImmutableJson**(`data`, `chainId`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L65)
+Defined in: [server/\_lib/lens/lensGrove.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L65)
 
 #### Parameters
 
@@ -334,7 +334,7 @@ Defined in: [server/\_lib/lens/lensGrove.ts:65](https://github.com/wenakita/4626
 
 > **uploadMutableFile**(`file`, `opts`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:190](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L190)
+Defined in: [server/\_lib/lens/lensGrove.ts:190](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L190)
 
 Upload a file to Grove with a mutable ACL.
 
@@ -368,7 +368,7 @@ Upload a file to Grove with a mutable ACL.
 
 > **uploadMutableJson**(`data`, `opts`): `Promise`\<[`GroveUploadResult`](#groveuploadresult)\>
 
-Defined in: [server/\_lib/lens/lensGrove.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/lensGrove.ts#L168)
+Defined in: [server/\_lib/lens/lensGrove.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lens/lensGrove.ts#L168)
 
 Upload JSON to Grove with a mutable ACL.
 

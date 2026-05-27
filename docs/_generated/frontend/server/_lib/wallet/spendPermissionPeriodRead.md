@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/spendPermissionPeriodRead
+[4626-web](../../../index.md) / server/\_lib/wallet/spendPermissionPeriodRead
 
 # server/\_lib/wallet/spendPermissionPeriodRead
 
@@ -12,7 +12,7 @@
 
 > **SpendPermissionCurrentPeriod** = `object`
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L29)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L29)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:29](https://github
 
 > **end**: `number`
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L33)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L33)
 
 Unix seconds (uint48 from chain).
 
@@ -28,7 +28,7 @@ Unix seconds (uint48 from chain).
 
 > **remainingWei**: `string`
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L37)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L37)
 
 Wei remaining in the current period (allowance − spend), stringified.
 
@@ -36,7 +36,7 @@ Wei remaining in the current period (allowance − spend), stringified.
 
 > **spendWei**: `string`
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L35)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L35)
 
 Wei spent in the current period so far, stringified bigint.
 
@@ -44,7 +44,7 @@ Wei spent in the current period so far, stringified bigint.
 
 > **start**: `number`
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L31)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L31)
 
 Unix seconds (uint48 from chain).
 
@@ -54,7 +54,7 @@ Unix seconds (uint48 from chain).
 
 > **readSpendPermissionCurrentPeriod**(`client`, `payload`): `Promise`\<[`SpendPermissionCurrentPeriod`](#spendpermissioncurrentperiod) \| `null`\>
 
-Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L78)
+Defined in: [server/\_lib/wallet/spendPermissionPeriodRead.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/spendPermissionPeriodRead.ts#L78)
 
 Read `SpendPermissionManager.getCurrentPeriodSpend(permission)` on
 Base and return the normalized shape the UI needs.

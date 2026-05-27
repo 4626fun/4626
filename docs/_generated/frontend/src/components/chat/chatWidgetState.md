@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/chatWidgetState
+[4626-web](../../../index.md) / src/components/chat/chatWidgetState
 
 # src/components/chat/chatWidgetState
 
@@ -12,7 +12,7 @@
 
 > **OpenWindow** = `object`
 
-Defined in: [src/components/chat/chatWidgetState.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L1)
+Defined in: [src/components/chat/chatWidgetState.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L1)
 
 #### Properties
 
@@ -20,49 +20,49 @@ Defined in: [src/components/chat/chatWidgetState.ts:1](https://github.com/wenaki
 
 > **id**: `string`
 
-Defined in: [src/components/chat/chatWidgetState.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L2)
+Defined in: [src/components/chat/chatWidgetState.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L2)
 
 ##### imageUrl?
 
 > `optional` **imageUrl**: `string`
 
-Defined in: [src/components/chat/chatWidgetState.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L7)
+Defined in: [src/components/chat/chatWidgetState.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L7)
 
 ##### minimized
 
 > **minimized**: `boolean`
 
-Defined in: [src/components/chat/chatWidgetState.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L8)
+Defined in: [src/components/chat/chatWidgetState.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L8)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/components/chat/chatWidgetState.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L3)
+Defined in: [src/components/chat/chatWidgetState.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L3)
 
 ##### peerAddress?
 
 > `optional` **peerAddress**: `string`
 
-Defined in: [src/components/chat/chatWidgetState.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L6)
+Defined in: [src/components/chat/chatWidgetState.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L6)
 
 ##### peerInboxId?
 
 > `optional` **peerInboxId**: `string`
 
-Defined in: [src/components/chat/chatWidgetState.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L5)
+Defined in: [src/components/chat/chatWidgetState.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L5)
 
 ##### seedCommandId?
 
 > `optional` **seedCommandId**: `string` \| `null`
 
-Defined in: [src/components/chat/chatWidgetState.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L9)
+Defined in: [src/components/chat/chatWidgetState.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L9)
 
 ##### type
 
 > **type**: `"dm"` \| `"group"`
 
-Defined in: [src/components/chat/chatWidgetState.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L4)
+Defined in: [src/components/chat/chatWidgetState.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L4)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [src/components/chat/chatWidgetState.ts:4](https://github.com/wenaki
 
 > **rekeyOpenWindows**(`windows`, `oldConversationId`, `newConversationId`): [`OpenWindow`](#openwindow)[]
 
-Defined in: [src/components/chat/chatWidgetState.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/chatWidgetState.ts#L12)
+Defined in: [src/components/chat/chatWidgetState.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/chatWidgetState.ts#L12)
 
 #### Parameters
 

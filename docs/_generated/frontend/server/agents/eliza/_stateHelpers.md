@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/agents/eliza/\_stateHelpers
+[4626-web](../../../index.md) / server/agents/eliza/\_stateHelpers
 
 # server/agents/eliza/\_stateHelpers
 
@@ -12,7 +12,7 @@
 
 > **buildContinuityContextBlock**(`state`): `string`
 
-Defined in: [server/agents/eliza/\_stateHelpers.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_stateHelpers.ts#L24)
+Defined in: [server/agents/eliza/\_stateHelpers.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_stateHelpers.ts#L24)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/agents/eliza/\_stateHelpers.ts:24](https://github.com/wenaki
 
 > **buildFallbackHistoryBlock**(`state`): `string`
 
-Defined in: [server/agents/eliza/\_stateHelpers.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_stateHelpers.ts#L8)
+Defined in: [server/agents/eliza/\_stateHelpers.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_stateHelpers.ts#L8)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/agents/eliza/\_stateHelpers.ts:8](https://github.com/wenakit
 
 > **xmlEscape**(`value`): `string`
 
-Defined in: [server/agents/eliza/\_stateHelpers.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_stateHelpers.ts#L1)
+Defined in: [server/agents/eliza/\_stateHelpers.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_stateHelpers.ts#L1)
 
 #### Parameters
 

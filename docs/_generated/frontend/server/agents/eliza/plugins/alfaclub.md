@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / server/agents/eliza/plugins/alfaclub
+[4626-web](../../../../index.md) / server/agents/eliza/plugins/alfaclub
 
 # server/agents/eliza/plugins/alfaclub
 
@@ -12,7 +12,7 @@
 
 > `const` **alfaclubPlugin**: `Plugin`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:422](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L422)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:422](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L422)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:422](https://github.c
 
 > **formatCreatorDetail**(`params`): `string`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L176)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L176)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:176](https://github.c
 
 > **formatHelp**(): `string`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:259](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L259)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:259](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L259)
 
 #### Returns
 
@@ -68,7 +68,7 @@ Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:259](https://github.c
 
 > **formatLeaderboard**(`params`): `string`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L121)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L121)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:121](https://github.c
 
 > **formatStatus**(`flags`): `string`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:243](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L243)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:243](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L243)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:243](https://github.c
 
 > **parseSubcommand**(`text`): `object`
 
-Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L77)
+Defined in: [server/agents/eliza/plugins/alfaclub/index.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/alfaclub/index.ts#L77)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/ai/chat
+[4626-web](../../index.md) / server/ai/chat
 
 # server/ai/chat
 
@@ -12,7 +12,7 @@
 
 > **ChatRuntimeBridge** = `ReturnType`\<*typeof* [`createRuntimeBridge`](../agents/eliza/runtimeBridge.md#createruntimebridge)\>
 
-Defined in: [server/ai/chat.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L21)
+Defined in: [server/ai/chat.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L21)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/ai/chat.ts:21](https://github.com/wenakita/4626/blob/main/fr
 
 > **SharedConversationalRuntimeContext** = `object`
 
-Defined in: [server/ai/chat.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L22)
+Defined in: [server/ai/chat.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L22)
 
 #### Properties
 
@@ -28,19 +28,19 @@ Defined in: [server/ai/chat.ts:22](https://github.com/wenakita/4626/blob/main/fr
 
 > **inboundMemory**: `unknown`
 
-Defined in: [server/ai/chat.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L24)
+Defined in: [server/ai/chat.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L24)
 
 ##### runtimeBridge
 
 > **runtimeBridge**: [`ChatRuntimeBridge`](#chatruntimebridge)
 
-Defined in: [server/ai/chat.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L23)
+Defined in: [server/ai/chat.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L23)
 
 ##### state
 
 > **state**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/ai/chat.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L25)
+Defined in: [server/ai/chat.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L25)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [server/ai/chat.ts:25](https://github.com/wenakita/4626/blob/main/fr
 
 > **generateLlmResponse**(`params`): `Promise`\<\{ `handledByRuntime`: `boolean`; `ok`: `true`; `response`: `string`; \} \| \{ `handledByRuntime`: `boolean`; `ok`: `false`; `response`: `string`; \}\>
 
-Defined in: [server/ai/chat.ts:436](https://github.com/wenakita/4626/blob/main/frontend/server/ai/chat.ts#L436)
+Defined in: [server/ai/chat.ts:436](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/ai/chat.ts#L436)
 
 #### Parameters
 

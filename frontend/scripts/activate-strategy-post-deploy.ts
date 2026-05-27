@@ -3,8 +3,9 @@
  * Operator script: activate a paid strategy feature on an already-deployed
  * CreatorOVault.
  *
- * Typical use case: a creator deployed their vault with only Charm + Solana
- * (paid $200 upfront), then later decided to add Ajna ($100). This script:
+ * Greenfield creators buy **`vault_full_deploy`** (all strategies at deploy).
+ * This script is for **legacy / operator-only** post-deploy adds — e.g. a
+ * grandfathered vault deployed with only Charm, later adding Ajna via Safe:
  *
  *   1. Reads the `pending` row from `creator_strategy_features` for the
  *      given creator + feature.

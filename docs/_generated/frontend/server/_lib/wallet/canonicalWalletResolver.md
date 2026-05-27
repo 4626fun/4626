@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/canonicalWalletResolver
+[4626-web](../../../index.md) / server/\_lib/wallet/canonicalWalletResolver
 
 # server/\_lib/wallet/canonicalWalletResolver
 
@@ -12,7 +12,7 @@
 
 > **PersistedWalletIdentity** = `object`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L28)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L28)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:28](https://github.c
 
 > **canonicalSmartWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L30)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L30)
 
 ##### embeddedEoa
 
 > **embeddedEoa**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L31)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L31)
 
 ##### privyUserId
 
 > **privyUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L32)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L32)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L29)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L29)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:29](https://github.c
 
 > **ProfileWalletAuthority** = `object`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L35)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L35)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:35](https://github.c
 
 > **activeOwnerWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L38)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L38)
 
 ##### canonicalSmartWalletAddress
 
 > **canonicalSmartWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L37)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L37)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L36)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L36)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:36](https://github.c
 
 > **isAuthorizedWalletForProfile**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L125)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:125](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L125)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:125](https://github.
 
 > **readProfileWalletAuthority**(`params`): `Promise`\<[`ProfileWalletAuthority`](#profilewalletauthority) \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L105)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L105)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:105](https://github.
 
 > **resolveAuthorizedWalletProfile**(`address`): `Promise`\<[`ProfileWalletAuthority`](#profilewalletauthority) \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L146)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L146)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:146](https://github.
 
 > **resolveCanonicalSmartWalletAddress**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:357](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L357)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:357](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L357)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:357](https://github.
 
 > **resolvePersistedWalletIdentity**(`address`): `Promise`\<[`PersistedWalletIdentity`](#persistedwalletidentity) \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:306](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L306)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:306](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L306)
 
 #### Parameters
 
@@ -196,7 +196,7 @@ Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:306](https://github.
 
 > **resolvePersistedWalletIdentityForProfileId**(`profileId`): `Promise`\<[`PersistedWalletIdentity`](#persistedwalletidentity) \| `null`\>
 
-Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:325](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L325)
+Defined in: [server/\_lib/wallet/canonicalWalletResolver.ts:325](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/canonicalWalletResolver.ts#L325)
 
 #### Parameters
 

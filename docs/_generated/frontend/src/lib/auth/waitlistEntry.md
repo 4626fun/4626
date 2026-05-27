@@ -1,10 +1,18 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/auth/waitlistEntry
+[4626-web](../../../index.md) / src/lib/auth/waitlistEntry
 
 # src/lib/auth/waitlistEntry
+
+## Type Aliases
+
+### WaitlistSetupIntent
+
+> **WaitlistSetupIntent** = `"base-app"` \| `"owner-install"`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L100)
 
 ## Variables
 
@@ -12,7 +20,7 @@
 
 > `const` **WAITLIST\_REFERRAL\_CLICK\_SESSION\_KEY**: `"cv:waitlist:referral_click_session"` = `'cv:waitlist:referral_click_session'`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L7)
+Defined in: [src/lib/auth/waitlistEntry.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L8)
 
 ***
 
@@ -20,7 +28,15 @@ Defined in: [src/lib/auth/waitlistEntry.ts:7](https://github.com/wenakita/4626/b
 
 > `const` **WAITLIST\_REFERRAL\_CODE\_STORAGE\_KEY**: `"cv:waitlist:referral_code"` = `'cv:waitlist:referral_code'`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L6)
+Defined in: [src/lib/auth/waitlistEntry.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L7)
+
+***
+
+### WAITLIST\_START\_AUTH\_QUERY\_KEY
+
+> `const` **WAITLIST\_START\_AUTH\_QUERY\_KEY**: `"start"` = `'start'`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L5)
 
 ## Functions
 
@@ -28,7 +44,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:6](https://github.com/wenakita/4626/b
 
 > **buildCanonicalMarketingWaitlistUrl**(`baseUrl`): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L17)
+Defined in: [src/lib/auth/waitlistEntry.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L18)
 
 #### Parameters
 
@@ -46,7 +62,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:17](https://github.com/wenakita/4626/
 
 > **buildWaitlistEntryPath**(): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L66)
+Defined in: [src/lib/auth/waitlistEntry.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L67)
 
 #### Returns
 
@@ -58,7 +74,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:66](https://github.com/wenakita/4626/
 
 > **buildWaitlistEntryUrl**(`baseUrl`): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L70)
+Defined in: [src/lib/auth/waitlistEntry.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L87)
 
 #### Parameters
 
@@ -76,7 +92,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:70](https://github.com/wenakita/4626/
 
 > **buildWaitlistReferralPath**(`referralCode`): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L38)
+Defined in: [src/lib/auth/waitlistEntry.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L39)
 
 #### Parameters
 
@@ -94,7 +110,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:38](https://github.com/wenakita/4626/
 
 > **buildWaitlistReferralUrl**(`baseUrl`, `referralCode`): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L43)
+Defined in: [src/lib/auth/waitlistEntry.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L44)
 
 #### Parameters
 
@@ -112,11 +128,81 @@ Defined in: [src/lib/auth/waitlistEntry.ts:43](https://github.com/wenakita/4626/
 
 ***
 
+### buildWaitlistSetupPath()
+
+> **buildWaitlistSetupPath**(`setup`): `string`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L111)
+
+SPA-safe waitlist setup path (marketing host route).
+
+#### Parameters
+
+##### setup
+
+[`WaitlistSetupIntent`](#waitlistsetupintent)
+
+#### Returns
+
+`string`
+
+***
+
+### buildWaitlistSetupUrl()
+
+> **buildWaitlistSetupUrl**(`setup`): `string`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L116)
+
+Canonical marketing-host URL for waitlist setup deep links (`4626.fun`, not `app.4626.fun`).
+
+#### Parameters
+
+##### setup
+
+[`WaitlistSetupIntent`](#waitlistsetupintent)
+
+#### Returns
+
+`string`
+
+***
+
+### buildWaitlistStartAuthPath()
+
+> **buildWaitlistStartAuthPath**(): `string`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L78)
+
+#### Returns
+
+`string`
+
+***
+
+### buildWaitlistStartAuthUrl()
+
+> **buildWaitlistStartAuthUrl**(`baseUrl`): `string`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L82)
+
+#### Parameters
+
+##### baseUrl
+
+`string`
+
+#### Returns
+
+`string`
+
+***
+
 ### clearStoredWaitlistReferralCode()
 
 > **clearStoredWaitlistReferralCode**(): `void`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L103)
+Defined in: [src/lib/auth/waitlistEntry.ts:142](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L142)
 
 #### Returns
 
@@ -128,7 +214,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:103](https://github.com/wenakita/4626
 
 > **getCanonicalMarketingWaitlistPath**(): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L13)
+Defined in: [src/lib/auth/waitlistEntry.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L14)
 
 #### Returns
 
@@ -140,7 +226,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:13](https://github.com/wenakita/4626/
 
 > **getMarketingWaitlistEntryUrl**(): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L79)
+Defined in: [src/lib/auth/waitlistEntry.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L96)
 
 #### Returns
 
@@ -152,7 +238,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:79](https://github.com/wenakita/4626/
 
 > **getMarketingWaitlistReferralUrl**(`referralCode`): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L48)
+Defined in: [src/lib/auth/waitlistEntry.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L49)
 
 #### Parameters
 
@@ -170,7 +256,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:48](https://github.com/wenakita/4626/
 
 > **getPrivyCapableWaitlistEntryUrl**(): `string`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L75)
+Defined in: [src/lib/auth/waitlistEntry.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L92)
 
 #### Returns
 
@@ -182,7 +268,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:75](https://github.com/wenakita/4626/
 
 > **isMarketingWaitlistEntryLocation**(`location`): `boolean`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L61)
+Defined in: [src/lib/auth/waitlistEntry.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L62)
 
 #### Parameters
 
@@ -196,11 +282,29 @@ Defined in: [src/lib/auth/waitlistEntry.ts:61](https://github.com/wenakita/4626/
 
 ***
 
+### isWaitlistStartAuthSearchParam()
+
+> **isWaitlistStartAuthSearchParam**(`value`): `boolean`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L71)
+
+#### Parameters
+
+##### value
+
+`string` | `null` | `undefined`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### normalizeWaitlistReferralCode()
 
 > **normalizeWaitlistReferralCode**(`value`): `string` \| `null`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L28)
+Defined in: [src/lib/auth/waitlistEntry.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L29)
 
 #### Parameters
 
@@ -218,7 +322,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:28](https://github.com/wenakita/4626/
 
 > **readStoredWaitlistReferralCode**(): `string` \| `null`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L83)
+Defined in: [src/lib/auth/waitlistEntry.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L122)
 
 #### Returns
 
@@ -230,7 +334,7 @@ Defined in: [src/lib/auth/waitlistEntry.ts:83](https://github.com/wenakita/4626/
 
 > **readWaitlistEntryReferralCode**(`location`): `string` \| `null`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L52)
+Defined in: [src/lib/auth/waitlistEntry.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L53)
 
 #### Parameters
 
@@ -244,11 +348,29 @@ Defined in: [src/lib/auth/waitlistEntry.ts:52](https://github.com/wenakita/4626/
 
 ***
 
+### readWaitlistSetupIntent()
+
+> **readWaitlistSetupIntent**(`value`): [`WaitlistSetupIntent`](#waitlistsetupintent) \| `null`
+
+Defined in: [src/lib/auth/waitlistEntry.ts:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L102)
+
+#### Parameters
+
+##### value
+
+`string` | `null` | `undefined`
+
+#### Returns
+
+[`WaitlistSetupIntent`](#waitlistsetupintent) \| `null`
+
+***
+
 ### storeWaitlistReferralCode()
 
 > **storeWaitlistReferralCode**(`referralCode`): `void`
 
-Defined in: [src/lib/auth/waitlistEntry.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/waitlistEntry.ts#L92)
+Defined in: [src/lib/auth/waitlistEntry.ts:131](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/waitlistEntry.ts#L131)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / server/agents/eliza/plugins/zora
+[4626-web](../../../../index.md) / server/agents/eliza/plugins/zora
 
 # server/agents/eliza/plugins/zora
 
@@ -12,7 +12,7 @@
 
 > `const` **zoraPlugin**: `Plugin`
 
-Defined in: [server/agents/eliza/plugins/zora/index.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/plugins/zora/index.ts#L118)
+Defined in: [server/agents/eliza/plugins/zora/index.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/plugins/zora/index.ts#L118)
 
 ## References
 

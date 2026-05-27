@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/deploy-vault/useDeploySessionV2
+[4626-web](../../../index.md) / src/features/deploy-vault/useDeploySessionV2
 
 # src/features/deploy-vault/useDeploySessionV2
 
@@ -12,7 +12,7 @@
 
 > **useDeploySessionV2**(): `object`
 
-Defined in: [src/features/deploy-vault/useDeploySessionV2.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/deploy-vault/useDeploySessionV2.ts#L12)
+Defined in: [src/features/deploy-vault/useDeploySessionV2.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/deploy-vault/useDeploySessionV2.ts#L12)
 
 #### Returns
 
@@ -88,9 +88,17 @@ Defined in: [src/features/deploy-vault/useDeploySessionV2.ts:12](https://github.
 
 `number`
 
+###### parseTimeoutMs?
+
+`number`
+
 ###### postJson
 
 [`PostJsonWithTimeout`](../../lib/deploy/sessionClient.md#postjsonwithtimeout)
+
+###### requestTimeoutMs?
+
+`number`
 
 ###### url
 

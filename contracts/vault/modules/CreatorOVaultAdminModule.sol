@@ -14,12 +14,20 @@ import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
     uint16 internal constant MAX_FEE = 2_000;
+    uint16 internal constant MAX_MANAGEMENT_FEE = 500;
     uint256 internal constant SECONDS_PER_YEAR = 365 days;
+    uint64 internal constant MIN_RISK_CONFIG_DELAY = 1 days;
+    uint64 internal constant MAX_RISK_CONFIG_DELAY = 30 days;
+
+    uint8 internal constant RISK_KIND_NONE = 0;
+    uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
+    uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2;
+    uint8 internal constant RISK_KIND_STRATEGY_MAX_ASSETS = 3;
     uint64 internal constant MIN_RESCUE_DELAY = 1 days;
     uint64 internal constant MAX_RESCUE_DELAY = 30 days;
 
@@ -49,6 +57,13 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event RescueFinalized(address indexed oldOwner, address indexed newOwner);
 
     event UpdateStrategyMaxAssets(address indexed strategy, uint256 oldCap, uint256 newCap);
+    event UpdateManagementFee(uint16 newManagementFee);
+    event UpdateManagementFeeRecipient(address indexed newRecipient);
+    event UpdateRiskConfigDelay(uint64 newDelay);
+    event RiskConfigScheduled(uint8 kind, address indexed target, uint256 value, uint64 unlockTime);
+    event RiskConfigExecuted(uint8 kind, address indexed target, uint256 value);
+    event RiskConfigCancelled(uint8 kind);
+    event UpdateValuationMissThreshold(uint8 newThreshold);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -65,6 +80,11 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     error TooManyBlocks(uint256 provided, uint256 max);
     error CannotRescueCreatorCoin();
     error ETHTransferFailed();
+    error RiskConfigDelayOutOfBounds(uint64 provided, uint64 min, uint64 max);
+    error PendingRiskConfigExists(uint8 kind);
+    error NoPendingRiskConfig();
+    error RiskConfigTooEarly(uint64 unlockTime);
+    error InvalidRiskConfigKind(uint8 kind);
 
     // =================================
     // EMERGENCY CONTROLS
@@ -257,9 +277,107 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     // =================================
 
     function setPerformanceFee(uint16 _performanceFee) external onlyDelegateCall {
-        if (_performanceFee > MAX_FEE) revert InvalidAmount();
-        performanceFee = _performanceFee;
-        emit UpdatePerformanceFee(_performanceFee);
+        _scheduleRiskChange(RISK_KIND_PERFORMANCE_FEE, address(0), _performanceFee);
+    }
+
+    function scheduleSetPerformanceFee(uint16 _performanceFee) external onlyDelegateCall {
+        _scheduleRiskChange(RISK_KIND_PERFORMANCE_FEE, address(0), _performanceFee);
+    }
+
+    function scheduleSetManagementFee(uint16 _managementFee) external onlyDelegateCall {
+        if (_managementFee > MAX_MANAGEMENT_FEE) revert InvalidAmount();
+        _scheduleRiskChange(RISK_KIND_MANAGEMENT_FEE, address(0), _managementFee);
+    }
+
+    function scheduleSetStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall {
+        if (strategy == address(0)) revert ZeroAddress();
+        _scheduleRiskChange(RISK_KIND_STRATEGY_MAX_ASSETS, strategy, cap);
+    }
+
+    function executePendingRiskConfig() external onlyDelegateCall {
+        if (pendingRiskKind == RISK_KIND_NONE) revert NoPendingRiskConfig();
+        if (block.timestamp < pendingRiskUnlockTime) revert RiskConfigTooEarly(pendingRiskUnlockTime);
+
+        uint8 kind = pendingRiskKind;
+        address target = pendingRiskTarget;
+        uint256 value = pendingRiskValue;
+
+        pendingRiskKind = RISK_KIND_NONE;
+        pendingRiskTarget = address(0);
+        pendingRiskValue = 0;
+        pendingRiskUnlockTime = 0;
+
+        _executeRiskChange(kind, target, value);
+        emit RiskConfigExecuted(kind, target, value);
+    }
+
+    function cancelPendingRiskConfig() external onlyDelegateCall {
+        uint8 kind = pendingRiskKind;
+        if (kind == RISK_KIND_NONE) revert NoPendingRiskConfig();
+        pendingRiskKind = RISK_KIND_NONE;
+        pendingRiskTarget = address(0);
+        pendingRiskValue = 0;
+        pendingRiskUnlockTime = 0;
+        emit RiskConfigCancelled(kind);
+    }
+
+    function setRiskConfigDelay(uint64 delay) external onlyDelegateCall {
+        if (delay != 0 && (delay < MIN_RISK_CONFIG_DELAY || delay > MAX_RISK_CONFIG_DELAY)) {
+            revert RiskConfigDelayOutOfBounds(delay, MIN_RISK_CONFIG_DELAY, MAX_RISK_CONFIG_DELAY);
+        }
+        riskConfigDelay = delay;
+        emit UpdateRiskConfigDelay(delay);
+    }
+
+    function setManagementFeeRecipient(address recipient) external onlyDelegateCall {
+        if (recipient == address(0)) revert ZeroAddress();
+        managementFeeRecipient = recipient;
+        emit UpdateManagementFeeRecipient(recipient);
+    }
+
+    function setValuationMissThreshold(uint8 threshold) external onlyDelegateCall {
+        valuationMissThreshold = threshold;
+        emit UpdateValuationMissThreshold(threshold);
+    }
+
+    function _scheduleRiskChange(uint8 kind, address target, uint256 value) internal {
+        if (kind == RISK_KIND_PERFORMANCE_FEE && value > MAX_FEE) revert InvalidAmount();
+        if (kind == RISK_KIND_MANAGEMENT_FEE && value > MAX_MANAGEMENT_FEE) revert InvalidAmount();
+
+        uint64 delay = riskConfigDelay;
+        if (delay == 0) {
+            _executeRiskChange(kind, target, value);
+            emit RiskConfigExecuted(kind, target, value);
+            return;
+        }
+
+        if (pendingRiskKind != RISK_KIND_NONE) revert PendingRiskConfigExists(pendingRiskKind);
+
+        pendingRiskKind = kind;
+        pendingRiskTarget = target;
+        pendingRiskValue = value;
+        pendingRiskUnlockTime = uint64(block.timestamp) + delay;
+        emit RiskConfigScheduled(kind, target, value, pendingRiskUnlockTime);
+    }
+
+    function _executeRiskChange(uint8 kind, address target, uint256 value) internal {
+        if (kind == RISK_KIND_PERFORMANCE_FEE) {
+            performanceFee = uint16(value);
+            emit UpdatePerformanceFee(uint16(value));
+            return;
+        }
+        if (kind == RISK_KIND_MANAGEMENT_FEE) {
+            managementFee = uint16(value);
+            emit UpdateManagementFee(uint16(value));
+            return;
+        }
+        if (kind == RISK_KIND_STRATEGY_MAX_ASSETS) {
+            uint256 oldCap = strategyMaxAssets[target];
+            strategyMaxAssets[target] = value;
+            emit UpdateStrategyMaxAssets(target, oldCap, value);
+            return;
+        }
+        revert InvalidRiskConfigKind(kind);
     }
 
     function setPerformanceFeeRecipient(address _performanceFeeRecipient) external onlyDelegateCall {
@@ -308,10 +426,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     /// @dev Pass 0 to disable the cap (uncapped). The cap clamps the strategy's
     ///      contribution to `totalAssets()` so misreporting cannot inflate share price.
     function setStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall {
-        if (strategy == address(0)) revert ZeroAddress();
-        uint256 oldCap = strategyMaxAssets[strategy];
-        strategyMaxAssets[strategy] = cap;
-        emit UpdateStrategyMaxAssets(strategy, oldCap, cap);
+        _scheduleRiskChange(RISK_KIND_STRATEGY_MAX_ASSETS, strategy, cap);
     }
 
     function setFlashLoanProtection(

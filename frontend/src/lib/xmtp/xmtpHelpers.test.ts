@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { isLocalXmtpStateInvalidError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
+import { isLocalXmtpStateInvalidError, isTransientXmtpStreamNetworkError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
 
 describe('shouldFallbackToOriginalXmtpRecipient', () => {
   const original = '0xb05cf01231cf2ff99499682e64d3780d57c80fdd' as const
@@ -117,5 +117,19 @@ describe('resolveConversationById', () => {
     expect(list).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
     expect(listGroups).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
     expect(group.updateConsentState).toHaveBeenCalledWith(ConsentState.Allowed)
+  })
+})
+
+describe('isTransientXmtpStreamNetworkError', () => {
+  it('matches welcome-stream network blips from the browser worker', () => {
+    expect(
+      isTransientXmtpStreamNetworkError(
+        "api client at endpoint \"/xmtp.mls.api.v1.MlsApi/SubscribeWelcomeMessages\" has error status: 'Unknown error', self: \"js api error: TypeError: network error\"",
+      ),
+    ).toBe(true)
+  })
+
+  it('ignores unrelated validation failures', () => {
+    expect(isTransientXmtpStreamNetworkError('InboxValidationFailed: inbox mismatch')).toBe(false)
   })
 })

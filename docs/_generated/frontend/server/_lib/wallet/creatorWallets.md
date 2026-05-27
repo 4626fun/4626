@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/creatorWallets
+[4626-web](../../../index.md) / server/\_lib/wallet/creatorWallets
 
 # server/\_lib/wallet/creatorWallets
 
@@ -12,7 +12,7 @@
 
 > **ensureCreatorWalletsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/creatorWallets.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/creatorWallets.ts#L5)
+Defined in: [server/\_lib/wallet/creatorWallets.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/creatorWallets.ts#L5)
 
 #### Parameters
 

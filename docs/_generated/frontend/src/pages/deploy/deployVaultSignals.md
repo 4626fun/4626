@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/deploy/deployVaultSignals
+[4626-web](../../../index.md) / src/pages/deploy/deployVaultSignals
 
 # src/pages/deploy/deployVaultSignals
 
@@ -12,7 +12,7 @@
 
 > **DeployTimelineProgressState** = `"disabled"` \| `"inProgress"` \| `"done"` \| `"pending"`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L30)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L30)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:30](https://github.com/wenak
 
 > **buildShareVanitySkipLogKey**(`params`): `string`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L14)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L14)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:14](https://github.com/wenak
 
 > **deployTimelineProgressLabel**(`state`): `string`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L47)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L47)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:47](https://github.com/wenak
 
 > **deriveDeployTimelineProgressState**(`params`): [`DeployTimelineProgressState`](#deploytimelineprogressstate)
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L32)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L32)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:32](https://github.com/wenak
 
 > **isProviderCollisionErrorMessage**(`input`): `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L3)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L3)
 
 #### Parameters
 
@@ -120,7 +120,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:3](https://github.com/wenaki
 
 > **shouldEmitShareVanitySkipLog**(`params`): `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L23)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L23)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [src/pages/deploy/deployVaultSignals.ts:23](https://github.com/wenak
 
 > **summarizeDeployTimelineProgress**(`params`): `object`
 
-Defined in: [src/pages/deploy/deployVaultSignals.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignals.ts#L54)
+Defined in: [src/pages/deploy/deployVaultSignals.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/deploy/deployVaultSignals.ts#L54)
 
 #### Parameters
 

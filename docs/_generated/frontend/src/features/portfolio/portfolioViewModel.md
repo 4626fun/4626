@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/portfolio/portfolioViewModel
+[4626-web](../../../index.md) / src/features/portfolio/portfolioViewModel
 
 # src/features/portfolio/portfolioViewModel
 
@@ -12,7 +12,7 @@
 
 > **buildPortfolioImageProxyUrl**(`rawUrl`): `string` \| `null`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L69)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/portfolioViewModel.ts#L69)
 
 #### Parameters
 
@@ -28,9 +28,9 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com
 
 ### deriveCreatorCoinOptions()
 
-> **deriveCreatorCoinOptions**(`addresses`): `` `0x${string}` ``[]
+> **deriveCreatorCoinOptions**(`addresses`): `string`[]
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L31)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/portfolioViewModel.ts#L31)
 
 #### Parameters
 
@@ -40,15 +40,15 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com
 
 #### Returns
 
-`` `0x${string}` ``[]
+`string`[]
 
 ***
 
 ### isEvmAddress()
 
-> **isEvmAddress**(`value`): `` value is `0x${string}` ``
+> **isEvmAddress**(`value`): `value is string`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L3)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/portfolioViewModel.ts#L3)
 
 #### Parameters
 
@@ -58,15 +58,15 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/
 
 #### Returns
 
-`` value is `0x${string}` ``
+`value is string`
 
 ***
 
 ### normalizeAddress()
 
-> **normalizeAddress**(`value`): `` `0x${string}` `` \| `null`
+> **normalizeAddress**(`value`): `string` \| `null`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L7)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/portfolioViewModel.ts#L7)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/
 
 #### Returns
 
-`` `0x${string}` `` \| `null`
+`string` \| `null`
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/
 
 > **resolvePortfolioAddresses**(`input`): `object`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L13)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/portfolio/portfolioViewModel.ts#L13)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com
 
 ##### effectiveAddress
 
-> **effectiveAddress**: `` `0x${string}` `` \| `null`
+> **effectiveAddress**: `string` \| `null`
 
 ##### isPublicMode
 
@@ -116,4 +116,4 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com
 
 ##### publicAddress
 
-> **publicAddress**: `` `0x${string}` `` \| `null`
+> **publicAddress**: `string` \| `null`

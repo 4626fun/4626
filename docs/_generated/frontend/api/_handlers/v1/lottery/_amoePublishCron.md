@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoePublishCron
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoePublishCron
 
 # api/\_handlers/v1/lottery/\_amoePublishCron
 
@@ -10,7 +10,7 @@
 
 ### AmoePublishCronHandlerHooks
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:75](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L75)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L75)
 
 Test seam — inject the four collaborators so the integration test can
 drive the cron without snarkjs / RPC.
@@ -21,31 +21,31 @@ drive the cron without snarkjs / RPC.
 
 > `optional` **broadcast**: [`BroadcastSetPointsLedgerRoot`](../../../../server/_lib/lottery/amoeLedgerPublisher.md#broadcastsetpointsledgerroot)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:77](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L77)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L77)
 
 ##### confirm?
 
 > `optional` **confirm**: [`ConfirmTransactionReceipt`](../../../../server/_lib/lottery/amoeLedgerPublisher.md#confirmtransactionreceipt)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:78](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L78)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L78)
 
 ##### db?
 
 > `optional` **db**: [`AmoePublisherDb`](../../../../server/_lib/lottery/amoeLedgerPublisher.md#amoepublisherdb)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:76](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L76)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L76)
 
 ##### lookupBurnContext?
 
 > `optional` **lookupBurnContext**: [`LookupBurnContext`](../../../../server/_lib/lottery/amoeLedgerPublisher.md#lookupburncontext)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:79](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L79)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:79](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L79)
 
 ##### nowSec?
 
 > `optional` **nowSec**: `bigint`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:83](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L83)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L83)
 
 Override the now-source for epoch computation.
 
@@ -53,7 +53,7 @@ Override the now-source for epoch computation.
 
 > `optional` **publisherVersion**: `string`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L81)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L81)
 
 Override the publisher version (production reads from process.env).
 
@@ -63,7 +63,7 @@ Override the publisher version (production reads from process.env).
 
 > **\_\_resetAmoePublishCronHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:94](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L94)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L94)
 
 #### Returns
 
@@ -75,7 +75,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:94](https://github.c
 
 > **\_\_setAmoePublishCronHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:88](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L88)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L88)
 
 #### Parameters
 
@@ -93,7 +93,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:88](https://github.c
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:111](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L111)
+Defined in: [api/\_handlers/v1/lottery/\_amoePublishCron.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoePublishCron.ts#L111)
 
 #### Parameters
 

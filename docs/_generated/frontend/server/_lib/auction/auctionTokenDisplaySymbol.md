@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/auction/auctionTokenDisplaySymbol
+[4626-web](../../../index.md) / server/\_lib/auction/auctionTokenDisplaySymbol
 
 # server/\_lib/auction/auctionTokenDisplaySymbol
 
@@ -12,7 +12,7 @@
 
 > **auctionTokenDisplaySymbol**(`onChainSymbol`): `string` \| `null`
 
-Defined in: [server/\_lib/auction/auctionTokenDisplaySymbol.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/auction/auctionTokenDisplaySymbol.ts#L20)
+Defined in: [server/\_lib/auction/auctionTokenDisplaySymbol.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/auction/auctionTokenDisplaySymbol.ts#L20)
 
 #### Parameters
 

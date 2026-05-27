@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   getTrayWalletPortfolioDebank: vi.fn(),
   getTrayWalletPortfolioBaseEtherscan: vi.fn(),
+  hasDebankAccessKey: vi.fn(() => true),
+  hasEtherscanApiKey: vi.fn(() => true),
+  preferTrayPortfolioEtherscan: vi.fn(() => false),
 }))
 
 vi.mock('./debankPortfolio.js', () => ({
@@ -11,6 +14,12 @@ vi.mock('./debankPortfolio.js', () => ({
 
 vi.mock('./baseTrayPortfolioEtherscan.js', () => ({
   getTrayWalletPortfolioBaseEtherscan: mocks.getTrayWalletPortfolioBaseEtherscan,
+}))
+
+vi.mock('./etherscanV2.js', () => ({
+  hasDebankAccessKey: mocks.hasDebankAccessKey,
+  hasEtherscanApiKey: mocks.hasEtherscanApiKey,
+  preferTrayPortfolioEtherscan: mocks.preferTrayPortfolioEtherscan,
 }))
 
 const { getTrayWalletPortfolioDebank, getTrayWalletPortfolioBaseEtherscan } = mocks
@@ -53,13 +62,22 @@ describe('resolveTrayWalletPortfolio', () => {
     expect(resolved.portfolio?.totalUsdValue).toBe(5)
   })
 
-  it('uses DeBank when only total is available (no token rows)', async () => {
+  it('uses Etherscan v2 when DeBank has balance but no token rows', async () => {
     getTrayWalletPortfolioDebank.mockResolvedValue(portfolio({ totalUsdValue: 9.98, topTokens: [] }))
     getTrayWalletPortfolioBaseEtherscan.mockResolvedValue(portfolio({ totalUsdValue: 8 }))
 
     const resolved = await resolveTrayWalletPortfolio(ADDR)
-    expect(resolved.source).toBe('debank')
-    expect(resolved.portfolio?.totalUsdValue).toBeCloseTo(9.98, 2)
-    expect(getTrayWalletPortfolioBaseEtherscan).not.toHaveBeenCalled()
+    expect(resolved.source).toBe('base-etherscan')
+    expect(resolved.portfolio?.totalUsdValue).toBe(8)
+    expect(getTrayWalletPortfolioBaseEtherscan).toHaveBeenCalled()
+  })
+
+  it('uses Etherscan v2 only when DeBank key is not configured', async () => {
+    mocks.hasDebankAccessKey.mockReturnValue(false)
+    getTrayWalletPortfolioBaseEtherscan.mockResolvedValue(portfolio({ totalUsdValue: 12 }))
+
+    const resolved = await resolveTrayWalletPortfolio(ADDR)
+    expect(resolved.source).toBe('base-etherscan')
+    expect(getTrayWalletPortfolioDebank).not.toHaveBeenCalled()
   })
 })

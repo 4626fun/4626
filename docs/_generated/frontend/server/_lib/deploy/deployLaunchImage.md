@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/deploy/deployLaunchImage
+[4626-web](../../../index.md) / server/\_lib/deploy/deployLaunchImage
 
 # server/\_lib/deploy/deployLaunchImage
 
@@ -12,7 +12,7 @@
 
 > `const` **LAUNCH\_IMAGE\_PROJECT\_ID\_KEY**: `"launchImageProjectId"` = `'launchImageProjectId'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L16)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L16)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:16](https://github.com/wen
 
 > `const` **LAUNCH\_IMAGE\_READY\_AT\_KEY**: `"launchImageReadyAt"` = `'launchImageReadyAt'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L17)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L17)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:17](https://github.com/wen
 
 > `const` **LAUNCH\_IMAGE\_SHARE\_OFT\_KEY**: `"launchImageShareOft"` = `'launchImageShareOft'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L19)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L19)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:19](https://github.com/wen
 
 > `const` **LAUNCH\_IMAGE\_VAULT\_KEY**: `"launchImageVaultAddress"` = `'launchImageVaultAddress'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L18)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L18)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:18](https://github.com/wen
 
 > `const` **LAUNCH\_IMAGE\_VERIFIED\_AT\_KEY**: `"launchImageVerifiedAt"` = `'launchImageVerifiedAt'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L20)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L20)
 
 ***
 
@@ -52,15 +52,15 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:20](https://github.com/wen
 
 > `const` **LAUNCH\_IMAGE\_VERIFIED\_BYTES\_KEY**: `"launchImageVerifiedBytes"` = `'launchImageVerifiedBytes'`
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L21)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L21)
 
 ## Functions
 
 ### ensureLaunchImageReady()
 
-> **ensureLaunchImageReady**(`params`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `` `0x${string}` ``; `vaultAddress`: `` `0x${string}` ``; \}\>
+> **ensureLaunchImageReady**(`params`): `Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `string`; `vaultAddress`: `string`; \}\>
 
-Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deployLaunchImage.ts#L298)
+Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/deploy/deployLaunchImage.ts#L298)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/we
 
 ###### sessionAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### sessionId
 
@@ -104,4 +104,4 @@ Defined in: [server/\_lib/deploy/deployLaunchImage.ts:298](https://github.com/we
 
 #### Returns
 
-`Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `` `0x${string}` ``; `vaultAddress`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `outputBlobUrl`: `string`; `projectId`: `string`; `shareOFT`: `string`; `vaultAddress`: `string`; \}\>

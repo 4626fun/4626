@@ -69,8 +69,10 @@ export function resolvePolicyCanonicalAddress(params: {
 }): PolicyAddress | null {
   const candidate = normalizePolicyAddress(params.canonicalAddress ?? null)
   if (isTargetCanonicalCsw(candidate)) return TARGET_CANONICAL_CSW_ADDRESS
+  if (candidate) return candidate
+  // Only collapse signer-only sessions onto the agent CSW when no distinct canonical is known.
   if (isAllowedOwnerEoa(params.signerAddress ?? null)) return TARGET_CANONICAL_CSW_ADDRESS
-  return candidate
+  return null
 }
 
 export function hasContractBytecode(value: unknown): boolean {

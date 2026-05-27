@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/executionScope/cswOwnerCheck
+[4626-web](../../../index.md) / src/features/executionScope/cswOwnerCheck
 
 # src/features/executionScope/cswOwnerCheck
 
@@ -12,7 +12,7 @@
 
 > **CswOwnerCandidate** = `object`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L37)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L37)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/features/executionScope/cswOwnerCheck.ts:37](https://github.com
 
 > **address**: `Address`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L52)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L52)
 
 ##### label
 
 > **label**: `"smart_wallet"` \| `"external"` \| `"embedded"`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L51)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L51)
 
 - `smart_wallet` — 4626's own Privy app smart wallet (via
   `useSmartWallets`). ERC-4337 account; when it is on the CSW owner
@@ -46,7 +46,7 @@ Defined in: [src/features/executionScope/cswOwnerCheck.ts:51](https://github.com
 
 > **CswOwnerResult** = [`CswOwnerCandidate`](#cswownercandidate) & `object`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L55)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L55)
 
 #### Type Declaration
 
@@ -60,7 +60,7 @@ Defined in: [src/features/executionScope/cswOwnerCheck.ts:55](https://github.com
 
 > `const` **COINBASE\_SMART\_WALLET\_OWNER\_CHECK\_ABI**: readonly \[\{ `inputs`: readonly \[\{ `name`: `"account"`; `type`: `"address"`; \}\]; `name`: `"isOwnerAddress"`; `outputs`: readonly \[\{ `name`: `""`; `type`: `"bool"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L27)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L27)
 
 Shared helpers for checking CoinbaseSmartWallet ownership of a given
 EOA against the parent CSW. Used by both:
@@ -90,7 +90,7 @@ SpendPermission signing from a parent-CSW owner.
 
 > **checkCswOwners**(`args`): `Promise`\<[`CswOwnerResult`](#cswownerresult)[]\>
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L70)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L70)
 
 Query `isOwnerAddress(candidate)` on the parent CSW for each
 candidate in parallel. Candidates with unreadable addresses or
@@ -114,7 +114,7 @@ flows.
 
 ###### csw
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -130,7 +130,7 @@ flows.
 
 > **pickOwnerSigner**(`results`): [`CswOwnerResult`](#cswownerresult) \| `null`
 
-Defined in: [src/features/executionScope/cswOwnerCheck.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/features/executionScope/cswOwnerCheck.ts#L112)
+Defined in: [src/features/executionScope/cswOwnerCheck.ts:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/executionScope/cswOwnerCheck.ts#L112)
 
 Pick the preferred signer for a fresh SpendPermission signature.
 

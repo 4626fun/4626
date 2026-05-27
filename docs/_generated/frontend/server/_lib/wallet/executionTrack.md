@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/wallet/executionTrack
+[4626-web](../../../index.md) / server/\_lib/wallet/executionTrack
 
 # server/\_lib/wallet/executionTrack
 
@@ -12,7 +12,7 @@
 
 > **BaseSubAccountInput** = `object`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L65)
+Defined in: [server/\_lib/wallet/executionTrack.ts:54](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L54)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:65](https://github.com/wenaki
 
 > **baseSubAccountAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L67)
+Defined in: [server/\_lib/wallet/executionTrack.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L56)
 
 ##### canonicalCswAddress
 
 > **canonicalCswAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L66)
+Defined in: [server/\_lib/wallet/executionTrack.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L55)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:66](https://github.com/wenaki
 
 > **BaseSubAccountSummary** = `object`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L48)
+Defined in: [server/\_lib/wallet/executionTrack.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L37)
 
 #### Properties
 
@@ -42,7 +42,7 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:48](https://github.com/wenaki
 
 > **address**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L50)
+Defined in: [server/\_lib/wallet/executionTrack.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L39)
 
 Lowercased 0x address if one is persisted, null otherwise.
 
@@ -50,7 +50,7 @@ Lowercased 0x address if one is persisted, null otherwise.
 
 > **isDistinctFromCsw**: `boolean`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L55)
+Defined in: [server/\_lib/wallet/executionTrack.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L44)
 
 True iff `address` is non-null AND differs from the parent CSW address.
 False when the column is unset or mirrors the CSW (legacy backfill).
@@ -59,7 +59,7 @@ False when the column is unset or mirrors the CSW (legacy backfill).
 
 > **registered**: `boolean`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L62)
+Defined in: [server/\_lib/wallet/executionTrack.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L51)
 
 True iff this looks like an actual sub-account we can route user
 transactions through. Currently an alias for `isDistinctFromCsw`, but
@@ -72,7 +72,7 @@ if we add a `base_sub_account_registered_at` column in the future).
 
 > **ExecutionTrack** = `"sub-account"` \| `"legacy-owner-install"` \| `"none-yet"` \| `"migration-pending"`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L42)
+Defined in: [server/\_lib/wallet/executionTrack.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L31)
 
 ***
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:42](https://github.com/wenaki
 
 > **ExecutionTrackInput** = [`BaseSubAccountInput`](#basesubaccountinput) & `object`
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L70)
+Defined in: [server/\_lib/wallet/executionTrack.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L59)
 
 #### Type Declaration
 
@@ -99,7 +99,7 @@ execution; a `true` value signals the legacy owner-install path.
 
 > **resolveExecutionTrack**(`input`): [`ExecutionTrack`](#executiontrack)
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L100)
+Defined in: [server/\_lib/wallet/executionTrack.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L89)
 
 #### Parameters
 
@@ -117,7 +117,7 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:100](https://github.com/wenak
 
 > **summarizeBaseSubAccount**(`input`): [`BaseSubAccountSummary`](#basesubaccountsummary)
 
-Defined in: [server/\_lib/wallet/executionTrack.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/executionTrack.ts#L86)
+Defined in: [server/\_lib/wallet/executionTrack.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/wallet/executionTrack.ts#L75)
 
 #### Parameters
 
@@ -128,3 +128,9 @@ Defined in: [server/\_lib/wallet/executionTrack.ts:86](https://github.com/wenaki
 #### Returns
 
 [`BaseSubAccountSummary`](#basesubaccountsummary)
+
+## References
+
+### isWaitlistSubaccountFlowEnabled
+
+Re-exports [isWaitlistSubaccountFlowEnabled](waitlistSubaccountFlowEnv.md#iswaitlistsubaccountflowenabled)

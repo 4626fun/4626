@@ -1,8 +1,8 @@
-[**4626-app**](../index.md)
+[**4626-web**](../index.md)
 
 ***
 
-[4626-app](../index.md) / src/App
+[4626-web](../index.md) / src/App
 
 # src/App
 
@@ -12,7 +12,7 @@
 
 > **default**(): `Element`
 
-Defined in: [src/App.tsx:106](https://github.com/wenakita/4626/blob/main/frontend/src/App.tsx#L106)
+Defined in: [src/App.tsx:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/App.tsx#L106)
 
 #### Returns
 

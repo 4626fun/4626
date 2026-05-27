@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/basenameResolver
+[4626-web](../../../index.md) / server/\_lib/identity/basenameResolver
 
 # server/\_lib/identity/basenameResolver
 
@@ -12,7 +12,7 @@
 
 > **basenameToHandle**(`name`): `string` \| `null`
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L51)
+Defined in: [server/\_lib/identity/basenameResolver.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/basenameResolver.ts#L51)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/identity/basenameResolver.ts:51](https://github.com/we
 
 > **getBasenameName**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L66)
+Defined in: [server/\_lib/identity/basenameResolver.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/basenameResolver.ts#L66)
 
 Resolve a wallet address to its full Basename (e.g. "akita.base.eth")
 by calling the L2 Resolver on Base.
@@ -53,7 +53,7 @@ Returns null when no Basename is configured or on lookup failure.
 
 > **resolveBasenameHandle**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L94)
+Defined in: [server/\_lib/identity/basenameResolver.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/basenameResolver.ts#L94)
 
 Resolve a "Basename handle" (e.g. "akita" from "akita.base.eth")
 for a wallet address via the Base L2 Resolver.

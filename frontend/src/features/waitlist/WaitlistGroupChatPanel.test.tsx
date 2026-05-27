@@ -46,6 +46,7 @@ vi.mock('./usePrepareWaitlistMessagingWallet', () => ({
     prepare: vi.fn(async () => ({ ok: true })),
     walletReady: false,
     embeddedEoaAddress: '0x1234567890123456789012345678901234567890',
+    privyAuthenticated: true,
   }),
 }))
 

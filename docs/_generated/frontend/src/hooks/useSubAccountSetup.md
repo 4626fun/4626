@@ -1,10 +1,18 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useSubAccountSetup
+[4626-web](../../index.md) / src/hooks/useSubAccountSetup
 
 # src/hooks/useSubAccountSetup
+
+## Type Aliases
+
+### SubAccountSetupControls
+
+> **SubAccountSetupControls** = `ReturnType`\<*typeof* [`useSubAccountSetup`](#usesubaccountsetup)\>
+
+Defined in: [src/hooks/useSubAccountSetup.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSubAccountSetup.ts#L87)
 
 ## Functions
 
@@ -12,63 +20,139 @@
 
 > **useSubAccountSetup**(): `object`
 
-Defined in: [src/hooks/useSubAccountSetup.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSubAccountSetup.ts#L35)
+Defined in: [src/hooks/useSubAccountSetup.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useSubAccountSetup.ts#L89)
 
 #### Returns
 
+`object`
+
 ##### baseAccountWallet
 
-> **baseAccountWallet**: `ConnectedWallet` \| `null`
-
-The detected Base Account wallet instance.
+> **baseAccountWallet**: `ConnectedWalletLike` \| `null`
 
 ##### canSetup
 
 > **canSetup**: `boolean`
 
-Whether setup can be initiated (all required wallets/SDK available).
+##### confirmSubAccountEmbeddedOwner()
+
+> **confirmSubAccountEmbeddedOwner**: (`addresses`) => `Promise`\<\{ `alreadyOwner`: `boolean`; `transactionHash`: `` `0x${string}` `` \| `null`; \} \| `null`\> = `confirmEmbeddedOwner`
+
+###### Parameters
+
+###### addresses
+
+###### parentAddress
+
+`string`
+
+###### provider
+
+\{ `request`: (`args`) => `Promise`\<`unknown`\>; \}
+
+###### provider.request
+
+(`args`) => `Promise`\<`unknown`\>
+
+###### subAccountAddress
+
+`string`
+
+###### Returns
+
+`Promise`\<\{ `alreadyOwner`: `boolean`; `transactionHash`: `` `0x${string}` `` \| `null`; \} \| `null`\>
+
+##### connectBaseAccountWallet()
+
+> **connectBaseAccountWallet**: () => `Promise`\<`boolean`\>
+
+###### Returns
+
+`Promise`\<`boolean`\>
 
 ##### created
 
 > **created**: `boolean` = `state.created`
 
-Whether a new sub-account was created (vs reusing an existing one).
-
 ##### embeddedWallet
 
-> **embeddedWallet**: `ConnectedWallet` \| `null`
-
-The detected Privy embedded wallet instance.
+> **embeddedWallet**: `ConnectedWalletLike` \| `null`
 
 ##### error
 
 > **error**: `Error` \| `null` = `state.error`
 
-The last error, if any.
+##### finalizeSubAccountSigner()
+
+> **finalizeSubAccountSigner**: (`addresses`) => `Promise`\<`boolean` \| `null`\> = `finalizeSigner`
+
+###### Parameters
+
+###### addresses
+
+###### parentAddress
+
+`string`
+
+###### subAccountAddress
+
+`string`
+
+###### Returns
+
+`Promise`\<`boolean` \| `null`\>
+
+##### getLastSetupError()
+
+> **getLastSetupError**: () => `Error` \| `null`
+
+###### Returns
+
+`Error` \| `null`
+
+##### installSubAccountOwnerOnly()
+
+> **installSubAccountOwnerOnly**: (`addresses`) => `Promise`\<\{ `alreadyOwner`: `boolean`; `onChainOwnerInstalled`: `boolean`; `onChainOwnerWarning`: `string` \| `null`; `registered`: `boolean`; `transactionHash`: `` `0x${string}` `` \| `null`; \} \| `null`\>
+
+###### Parameters
+
+###### addresses
+
+###### parentAddress
+
+`string`
+
+###### subAccountAddress
+
+`string`
+
+###### Returns
+
+`Promise`\<\{ `alreadyOwner`: `boolean`; `onChainOwnerInstalled`: `boolean`; `onChainOwnerWarning`: `string` \| `null`; `registered`: `boolean`; `transactionHash`: `` `0x${string}` `` \| `null`; \} \| `null`\>
 
 ##### isSettingUp
 
 > **isSettingUp**: `boolean` = `state.isSettingUp`
 
-Whether setup is currently in progress.
-
 ##### lastStage
 
 > **lastStage**: [`SubAccountSetupStageEvent`](../lib/wallet/subAccountSetup.md#subaccountsetupstageevent) \| `null` = `state.lastStage`
 
-The last stage event from the setup flow.
-
 ##### parentAddress
 
-> **parentAddress**: `` `0x${string}` `` \| `null` = `state.parentAddress`
+> **parentAddress**: `string` \| `null` = `state.parentAddress`
 
-The parent CSW address (universal account).
+##### provisionSubAccount()
+
+> **provisionSubAccount**: () => `Promise`\<[`SubAccountSetupResult`](../lib/wallet/subAccountSetup.md#subaccountsetupresult) & `object` \| `null`\> = `provision`
+
+###### Returns
+
+`Promise`\<[`SubAccountSetupResult`](../lib/wallet/subAccountSetup.md#subaccountsetupresult) & `object` \| `null`\>
 
 ##### setupSubAccount()
 
 > **setupSubAccount**: () => `Promise`\<[`SubAccountSetupResult`](../lib/wallet/subAccountSetup.md#subaccountsetupresult) \| `null`\> = `setup`
-
-Run the sub-account setup flow.
 
 ###### Returns
 
@@ -76,6 +160,4 @@ Run the sub-account setup flow.
 
 ##### subAccountAddress
 
-> **subAccountAddress**: `` `0x${string}` `` \| `null` = `state.subAccountAddress`
-
-The sub-account address (execution address for the app).
+> **subAccountAddress**: `string` \| `null` = `state.subAccountAddress`

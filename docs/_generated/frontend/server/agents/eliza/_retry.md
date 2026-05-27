@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/agents/eliza/\_retry
+[4626-web](../../../index.md) / server/agents/eliza/\_retry
 
 # server/agents/eliza/\_retry
 
@@ -12,7 +12,7 @@
 
 > **sleep**(`ms`): `Promise`\<`void`\>
 
-Defined in: [server/agents/eliza/\_retry.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_retry.ts#L16)
+Defined in: [server/agents/eliza/\_retry.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_retry.ts#L16)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/agents/eliza/\_retry.ts:16](https://github.com/wenakita/4626
 
 > **withRetry**\<`T`\>(`params`): `Promise`\<`T`\>
 
-Defined in: [server/agents/eliza/\_retry.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_retry.ts#L20)
+Defined in: [server/agents/eliza/\_retry.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_retry.ts#L20)
 
 #### Type Parameters
 
@@ -72,7 +72,7 @@ Defined in: [server/agents/eliza/\_retry.ts:20](https://github.com/wenakita/4626
 
 > **withTimeout**\<`T`\>(`promise`, `timeoutMs`, `timeoutMessage`): `Promise`\<`T`\>
 
-Defined in: [server/agents/eliza/\_retry.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_retry.ts#L7)
+Defined in: [server/agents/eliza/\_retry.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_retry.ts#L7)
 
 #### Type Parameters
 

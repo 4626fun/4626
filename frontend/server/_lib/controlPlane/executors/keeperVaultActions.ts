@@ -87,6 +87,40 @@ export async function executeVaultTend(vaultAddress: string): Promise<{ txHash: 
   return { txHash, status: 'success' }
 }
 
+const VAULT_REBALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'rebalanceStrategies',
+    inputs: [{ name: 'minDeviationBps', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+] as const
+
+export async function executeVaultRebalanceStrategies(
+  vaultAddress: string,
+  minDeviationBps: bigint,
+): Promise<{ txHash: string; status: string }> {
+  const address = normalizeVaultAddress(vaultAddress)
+  const { account, publicClient, walletClient } = getKeeperClients()
+  const txHash = await walletClient.writeContract({
+    address,
+    abi: VAULT_REBALANCE_ABI as unknown as Abi,
+    functionName: 'rebalanceStrategies',
+    args: [minDeviationBps],
+    chain: base,
+    account,
+  })
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash, timeout: 120_000 })
+  if (receipt.status !== 'success') {
+    throw new KeeperVaultActionError('rebalanceStrategies() reverted', {
+      code: 'rebalance_strategies_reverted',
+      retryable: false,
+    })
+  }
+  return { txHash, status: 'success' }
+}
+
 export async function executeVaultReport(vaultAddress: string): Promise<{ txHash: string; status: string }> {
   const address = normalizeVaultAddress(vaultAddress)
   const { account, publicClient, walletClient } = getKeeperClients()

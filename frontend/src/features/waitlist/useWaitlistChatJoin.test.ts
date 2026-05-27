@@ -110,7 +110,7 @@ describe('useWaitlistChatJoin', () => {
       expect(result.current.status).toBe('pending')
     })
     const joinCalls = mockedApiFetch.mock.calls.filter(([path]) => path === '/api/waitlist/xmtp-join')
-    expect(joinCalls).toHaveLength(2)
+    expect(joinCalls).toHaveLength(1)
   })
 
   it('maps embedded owner missing to blocked', async () => {

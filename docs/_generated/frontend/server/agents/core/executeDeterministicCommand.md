@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/agents/core/executeDeterministicCommand
+[4626-web](../../../index.md) / server/agents/core/executeDeterministicCommand
 
 # server/agents/core/executeDeterministicCommand
 
@@ -12,7 +12,7 @@
 
 > **DeterministicCommandResult** = `object`
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L4)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L4)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/agents/core/executeDeterministicCommand.ts:4](https://github
 
 > `optional` **action**: `unknown`
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L8)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L8)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L5)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L5)
 
 ##### rawResponseText
 
 > **rawResponseText**: `string`
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L7)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L7)
 
 ##### responseText
 
 > **responseText**: `string`
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L6)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L6)
 
 ## Functions
 
@@ -46,7 +46,7 @@ Defined in: [server/agents/core/executeDeterministicCommand.ts:6](https://github
 
 > **executeDeterministicCommand**(`params`): `Promise`\<[`DeterministicCommandResult`](#deterministiccommandresult)\>
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L35)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L35)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [server/agents/core/executeDeterministicCommand.ts:35](https://githu
 
 > **normalizeKeeprCommandResult**(`params`): [`DeterministicCommandResult`](#deterministiccommandresult)
 
-Defined in: [server/agents/core/executeDeterministicCommand.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/agents/core/executeDeterministicCommand.ts#L21)
+Defined in: [server/agents/core/executeDeterministicCommand.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/core/executeDeterministicCommand.ts#L21)
 
 #### Parameters
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/proveAmoeEntryPlonk
+[4626-web](../../../index.md) / server/\_lib/lottery/proveAmoeEntryPlonk
 
 # server/\_lib/lottery/proveAmoeEntryPlonk
 
@@ -10,7 +10,7 @@
 
 ### AmoeProofGenerationError
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L91)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L91)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:91](https://github.com/
 
 > **new AmoeProofGenerationError**(`code`, `message?`): [`AmoeProofGenerationError`](#amoeproofgenerationerror)
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L94)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L94)
 
 ###### Parameters
 
@@ -48,13 +48,13 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:94](https://github.com/
 
 > `readonly` **code**: [`AmoeProofGenerationErrorCode`](#amoeproofgenerationerrorcode-1)
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L92)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L92)
 
 ## Interfaces
 
 ### AmoeEligibilityWitness
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:270](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L270)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:270](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L270)
 
 AMOE eligibility circuit witness input. Maps 1:1 onto the 14 declared
 input signals in `amoe/circuits/amoe_eligibility.circom::AmoeEligibility`.
@@ -75,109 +75,109 @@ generation time.
 
 > **allowlistRoot**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:276](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L276)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:276](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L276)
 
 ##### creatorCoinAddr
 
 > **creatorCoinAddr**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:273](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L273)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:273](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L273)
 
 ##### epoch
 
 > **epoch**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:275](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L275)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:275](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L275)
 
 ##### nonce
 
 > **nonce**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:283](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L283)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:283](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L283)
 
 ##### nonceCommit
 
 > **nonceCommit**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:274](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L274)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:274](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L274)
 
 ##### pathElements
 
 > **pathElements**: readonly (`string` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:285](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L285)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:285](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L285)
 
 ##### pathIndices
 
 > **pathIndices**: readonly (`string` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:286](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L286)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:286](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L286)
 
 ##### pointsBurnedAsUSD
 
 > **pointsBurnedAsUSD**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:277](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L277)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:277](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L277)
 
 ##### pointsBurnNullifier
 
 > **pointsBurnNullifier**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:279](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L279)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:279](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L279)
 
 ##### pointsLedgerPathElements
 
 > **pointsLedgerPathElements**: readonly (`string` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:291](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L291)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:291](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L291)
 
 ##### pointsLedgerPathIndices
 
 > **pointsLedgerPathIndices**: readonly (`string` \| `bigint`)[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:292](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L292)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:292](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L292)
 
 ##### pointsLedgerRoot
 
 > **pointsLedgerRoot**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:278](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L278)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:278](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L278)
 
 ##### signupIdHash
 
 > **signupIdHash**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:289](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L289)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:289](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L289)
 
 ##### spendRefIdHash
 
 > **spendRefIdHash**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:290](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L290)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:290](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L290)
 
 ##### twitterCreditNullifier
 
 > **twitterCreditNullifier**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:284](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L284)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:284](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L284)
 
 ##### wallet
 
 > **wallet**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L282)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:282](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L282)
 
 ##### walletAddrCommit
 
 > **walletAddrCommit**: `string` \| `bigint`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:272](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L272)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:272](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L272)
 
 ***
 
 ### AmoeProveResult
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:303](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L303)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:303](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L303)
 
 #### Properties
 
@@ -185,7 +185,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:303](https://github.com
 
 > **proof**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:306](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L306)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:306](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L306)
 
 24-element PLONK proof, scalars in `[0, Q)`. Suitable as input to
  `buildAmoeEntryZKCall`.
@@ -194,7 +194,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:306](https://github.com
 
 > **pubInputs**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:309](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L309)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:309](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L309)
 
 8-element public-input array, in the slot order pinned by
  `AMOE_PLONK_PUB_INPUT_SLOT`.
@@ -203,7 +203,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:309](https://github.com
 
 ### ParsedPlonkCallData
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:117](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L117)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L117)
 
 Result of parsing snarkjs's solidity-calldata string for a PLONK proof.
 Both arrays carry BN254 scalars in `[0, Q)` (the parser enforces this).
@@ -220,19 +220,19 @@ circuit) without changing the parse code.
 
 > **proof**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L118)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L118)
 
 ##### pubInputs
 
 > **pubInputs**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L119)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L119)
 
 ***
 
 ### ProveAmoeEntryPlonkOptions
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:312](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L312)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:312](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L312)
 
 #### Properties
 
@@ -240,7 +240,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:312](https://github.com
 
 > `optional` **snarkjs**: [`SnarkjsLike`](#snarkjslike)
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:332](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L332)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:332](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L332)
 
 Optional snarkjs override — primarily for tests that want to inject a
 deterministic mock. Production callers leave this unset.
@@ -249,7 +249,7 @@ deterministic mock. Production callers leave this unset.
 
 > **wasmPath**: `string`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:319](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L319)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:319](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L319)
 
 Filesystem path to the circuit's compiled `amoe_eligibility.wasm`. In
 production this is fetched/cached from object storage on cold start
@@ -260,7 +260,7 @@ checked-in fixture wasm.
 
 > **zkeyPath**: `string`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:326](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L326)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:326](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L326)
 
 Filesystem path to the PLONK final zkey (`amoe_plonk_final.zkey`). Same
 sourcing as `wasmPath` — production fetches from blob storage; tests
@@ -270,7 +270,7 @@ use the small checked-in fixture zkey.
 
 ### SnarkjsLike
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:340](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L340)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:340](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L340)
 
 Minimal snarkjs surface this module depends on. Defining it as a named
 interface (a) lets us tree-shake the rest of the snarkjs API and (b)
@@ -282,7 +282,7 @@ makes mocking in tests trivial without `vi.mock(...)` ESM gymnastics.
 
 > **plonk**: `object`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:341](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L341)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:341](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L341)
 
 ###### exportSolidityCallData()
 
@@ -330,7 +330,7 @@ Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:341](https://github.com
 
 > **AmoeProofGenerationErrorCode** = `"plonk_calldata_parse_failed"` \| `"plonk_calldata_proof_length_mismatch"` \| `"plonk_calldata_pubinputs_length_mismatch"` \| `"plonk_calldata_scalar_not_hex"` \| `"plonk_calldata_scalar_out_of_field"` \| `"plonk_witness_input_missing"` \| `"plonk_witness_input_invalid"` \| `"plonk_snarkjs_failed"`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L81)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L81)
 
 Stable error codes thrown by this module. Keep this in sync with the
 documented contract in [proveAmoeEntryPlonk](#proveamoeentryplonk) — relayer retry logic
@@ -342,7 +342,7 @@ branches on these codes, so removing or renaming one is a breaking change.
 
 > `const` **AMOE\_MERKLE\_DEPTH**: `20`
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:301](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L301)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:301](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L301)
 
 Locked Merkle-tree depth of both the allowlist and the points-burn
 ledger. Mirrors `DEPTH` in the .circom file. Bumping this without
@@ -355,7 +355,7 @@ error when it walks the path arrays.
 
 > **parsePlonkSolidityCallData**(`raw`): [`ParsedPlonkCallData`](#parsedplonkcalldata)
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L155)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L155)
 
 Parse a snarkjs PLONK solidity-calldata string into typed scalar arrays.
 
@@ -399,7 +399,7 @@ on any structural / field-bounds violation
 
 > **proveAmoeEntryPlonk**(`witness`, `opts`): `Promise`\<[`AmoeProveResult`](#amoeproveresult)\>
 
-Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:376](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L376)
+Defined in: [server/\_lib/lottery/proveAmoeEntryPlonk.ts:376](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/proveAmoeEntryPlonk.ts#L376)
 
 Generate a PLONK proof for the AMOE eligibility circuit and return it in
 the (proof[24], pubInputs[8]) shape the on-chain `submitAmoeEntryZK`

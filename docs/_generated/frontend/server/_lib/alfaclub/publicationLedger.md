@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/publicationLedger
+[4626-web](../../../index.md) / server/\_lib/alfaclub/publicationLedger
 
 # server/\_lib/alfaclub/publicationLedger
 
@@ -12,7 +12,7 @@
 
 > **MetricsSnapshotRow** = `object`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:385](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L385)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:385](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L385)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:385](https://github.com/
 
 > **creatorAddress**: `Address`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:387](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L387)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:387](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L387)
 
 ##### hlAccountValueUsd
 
 > **hlAccountValueUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:392](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L392)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:392](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L392)
 
 ##### pnl30dUsd
 
 > **pnl30dUsd**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:391](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L391)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:391](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L391)
 
 ##### rank
 
 > **rank**: `number`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:394](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L394)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:394](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L394)
 
 ##### score
 
 > **score**: `number`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:393](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L393)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:393](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L393)
 
 ##### snapshotTs
 
 > **snapshotTs**: `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:386](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L386)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:386](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L386)
 
 ##### stakedSupply
 
 > **stakedSupply**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:390](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L390)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:390](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L390)
 
 ##### tokenId
 
 > **tokenId**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:388](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L388)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:388](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L388)
 
 ##### totalSupply
 
 > **totalSupply**: `bigint`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:389](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L389)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:389](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L389)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:389](https://github.com/
 
 > **NewPublicationInput** = `Omit`\<[`PublicationRecord`](#publicationrecord), `"createdAt"` \| `"submissionAttempts"` \| `"lastSubmissionError"` \| `"lastSubmissionAt"`\> & `object`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L47)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L47)
 
 #### Type Declaration
 
@@ -98,7 +98,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:47](https://github.com/w
 
 > **PublicationKind** = `"lens"` \| `"erc8004-submitted"` \| `"erc8004-queued"` \| `"erc8004-failed"`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L22)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L22)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:22](https://github.com/w
 
 > **PublicationRecord** = `object`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L28)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L28)
 
 #### Properties
 
@@ -114,97 +114,97 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:28](https://github.com/w
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L41)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L41)
 
 ##### creatorAddress
 
 > **creatorAddress**: `Address`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L31)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L31)
 
 ##### erc8004Calldata
 
 > **erc8004Calldata**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L38)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L38)
 
 ##### erc8004TxHash
 
 > **erc8004TxHash**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L37)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L37)
 
 ##### kind
 
 > **kind**: [`PublicationKind`](#publicationkind)
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L30)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L30)
 
 ##### lastSubmissionAt
 
 > **lastSubmissionAt**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L44)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L44)
 
 ##### lastSubmissionError
 
 > **lastSubmissionError**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L43)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L43)
 
 ##### lensPostId
 
 > **lensPostId**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L36)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L36)
 
 ##### publicationKey
 
 > **publicationKey**: `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L29)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L29)
 
 ##### rank
 
 > **rank**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L40)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L40)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L39)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L39)
 
 ##### scorecardCid
 
 > **scorecardCid**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L33)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:33](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L33)
 
 ##### scorecardHash
 
 > **scorecardHash**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L35)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L35)
 
 ##### scorecardUri
 
 > **scorecardUri**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L34)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L34)
 
 ##### submissionAttempts
 
 > **submissionAttempts**: `number`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L42)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L42)
 
 ##### tokenId
 
 > **tokenId**: `bigint` \| `null`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L32)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L32)
 
 ## Functions
 
@@ -212,7 +212,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:32](https://github.com/w
 
 > **abandonQueuedFeedback**(`publicationKey`, `finalError`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:359](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L359)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:359](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L359)
 
 Permanently abandon a queued row. Flips `kind` to `'erc8004-failed'` so
 subsequent drain ticks skip it.
@@ -237,7 +237,7 @@ subsequent drain ticks skip it.
 
 > **attachErc8004TxHash**(`publicationKey`, `txHash`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:270](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L270)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:270](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L270)
 
 Attach an onchain tx hash to a previously-queued ERC-8004 row.
 
@@ -261,7 +261,7 @@ Attach an onchain tx hash to a previously-queued ERC-8004 row.
 
 > **bucketWindowStart**(`now`, `cooldownHours`): `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L83)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L83)
 
 Bucket a timestamp to the start of the cooldown window so every run
 inside the same window resolves to the same key.
@@ -288,7 +288,7 @@ Default window is 24 hours; override via ALFACLUB_VIGILANTE_POST_COOLDOWN_HOURS.
 
 > **getLatestSnapshotTs**(): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:431](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L431)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:431](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L431)
 
 #### Returns
 
@@ -300,7 +300,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:431](https://github.com/
 
 > **getSnapshotAt**(`snapshotTs`): `Promise`\<[`MetricsSnapshotRow`](#metricssnapshotrow)[]\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L446)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:446](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L446)
 
 #### Parameters
 
@@ -318,7 +318,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:446](https://github.com/
 
 > **hasPublication**(`publicationKey`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L99)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L99)
 
 #### Parameters
 
@@ -336,7 +336,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:99](https://github.com/w
 
 > **insertMetricsSnapshot**(`rows`): `Promise`\<`number`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:397](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L397)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:397](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L397)
 
 #### Parameters
 
@@ -354,7 +354,7 @@ readonly [`MetricsSnapshotRow`](#metricssnapshotrow)[]
 
 > **listQueuedFeedback**(`limit`): `Promise`\<[`PublicationRecord`](#publicationrecord)[]\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:301](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L301)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:301](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L301)
 
 List ERC-8004 rows queued for autonomous submission. FIFO, excludes rows
 that have already been submitted, abandoned, or that failed a selector
@@ -377,7 +377,7 @@ address themselves and validate the stored calldata before submitting.
 
 > **listRecentPublications**(`kind`, `limit`): `Promise`\<[`PublicationRecord`](#publicationrecord)[]\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L188)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:188](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L188)
 
 #### Parameters
 
@@ -399,7 +399,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:188](https://github.com/
 
 > **makePublicationKey**(`params`): `string`
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L64)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L64)
 
 Stable publication key. Same `(creator, windowStart, kind)` → same key,
 so re-running the cron within the same window is idempotent.
@@ -430,7 +430,7 @@ so re-running the cron within the same window is idempotent.
 
 > **markSubmissionAttemptFailed**(`publicationKey`, `err`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:334](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L334)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:334](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L334)
 
 Record a failed submission attempt without advancing the row past
 `erc8004-queued`. The drain loop uses `submission_attempts` to decide
@@ -456,7 +456,7 @@ when to abandon.
 
 > **recentPublicationsForCreator**(`creatorAddress`, `kind`, `limit`): `Promise`\<[`PublicationRecord`](#publicationrecord)[]\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L160)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:160](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L160)
 
 #### Parameters
 
@@ -482,7 +482,7 @@ Defined in: [server/\_lib/alfaclub/publicationLedger.ts:160](https://github.com/
 
 > **recordPublication**(`input`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/alfaclub/publicationLedger.ts:236](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/publicationLedger.ts#L236)
+Defined in: [server/\_lib/alfaclub/publicationLedger.ts:236](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/publicationLedger.ts#L236)
 
 Insert a publication row. If the publication_key already exists, the
 insert is skipped (primary-key conflict) and this function returns false.

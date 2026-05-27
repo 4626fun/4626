@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/agents/eliza/\_rateLimit
+[4626-web](../../../index.md) / server/agents/eliza/\_rateLimit
 
 # server/agents/eliza/\_rateLimit
 
@@ -10,7 +10,7 @@
 
 ### DailyBudgetGuard
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L96)
+Defined in: [server/agents/eliza/\_rateLimit.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L96)
 
 #### Constructors
 
@@ -18,7 +18,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:96](https://github.com/wenakita/
 
 > **new DailyBudgetGuard**(`tokenBudget`, `usdBudget`): [`DailyBudgetGuard`](#dailybudgetguard)
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L101)
+Defined in: [server/agents/eliza/\_rateLimit.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L101)
 
 ###### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:101](https://github.com/wenakita
 
 > **canConsume**(`key`, `usage`, `now`): `object`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L106)
+Defined in: [server/agents/eliza/\_rateLimit.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L106)
 
 ###### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:106](https://github.com/wenakita
 
 > **getSnapshot**(`key`, `now`): `DailyUsage`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L143)
+Defined in: [server/agents/eliza/\_rateLimit.ts:143](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L143)
 
 ###### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:143](https://github.com/wenakita
 
 > **record**(`key`, `usage`, `now`): `DailyUsage`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L127)
+Defined in: [server/agents/eliza/\_rateLimit.ts:127](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L127)
 
 ###### Parameters
 
@@ -136,7 +136,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:127](https://github.com/wenakita
 
 ### SlidingWindowRateLimiter
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L12)
+Defined in: [server/agents/eliza/\_rateLimit.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L12)
 
 #### Constructors
 
@@ -144,7 +144,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:12](https://github.com/wenakita/
 
 > **new SlidingWindowRateLimiter**(`windowMs`, `maxEvents`, `options`): [`SlidingWindowRateLimiter`](#slidingwindowratelimiter)
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L19)
+Defined in: [server/agents/eliza/\_rateLimit.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L19)
 
 ###### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:19](https://github.com/wenakita/
 
 > **allow**(`key`, `now`): `AllowResult`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L55)
+Defined in: [server/agents/eliza/\_rateLimit.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L55)
 
 ###### Parameters
 
@@ -190,7 +190,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:55](https://github.com/wenakita/
 
 > **getDebugState**(): `object`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L81)
+Defined in: [server/agents/eliza/\_rateLimit.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L81)
 
 ###### Returns
 
@@ -210,7 +210,7 @@ Defined in: [server/agents/eliza/\_rateLimit.ts:81](https://github.com/wenakita/
 
 > **parsePositiveNumber**(`raw`, `fallback`): `number`
 
-Defined in: [server/agents/eliza/\_rateLimit.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/_rateLimit.ts#L160)
+Defined in: [server/agents/eliza/\_rateLimit.ts:160](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/_rateLimit.ts#L160)
 
 #### Parameters
 

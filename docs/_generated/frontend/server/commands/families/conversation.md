@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/conversation
+[4626-web](../../../index.md) / server/commands/families/conversation
 
 # server/commands/families/conversation
 
@@ -12,7 +12,7 @@
 
 > **executeConversationalCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/conversation.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/conversation.ts#L18)
+Defined in: [server/commands/families/conversation.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/conversation.ts#L18)
 
 #### Parameters
 
@@ -24,7 +24,7 @@ Defined in: [server/commands/families/conversation.ts:18](https://github.com/wen
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 
@@ -44,7 +44,7 @@ Defined in: [server/commands/families/conversation.ts:18](https://github.com/wen
 
 > **looksLikeConversationalCommand**(`text`): `boolean`
 
-Defined in: [server/commands/families/conversation.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/conversation.ts#L13)
+Defined in: [server/commands/families/conversation.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/conversation.ts#L13)
 
 #### Parameters
 

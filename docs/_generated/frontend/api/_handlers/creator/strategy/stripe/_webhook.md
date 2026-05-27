@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/creator/strategy/stripe/\_webhook
+[4626-web](../../../../../index.md) / api/\_handlers/creator/strategy/stripe/\_webhook
 
 # api/\_handlers/creator/strategy/stripe/\_webhook
 
@@ -12,7 +12,7 @@
 
 > `const` **config**: `object`
 
-Defined in: [api/\_handlers/creator/strategy/stripe/\_webhook.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator/strategy/stripe/_webhook.ts#L46)
+Defined in: [api/\_handlers/creator/strategy/stripe/\_webhook.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/creator/strategy/stripe/_webhook.ts#L53)
 
 Stripe webhook handler.
 
@@ -56,7 +56,7 @@ the raw stream. For now this is adequate.
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/creator/strategy/stripe/\_webhook.ts:78](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/creator/strategy/stripe/_webhook.ts#L78)
+Defined in: [api/\_handlers/creator/strategy/stripe/\_webhook.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/creator/strategy/stripe/_webhook.ts#L85)
 
 #### Parameters
 

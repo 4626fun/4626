@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/creatorStrategy/usePayWithX402
+[4626-web](../../../index.md) / src/lib/creatorStrategy/usePayWithX402
 
 # src/lib/creatorStrategy/usePayWithX402
 
@@ -12,7 +12,7 @@
 
 > **PayWithX402Input** = `object`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L74)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L74)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:74](https://github.com/we
 
 > **creatorToken**: `Address`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L75)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L75)
 
 ##### endpoint?
 
 > `optional` **endpoint**: `string`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L78)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:78](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L78)
 
 Defaults to `/api/creator/strategy/x402-activate` at the current origin.
 
@@ -34,7 +34,7 @@ Defaults to `/api/creator/strategy/x402-activate` at the current origin.
 
 > **featureKey**: `string`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L76)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L76)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:76](https://github.com/we
 
 > **PayWithX402Status** = \{ `phase`: `"idle"`; \} \| \{ `phase`: `"requesting_402"`; \} \| \{ `phase`: `"signing"`; \} \| \{ `phase`: `"settling"`; `txHash?`: `Hex`; \} \| \{ `activationId`: `number` \| `null`; `phase`: `"success"`; `txHash`: `Hex`; \} \| \{ `message`: `string`; `phase`: `"error"`; `reason`: `string`; \}
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L81)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L81)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:81](https://github.com/we
 
 > **X402PaymentRequirements** = `object`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L58)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L58)
 
 #### Properties
 
@@ -58,7 +58,7 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:58](https://github.com/we
 
 > **accepts**: `object`[]
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L60)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L60)
 
 ###### asset
 
@@ -100,13 +100,13 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:60](https://github.com/we
 
 > `optional` **error**: `string`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L71)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L71)
 
 ##### x402\_version
 
 > **x402\_version**: `1`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L59)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L59)
 
 ## Functions
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:59](https://github.com/we
 
 > **usePayWithX402**(): `object`
 
-Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L98)
+Defined in: [src/lib/creatorStrategy/usePayWithX402.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/creatorStrategy/usePayWithX402.ts#L98)
 
 #### Returns
 

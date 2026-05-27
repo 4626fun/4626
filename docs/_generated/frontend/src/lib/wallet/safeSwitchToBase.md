@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/wallet/safeSwitchToBase
+[4626-web](../../../index.md) / src/lib/wallet/safeSwitchToBase
 
 # src/lib/wallet/safeSwitchToBase
 
@@ -12,7 +12,7 @@
 
 > `const` **BASE\_CHAIN\_ID\_HEX**: `string`
 
-Defined in: [src/lib/wallet/safeSwitchToBase.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/safeSwitchToBase.ts#L7)
+Defined in: [src/lib/wallet/safeSwitchToBase.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/safeSwitchToBase.ts#L7)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/wallet/safeSwitchToBase.ts:7](https://github.com/wenakita/4
 
 > **ensureProviderOnBase**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/lib/wallet/safeSwitchToBase.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/safeSwitchToBase.ts#L29)
+Defined in: [src/lib/wallet/safeSwitchToBase.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/safeSwitchToBase.ts#L29)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/wallet/safeSwitchToBase.ts:29](https://github.com/wenakita/
 
 > **ensureWagmiChainOnBase**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/lib/wallet/safeSwitchToBase.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/safeSwitchToBase.ts#L13)
+Defined in: [src/lib/wallet/safeSwitchToBase.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/wallet/safeSwitchToBase.ts#L13)
 
 #### Parameters
 

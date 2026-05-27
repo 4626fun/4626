@@ -32,11 +32,15 @@ export function shouldShowExploreTableLoading({
   isLoading,
   isFetching,
   hasRows,
+  hasActiveSearch = false,
 }: {
   isLoading: boolean
   isFetching: boolean
   hasRows: boolean
+  /** When the user is searching, inline table messages own empty/loading UX. */
+  hasActiveSearch?: boolean
 }): boolean {
+  if (hasActiveSearch && !hasRows) return false
   if (isLoading) return true
   return isFetching && !hasRows
 }

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/services/trade
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/services/trade
 
 # api/\_handlers/telegram/webhook/services/trade
 
@@ -12,7 +12,7 @@
 
 > **checkTelegramTradeRateLimit**(`params`): \{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `"rate_limit_user"` \| `"rate_limit_chat"`; `retryAfterSeconds`: `number`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L23)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/services/trade.ts#L23)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://githu
 
 > **readTradeLimitFromEnv**(`key`, `fallback`): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/services/trade.ts#L4)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github
 
 > **tradeRateLimitForAction**(`actionType`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/services/trade.ts#L10)
 
 #### Parameters
 

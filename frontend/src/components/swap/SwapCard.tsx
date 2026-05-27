@@ -16,6 +16,7 @@ type SwapCardProps = {
   tokenOutIdentityLoading: boolean
   amountInUnits: string
   estimatedOut: string
+  buyQuoteLoading?: boolean
   estimatedOutUsd: string | null
   tokenInSymbol: string
   tokenOutSymbol: string
@@ -131,6 +132,7 @@ export function SwapCard(props: SwapCardProps) {
           label="Buy"
           amount={props.estimatedOut}
           readOnly
+          amountLoading={props.buyQuoteLoading}
           amountUsd={props.estimatedOutUsd || undefined}
           balanceLabel={props.tokenOutBalanceLabel}
           token={props.tokenOutDisplay}

@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/workspace/\_tasks
+[4626-web](../../../../index.md) / api/\_handlers/v1/workspace/\_tasks
 
 # api/\_handlers/v1/workspace/\_tasks
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/workspace/\_tasks.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_tasks.ts#L23)
+Defined in: [api/\_handlers/v1/workspace/\_tasks.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/workspace/_tasks.ts#L23)
 
 #### Parameters
 

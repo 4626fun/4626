@@ -140,7 +140,9 @@ No new Solana OFT deploy is required for AKITA redeploy if you keep this mesh id
 
 1. **Wallet** — execution-ready on canonical track (parent CSW + Privy embedded owner).
 2. **Balance** — ≥ **50,000,000** AKITA creator tokens for vault deposit (+ gas for phases).
-3. **Entitlement** — `vault_full_deploy` active/pending (or charm + ajna + `solana_ovault_mesh`).
+3. **Entitlement** — **`vault_full_deploy`** active/pending (recommended: single $499 bundle).
+   Legacy operator comps with separate `charm_active_lp` + `ajna_sleeve` +
+   `solana_ovault_mesh` rows still satisfy deploy (AKITA path).
 4. **Deploy UI** — `https://app.4626.fun/deploy/vault` with creator `0x5b6741…`.
 5. **Fresh salts** — new `deploymentVersion` so CREATE2 addresses differ from legacy stack.
 6. **Optional** — `pnpm -C frontend run dev:deploy-dry-run` on a fork first.

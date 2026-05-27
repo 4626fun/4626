@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/amoeMerkleTree
+[4626-web](../../../index.md) / server/\_lib/lottery/amoeMerkleTree
 
 # server/\_lib/lottery/amoeMerkleTree
 
@@ -10,7 +10,7 @@
 
 ### AmoeMerklePath
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:169](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L169)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:169](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L169)
 
 Inclusion proof in the shape the circuit consumes — `pathElements` are
 the sibling values at each level, `pathIndices` are the left/right bits.
@@ -22,19 +22,19 @@ Both arrays are exactly `DEPTH` long.
 
 > **pathElements**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:170](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L170)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:170](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L170)
 
 ##### pathIndices
 
 > **pathIndices**: `bigint`[]
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:171](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L171)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:171](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L171)
 
 ***
 
 ### AmoeMerkleSnapshot
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:149](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L149)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:149](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L149)
 
 Sparse snapshot — only stores nodes along the paths from real leaves
 to the root. Empty subtrees are implied by `AMOE_MERKLE_ZERO_HASHES`.
@@ -49,7 +49,7 @@ collide with level-1+ indices in the same key.
 
 > **leafCount**: `number`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L155)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:155](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L155)
 
 Logical leaf count BEFORE zero-padding (for diagnostics).
 
@@ -57,7 +57,7 @@ Logical leaf count BEFORE zero-padding (for diagnostics).
 
 > **leavesByIndex**: `ReadonlyMap`\<`number`, `bigint`\>
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L161)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:161](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L161)
 
 Mapping from leaf index → leaf value, kept around so callers can
 cheaply re-read a leaf they put in (e.g. for membership checks).
@@ -67,7 +67,7 @@ Sparse — empty positions are absent.
 
 > **nodes**: `ReadonlyMap`\<`number`, `bigint`\>
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:151](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L151)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:151](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L151)
 
 Map from packed `(level, index)` key to node value.
 
@@ -75,7 +75,7 @@ Map from packed `(level, index)` key to node value.
 
 > **root**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L153)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L153)
 
 The Merkle root.
 
@@ -85,7 +85,7 @@ The Merkle root.
 
 > `const` **AMOE\_MERKLE\_TREE\_DEPTH**: `20`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L89)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L89)
 
 Locked Merkle tree depth (DEPTH=20) from
 `amoe/circuits/amoe_eligibility.circom::component main = AmoeEligibility(20)`.
@@ -97,7 +97,7 @@ Bumping this requires regenerating the circuit + zkey.
 
 > `const` **AMOE\_MERKLE\_TREE\_MAX\_LEAVES**: `number`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L95)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L95)
 
 Maximum number of leaves a depth-20 tree can hold (2^20 = 1,048,576).
 Snapshot construction throws if asked to insert more than this.
@@ -108,7 +108,7 @@ Snapshot construction throws if asked to insert more than this.
 
 > `const` **AMOE\_MERKLE\_ZERO\_HASHES**: `ReadonlyArray`\<`bigint`\>
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L132)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L132)
 
 `AMOE_MERKLE_ZERO_HASHES[L]` is the value used for an empty ("missing")
 sibling at every level of the path. Length is DEPTH+1.
@@ -142,7 +142,7 @@ never share an ancestor with `i`. The publisher (a separate workstream
 
 > `const` **AMOE\_MERKLE\_ZERO\_LEAF**: `0n` = `0n`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L103)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L103)
 
 Zero-leaf value used to pad a sparse snapshot up to `2^DEPTH`. The .circom
 file uses raw `0` for empty path positions, so we mirror that here. This
@@ -155,7 +155,7 @@ matches the canonical fixture (`input_v2.json`) where every
 
 > **buildAmoeMerkleSnapshot**(`leaves`): [`AmoeMerkleSnapshot`](#amoemerklesnapshot)
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L228)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:228](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L228)
 
 Build a sparse depth-20 Poseidon Merkle tree snapshot from a list of
 leaves.
@@ -194,7 +194,7 @@ on overflow / non-bigint elements.
 
 > **getAmoeMerklePath**(`snapshot`, `leafIndex`): [`AmoeMerklePath`](#amoemerklepath)
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:324](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L324)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:324](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L324)
 
 Compute the inclusion path for a leaf at `leafIndex` in a snapshot built
 by [buildAmoeMerkleSnapshot](#buildamoemerklesnapshot). Returns sibling values + left/right
@@ -227,7 +227,7 @@ if `leafIndex` is out of range.
 
 > **readAmoeMerkleLeaf**(`snapshot`, `leafIndex`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:366](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L366)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:366](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L366)
 
 Read the leaf value at `leafIndex` from a snapshot. Returns
 `AMOE_MERKLE_ZERO_LEAF` if the position was never filled. Used by
@@ -254,7 +254,7 @@ leaf-index actually contains the leaf they say it does.
 
 > **verifyAmoeMerklePath**(`args`): `boolean`
 
-Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:394](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeMerkleTree.ts#L394)
+Defined in: [server/\_lib/lottery/amoeMerkleTree.ts:394](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeMerkleTree.ts#L394)
 
 Verify an inclusion proof against an expected root. Pure helper used in
 tests and as a defensive sanity check before the witness is handed to

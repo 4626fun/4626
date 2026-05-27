@@ -257,6 +257,7 @@ export function filterVaultsForWorkflow(
     | 'ajna-bucket-manager'
     | 'charm-rebalance-manager'
     | 'payout-router-harvest'
+    | 'vault-strategy-reallocator'
 ): VaultConfig[] {
   switch (workflow) {
     case 'vault-keeper':
@@ -286,6 +287,10 @@ export function filterVaultsForWorkflow(
     case 'payout-router-harvest':
       // Payout processor needs creator coin + router wiring.
       return vaults.filter((v) => v.creatorCoinAddress && v.payoutRouterAddress);
+
+    case 'vault-strategy-reallocator':
+      // Cross-strategy TVL rebalance only needs an active vault with strategies.
+      return vaults.filter((v) => v.vaultAddress);
 
     default:
       return vaults;

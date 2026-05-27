@@ -31,6 +31,14 @@ There are multiple layers:
   - Strategies (Charm/Ajna) via batchers
   - Payout routing (e.g., `PayoutRouter`)
 
+## Strategy entitlements (greenfield)
+
+Greenfield vault deploy requires paid **`vault_full_deploy`** ($499 USDC). That single purchase expands to bundled sub-entitlements: `charm_active_lp`, `ajna_sleeve`, `solana_ovault_mesh`, and `solana_meteora_alpha_vault`. À-la-carte purchases of those keys return HTTP 410 — creators activate the bundle at `/creator/strategy/features`.
+
+- **Phase 3 weights (bundle default):** Charm 4_500 bps + Ajna 4_500 bps + idle 1_000 bps; `solanaWeightBps = 0` (Solana share liquidity seeds via Pipe A at Phase 2 finalize, not Phase 3 TVL).
+- **Legacy:** individual comp rows (e.g. AKITA) still resolve via `resolveCreatorStrategyPlan`.
+- **Canonical spec:** `docs/operations/creator-strategy-features.md`
+
 ## Required Inputs
 
 - Chain/network + RPC URL

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agent/erc8004OperatorStatus
+[4626-web](../../../index.md) / server/\_lib/agent/erc8004OperatorStatus
 
 # server/\_lib/agent/erc8004OperatorStatus
 
@@ -12,7 +12,7 @@
 
 > **AgentOperatorNextAction** = `object`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L34)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L34)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:34](https://github.com/
 
 > **detail**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L37)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L37)
 
 ##### id
 
 > **id**: [`AgentOperatorNextActionId`](#agentoperatornextactionid-1)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L35)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L35)
 
 ##### label
 
 > **label**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L36)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L36)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:36](https://github.com/
 
 > **AgentOperatorNextActionId** = `"register_onchain_identity"` \| `"write_token_uri"` \| `"set_agent_wallet"` \| `"repair_mirror"` \| `"repair_domain_proof"` \| `"fix_service_endpoint"` \| `"rerun_discoverability"`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L25)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L25)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:25](https://github.com/
 
 > **AgentOperatorStatus** = `object`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L40)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L40)
 
 #### Properties
 
@@ -56,31 +56,31 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:40](https://github.com/
 
 > **checkedAt**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L45)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:45](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L45)
 
 ##### discoverability
 
 > **discoverability**: [`AgentVerificationData`](../../../api/_handlers/v1/agents/identity/_verification.md#agentverificationdata)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L43)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L43)
 
 ##### nextActions
 
 > **nextActions**: [`AgentOperatorNextAction`](#agentoperatornextaction)[]
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L44)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L44)
 
 ##### publish
 
 > **publish**: [`AgentPublishData`](#agentpublishdata)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L42)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L42)
 
 ##### registration
 
 > **registration**: [`RegistrationFile`](agentRegistration.md#registrationfile)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L41)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L41)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:41](https://github.com/
 
 > **AgentPublishData** = `object`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L19)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L19)
 
 #### Properties
 
@@ -96,19 +96,19 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:19](https://github.com/
 
 > `optional` **grove**: [`AgentPublishGroveData`](#agentpublishgrovedata)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L22)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L22)
 
 ##### groveStatus
 
 > **groveStatus**: `"stored"` \| `"unavailable"` \| `"skipped"`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L21)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L21)
 
 ##### uriPolicy
 
 > **uriPolicy**: [`AgentUriPolicy`](../../../src/lib/agent/erc8004AgentUriPolicy.md#agenturipolicy)
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L20)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L20)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:20](https://github.com/
 
 > **AgentPublishGroveData** = `object`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L12)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L12)
 
 #### Properties
 
@@ -124,25 +124,25 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:12](https://github.com/
 
 > **gatewayUrl**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L14)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L14)
 
 ##### lensUri
 
 > **lensUri**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L13)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L13)
 
 ##### statusUrl
 
 > **statusUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L16)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L16)
 
 ##### storageKey
 
 > **storageKey**: `string`
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L15)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L15)
 
 ## Functions
 
@@ -150,7 +150,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:15](https://github.com/
 
 > **buildAgentOperatorStatus**(`req?`): `Promise`\<[`AgentOperatorStatus`](#agentoperatorstatus)\>
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:235](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L235)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:235](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L235)
 
 #### Parameters
 
@@ -168,7 +168,7 @@ Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:235](https://github.com
 
 > **buildAgentPublishStatus**(`options`): `Promise`\<`BuildAgentPublishStatusResult`\>
 
-Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L168)
+Defined in: [server/\_lib/agent/erc8004OperatorStatus.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agent/erc8004OperatorStatus.ts#L168)
 
 #### Parameters
 

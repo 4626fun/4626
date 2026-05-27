@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/identityRecovery
+[4626-web](../../../index.md) / server/\_lib/identity/identityRecovery
 
 # server/\_lib/identity/identityRecovery
 
@@ -12,7 +12,7 @@
 
 > **IdentityRecoveryRequiredError** = `Error` & `object` & \{ `email`: `string`; `existingPrivyUserId`: `string`; `reason`: `"EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER"`; `source`: `EmailCollisionSource`; \} \| \{ `canonicalEmail`: `string`; `canonicalProfileId`: `number`; `reason`: `"WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE"`; `wallet`: `string`; \}
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L7)
+Defined in: [server/\_lib/identity/identityRecovery.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/identityRecovery.ts#L7)
 
 #### Type Declaration
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:7](https://github.com/wen
 
 > **assertNoEmailPrivyCollision**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L118)
+Defined in: [server/\_lib/identity/identityRecovery.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/identityRecovery.ts#L118)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:118](https://github.com/w
 
 > **assertNoWalletPrivyCollision**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:168](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L168)
+Defined in: [server/\_lib/identity/identityRecovery.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/identityRecovery.ts#L168)
 
 Block wallet-only Privy sign-ins that would otherwise mint a fragmented
 profile for a human whose canonical account (verified email) already
@@ -113,7 +113,7 @@ Provide exactly one source of EVM addresses: a raw Privy user (we
 
 > **isIdentityRecoveryRequiredError**(`error`): `error is IdentityRecoveryRequiredError`
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:272](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L272)
+Defined in: [server/\_lib/identity/identityRecovery.ts:272](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/identityRecovery.ts#L272)
 
 #### Parameters
 

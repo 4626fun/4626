@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337
+[4626-web](../../../index.md) / src/lib/aa/coinbaseErc4337
 
 # src/lib/aa/coinbaseErc4337
 
@@ -12,7 +12,7 @@
 
 > **PollUserOperationStatusOptions** = `object`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:414](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L414)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:488](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L488)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:414](https://github.com/wenakita/4626
 
 > `optional` **maxDurationMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:416](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L416)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:490](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L490)
 
 ##### onError()?
 
 > `optional` **onError**: (`error`) => `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:419](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L419)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:493](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L493)
 
 ###### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:419](https://github.com/wenakita/4626
 
 > `optional` **onStatusChange**: (`status`, `txHash?`) => `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:418](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L418)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:492](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L492)
 
 ###### Parameters
 
@@ -62,19 +62,19 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:418](https://github.com/wenakita/4626
 
 > `optional` **perCheckTimeoutMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:417](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L417)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:491](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L491)
 
 ##### pollIntervalMs?
 
 > `optional` **pollIntervalMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:415](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L415)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:489](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L489)
 
 ##### signal?
 
 > `optional` **signal**: `AbortSignal`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:420](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L420)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:494](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L494)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:420](https://github.com/wenakita/4626
 
 > **PublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:200](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L200)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:206](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L206)
 
 #### Type Declaration
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:200](https://github.com/wenakita/4626
 
 > **UserOpStatus** = `"pending"` \| `"confirmed"` \| `"failed"` \| `"timeout"`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:412](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L412)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:486](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L486)
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:412](https://github.com/wenakita/4626
 
 > **WalletClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:205](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L205)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:211](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L211)
 
 #### Type Declaration
 
@@ -186,9 +186,9 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:205](https://github.com/wenakita/4626
 
 ### ERC4337\_ENTRYPOINT\_V06
 
-> `const` **ERC4337\_ENTRYPOINT\_V06**: `` `0x${string}` `` = `ENTRYPOINT_V06`
+> `const` **ERC4337\_ENTRYPOINT\_V06**: `string` = `ENTRYPOINT_V06`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:451](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L451)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:525](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L525)
 
 The canonical EntryPoint v0.6 address used by this module.
 This is the ONLY EntryPoint version supported.
@@ -199,7 +199,7 @@ This is the ONLY EntryPoint version supported.
 
 > **assertEntryPointV06**(`address`): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:457](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L457)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:531](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L531)
 
 Assert that a given address matches EntryPoint v0.6.
 Use this to verify configuration matches expectations.
@@ -208,7 +208,7 @@ Use this to verify configuration matches expectations.
 
 ##### address
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -216,11 +216,67 @@ Use this to verify configuration matches expectations.
 
 ***
 
+### deriveEphemeralNonceKey()
+
+> **deriveEphemeralNonceKey**(`ownerIndex`): `bigint`
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:363](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L363)
+
+Fresh EntryPoint nonce key when the owner-index lane is blocked by AA25.
+
+#### Parameters
+
+##### ownerIndex
+
+`number`
+
+#### Returns
+
+`bigint`
+
+***
+
+### pollCanonicalUserOpTransactionHash()
+
+> **pollCanonicalUserOpTransactionHash**(`params`): `Promise`\<`` `0x${string}` ``\>
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:2463](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L2463)
+
+#### Parameters
+
+##### params
+
+###### bundlerUrl
+
+`string`
+
+###### maxDurationMs?
+
+`number`
+
+###### publicClient
+
+[`PublicClientLike`](#publicclientlike)
+
+###### signal?
+
+`AbortSignal`
+
+###### userOpHash
+
+`` `0x${string}` ``
+
+#### Returns
+
+`Promise`\<`` `0x${string}` ``\>
+
+***
+
 ### pollUserOperationStatus()
 
 > **pollUserOperationStatus**(`params`): `Promise`\<\{ `status`: [`UserOpStatus`](#useropstatus); `txHash?`: `` `0x${string}` ``; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:2124](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L2124)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:2380](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L2380)
 
 #### Parameters
 
@@ -246,9 +302,9 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:2124](https://github.com/wenakita/462
 
 ### sendCoinbaseSmartWalletUserOperation()
 
-> **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
+> **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` `` \| `null`; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L1023)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1097](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L1097)
 
 #### Parameters
 
@@ -274,9 +330,13 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 `object`[]
 
+###### onSubmissionStatus?
+
+(`message`) => `void`
+
 ###### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### ownerApprovalContext?
 
@@ -304,7 +364,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 ###### ownerIndexLookupAddress?
 
-`` `0x${string}` ``
+`string`
 
 ###### ownerIndexOverride?
 
@@ -338,6 +398,12 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 `boolean`
 
+###### skipPasskeyOwnerSlotsInProbe?
+
+`boolean`
+
+When true, skip owner index 0 during self-auth CSW probe (WebAuthn passkey slot).
+
 ###### skipPaymaster?
 
 `boolean`
@@ -348,7 +414,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### userOpSignMode?
 
@@ -366,13 +432,19 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 `"1"` \| `"1.1"`
 
+###### waitForOnChainReceipt?
+
+`boolean`
+
+When false, return after bundler accepts the UserOp; receipt can be polled separately.
+
 ###### walletClient
 
 [`WalletClientLike`](#walletclientlike)
 
 #### Returns
 
-`Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `transactionHash`: `` `0x${string}` `` \| `null`; `userOpHash`: `` `0x${string}` ``; \}\>
 
 ***
 
@@ -380,7 +452,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:1023](https://github.com/wenakita/462
 
 > **simulateSmartWalletCalls**(`params`): `Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:748](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L748)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:822](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L822)
 
 Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
 This helps diagnose whether a UserOp failure is due to:
@@ -404,7 +476,7 @@ The direct simulation helps identify if the target contract would revert even wi
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
@@ -416,7 +488,7 @@ The direct simulation helps identify if the target contract would revert even wi
 
 > **verifyBundlerSupportsV06**(`bundlerUrl`, `options?`): `Promise`\<`void`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L107)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L113)
 
 Verify the bundler supports EntryPoint v0.6.
 Throws if the bundler doesn't support v0.6.
@@ -440,6 +512,40 @@ Throws if the bundler doesn't support v0.6.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### waitForEntryPointNonceAdvance()
+
+> **waitForEntryPointNonceAdvance**(`params`): `Promise`\<\{ `advanced`: `boolean`; `nonce`: `bigint`; \}\>
+
+Defined in: [src/lib/aa/coinbaseErc4337.ts:405](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337.ts#L405)
+
+Poll EntryPoint nonce until it advances past a stuck in-flight UserOp.
+
+#### Parameters
+
+##### params
+
+###### maxWaitMs?
+
+`number`
+
+###### pollIntervalMs?
+
+`number`
+
+###### readNonce
+
+() => `Promise`\<`bigint`\>
+
+###### startingNonce
+
+`bigint`
+
+#### Returns
+
+`Promise`\<\{ `advanced`: `boolean`; `nonce`: `bigint`; \}\>
 
 ## References
 

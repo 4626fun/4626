@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337ErrorUtils
+[4626-web](../../../index.md) / src/lib/aa/coinbaseErc4337ErrorUtils
 
 # src/lib/aa/coinbaseErc4337ErrorUtils
 
@@ -12,7 +12,7 @@
 
 > **classifyUserOpErrorCode**(`error`): `string`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L30)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:47](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L47)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:30](https://github.com/wena
 
 > **ensureUserOperationSucceeded**(`receipt`, `context`): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L126)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L144)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:126](https://github.com/wen
 
 > **extractRevertInfo**(`e`): `object`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L41)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L59)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:41](https://github.com/wena
 
 > **formatMetaMessages**(`error`): `string` \| `null`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:230](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L230)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:248](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L248)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:230](https://github.com/wen
 
 > **getErrorDiagnosticMessage**(`error`): `string`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L73)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L91)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:73](https://github.com/wena
 
 > **getRpcErrorDetails**(`error`): `string` \| `null`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L118)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:136](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L136)
 
 #### Parameters
 
@@ -132,11 +132,29 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:118](https://github.com/wen
 
 ***
 
+### isAccountNonceMismatchError()
+
+> **isAccountNonceMismatchError**(`error`): `boolean`
+
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L30)
+
+#### Parameters
+
+##### error
+
+`unknown`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### isExpectedUserOpTimeoutError()
 
 > **isExpectedUserOpTimeoutError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:249](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L249)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:267](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L267)
 
 #### Parameters
 
@@ -154,7 +172,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:249](https://github.com/wen
 
 > **isImmediateUserOpRetrySuppressedError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:202](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L202)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:220](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L220)
 
 #### Parameters
 
@@ -172,7 +190,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:202](https://github.com/wen
 
 > **isLikelyVerificationGasLimitError**(`message`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L63)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L81)
 
 #### Parameters
 
@@ -190,7 +208,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:63](https://github.com/wena
 
 > **isPaymasterAuthPolicyError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:213](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L213)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:231](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L231)
 
 #### Parameters
 
@@ -208,7 +226,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:213](https://github.com/wen
 
 > **isPaymasterPolicyError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:177](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L177)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:195](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L195)
 
 #### Parameters
 
@@ -226,7 +244,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:177](https://github.com/wen
 
 > **isPaymasterRoutingPolicyError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:224](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L224)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:242](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L242)
 
 #### Parameters
 
@@ -244,7 +262,7 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:224](https://github.com/wen
 
 > **isPaymasterStakeError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:150](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L150)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:168](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L168)
 
 #### Parameters
 
@@ -262,7 +280,25 @@ Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:150](https://github.com/wen
 
 > **isPaymasterUnavailableError**(`error`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L161)
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:179](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L179)
+
+#### Parameters
+
+##### error
+
+`unknown`
+
+#### Returns
+
+`boolean`
+
+***
+
+### isRpcRateLimitError()
+
+> **isRpcRateLimitError**(`error`): `boolean`
+
+Defined in: [src/lib/aa/coinbaseErc4337ErrorUtils.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337ErrorUtils.ts#L35)
 
 #### Parameters
 

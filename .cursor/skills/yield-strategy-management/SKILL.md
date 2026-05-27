@@ -26,6 +26,7 @@ Key ideas:
 - Vault holds idle creator coins (`coinBalance`) and can deploy excess into strategies.
 - Strategies implement `IStrategy` (single-asset: must have `asset() == CREATOR_COIN`).
 - Allocation is weight-based:
+  - Greenfield **`vault_full_deploy`** default: Charm 4_500 bps + Ajna 4_500 bps + idle 1_000 bps (see `docs/operations/creator-strategy-features.md`).
   - `deployable = coinBalance - max(minimumTotalIdle, deploymentThreshold)`
   - each strategy gets `amount_i = deployable * weight_i / totalStrategyWeight`
 - Debt accounting:

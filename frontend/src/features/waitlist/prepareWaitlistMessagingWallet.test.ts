@@ -6,16 +6,37 @@ import {
   prepareWaitlistMessagingWallet,
 } from './prepareWaitlistMessagingWallet'
 
+const EMBEDDED = '0x2222222222222222222222222222222222222222'
+
+const mockWalletClient = {
+  account: { address: EMBEDDED },
+  signMessage: vi.fn(),
+}
+
+vi.mock('@/lib/xmtp/waitForMessagingWallet', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/xmtp/waitForMessagingWallet')>()
+  return {
+    ...actual,
+    waitForMessagingWallet: vi.fn(async () => ({
+      address: EMBEDDED,
+      walletClient: mockWalletClient,
+      connector: { id: 'privy-embedded-waitlist' },
+    })),
+  }
+})
+
+const wagmiConfig = {} as import('wagmi').Config
+
 describe('prepareWaitlistMessagingWallet', () => {
   it('finds the live embedded Privy wallet by address', () => {
     const wallet = findLiveEmbeddedPrivyWallet(
       [
         { address: '0x1111111111111111111111111111111111111111', walletClientType: 'metamask' },
-        { address: '0x2222222222222222222222222222222222222222', walletClientType: 'privy' },
+        { address: EMBEDDED, walletClientType: 'privy' },
       ],
-      '0x2222222222222222222222222222222222222222',
+      EMBEDDED,
     )
-    expect(wallet?.address).toBe('0x2222222222222222222222222222222222222222')
+    expect(wallet?.address).toBe(EMBEDDED)
   })
 
   it('recognizes waitlist messaging connectors', () => {
@@ -33,31 +54,33 @@ describe('prepareWaitlistMessagingWallet', () => {
       connectAsync,
       connectors: [],
       messagingWalletReady: true,
+      wagmiConfig,
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).not.toHaveBeenCalled()
   })
 
   it('disconnects stale wagmi connectors before embedded connect', async () => {
-    const connectAsync = vi.fn(async () => ({ accounts: ['0x2222222222222222222222222222222222222222'] }))
+    const connectAsync = vi.fn(async () => ({ accounts: [EMBEDDED] }))
     const disconnectAsync = vi.fn(async () => undefined)
     const result = await prepareWaitlistMessagingWallet({
       wallets: [
         {
-          address: '0x2222222222222222222222222222222222222222',
+          address: EMBEDDED,
           walletClientType: 'privy',
           provider: { request: vi.fn() },
         },
       ],
-      embeddedEoaAddress: '0x2222222222222222222222222222222222222222',
+      embeddedEoaAddress: EMBEDDED,
       ensureEmbeddedWallet: vi.fn(async () => ({
-        address: '0x2222222222222222222222222222222222222222',
+        address: EMBEDDED,
       })),
       connectAsync,
       disconnectAsync,
       activeConnectorId: 'coinbaseWalletSDK',
       connectors: [],
       messagingWalletReady: false,
+      wagmiConfig,
     })
     expect(result).toEqual({ ok: true })
     expect(disconnectAsync).toHaveBeenCalledTimes(1)
@@ -65,22 +88,23 @@ describe('prepareWaitlistMessagingWallet', () => {
   })
 
   it('connects injected fallback when Privy connector is unavailable', async () => {
-    const connectAsync = vi.fn(async () => ({ accounts: ['0x2222222222222222222222222222222222222222'] }))
+    const connectAsync = vi.fn(async () => ({ accounts: [EMBEDDED] }))
     const result = await prepareWaitlistMessagingWallet({
       wallets: [
         {
-          address: '0x2222222222222222222222222222222222222222',
+          address: EMBEDDED,
           walletClientType: 'privy',
           provider: { request: vi.fn() },
         },
       ],
-      embeddedEoaAddress: '0x2222222222222222222222222222222222222222',
+      embeddedEoaAddress: EMBEDDED,
       ensureEmbeddedWallet: vi.fn(async () => ({
-        address: '0x2222222222222222222222222222222222222222',
+        address: EMBEDDED,
       })),
       connectAsync,
       connectors: [],
       messagingWalletReady: false,
+      wagmiConfig,
     })
     expect(result).toEqual({ ok: true })
     expect(connectAsync).toHaveBeenCalledTimes(1)

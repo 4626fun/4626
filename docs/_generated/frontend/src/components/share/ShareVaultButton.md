@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/share/ShareVaultButton
+[4626-web](../../../index.md) / src/components/share/ShareVaultButton
 
 # src/components/share/ShareVaultButton
 
@@ -12,7 +12,7 @@
 
 > **buildTelegramIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L37)
+Defined in: [src/components/share/ShareVaultButton.tsx:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L39)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:37](https://github.com/we
 
 > **buildTwitterIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L25)
+Defined in: [src/components/share/ShareVaultButton.tsx:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L27)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:25](https://github.com/we
 
 > **buildWarpcastIntent**(`url`, `text`): `string`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:30](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L30)
+Defined in: [src/components/share/ShareVaultButton.tsx:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L32)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/components/share/ShareVaultButton.tsx:30](https://github.com/we
 
 > **ShareVaultButton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/share/ShareVaultButton.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/components/share/ShareVaultButton.tsx#L50)
+Defined in: [src/components/share/ShareVaultButton.tsx:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/share/ShareVaultButton.tsx#L52)
 
 #### Parameters
 

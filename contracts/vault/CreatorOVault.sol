@@ -8,10 +8,13 @@ import {ERC4626} from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.so
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../interfaces/IStrategyValuation.sol";
 import {ICreatorOVaultModuleIdentity} from "./modules/ICreatorOVaultModuleIdentity.sol";
+import {CreatorOVaultLiquidityLib} from "./libraries/CreatorOVaultLiquidityLib.sol";
 
 /**
  * @title CreatorOVault
@@ -42,7 +45,7 @@ import {ICreatorOVaultModuleIdentity} from "./modules/ICreatorOVaultModuleIdenti
  *      - _name: Vault name (e.g., "Creator OVault - AKITA")
  *      - _symbol: Vault symbol (e.g., "▢AKITA")
  */
-contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
+contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712, Nonces, IERC20Permit {
     using SafeERC20 for IERC20;
 
     // =================================
@@ -51,6 +54,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Maximum performance fee (20%)
     uint16 public constant MAX_FEE = 2_000;
+
+    /// @notice Maximum management (TVL) fee (5% annualized bps charge in report)
+    uint16 public constant MAX_MANAGEMENT_FEE = 500;
+
+    /// @notice Risk timelock bounds
+    uint64 public constant MIN_RISK_CONFIG_DELAY = 1 days;
+    uint64 public constant MAX_RISK_CONFIG_DELAY = 30 days;
+
+    uint8 internal constant RISK_KIND_NONE = 0;
+    uint8 internal constant RISK_KIND_PERFORMANCE_FEE = 1;
+    uint8 internal constant RISK_KIND_MANAGEMENT_FEE = 2;
+    uint8 internal constant RISK_KIND_STRATEGY_MAX_ASSETS = 3;
+
+    bytes32 private constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     /// @notice Basis points denominator
     uint256 internal constant MAX_BPS = 10_000;
@@ -63,7 +81,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
@@ -334,11 +352,32 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     ///      inflation/donation attacks (docs/runbooks/strategy-onboarding-checklist.md).
     mapping(address => uint256) public strategyMaxAssets;
 
+    // v2 governance / liquidity transparency
+    uint16 public managementFee;
+    address public managementFeeRecipient;
+    uint64 public riskConfigDelay;
+    uint8 public pendingRiskKind;
+    address public pendingRiskTarget;
+    uint256 public pendingRiskValue;
+    uint64 public pendingRiskUnlockTime;
+    uint8 public valuationMissThreshold;
+    mapping(address => uint8) public strategyValuationMisses;
+
     // =================================
     // EVENTS
     // =================================
 
     event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
+    event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
+    event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
+
+    event UpdateManagementFee(uint16 newManagementFee);
+    event UpdateManagementFeeRecipient(address indexed newRecipient);
+    event UpdateRiskConfigDelay(uint64 newDelay);
+    event RiskConfigScheduled(uint8 kind, address indexed target, uint256 value, uint64 unlockTime);
+    event RiskConfigExecuted(uint8 kind, address indexed target, uint256 value);
+    event RiskConfigCancelled(uint8 kind);
+    event UpdateValuationMissThreshold(uint8 newThreshold);
 
     event StrategyAdded(address indexed strategy, uint256 weight);
     event StrategyRemoved(address indexed strategy);
@@ -454,6 +493,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     // Operator authorization errors
     error OperatorPermitExpired(uint256 deadline);
+    error PermitExpired(uint256 deadline);
+    error InvalidPermitSignature();
+
+    error RiskConfigDelayOutOfBounds(uint64 provided, uint64 min, uint64 max);
+    error PendingRiskConfigExists(uint8 kind);
+    error NoPendingRiskConfig();
+    error RiskConfigTooEarly(uint64 unlockTime);
+    error InvalidRiskConfigKind(uint8 kind);
     error InvalidOperatorSignature();
 
     // Protocol rescue errors
@@ -558,7 +605,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         keeper = _owner;
         emergencyAdmin = _owner;
         performanceFeeRecipient = _owner;
+        managementFeeRecipient = _owner;
         performanceFee = 0; // 0% default
+        managementFee = 0;
         profitMaxUnlockTime = 7 days;
         rescueDelay = uint64(7 days);
 
@@ -1449,6 +1498,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _delegateAndReturn(_strategiesModule);
     }
 
+    /**
+     * @notice Rebalance overweight strategies back to idle, then redeploy by weight.
+     * @param minDeviationBps Minimum overweight drift (bps of target) before withdrawing excess.
+     */
+    function rebalanceStrategies(uint256 minDeviationBps) external nonReentrant onlyKeepers {
+        _delegateAndReturn(_strategiesModule);
+    }
+
     // =================================
     // GAUGE CONTROLLER
     // =================================
@@ -1667,6 +1724,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             emit RescueCancelled(oldOwner);
         }
 
+        if (pendingRiskKind != 0) {
+            uint8 kind = pendingRiskKind;
+            pendingRiskKind = 0;
+            pendingRiskTarget = address(0);
+            pendingRiskValue = 0;
+            pendingRiskUnlockTime = 0;
+            emit RiskConfigCancelled(kind);
+        }
+
         if (oldOwner != address(0) && newOwner != oldOwner) {
             unchecked {
                 operatorEpoch++;
@@ -1717,7 +1783,40 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _delegate(_adminModule);
     }
 
+    /// @dev When `riskConfigDelay > 0`, use `scheduleSetPerformanceFee` + `executePendingRiskConfig`.
     function setPerformanceFee(uint16 _performanceFee) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function scheduleSetPerformanceFee(uint16 _performanceFee) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function scheduleSetManagementFee(uint16 _managementFee) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function scheduleSetStrategyMaxAssets(address strategy, uint256 cap) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function executePendingRiskConfig() external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function cancelPendingRiskConfig() external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function setRiskConfigDelay(uint64 delay) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    function setManagementFeeRecipient(address recipient) external onlyManagement {
+        _delegate(_adminModule);
+    }
+
+    function setValuationMissThreshold(uint8 threshold) external onlyManagement {
         _delegate(_adminModule);
     }
 
@@ -1750,8 +1849,19 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev 0 == uncapped. Non-zero clamps strategy contribution to `totalAssets()`.
      *      See docs/runbooks/strategy-onboarding-checklist.md.
      */
-    function setStrategyMaxAssets(address, uint256) external onlyManagement {
+    function setStrategyMaxAssets(address strategy, uint256 cap) external onlyManagement {
         _delegate(_adminModule);
+    }
+
+    /**
+     * @notice Atomically replace a strategy (withdraw old, register new).
+     */
+    function migrateStrategy(address oldStrategy, address newStrategy, uint256 weight, bool addToQueue)
+        external
+        nonReentrant
+        onlyManagement
+    {
+        _delegate(_strategiesModule);
     }
 
     /**
@@ -1824,8 +1934,44 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     // =================================
+    // ERC-2612 PERMIT (vault shares)
+    // =================================
+
+    /// @inheritdoc IERC20Permit
+    function permit(address owner_, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)
+        public
+    {
+        if (block.timestamp > deadline) revert PermitExpired(deadline);
+
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner_, spender, value, _useNonce(owner_), deadline));
+        bytes32 hash = _hashTypedDataV4(structHash);
+        address signer = ecrecover(hash, v, r, s);
+        if (signer == address(0) || signer != owner_) revert InvalidPermitSignature();
+
+        _approve(owner_, spender, value);
+    }
+
+    /// @inheritdoc IERC20Permit
+    function nonces(address owner_) public view override(Nonces, IERC20Permit) returns (uint256) {
+        return super.nonces(owner_);
+    }
+
+    /// @inheritdoc IERC20Permit
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    // =================================
     // VIEW FUNCTIONS
     // =================================
+
+    function strategyCount() external view returns (uint256) {
+        return strategyList.length;
+    }
+
+    function liquiditySnapshot() external view returns (CreatorOVaultLiquidityLib.LiquiditySnapshot memory) {
+        return CreatorOVaultLiquidityLib.snapshot(address(this));
+    }
 
     /**
      * @notice Get price per share (1e18 scale)

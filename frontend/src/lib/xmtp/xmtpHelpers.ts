@@ -196,6 +196,19 @@ export function isLocalXmtpStateInvalidError(message: string): boolean {
   )
 }
 
+/** Transient XMTP worker/network blips (common during dev HMR or welcome-stream retries). */
+export function isTransientXmtpStreamNetworkError(message: string): boolean {
+  const m = String(message || '').toLowerCase()
+  return (
+    m.includes('network error') ||
+    m.includes('subscribewelcomemessages') ||
+    m.includes('failed to fetch') ||
+    m.includes('load failed') ||
+    m.includes('err_network') ||
+    m.includes('connection reset')
+  )
+}
+
 // ---------------------------------------------------------------------------
 // canMessage result parsing
 // ---------------------------------------------------------------------------

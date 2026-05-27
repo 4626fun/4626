@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/api/apiBase
+[4626-web](../../../index.md) / src/lib/api/apiBase
 
 # src/lib/api/apiBase
 
@@ -12,7 +12,7 @@
 
 > **ApiFetchInit** = `RequestInit` & `object`
 
-Defined in: [src/lib/api/apiBase.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/api/apiBase.ts#L9)
+Defined in: [src/lib/api/apiBase.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/api/apiBase.ts#L9)
 
 #### Type Declaration
 
@@ -26,7 +26,7 @@ Defined in: [src/lib/api/apiBase.ts:9](https://github.com/wenakita/4626/blob/mai
 
 > **apiAliasPath**(`path`): `string`
 
-Defined in: [src/lib/api/apiBase.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/api/apiBase.ts#L16)
+Defined in: [src/lib/api/apiBase.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/api/apiBase.ts#L16)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [src/lib/api/apiBase.ts:16](https://github.com/wenakita/4626/blob/ma
 
 > **apiFetch**(`path`, `init`, `bases?`): `Promise`\<`Response`\>
 
-Defined in: [src/lib/api/apiBase.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/api/apiBase.ts#L61)
+Defined in: [src/lib/api/apiBase.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/api/apiBase.ts#L61)
 
 Fetch an API route with a best-effort alias fallback:
 - try `/__api/*` first (to avoid extension blocks on `/api/*`)

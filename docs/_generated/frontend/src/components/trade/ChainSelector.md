@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/trade/ChainSelector
+[4626-web](../../../index.md) / src/components/trade/ChainSelector
 
 # src/components/trade/ChainSelector
 
@@ -10,7 +10,7 @@
 
 ### ChainSelectorProps
 
-Defined in: [src/components/trade/ChainSelector.tsx:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L5)
+Defined in: [src/components/trade/ChainSelector.tsx:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L5)
 
 #### Properties
 
@@ -18,13 +18,13 @@ Defined in: [src/components/trade/ChainSelector.tsx:5](https://github.com/wenaki
 
 > `optional` **compact**: `boolean`
 
-Defined in: [src/components/trade/ChainSelector.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L9)
+Defined in: [src/components/trade/ChainSelector.tsx:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L9)
 
 ##### onSelect()
 
 > **onSelect**: (`chainId`) => `void`
 
-Defined in: [src/components/trade/ChainSelector.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L8)
+Defined in: [src/components/trade/ChainSelector.tsx:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L8)
 
 ###### Parameters
 
@@ -40,13 +40,13 @@ Defined in: [src/components/trade/ChainSelector.tsx:8](https://github.com/wenaki
 
 > **selectedChainId**: [`SupportedChainId`](../../config/chains.md#supportedchainid)
 
-Defined in: [src/components/trade/ChainSelector.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L6)
+Defined in: [src/components/trade/ChainSelector.tsx:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L6)
 
 ##### walletChainId?
 
 > `optional` **walletChainId**: `number` \| `null`
 
-Defined in: [src/components/trade/ChainSelector.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L7)
+Defined in: [src/components/trade/ChainSelector.tsx:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L7)
 
 ## Variables
 
@@ -54,4 +54,4 @@ Defined in: [src/components/trade/ChainSelector.tsx:7](https://github.com/wenaki
 
 > `const` **ChainSelector**: `NamedExoticComponent`\<[`ChainSelectorProps`](#chainselectorprops)\>
 
-Defined in: [src/components/trade/ChainSelector.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/ChainSelector.tsx#L41)
+Defined in: [src/components/trade/ChainSelector.tsx:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/trade/ChainSelector.tsx#L43)

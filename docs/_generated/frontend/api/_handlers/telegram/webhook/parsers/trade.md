@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/parsers/trade
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/parsers/trade
 
 # api/\_handlers/telegram/webhook/parsers/trade
 
@@ -12,7 +12,7 @@
 
 > **commandHasArguments**(`rawText`, `head`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L43)
+Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L43)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:43](https://github
 
 > **parseTelegramTradeIntent**(`rawText`): [`ParsedTelegramTradeIntent`](../types.md#parsedtelegramtradeintent) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L4)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:4](https://github.
 
 > **parseTradeCallbackData**(`rawData`): \{ `kind`: `"accept"` \| `"decline"`; `token`: `string`; \} \| \{ `actionType`: `"buy"` \| `"sell"` \| `"bid"`; `kind`: `"edit"`; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:110](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L110)
+Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L110)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:110](https://githu
 
 > **parseTradeFlowCallbackData**(`rawData`): \{ `actionType`: [`InteractiveTradeAction`](../types.md#interactivetradeaction); `kind`: `"vault"`; `vaultAddress`: `` `0x${string}` ``; \} \| \{ `actionType`: [`InteractiveTradeAction`](../types.md#interactivetradeaction); `kind`: `"percent"`; `percentBps`: `number`; `vaultAddress`: `` `0x${string}` ``; \} \| \{ `actionType`: [`InteractiveTradeAction`](../types.md#interactivetradeaction); `kind`: `"custom"`; `vaultAddress`: `` `0x${string}` ``; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L71)
+Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L71)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:71](https://github
 
 > **resolveTradeTarget**(`scopedVaults`, `identifier`): [`ScopedVaultRow`](../types.md#scopedvaultrow) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L52)
+Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L52)
 
 #### Parameters
 

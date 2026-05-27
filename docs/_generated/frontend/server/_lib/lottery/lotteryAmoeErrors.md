@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/lotteryAmoeErrors
+[4626-web](../../../index.md) / server/\_lib/lottery/lotteryAmoeErrors
 
 # server/\_lib/lottery/lotteryAmoeErrors
 
@@ -10,7 +10,7 @@
 
 ### AmoeAuthorityError
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L55)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L55)
 
 Authority-mismatch class. Maps to HTTP 403.
 Used when the authenticated session does not have authority over the
@@ -27,7 +27,7 @@ wallet than the auth identity controls).
 
 > **new AmoeAuthorityError**(`message`): [`AmoeAuthorityError`](#amoeauthorityerror)
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L57)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L57)
 
 ###### Parameters
 
@@ -49,13 +49,13 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:57](https://github.com/we
 
 > `readonly` **kind**: `"amoe_authority"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L56)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L56)
 
 ***
 
 ### AmoeBadRequestError
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L29)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L29)
 
 Bad-request class. Maps to HTTP 400.
 Used for: malformed input, mismatched fields, expired challenges,
@@ -71,7 +71,7 @@ Used for: malformed input, mismatched fields, expired challenges,
 
 > **new AmoeBadRequestError**(`message`): [`AmoeBadRequestError`](#amoebadrequesterror)
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L31)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L31)
 
 ###### Parameters
 
@@ -93,13 +93,13 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:31](https://github.com/we
 
 > `readonly` **kind**: `"amoe_bad_request"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L30)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L30)
 
 ***
 
 ### AmoeInsufficientCreditsError
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L41)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L41)
 
 Insufficient-credits class. Maps to HTTP 402 (Payment Required).
 Used when the wallet doesn't have enough credits to spend an entry.
@@ -114,7 +114,7 @@ Used when the wallet doesn't have enough credits to spend an entry.
 
 > **new AmoeInsufficientCreditsError**(`message`): [`AmoeInsufficientCreditsError`](#amoeinsufficientcreditserror)
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L43)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:43](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L43)
 
 ###### Parameters
 
@@ -136,13 +136,13 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:43](https://github.com/we
 
 > `readonly` **kind**: `"amoe_insufficient_credits"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L42)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L42)
 
 ***
 
 ### AmoeServerError
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L67)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:67](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L67)
 
 Server-side / config / upstream class. Maps to HTTP 500 or 503.
 Used for missing relay key, RPC failures, downstream contract reads.
@@ -162,7 +162,7 @@ Used for missing relay key, RPC failures, downstream contract reads.
 
 > **new AmoeServerError**(`message`): [`AmoeServerError`](#amoeservererror)
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L69)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:69](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L69)
 
 ###### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:69](https://github.com/we
 
 > `readonly` **kind**: `"amoe_server"`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L68)
 
 ## Functions
 
@@ -192,7 +192,7 @@ Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:68](https://github.com/we
 
 > **classifyAmoeError**(`err`): `object`
 
-Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L80)
+Defined in: [server/\_lib/lottery/lotteryAmoeErrors.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/lotteryAmoeErrors.ts#L80)
 
 HTTP status mapping for typed AMOE errors. Falls back to substring
 matching for legacy `Error.message` values so callers can switch

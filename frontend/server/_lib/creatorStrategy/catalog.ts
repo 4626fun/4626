@@ -1,19 +1,17 @@
 /**
  * Creator strategy feature catalog.
  *
- * Every productive strategy on a `CreatorOVault` (Charm, Ajna, Solana
- * bridge) is a paid, per-creator feature gated by an activation in
- * `creator_strategy_features`. There is no free baseline — a creator
- * must activate at least one feature before Phase 3 deploy, and each
- * feature entry in this catalog is independently priced in USDC.
+ * Greenfield vault deploy sells one public SKU: **`vault_full_deploy`**
+ * ($499 USDC). Payment expands into bundled sub-entitlements (Charm,
+ * Ajna, Solana mesh, Meteora) via `expandCreatorFeatureKeys`. Individual
+ * à-la-carte purchases of bundled keys return HTTP 410. Legacy per-key
+ * rows from operator comps still resolve for grandfathered creators.
  *
- * Activation is a one-time USDC payment on Base that unlocks
- * server-side provisioning of the underlying infra. See
- * `docs/operations/creator-strategy-features.md` for the full product
- * model (deploy-gating vs post-deploy features, weight scaling, etc.).
+ * See `docs/operations/creator-strategy-features.md` for the full product
+ * model (bundle, weight scaling, legacy partial entitlements).
  *
  * Design rules (keep this file boring and declarative):
- *   - Prices are in USDC base units (6 decimals). 100e6 = $100.
+ *   - Prices are in USDC base units (6 decimals). 499e6 = $499 bundle.
  *   - Keys are kebab_case + provider-scoped so we can add more without
  *     namespace collisions (e.g. `solana_meteora_alpha_vault`,
  *     `charm_auto_rebalance`, `ajna_min_bucket_keeper`).
@@ -177,8 +175,8 @@ export type CreatorStrategyFeatureDefinition = {
 }
 
 /**
- * The default USDC price for a premium feature. Individual features can
- * override but keeping them uniform at $100 is the initial product rule.
+ * Legacy list price for bundled sub-feature catalog entries and vanity tiers
+ * ($100). Public greenfield deploy SKU is `FULL_VAULT_DEPLOY_PRICE_USDC` ($499).
  */
 export const DEFAULT_CREATOR_STRATEGY_PRICE_USDC: bigint = 100_000_000n // $100.00 at 6 decimals
 

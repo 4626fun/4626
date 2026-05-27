@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
+import { erc20Abi, formatUnits, getAddress, isAddress, parseUnits } from 'viem'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { CONTRACTS } from '@/config/contracts'
 
@@ -21,6 +21,8 @@ import {
   readClientSwapPolicy,
   shouldEnable7702CanaryForAddress,
 } from '@/lib/uniswap/policy'
+import { fetchSwapAssetBalanceViaApi } from '@/lib/swap/useSwapAssetBalance'
+import { resolveSwapTokenDecimals } from '@/lib/swap/swapTokenDecimals'
 import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import { isAllowedCanonicalSigner, isTargetCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
@@ -374,18 +376,20 @@ export async function assertSwapSpendBalancePreflight(params: {
   wrapNativeEthForCanonical: boolean
   getTokenDecimals: (token: string) => Promise<number>
 }): Promise<void> {
-  if (!params.publicClient || !params.executionAddress) return
+  if (!params.executionAddress) return
 
   const parsableAmount = toParsableAmount(params.amountInUnits)
   if (!parsableAmount) {
     throw new Error('Enter a valid amount greater than 0.')
   }
 
+  const executionAddress = getAddress(params.executionAddress)
   const sellsNativeEth =
     params.wrapNativeEthForCanonical || params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
   if (sellsNativeEth) {
+    if (!params.publicClient) return
     const required = parseUnits(parsableAmount, 18)
-    const balance = await params.publicClient.getBalance({ address: params.executionAddress })
+    const balance = await params.publicClient.getBalance({ address: executionAddress })
     if (balance < required) {
       throw new Error(
         'Insufficient ETH on your smart wallet for this swap. Reduce the amount or add ETH on Base, then refresh the quote.',
@@ -394,16 +398,39 @@ export async function assertSwapSpendBalancePreflight(params: {
     return
   }
 
-  if (!isAddress(params.tokenIn) || typeof params.publicClient.readContract !== 'function') return
+  if (!isAddress(params.tokenIn)) return
 
   const decimals = await params.getTokenDecimals(params.tokenIn)
   const required = parseUnits(parsableAmount, decimals)
-  const balance = (await params.publicClient.readContract({
-    address: params.tokenIn as `0x${string}`,
-    abi: erc20Abi,
-    functionName: 'balanceOf',
-    args: [params.executionAddress],
-  })) as bigint
+
+  // Match the swap UI balance source first (/api/wallet/tokenBalance). Browser RPC
+  // reads against the CSW often return 0 while the server read is correct.
+  let balance: bigint | undefined
+  try {
+    const apiBalance = await fetchSwapAssetBalanceViaApi({
+      ownerAddress: executionAddress,
+      tokenAddress: params.tokenIn,
+    })
+    balance = apiBalance.raw
+  } catch {
+    balance = undefined
+  }
+
+  if (balance === undefined && params.publicClient && typeof params.publicClient.readContract === 'function') {
+    try {
+      balance = (await params.publicClient.readContract({
+        address: params.tokenIn as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'balanceOf',
+        args: [executionAddress],
+      })) as bigint
+    } catch {
+      balance = undefined
+    }
+  }
+
+  if (balance === undefined) return
+
   if (balance < required) {
     throw new Error(
       'Insufficient token balance on your smart wallet for this swap. Reduce the amount or add tokens on Base, then refresh the quote.',
@@ -985,19 +1012,15 @@ export function useSwapExecution(params: {
     ],
   )
 
-  const getTokenDecimals = useCallback(async (token: string): Promise<number> => {
-    if (!params.publicClient || !isAddress(token)) return 18
-    try {
-      const decimals = await params.publicClient.readContract({
-        address: token as `0x${string}`,
-        abi: erc20Abi,
-        functionName: 'decimals',
-      })
-      return Number(decimals)
-    } catch {
-      return 18
-    }
-  }, [params.publicClient])
+  const getTokenDecimals = useCallback(
+    async (token: string): Promise<number> =>
+      resolveSwapTokenDecimals({
+        token,
+        chainId: swapChainId,
+        publicClient: params.publicClient,
+      }),
+    [params.publicClient, swapChainId],
+  )
 
   const syncPermitRequirement = useCallback((nextQuote: TradeQuoteResponse | null | undefined) => {
     const requiresPermit = Boolean(pickPermitData(nextQuote))

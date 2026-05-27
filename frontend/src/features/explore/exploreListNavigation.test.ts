@@ -24,4 +24,15 @@ describe('exploreListNavigation', () => {
     expect(shouldShowExploreTableLoading({ isLoading: false, isFetching: true, hasRows: false })).toBe(true)
     expect(shouldShowExploreTableLoading({ isLoading: false, isFetching: true, hasRows: true })).toBe(false)
   })
+
+  it('suppresses table overlay during active search with no rows', () => {
+    expect(
+      shouldShowExploreTableLoading({
+        isLoading: false,
+        isFetching: true,
+        hasRows: false,
+        hasActiveSearch: true,
+      }),
+    ).toBe(false)
+  })
 })

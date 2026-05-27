@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routes.wallet.solana
+[4626-web](../../index.md) / api/\_handlers/\_routes.wallet.solana
 
 # api/\_handlers/\_routes.wallet.solana
 
@@ -12,7 +12,7 @@
 
 > `const` **walletSolanaRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.wallet.solana.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L4)
+Defined in: [api/\_handlers/\_routes.wallet.solana.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.wallet.solana.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.wallet.solana.ts:4](https://github.com/wena
 
 > **getWalletSolanaApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.wallet.solana.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L10)
+Defined in: [api/\_handlers/\_routes.wallet.solana.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routes.wallet.solana.ts#L10)
 
 #### Parameters
 

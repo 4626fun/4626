@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/telegramApi/chats
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/telegramApi/chats
 
 # api/\_handlers/telegram/webhook/telegramApi/chats
 
@@ -12,7 +12,7 @@
 
 > **TelegramChatMemberRole** = `"admin"` \| `"member"` \| `"unknown"`
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L12)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L12)
 
 Logical Telegram chat-member role used for authorization of setup commands.
 Intentionally narrower than the raw Telegram status strings:
@@ -28,7 +28,7 @@ Callers MUST fail closed on 'unknown' (refuse the action, do not allow).
 
 > `const` **TELEGRAM\_GROUP\_ANONYMOUS\_BOT\_ID**: `"1087968824"` = `'1087968824'`
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L20)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L20)
 
 Telegram's well-known ID for the GroupAnonymousBot. When a group admin posts
 anonymously, `from.id` is this constant instead of a real user id. We treat
@@ -41,7 +41,7 @@ https://core.telegram.org/bots/api#message
 
 > **\_\_resetTelegramChatMemberRoleCache**(): `void`
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:85](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L85)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L85)
 
 Test-only: clears the in-memory role cache.
 
@@ -55,7 +55,7 @@ Test-only: clears the in-memory role cache.
 
 > **createTelegramHolderRoomInviteLink**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L22)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L22)
 
 #### Parameters
 
@@ -83,7 +83,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:22](https://gi
 
 > **readTelegramChatMemberRole**(`params`): `Promise`\<[`TelegramChatMemberRole`](#telegramchatmemberrole)\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:100](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L100)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L100)
 
 Read the logical admin/member role of a user in a chat, with a 60s TTL cache.
 
@@ -129,7 +129,7 @@ Callers must fail closed on 'unknown'.
 
 > **readTelegramChatMemberStatus**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L49)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/chats.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/telegramApi/chats.ts#L49)
 
 #### Parameters
 

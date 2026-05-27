@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/messaging/telegramTrading
+[4626-web](../../../index.md) / server/\_lib/messaging/telegramTrading
 
 # server/\_lib/messaging/telegramTrading
 
@@ -12,7 +12,7 @@
 
 > **TelegramMergePreflightResult** = \{ `ok`: `true`; \} \| \{ `existingLinkStatus`: `string`; `existingPrivyUserId`: `string`; `existingProfileId`: `number` \| `null`; `ok`: `false`; `reason`: `"TELEGRAM_LINKED_TO_DIFFERENT_PRIVY"`; \}
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1252](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1252)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1252](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1252)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1252](https://github.com/
 
 > **TelegramOnboardingSession** = `object`
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1031](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1031)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1031](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1031)
 
 #### Properties
 
@@ -28,19 +28,19 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1031](https://github.com/
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1034](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1034)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1034](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1034)
 
 ##### step
 
 > **step**: [`TelegramOnboardingStep`](#telegramonboardingstep)
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1033](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1033)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1033](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1033)
 
 ##### telegramUserId
 
 > **telegramUserId**: `string`
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1032](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1032)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1032](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1032)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1032](https://github.com/
 
 > **TelegramOnboardingStep** = `"welcome"` \| `"csw_fork"` \| `"branch_create"` \| `"branch_link"`
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1029](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1029)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1029](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1029)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1029](https://github.com/
 
 > **claimAndConsumeTelegramLinkStartToken**(`params`): `Promise`\<[`TelegramLinkStartTokenClaimAndConsumeResult`](telegramTradingHelpers.md#telegramlinkstarttokenclaimandconsumeresult)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L177)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:177](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L177)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:177](https://github.com/w
 
 > **claimTelegramLinkStartToken**(`params`): `Promise`\<[`TelegramLinkStartTokenClaimResult`](telegramTradingHelpers.md#telegramlinkstarttokenclaimresult)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L119)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L119)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:119](https://github.com/w
 
 > **claimTelegramMiniAppReplayNonce**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:358](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L358)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:358](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L358)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:358](https://github.com/w
 
 > **clearTelegramActiveMessage**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2082](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2082)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2082](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2082)
 
 #### Parameters
 
@@ -180,7 +180,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2082](https://github.com/
 
 > **clearTelegramTradePercentPrompt**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1821](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1821)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1821](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1821)
 
 #### Parameters
 
@@ -208,7 +208,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1821](https://github.com/
 
 > **closeTelegramInlineSignalFeed**(`params`): `Promise`\<[`TelegramInlineSignalFeed`](telegramTradingHelpers.md#telegraminlinesignalfeed) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1973](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1973)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1973](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1973)
 
 #### Parameters
 
@@ -232,7 +232,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1973](https://github.com/
 
 > **consumeTelegramActionToken**(`params`): `Promise`\<[`TelegramActionTokenConsumeResult`](telegramTradingHelpers.md#telegramactiontokenconsumeresult)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:566](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L566)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:566](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L566)
 
 #### Parameters
 
@@ -268,7 +268,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:566](https://github.com/w
 
 > **consumeTelegramLinkStartToken**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:261](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L261)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:261](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L261)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:261](https://github.com/w
 
 > **consumeTelegramTradePercentPrompt**(`params`): `Promise`\<[`TelegramTradePercentPrompt`](telegramTradingHelpers.md#telegramtradepercentprompt) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1792](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1792)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1792](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1792)
 
 #### Parameters
 
@@ -324,7 +324,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1792](https://github.com/
 
 > **createTelegramActionToken**(`params`): `Promise`\<\{ `expiresAt`: `string`; `token`: `string`; \}\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:527](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L527)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:527](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L527)
 
 #### Parameters
 
@@ -364,7 +364,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:527](https://github.com/w
 
 > **createTelegramMiniAppSession**(`params`): `Promise`\<\{ `expiresAt`: `string`; `session`: [`TelegramMiniAppSession`](telegramTradingHelpers.md#telegramminiappsession); `sessionToken`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:396](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L396)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:396](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L396)
 
 #### Parameters
 
@@ -416,7 +416,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:396](https://github.com/w
 
 > **ensureTelegramTradingSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:721](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L721)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:721](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L721)
 
 #### Parameters
 
@@ -434,7 +434,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:721](https://github.com/w
 
 > **finalizeTelegramLinkStartTokenConsumption**(`params`): `Promise`\<`"expired"` \| `"consumed"` \| `"other_user"` \| `"missing"`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L282)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:282](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L282)
 
 #### Parameters
 
@@ -462,7 +462,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:282](https://github.com/w
 
 > **findReusableTelegramMiniAppSession**(`params`): `Promise`\<[`TelegramMiniAppSession`](telegramTradingHelpers.md#telegramminiappsession) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:459](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L459)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:459](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L459)
 
 #### Parameters
 
@@ -498,7 +498,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:459](https://github.com/w
 
 > **getHolderRoomPolicyByVault**(`params`): `Promise`\<[`TelegramHolderRoomPolicy`](telegramTradingHelpers.md#telegramholderroompolicy) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1547](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1547)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1547](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1547)
 
 #### Parameters
 
@@ -526,7 +526,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1547](https://github.com/
 
 > **getTelegramActiveMessage**(`params`): `Promise`\<[`TelegramActiveMessage`](telegramTradingHelpers.md#telegramactivemessage) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2019](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2019)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2019](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2019)
 
 #### Parameters
 
@@ -554,7 +554,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2019](https://github.com/
 
 > **getTelegramChatTradePolicy**(`params`): `Promise`\<[`TelegramChatTradePolicy`](telegramTradingHelpers.md#telegramchattradepolicy)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1516](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1516)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1516](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1516)
 
 #### Parameters
 
@@ -578,7 +578,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1516](https://github.com/
 
 > **getTelegramFunnelMetrics**(`params`): `Promise`\<[`TelegramFunnelMetrics`](telegramTradingHelpers.md#telegramfunnelmetrics)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2251](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2251)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2251](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2251)
 
 #### Parameters
 
@@ -606,7 +606,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2251](https://github.com/
 
 > **getTelegramInlineSignalFeedByInlineMessageId**(`params`): `Promise`\<[`TelegramInlineSignalFeed`](telegramTradingHelpers.md#telegraminlinesignalfeed) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1888](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1888)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1888](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1888)
 
 #### Parameters
 
@@ -630,7 +630,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1888](https://github.com/
 
 > **getTelegramLinkByUserId**(`params`): `Promise`\<[`TelegramUserLink`](telegramTradingHelpers.md#telegramuserlink) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1119)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1119)
 
 #### Parameters
 
@@ -654,7 +654,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1119](https://github.com/
 
 > **getTelegramLinkStatus**(`params`): `Promise`\<[`TelegramUserLink`](telegramTradingHelpers.md#telegramuserlink) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1245](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1245)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1245](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1245)
 
 #### Parameters
 
@@ -678,7 +678,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1245](https://github.com/
 
 > **getTelegramPortfolioSummary**(`params`): `Promise`\<[`TelegramPortfolioSummary`](telegramTradingHelpers.md#telegramportfoliosummary) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1418](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1418)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1418](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1418)
 
 #### Parameters
 
@@ -706,7 +706,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1418](https://github.com/
 
 > **getTelegramTradePercentPrompt**(`params`): `Promise`\<[`TelegramTradePercentPrompt`](telegramTradingHelpers.md#telegramtradepercentprompt) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1763](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1763)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1763](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1763)
 
 #### Parameters
 
@@ -734,7 +734,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1763](https://github.com/
 
 > **listHolderRoomMembersNeedingRecheck**(`params`): `Promise`\<[`TelegramHolderRoomRecheckRow`](telegramTradingHelpers.md#telegramholderroomrecheckrow)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2108)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2108](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2108)
 
 #### Parameters
 
@@ -762,7 +762,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2108](https://github.com/
 
 > **listHolderRoomPolicies**(`params`): `Promise`\<[`TelegramHolderRoomPolicy`](telegramTradingHelpers.md#telegramholderroompolicy)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1567](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1567)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1567](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1567)
 
 #### Parameters
 
@@ -794,7 +794,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1567](https://github.com/
 
 > **listTelegramAuctions**(`params`): `Promise`\<[`TelegramAuctionRow`](telegramTradingHelpers.md#telegramauctionrow)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2165](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2165)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2165](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2165)
 
 #### Parameters
 
@@ -822,7 +822,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2165](https://github.com/
 
 > **listTelegramInlineSignalFeedsBySourceChat**(`params`): `Promise`\<[`TelegramInlineSignalFeed`](telegramTradingHelpers.md#telegraminlinesignalfeed)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1913](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1913)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1913](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1913)
 
 #### Parameters
 
@@ -854,7 +854,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1913](https://github.com/
 
 > **listTelegramScopedVaults**(`params`): `Promise`\<[`TelegramScopedVault`](telegramTradingHelpers.md#telegramscopedvault)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1467](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1467)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1467](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1467)
 
 #### Parameters
 
@@ -882,7 +882,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1467](https://github.com/
 
 > **listTelegramSignals**(`params`): `Promise`\<[`TelegramSignalRow`](telegramTradingHelpers.md#telegramsignalrow)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2186](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2186)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2186](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2186)
 
 #### Parameters
 
@@ -910,7 +910,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2186](https://github.com/
 
 > **listTelegramUserBids**(`params`): `Promise`\<[`TelegramSignalRow`](telegramTradingHelpers.md#telegramsignalrow)[]\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2211](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2211)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2211](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2211)
 
 #### Parameters
 
@@ -938,7 +938,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2211](https://github.com/
 
 > **logTelegramActionAudit**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:627](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L627)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:627](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L627)
 
 #### Parameters
 
@@ -1014,7 +1014,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:627](https://github.com/w
 
 > **logTelegramFunnelEvent**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:687](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L687)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:687](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L687)
 
 #### Parameters
 
@@ -1054,7 +1054,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:687](https://github.com/w
 
 > **readTelegramLinkStartTokenClaim**(`params`): `Promise`\<[`TelegramLinkStartTokenClaim`](telegramTradingHelpers.md#telegramlinkstarttokenclaim) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:317](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L317)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:317](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L317)
 
 #### Parameters
 
@@ -1078,7 +1078,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:317](https://github.com/w
 
 > **readTelegramMiniAppSession**(`params`): `Promise`\<[`TelegramMiniAppSessionReadResult`](telegramTradingHelpers.md#telegramminiappsessionreadresult)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:492](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L492)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:492](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L492)
 
 #### Parameters
 
@@ -1102,7 +1102,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:492](https://github.com/w
 
 > **readTelegramOnboardingSession**(`params`): `Promise`\<[`TelegramOnboardingSession`](#telegramonboardingsession) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1083](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1083)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1083](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1083)
 
 #### Parameters
 
@@ -1126,7 +1126,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1083](https://github.com/
 
 > **revokeTelegramLink**(`params`): `Promise`\<\{ `link`: [`TelegramUserLink`](telegramTradingHelpers.md#telegramuserlink) \| `null`; `revoked`: `boolean`; \}\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1388](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1388)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1388](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1388)
 
 #### Parameters
 
@@ -1154,7 +1154,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1388](https://github.com/
 
 > **runTelegramMergePreflight**(`params`): `Promise`\<[`TelegramMergePreflightResult`](#telegrammergepreflightresult)\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1262](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1262)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1262](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1262)
 
 #### Parameters
 
@@ -1182,7 +1182,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1262](https://github.com/
 
 > **setTelegramInlineSignalFeedPaused**(`params`): `Promise`\<[`TelegramInlineSignalFeed`](telegramTradingHelpers.md#telegraminlinesignalfeed) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1944](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1944)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1944](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1944)
 
 #### Parameters
 
@@ -1210,7 +1210,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1944](https://github.com/
 
 > **touchTelegramInlineSignalFeedPush**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2001](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2001)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2001](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2001)
 
 #### Parameters
 
@@ -1238,7 +1238,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2001](https://github.com/
 
 > **tryInsertTelegramPrivateDmWelcomeSent**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1049](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1049)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1049](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1049)
 
 Returns true when this was the first insert for the user (idempotent welcome gate).
 
@@ -1264,7 +1264,7 @@ Returns true when this was the first insert for the user (idempotent welcome gat
 
 > **upsertHolderRoomMember**(`params`): `Promise`\<[`TelegramHolderRoomMember`](telegramTradingHelpers.md#telegramholderroommember) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1638](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1638)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1638](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1638)
 
 #### Parameters
 
@@ -1316,7 +1316,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1638](https://github.com/
 
 > **upsertHolderRoomPolicy**(`params`): `Promise`\<[`TelegramHolderRoomPolicy`](telegramTradingHelpers.md#telegramholderroompolicy) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1588](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1588)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1588](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1588)
 
 #### Parameters
 
@@ -1360,7 +1360,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1588](https://github.com/
 
 > **upsertTelegramActiveMessage**(`params`): `Promise`\<[`TelegramActiveMessage`](telegramTradingHelpers.md#telegramactivemessage) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:2042](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L2042)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:2042](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L2042)
 
 #### Parameters
 
@@ -1392,7 +1392,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:2042](https://github.com/
 
 > **upsertTelegramInlineSignalFeed**(`params`): `Promise`\<[`TelegramInlineSignalFeed`](telegramTradingHelpers.md#telegraminlinesignalfeed) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1836](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1836)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1836](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1836)
 
 #### Parameters
 
@@ -1424,7 +1424,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1836](https://github.com/
 
 > **upsertTelegramOnboardingSession**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1064](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1064)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1064](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1064)
 
 #### Parameters
 
@@ -1452,7 +1452,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1064](https://github.com/
 
 > **upsertTelegramTradePercentPrompt**(`params`): `Promise`\<[`TelegramTradePercentPrompt`](telegramTradingHelpers.md#telegramtradepercentprompt) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1705](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1705)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1705](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1705)
 
 #### Parameters
 
@@ -1492,7 +1492,7 @@ Defined in: [server/\_lib/messaging/telegramTrading.ts:1705](https://github.com/
 
 > **upsertTelegramUserLink**(`params`): `Promise`\<[`TelegramUserLink`](telegramTradingHelpers.md#telegramuserlink) \| `null`\>
 
-Defined in: [server/\_lib/messaging/telegramTrading.ts:1297](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramTrading.ts#L1297)
+Defined in: [server/\_lib/messaging/telegramTrading.ts:1297](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramTrading.ts#L1297)
 
 #### Parameters
 

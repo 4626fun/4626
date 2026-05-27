@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/pages/Leaderboard
+[4626-web](../../index.md) / src/pages/Leaderboard
 
 # src/pages/Leaderboard
 
@@ -12,7 +12,7 @@
 
 > **Leaderboard**(): `Element`
 
-Defined in: [src/pages/Leaderboard.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Leaderboard.tsx#L52)
+Defined in: [src/pages/Leaderboard.tsx:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/Leaderboard.tsx#L39)
 
 #### Returns
 

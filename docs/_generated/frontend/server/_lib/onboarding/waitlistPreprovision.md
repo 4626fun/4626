@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onboarding/waitlistPreprovision
+[4626-web](../../../index.md) / server/\_lib/onboarding/waitlistPreprovision
 
 # server/\_lib/onboarding/waitlistPreprovision
 
@@ -12,7 +12,7 @@
 
 > **PreprovisionResult** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L93)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L93)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:93](https://github.
 
 > **coinAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L96)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L96)
 
 ##### coinSymbol
 
 > **coinSymbol**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L97)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L97)
 
 ##### serverWalletAddress
 
 > **serverWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L95)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L95)
 
 ##### serverWalletId
 
 > **serverWalletId**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L94)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L94)
 
 ##### zoraHandle
 
 > **zoraHandle**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L98)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L98)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:98](https://github.
 
 > **preprovisionWaitlistUser**(`signupId`, `walletAddress`): `Promise`\<[`PreprovisionResult`](#preprovisionresult) \| `null`\>
 
-Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L111)
+Defined in: [server/\_lib/onboarding/waitlistPreprovision.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onboarding/waitlistPreprovision.ts#L111)
 
 Pre-provision a waitlist user. This resolves identities and provisions
 a Privy server wallet, then stores the results on the `profiles` row.

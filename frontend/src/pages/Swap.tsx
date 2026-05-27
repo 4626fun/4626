@@ -45,6 +45,14 @@ import {
 } from '@/lib/uniswap/liquidityApi'
 import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { resolveSwapBalanceOwner } from '@/lib/swap/resolveSwapBalanceOwner'
+import {
+  enrichDiscoveredSwapTokenOptions,
+  normalizeSwapTokenSearchQuery,
+  searchZoraCreatorCoinsForSwap,
+  zoraCoinsToSwapTokenOptions,
+} from '@/lib/swap/zoraTokenSearch'
+import { enrichSwapTokenOption, swapTokenOptionNeedsLabelEnrichment } from '@/lib/swap/swapTokenLabels'
+import { fetchWalletZoraHoldingsBundle } from '@/lib/zora/walletHoldings'
 import { useSwapAssetBalance } from '@/lib/swap/useSwapAssetBalance'
 import { isBaseAccountWallet, useSwapSubAccountRuntime } from '@/lib/swap/useSwapSubAccountRuntime'
 import { buildWaitlistSetupUrl } from '@/lib/auth/waitlistEntry'
@@ -146,7 +154,7 @@ function normalizeCreatorCoinLabel(value: unknown): string | null {
   return trimmed
 }
 
-async function fetchSwapCreatorCoinOptions(params: {
+async function fetchSwapVaultCreatorCoinOptions(params: {
   query: string
   limit: number
   chainId: number
@@ -156,7 +164,7 @@ async function fetchSwapCreatorCoinOptions(params: {
   searchParams.set('sort', 'volume')
   searchParams.set('time', '1y')
   searchParams.set('chainId', String(params.chainId))
-  const query = params.query.trim()
+  const query = normalizeSwapTokenSearchQuery(params.query)
   if (query) searchParams.set('query', query)
 
   const res = await apiFetch(`${API_ENDPOINTS.explore.vaults}?${searchParams.toString()}`, { method: 'GET' })
@@ -173,17 +181,47 @@ async function fetchSwapCreatorCoinOptions(params: {
     seen.add(normalizedAddress)
 
     const groupLabel = normalizeCreatorCoinLabel(item?.groupId)
-    const symbol = groupLabel ?? shortAddress(normalizedAddress)
+    const useGroupAsLabel = Boolean(groupLabel && !isOpaqueInternalTokenLabel(groupLabel))
+    const symbol = useGroupAsLabel ? groupLabel! : shortAddress(normalizedAddress)
     out.push({
       address: normalizedAddress,
       symbol,
-      name: groupLabel ? `${groupLabel} creator coin` : 'Creator coin',
+      name: useGroupAsLabel ? `${groupLabel} creator coin` : 'Creator coin',
       group: 'creator',
       chainId: params.chainId,
       verified: true,
     })
   }
   return out
+}
+
+async function fetchSwapCreatorCoinOptions(params: {
+  query: string
+  limit: number
+  chainId: number
+}): Promise<SwapTokenOption[]> {
+  const normalizedQuery = normalizeSwapTokenSearchQuery(params.query)
+  const [vaultOptions, zoraOptions] = await Promise.all([
+    fetchSwapVaultCreatorCoinOptions({ ...params, query: normalizedQuery }),
+    normalizedQuery
+      ? searchZoraCreatorCoinsForSwap(normalizedQuery).then((coins) =>
+          zoraCoinsToSwapTokenOptions(coins, params.chainId),
+        )
+      : Promise.resolve([] as SwapTokenOption[]),
+  ])
+
+  const merged: SwapTokenOption[] = []
+  const seen = new Set<string>()
+  const zoraByAddress = new Map(zoraOptions.map((option) => [option.address.toLowerCase(), option]))
+
+  for (const option of [...zoraOptions, ...vaultOptions]) {
+    const key = option.address.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(zoraByAddress.get(key) ?? option)
+  }
+  const sliced = merged.slice(0, params.limit)
+  return enrichDiscoveredSwapTokenOptions(sliced)
 }
 
 type QuoteShape = Record<string, unknown>
@@ -312,19 +350,6 @@ function pickPrivyEmbeddedEoaAddressFromUser(user: any): Address | null {
     if (address) return address
   }
   return null
-}
-
-/** Numeric token amount for read-only Buy input (no symbol suffix). */
-function formatBalanceForAmountInput(
-  data: { formatted: string } | undefined,
-): string | undefined {
-  if (!data) return undefined
-  const raw = data.formatted.trim()
-  if (!raw) return undefined
-  const n = Number(raw)
-  if (!Number.isFinite(n)) return undefined
-  if (n === 0) return '0'
-  return raw.includes('.') ? raw.replace(/\.?0+$/, '') || '0' : raw
 }
 
 function fmtBalFromAmount(amount: string | null | undefined, symbol: string): string | undefined {
@@ -1330,28 +1355,98 @@ export function Swap() {
     })
   }, [dynamicCoreTokens, normalizedRequestedShareToken, requestedTradeToken, swapChainId])
 
+  const balanceOwnerAddress = useMemo(
+    () =>
+      resolveSwapBalanceOwner({
+        accountMeCanonicalCsw: accountSignals?.canonicalCswAddress,
+        accountContextCsw: canonicalAddress,
+        privyEmbeddedEoa: privyEmbeddedEoaAddress,
+        connectedExternalEoa: address,
+        executionAddress,
+      }),
+    [
+      accountSignals?.canonicalCswAddress,
+      address,
+      canonicalAddress,
+      executionAddress,
+      privyEmbeddedEoaAddress,
+    ],
+  )
+  const balanceReadsEnabled = Boolean(hasSession && sessionHydrated && balanceOwnerAddress)
+
+  const swapZoraHoldingsQuery = useQuery({
+    queryKey: ['swap', 'zora-holdings', balanceOwnerAddress?.toLowerCase() ?? null],
+    enabled:
+      swapChainId === BASE_CHAIN_ID &&
+      balanceReadsEnabled &&
+      Boolean(balanceOwnerAddress && isAddress(balanceOwnerAddress)),
+    staleTime: 60_000,
+    queryFn: async () => fetchWalletZoraHoldingsBundle(balanceOwnerAddress as Address, { topTokenCount: 100 }),
+  })
+
+  const swapZoraHoldingOptions = useMemo(() => {
+    const bundle = swapZoraHoldingsQuery.data
+    if (!bundle) return []
+    return [...bundle.creator, ...bundle.content]
+  }, [swapZoraHoldingsQuery.data])
+
+  const swapZoraHoldingBalances = useMemo(
+    () => swapZoraHoldingsQuery.data?.balances ?? {},
+    [swapZoraHoldingsQuery.data],
+  )
+
   const allTokenOptions = useMemo<SwapTokenOption[]>(() => {
-    const merged = [...tokenOptions, ...discoveredCreatorTokenOptions, ...extraTokenOptions]
-    const seen = new Set<string>()
-    const unique: SwapTokenOption[] = []
+    // Later entries win so Zora holdings / curated options override address-only stubs.
+    const merged = [
+      ...extraTokenOptions,
+      ...discoveredCreatorTokenOptions,
+      ...tokenOptions,
+      ...swapZoraHoldingOptions,
+    ]
+    const byAddress = new Map<string, SwapTokenOption>()
     for (const option of merged) {
-      const normalized = option.address.toLowerCase()
-      if (seen.has(normalized)) continue
-      seen.add(normalized)
-      unique.push(option)
+      byAddress.set(option.address.toLowerCase(), option)
     }
-    return unique
-  }, [discoveredCreatorTokenOptions, extraTokenOptions, tokenOptions])
+    return [...byAddress.values()]
+  }, [discoveredCreatorTokenOptions, extraTokenOptions, swapZoraHoldingOptions, tokenOptions])
+
+  const opaqueSwapTokenOptions = useMemo(
+    () => allTokenOptions.filter((option) => swapTokenOptionNeedsLabelEnrichment(option)),
+    [allTokenOptions],
+  )
+
+  const enrichedOpaqueLabelsQuery = useQuery({
+    queryKey: [
+      'swap-opaque-token-labels',
+      opaqueSwapTokenOptions.map((option) => `${option.address}:${option.symbol}:${option.name}`).join('|'),
+    ],
+    enabled: opaqueSwapTokenOptions.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const entries = await Promise.all(
+        opaqueSwapTokenOptions.map(async (option) => {
+          const enriched = await enrichSwapTokenOption(option)
+          return [option.address.toLowerCase(), enriched] as const
+        }),
+      )
+      return new Map(entries)
+    },
+  })
 
   const swapTokenOptions = useMemo<SwapTokenOption[]>(() => {
-    return allTokenOptions.map((option) => ({
-      ...option,
-      // Never auto-trust URL-injected creator/share tokens; only core defaults to verified.
-      verified: option.verified ?? (option.group === 'core'),
-      sectionTag:
-        option.group === 'creator' ? 'creator' : option.group === 'share' ? 'content' : undefined,
-    }))
-  }, [allTokenOptions])
+    const enrichedByAddress = enrichedOpaqueLabelsQuery.data
+    return allTokenOptions.map((option) => {
+      const enriched = enrichedByAddress?.get(option.address.toLowerCase())
+      const resolved = enriched ?? option
+      return {
+        ...resolved,
+        // Never auto-trust URL-injected creator/share tokens; only core defaults to verified.
+        verified: resolved.verified ?? (resolved.group === 'core'),
+        sectionTag:
+          resolved.group === 'creator' ? 'creator' : resolved.group === 'share' ? 'content' : undefined,
+      }
+    })
+  }, [allTokenOptions, enrichedOpaqueLabelsQuery.data])
 
   const tokenInOption = useMemo(
     () => swapTokenOptions.find((opt) => opt.address.toLowerCase() === tokenIn.toLowerCase()) ?? null,
@@ -1401,13 +1496,13 @@ export function Swap() {
         symbol: tokenInSymbol,
         name: tokenInSymbol,
         address,
-        group: 'share',
-        verified: false,
+        group: 'creator',
+        chainId: swapChainId,
         decimals: 18,
         logoUrls: [],
       })
     }
-  }, [extraTokenOptions, registerTokenForIdentity, tokenIn, tokenInOption, tokenInSymbol])
+  }, [extraTokenOptions, registerTokenForIdentity, swapChainId, tokenIn, tokenInOption, tokenInSymbol])
 
   useEffect(() => {
     const address = tokenOut.toLowerCase()
@@ -1416,33 +1511,14 @@ export function Swap() {
         symbol: tokenOutSymbol,
         name: tokenOutSymbol,
         address,
-        group: 'share',
-        verified: false,
+        group: 'creator',
+        chainId: swapChainId,
         decimals: 18,
         logoUrls: [],
       })
     }
-  }, [extraTokenOptions, registerTokenForIdentity, tokenOut, tokenOutOption, tokenOutSymbol])
+  }, [extraTokenOptions, registerTokenForIdentity, swapChainId, tokenOut, tokenOutOption, tokenOutSymbol])
 
-  // ─── Token balances ───────────────────────────────────────────────────────
-  const balanceOwnerAddress = useMemo(
-    () =>
-      resolveSwapBalanceOwner({
-        accountMeCanonicalCsw: accountSignals?.canonicalCswAddress,
-        accountContextCsw: canonicalAddress,
-        privyEmbeddedEoa: privyEmbeddedEoaAddress,
-        connectedExternalEoa: address,
-        executionAddress,
-      }),
-    [
-      accountSignals?.canonicalCswAddress,
-      address,
-      canonicalAddress,
-      executionAddress,
-      privyEmbeddedEoaAddress,
-    ],
-  )
-  const balanceReadsEnabled = Boolean(hasSession && sessionHydrated && balanceOwnerAddress)
   const tokenInBalanceQuery = useSwapAssetBalance({
     ownerAddress: balanceOwnerAddress,
     tokenAddress: tokenIn,
@@ -1542,30 +1618,12 @@ export function Swap() {
     ensureCanonicalSession,
   })
 
-  const outputWalletBalanceAmount = useMemo(() => {
-    if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return null
-    return formatBalanceForAmountInput({ formatted: tokenOutBalanceQuery.data.formatted }) ?? null
-  }, [tokenOutBalanceQuery.data, tokenOutBalanceQuery.isSuccess])
-
   const buyAmountDisplay = useMemo(() => {
-    const walletBalance = outputWalletBalanceAmount
-
-    if (swapCompletion || txState === 'success') {
-      if (walletBalance != null && balanceOwnerAddress) return walletBalance
-      if (swapCompletion?.estimatedOut) return swapCompletion.estimatedOut
-      return estimatedOut
-    }
-
-    if (estimatedOut) return estimatedOut
-    if (walletBalance != null && balanceOwnerAddress) return walletBalance
+    if (swapCompletion?.estimatedOut) return swapCompletion.estimatedOut
     return estimatedOut
-  }, [
-    balanceOwnerAddress,
-    estimatedOut,
-    outputWalletBalanceAmount,
-    swapCompletion,
-    txState,
-  ])
+  }, [estimatedOut, swapCompletion?.estimatedOut])
+
+  const buyQuoteLoading = busy === 'quote' && !buyAmountDisplay
 
   const tokenOutBalanceLabel = useMemo(() => {
     if (!tokenOutBalanceQuery.isSuccess || !tokenOutBalanceQuery.data) return undefined
@@ -1976,6 +2034,7 @@ export function Swap() {
                         tokenOutIdentityLoading={tokenOutIdentity.isLoading}
                         amountInUnits={amountInUnits}
                         estimatedOut={buyAmountDisplay}
+                        buyQuoteLoading={buyQuoteLoading}
                         estimatedOutUsd={null}
                         tokenInSymbol={tokenInSymbol}
                         tokenOutSymbol={tokenOutSymbol}
@@ -2245,6 +2304,15 @@ export function Swap() {
               <div>signer: {txDebug.signerAddress ?? '--'}</div>
               <div>canonical: {txDebug.canonicalAddress ?? '--'}</div>
               <div>balance owner: {balanceOwnerAddress ?? '--'}</div>
+              <div>token in: {tokenIn}</div>
+              <div>
+                token in bal:{' '}
+                {tokenInBalanceQuery.isSuccess
+                  ? `${tokenInBalanceQuery.data?.formatted ?? '--'} (${tokenInBalanceQuery.data?.raw?.toString() ?? '--'})`
+                  : tokenInBalanceQuery.isError
+                    ? 'error'
+                    : 'loading'}
+              </div>
               <div>token out: {tokenOut}</div>
               <div>
                 token out bal:{' '}
@@ -2324,6 +2392,13 @@ export function Swap() {
         tokenOptions={swapTokenOptions}
         recentTokenAddresses={recentTokenAddresses}
         chainId={swapChainId}
+        balanceOwnerAddress={balanceOwnerAddress ?? null}
+        zoraHoldingOptions={swapZoraHoldingOptions}
+        zoraHoldingBalances={swapZoraHoldingBalances}
+        zoraHoldingsLoading={swapZoraHoldingsQuery.isLoading}
+        isSearchLoading={
+          discoveredCreatorTokenOptionsQuery.isFetching && Boolean(normalizedTokenSelectorQuery)
+        }
         onQueryChange={setTokenSelectorQuery}
         onClose={() => setTokenSelectorOpen(false)}
         onSelect={onSelectToken}

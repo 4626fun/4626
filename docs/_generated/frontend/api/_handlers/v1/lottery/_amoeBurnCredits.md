@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeBurnCredits
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeBurnCredits
 
 # api/\_handlers/v1/lottery/\_amoeBurnCredits
 
@@ -12,7 +12,7 @@
 
 > **computeEligibleSubmitAfterUnixSec**(`burnEpoch`): `bigint`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnCredits.ts:149](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnCredits.ts#L149)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnCredits.ts:150](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnCredits.ts#L150)
 
 Compute the unix timestamp at which a burn that landed in `epoch`
 becomes eligible for phase B submission. Equals the start of
@@ -43,7 +43,7 @@ stays mathematically pure.
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeBurnCredits.ts:153](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeBurnCredits.ts#L153)
+Defined in: [api/\_handlers/v1/lottery/\_amoeBurnCredits.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeBurnCredits.ts#L154)
 
 #### Parameters
 

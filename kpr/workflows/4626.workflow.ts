@@ -35,6 +35,10 @@ import {
   executeBridgeIntegrityMonitor,
   type BridgeIntegrityMonitorResult,
 } from '../actions/bridge-integrity-monitor.action.js';
+import {
+  executeVaultStrategyReallocator,
+  type BatchVaultStrategyReallocateResult,
+} from '../actions/vault-strategy-reallocator.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = '4626';
@@ -52,6 +56,7 @@ export interface UnifiedResult {
   settlement: BatchCcaFinalizationResult | null;
   queue: KeeprActionQueueResult | null;
   bridgeIntegrity: BridgeIntegrityMonitorResult | null;
+  strategyReallocator: BatchVaultStrategyReallocateResult | null;
   errors: string[];
   durationMs: number;
 }
@@ -69,6 +74,7 @@ export async function handler(): Promise<void> {
   let settlementResult: BatchCcaFinalizationResult | null = null;
   let queueResult: KeeprActionQueueResult | null = null;
   let bridgeIntegrityResult: BridgeIntegrityMonitorResult | null = null;
+  let strategyReallocatorResult: BatchVaultStrategyReallocateResult | null = null;
 
   // ── 1. Vault Keeper (tend + report) ──────────────────────────────────
   try {
@@ -188,6 +194,20 @@ export async function handler(): Promise<void> {
     errors.push(`bridge-integrity-monitor: ${msg}`);
   }
 
+  // ── 8. Cross-strategy TVL reallocator (Charm ↔ Ajna via vault idle) ───
+  try {
+    console.log('═══ Vault Strategy Reallocator ═══');
+    strategyReallocatorResult = await executeVaultStrategyReallocator();
+    console.log(
+      `  vaults=${strategyReallocatorResult.totalVaults} rebalanced=${strategyReallocatorResult.rebalanced} ` +
+        `skipped=${strategyReallocatorResult.skipped} errors=${strategyReallocatorResult.errors}`,
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  vault-strategy-reallocator failed: ${msg}`);
+    errors.push(`vault-strategy-reallocator: ${msg}`);
+  }
+
   const durationMs = Date.now() - start;
 
   // ── Summary ──────────────────────────────────────────────────────────
@@ -233,6 +253,13 @@ export async function handler(): Promise<void> {
           monitoredRoutes: bridgeIntegrityResult.monitoredRoutes,
           criticalFindings: bridgeIntegrityResult.criticalFindings.length,
           warningFindings: bridgeIntegrityResult.warningFindings.length,
+        }
+      : null,
+    strategyReallocator: strategyReallocatorResult
+      ? {
+          vaults: strategyReallocatorResult.totalVaults,
+          rebalanced: strategyReallocatorResult.rebalanced,
+          skipped: strategyReallocatorResult.skipped,
         }
       : null,
     errors: errors.length,

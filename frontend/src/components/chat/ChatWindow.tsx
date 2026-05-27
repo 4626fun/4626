@@ -46,7 +46,7 @@ import {
   searchChatCommands,
   getChatCommandById,
 } from './commandCenter'
-import { resolveCommandCenterVisibility, shouldAttemptInactiveDmRecovery } from './chatWindowState'
+import { resolveCommandCenterVisibility, shouldAttemptGroupConversationRecovery, shouldAttemptInactiveDmRecovery } from './chatWindowState'
 
 type Props = {
   conversationId: string
@@ -59,6 +59,8 @@ type Props = {
   onMinimize: () => void
   onClose: () => void
   onConversationRekey?: (oldConversationId: string, newConversationId: string) => void
+  /** Re-resolve a group conversation in the worker after reconnect/HMR stale ids. */
+  recoverGroupConversation?: () => Promise<string | null>
   variant?: 'desktop' | 'mobile' | 'embedded'
   /** When embedded, `inline` drops duplicate header/chrome for parent-hosted surfaces like waitlist chat. */
   embeddedChrome?: 'framed' | 'inline'
@@ -263,6 +265,7 @@ export function ChatWindow({
   onMinimize,
   onClose,
   onConversationRekey,
+  recoverGroupConversation,
   variant = 'desktop',
   embeddedChrome = 'framed',
   seedCommandId = null,
@@ -685,6 +688,33 @@ export function ChatWindow({
           }
         }
 
+        if (
+          shouldAttemptGroupConversationRecovery({ reason, conversationType }) &&
+          recoverGroupConversation
+        ) {
+          try {
+            const recoveredConversationId = await recoverGroupConversation()
+            if (recoveredConversationId) {
+              if (recoveredConversationId !== conversationId) {
+                onConversationRekey?.(conversationId, recoveredConversationId)
+              }
+              await sendMessage(recoveredConversationId, text, replyOptions)
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === messageId
+                    ? { ...msg, status: 'sent', error: null }
+                    : msg,
+                ),
+              )
+              setReplyToMessageId(null)
+              return true
+            }
+          } catch (retryError) {
+            reason = retryError instanceof Error ? retryError.message : reason
+            console.error('[chat] group recovery send error:', retryError)
+          }
+        }
+
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId
@@ -712,6 +742,7 @@ export function ChatWindow({
       dmPeerAddress,
       emitTelemetry,
       onConversationRekey,
+      recoverGroupConversation,
       peerInboxId,
       sendMessage,
       sending,

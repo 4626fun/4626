@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / api/\_handlers/\_routeLoader
+[4626-web](../../index.md) / api/\_handlers/\_routeLoader
 
 # api/\_handlers/\_routeLoader
 
@@ -12,7 +12,7 @@
 
 > **ApiHandler** = (`req`, `res`) => `unknown` \| `Promise`\<`unknown`\>
 
-Defined in: [api/\_handlers/\_routeLoader.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routeLoader.ts#L3)
+Defined in: [api/\_handlers/\_routeLoader.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routeLoader.ts#L3)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/\_routeLoader.ts:3](https://github.com/wenakita/4626
 
 > **ApiHandlerModule** = `object`
 
-Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routeLoader.ts#L5)
+Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routeLoader.ts#L5)
 
 #### Properties
 
@@ -42,7 +42,7 @@ Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626
 
 > `optional` **default**: [`ApiHandler`](#apihandler)
 
-Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routeLoader.ts#L5)
+Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routeLoader.ts#L5)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/\_routeLoader.ts:5](https://github.com/wenakita/4626
 
 > **ApiRouteLoaders** = `Record`\<`string`, () => `Promise`\<[`ApiHandlerModule`](#apihandlermodule)\>\>
 
-Defined in: [api/\_handlers/\_routeLoader.ts:7](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routeLoader.ts#L7)
+Defined in: [api/\_handlers/\_routeLoader.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routeLoader.ts#L7)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [api/\_handlers/\_routeLoader.ts:7](https://github.com/wenakita/4626
 
 > **loadHandlerFromMap**(`subpath`, `loaders`): `Promise`\<[`ApiHandler`](#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routeLoader.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routeLoader.ts#L9)
+Defined in: [api/\_handlers/\_routeLoader.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/_routeLoader.ts#L9)
 
 #### Parameters
 

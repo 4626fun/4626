@@ -21,11 +21,12 @@ interface ICreatorOVaultStrategiesModuleInternal {
 contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
     uint256 internal constant MAX_BPS = 10_000;
+    uint256 internal constant SECONDS_PER_YEAR = 31_556_952;
     uint256 internal constant MAX_BPS_EXTENDED = 1_000_000_000_000;
     uint256 internal constant MAX_PRICE_CHANGE_BPS = 1000;
     uint256 internal constant MINIMUM_FIRST_DEPOSIT = 50_000_000e18;
@@ -37,6 +38,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     );
 
     event Reported(uint256 profit, uint256 loss, uint256 performanceFees, uint256 totalAssets);
+    event ManagementFeeAccrued(uint256 feeAssets, uint256 feeShares, uint256 elapsedSeconds);
+    event StrategyValuationAutoDisabled(address indexed strategy, uint8 consecutiveMisses);
     event CapitalInjected(address indexed from, uint256 amount, uint256 newPricePerShare);
     event SharesBurnedForPrice(address indexed from, uint256 shares, uint256 newPricePerShare);
 
@@ -588,9 +591,11 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
     function report() external onlyDelegateCall returns (uint256 profit, uint256 loss) {
         _processProfitUnlock();
+        _processValuationHealth();
         _requireStrategyValuationsReady();
 
         uint256 currentTotalAssets = totalAssets();
+        _accrueManagementFee(currentTotalAssets);
         uint256 previousTotalAssets = totalAssetsAtLastReport;
 
         // FIX: I-03 — bootstrap only on the very first report, not after a full vault drain
@@ -664,8 +669,72 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         }
 
         lastReport = uint96(block.timestamp);
-        totalAssetsAtLastReport = currentTotalAssets;
+        totalAssetsAtLastReport = totalAssets();
         trustedPpsCheckpoint = pricePerShare();
+    }
+
+    function _accrueManagementFee(uint256 currentTotalAssets) internal {
+        uint16 feeBps = managementFee;
+        if (feeBps == 0) return;
+
+        uint256 elapsed = block.timestamp - lastReport;
+        if (elapsed == 0 || currentTotalAssets == 0) return;
+
+        uint256 feeAssets = (currentTotalAssets * feeBps * elapsed) / (MAX_BPS * SECONDS_PER_YEAR);
+        if (feeAssets == 0) return;
+
+        address recipient = managementFeeRecipient;
+        if (recipient == address(0)) recipient = performanceFeeRecipient;
+        if (recipient == address(0)) return;
+
+        uint256 supply = _totalSupply;
+        uint256 feeShares = supply > 0 ? (feeAssets * supply) / currentTotalAssets : feeAssets;
+        if (feeShares == 0) return;
+
+        _sharesUpdate(address(0), recipient, feeShares);
+        emit ManagementFeeAccrued(feeAssets, feeShares, elapsed);
+    }
+
+    function _processValuationHealth() internal {
+        uint8 threshold = valuationMissThreshold;
+        if (threshold == 0) return;
+
+        uint256 len = strategyList.length;
+        for (uint256 i = 0; i < len; i++) {
+            address strategy = strategyList[i];
+            if (!activeStrategies[strategy]) continue;
+
+            if (_isValuationReady(strategy)) {
+                strategyValuationMisses[strategy] = 0;
+                continue;
+            }
+
+            uint8 misses = strategyValuationMisses[strategy] + 1;
+            strategyValuationMisses[strategy] = misses;
+            if (misses < threshold) continue;
+
+            uint256 weight = strategyWeights[strategy];
+            activeStrategies[strategy] = false;
+            totalStrategyWeight -= weight;
+            strategyWeights[strategy] = 0;
+            strategyValuationMisses[strategy] = 0;
+
+            emit StrategyValuationAutoDisabled(strategy, misses);
+        }
+    }
+
+    function _isValuationReady(address strategy) internal view returns (bool) {
+        try IStrategyValuation(strategy).isValuationReady() returns (bool ok) {
+            if (!ok) return false;
+        } catch {
+            return false;
+        }
+
+        try IStrategy(strategy).getTotalAssets() returns (uint256) {
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     // FIX: I-04 — do not rebuild baseline from live totalAssets() when baseline is zero;

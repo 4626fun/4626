@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/snarkjs
+[4626-web](../../../index.md) / server/\_lib/lottery/snarkjs
 
 # server/\_lib/lottery/snarkjs
 
@@ -12,7 +12,7 @@
 
 > `const` **groth16**: `object`
 
-Defined in: [server/\_lib/lottery/snarkjs.d.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/snarkjs.d.ts#L26)
+Defined in: [server/\_lib/lottery/snarkjs.d.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/snarkjs.d.ts#L26)
 
 #### Type Declaration
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/lottery/snarkjs.d.ts:26](https://github.com/wenakita/4
 
 > `const` **plonk**: `object`
 
-Defined in: [server/\_lib/lottery/snarkjs.d.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/snarkjs.d.ts#L12)
+Defined in: [server/\_lib/lottery/snarkjs.d.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/snarkjs.d.ts#L12)
 
 #### Type Declaration
 

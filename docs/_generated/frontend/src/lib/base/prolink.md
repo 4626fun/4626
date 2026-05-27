@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/base/prolink
+[4626-web](../../../index.md) / src/lib/base/prolink
 
 # src/lib/base/prolink
 
@@ -12,7 +12,7 @@
 
 > **buildBaseAppProlinkUrl**(`payload`, `baseUrl`): `string`
 
-Defined in: [src/lib/base/prolink.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/base/prolink.ts#L49)
+Defined in: [src/lib/base/prolink.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/base/prolink.ts#L52)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/base/prolink.ts:49](https://github.com/wenakita/4626/blob/m
 
 > **encodeSingleCallSendCallsProlink**(`input`): `Promise`\<`string`\>
 
-Defined in: [src/lib/base/prolink.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/base/prolink.ts#L21)
+Defined in: [src/lib/base/prolink.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/base/prolink.ts#L23)
 
 Encode a single-call wallet_sendCalls prolink payload for Base mainnet.
 
@@ -47,6 +47,10 @@ Encode a single-call wallet_sendCalls prolink payload for Base mainnet.
 `boolean`
 
 ###### data
+
+`string`
+
+###### from
 
 `string`
 

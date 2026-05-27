@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/amoeSubmitZk
+[4626-web](../../../index.md) / server/\_lib/lottery/amoeSubmitZk
 
 # server/\_lib/lottery/amoeSubmitZk
 
@@ -10,7 +10,7 @@
 
 ### AmoeSubmitZkOrchestrationInputs
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:115](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L115)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L116)
 
 Inputs the orchestration helper needs from the handler. All
 validation is the handler's responsibility — by the time we get
@@ -22,7 +22,7 @@ here, every value is well-formed.
 
 > **creatorCoin**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L119)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:120](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L120)
 
 Creator coin the entry is for.
 
@@ -30,7 +30,7 @@ Creator coin the entry is for.
 
 > **lotteryAmoeRouter**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:143](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L143)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:144](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L144)
 
 Address of the deployed `LotteryAmoeRouter` (env-driven; passed in
 to keep this module pure).
@@ -39,7 +39,7 @@ to keep this module pure).
 
 > **nonce**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L123)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:124](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L124)
 
 The bytes32 nonce previously issued by `/api/v1/lottery/amoe/nonce`.
 
@@ -47,7 +47,7 @@ The bytes32 nonce previously issued by `/api/v1/lottery/amoe/nonce`.
 
 > **pointsBurned**: `number`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L121)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L122)
 
 Points being burned (already validated to be in [MIN, MAX]).
 
@@ -55,7 +55,7 @@ Points being burned (already validated to be in [MIN, MAX]).
 
 > **profileId**: `number` \| `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:138](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L138)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:139](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L139)
 
 `profiles.id` (Postgres bigint). Resolved upstream by
 `resolveAmoeWallet`. Required — handlers MUST refuse to proceed
@@ -66,7 +66,7 @@ wallet.
 
 > **spendRefId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L131)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L132)
 
 Opaque external reference for the points-burn row (the
 idempotency key used by the points ledger). Hash-bound into
@@ -76,7 +76,7 @@ idempotency key used by the points ledger). Hash-bound into
 
 > **twitterHandle**: `string`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:125](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L125)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L126)
 
 Twitter handle (raw user-supplied; we normalise inside).
 
@@ -84,7 +84,7 @@ Twitter handle (raw user-supplied; we normalise inside).
 
 > **wallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:117](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L117)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L118)
 
 Wallet entering the lottery.
 
@@ -92,7 +92,7 @@ Wallet entering the lottery.
 
 ### AmoeSubmitZkOrchestrationResult
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L175)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:176](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L176)
 
 #### Properties
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:175](https://github.com/wenaki
 
 > **call**: [`AmoeZKBuildResult`](lotteryAmoe.md#amoezkbuildresult)
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:177](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L177)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:178](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L178)
 
 Built calldata + meta for relay.
 
@@ -108,7 +108,7 @@ Built calldata + meta for relay.
 
 > **epoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:181](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L181)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:182](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L182)
 
 The epoch the entry was bound to (for response payload + PR 4 replay store).
 
@@ -116,7 +116,7 @@ The epoch the entry was bound to (for response payload + PR 4 replay store).
 
 > **pointsBurnedAsUSD**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L183)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:184](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L184)
 
 USD-1e6 value the entry will burn (echo of pubInputs[5] for response payload).
 
@@ -124,7 +124,7 @@ USD-1e6 value the entry will burn (echo of pubInputs[5] for response payload).
 
 > **proof**: [`AmoeProveResult`](proveAmoeEntryPlonk.md#amoeproveresult)
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:179](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L179)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:180](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L180)
 
 The PLONK proof + 8-element pubInputs (for downstream logging / replay store).
 
@@ -132,7 +132,7 @@ The PLONK proof + 8-element pubInputs (for downstream logging / replay store).
 
 > **twitterCreditNullifier**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:192](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L192)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:193](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L193)
 
 The twitter-credit nullifier (private input the orchestrator
 derived from the user's twitter handle), exported so the handler
@@ -145,7 +145,7 @@ the same wallet-addr commitment that the proof committed to.
 
 ### AmoeSubmitZkProveOptions
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:150](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L150)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:151](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L151)
 
 Snarkjs + zkey/wasm wiring the helper expects. Tests inject mocks;
 production reads from disk via `defaultProveOptions()`.
@@ -156,7 +156,7 @@ production reads from disk via `defaultProveOptions()`.
 
 > `optional` **ledgerSnapshotReader**: [`AmoeLedgerSnapshotReader`](amoeLedgerSnapshotReader.md#amoeledgersnapshotreader)
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:172](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L172)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:173](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L173)
 
 PR 5b: production injects an `AmoeLedgerSnapshotPgReader` here so
 the orchestrator pulls the CONFIRMED L2 snapshot from
@@ -174,7 +174,7 @@ inline from the requesting wallet.
 
 > `optional` **nowSec**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L158)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:159](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L159)
 
 Optional override of `Date.now()` source — tests use this to pin
 the epoch deterministically.
@@ -183,19 +183,19 @@ the epoch deterministically.
 
 > `optional` **snarkjs**: [`SnarkjsLike`](proveAmoeEntryPlonk.md#snarkjslike)
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L153)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:154](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L154)
 
 ##### wasmPath
 
 > **wasmPath**: `string`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:151](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L151)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L152)
 
 ##### zkeyPath
 
 > **zkeyPath**: `string`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L152)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:153](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L153)
 
 ## Variables
 
@@ -203,7 +203,7 @@ Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:152](https://github.com/wenaki
 
 > `const` **AMOE\_EPOCH\_GENESIS\_UNIX\_SEC**: `1777507200n` = `AMOE_EPOCH_GENESIS_SECONDS`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L94)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L95)
 
 Genesis anchor for the AMOE epoch counter — first UTC midnight after
 PR #426 (witness construction) merged.
@@ -223,7 +223,7 @@ Value: `2026-04-30T00:00:00Z` → `Date.UTC(2026, 3, 30) / 1000` =
 
 > `const` **AMOE\_EPOCH\_SECONDS**: `86400n` = `AMOE_EPOCH_LENGTH_SECONDS`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L79)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L80)
 
 Daily AMOE epoch length, in seconds. Pinned at 86400 — must match
 `EPOCH_SECONDS` in `amoe/circuits/amoe_eligibility.circom:157`.
@@ -246,7 +246,7 @@ touch without an explicit zk-circuit change ticket.
 
 > **assertOrchestrationInputsShape**(`inputs`): `void`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:451](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L451)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:448](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L448)
 
 Defense-in-depth: re-validate that the orchestration inputs the
 handler is about to pass us are well-formed. The handler already
@@ -269,7 +269,7 @@ the duplication for the layered-checks property.
 
 > **computeAmoeEpoch**(`nowSec`): `bigint`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L105)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L106)
 
 Compute the current AMOE epoch number for a given Unix-second
 timestamp. Exposed as a named function so tests can pin specific
@@ -295,18 +295,7 @@ Non-negative bigint epoch counter. Returns 0 for any time
 
 > **defaultAmoeZkAssetPaths**(): `object`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:207](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L207)
-
-Best-effort default for the prover wasm + zkey paths.
-
-Resolution order:
-  1. `AMOE_ZK_WASM_PATH` / `AMOE_ZK_ZKEY_PATH` env vars (preferred for
-     Vercel — set them at deploy time).
-  2. Repo-relative fallback under `amoe/circuits/build/...` so local
-     `pnpm dev` and the test harness work without env wiring.
-
-PR 6 will swap the env-or-fallback strategy for an
-`S3-presigned-URL` strategy at module-load. Until then, disk paths.
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:213](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L213)
 
 #### Returns
 
@@ -326,7 +315,7 @@ PR 6 will swap the env-or-fallback strategy for an
 
 > **isAmoeZkSubmitEnabled**(): `boolean`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:441](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L441)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:438](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L438)
 
 Read the `AMOE_ZK_SUBMIT_ENABLED` feature flag. Defaults to `false`.
 
@@ -340,7 +329,7 @@ Read the `AMOE_ZK_SUBMIT_ENABLED` feature flag. Defaults to `false`.
 
 > **orchestrateAmoeSubmitZk**(`inputs`, `proveOpts`): `Promise`\<[`AmoeSubmitZkOrchestrationResult`](#amoesubmitzkorchestrationresult)\>
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:299](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L299)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:296](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L296)
 
 #### Parameters
 
@@ -362,7 +351,7 @@ Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:299](https://github.com/wenaki
 
 > **readLotteryAmoeRouterAddress**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:432](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeSubmitZk.ts#L432)
+Defined in: [server/\_lib/lottery/amoeSubmitZk.ts:429](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeSubmitZk.ts#L429)
 
 Read + validate the deployed `LotteryAmoeRouter` address from env.
 Separate from `getApiContracts` so we don't have to widen the typed

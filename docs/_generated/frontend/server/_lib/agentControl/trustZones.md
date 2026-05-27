@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/agentControl/trustZones
+[4626-web](../../../index.md) / server/\_lib/agentControl/trustZones
 
 # server/\_lib/agentControl/trustZones
 
@@ -12,23 +12,23 @@
 
 > **KeeprTrustZone** = `"financial_execution"` \| `"market_maintenance"` \| `"queue_messaging_monitoring"`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L3)
+Defined in: [server/\_lib/agentControl/trustZones.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L3)
 
 ## Variables
 
-### KEEPR\_TRUST\_ZONE\_HEADER
+### KPR\_TRUST\_ZONE\_HEADER
 
-> `const` **KEEPR\_TRUST\_ZONE\_HEADER**: `"x-keepr-trust-zone"` = `'x-keepr-trust-zone'`
+> `const` **KPR\_TRUST\_ZONE\_HEADER**: `"x-keepr-trust-zone"` = `'x-keepr-trust-zone'`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L8)
+Defined in: [server/\_lib/agentControl/trustZones.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L8)
 
 ***
 
-### KEEPR\_TRUST\_ZONE\_KEY\_HEADER
+### KPR\_TRUST\_ZONE\_KEY\_HEADER
 
-> `const` **KEEPR\_TRUST\_ZONE\_KEY\_HEADER**: `"x-keepr-zone-key"` = `'x-keepr-zone-key'`
+> `const` **KPR\_TRUST\_ZONE\_KEY\_HEADER**: `"x-keepr-zone-key"` = `'x-keepr-zone-key'`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L9)
+Defined in: [server/\_lib/agentControl/trustZones.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L9)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:9](https://github.com/wenak
 
 > **formatTrustZoneDisabledError**(`zone`): `string`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L122)
+Defined in: [server/\_lib/agentControl/trustZones.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L122)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:122](https://github.com/wen
 
 > **formatTrustZoneError**(`zone`): `string`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L118)
+Defined in: [server/\_lib/agentControl/trustZones.ts:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L118)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:118](https://github.com/wen
 
 > **getKeeprTrustZoneEnvKey**(`zone`): `string`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L62)
+Defined in: [server/\_lib/agentControl/trustZones.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L62)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:62](https://github.com/wena
 
 > **getKeeprTrustZoneKillSwitchEnvKey**(`zone`): `string`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L66)
+Defined in: [server/\_lib/agentControl/trustZones.ts:66](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L66)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:66](https://github.com/wena
 
 > **isActionTypeInTrustZone**(`actionType`, `zone`): `boolean`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:104](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L104)
+Defined in: [server/\_lib/agentControl/trustZones.ts:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L104)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:104](https://github.com/wen
 
 > **isKeeprTrustZoneWriteEnabled**(`zone`, `env`): `boolean`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L126)
+Defined in: [server/\_lib/agentControl/trustZones.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L126)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:126](https://github.com/wen
 
 > **parseKeeprTrustZone**(`value`): [`KeeprTrustZone`](#keeprtrustzone) \| `null`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L55)
+Defined in: [server/\_lib/agentControl/trustZones.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L55)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:55](https://github.com/wena
 
 > **readRequestedKeeprTrustZone**(`value`): [`KeeprTrustZone`](#keeprtrustzone) \| `null`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L111)
+Defined in: [server/\_lib/agentControl/trustZones.ts:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L111)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:111](https://github.com/wen
 
 > **resolveKeeprEffectiveActionType**(`actionType`, `actionPayload?`): `string` \| `null`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L89)
+Defined in: [server/\_lib/agentControl/trustZones.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L89)
 
 #### Parameters
 
@@ -210,7 +210,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:89](https://github.com/wena
 
 > **resolveKeeprTrustZone**(`actionType`): [`KeeprTrustZone`](#keeprtrustzone)
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L70)
+Defined in: [server/\_lib/agentControl/trustZones.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L70)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [server/\_lib/agentControl/trustZones.ts:70](https://github.com/wena
 
 > **sanitizeZoneHeaderValue**(`value`): `string`
 
-Defined in: [server/\_lib/agentControl/trustZones.ts:135](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/trustZones.ts#L135)
+Defined in: [server/\_lib/agentControl/trustZones.ts:135](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/agentControl/trustZones.ts#L135)
 
 #### Parameters
 

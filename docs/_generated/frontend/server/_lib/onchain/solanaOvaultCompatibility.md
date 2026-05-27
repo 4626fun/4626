@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onchain/solanaOvaultCompatibility
+[4626-web](../../../index.md) / server/\_lib/onchain/solanaOvaultCompatibility
 
 # server/\_lib/onchain/solanaOvaultCompatibility
 
@@ -12,7 +12,7 @@
 
 > **SolanaAdapterMode** = `"regular-oft"` \| `"oft-adapter"`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L3)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L3)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:3](https://github
 
 > **SolanaAssetMintOrigin** = `"existing"` \| `"new"`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L1)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L1)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:1](https://github
 
 > **SolanaOvaultEligibility** = `object`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L27)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L27)
 
 #### Properties
 
@@ -36,25 +36,25 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:27](https://githu
 
 > **depositEligible**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L29)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L29)
 
 ##### existingMintCompatible
 
 > **existingMintCompatible**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L28)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L28)
 
 ##### mintCompatibility
 
 > **mintCompatibility**: [`SolanaOvaultMintCompatibility`](#solanaovaultmintcompatibility)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L31)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L31)
 
 ##### redeemEligible
 
 > **redeemEligible**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L30)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L30)
 
 ***
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:30](https://githu
 
 > **SolanaOvaultMintCompatibility** = `object`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L14)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L14)
 
 #### Properties
 
@@ -70,61 +70,61 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:14](https://githu
 
 > **adapterModeDisallowed**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L20)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L20)
 
 ##### assetMintOrigin
 
 > **assetMintOrigin**: [`SolanaAssetMintOrigin`](#solanaassetmintorigin)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L15)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L15)
 
 ##### authorityCompatible
 
 > **authorityCompatible**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L22)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L22)
 
 ##### blockers
 
 > **blockers**: `string`[]
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L24)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L24)
 
 ##### checksRequired
 
 > **checksRequired**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L16)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L16)
 
 ##### oftFeeIsZero
 
 > **oftFeeIsZero**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L21)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L21)
 
 ##### programSupported
 
 > **programSupported**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L17)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L17)
 
 ##### regularOftMode
 
 > **regularOftMode**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L19)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L19)
 
 ##### rentValueLamports
 
 > **rentValueLamports**: `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L23)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L23)
 
 ##### transferHookDetected
 
 > **transferHookDetected**: `boolean`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L18)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L18)
 
 ***
 
@@ -132,7 +132,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:18](https://githu
 
 > **SolanaOvaultMintCompatibilityHints** = `object`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L5)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L5)
 
 #### Properties
 
@@ -140,37 +140,37 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:5](https://github
 
 > **adapterMode**: [`SolanaAdapterMode`](#solanaadaptermode) \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L9)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L9)
 
 ##### authorityCompatible
 
 > **authorityCompatible**: `boolean` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L10)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L10)
 
 ##### oftFeeBps
 
 > **oftFeeBps**: `number` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L8)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L8)
 
 ##### rentValueLamports
 
 > **rentValueLamports**: `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L11)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L11)
 
 ##### tokenProgram
 
 > **tokenProgram**: [`SolanaTokenProgram`](#solanatokenprogram) \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L6)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L6)
 
 ##### transferHookDetected
 
 > **transferHookDetected**: `boolean` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L7)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L7)
 
 ***
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:7](https://github
 
 > **SolanaTokenProgram** = `"spl-token"` \| `"token-2022"`
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L2)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L2)
 
 ## Functions
 
@@ -186,7 +186,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:2](https://github
 
 > **evaluateSolanaOvaultMintCompatibility**(`params`): [`SolanaOvaultEligibility`](#solanaovaulteligibility)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L133)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:133](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L133)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:133](https://gith
 
 > **normalizeSolanaAssetMintOrigin**(`value`, `fallback`): [`SolanaAssetMintOrigin`](#solanaassetmintorigin)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L94)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L94)
 
 #### Parameters
 
@@ -240,7 +240,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:94](https://githu
 
 > **parseSolanaOvaultMintCompatibilityHints**(`value`): [`SolanaOvaultMintCompatibilityHints`](#solanaovaultmintcompatibilityhints)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L105)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L105)
 
 #### Parameters
 
@@ -258,7 +258,7 @@ Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:105](https://gith
 
 > **readSolanaOvaultMintCompatibilityHintsFromEnv**(): [`SolanaOvaultMintCompatibilityHints`](#solanaovaultmintcompatibilityhints)
 
-Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:122](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L122)
+Defined in: [server/\_lib/onchain/solanaOvaultCompatibility.ts:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaOvaultCompatibility.ts#L122)
 
 #### Returns
 

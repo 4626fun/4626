@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/auth/appOnlyPaths
+[4626-web](../../../index.md) / src/lib/auth/appOnlyPaths
 
 # src/lib/auth/appOnlyPaths
 
@@ -10,9 +10,9 @@
 
 ### APP\_ONLY\_PATHS
 
-> `const` **APP\_ONLY\_PATHS**: readonly \[`"/explore"`, `"/swap"`, `"/telegram"`, `"/positions"`, `"/portfolio"`, `"/deploy"`, `"/vault"`, `"/vote"`, `"/auction"`, `"/admin"`, `"/agents"`, `"/alfaclub"`, `"/coin"`, `"/creator"`, `"/complete-auction"`\]
+> `const` **APP\_ONLY\_PATHS**: readonly \[`"/explore"`, `"/swap"`, `"/telegram"`, `"/positions"`, `"/deploy"`, `"/vault"`, `"/vote"`, `"/auction"`, `"/admin"`, `"/agents"`, `"/alfaclub"`, `"/coin"`, `"/creator"`, `"/complete-auction"`\]
 
-Defined in: [src/lib/auth/appOnlyPaths.ts:2](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appOnlyPaths.ts#L2)
+Defined in: [src/lib/auth/appOnlyPaths.ts:2](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/appOnlyPaths.ts#L2)
 
 App-only paths that should always run on app.4626.fun.
 
@@ -22,7 +22,7 @@ App-only paths that should always run on app.4626.fun.
 
 > **isAppOnlyPath**(`pathname`): `boolean`
 
-Defined in: [src/lib/auth/appOnlyPaths.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/appOnlyPaths.ts#L22)
+Defined in: [src/lib/auth/appOnlyPaths.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/auth/appOnlyPaths.ts#L21)
 
 #### Parameters
 

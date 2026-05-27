@@ -42,6 +42,8 @@ contract DeploymentBatcherPhase3Helper {
     int24 internal constant CHARM_MIN_TICK_MOVE = 10;
     int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 internal constant CHARM_TWAP_DURATION = 300;
+    // 125% min collateral ratio for Charm→Ajna borrow backstop (matches integration tests).
+    uint256 internal constant CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS = 12_500;
 
     address internal constant CHARM_FACTORY = 0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa;
     address internal constant CHARM_FACTORY_GOVERNANCE = 0x424cdd9021AF88A86C76b245e24583f9a71e32a1;
@@ -57,6 +59,7 @@ contract DeploymentBatcherPhase3Helper {
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
     error Phase3HelperLostAdmin();
+    error MissingCreatorOracleForSynergy();
     error ZeroAddress();
     error InvalidWeight();
 
@@ -139,6 +142,12 @@ contract DeploymentBatcherPhase3Helper {
         }
         out.v3Pool = v3Pool;
 
+        bool wireCharmAjnaSynergy = params.charmWeightBps != 0 && params.ajnaWeightBps != 0;
+        address ajnaPool = address(0);
+        if (wireCharmAjnaSynergy || params.ajnaWeightBps != 0) {
+            ajnaPool = _resolveAjnaPool(params.creatorToken);
+        }
+
         // Charm active LP is an OPT-IN strategy gated behind the
         // `charm_active_lp` creator-feature activation ($100 USDC, enforced
         // off-chain by the deploy session). If the creator did not pay,
@@ -147,24 +156,14 @@ contract DeploymentBatcherPhase3Helper {
         // addStrategy on the vault). Return zero addresses so downstream
         // callers can detect the skip. See docs/operations/creator-strategy-features.md.
         if (params.charmWeightBps != 0) {
-            (out.charmVault, out.charmStrategy) = _deployCharmPipeline(params, codeIds, baseSalt, v3Pool);
+            (out.charmVault, out.charmStrategy) =
+                _deployCharmPipeline(params, codeIds, baseSalt, v3Pool, wireCharmAjnaSynergy);
         }
 
         // Ajna lending sleeve is an OPT-IN strategy gated behind the
         // `ajna_sleeve` creator-feature activation. Same skip pattern
         // as Charm above.
         if (params.ajnaWeightBps != 0) {
-            bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
-            address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
-            if (ajnaPool == address(0)) {
-                uint256 ajnaInterestRate = 5e16;
-                uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
-                uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
-                if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
-                if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
-                ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
-            }
-
             bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
             out.ajnaVaultAuth =
                 create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
@@ -198,6 +197,13 @@ contract DeploymentBatcherPhase3Helper {
             IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolAutomation);
         }
 
+        if (wireCharmAjnaSynergy) {
+            address oracle = _resolveCreatorOracle(params.creatorToken);
+            if (oracle == address(0)) revert MissingCreatorOracleForSynergy();
+            _wireCharmAjnaSynergy(out.charmStrategy, ajnaPool, oracle);
+            IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
+        }
+
         // SolanaBridgeStrategy Phase-3 lane removed for greenfield deploys.
         // Solana share liquidity is seeded via the 30% ShareOFT auto-bridge at
         // finalizePhase2 instead of a Phase-3 SolanaBridgeStrategy allocation.
@@ -214,11 +220,38 @@ contract DeploymentBatcherPhase3Helper {
         }
     }
 
+    function _resolveAjnaPool(address creatorToken) internal returns (address ajnaPool) {
+        bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
+        ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, creatorToken);
+        if (ajnaPool == address(0)) {
+            uint256 ajnaInterestRate = 5e16;
+            uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
+            uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
+            if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
+            if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
+            ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, creatorToken, ajnaInterestRate);
+        }
+    }
+
+    function _resolveCreatorOracle(address creatorToken) internal view returns (address oracle) {
+        address reg = IDeploymentBatcherRegistryAccess(batcher).registry();
+        oracle = ICreatorRegistry(reg).getCreatorCoin(creatorToken).oracle;
+    }
+
+    function _wireCharmAjnaSynergy(address charmStrategy, address ajnaPool, address oracle) internal {
+        ICreatorCharmStrategy(charmStrategy).setCreatorOracle(oracle);
+        ICreatorCharmStrategy(charmStrategy).setAjnaPool(ajnaPool);
+        ICreatorCharmStrategy(charmStrategy).setAjnaBorrowConfig(
+            true, type(uint256).max, type(uint256).max, CHARM_AJNA_MIN_COLLATERAL_RATIO_BPS, 0, 0
+        );
+    }
+
     function _deployCharmPipeline(
         DeploymentBatcher.Phase3Params calldata params,
         DeploymentBatcher.StrategyCodeIds calldata codeIds,
         bytes32 baseSalt,
-        address v3Pool
+        address v3Pool,
+        bool deferOwnershipTransfer
     ) internal returns (address charmVault, address charmStrategy) {
         _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
         charmVault = ICharmFactory(CHARM_FACTORY)
@@ -247,7 +280,9 @@ contract DeploymentBatcherPhase3Helper {
             abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, charmVault, v3Pool, address(this));
         charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
         ICreatorCharmStrategy(charmStrategy).initializeApprovals();
-        IOwnableTransfer(charmStrategy).transferOwnership(protocolTreasury);
+        if (!deferOwnershipTransfer) {
+            IOwnableTransfer(charmStrategy).transferOwnership(protocolTreasury);
+        }
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -598,8 +633,22 @@ interface ICharmVaultManager {
     function manager() external view returns (address);
 }
 
+interface IDeploymentBatcherRegistryAccess {
+    function registry() external view returns (address);
+}
+
 interface ICreatorCharmStrategy {
     function initializeApprovals() external;
+    function setCreatorOracle(address _creatorOracle) external;
+    function setAjnaPool(address _ajnaPool) external;
+    function setAjnaBorrowConfig(
+        bool _enabled,
+        uint256 _maxDebt,
+        uint256 _maxBorrowPerWithdraw,
+        uint256 _minCollateralRatioBps,
+        uint256 _borrowLimitIndex,
+        uint256 _repayLimitIndex
+    ) external;
 }
 
 interface ICreatorOVaultStrategyManager {

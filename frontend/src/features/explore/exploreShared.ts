@@ -104,7 +104,8 @@ export function normalizeCoinSearchQuery(query: string): {
   withoutBasenameSuffix: string
 } {
   const raw = query.trim().toLowerCase()
-  const withoutAt = raw.startsWith('@') ? raw.slice(1) : raw
+  const withoutPrefix = raw.startsWith('@') ? raw.slice(1) : raw
+  const withoutAt = withoutPrefix.startsWith('$') ? withoutPrefix.slice(1) : withoutPrefix
   const withoutBasenameSuffix = withoutAt.endsWith(BASENAME_SUFFIX)
     ? withoutAt.slice(0, -BASENAME_SUFFIX.length)
     : withoutAt

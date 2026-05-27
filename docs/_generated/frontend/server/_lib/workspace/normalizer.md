@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/workspace/normalizer
+[4626-web](../../../index.md) / server/\_lib/workspace/normalizer
 
 # server/\_lib/workspace/normalizer
 
@@ -12,7 +12,7 @@
 
 > **normalizeKeeprActionStatusForWorkspace**(`params`): `Promise`\<\{ `created`: `boolean`; `vaultAddress?`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L221)
+Defined in: [server/\_lib/workspace/normalizer.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/workspace/normalizer.ts#L26)
 
 #### Parameters
 
@@ -28,56 +28,8 @@ Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenaki
 
 ###### status
 
-`"retry"` \| `"failed"` \| `"executed"` \| `"executing"`
+`"retry"` \| `"failed"` \| `"executing"` \| `"executed"`
 
 #### Returns
 
 `Promise`\<\{ `created`: `boolean`; `vaultAddress?`: `` `0x${string}` ``; \}\>
-
-***
-
-### normalizeRuntimeDecisionForWorkspace()
-
-> **normalizeRuntimeDecisionForWorkspace**(`params`): `Promise`\<\{ `approvalId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>
-
-Defined in: [server/\_lib/workspace/normalizer.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L124)
-
-#### Parameters
-
-##### params
-
-###### actionId?
-
-`number`
-
-###### decision
-
-[`RuntimeDecision`](../kpr/runtimeBridge.md#runtimedecision)
-
-###### enqueueAction?
-
-\{ `action?`: `Record`\<`string`, `unknown`\>; `actionType?`: `string`; `groupId?`: `string`; `vaultAddress?`: `string`; \} \| `null`
-
-#### Returns
-
-`Promise`\<\{ `approvalId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>
-
-***
-
-### normalizeRuntimeRecordForWorkspace()
-
-> **normalizeRuntimeRecordForWorkspace**(`params`): `Promise`\<\{ `alertId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>
-
-Defined in: [server/\_lib/workspace/normalizer.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L48)
-
-#### Parameters
-
-##### params
-
-###### record
-
-[`RuntimeRecord`](../kpr/runtimeBridge.md#runtimerecord)
-
-#### Returns
-
-`Promise`\<\{ `alertId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>

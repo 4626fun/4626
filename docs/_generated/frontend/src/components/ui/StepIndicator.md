@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/ui/StepIndicator
+[4626-web](../../../index.md) / src/components/ui/StepIndicator
 
 # src/components/ui/StepIndicator
 
@@ -10,7 +10,7 @@
 
 ### StepIndicatorProps
 
-Defined in: [src/components/ui/StepIndicator.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L11)
+Defined in: [src/components/ui/StepIndicator.tsx:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/StepIndicator.tsx#L13)
 
 #### Properties
 
@@ -18,13 +18,13 @@ Defined in: [src/components/ui/StepIndicator.tsx:11](https://github.com/wenakita
 
 > `optional` **className**: `string`
 
-Defined in: [src/components/ui/StepIndicator.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L13)
+Defined in: [src/components/ui/StepIndicator.tsx:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/StepIndicator.tsx#L15)
 
 ##### steps
 
 > **steps**: `Step`[]
 
-Defined in: [src/components/ui/StepIndicator.tsx:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L12)
+Defined in: [src/components/ui/StepIndicator.tsx:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/StepIndicator.tsx#L14)
 
 ## Type Aliases
 
@@ -32,7 +32,7 @@ Defined in: [src/components/ui/StepIndicator.tsx:12](https://github.com/wenakita
 
 > **StepStatus** = `"pending"` \| `"active"` \| `"complete"`
 
-Defined in: [src/components/ui/StepIndicator.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L4)
+Defined in: [src/components/ui/StepIndicator.tsx:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/StepIndicator.tsx#L6)
 
 ## Variables
 
@@ -40,4 +40,4 @@ Defined in: [src/components/ui/StepIndicator.tsx:4](https://github.com/wenakita/
 
 > `const` **StepIndicator**: `NamedExoticComponent`\<[`StepIndicatorProps`](#stepindicatorprops)\>
 
-Defined in: [src/components/ui/StepIndicator.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L16)
+Defined in: [src/components/ui/StepIndicator.tsx:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/ui/StepIndicator.tsx#L18)

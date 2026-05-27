@@ -30,8 +30,8 @@ export function shouldUseKeeperHttpBridge(): boolean {
 }
 
 async function postKeeperBridge(
-  path: 'keeper/tend' | 'keeper/report',
-  vaultAddress: `0x${string}`,
+  path: 'keeper/tend' | 'keeper/report' | 'keeper/rebalance-strategies',
+  body: Record<string, unknown>,
 ): Promise<KeeperBridgeWriteResult> {
   const baseUrl = resolveKeeperApiBaseUrl();
   const apiKey = resolveKeeperApiKey();
@@ -43,7 +43,7 @@ async function postKeeperBridge(
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ vaultAddress }),
+    body: JSON.stringify(body),
   });
 
   const text = await response.text();
@@ -81,9 +81,19 @@ async function postKeeperBridge(
 }
 
 export async function postKeeperTend(vaultAddress: `0x${string}`): Promise<KeeperBridgeWriteResult> {
-  return postKeeperBridge('keeper/tend', vaultAddress);
+  return postKeeperBridge('keeper/tend', { vaultAddress });
 }
 
 export async function postKeeperReport(vaultAddress: `0x${string}`): Promise<KeeperBridgeWriteResult> {
-  return postKeeperBridge('keeper/report', vaultAddress);
+  return postKeeperBridge('keeper/report', { vaultAddress });
+}
+
+export async function postKeeperRebalanceStrategies(
+  vaultAddress: `0x${string}`,
+  minDeviationBps: bigint,
+): Promise<KeeperBridgeWriteResult> {
+  return postKeeperBridge('keeper/rebalance-strategies', {
+    vaultAddress,
+    minDeviationBps: minDeviationBps.toString(),
+  });
 }

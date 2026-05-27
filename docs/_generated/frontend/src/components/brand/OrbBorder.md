@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/brand/OrbBorder
+[4626-web](../../../index.md) / src/components/brand/OrbBorder
 
 # src/components/brand/OrbBorder
 
@@ -12,7 +12,7 @@
 
 > **OrbBorderIntensity** = `"low"` \| `"medium"` \| `"high"`
 
-Defined in: [src/components/brand/OrbBorder.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/OrbBorder.tsx#L4)
+Defined in: [src/components/brand/OrbBorder.tsx:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/brand/OrbBorder.tsx#L4)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/components/brand/OrbBorder.tsx:4](https://github.com/wenakita/4
 
 > **OrbBorderShape** = `"round"` \| `"rect"`
 
-Defined in: [src/components/brand/OrbBorder.tsx:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/OrbBorder.tsx#L5)
+Defined in: [src/components/brand/OrbBorder.tsx:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/brand/OrbBorder.tsx#L5)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/components/brand/OrbBorder.tsx:5](https://github.com/wenakita/4
 
 > **OrbBorder**(`__namedParameters`): `Element`
 
-Defined in: [src/components/brand/OrbBorder.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/OrbBorder.tsx#L7)
+Defined in: [src/components/brand/OrbBorder.tsx:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/brand/OrbBorder.tsx#L7)
 
 #### Parameters
 

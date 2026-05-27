@@ -1,34 +1,24 @@
 /**
  * Resolve which Phase 3 strategy slots a creator has paid for.
  *
- * Reads active `creator_strategy_features` rows for the given creator
- * token and returns the Phase-3 weight pair the deploy session should
- * pass to `DeploymentBatcher.deployPhase3Strategies`. Strategies the
- * creator has not activated are returned with `weightBps = 0`, which the
- * patched `DeploymentBatcher` interprets as "skip this strategy
- * entirely" (no deploy, no addStrategy call, result address stays zero).
+ * Reads active `creator_strategy_features` rows (plus bundle expansion)
+ * and returns the Phase-3 weights the deploy session passes to
+ * `DeploymentBatcher.deployPhase3Strategies`. Unpaid legs get `weightBps = 0`
+ * (strategy skipped on-chain).
  *
- * Charm and Ajna are opt-in paid features. Solana vault strategy weight
- * is permanently zero — share mesh seeding happens via the fixed 30%
- * ShareOFT auto-bridge at finalizePhase2 instead of Phase-3 TVL.
+ * **Greenfield default:** `vault_full_deploy` → Charm 4_500 + Ajna 4_500 +
+ * idle 1_000. Solana Phase 3 weight is always 0 (Pipe A at finalize).
  *
- * **At least one paid strategy is required** — the contract rejects a
- * weight sum of zero, and this resolver returns `ok: false` when
- * nothing is active so the deploy page can block submission until the
- * creator activates at least one feature.
+ * **Legacy:** partial single-key comps still yield 9_000 on one leg.
  *
- * Weight scaling: paid strategies split a fixed productive budget
- * (`TOTAL_ALLOCATION_BPS - DEFAULT_IDLE_RESERVE_BPS` = `9_000` bps)
- * evenly, with the idle reserve fixed at `1_000` bps regardless of
- * strategy count. So:
- *   1 strategy : 9_000 bps → that strategy gets 90 %  (idle 10 %)
- *   2 strategies : 4_500 bps each → 45 % / 45 %        (idle 10 %)
+ * Returns `{ ok: false, reason: 'no_paid_strategies' }` when neither Charm
+ * nor Ajna is entitled (no bundle and no legacy rows).
  *
- * Note: the server-side deploy session is the AUTHORITATIVE enforcement
- * point for weight gating. A client that constructs a UserOp with
- * `charmWeightBps > 0` but no `charm_active_lp` activation must be
- * refused by the paymaster / deploy-continue handler using this
- * resolver's output as the truth.
+ * Weight scaling for multiple paid legs: productive budget 9_000 bps split
+ * evenly; idle fixed at 1_000 bps.
+ *
+ * Server-side deploy session + paymaster `gateRequestedStrategyWeights` are
+ * authoritative — clients cannot request weights beyond the resolved plan.
  */
 
 import type { Address } from 'viem'

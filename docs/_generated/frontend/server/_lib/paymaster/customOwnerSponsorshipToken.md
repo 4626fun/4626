@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/paymaster/customOwnerSponsorshipToken
+[4626-web](../../../index.md) / server/\_lib/paymaster/customOwnerSponsorshipToken
 
 # server/\_lib/paymaster/customOwnerSponsorshipToken
 
@@ -12,7 +12,7 @@
 
 > **DecodedCustomOwnerSponsorshipToken** = `object`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L16)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L16)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:16](https://g
 
 > **expiresAtMs**: `number`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L22)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:22](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L22)
 
 ##### issuedAtMs
 
 > **issuedAtMs**: `number`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L21)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L21)
 
 ##### ownerToAdd
 
 > **ownerToAdd**: `Address`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L19)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L19)
 
 ##### profileId
 
 > **profileId**: `number` \| `null`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L20)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:20](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L20)
 
 ##### sessionAddress
 
 > **sessionAddress**: `Address`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L17)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L17)
 
 ##### smartWalletAddress
 
 > **smartWalletAddress**: `Address`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L18)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L18)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:18](https://g
 
 > **issueCustomOwnerSponsorshipToken**(`params`): `string`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L60)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L60)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://g
 
 ###### ownerToAdd
 
-`` `0x${string}` ``
+`string`
 
 ###### profileId?
 
@@ -78,11 +78,11 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://g
 
 ###### sessionAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### smartWalletAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### ttlSeconds?
 
@@ -98,7 +98,7 @@ Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:60](https://g
 
 > **readCustomOwnerSponsorshipToken**(`token`): [`DecodedCustomOwnerSponsorshipToken`](#decodedcustomownersponsorshiptoken) \| `null`
 
-Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L90)
+Defined in: [server/\_lib/paymaster/customOwnerSponsorshipToken.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/paymaster/customOwnerSponsorshipToken.ts#L90)
 
 #### Parameters
 

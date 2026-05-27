@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/account/CopyableAddress
+[4626-web](../../../index.md) / src/components/account/CopyableAddress
 
 # src/components/account/CopyableAddress
 
@@ -12,7 +12,7 @@
 
 > **CopyableAddress**(`__namedParameters`): `Element`
 
-Defined in: [src/components/account/CopyableAddress.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/account/CopyableAddress.tsx#L14)
+Defined in: [src/components/account/CopyableAddress.tsx:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/account/CopyableAddress.tsx#L14)
 
 Display an Ethereum address in short form with a copy-to-clipboard
 action. Shows the full address in a tooltip on hover; click anywhere

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/commands/telegramGroupAdminGate
+[4626-web](../../index.md) / server/commands/telegramGroupAdminGate
 
 # server/commands/telegramGroupAdminGate
 
@@ -12,7 +12,7 @@
 
 > **GroupAdminGateDecision** = \{ `allowed`: `true`; \} \| \{ `allowed`: `false`; `response`: `string`; \}
 
-Defined in: [server/commands/telegramGroupAdminGate.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/commands/telegramGroupAdminGate.ts#L17)
+Defined in: [server/commands/telegramGroupAdminGate.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/telegramGroupAdminGate.ts#L17)
 
 Result of evaluating whether a caller should be allowed to run a setup
 command in a group chat. `allowed: true` means proceed normally.
@@ -23,7 +23,7 @@ command in a group chat. `allowed: true` means proceed normally.
 
 > **evaluateGroupAdminGate**(`params`): `Promise`\<[`GroupAdminGateDecision`](#groupadmingatedecision)\>
 
-Defined in: [server/commands/telegramGroupAdminGate.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/commands/telegramGroupAdminGate.ts#L53)
+Defined in: [server/commands/telegramGroupAdminGate.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/telegramGroupAdminGate.ts#L53)
 
 Central decision point for the Telegram group-admin gate. Both the
 deterministic execute pipeline and the native Telegram command handler
@@ -65,7 +65,7 @@ Fail-closed (returns `allowed: false` with refusal copy):
 
 > **formatCommandForDisplay**(`rawText`): `string`
 
-Defined in: [server/commands/telegramGroupAdminGate.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/commands/telegramGroupAdminGate.ts#L27)
+Defined in: [server/commands/telegramGroupAdminGate.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/telegramGroupAdminGate.ts#L27)
 
 Format the user's raw command text for display in a refusal message.
 Preserves the leading slash and subcommand arg so "/keepr status" stays

@@ -103,6 +103,47 @@ export const VRF_MIN_BALANCE_WEI = BigInt('5000000000000000'); // 0.005 ETH
 // ABI fragments — only the functions each workflow needs
 // ---------------------------------------------------------------------------
 
+/** Minimum overweight drift before cross-strategy rebalance executes */
+export const VAULT_STRATEGY_REALLOC_MIN_DEVIATION_BPS = 500; // 5%
+
+export const VAULT_STRATEGY_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'strategyList',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'strategyWeights',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'strategyDebt',
+    stateMutability: 'view',
+    inputs: [{ name: 'strategy', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'defaultQueue',
+    stateMutability: 'view',
+    inputs: [{ name: 'index', type: 'uint256' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'useDefaultQueue',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bool' }],
+  },
+] as const;
+
 export const VAULT_ABI = [
   // Read
   { type: 'function', name: 'coinBalance', inputs: [], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
@@ -119,6 +160,13 @@ export const VAULT_ABI = [
   { type: 'function', name: 'tend', inputs: [], outputs: [], stateMutability: 'nonpayable' },
   { type: 'function', name: 'report', inputs: [], outputs: [{ type: 'uint256' }, { type: 'uint256' }], stateMutability: 'nonpayable' },
   { type: 'function', name: 'deployToStrategies', inputs: [], outputs: [], stateMutability: 'nonpayable' },
+  {
+    type: 'function',
+    name: 'rebalanceStrategies',
+    inputs: [{ name: 'minDeviationBps', type: 'uint256' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
 ] as const;
 
 export const ORACLE_ABI = [

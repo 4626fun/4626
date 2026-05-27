@@ -36,14 +36,13 @@ import {
   buildTrayHoldingsFromPortfolios,
   buildTrayTokenRowsFromPortfolios,
   buildTrayWalletSources,
-  buildTrayZoraHoldings,
-  collectZoraLookupAddresses,
   isEvmAddress,
   type TrayAssetHolding,
   type TrayNetworkHolding,
   type TrayTokenHolding,
   type TrayWalletSource,
 } from '@/components/account/trayPortfolioHelpers'
+import { fetchTrayZoraHoldingsForWallets } from '@/lib/zora/walletHoldings'
 
 type ConnectButtonStateInput = {
   sessionHydrated: boolean
@@ -184,19 +183,6 @@ function formatTokenAmount(value: number | null | undefined): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
-async function mapWithLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const output: R[] = []
-  let index = 0
-  const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-    while (index < items.length) {
-      const current = index++
-      output[current] = await fn(items[current]!)
-    }
-  })
-  await Promise.all(workers)
-  return output
-}
-
 type TrayPointsOverview = {
   points: {
     total: number
@@ -212,20 +198,6 @@ type TrayPointsOverview = {
     total: number | null
   }
   totalCount: number
-}
-
-async function fetchZoraCoinViaApi(address: string): Promise<unknown | null> {
-  const qs = new URLSearchParams({
-    address,
-    chain: '8453',
-  })
-  const response = await apiFetch(`/api/zora/coin?${qs.toString()}`, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  })
-  if (!response.ok) return null
-  const json = (await response.json().catch(() => null)) as { data?: unknown } | null
-  return json?.data ?? null
 }
 
 export function deriveWalletIdentityPresentation(input: WalletIdentityPresentationInput): WalletIdentityPresentation {
@@ -444,40 +416,23 @@ export function ConnectButton({
       }),
     [trayPortfolioResults, zoraTokenWalletSources],
   )
-  const trayTokenAddressesKey = useMemo(
-    () => collectZoraLookupAddresses(trayTokenRows).join(','),
-    [trayTokenRows],
-  )
-  const trayZoraTokensQuery = useQuery({
-    queryKey: ['account-tray', 'zora-token-map', trayTokenAddressesKey],
-    enabled: auth.hasSession && trayTokenAddressesKey.length > 0,
+  const trayZoraHoldingsQuery = useQuery({
+    queryKey: ['account-tray', 'zora-holdings', trayWalletKey],
+    enabled: auth.hasSession && showMenu && trayWalletSources.length > 0,
     staleTime: 60_000,
     retry: 0,
-    queryFn: async () => {
-      const unique = collectZoraLookupAddresses(trayTokenRows)
-      const pairs = await mapWithLimit(unique, 6, async (addressLc) => {
-        try {
-          const coin = await fetchZoraCoinViaApi(addressLc)
-          return [addressLc, coin] as const
-        } catch {
-          return [addressLc, null] as const
-        }
-      })
-      const out: Record<string, unknown | null> = {}
-      for (const [addressLc, coin] of pairs) {
-        out[addressLc] = coin
-      }
-      return out
-    },
+    queryFn: async () =>
+      fetchTrayZoraHoldingsForWallets(
+        trayWalletSources.map((wallet) => wallet.address),
+        { topTokenCount: 100 },
+      ),
   })
   const trayHoldingsList = useMemo<TrayAssetHolding[]>(
     () => buildTrayAssetHoldings(trayTokenRows),
     [trayTokenRows],
   )
-  const trayZoraTokens = useMemo<TrayTokenHolding[]>(
-    () => buildTrayZoraHoldings(trayTokenRows, trayZoraTokensQuery.data ?? {}),
-    [trayTokenRows, trayZoraTokensQuery.data],
-  )
+  const trayZoraCreatorTokens = trayZoraHoldingsQuery.data?.creator ?? []
+  const trayZoraContentTokens = trayZoraHoldingsQuery.data?.content ?? []
   const trayPortfolioSourceNote = useMemo(() => {
     const sources = trayPortfolioQuery.data?.sources
     if (!sources) return null
@@ -492,7 +447,7 @@ export function ConnectButton({
     return null
   }, [trayPortfolioQuery.data?.sources])
   const trayHoldingsLoading = trayPortfolioQuery.isLoading
-  const trayZoraTokensLoading = trayPortfolioQuery.isLoading || trayZoraTokensQuery.isLoading
+  const trayZoraTokensLoading = trayZoraHoldingsQuery.isLoading
   const sessionAddress = auth.authAddress ?? null
   const trayAccountPointsQuery = useQuery({
     queryKey: ['account-tray', 'accounts-me-points'],
@@ -697,7 +652,8 @@ export function ConnectButton({
                   holdings={trayHoldingsList}
                   holdingsLoading={trayPortfolioQuery.isLoading}
                   portfolioSourceNote={trayPortfolioSourceNote}
-                  zoraTokens={trayZoraTokens}
+                  zoraCreatorTokens={trayZoraCreatorTokens}
+                  zoraContentTokens={trayZoraContentTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
               ) : null}
@@ -864,7 +820,8 @@ export function ConnectButton({
                   holdings={trayHoldingsList}
                   holdingsLoading={trayPortfolioQuery.isLoading}
                   portfolioSourceNote={trayPortfolioSourceNote}
-                  zoraTokens={trayZoraTokens}
+                  zoraCreatorTokens={trayZoraCreatorTokens}
+                  zoraContentTokens={trayZoraContentTokens}
                   zoraTokensLoading={trayZoraTokensLoading}
                 />
               ) : (
@@ -1033,7 +990,8 @@ function RelayTrayPortfolioModule(props: {
   holdings: TrayAssetHolding[]
   holdingsLoading: boolean
   portfolioSourceNote?: string | null
-  zoraTokens: TrayTokenHolding[]
+  zoraCreatorTokens: TrayTokenHolding[]
+  zoraContentTokens: TrayTokenHolding[]
   zoraTokensLoading: boolean
 }) {
   const [networksExpanded, setNetworksExpanded] = useState(false)
@@ -1129,19 +1087,49 @@ function RelayTrayPortfolioModule(props: {
               </div>
             ) : null}
 
-            {props.zoraTokens.length > 0 || props.zoraTokensLoading ? (
-              <div className="mt-3 border-t border-white/8 pt-2">
-                <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">Zora creator coins</div>
+            {props.zoraCreatorTokens.length > 0 ||
+            props.zoraContentTokens.length > 0 ||
+            props.zoraTokensLoading ? (
+              <div className="mt-3 space-y-2 border-t border-white/8 pt-2">
                 {props.zoraTokensLoading ? (
                   <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2 text-[11px] text-zinc-500">
-                    Loading Zora coin metadata…
+                    Loading Zora coin holdings…
                   </div>
                 ) : (
-                  <div className="max-h-40 space-y-1 overflow-y-auto pr-1">
-                    {props.zoraTokens.map((token) => (
-                      <RelayTrayHoldingRow key={`zora:${token.tokenKey}`} token={token} subtitle="Zora coin" />
-                    ))}
-                  </div>
+                  <>
+                    {props.zoraCreatorTokens.length > 0 ? (
+                      <div>
+                        <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                          Zora creator coins
+                        </div>
+                        <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
+                          {props.zoraCreatorTokens.map((token) => (
+                            <RelayTrayHoldingRow
+                              key={`zora-creator:${token.tokenKey}`}
+                              token={token}
+                              subtitle="Creator coin"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {props.zoraContentTokens.length > 0 ? (
+                      <div>
+                        <div className="px-0.5 pb-1.5 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                          Zora content coins
+                        </div>
+                        <div className="max-h-32 space-y-1 overflow-y-auto pr-1">
+                          {props.zoraContentTokens.map((token) => (
+                            <RelayTrayHoldingRow
+                              key={`zora-content:${token.tokenKey}`}
+                              token={token}
+                              subtitle="Content coin"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </>
                 )}
               </div>
             ) : null}

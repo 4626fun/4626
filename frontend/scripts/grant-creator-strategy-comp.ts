@@ -6,10 +6,16 @@
  *   1. Price override rows ($0) — user can self-activate via USDC/x402/Stripe at $0
  *   2. Direct pending activation rows — unlocks deploy immediately (no payment UX)
  *
+ * Greenfield comps should prefer **`vault_full_deploy`** (one row → full bundle).
+ * `--all-deploy-gating` grants legacy per-key Charm + Ajna rows only (AKITA-style).
+ *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/grant-creator-strategy-comp.ts \
  *     --creator=0x5b674196812451b7cec024fe9d22d2c0b172fa75 \
- *     --all-deploy-gating --execute --confirm=GRANT-STRATEGY-COMP
+ *     --features=vault_full_deploy --execute --confirm=GRANT-STRATEGY-COMP
+ *
+ * Legacy AKITA-style (separate charm + ajna + mesh rows):
+ *   ... --all-deploy-gating --features=solana_ovault_mesh ...
  */
 
 import { createHash, randomBytes } from 'node:crypto'

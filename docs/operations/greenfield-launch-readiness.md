@@ -73,9 +73,9 @@ SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=0
 1. Creator coin on Zora; payout recipient correct  
 2. **50M+** creator tokens for vault deposit  
 3. Wallet **execution-ready** (parent CSW + embedded owner, or EOA track)  
-4. Paid features at `/creator/strategy/features`:
-   - At least one Phase 3 strategy (`charm_active_lp` or `ajna_sleeve`)
-   - `solana_ovault_mesh` if Solana mesh is wanted  
+4. Paid **`vault_full_deploy`** ($499) active/pending at `/creator/strategy/features`
+   (bundles Charm + Ajna + Solana mesh + Meteora entitlement — all-or-nothing;
+   legacy individual comp rows still work for grandfathered creators)
 5. Optional: fork dry-run — `pnpm -C frontend run dev:deploy-dry-run`
 
 Pipe A (30% ShareOFT auto-bridge at finalize) additionally requires a **Pipe-A-ready batcher** — see [batcher-pipe-a-cutover.md](./deployment/batcher-pipe-a-cutover.md):

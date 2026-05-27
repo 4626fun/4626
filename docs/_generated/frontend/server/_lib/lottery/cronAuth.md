@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/cronAuth
+[4626-web](../../../index.md) / server/\_lib/lottery/cronAuth
 
 # server/\_lib/lottery/cronAuth
 
@@ -12,7 +12,7 @@
 
 > **isAuthorizedCron**(`req`): `boolean`
 
-Defined in: [server/\_lib/lottery/cronAuth.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/cronAuth.ts#L49)
+Defined in: [server/\_lib/lottery/cronAuth.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/cronAuth.ts#L49)
 
 Validate the `Authorization` header on a Vercel cron request against
 the configured shared secret.
@@ -40,7 +40,7 @@ uniformly translate to 401 without leaking which check failed.
 
 > **readCronSecret**(): `string` \| `null`
 
-Defined in: [server/\_lib/lottery/cronAuth.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/cronAuth.ts#L29)
+Defined in: [server/\_lib/lottery/cronAuth.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/cronAuth.ts#L29)
 
 Read the Vercel cron-shared secret. Returns `null` if unset — cron
 authorization fails closed in that case (`isAuthorizedCron` returns

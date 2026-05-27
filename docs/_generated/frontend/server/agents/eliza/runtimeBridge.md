@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/agents/eliza/runtimeBridge
+[4626-web](../../../index.md) / server/agents/eliza/runtimeBridge
 
 # server/agents/eliza/runtimeBridge
 
@@ -12,7 +12,7 @@
 
 > **createRuntimeBridge**(`params`): `RuntimeBridge`
 
-Defined in: [server/agents/eliza/runtimeBridge.ts:1697](https://github.com/wenakita/4626/blob/main/frontend/server/agents/eliza/runtimeBridge.ts#L1697)
+Defined in: [server/agents/eliza/runtimeBridge.ts:1697](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/agents/eliza/runtimeBridge.ts#L1697)
 
 #### Parameters
 

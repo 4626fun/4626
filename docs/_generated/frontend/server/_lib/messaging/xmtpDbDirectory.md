@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/messaging/xmtpDbDirectory
+[4626-web](../../../index.md) / server/\_lib/messaging/xmtpDbDirectory
 
 # server/\_lib/messaging/xmtpDbDirectory
 
@@ -12,7 +12,7 @@
 
 > **findMountedAncestorPath**(`targetPath`, `mountInfoText?`): `string` \| `null`
 
-Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L93)
+Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L93)
 
 Return the closest mounted ancestor for a target path, or null when mount
 info is unavailable.
@@ -37,7 +37,7 @@ info is unavailable.
 
 > **hasDedicatedMount**(`targetPath`, `mountInfoText?`): `boolean`
 
-Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:121](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L121)
+Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L121)
 
 True when the target path lives on a dedicated mount, not just the
 container root filesystem (`/`).
@@ -62,7 +62,7 @@ container root filesystem (`/`).
 
 > **listXmtpDb3FilesUnderRoot**(`rootDir`, `maxDepth`): `string`[]
 
-Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L48)
+Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L48)
 
 List all `.db3` files under an XMTP root (e.g. `/data/.xmtp-data`).
 The XMTP SDK may nest DBs under subfolders such as `v3/` — a flat directory
@@ -88,7 +88,7 @@ scan misses them and incorrectly logs "no .db3 files" on every boot.
 
 > **parseMountInfoMountPoints**(`mountInfoText`): `string`[]
 
-Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L75)
+Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L75)
 
 Parse mount points from `/proc/self/mountinfo`.
 Paths in mountinfo escape spaces and special bytes using octal escapes.
@@ -109,7 +109,7 @@ Paths in mountinfo escape spaces and special bytes using octal escapes.
 
 > **resolveXmtpDbDirectory**(): `string`
 
-Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L146)
+Defined in: [server/\_lib/messaging/xmtpDbDirectory.ts:146](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/xmtpDbDirectory.ts#L146)
 
 Resolve a stable XMTP DB directory with persistence-first behavior.
 

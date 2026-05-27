@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeSubmitZk
+[4626-web](../../../../index.md) / api/\_handlers/v1/lottery/\_amoeSubmitZk
 
 # api/\_handlers/v1/lottery/\_amoeSubmitZk
 
@@ -10,7 +10,7 @@
 
 ### AmoeSubmitZkHandlerHooks
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:367](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L367)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:214](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L214)
 
 Test seam — handler accepts an injectable orchestration + relay so
 vitest can run the full pipeline without real snarkjs / RPC.
@@ -24,7 +24,7 @@ defaults. Exported for use by the integration test harness.
 
 > `optional` **ledgerSnapshotReader**: [`AmoeLedgerSnapshotReader`](../../../../server/_lib/lottery/amoeLedgerSnapshotReader.md#amoeledgersnapshotreader)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:379](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L379)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:226](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L226)
 
 Test seam for the burn-then-submit reader pre-flight (PR 6b).
 When `AMOE_BURN_THEN_SUBMIT_REQUIRED=1`, the handler calls
@@ -38,7 +38,7 @@ When omitted in production, the handler builds a real
 
 > `optional` **orchestrate**: (`inputs`, `proveOpts`) => `Promise`\<[`AmoeSubmitZkOrchestrationResult`](../../../../server/_lib/lottery/amoeSubmitZk.md#amoesubmitzkorchestrationresult)\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:368](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L368)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:215](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L215)
 
 ###### Parameters
 
@@ -54,36 +54,11 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:368](https://github.com
 
 `Promise`\<[`AmoeSubmitZkOrchestrationResult`](../../../../server/_lib/lottery/amoeSubmitZk.md#amoesubmitzkorchestrationresult)\>
 
-##### relay()?
+##### relay?
 
-> `optional` **relay**: (`params`) => `Promise`\<`` `0x${string}` ``\>
+> `optional` **relay**: [`AmoeRelayFn`](../../../../server/_lib/lottery/amoeRelay.md#amoerelayfn)
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:369](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L369)
-
-Send the relayer transaction to `LotteryAmoeRouter.submitAmoeEntryZK`.
-
-Same dual-mode design as the legacy handler: prefer ERC-4337 user-op
-via Coinbase Smart Wallet when configured; otherwise fall back to a
-raw EOA signed tx. Lifted in-place rather than extracted to a shared
-helper because (a) it's identical code-shape but different `to` and
-(b) the legacy module is on its own deprecation timeline; sharing
-would couple them.
-
-###### Parameters
-
-###### params
-
-###### callData
-
-`` `0x${string}` ``
-
-###### to
-
-`` `0x${string}` ``
-
-###### Returns
-
-`Promise`\<`` `0x${string}` ``\>
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:216](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L216)
 
 ## Functions
 
@@ -91,7 +66,7 @@ would couple them.
 
 > **\_\_resetAmoeSubmitZkHandlerHooksForTest**(): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:426](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L426)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:273](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L273)
 
 #### Returns
 
@@ -103,7 +78,7 @@ Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:426](https://github.com
 
 > **\_\_setAmoeSubmitZkHandlerHooksForTest**(`hooks`): `void`
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:422](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L422)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:269](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L269)
 
 Override the handler's orchestrate / relay impls. Vitest only — call
 `__resetAmoeSubmitZkHandlerHooks()` between tests.
@@ -124,7 +99,7 @@ Override the handler's orchestrate / relay impls. Vitest only — call
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:430](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L430)
+Defined in: [api/\_handlers/v1/lottery/\_amoeSubmitZk.ts:277](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/v1/lottery/_amoeSubmitZk.ts#L277)
 
 #### Parameters
 

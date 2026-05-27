@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/onchain/solanaWrappedMintPda
+[4626-web](../../../index.md) / server/\_lib/onchain/solanaWrappedMintPda
 
 # server/\_lib/onchain/solanaWrappedMintPda
 
@@ -12,7 +12,7 @@
 
 > **BridgeDeployEnv** = keyof *typeof* [`BRIDGE_PROGRAM_BY_ENV`](#bridge_program_by_env)
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L32)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L32)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:32](https://github.com
 
 > **DeriveWrappedMintInput** = `object`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L34)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:34](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L34)
 
 #### Properties
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:34](https://github.com
 
 > **decimals**: `number`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L40)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L40)
 
 Solana mint decimals (Token-2022 mint header).
 
@@ -36,7 +36,7 @@ Solana mint decimals (Token-2022 mint header).
 
 > **deployEnv**: [`BridgeDeployEnv`](#bridgedeployenv)
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L46)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L46)
 
 Which deploy environment's bridge program to target.
 
@@ -44,7 +44,7 @@ Which deploy environment's bridge program to target.
 
 > **name**: `string`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L36)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L36)
 
 Must match `wrap-token`'s `--name` verbatim (case and all).
 
@@ -52,7 +52,7 @@ Must match `wrap-token`'s `--name` verbatim (case and all).
 
 > **remoteToken**: `Address`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L42)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L42)
 
 Base ERC-20 address the mint bridges to. Checksummed or lowercase both work.
 
@@ -60,7 +60,7 @@ Base ERC-20 address the mint bridges to. Checksummed or lowercase both work.
 
 > **scalerExponent**: `number`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L44)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L44)
 
 Bridge scaler exponent (amount conversion factor between Base and Solana).
 
@@ -68,7 +68,7 @@ Bridge scaler exponent (amount conversion factor between Base and Solana).
 
 > **symbol**: `string`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L38)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L38)
 
 Must match `wrap-token`'s `--symbol` verbatim.
 
@@ -78,7 +78,7 @@ Must match `wrap-token`'s `--symbol` verbatim.
 
 > **DeriveWrappedMintOutput** = `object`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L49)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L49)
 
 #### Properties
 
@@ -86,25 +86,25 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:49](https://github.com
 
 > **bridgeProgram**: `string`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L52)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L52)
 
 ##### metadataHash
 
 > **metadataHash**: `Hex`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L53)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L53)
 
 ##### mintBytes32
 
 > **mintBytes32**: `Hex`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L51)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L51)
 
 ##### mintPubkey
 
 > **mintPubkey**: `string`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L50)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:50](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L50)
 
 ## Variables
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:50](https://github.com
 
 > `const` **BRIDGE\_PROGRAM\_BY\_ENV**: `object`
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L26)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L26)
 
 #### Type Declaration
 
@@ -134,7 +134,7 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:26](https://github.com
 
 > `const` **WRAPPED\_TOKEN\_SEED**: `Buffer`\<`ArrayBuffer`\>
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L24)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:24](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L24)
 
 ## Functions
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:24](https://github.com
 
 > **deriveWrappedMintPda**(`input`): [`DeriveWrappedMintOutput`](#derivewrappedmintoutput)
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L77)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:77](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L77)
 
 Deterministically compute the Solana mint PDA for a base/bridge
 wrapped token. Pure function: does NOT require a Solana RPC.
@@ -167,7 +167,7 @@ script and the external bridge CLI use the same algorithm.
 
 > **solanaPubkeyToBytes32**(`pubkey`): `` `0x${string}` ``
 
-Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L132)
+Defined in: [server/\_lib/onchain/solanaWrappedMintPda.ts:132](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/onchain/solanaWrappedMintPda.ts#L132)
 
 Convert a Solana pubkey (base58) to the 32-byte hex form the Base
 `SolanaBridgeAdapter` stores in `tokenToSolanaMint`. Useful when

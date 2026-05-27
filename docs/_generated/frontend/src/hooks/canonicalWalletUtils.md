@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/canonicalWalletUtils
+[4626-web](../../index.md) / src/hooks/canonicalWalletUtils
 
 # src/hooks/canonicalWalletUtils
 
@@ -12,7 +12,7 @@
 
 > **WaitlistMeData** = `object`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L3)
+Defined in: [src/hooks/canonicalWalletUtils.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L3)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/hooks/canonicalWalletUtils.ts:3](https://github.com/wenakita/46
 
 > `optional` **baseSubAccount**: `string` \| `null`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L6)
+Defined in: [src/hooks/canonicalWalletUtils.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L6)
 
 ##### connectedAccounts?
 
 > `optional` **connectedAccounts**: `object`[]
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L7)
+Defined in: [src/hooks/canonicalWalletUtils.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L7)
 
 ###### address?
 
@@ -56,13 +56,13 @@ Defined in: [src/hooks/canonicalWalletUtils.ts:7](https://github.com/wenakita/46
 
 > `optional` **cswAddress**: `string` \| `null`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L4)
+Defined in: [src/hooks/canonicalWalletUtils.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L4)
 
 ##### primarySmartWallet?
 
 > `optional` **primarySmartWallet**: `string` \| `null`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L5)
+Defined in: [src/hooks/canonicalWalletUtils.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L5)
 
 ## Functions
 
@@ -70,7 +70,25 @@ Defined in: [src/hooks/canonicalWalletUtils.ts:5](https://github.com/wenakita/46
 
 > **pickCanonicalSmartWalletAddress**(`row`): `string` \| `null`
 
-Defined in: [src/hooks/canonicalWalletUtils.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/canonicalWalletUtils.ts#L21)
+Defined in: [src/hooks/canonicalWalletUtils.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L21)
+
+#### Parameters
+
+##### row
+
+[`WaitlistMeData`](#waitlistmedata) | `null` | `undefined`
+
+#### Returns
+
+`string` \| `null`
+
+***
+
+### pickExecutionSubAccountAddress()
+
+> **pickExecutionSubAccountAddress**(`row`): `string` \| `null`
+
+Defined in: [src/hooks/canonicalWalletUtils.ts:52](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/canonicalWalletUtils.ts#L52)
 
 #### Parameters
 

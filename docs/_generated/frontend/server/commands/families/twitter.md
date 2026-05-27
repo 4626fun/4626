@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/commands/families/twitter
+[4626-web](../../../index.md) / server/commands/families/twitter
 
 # server/commands/families/twitter
 
@@ -12,7 +12,7 @@
 
 > **executeTwitterCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/twitter.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/twitter.ts#L6)
+Defined in: [server/commands/families/twitter.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/commands/families/twitter.ts#L6)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [server/commands/families/twitter.ts:6](https://github.com/wenakita/
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

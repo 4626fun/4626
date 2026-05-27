@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/deploy/DeploymentSuccess
+[4626-web](../../../index.md) / src/components/deploy/DeploymentSuccess
 
 # src/components/deploy/DeploymentSuccess
 
@@ -10,7 +10,7 @@
 
 ### DeploymentSuccessProps
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:273](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L273)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:275](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L275)
 
 #### Properties
 
@@ -18,7 +18,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:273](https://github.com
 
 > `optional` **canonicalCswAddress**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:283](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L283)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:285](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L285)
 
 Canonical CSW used for Ajna automation consent
 
@@ -26,7 +26,7 @@ Canonical CSW used for Ajna automation consent
 
 > **deployment**: [`DeploymentRecord`](../../hooks/useDeploymentTracker.md#deploymentrecord) \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:275](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L275)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:277](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L277)
 
 The deployment record
 
@@ -34,7 +34,7 @@ The deployment record
 
 > `optional` **embeddedEoaAddress**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:285](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L285)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:287](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L287)
 
 Connected embedded EOA wallet address
 
@@ -42,7 +42,7 @@ Connected embedded EOA wallet address
 
 > `optional` **onNewDeploy**: () => `void`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:281](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L281)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:283](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L283)
 
 Callback when user wants to view another deployment
 
@@ -54,7 +54,7 @@ Callback when user wants to view another deployment
 
 > `optional` **privyWalletId**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:287](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L287)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:289](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L289)
 
 Connected embedded EOA Privy wallet ID
 
@@ -62,7 +62,7 @@ Connected embedded EOA Privy wallet ID
 
 > `optional` **shareSymbol**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:279](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L279)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:281](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L281)
 
 Share symbol for display
 
@@ -70,7 +70,7 @@ Share symbol for display
 
 > `optional` **tokenSymbol**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:277](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L277)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:279](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L279)
 
 Token symbol for display
 
@@ -80,7 +80,7 @@ Token symbol for display
 
 > **AjnaAutomationOptInCardProps** = `object`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:108](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L108)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:109](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L109)
 
 #### Properties
 
@@ -88,43 +88,43 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:108](https://github.com
 
 > **canonicalCswAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L110)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:111](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L111)
 
 ##### embeddedEoaAddress
 
 > **embeddedEoaAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:111](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L111)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:112](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L112)
 
 ##### errorMessage?
 
 > `optional` **errorMessage**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:119](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L119)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:120](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L120)
 
 ##### isRevoking
 
 > **isRevoking**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:116](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L116)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L117)
 
 ##### isStatusLoading?
 
 > `optional` **isStatusLoading**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:117](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L117)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:118](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L118)
 
 ##### isSubmitting
 
 > **isSubmitting**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:115](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L115)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:116](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L116)
 
 ##### onEnable()
 
 > **onEnable**: (`payload`) => `void`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:120](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L120)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:121](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L121)
 
 ###### Parameters
 
@@ -140,7 +140,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:120](https://github.com
 
 > **onRevoke**: (`vaultAddress`) => `void`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:121](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L121)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:122](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L122)
 
 ###### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:121](https://github.com
 
 > `optional` **onVaultAddressChange**: (`value`) => `void`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:122](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L122)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:123](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L123)
 
 ###### Parameters
 
@@ -172,31 +172,31 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:122](https://github.com
 
 > **privyWalletId**: `string` \| `null` \| `undefined`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:112](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L112)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:113](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L113)
 
 ##### showVaultInput?
 
 > `optional` **showVaultInput**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:118](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L118)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:119](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L119)
 
 ##### status
 
 > **status**: [`AjnaAutomationStatus`](#ajnaautomationstatus) \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:113](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L113)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:114](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L114)
 
 ##### statusUnavailable?
 
 > `optional` **statusUnavailable**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:114](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L114)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:115](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L115)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:109](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L109)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:110](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L110)
 
 ***
 
@@ -204,7 +204,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:109](https://github.com
 
 > **AjnaAutomationPayload** = `object`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L89)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L90)
 
 #### Properties
 
@@ -212,25 +212,25 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:89](https://github.com/
 
 > **cswAddress**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:91](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L91)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L92)
 
 ##### embeddedEoaAddress
 
 > **embeddedEoaAddress**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:92](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L92)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L93)
 
 ##### privyWalletId
 
 > **privyWalletId**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:93](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L93)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L94)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:90](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L90)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L91)
 
 ***
 
@@ -238,7 +238,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:90](https://github.com/
 
 > **AjnaAutomationStatus** = `object`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:96](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L96)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L97)
 
 #### Properties
 
@@ -246,55 +246,55 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:96](https://github.com/
 
 > **automationEnabled**: `boolean`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:98](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L98)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L99)
 
 ##### automationScope?
 
 > `optional` **automationScope**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:99](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L99)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L100)
 
 ##### canonicalCswAddress?
 
 > `optional` **canonicalCswAddress**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:100](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L100)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L101)
 
 ##### embeddedEoaAddress?
 
 > `optional` **embeddedEoaAddress**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:101](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L101)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:102](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L102)
 
 ##### lastOwnerCheckAt?
 
 > `optional` **lastOwnerCheckAt**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:103](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L103)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:104](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L104)
 
 ##### privyWalletId?
 
 > `optional` **privyWalletId**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:102](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L102)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L103)
 
 ##### revokedAt?
 
 > `optional` **revokedAt**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:104](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L104)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:105](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L105)
 
 ##### updatedAt?
 
 > `optional` **updatedAt**: `string` \| `null`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:105](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L105)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:106](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L106)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:97](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L97)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:98](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L98)
 
 ## Functions
 
@@ -302,7 +302,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:97](https://github.com/
 
 > **AjnaAutomationOptInCard**(`__namedParameters`): `Element`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:138](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L138)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:139](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L139)
 
 #### Parameters
 
@@ -320,7 +320,7 @@ Defined in: [src/components/deploy/DeploymentSuccess.tsx:138](https://github.com
 
 > **AlreadyDeployedBanner**(`__namedParameters`): `Element`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:649](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L649)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:645](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L645)
 
 Simpler "already deployed" banner for use at the top of the deploy page
 
@@ -346,7 +346,7 @@ Simpler "already deployed" banner for use at the top of the deploy page
 
 > **DeploymentSuccess**(`__namedParameters`): `Element`
 
-Defined in: [src/components/deploy/DeploymentSuccess.tsx:290](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/DeploymentSuccess.tsx#L290)
+Defined in: [src/components/deploy/DeploymentSuccess.tsx:292](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/deploy/DeploymentSuccess.tsx#L292)
 
 #### Parameters
 

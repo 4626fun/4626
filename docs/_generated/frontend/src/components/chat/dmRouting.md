@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/dmRouting
+[4626-web](../../../index.md) / src/components/chat/dmRouting
 
 # src/components/chat/dmRouting
 
@@ -12,7 +12,7 @@
 
 > **DmRouteDecision** = `object`
 
-Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L3)
+Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/dmRouting.ts#L3)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/462
 
 > **notice**: `string` \| `null`
 
-Defined in: [src/components/chat/dmRouting.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L5)
+Defined in: [src/components/chat/dmRouting.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/dmRouting.ts#L5)
 
 ##### recipient
 
 > **recipient**: [`DmRecipientResolution`](../../lib/xmtp/socialIdentity.md#dmrecipientresolution)
 
-Defined in: [src/components/chat/dmRouting.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L4)
+Defined in: [src/components/chat/dmRouting.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/dmRouting.ts#L4)
 
 ##### reroutedToAgent
 
 > **reroutedToAgent**: `boolean`
 
-Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L6)
+Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/dmRouting.ts#L6)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/462
 
 > **resolveDmRoute**(`params`): [`DmRouteDecision`](#dmroutedecision)
 
-Defined in: [src/components/chat/dmRouting.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L9)
+Defined in: [src/components/chat/dmRouting.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/dmRouting.ts#L9)
 
 #### Parameters
 

@@ -112,7 +112,7 @@ npx vitest run frontend/src/lib/relay
 - [ ] Deploy preflight/status handlers are **read-only** (no provision/register side effects).
 - [ ] `/api/deploy/config` available to authenticated deploy users (not admin-only).
 - [ ] Deprecated batcher aliases fail closed (`deploymentBatcherConfigError.ts`).
-- [ ] Phase 3 weights match paid strategy plan (`resolveWeights.ts`, paymaster gate).
+- [ ] Phase 3 weights match paid **`vault_full_deploy`** / legacy entitlement plan (`resolveWeights.ts`, paymaster `gateRequestedStrategyWeights`).
 - [ ] Creator must deposit 50M creator coin; CCA seed 99/1; one deploy per wallet per deployment version.
 
 ### Files

@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/dexscreener/\_shared
+[4626-web](../../index.md) / server/dexscreener/\_shared
 
 # server/dexscreener/\_shared
 
@@ -12,7 +12,7 @@
 
 > **getStringQuery**(`req`, `key`): `string` \| `null`
 
-Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L21)
+Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/dexscreener/_shared.ts#L21)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626
 
 > **handleOptions**(`req`, `res`): `boolean`
 
-Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L8)
+Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/dexscreener/_shared.ts#L8)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L27)
+Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/dexscreener/_shared.ts#L27)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626
 
 > **setCache**(`res`, `seconds`): `void`
 
-Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L17)
+Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/dexscreener/_shared.ts#L17)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626
 
 > **setCors**(`req`, `res`): `void`
 
-Defined in: [server/dexscreener/\_shared.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L4)
+Defined in: [server/dexscreener/\_shared.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/dexscreener/_shared.ts#L4)
 
 #### Parameters
 

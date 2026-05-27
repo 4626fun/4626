@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/uniswap/walletMode
+[4626-web](../../../index.md) / src/lib/uniswap/walletMode
 
 # src/lib/uniswap/walletMode
 
@@ -12,7 +12,7 @@
 
 > **WalletExecutionContext** = `object`
 
-Defined in: [src/lib/uniswap/walletMode.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L14)
+Defined in: [src/lib/uniswap/walletMode.ts:14](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L14)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/uniswap/walletMode.ts:14](https://github.com/wenakita/4626/
 
 > **address**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/uniswap/walletMode.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L17)
+Defined in: [src/lib/uniswap/walletMode.ts:17](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L17)
 
 ##### capabilities
 
 > **capabilities**: `object`
 
-Defined in: [src/lib/uniswap/walletMode.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L19)
+Defined in: [src/lib/uniswap/walletMode.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L19)
 
 ###### supports5792
 
@@ -40,19 +40,19 @@ Defined in: [src/lib/uniswap/walletMode.ts:19](https://github.com/wenakita/4626/
 
 > **mode**: [`WalletMode`](#walletmode)
 
-Defined in: [src/lib/uniswap/walletMode.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L15)
+Defined in: [src/lib/uniswap/walletMode.ts:15](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L15)
 
 ##### ready
 
 > **ready**: `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L18)
+Defined in: [src/lib/uniswap/walletMode.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L18)
 
 ##### walletType
 
 > **walletType**: `"canonical"` \| `"eoa"`
 
-Defined in: [src/lib/uniswap/walletMode.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L16)
+Defined in: [src/lib/uniswap/walletMode.ts:16](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L16)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:16](https://github.com/wenakita/4626/
 
 > **WalletMode** = `"canonical"` \| `"eoa"`
 
-Defined in: [src/lib/uniswap/walletMode.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L1)
+Defined in: [src/lib/uniswap/walletMode.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L1)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:1](https://github.com/wenakita/4626/b
 
 > **WalletModeContextInput** = `object`
 
-Defined in: [src/lib/uniswap/walletMode.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L5)
+Defined in: [src/lib/uniswap/walletMode.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L5)
 
 #### Properties
 
@@ -76,37 +76,37 @@ Defined in: [src/lib/uniswap/walletMode.ts:5](https://github.com/wenakita/4626/b
 
 > **canonicalAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/uniswap/walletMode.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L6)
+Defined in: [src/lib/uniswap/walletMode.ts:6](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L6)
 
 ##### canonicalReady
 
 > **canonicalReady**: `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L8)
+Defined in: [src/lib/uniswap/walletMode.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L8)
 
 ##### eoaReady
 
 > **eoaReady**: `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L9)
+Defined in: [src/lib/uniswap/walletMode.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L9)
 
 ##### signerAddress
 
 > **signerAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/uniswap/walletMode.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L7)
+Defined in: [src/lib/uniswap/walletMode.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L7)
 
 ##### supports5792?
 
 > `optional` **supports5792**: `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L10)
+Defined in: [src/lib/uniswap/walletMode.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L10)
 
 ##### supports7702?
 
 > `optional` **supports7702**: `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L11)
+Defined in: [src/lib/uniswap/walletMode.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L11)
 
 ## Functions
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:11](https://github.com/wenakita/4626/
 
 > **getActiveSignerOrProvider**(`mode`, `input`): `object`
 
-Defined in: [src/lib/uniswap/walletMode.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L90)
+Defined in: [src/lib/uniswap/walletMode.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L90)
 
 #### Parameters
 
@@ -154,7 +154,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:90](https://github.com/wenakita/4626/
 
 > **getDefaultWalletMode**(`input`): [`WalletMode`](#walletmode)
 
-Defined in: [src/lib/uniswap/walletMode.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L48)
+Defined in: [src/lib/uniswap/walletMode.ts:48](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L48)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:48](https://github.com/wenakita/4626/
 
 > **getExecutionContext**(`mode`, `input`): [`WalletExecutionContext`](#walletexecutioncontext)
 
-Defined in: [src/lib/uniswap/walletMode.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L61)
+Defined in: [src/lib/uniswap/walletMode.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L61)
 
 #### Parameters
 
@@ -204,7 +204,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:61](https://github.com/wenakita/4626/
 
 > **isCSWAvailable**(`input`): `boolean`
 
-Defined in: [src/lib/uniswap/walletMode.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L44)
+Defined in: [src/lib/uniswap/walletMode.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L44)
 
 #### Parameters
 
@@ -222,7 +222,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:44](https://github.com/wenakita/4626/
 
 > **readPreferredWalletMode**(): [`WalletMode`](#walletmode)
 
-Defined in: [src/lib/uniswap/walletMode.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L25)
+Defined in: [src/lib/uniswap/walletMode.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L25)
 
 #### Returns
 
@@ -234,7 +234,7 @@ Defined in: [src/lib/uniswap/walletMode.ts:25](https://github.com/wenakita/4626/
 
 > **writePreferredWalletMode**(`mode`): `void`
 
-Defined in: [src/lib/uniswap/walletMode.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/walletMode.ts#L35)
+Defined in: [src/lib/uniswap/walletMode.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/walletMode.ts#L35)
 
 #### Parameters
 

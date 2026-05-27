@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/uniswap/requestDiagnostics
+[4626-web](../../../index.md) / src/lib/uniswap/requestDiagnostics
 
 # src/lib/uniswap/requestDiagnostics
 
@@ -12,7 +12,7 @@
 
 > **UniswapRequestFailure** = `object`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L9)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L9)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/uniswap/requestDiagnostics.ts:9](https://github.com/wenakit
 
 > **code**: [`UniswapRequestFailureCode`](#uniswaprequestfailurecode-1)
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L10)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L10)
 
 ##### message
 
 > **message**: `string`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L12)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:12](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L12)
 
 ##### status
 
 > **status**: `number` \| `null`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L11)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:11](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L11)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/uniswap/requestDiagnostics.ts:11](https://github.com/wenaki
 
 > **UniswapRequestFailureCode** = `"auth-required"` \| `"forbidden"` \| `"rate-limited"` \| `"not-configured"` \| `"http-error"` \| `"network-error"`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L1)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L1)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/uniswap/requestDiagnostics.ts:1](https://github.com/wenakit
 
 > **classifyUniswapRequestFailure**(`status`): [`UniswapRequestFailure`](#uniswaprequestfailure)
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L18)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:18](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L18)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/uniswap/requestDiagnostics.ts:18](https://github.com/wenaki
 
 > **extractGraphqlOperationName**(`query`): `string` \| `null`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L79)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:79](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L79)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/lib/uniswap/requestDiagnostics.ts:79](https://github.com/wenaki
 
 > **warnUniswapRequestOnce**(`params`): `void`
 
-Defined in: [src/lib/uniswap/requestDiagnostics.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/requestDiagnostics.ts#L61)
+Defined in: [src/lib/uniswap/requestDiagnostics.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/uniswap/requestDiagnostics.ts#L61)
 
 #### Parameters
 

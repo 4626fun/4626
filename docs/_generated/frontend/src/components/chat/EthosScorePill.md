@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/components/chat/EthosScorePill
+[4626-web](../../../index.md) / src/components/chat/EthosScorePill
 
 # src/components/chat/EthosScorePill
 
@@ -12,7 +12,7 @@
 
 > **EthosScorePalette** = `object`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:35](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L35)
+Defined in: [src/components/chat/EthosScorePill.tsx:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L35)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [src/components/chat/EthosScorePill.tsx:35](https://github.com/wenak
 
 > **bgClass**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:40](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L40)
+Defined in: [src/components/chat/EthosScorePill.tsx:40](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L40)
 
 ##### borderClass
 
 > **borderClass**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L39)
+Defined in: [src/components/chat/EthosScorePill.tsx:39](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L39)
 
 ##### level
 
 > **level**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L36)
+Defined in: [src/components/chat/EthosScorePill.tsx:36](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L36)
 
 ##### ringClass
 
 > **ringClass**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L41)
+Defined in: [src/components/chat/EthosScorePill.tsx:41](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L41)
 
 ##### strongTextClass
 
 > **strongTextClass**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L38)
+Defined in: [src/components/chat/EthosScorePill.tsx:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L38)
 
 ##### textClass
 
 > **textClass**: `string`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L37)
+Defined in: [src/components/chat/EthosScorePill.tsx:37](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L37)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:37](https://github.com/wenak
 
 > **EthosScoreValue** = `object`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L8)
+Defined in: [src/components/chat/EthosScorePill.tsx:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L8)
 
 #### Properties
 
@@ -66,13 +66,13 @@ Defined in: [src/components/chat/EthosScorePill.tsx:8](https://github.com/wenaki
 
 > **level**: `string` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L10)
+Defined in: [src/components/chat/EthosScorePill.tsx:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L10)
 
 ##### score
 
 > **score**: `number` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L9)
+Defined in: [src/components/chat/EthosScorePill.tsx:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L9)
 
 ## Functions
 
@@ -80,7 +80,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:9](https://github.com/wenaki
 
 > **EthosAvatarScoreBadge**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:401](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L401)
+Defined in: [src/components/chat/EthosScorePill.tsx:446](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L446)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:401](https://github.com/wena
 
 > **EthosAvatarScoreForAddress**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:577](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L577)
+Defined in: [src/components/chat/EthosScorePill.tsx:624](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L624)
 
 #### Parameters
 
@@ -140,7 +140,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:577](https://github.com/wena
 
 > **EthosAvatarScoreForUserkey**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:600](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L600)
+Defined in: [src/components/chat/EthosScorePill.tsx:647](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L647)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:600](https://github.com/wena
 
 > **EthosScoreForAddress**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:552](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L552)
+Defined in: [src/components/chat/EthosScorePill.tsx:599](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L599)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:552](https://github.com/wena
 
 > **EthosScorePill**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/chat/EthosScorePill.tsx:370](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L370)
+Defined in: [src/components/chat/EthosScorePill.tsx:415](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L415)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:370](https://github.com/wena
 
 > **fetchEthosScoreForUserkey**(`userkey`): `Promise`\<[`EthosScoreValue`](#ethosscorevalue) \| `null`\>
 
-Defined in: [src/components/chat/EthosScorePill.tsx:288](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L288)
+Defined in: [src/components/chat/EthosScorePill.tsx:327](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L327)
 
 #### Parameters
 
@@ -242,11 +242,33 @@ Defined in: [src/components/chat/EthosScorePill.tsx:288](https://github.com/wena
 
 ***
 
+### getEthosScoreAccentHex()
+
+> **getEthosScoreAccentHex**(`score`, `level?`): `string`
+
+Defined in: [src/components/chat/EthosScorePill.tsx:243](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L243)
+
+#### Parameters
+
+##### score
+
+`number` | `null` | `undefined`
+
+##### level?
+
+`string` | `null`
+
+#### Returns
+
+`string`
+
+***
+
 ### getEthosScorePalette()
 
 > **getEthosScorePalette**(`score`, `level?`): [`EthosScorePalette`](#ethosscorepalette)
 
-Defined in: [src/components/chat/EthosScorePill.tsx:204](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L204)
+Defined in: [src/components/chat/EthosScorePill.tsx:238](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L238)
 
 #### Parameters
 
@@ -268,7 +290,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:204](https://github.com/wena
 
 > **useEthosScore**(`address`): `UseQueryResult`\<[`EthosScoreValue`](#ethosscorevalue) \| `null`, `Error`\>
 
-Defined in: [src/components/chat/EthosScorePill.tsx:362](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L362)
+Defined in: [src/components/chat/EthosScorePill.tsx:407](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L407)
 
 #### Parameters
 
@@ -286,7 +308,7 @@ Defined in: [src/components/chat/EthosScorePill.tsx:362](https://github.com/wena
 
 > **useEthosScoreForUserkey**(`userkey`): `UseQueryResult`\<[`EthosScoreValue`](#ethosscorevalue) \| `null`, `Error`\>
 
-Defined in: [src/components/chat/EthosScorePill.tsx:366](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/EthosScorePill.tsx#L366)
+Defined in: [src/components/chat/EthosScorePill.tsx:411](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/components/chat/EthosScorePill.tsx#L411)
 
 #### Parameters
 

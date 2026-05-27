@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/waitlist/waitlistLoginOptions
+[4626-web](../../../index.md) / src/features/waitlist/waitlistLoginOptions
 
 # src/features/waitlist/waitlistLoginOptions
 
@@ -12,7 +12,7 @@
 
 > **buildWaitlistEmailLoginOptions**(): `object`
 
-Defined in: [src/features/waitlist/waitlistLoginOptions.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistLoginOptions.ts#L1)
+Defined in: [src/features/waitlist/waitlistLoginOptions.ts:1](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistLoginOptions.ts#L1)
 
 #### Returns
 
@@ -28,7 +28,7 @@ Defined in: [src/features/waitlist/waitlistLoginOptions.ts:1](https://github.com
 
 > **buildWaitlistRecoveryLoginOptions**(): `object`
 
-Defined in: [src/features/waitlist/waitlistLoginOptions.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistLoginOptions.ts#L7)
+Defined in: [src/features/waitlist/waitlistLoginOptions.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/waitlist/waitlistLoginOptions.ts#L7)
 
 #### Returns
 

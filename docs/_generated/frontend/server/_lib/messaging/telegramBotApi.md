@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/messaging/telegramBotApi
+[4626-web](../../../index.md) / server/\_lib/messaging/telegramBotApi
 
 # server/\_lib/messaging/telegramBotApi
 
@@ -12,7 +12,7 @@
 
 > **TelegramBotCommand** = `object`
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L3)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L3)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/messaging/telegramBotApi.ts:3](https://github.com/wena
 
 > **command**: `string`
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L4)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L4)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L5)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L5)
 
 ## Functions
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/messaging/telegramBotApi.ts:5](https://github.com/wena
 
 > **resolveTelegramBotToken**(): `string`
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L126)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:126](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L126)
 
 #### Returns
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/messaging/telegramBotApi.ts:126](https://github.com/we
 
 > **setTelegramChatMenuButton**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L75)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:75](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L75)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/messaging/telegramBotApi.ts:75](https://github.com/wen
 
 > **setTelegramMyCommands**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L44)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L44)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/messaging/telegramBotApi.ts:44](https://github.com/wen
 
 > **setTelegramWebhook**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/messaging/telegramBotApi.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/telegramBotApi.ts#L94)
+Defined in: [server/\_lib/messaging/telegramBotApi.ts:94](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/messaging/telegramBotApi.ts#L94)
 
 #### Parameters
 

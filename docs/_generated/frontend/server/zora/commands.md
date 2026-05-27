@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / server/zora/commands
+[4626-web](../../index.md) / server/zora/commands
 
 # server/zora/commands
 
@@ -12,7 +12,7 @@
 
 > **handleCoinCommand**(`params`): `Promise`\<[`KeeprCommandResult`](../commands/types.md#keeprcommandresult)\>
 
-Defined in: [server/zora/commands.ts:1570](https://github.com/wenakita/4626/blob/main/frontend/server/zora/commands.ts#L1570)
+Defined in: [server/zora/commands.ts:1570](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/zora/commands.ts#L1570)
 
 #### Parameters
 
@@ -28,7 +28,7 @@ Defined in: [server/zora/commands.ts:1570](https://github.com/wenakita/4626/blob
 
 ###### senderWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### text
 

@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/pages/admin/AlfaClubVigilante
+[4626-web](../../../index.md) / src/pages/admin/AlfaClubVigilante
 
 # src/pages/admin/AlfaClubVigilante
 
@@ -12,7 +12,7 @@
 
 > **AlfaClubVigilante**(): `Element`
 
-Defined in: [src/pages/admin/AlfaClubVigilante.tsx:142](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AlfaClubVigilante.tsx#L142)
+Defined in: [src/pages/admin/AlfaClubVigilante.tsx:276](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/pages/admin/AlfaClubVigilante.tsx#L276)
 
 #### Returns
 

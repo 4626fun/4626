@@ -1,8 +1,8 @@
-[**4626-app**](../../../../../index.md)
+[**4626-web**](../../../../../index.md)
 
 ***
 
-[4626-app](../../../../../index.md) / api/\_handlers/telegram/webhook/trade/fsm
+[4626-web](../../../../../index.md) / api/\_handlers/telegram/webhook/trade/fsm
 
 # api/\_handlers/telegram/webhook/trade/fsm
 
@@ -12,7 +12,7 @@
 
 > `const` **TRADE\_FLOW\_IDLE\_STATE**: [`TradeFlowState`](types.md#tradeflowstate)
 
-Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:3](https://github.com/
 
 > **deriveActionTypeFromState**(`state`): `"buy"` \| `"sell"` \| `"bid"` \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L71)
+Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L71)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:71](https://github.com
 
 > **reduceTradeFlowState**(`current`, `event`): [`TradeFlowState`](types.md#tradeflowstate)
 
-Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/trade/fsm.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/telegram/webhook/trade/fsm.ts#L5)
 
 #### Parameters
 

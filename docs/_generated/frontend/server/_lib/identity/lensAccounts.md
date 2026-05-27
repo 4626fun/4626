@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/identity/lensAccounts
+[4626-web](../../../index.md) / server/\_lib/identity/lensAccounts
 
 # server/\_lib/identity/lensAccounts
 
@@ -12,7 +12,7 @@
 
 > **LensUser** = `object`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L26)
+Defined in: [server/\_lib/identity/lensAccounts.ts:26](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L26)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [server/\_lib/identity/lensAccounts.ts:26](https://github.com/wenaki
 
 > **accountAddress**: `string`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L31)
+Defined in: [server/\_lib/identity/lensAccounts.ts:31](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L31)
 
 ##### avatar
 
 > **avatar**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L30)
+Defined in: [server/\_lib/identity/lensAccounts.ts:30](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L30)
 
 ##### displayName
 
 > **displayName**: `string`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L27)
+Defined in: [server/\_lib/identity/lensAccounts.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L27)
 
 ##### handle
 
 > **handle**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L28)
+Defined in: [server/\_lib/identity/lensAccounts.ts:28](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L28)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L32)
+Defined in: [server/\_lib/identity/lensAccounts.ts:32](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L32)
 
 ##### username
 
 > **username**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L29)
+Defined in: [server/\_lib/identity/lensAccounts.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L29)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/identity/lensAccounts.ts:29](https://github.com/wenaki
 
 > **resolveLensUserByOwner**(`address`): `Promise`\<[`LensUser`](#lensuser) \| `null`\>
 
-Defined in: [server/\_lib/identity/lensAccounts.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/lensAccounts.ts#L164)
+Defined in: [server/\_lib/identity/lensAccounts.ts:164](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/identity/lensAccounts.ts#L164)
 
 #### Parameters
 

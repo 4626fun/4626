@@ -1,8 +1,8 @@
-[**4626-app**](../../../../index.md)
+[**4626-web**](../../../../index.md)
 
 ***
 
-[4626-app](../../../../index.md) / api/\_handlers/admin/waitlist/\_approve
+[4626-web](../../../../index.md) / api/\_handlers/admin/waitlist/\_approve
 
 # api/\_handlers/admin/waitlist/\_approve
 
@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/waitlist/\_approve.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/waitlist/_approve.ts#L42)
+Defined in: [api/\_handlers/admin/waitlist/\_approve.ts:42](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/api/_handlers/admin/waitlist/_approve.ts#L42)
 
 #### Parameters
 

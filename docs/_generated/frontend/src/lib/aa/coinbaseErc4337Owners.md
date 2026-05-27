@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/aa/coinbaseErc4337Owners
+[4626-web](../../../index.md) / src/lib/aa/coinbaseErc4337Owners
 
 # src/lib/aa/coinbaseErc4337Owners
 
@@ -12,7 +12,7 @@
 
 > **OwnersPublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L32)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:38](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L38)
 
 #### Type Declaration
 
@@ -42,9 +42,9 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:32](https://github.com/wenakita
 
 ### fetchCoinbaseSmartWalletOwners()
 
-> **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`` `0x${string}` ``[]\>
+> **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`string`[]\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L160)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:222](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L222)
 
 #### Parameters
 
@@ -60,11 +60,11 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakit
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 #### Returns
 
-`Promise`\<`` `0x${string}` ``[]\>
+`Promise`\<`string`[]\>
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakit
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L76)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:100](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L100)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita
 
 ###### ownerAddress
 
-`` `0x${string}` ``
+`string`
 
 ###### publicClient
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita
 
 ###### smartWallet
 
-`` `0x${string}` ``
+`string`
 
 ###### useCache?
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita
 
 > **resetOwnerIndexCacheForTests**(): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L72)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:96](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L96)
 
 #### Returns
 

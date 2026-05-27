@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/zora/cswGateVerification
+[4626-web](../../../index.md) / server/\_lib/zora/cswGateVerification
 
 # server/\_lib/zora/cswGateVerification
 
@@ -12,7 +12,7 @@
 
 > **CswEntryChallengeRow** = `object`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:288](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L288)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:288](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L288)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:288](https://github.com/we
 
 > **challengeHash**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:289](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L289)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:289](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L289)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:292](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L292)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:292](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L292)
 
 ##### cswAddress
 
 > **cswAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:290](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L290)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:290](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L290)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:291](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L291)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:291](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L291)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:291](https://github.com/we
 
 > **CswSignatureVerificationResult** = `object`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:466](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L466)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:466](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L466)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:466](https://github.com/we
 
 > **contractValidated**: `boolean`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:468](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L468)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:468](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L468)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:467](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L467)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:467](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L467)
 
 ##### recoveredSigner
 
 > **recoveredSigner**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:469](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L469)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:469](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L469)
 
 ***
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:469](https://github.com/we
 
 > **ZoraCswGateVerifyTokenRow** = `object`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L55)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:55](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L55)
 
 #### Properties
 
@@ -82,55 +82,55 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:55](https://github.com/wen
 
 > **consumedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L61)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:61](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L61)
 
 ##### consumedTelegramUserId
 
 > **consumedTelegramUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L62)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:62](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L62)
 
 ##### consumedTelegramUsername
 
 > **consumedTelegramUsername**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L63)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:63](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L63)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L64)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:64](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L64)
 
 ##### cswAddress
 
 > **cswAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L57)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:57](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L57)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L60)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L60)
 
 ##### requestedTelegramUsername
 
 > **requestedTelegramUsername**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L58)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L58)
 
 ##### sourceUrl
 
 > **sourceUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L59)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L59)
 
 ##### tokenHash
 
 > **tokenHash**: `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L56)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:56](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L56)
 
 ## Functions
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:56](https://github.com/wen
 
 > **buildCswEntryChallengeMessage**(`params`): `string`
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:360](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L360)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:360](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L360)
 
 #### Parameters
 
@@ -164,9 +164,9 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:360](https://github.com/we
 
 ### consumeCswEntryChallenge()
 
-> **consumeCswEntryChallenge**(`params`): `Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"invalid"` \| `"mismatch"`; \}\>
+> **consumeCswEntryChallenge**(`params`): `Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"mismatch"` \| `"invalid"`; \}\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:423](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L423)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:423](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L423)
 
 FIX: M-01 — Atomically consume a CSW entry challenge.
 Returns ok:true with the mapped row if the challenge was live and is now
@@ -191,7 +191,7 @@ pattern is atomic against concurrent requests.
 
 #### Returns
 
-`Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"invalid"` \| `"mismatch"`; \}\>
+`Promise`\<\{ `ok`: `true`; `row`: [`CswEntryChallengeRow`](#cswentrychallengerow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"mismatch"` \| `"invalid"`; \}\>
 
 ***
 
@@ -199,7 +199,7 @@ pattern is atomic against concurrent requests.
 
 > **consumeZoraCswGateVerificationToken**(`params`): `Promise`\<\{ `ok`: `true`; `row`: [`ZoraCswGateVerifyTokenRow`](#zoracswgateverifytokenrow); \} \| \{ `ok`: `false`; `reason`: `"expired"` \| `"consumed"` \| `"invalid"`; `row?`: [`ZoraCswGateVerifyTokenRow`](#zoracswgateverifytokenrow); \}\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:213](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L213)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:213](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L213)
 
 #### Parameters
 
@@ -231,7 +231,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:213](https://github.com/we
 
 > **ensureCswEntryChallengeSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:308](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L308)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:308](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L308)
 
 #### Parameters
 
@@ -249,7 +249,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:308](https://github.com/we
 
 > **ensureZoraCswGateVerificationSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L95)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L95)
 
 #### Parameters
 
@@ -267,7 +267,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:95](https://github.com/wen
 
 > **issueCswEntryChallenge**(`params`): `Promise`\<\{ `expiresAt`: `string`; `message`: `string`; `nonce`: `string`; \}\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:379](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L379)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:379](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L379)
 
 #### Parameters
 
@@ -295,7 +295,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:379](https://github.com/we
 
 > **issueZoraCswGateVerificationToken**(`params`): `Promise`\<\{ `expiresAt`: `string`; `token`: `string`; `tokenHash`: `string`; \}\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:152](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L152)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:152](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L152)
 
 #### Parameters
 
@@ -331,7 +331,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:152](https://github.com/we
 
 > **readZoraCswGateVerificationToken**(`params`): `Promise`\<[`ZoraCswGateVerifyTokenRow`](#zoracswgateverifytokenrow) \| `null`\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:194](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L194)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:194](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L194)
 
 #### Parameters
 
@@ -355,7 +355,7 @@ Defined in: [server/\_lib/zora/cswGateVerification.ts:194](https://github.com/we
 
 > **verifyCswWalletSignature**(`params`): `Promise`\<[`CswSignatureVerificationResult`](#cswsignatureverificationresult)\>
 
-Defined in: [server/\_lib/zora/cswGateVerification.ts:487](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/cswGateVerification.ts#L487)
+Defined in: [server/\_lib/zora/cswGateVerification.ts:487](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/zora/cswGateVerification.ts#L487)
 
 FIX: M-01 — Verify a signature from a CSW (EOA or ERC-4337 / smart wallet).
 

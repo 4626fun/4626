@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/alfaclub/vigilante
+[4626-web](../../../index.md) / server/\_lib/alfaclub/vigilante
 
 # server/\_lib/alfaclub/vigilante
 
@@ -12,7 +12,7 @@
 
 > **VigilanteFlags** = `object`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L82)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:82](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L82)
 
 #### Properties
 
@@ -20,37 +20,43 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:82](https://github.com/wenakita/
 
 > **cooldownHours**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L88)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:88](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L88)
 
 ##### feedbackEnabled
 
 > **feedbackEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L86)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:86](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L86)
 
 ##### killSwitch
 
 > **killSwitch**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L83)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:83](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L83)
+
+##### maxCreatorsPerRun
+
+> **maxCreatorsPerRun**: `number` \| `null`
+
+Defined in: [server/\_lib/alfaclub/vigilante.ts:89](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L89)
 
 ##### postEnabled
 
 > **postEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L85)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:85](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L85)
 
 ##### readEnabled
 
 > **readEnabled**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L84)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:84](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L84)
 
 ##### topN
 
 > **topN**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L87)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L87)
 
 ***
 
@@ -58,7 +64,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:87](https://github.com/wenakita/
 
 > **VigilantePublicationKind** = [`PublicationKind`](publicationLedger.md#publicationkind)
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:656](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L656)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:672](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L672)
 
 Narrow type helper so callers can opaque-pass a kind without importing the ledger.
 
@@ -68,7 +74,7 @@ Narrow type helper so callers can opaque-pass a kind without importing the ledge
 
 > **VigilantePublishResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:464](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L464)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:475](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L475)
 
 #### Properties
 
@@ -76,25 +82,25 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:464](https://github.com/wenakita
 
 > **creatorAddress**: `string`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:465](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L465)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:476](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L476)
 
 ##### erc8004
 
 > **erc8004**: `PublishOutcome` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:468](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L468)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:479](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L479)
 
 ##### lens
 
 > **lens**: `PublishOutcome` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:467](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L467)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:478](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L478)
 
 ##### rank
 
 > **rank**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:466](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L466)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:477](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L477)
 
 ***
 
@@ -102,7 +108,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:466](https://github.com/wenakita
 
 > **VigilanteRunOptions** = `object`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:445](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L445)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:456](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L456)
 
 #### Properties
 
@@ -110,19 +116,19 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:445](https://github.com/wenakita
 
 > `optional` **client**: [`AlfaClubPublicClientLike`](../wallet/alfaclub.md#alfaclubpublicclientlike)
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:447](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L447)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:458](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L458)
 
 ##### flags?
 
 > `optional` **flags**: [`VigilanteFlags`](#vigilanteflags)
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L446)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:457](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L457)
 
 ##### getHyperliquid()?
 
 > `optional` **getHyperliquid**: (`address`) => `Promise`\<[`HyperliquidSnapshot`](hyperliquid.md#hyperliquidsnapshot)\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:451](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L451)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:462](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L462)
 
 Override metrics capture (for tests).
 
@@ -140,7 +146,7 @@ Override metrics capture (for tests).
 
 > `optional` **listCreators**: () => `Promise`\<[`AlfaClubCreator`](creators.md#alfaclubcreator)[]\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:449](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L449)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:460](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L460)
 
 Override creator enumeration (for tests / dry-runs).
 
@@ -152,7 +158,7 @@ Override creator enumeration (for tests / dry-runs).
 
 > `optional` **now**: `Date`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:457](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L457)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:468](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L468)
 
 Override the current time (tests).
 
@@ -160,7 +166,7 @@ Override the current time (tests).
 
 > `optional` **postToLens**: (`body`, `scorecardUri`) => `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:453](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L453)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:464](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L464)
 
 Optional Lens post publisher — if unset, Lens posts skip the post step but still record the scorecard.
 
@@ -182,7 +188,7 @@ Optional Lens post publisher — if unset, Lens posts skip the post step but sti
 
 > `optional` **signer**: `Erc8004Signer` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:455](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L455)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:466](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L466)
 
 Provide an explicit signer (tests) — otherwise derived from env private keys.
 
@@ -190,7 +196,7 @@ Provide an explicit signer (tests) — otherwise derived from env private keys.
 
 > `optional` **skipHyperliquid**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:461](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L461)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:472](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L472)
 
 Skip Hyperliquid reads (tests or early rollouts).
 
@@ -198,7 +204,7 @@ Skip Hyperliquid reads (tests or early rollouts).
 
 > `optional` **skipIndexer**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:459](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L459)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:470](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L470)
 
 Skip the indexer step (tests that seed creators directly).
 
@@ -208,7 +214,7 @@ Skip the indexer step (tests that seed creators directly).
 
 > **VigilanteRunResult** = `object`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:471](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L471)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:482](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L482)
 
 #### Properties
 
@@ -216,67 +222,67 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:471](https://github.com/wenakita
 
 > **durationMs**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:482](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L482)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:493](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L493)
 
 ##### flags
 
 > **flags**: [`VigilanteFlags`](#vigilanteflags)
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:474](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L474)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:485](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L485)
 
 ##### indexedNewCreators
 
 > **indexedNewCreators**: `number` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:477](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L477)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:488](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L488)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:472](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L472)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:483](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L483)
 
 ##### publications
 
 > **publications**: [`VigilantePublishResult`](#vigilantepublishresult)[]
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:480](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L480)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:491](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L491)
 
 ##### rankedCreators
 
 > **rankedCreators**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:478](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L478)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:489](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L489)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:473](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L473)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:484](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L484)
 
 ##### signerAddress
 
 > **signerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:481](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L481)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:492](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L492)
 
 ##### snapshotTs
 
 > **snapshotTs**: `string`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:475](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L475)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:486](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L486)
 
 ##### topN
 
 > **topN**: `number`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:479](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L479)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:490](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L490)
 
 ##### windowStart
 
 > **windowStart**: `string`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:476](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L476)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:487](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L487)
 
 ## Variables
 
@@ -284,7 +290,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:476](https://github.com/wenakita
 
 > `const` **VIGILANTE\_SCORECARD\_SCHEMA**: `"4626.alfaclub.scorecard.v1"` = `SCORECARD_SCHEMA`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:638](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L638)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:654](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L654)
 
 ## Functions
 
@@ -292,7 +298,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:638](https://github.com/wenakita
 
 > **buildEoaSigner**(): `Promise`\<`Erc8004Signer` \| `null`\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:290](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L290)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:301](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L301)
 
 Lazily construct a viem wallet-client EOA signer. Returns null when no
 private key is configured, in which case the orchestrator queues the
@@ -308,7 +314,7 @@ prepared calldata instead of submitting. No key => no autonomous write.
 
 > **buildRevokeFeedbackCalldata**(`params`): `object`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:622](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L622)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:638](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L638)
 
 Build the calldata for `revokeFeedback(agentId, feedbackIndex)`. The caller
 supplies the signer — we intentionally do NOT auto-revoke. The admin
@@ -344,7 +350,7 @@ dashboard submits this through the existing manual-submit flow.
 
 > **captureMetricsForCreators**(`creators`, `client`, `opts`): `Promise`\<[`CreatorMetricsInput`](leaderboard.md#creatormetricsinput)[]\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L160)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:171](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L171)
 
 #### Parameters
 
@@ -376,7 +382,7 @@ readonly [`AlfaClubCreator`](creators.md#alfaclubcreator)[]
 
 > **publishErc8004Feedback**(`params`): `Promise`\<`PublishOutcome`\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:321](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L321)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:332](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L332)
 
 #### Parameters
 
@@ -412,7 +418,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:321](https://github.com/wenakita
 
 > **publishLensScorecard**(`params`): `Promise`\<`PublishOutcome`\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:201](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L201)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:212](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L212)
 
 #### Parameters
 
@@ -448,7 +454,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:201](https://github.com/wenakita
 
 > **readVigilanteFlags**(): [`VigilanteFlags`](#vigilanteflags)
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:107](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L107)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:117](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L117)
 
 #### Returns
 
@@ -460,7 +466,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:107](https://github.com/wenakita
 
 > **resolveSignerPrivateKey**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:277](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L277)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:288](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L288)
 
 #### Returns
 
@@ -472,7 +478,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:277](https://github.com/wenakita
 
 > **runVigilante**(`opts`): `Promise`\<[`VigilanteRunResult`](#vigilanterunresult)\>
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:485](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L485)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:496](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L496)
 
 #### Parameters
 
@@ -490,7 +496,7 @@ Defined in: [server/\_lib/alfaclub/vigilante.ts:485](https://github.com/wenakita
 
 > **stableDigest**(`input`): `string`
 
-Defined in: [server/\_lib/alfaclub/vigilante.ts:648](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/vigilante.ts#L648)
+Defined in: [server/\_lib/alfaclub/vigilante.ts:664](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/alfaclub/vigilante.ts#L664)
 
 #### Parameters
 

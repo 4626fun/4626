@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / server/\_lib/lottery/amoeReplayRetry
+[4626-web](../../../index.md) / server/\_lib/lottery/amoeReplayRetry
 
 # server/\_lib/lottery/amoeReplayRetry
 
@@ -10,7 +10,7 @@
 
 ### CronRetrySubmissionParams
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L90)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:90](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L90)
 
 The cron-only variant: skips the `callerSignupId` ownership check
 because the cron runs as a system-level actor. Also drops
@@ -23,25 +23,25 @@ to the per-row retry call.
 
 > **currentEpoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L91)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:91](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L91)
 
 ##### lotteryAmoeRouter
 
 > **lotteryAmoeRouter**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L92)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:92](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L92)
 
 ##### relay?
 
 > `optional` **relay**: [`RetrySubmissionRelay`](#retrysubmissionrelay)
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L93)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L93)
 
 ***
 
 ### RetrySubmissionParams
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L58)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:58](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L58)
 
 #### Properties
 
@@ -49,7 +49,7 @@ Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:58](https://github.com/wena
 
 > **callerSignupId**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L68)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:68](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L68)
 
 Caller's signup_id (Postgres bigint). Required for ownership check
 \u2014 a retry is rejected unless the caller owns the row.
@@ -62,7 +62,7 @@ regardless of who originally submitted them).
 
 > **currentEpoch**: `bigint`
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L74)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:74](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L74)
 
 Current epoch. Compared to the row's `epoch` \u2014 a mismatch means
 the proof is no longer valid for the current epoch and the row is
@@ -72,7 +72,7 @@ abandoned with `epoch_rolled`.
 
 > **lotteryAmoeRouter**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L76)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:76](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L76)
 
 Address of the deployed `LotteryAmoeRouter`.
 
@@ -80,7 +80,7 @@ Address of the deployed `LotteryAmoeRouter`.
 
 > `optional` **relay**: [`RetrySubmissionRelay`](#retrysubmissionrelay)
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L81)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:81](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L81)
 
 Relay function. Production callers leave this as the default
 (resolved by the caller), tests inject a mock.
@@ -89,7 +89,7 @@ Relay function. Production callers leave this as the default
 
 > **submissionId**: `string`
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L59)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:59](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L59)
 
 ## Type Aliases
 
@@ -97,7 +97,7 @@ Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:59](https://github.com/wena
 
 > **RetrySubmissionOutcome** = \{ `kind`: `"settled"`; `txHash`: `` `0x${string}` ``; \} \| \{ `kind`: `"manager_declined_again"`; `reason`: `string`; `retryCount`: `number`; \} \| \{ `kind`: `"abandoned_epoch_rolled"`; \} \| \{ `kind`: `"abandoned_budget_exhausted"`; \} \| \{ `kind`: `"rejected_chain"`; `reason`: `string`; \}
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L51)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:51](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L51)
 
 ***
 
@@ -105,7 +105,7 @@ Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:51](https://github.com/wena
 
 > **RetrySubmissionRelay** = (`params`) => `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L46)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L46)
 
 Relay function injected by callers. Production wires it to the same
 `relayAmoeEntryZkTransaction` used by the submit handler; tests mock it.
@@ -132,7 +132,7 @@ Relay function injected by callers. Production wires it to the same
 
 > **retrySubmissionById**(`params`): `Promise`\<[`RetrySubmissionOutcome`](#retrysubmissionoutcome)\>
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:241](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L241)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:241](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L241)
 
 Public: retry by id, with caller-ownership verification.
 
@@ -173,7 +173,7 @@ AmoeBadRequestError('submission_not_retryable') for any state
 
 > **retrySubmissionByIdAsCron**(`id`, `params`): `Promise`\<[`RetrySubmissionOutcome`](#retrysubmissionoutcome)\>
 
-Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:271](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lottery/amoeReplayRetry.ts#L271)
+Defined in: [server/\_lib/lottery/amoeReplayRetry.ts:271](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/server/_lib/lottery/amoeReplayRetry.ts#L271)
 
 Public: retry by id from the cron path \u2014 skips the
 caller-ownership check (the cron is a system actor).

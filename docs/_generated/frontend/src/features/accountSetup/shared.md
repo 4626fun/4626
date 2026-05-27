@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/features/accountSetup/shared
+[4626-web](../../../index.md) / src/features/accountSetup/shared
 
 # src/features/accountSetup/shared
 
@@ -12,7 +12,7 @@
 
 > `const` **PROVIDER\_ROWS**: [`ProviderRow`](types.md#providerrow)[]
 
-Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L3)
+Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/
 
 > **deriveOwnerAuthorityState**(`input`): [`OwnerAuthorityState`](types.md#ownerauthoritystate)
 
-Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L41)
+Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L35)
 
 #### Parameters
 
@@ -40,15 +40,7 @@ Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita
 
 ###### connectedOwnerState
 
-\{ `reason`: `"ok"` \| `"idle"` \| `"network_mismatch"` \| `"missing_params"` \| `"read_failed"`; `value`: `boolean` \| `null`; \}
-
-###### connectedOwnerState.reason
-
-`"ok"` \| `"idle"` \| `"network_mismatch"` \| `"missing_params"` \| `"read_failed"`
-
-###### connectedOwnerState.value
-
-`boolean` \| `null`
+[`ConnectedOwnerState`](types.md#connectedownerstate)
 
 #### Returns
 
@@ -60,7 +52,7 @@ Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita
 
 > **hasResolvedZoraSignals**(`data`): `boolean`
 
-Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L25)
+Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L19)
 
 #### Parameters
 
@@ -78,7 +70,7 @@ Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita
 
 > **isMobileWalletEnvironment**(): `boolean`
 
-Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L35)
+Defined in: [src/features/accountSetup/shared.ts:29](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L29)
 
 #### Returns
 
@@ -86,29 +78,11 @@ Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita
 
 ***
 
-### normalizeAddress()
-
-> **normalizeAddress**(`value`): `string` \| `null`
-
-Defined in: [src/features/accountSetup/shared.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L13)
-
-#### Parameters
-
-##### value
-
-`string`
-
-#### Returns
-
-`string` \| `null`
-
-***
-
 ### shortValue()
 
 > **shortValue**(`value`): `string`
 
-Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L19)
+Defined in: [src/features/accountSetup/shared.ts:13](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L13)
 
 #### Parameters
 
@@ -126,7 +100,7 @@ Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita
 
 > **sleep**(`ms`): `Promise`\<`void`\>
 
-Defined in: [src/features/accountSetup/shared.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L31)
+Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/features/accountSetup/shared.ts#L25)
 
 #### Parameters
 

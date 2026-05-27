@@ -1,8 +1,8 @@
-[**4626-app**](../../index.md)
+[**4626-web**](../../index.md)
 
 ***
 
-[4626-app](../../index.md) / src/hooks/useCanonicalIdentity
+[4626-web](../../index.md) / src/hooks/useCanonicalIdentity
 
 # src/hooks/useCanonicalIdentity
 
@@ -12,7 +12,7 @@
 
 > **CanonicalIdentity** = `object`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L37)
+Defined in: [src/hooks/useCanonicalIdentity.ts:44](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L44)
 
 Consolidated identity snapshot for the signed-in user. Composes:
   - Privy user state (the human login)
@@ -40,11 +40,19 @@ Design notes:
 
 #### Properties
 
+##### accountChrome
+
+> **accountChrome**: [`AccountChromeExecution`](../lib/wallet/userExecutionTrack.md#accountchromeexecution)
+
+Defined in: [src/hooks/useCanonicalIdentity.ts:103](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L103)
+
+Tray / accounts / swap chrome derived from the effective execution lane.
+
 ##### activeSigner
 
 > **activeSigner**: `"external"` \| `"embedded"` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L73)
+Defined in: [src/hooks/useCanonicalIdentity.ts:87](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L87)
 
 Which signer is currently active. Priority:
   - 'external' when an external wagmi connection exists
@@ -55,7 +63,7 @@ Which signer is currently active. Priority:
 
 > **creatorCoinAddress**: `Address` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L79)
+Defined in: [src/hooks/useCanonicalIdentity.ts:93](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L93)
 
 Creator coin ERC-20 address owned by this CSW's vault, or null if
 the CSW has no registered vault yet. Always normalized to checksum
@@ -65,7 +73,7 @@ form.
 
 > **cswAddress**: `Address` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L39)
+Defined in: [src/hooks/useCanonicalIdentity.ts:46](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L46)
 
 The user's Coinbase Smart Wallet — primary identity.
 
@@ -73,34 +81,53 @@ The user's Coinbase Smart Wallet — primary identity.
 
 > **cswMissing**: `boolean`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L53)
+Defined in: [src/hooks/useCanonicalIdentity.ts:60](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L60)
 
 True when the server confirms the profile is authed but no
 `canonicalCswAddress` is linked yet (user signed in but hasn't
 completed Zora / Base App setup). The card uses this to prompt
 setup instead of leaving an empty CSW row.
 
+##### effectiveExecutionTrack
+
+> **effectiveExecutionTrack**: [`UserFrontendExecutionTrack`](../lib/wallet/userExecutionTrack.md#userfrontendexecutiontrack)
+
+Defined in: [src/hooks/useCanonicalIdentity.ts:101](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L101)
+
+Effective track after parent-owner promotion over stale sub-account state.
+
+##### embeddedSignerAuthorizedOnCsw
+
+> **embeddedSignerAuthorizedOnCsw**: `boolean` \| `null`
+
+Defined in: [src/hooks/useCanonicalIdentity.ts:80](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L80)
+
+Whether the embedded signer is already an owner on the canonical CSW.
+- true  => embedded signer is authorized for canonical owner actions
+- false => embedded signer exists but is not yet authorized
+- null  => unknown / not yet resolved from account signals
+
 ##### executionSubAccountAddress
 
 > **executionSubAccountAddress**: `Address` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L83)
+Defined in: [src/hooks/useCanonicalIdentity.ts:97](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L97)
 
-Optional app-scoped execution sub-account, hidden unless a route actively uses it.
+Optional app-scoped execution sub-account when the effective track uses it.
 
 ##### executionTrack
 
-> **executionTrack**: `"sub-account"` \| `"legacy-owner-install"` \| `"migration-pending"` \| `"none-yet"` \| `null`
+> **executionTrack**: [`UserFrontendExecutionTrack`](../lib/wallet/userExecutionTrack.md#userfrontendexecutiontrack) \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L85)
+Defined in: [src/hooks/useCanonicalIdentity.ts:99](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L99)
 
-Server-derived execution track classification.
+Server-derived execution track classification (raw from `/api/accounts/me`).
 
 ##### externalEoaAddress
 
 > **externalEoaAddress**: `Address` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L64)
+Defined in: [src/hooks/useCanonicalIdentity.ts:71](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L71)
 
 External EOA (Rabby / MetaMask / injected) if one is actively
 connected via wagmi. Null when only the Privy embedded EOA is
@@ -110,7 +137,7 @@ signing.
 
 > **hasSession**: `boolean`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L58)
+Defined in: [src/hooks/useCanonicalIdentity.ts:65](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L65)
 
 Whether a SIWE session exists at all. When false the card
 should not render.
@@ -119,7 +146,7 @@ should not render.
 
 > **loadingCoin**: `boolean`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L81)
+Defined in: [src/hooks/useCanonicalIdentity.ts:95](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L95)
 
 Loading state for async CSW → coin lookup.
 
@@ -127,7 +154,7 @@ Loading state for async CSW → coin lookup.
 
 > **loadingCsw**: `boolean`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L46)
+Defined in: [src/hooks/useCanonicalIdentity.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L53)
 
 True while `/api/accounts/me` is still fetching the profile's
 canonical CSW. Useful for rendering a "Linking…" placeholder in
@@ -138,7 +165,7 @@ is in fact signed in and the CSW just hasn't arrived yet.
 
 > **privyEmbeddedAddress**: `Address` \| `null`
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L66)
+Defined in: [src/hooks/useCanonicalIdentity.ts:73](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L73)
 
 Privy-provisioned embedded EOA, if Privy is authed.
 
@@ -148,7 +175,7 @@ Privy-provisioned embedded EOA, if Privy is authed.
 
 > **useCanonicalIdentity**(): [`CanonicalIdentity`](#canonicalidentity)
 
-Defined in: [src/hooks/useCanonicalIdentity.ts:163](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCanonicalIdentity.ts#L163)
+Defined in: [src/hooks/useCanonicalIdentity.ts:181](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/hooks/useCanonicalIdentity.ts#L181)
 
 #### Returns
 

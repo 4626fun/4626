@@ -1,8 +1,8 @@
-[**4626-app**](../../../index.md)
+[**4626-web**](../../../index.md)
 
 ***
 
-[4626-app](../../../index.md) / src/lib/swap/providerConfig
+[4626-web](../../../index.md) / src/lib/swap/providerConfig
 
 # src/lib/swap/providerConfig
 
@@ -12,7 +12,7 @@
 
 > **SwapProvider** = `"uniswap"` \| `"cdp"`
 
-Defined in: [src/lib/swap/providerConfig.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L4)
+Defined in: [src/lib/swap/providerConfig.ts:4](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L4)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/swap/providerConfig.ts:4](https://github.com/wenakita/4626/
 
 > **SwapProviderMode** = `"uniswap"` \| `"cdp"` \| `"hybrid"`
 
-Defined in: [src/lib/swap/providerConfig.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L5)
+Defined in: [src/lib/swap/providerConfig.ts:5](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L5)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/swap/providerConfig.ts:5](https://github.com/wenakita/4626/
 
 > **SwapProviderSelection** = `object`
 
-Defined in: [src/lib/swap/providerConfig.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L7)
+Defined in: [src/lib/swap/providerConfig.ts:7](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L7)
 
 #### Properties
 
@@ -36,19 +36,19 @@ Defined in: [src/lib/swap/providerConfig.ts:7](https://github.com/wenakita/4626/
 
 > **fallback**: [`SwapProvider`](#swapprovider) \| `null`
 
-Defined in: [src/lib/swap/providerConfig.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L10)
+Defined in: [src/lib/swap/providerConfig.ts:10](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L10)
 
 ##### mode
 
 > **mode**: [`SwapProviderMode`](#swapprovidermode)
 
-Defined in: [src/lib/swap/providerConfig.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L8)
+Defined in: [src/lib/swap/providerConfig.ts:8](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L8)
 
 ##### primary
 
 > **primary**: [`SwapProvider`](#swapprovider)
 
-Defined in: [src/lib/swap/providerConfig.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L9)
+Defined in: [src/lib/swap/providerConfig.ts:9](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L9)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [src/lib/swap/providerConfig.ts:9](https://github.com/wenakita/4626/
 
 > **getSwapProviderLabel**(`provider`): `"Uniswap"` \| `"CDP"`
 
-Defined in: [src/lib/swap/providerConfig.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L70)
+Defined in: [src/lib/swap/providerConfig.ts:70](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L70)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [src/lib/swap/providerConfig.ts:70](https://github.com/wenakita/4626
 
 > **readSwapProviderMode**(): [`SwapProviderMode`](#swapprovidermode)
 
-Defined in: [src/lib/swap/providerConfig.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L23)
+Defined in: [src/lib/swap/providerConfig.ts:23](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L23)
 
 #### Returns
 
@@ -86,7 +86,7 @@ Defined in: [src/lib/swap/providerConfig.ts:23](https://github.com/wenakita/4626
 
 > **requiresCanonicalExecutionForSwapMode**(`mode`): `boolean`
 
-Defined in: [src/lib/swap/providerConfig.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L49)
+Defined in: [src/lib/swap/providerConfig.ts:49](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L49)
 
 #### Parameters
 
@@ -104,7 +104,7 @@ Defined in: [src/lib/swap/providerConfig.ts:49](https://github.com/wenakita/4626
 
 > **resolveSwapProviderSelection**(`mode`): [`SwapProviderSelection`](#swapproviderselection)
 
-Defined in: [src/lib/swap/providerConfig.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L27)
+Defined in: [src/lib/swap/providerConfig.ts:27](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L27)
 
 #### Parameters
 
@@ -122,7 +122,7 @@ Defined in: [src/lib/swap/providerConfig.ts:27](https://github.com/wenakita/4626
 
 > **shouldFallbackToUniswap**(`error`): `boolean`
 
-Defined in: [src/lib/swap/providerConfig.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/providerConfig.ts#L53)
+Defined in: [src/lib/swap/providerConfig.ts:53](https://github.com/wenakita/4626/blob/5b93f3e2a7f660b27b3021bf4884acc058311983/frontend/src/lib/swap/providerConfig.ts#L53)
 
 #### Parameters
 
