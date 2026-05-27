@@ -49,6 +49,8 @@ import {
   parseWireContent,
   shouldFallbackToOriginalXmtpRecipient,
   truncateAddress,
+  conversationIdsEqual,
+  resolveConversationById,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
   buildXmtpDbPath,
@@ -949,7 +951,13 @@ function showNotification(title: string, body: string) {
 // Provider
 // ---------------------------------------------------------------------------
 
-export function XmtpChatProvider({ children }: { children: ReactNode }) {
+export function XmtpChatProvider({
+  children,
+  identityHintAddress = null,
+}: {
+  children: ReactNode
+  identityHintAddress?: string | null
+}) {
   const { address, isConnected, connector } = useAccount()
   const accountContext = useAccountContext()
   const xmtpModeOverride: 'EOA' | 'SMART_WALLET' | null =
@@ -996,7 +1004,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   >(new Map())
   const cswOwnerIndexCache = useRef<Map<string, number | null>>(new Map())
   const identityAddressRef = useRef<string | null>(null)
+  const identityHintAddressRef = useRef<string | null>(null)
   const pendingLocalResetHandledRef = useRef(false)
+
+  useEffect(() => {
+    identityHintAddressRef.current = normalizeEvmAddress(identityHintAddress) ?? null
+  }, [identityHintAddress])
 
   const endActiveStreams = useCallback((): void => {
     endTrackedStreams({
@@ -1273,7 +1286,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!client) return conversationsRef.current
     await client.conversations.sync()
     const convos = await client.conversations.list()
-    const summaries = await Promise.all(convos.map(buildConvoSummary))
+    let mergedConvos = [...convos]
+    const conversationsApi = client.conversations as {
+      listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+    }
+    if (typeof conversationsApi.listGroups === 'function') {
+      try {
+        const groups = await conversationsApi.listGroups()
+        for (const group of groups) {
+          if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
+            mergedConvos.push(group)
+          }
+        }
+      } catch {
+        // best effort
+      }
+    }
+    const summaries = await Promise.all(mergedConvos.map(buildConvoSummary))
     return applyConversationSummaries(summaries)
   }, [applyConversationSummaries, buildConvoSummary])
 
@@ -1282,19 +1311,30 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
     if (!normalizedId) return null
 
     const existing =
-      conversationsRef.current.find((conversation) => conversation.id === normalizedId) ?? null
+      conversationsRef.current.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ??
+      null
     if (existing) return existing
 
     const summaries = await refreshConversations()
-    const fromList = summaries.find((conversation) => conversation.id === normalizedId) ?? null
+    const fromList =
+      summaries.find((conversation) => conversationIdsEqual(conversation.id, normalizedId)) ?? null
     if (fromList) return fromList
 
     const client = clientRef.current
     if (!client) return null
+
+    const conversationsApi = client.conversations as {
+      sync: () => Promise<unknown>
+      getConversationById: (id: string) => Promise<Conversation | Dm | Group | null>
+      list: () => Promise<Array<Conversation | Dm | Group>>
+      listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+    }
+
+    const convo = await resolveConversationById(conversationsApi, normalizedId)
+    if (!convo) return null
+
     try {
-      const convo = await client.conversations.getConversationById(normalizedId)
-      if (!convo) return null
-      const summary = await buildConvoSummary(convo)
+      const summary = await buildConvoSummary(convo as Conversation | Dm | Group)
       if (mountedRef.current) {
         setConversations((prev) => {
           const next = upsertConversationSummary(prev, summary)
@@ -1320,6 +1360,16 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
   }> => {
     const connected = normalizeEvmAddress(connectedAddress)
     if (!connected) return { identityAddress: connectedAddress.toLowerCase(), isCanonicalSmartWallet: false }
+
+    const identityHint = identityHintAddressRef.current
+    if (identityHint && identityHint !== connected) {
+      const resolved = {
+        identityAddress: identityHint,
+        isCanonicalSmartWallet: true,
+      }
+      resolvedIdentityByWalletRef.current.set(`${connected}:${modeOverride ?? 'auto'}`, resolved)
+      return resolved
+    }
 
     const cacheKey = `${connected}:${modeOverride ?? 'auto'}`
     const cached = resolvedIdentityByWalletRef.current.get(cacheKey)
@@ -1528,6 +1578,25 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       hostname,
     })
     if (!precheck.allowed) {
+      if (
+        precheck.reason === 'already_connected' &&
+        intent === 'user' &&
+        clientRef.current
+      ) {
+        try {
+          await refreshConversations()
+          if (mountedRef.current) {
+            setStatus('connected')
+            setError(null)
+          }
+        } catch (err) {
+          if (mountedRef.current) {
+            setStatus('error')
+            setError(err instanceof Error ? err.message : String(err))
+          }
+        }
+        return
+      }
       if (mountedRef.current) {
         if (precheck.reason === 'cooldown') {
           setStatus('error')
@@ -1748,7 +1817,23 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       const setupConversations = async (client: Client) => {
         await client.conversations.sync()
         const convos = await client.conversations.list()
-        const summaries = await Promise.all(convos.map(buildConvoSummary))
+        let mergedConvos = [...convos]
+        const conversationsApi = client.conversations as {
+          listGroups?: () => Promise<Array<Conversation | Dm | Group>>
+        }
+        if (typeof conversationsApi.listGroups === 'function') {
+          try {
+            const groups = await conversationsApi.listGroups()
+            for (const group of groups) {
+              if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
+                mergedConvos.push(group)
+              }
+            }
+          } catch {
+            // best effort
+          }
+        }
+        const summaries = await Promise.all(mergedConvos.map(buildConvoSummary))
         const normalizedSummaries = applyConversationSummaries(summaries)
         const convoStream = await client.conversations.stream({
           onValue: async (convo: any) => {
@@ -2170,7 +2255,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         releaseTabLock()
       }
     }
-  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat])
+  }, [address, connector, walletClient, publicClient, resolveXmtpIdentityAddress, buildConvoSummary, applyConversationSummaries, xmtpModeOverride, markLocalStateInvalid, acquireTabLock, startTabLockHeartbeat, releaseTabLock, stopTabLockHeartbeat, refreshConversations])
 
   const reconnectFromLocalInstall = useCallback(async (): Promise<void> => {
     if (connectInFlightRef.current || resetLocalStateInFlightRef.current) return

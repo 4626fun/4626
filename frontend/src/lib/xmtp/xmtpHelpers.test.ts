@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { isLocalXmtpStateInvalidError, shouldFallbackToOriginalXmtpRecipient } from './xmtpHelpers'
 
@@ -60,5 +60,22 @@ describe('isLocalXmtpStateInvalidError', () => {
     ).toBe(true)
     expect(isLocalXmtpStateInvalidError('synced 12 messages, 3 failed 9 succeeded')).toBe(true)
     expect(isLocalXmtpStateInvalidError('conversation_not_found')).toBe(false)
+  })
+})
+
+
+describe('resolveConversationById', () => {
+  it('matches conversation ids case-insensitively', async () => {
+    const { conversationIdsEqual, resolveConversationById } = await import('./xmtpHelpers')
+    expect(conversationIdsEqual('AbC', 'abc')).toBe(true)
+
+    const convo = { id: 'GroupABC', sync: vi.fn(async () => undefined) }
+    const api = {
+      sync: vi.fn(async () => undefined),
+      getConversationById: vi.fn(async () => null),
+      list: vi.fn(async () => [convo]),
+    }
+    const resolved = await resolveConversationById(api, 'groupabc')
+    expect(resolved?.id).toBe('GroupABC')
   })
 })

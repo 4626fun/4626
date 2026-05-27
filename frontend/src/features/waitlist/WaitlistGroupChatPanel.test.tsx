@@ -53,6 +53,7 @@ vi.mock('./useWaitlistXmtpStatus', () => ({
   useWaitlistXmtpStatus: () => ({
     data: {
       configured: true,
+      vaultConfigured: true,
       chatReady: true,
       canJoin: true,
       groupId: 'group-1',

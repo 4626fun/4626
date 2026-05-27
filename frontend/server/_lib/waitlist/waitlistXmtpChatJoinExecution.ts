@@ -8,6 +8,9 @@ import { WAITLIST_CHAT_VAULT_ADDRESS } from './waitlistXmtpChat.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
+/** Keepr XMTP actions can stall in `executing` if the worker dies mid-flight. */
+export const WAITLIST_CHAT_STALE_EXECUTING_SECONDS = 120
+
 export type WaitlistChatJoinActionSnapshot = {
   actionId: number
   status: 'pending' | 'executing' | 'executed' | 'failed' | 'retry' | null
@@ -75,18 +78,22 @@ export async function executeWaitlistChatJoinActionNow(params: {
   if (existingStatus === 'executed') {
     return { outcome: 'executed' }
   }
-  if (existingStatus === 'executing') {
-    return { outcome: 'deferred' }
-  }
 
   const claim = await params.db.sql`
     UPDATE keepr_actions
     SET
       status = 'executing',
       attempt_count = attempt_count + 1,
-      updated_at = NOW()
+      updated_at = NOW(),
+      last_error = NULL
     WHERE id = ${params.actionId}
-      AND status IN ('pending', 'retry')
+      AND (
+        status IN ('pending', 'retry')
+        OR (
+          status = 'executing'
+          AND updated_at < NOW() - (${WAITLIST_CHAT_STALE_EXECUTING_SECONDS} || ' seconds')::interval
+        )
+      )
     RETURNING id;
   `
   if ((claim.rows?.length ?? 0) === 0) {

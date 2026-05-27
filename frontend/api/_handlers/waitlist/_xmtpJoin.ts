@@ -22,6 +22,7 @@ import {
 import {
   buildWaitlistChatDedupeKey,
   executeWaitlistChatJoinActionNow,
+  readWaitlistChatJoinAction,
   type WaitlistChatJoinExecutionOutcome,
 } from '../../../server/_lib/waitlist/waitlistXmtpChatJoinExecution.js'
 
@@ -121,6 +122,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const dedupeKey = buildWaitlistChatDedupeKey(groupId, xmtpMemberAddress)
 
+  const existingJoin = await readWaitlistChatJoinAction(db, dedupeKey)
+  if (existingJoin?.status === 'executed') {
+    return res.status(200).json({
+      success: true,
+      data: {
+        queued: false,
+        actionId: existingJoin.actionId,
+        groupId,
+        identityAddress: xmtpMemberAddress,
+        executionTrack,
+        execution: 'executed',
+        executionError: null,
+      },
+    } satisfies ApiEnvelope<WaitlistXmtpJoinResponse>)
+  }
+
   const action = await enqueueKeeprAction({
     vaultAddress: WAITLIST_CHAT_VAULT_ADDRESS,
     groupId,
@@ -129,24 +146,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     dedupeKey,
   })
 
-  const execution = await executeWaitlistChatJoinActionNow({
+  void executeWaitlistChatJoinActionNow({
     db,
     actionId: action.id,
     groupId,
     action: actionPayload,
     actionType: 'xmtp.group.add_member',
+  }).catch((err) => {
+    console.warn('waitlist_chat.join_execute_background_failed', {
+      actionId: action.id,
+      groupId,
+      message: err instanceof Error ? err.message : String(err),
+    })
   })
+
+  const execution: WaitlistChatJoinExecutionOutcome = 'deferred'
 
   return res.status(200).json({
     success: true,
     data: {
-      queued: execution.outcome !== 'executed',
+      queued: execution !== 'executed',
       actionId: action.id,
       groupId,
       identityAddress: xmtpMemberAddress,
       executionTrack,
-      execution: execution.outcome,
-      executionError: execution.error ?? null,
+      execution,
+      executionError: null,
     },
   } satisfies ApiEnvelope<WaitlistXmtpJoinResponse>)
 }

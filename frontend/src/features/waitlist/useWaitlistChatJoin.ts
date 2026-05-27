@@ -48,6 +48,9 @@ export function waitlistChatBlockedMessage(params: {
   executionTrack?: WaitlistChatExecutionTrack | null
   joinBlockedReason?: string | null
 }): string {
+  if (params.joinBlockedReason === 'service_unavailable') {
+    return 'Waitlist chat status is temporarily unavailable. Retry in a moment.'
+  }
   if (params.joinBlockedReason === 'sub_account_not_registered') {
     return 'Connect Base App and finish app-wallet setup to join waitlist chat.'
   }
@@ -108,8 +111,9 @@ export function useWaitlistChatJoin(params: {
   chatReady: boolean
   enabled: boolean
   messagingReady: boolean
+  serverJoinActionStatus?: WaitlistJoinActionStatus | null
 }): { status: WaitlistChatStatus; retryJoin: () => void } {
-  const { xmtpMemberAddress, chatReady, enabled, messagingReady } = params
+  const { xmtpMemberAddress, chatReady, enabled, messagingReady, serverJoinActionStatus } = params
   const [status, setStatus] = useState<WaitlistChatStatus>('idle')
   const [retryNonce, setRetryNonce] = useState(0)
   const completedIdentityRef = useRef<string | null>(null)
@@ -120,6 +124,28 @@ export function useWaitlistChatJoin(params: {
     setRetryNonce((value) => value + 1)
     setStatus('idle')
   }, [])
+
+  useEffect(() => {
+    if (!enabled || !chatReady) return
+    const identity = xmtpMemberAddress?.toLowerCase() ?? null
+    if (!identity) return
+
+    const mapped = mapJoinActionStatus(serverJoinActionStatus ?? null)
+    if (!mapped) return
+
+    setStatus((current) => {
+      if (current === 'joining' && mapped !== 'executed' && mapped !== 'failed') {
+        return current
+      }
+      if (shouldPersistJoinOutcome(mapped)) {
+        completedIdentityRef.current = identity
+      }
+      if (!messagingReady && mapped !== 'executed' && mapped !== 'failed') {
+        return current === 'joining' ? current : 'awaiting_messaging'
+      }
+      return mapped
+    })
+  }, [chatReady, enabled, messagingReady, serverJoinActionStatus, xmtpMemberAddress])
 
   useEffect(() => {
     const identity = xmtpMemberAddress?.toLowerCase() ?? null
@@ -135,7 +161,25 @@ export function useWaitlistChatJoin(params: {
       )
       return
     }
-    if (completedIdentityRef.current === identity) return
+    if (completedIdentityRef.current === identity) {
+      setStatus((current) =>
+        current === 'awaiting_messaging' || current === 'idle' || current === 'joining' ? 'executed' : current,
+      )
+      return
+    }
+
+    const serverMapped = mapJoinActionStatus(serverJoinActionStatus ?? null)
+    if (serverMapped === 'executed' || serverMapped === 'failed') {
+      setStatus(serverMapped)
+      if (serverMapped === 'executed') {
+        completedIdentityRef.current = identity
+      }
+      return
+    }
+    if (serverMapped === 'pending' || serverMapped === 'executing') {
+      setStatus(serverMapped)
+      return
+    }
 
     const requestId = ++joinRequestIdRef.current
     const controller = new AbortController()
@@ -196,7 +240,7 @@ export function useWaitlistChatJoin(params: {
       controller.abort()
       if (timeoutId !== null) window.clearTimeout(timeoutId)
     }
-  }, [chatReady, enabled, messagingReady, retryNonce, xmtpMemberAddress])
+  }, [chatReady, enabled, messagingReady, retryNonce, serverJoinActionStatus, xmtpMemberAddress])
 
   useEffect(() => {
     if (!enabled || !chatReady || !messagingReady) return

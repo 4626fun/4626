@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { MessageSquare } from 'lucide-react'
 
 import { ChatWindow } from '@/components/chat/ChatWindow'
@@ -15,6 +15,10 @@ import {
 } from './useWaitlistChatJoin'
 import { useWaitlistXmtpStatus } from './useWaitlistXmtpStatus'
 import { usePrepareWaitlistMessagingWallet } from './usePrepareWaitlistMessagingWallet'
+import {
+  collectWaitlistGroupIdCandidates,
+  findWaitlistGroupConversation,
+} from './waitlistXmtpGroupIds'
 
 type WaitlistGroupChatPanelProps = {
   setupComplete: boolean
@@ -26,17 +30,35 @@ export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
 
   return (
     <AccountContextProvider>
-      <XmtpChatProvider>
-        <WaitlistGroupChatPanelInner {...props} />
-      </XmtpChatProvider>
+      <WaitlistGroupChatPanelInner {...props} />
     </AccountContextProvider>
   )
 }
 
-function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelProps) {
+function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
+  const { signingReady, setupComplete } = props
+  const statusQuery = useWaitlistXmtpStatus(setupComplete)
+  const identityHintAddress = statusQuery.data?.xmtpMemberAddress ?? null
+
+  return (
+    <XmtpChatProvider identityHintAddress={identityHintAddress}>
+      <WaitlistGroupChatPanelBody
+        signingReady={signingReady}
+        setupComplete={setupComplete}
+        statusQuery={statusQuery}
+      />
+    </XmtpChatProvider>
+  )
+}
+
+function WaitlistGroupChatPanelBody({
+  signingReady,
+  statusQuery,
+}: WaitlistGroupChatPanelProps & {
+  statusQuery: ReturnType<typeof useWaitlistXmtpStatus>
+}) {
   const { status: xmtpStatus } = useXmtp()
   const messagingReady = xmtpStatus === 'connected'
-  const statusQuery = useWaitlistXmtpStatus(signingReady)
   const chatConfig = statusQuery.data
   const chatReady = chatConfig?.chatReady ?? false
   const join = useWaitlistChatJoin({
@@ -44,9 +66,17 @@ function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelPro
     chatReady,
     enabled: signingReady,
     messagingReady,
+    serverJoinActionStatus: chatConfig?.joinAction?.status ?? null,
   })
   const joinStatus = join.status
   const retryJoin = join.retryJoin
+  const { refetch: refetchWaitlistStatus } = statusQuery
+
+  useEffect(() => {
+    if (joinStatus === 'executed' || joinStatus === 'failed' || joinStatus === 'pending' || joinStatus === 'executing') {
+      void refetchWaitlistStatus()
+    }
+  }, [joinStatus, refetchWaitlistStatus])
 
   const groupName = chatConfig?.groupName ?? 'Waitlist chat'
   const blockedMessage = waitlistChatBlockedMessage({
@@ -74,15 +104,62 @@ function WaitlistGroupChatPanelInner({ signingReady }: WaitlistGroupChatPanelPro
         <p className="text-xs text-zinc-400">{blockedMessage}</p>
       ) : statusQuery.isLoading ? (
         <LoadingInline label="Loading waitlist chat…" />
+      ) : statusQuery.isError ? (
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-400">
+            Could not load waitlist chat status. Refresh the page or try again in a moment.
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void statusQuery.refetch()}>
+            Retry
+          </Button>
+        </div>
       ) : !chatConfig?.configured ? (
         <p className="text-xs text-zinc-400">
-          Waitlist chat is not configured yet. Ask an admin to set the waitlist XMTP group.
+          Waitlist chat is not configured yet. Ask an admin to set WAITLIST_XMTP_GROUP_ID or the
+          waitlist Keepr vault group.
         </p>
+      ) : chatConfig.joinBlockedReason === 'service_unavailable' ? (
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-400">
+            Waitlist chat status is temporarily unavailable. Connect messaging below once signing is
+            ready, or retry loading status.
+          </p>
+          <Button type="button" variant="secondary" size="sm" onClick={() => void statusQuery.refetch()}>
+            Retry status
+          </Button>
+        </div>
+      ) : !chatConfig.vaultConfigured ? (
+        <div className="space-y-2">
+          <p className="text-xs text-amber-200/90">
+            Waitlist chat group is set, but the Keepr vault for automated joins is missing. You can still
+            connect messaging; group join may fail until ops registers the waitlist vault.
+          </p>
+          {chatReady ? (
+            <WaitlistGroupChatSurface
+              groupId={chatConfig.groupId}
+              envGroupId={chatConfig.envGroupId}
+              vaultGroupId={chatConfig.vaultGroupId}
+              groupIdMismatch={chatConfig.groupIdMismatch}
+              groupName={groupName}
+              joinStatus={joinStatus}
+              joinActionError={chatConfig.joinAction?.lastError ?? null}
+              xmtpMemberAddress={chatConfig.xmtpMemberAddress}
+              retryJoin={retryJoin}
+              signingReady={signingReady}
+              chatReady={chatReady}
+            />
+          ) : (
+            <p className="text-xs text-zinc-400">{blockedMessage}</p>
+          )}
+        </div>
       ) : !chatReady ? (
         <p className="text-xs text-zinc-400">{blockedMessage}</p>
       ) : (
         <WaitlistGroupChatSurface
           groupId={chatConfig.groupId}
+          envGroupId={chatConfig.envGroupId}
+          vaultGroupId={chatConfig.vaultGroupId}
+          groupIdMismatch={chatConfig.groupIdMismatch}
           groupName={groupName}
           joinStatus={joinStatus}
           joinActionError={chatConfig.joinAction?.lastError ?? null}
@@ -106,7 +183,7 @@ function WaitlistJoinBadge(props: {
   if (!chatReady || joinStatus === 'idle') {
     return null
   }
-  if (!messagingReady && joinStatus === 'awaiting_messaging') {
+  if (joinStatus === 'awaiting_messaging') {
     return null
   }
 
@@ -133,6 +210,9 @@ function WaitlistJoinBadge(props: {
 
 function WaitlistGroupChatSurface(props: {
   groupId: string | null
+  envGroupId: string | null
+  vaultGroupId: string | null
+  groupIdMismatch: boolean
   groupName: string
   joinStatus: WaitlistChatStatus
   joinActionError: string | null
@@ -141,6 +221,19 @@ function WaitlistGroupChatSurface(props: {
   signingReady: boolean
   chatReady: boolean
 }) {
+  const {
+    groupId,
+    envGroupId,
+    vaultGroupId,
+    groupIdMismatch,
+    groupName,
+    joinStatus,
+    joinActionError,
+    xmtpMemberAddress,
+    retryJoin,
+    signingReady,
+    chatReady,
+  } = props
   const {
     status,
     connect,
@@ -155,68 +248,132 @@ function WaitlistGroupChatSurface(props: {
     ensureConversationById,
     disconnect,
   } = useXmtp()
-  const { prepare, walletReady } = usePrepareWaitlistMessagingWallet(props.signingReady && props.chatReady)
+  const { prepare, walletReady } = usePrepareWaitlistMessagingWallet(signingReady && chatReady)
   const [prepareError, setPrepareError] = useState<string | null>(null)
   const [prepareBusy, setPrepareBusy] = useState(false)
   const [refreshBusy, setRefreshBusy] = useState(false)
   const [syncTimedOut, setSyncTimedOut] = useState(false)
+  const mismatchRejoinRef = useRef(false)
+
+  const groupIdCandidates = useMemo(
+    () =>
+      collectWaitlistGroupIdCandidates({
+        groupId,
+        envGroupId,
+        vaultGroupId,
+      }),
+    [envGroupId, groupId, vaultGroupId],
+  )
+
+  const syncWaitlistGroups = useCallback(async () => {
+    let resolved = null
+    for (const candidateId of groupIdCandidates) {
+      resolved = await ensureConversationById(candidateId)
+      if (resolved) break
+    }
+    if (!resolved) {
+      await refreshConversations()
+    }
+    return resolved
+  }, [ensureConversationById, groupIdCandidates, refreshConversations])
 
   const handleConnectMessaging = useCallback(async () => {
     setPrepareError(null)
     setPrepareBusy(true)
     try {
+      const expected = xmtpMemberAddress?.trim().toLowerCase() ?? null
+      const actual = identityAddress?.trim().toLowerCase() ?? null
+      if (status === 'connected' && expected && actual && expected !== actual) {
+        disconnect()
+      }
       const prepared = await prepare()
       if (!prepared.ok) {
         setPrepareError(prepared.error)
         return
       }
       await connect('user')
+      retryJoin()
+      await syncWaitlistGroups()
+    } catch (err) {
+      setPrepareError(err instanceof Error ? err.message : String(err))
     } finally {
       setPrepareBusy(false)
     }
-  }, [connect, prepare])
+  }, [connect, disconnect, identityAddress, prepare, retryJoin, status, syncWaitlistGroups, xmtpMemberAddress])
 
   const handleReconnectMessaging = useCallback(async () => {
     disconnect()
-    props.retryJoin()
+    retryJoin()
     await handleConnectMessaging()
-  }, [disconnect, handleConnectMessaging, props])
+  }, [disconnect, handleConnectMessaging, retryJoin])
 
   const identityMismatch = useMemo(() => {
-    const expected = props.xmtpMemberAddress?.trim().toLowerCase() ?? null
+    const expected = xmtpMemberAddress?.trim().toLowerCase() ?? null
     const actual = identityAddress?.trim().toLowerCase() ?? null
     if (!expected || !actual) return false
     return expected !== actual
-  }, [identityAddress, props.xmtpMemberAddress])
+  }, [identityAddress, xmtpMemberAddress])
 
-  const groupConversation = useMemo(() => {
-    const groupId = props.groupId
-    if (!groupId) return null
-    return (
-      conversations.find(
-        (conversation) =>
-          conversation.type === 'group' &&
-          (conversation.id === groupId || conversation.id.toLowerCase() === groupId.toLowerCase()),
-      ) ?? null
-    )
-  }, [conversations, props.groupId])
+  const groupConversation = useMemo(
+    () => findWaitlistGroupConversation(conversations, groupIdCandidates),
+    [conversations, groupIdCandidates],
+  )
 
   const handleRefreshGroup = useCallback(async () => {
-    if (!props.groupId) {
+    if (groupIdCandidates.length === 0) {
       await refreshConversations()
       return
     }
     setRefreshBusy(true)
     setSyncTimedOut(false)
     try {
-      await ensureConversationById(props.groupId)
+      await syncWaitlistGroups()
     } finally {
       setRefreshBusy(false)
     }
-  }, [ensureConversationById, props.groupId, refreshConversations])
+  }, [groupIdCandidates.length, refreshConversations, syncWaitlistGroups])
+
+  const isConnecting = status === 'signing' || status === 'connecting'
+  const messagingReady = status === 'connected'
+  const staleAwaitingJoin = messagingReady && joinStatus === 'awaiting_messaging'
+  const needsConnectMessaging = !messagingReady && !isConnecting
+  const statusMessage =
+    staleAwaitingJoin
+      ? waitlistChatStatusMessage('joining')
+      : needsConnectMessaging
+        ? waitlistChatStatusMessage('awaiting_messaging')
+        : joinStatus !== 'idle'
+          ? waitlistChatStatusMessage(joinStatus)
+          : null
 
   useEffect(() => {
-    if (status !== 'connected' || props.joinStatus !== 'executed' || !props.groupId || groupConversation) {
+    if (
+      !messagingReady ||
+      !groupIdMismatch ||
+      joinStatus !== 'executed' ||
+      groupConversation ||
+      mismatchRejoinRef.current
+    ) {
+      return
+    }
+    mismatchRejoinRef.current = true
+    retryJoin()
+  }, [groupConversation, groupIdMismatch, joinStatus, messagingReady, retryJoin])
+
+  useEffect(() => {
+    if (
+      status !== 'connected' ||
+      groupIdCandidates.length === 0 ||
+      groupConversation
+    ) {
+      setSyncTimedOut(false)
+      return
+    }
+    const shouldSync =
+      joinStatus === 'executed' ||
+      joinStatus === 'pending' ||
+      joinStatus === 'executing'
+    if (!shouldSync) {
       setSyncTimedOut(false)
       return
     }
@@ -228,7 +385,7 @@ function WaitlistGroupChatSurface(props: {
     const tick = async () => {
       if (cancelled || attempts >= maxAttempts) return
       attempts += 1
-      await ensureConversationById(props.groupId!)
+      await syncWaitlistGroups()
       if (cancelled) return
       if (attempts >= maxAttempts) {
         setSyncTimedOut(true)
@@ -244,11 +401,12 @@ function WaitlistGroupChatSurface(props: {
       cancelled = true
       window.clearInterval(intervalId)
     }
-  }, [ensureConversationById, groupConversation, props.groupId, props.joinStatus, status])
+  }, [groupConversation, groupIdCandidates.length, joinStatus, status, syncWaitlistGroups])
 
-  const isConnecting = status === 'signing' || status === 'connecting'
-  const messagingReady = status === 'connected'
-  const statusMessage = props.joinStatus !== 'idle' ? waitlistChatStatusMessage(props.joinStatus) : null
+  useEffect(() => {
+    if (!staleAwaitingJoin) return
+    retryJoin()
+  }, [retryJoin, staleAwaitingJoin])
 
   if (localStateResetRequired) {
     return (
@@ -264,7 +422,7 @@ function WaitlistGroupChatSurface(props: {
     )
   }
 
-  if (!messagingReady && !isConnecting) {
+  if (needsConnectMessaging) {
     const displayError = prepareError ?? error
     return (
       <div className="space-y-3 rounded-xl border border-white/10 bg-black/40 p-4 text-center">
@@ -281,11 +439,11 @@ function WaitlistGroupChatSurface(props: {
           type="button"
           variant="primary"
           size="sm"
-          loading={prepareBusy}
-          disabled={prepareBusy}
+          loading={prepareBusy || isConnecting}
+          disabled={prepareBusy || isConnecting}
           onClick={() => void handleConnectMessaging()}
         >
-          Connect messaging
+          {isConnecting ? 'Connecting…' : 'Connect messaging'}
         </Button>
         {installationLimitInboxId ? (
           <Button type="button" variant="secondary" size="sm" onClick={() => void resetInstallations()}>
@@ -312,13 +470,32 @@ function WaitlistGroupChatSurface(props: {
             {statusMessage}
           </p>
         ) : null}
-        {props.joinActionError && (props.joinStatus === 'failed' || props.joinStatus === 'error') ? (
-          <p className="text-xs text-red-300">{props.joinActionError}</p>
+        {joinActionError &&
+        (joinStatus === 'failed' ||
+          joinStatus === 'error' ||
+          joinStatus === 'pending' ||
+          joinStatus === 'executing') ? (
+          <p className="text-xs text-red-300">{joinActionError}</p>
+        ) : null}
+        {groupIdMismatch ? (
+          <p className="text-xs text-amber-200/90">
+            Waitlist chat env group id ({envGroupId?.slice(0, 8)}…) differs from the live keepr
+            vault ({vaultGroupId?.slice(0, 8)}…). We are re-joining on the vault group and checking
+            both ids in this browser.
+          </p>
         ) : null}
         {identityMismatch ? (
           <p className="text-xs text-amber-200/90">
             Messaging opened the wrong wallet inbox for waitlist chat. Reconnect messaging so we use your
-            waitlist wallet, then retry join.
+            waitlist wallet ({xmtpMemberAddress?.slice(0, 6)}…{xmtpMemberAddress?.slice(-4)}),
+            then retry join.
+          </p>
+        ) : null}
+        {identityAddress && xmtpMemberAddress && !identityMismatch && joinStatus === 'executed' ? (
+          <p className="text-[11px] text-zinc-500">
+            Syncing inbox {identityAddress.slice(0, 6)}…{identityAddress.slice(-4)} for{' '}
+            {groupIdCandidates.length > 1 ? `${groupIdCandidates.length} group ids` : 'group'}{' '}
+            {groupIdCandidates[0]?.slice(0, 8)}…
           </p>
         ) : null}
         {syncTimedOut ? (
@@ -337,13 +514,18 @@ function WaitlistGroupChatSurface(props: {
           >
             Refresh conversations
           </Button>
-          {identityMismatch || syncTimedOut ? (
+          {identityMismatch || syncTimedOut || joinStatus === 'executed' ? (
             <Button type="button" variant="secondary" size="sm" onClick={() => void handleReconnectMessaging()}>
               Reconnect messaging
             </Button>
           ) : null}
-          {(props.joinStatus === 'failed' || props.joinStatus === 'error' || syncTimedOut) && (
-            <Button type="button" variant="primary" size="sm" onClick={props.retryJoin}>
+          {(joinStatus === 'failed' ||
+            joinStatus === 'error' ||
+            joinStatus === 'pending' ||
+            joinStatus === 'executing' ||
+            syncTimedOut ||
+            groupIdMismatch) && (
+            <Button type="button" variant="primary" size="sm" onClick={retryJoin}>
               Retry join
             </Button>
           )}
@@ -354,12 +536,12 @@ function WaitlistGroupChatSurface(props: {
 
   return (
     <div className="space-y-2">
-      {statusMessage && props.joinStatus !== 'executed' ? (
+      {statusMessage && joinStatus !== 'executed' ? (
         <p className="text-[11px] text-zinc-500">{statusMessage}</p>
       ) : null}
       <ChatWindow
         conversationId={groupConversation.id}
-        conversationName={groupConversation.name || props.groupName}
+        conversationName={groupConversation.name || groupName}
         conversationType="group"
         conversationImageUrl={groupConversation.imageUrl}
         minimized={false}

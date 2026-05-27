@@ -284,3 +284,89 @@ export function buildNotRegisteredDmMessage(params: {
   }
   return `Address ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Ask the recipient to open an XMTP-enabled app on the same environment, then retry.`
 }
+
+// ---------------------------------------------------------------------------
+// Conversation lookup (shared with waitlist group sync recovery)
+// ---------------------------------------------------------------------------
+
+export function conversationIdsEqual(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  return String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase()
+}
+
+export type ConversationLike = {
+  id: string
+  sync?: () => Promise<unknown>
+}
+
+export type ConversationsApiLike = {
+  sync: () => Promise<unknown>
+  getConversationById: (id: string) => Promise<ConversationLike | null>
+  list: () => Promise<ConversationLike[]>
+  listGroups?: () => Promise<ConversationLike[]>
+}
+
+async function syncConversationIfSupported(convo: ConversationLike): Promise<void> {
+  if (typeof convo.sync === 'function') {
+    await convo.sync().catch(() => undefined)
+  }
+}
+
+export async function resolveConversationById(
+  conversationsApi: ConversationsApiLike,
+  conversationId: string,
+): Promise<ConversationLike | null> {
+  const normalizedId = conversationId.trim()
+  if (!normalizedId) return null
+
+  const tryGet = async (): Promise<ConversationLike | null> => {
+    try {
+      const convo = await conversationsApi.getConversationById(normalizedId)
+      if (!convo) return null
+      await syncConversationIfSupported(convo)
+      return convo
+    } catch {
+      return null
+    }
+  }
+
+  const direct = await tryGet()
+  if (direct) return direct
+
+  try {
+    await conversationsApi.sync()
+  } catch {
+    // best effort
+  }
+
+  const afterSync = await tryGet()
+  if (afterSync) return afterSync
+
+  try {
+    const convos = await conversationsApi.list()
+    const match = convos.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
+    if (match) {
+      await syncConversationIfSupported(match)
+      return match
+    }
+  } catch {
+    // continue
+  }
+
+  if (typeof conversationsApi.listGroups === 'function') {
+    try {
+      const groups = await conversationsApi.listGroups()
+      const match = groups.find((convo) => conversationIdsEqual(convo.id, normalizedId)) ?? null
+      if (match) {
+        await syncConversationIfSupported(match)
+        return match
+      }
+    } catch {
+      // continue
+    }
+  }
+
+  return null
+}

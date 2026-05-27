@@ -28,6 +28,8 @@ type WaitlistXmtpStatusResponse = {
   configured: boolean
   vaultConfigured: boolean
   groupId: string | null
+  envGroupId: string | null
+  vaultGroupId: string | null
   groupIdSource: 'vault' | 'env' | null
   groupIdMismatch: boolean
   groupName: string
@@ -70,11 +72,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const groupResolution = await resolveWaitlistGroupId()
   const groupId = groupResolution.groupId
   const vaultConfigured = await isWaitlistChatVaultConfigured()
-  const configured = Boolean(groupId && vaultConfigured)
+  const configured = Boolean(groupId)
 
   const db = await getDb()
   if (!db) {
-    return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
+    return res.status(200).json({
+      success: true,
+      data: {
+        configured,
+        vaultConfigured,
+        groupId,
+        envGroupId: groupResolution.envGroupId,
+        vaultGroupId: groupResolution.vaultGroupId,
+        groupIdSource: groupResolution.source,
+        groupIdMismatch: groupResolution.mismatched,
+        groupName: getWaitlistGroupName(),
+        chatReady: false,
+        canJoin: false,
+        executionTrack: 'none-yet' as const,
+        canonicalCswAddress: null,
+        xmtpMemberAddress: null,
+        joinBlockedReason: 'service_unavailable',
+        joinAction: null,
+      },
+    } satisfies ApiEnvelope<WaitlistXmtpStatusResponse>)
   }
 
   const eligibility = await resolveWaitlistChatEligibility(db, authorizedPrincipal.profileId)
@@ -92,11 +113,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       configured,
       vaultConfigured,
       groupId,
+      envGroupId: groupResolution.envGroupId,
+      vaultGroupId: groupResolution.vaultGroupId,
       groupIdSource: groupResolution.source,
       groupIdMismatch: groupResolution.mismatched,
       groupName: getWaitlistGroupName(),
       chatReady: eligibility.chatReady,
-      canJoin: configured && eligibility.chatReady,
+      canJoin: configured && vaultConfigured && eligibility.chatReady,
       executionTrack: eligibility.executionTrack,
       canonicalCswAddress: eligibility.canonicalCswAddress,
       xmtpMemberAddress: eligibility.xmtpMemberAddress,

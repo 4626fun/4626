@@ -155,6 +155,93 @@ describe('useWaitlistChatJoin', () => {
     })
   })
 
+  it('hydrates executed from server join action before messaging connects', async () => {
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useWaitlistChatJoin>[0]) => useWaitlistChatJoin(props),
+      {
+        initialProps: {
+          xmtpMemberAddress: IDENTITY,
+          chatReady: true,
+          enabled: true,
+          messagingReady: false,
+          serverJoinActionStatus: 'executed' as const,
+        },
+      },
+    )
+
+    expect(result.current.status).toBe('executed')
+
+    rerender({
+      xmtpMemberAddress: IDENTITY,
+      chatReady: true,
+      enabled: true,
+      messagingReady: true,
+      serverJoinActionStatus: 'executed' as const,
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('executed')
+    })
+    expect(mockedApiFetch).not.toHaveBeenCalled()
+  })
+
+  it('clears stale awaiting_messaging once messaging is ready for a completed identity', async () => {
+    mockedApiFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { execution: 'executed' },
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useWaitlistChatJoin>[0]) => useWaitlistChatJoin(props),
+      {
+        initialProps: {
+          xmtpMemberAddress: IDENTITY,
+          chatReady: true,
+          enabled: true,
+          messagingReady: false,
+          serverJoinActionStatus: null,
+        },
+      },
+    )
+
+    expect(result.current.status).toBe('awaiting_messaging')
+
+    rerender({
+      xmtpMemberAddress: IDENTITY,
+      chatReady: true,
+      enabled: true,
+      messagingReady: true,
+      serverJoinActionStatus: null,
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('executed')
+    })
+  })
+
+  it('does not re-post join when the server action is already pending', async () => {
+    const { result } = renderHook(() =>
+      useWaitlistChatJoin({
+        xmtpMemberAddress: IDENTITY,
+        chatReady: true,
+        enabled: true,
+        messagingReady: true,
+        serverJoinActionStatus: 'pending',
+      }),
+    )
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('pending')
+    })
+    const joinCalls = mockedApiFetch.mock.calls.filter(([path]) => path === '/api/waitlist/xmtp-join')
+    expect(joinCalls).toHaveLength(0)
+  })
+
   it('maps request timeout to error', async () => {
     vi.useFakeTimers()
     mockedApiFetch.mockImplementation(

@@ -8,6 +8,8 @@ export type WaitlistXmtpStatus = {
   configured: boolean
   vaultConfigured: boolean
   groupId: string | null
+  envGroupId: string | null
+  vaultGroupId: string | null
   groupIdSource: 'vault' | 'env' | null
   groupIdMismatch: boolean
   groupName: string
@@ -24,11 +26,18 @@ export type WaitlistXmtpStatus = {
   } | null
 }
 
-async function fetchWaitlistXmtpStatus(): Promise<WaitlistXmtpStatus | null> {
+async function fetchWaitlistXmtpStatus(): Promise<WaitlistXmtpStatus> {
   const response = await apiFetch('/api/waitlist/xmtp-status')
-  if (!response.ok) return null
-  const json = (await response.json()) as { success?: boolean; data?: WaitlistXmtpStatus }
-  return json.data ?? null
+  const json = (await response.json().catch(() => null)) as {
+    success?: boolean
+    error?: string
+    data?: WaitlistXmtpStatus
+  } | null
+  if (!response.ok || !json?.success || !json.data) {
+    const reason = json?.error ?? `waitlist_xmtp_status_${response.status}`
+    throw new Error(reason)
+  }
+  return json.data
 }
 
 export function useWaitlistXmtpStatus(enabled: boolean) {
