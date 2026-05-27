@@ -49,27 +49,34 @@ strings programs/creator-share-hook/target/deploy/creator_share_hook.so | rg -i 
 
 ## Build fresh bytecode
 
-The committed `.so` is stale. Rebuild before deploy.
+The committed `.so` under `target/deploy/` is **not** tracked in git and may be stale. Rebuild before deploy.
 
-### Toolchain (current blocker)
+### Toolchain requirement (edition 2024)
 
-`cargo build-sbf` / `anchor build` may fail on `indexmap` / Rust **edition2024** with Cargo 1.84. Fix options (pick one):
+Anchor 1.0 / `solana-address` 2.6 pull host-side proc-macro deps (`wincode`, etc.) that use **Rust edition 2024**. Solana **platform-tools v1.51** bundles **Cargo 1.84**, which cannot parse those manifests.
 
-1. **Solana/Agave toolchain with newer cargo** — use the Solana install active release (`~/.local/share/solana/install/active_release/bin/cargo-build-sbf`).
-2. **Pin transitive deps** — add a workspace `Cargo.lock` pin so `indexmap` stays on an edition-2021 release (temporary until Solana ships newer cargo).
-3. **Nightly cargo** — only if your SBF toolchain accepts it; verify `.so` on devnet first.
+**Minimum:** platform-tools **v1.52** (Cargo **1.89**). Use the repo build script — do not rely on bare `anchor build` until Anchor forwards `--tools-version`.
 
 ```bash
 cd programs/creator-share-hook
-anchor build
-# or: cargo build-sbf --manifest-path Cargo.toml
+
+# First time or after Cargo.toml dependency bumps:
+bash scripts/pin-sbf-deps.sh
+
+# Canonical SBF build (writes target/deploy/creator_share_hook.so)
+bash scripts/build-sbf.sh
+
+# Optional: regenerate IDL from source (host Anchor CLI)
+cd ../.. && anchor idl build -p creator_share_hook \
+  > programs/creator-share-hook/target/idl/creator_share_hook.json
 ```
 
-Regenerate IDL/types (do not hand-edit after a clean build):
+Override platform-tools version: `SBF_TOOLS_VERSION=v1.54 bash scripts/build-sbf.sh`
+
+From repo root via frontend script:
 
 ```bash
-cd programs/creator-share-hook
-anchor idl build > target/idl/creator_share_hook.json
+pnpm -C frontend ops:build-creator-share-hook
 ```
 
 ### Post-build verification (must pass before mainnet)
