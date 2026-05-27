@@ -1,11 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import {
-  handleOptions,
-  setCache,
-  setCors,
-  setNoStore,
-} from '../../../server/zora/_shared.js'
+import { handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
+import { setNoStore } from '../../../packages/server-core/src/index.js'
 import { isDuneConfigured, runDuneSqlRows } from '../../../server/_lib/dune/duneApi.js'
 import { isDuneMetricKey, listDuneMetricKeys, loadDuneMetricSql } from '../../../server/_lib/dune/duneMetricSql.js'
 

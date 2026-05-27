@@ -28,8 +28,8 @@ export function isDuneMetricKey(value: string): value is DuneMetricKey {
 
 export function loadDuneMetricSql(metric: DuneMetricKey): string {
   const file = METRIC_SQL_FILES[metric]
-  const repoRoot = resolve(import.meta.dirname, '../../../..')
-  const path = resolve(repoRoot, 'docs/operations/dune/queries', file)
+  // Bundled next to this module for Vercel (project root is frontend/, not monorepo root).
+  const path = resolve(import.meta.dirname, 'queries', file)
   const raw = readFileSync(path, 'utf8')
   const sql = stripSqlComments(raw)
   if (!sql) {
