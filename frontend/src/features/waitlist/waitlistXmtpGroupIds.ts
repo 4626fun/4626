@@ -30,6 +30,10 @@ export function findWaitlistGroupConversation<T extends { id: string; type: stri
 ): T | null {
   if (groupIds.length === 0) return null
   const normalizedTargets = new Set(groupIds.map((id) => id.trim().toLowerCase()))
+  const byId = conversations.find((conversation) =>
+    normalizedTargets.has(conversation.id.trim().toLowerCase()),
+  )
+  if (byId) return byId
   return (
     conversations.find(
       (conversation) =>

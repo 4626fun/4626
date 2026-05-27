@@ -254,6 +254,8 @@ function WaitlistGroupChatSurface(props: {
   const [refreshBusy, setRefreshBusy] = useState(false)
   const [syncTimedOut, setSyncTimedOut] = useState(false)
   const mismatchRejoinRef = useRef(false)
+  const autoRecoveryRef = useRef(false)
+  const [autoRecoveryBusy, setAutoRecoveryBusy] = useState(false)
 
   const groupIdCandidates = useMemo(
     () =>
@@ -409,6 +411,38 @@ function WaitlistGroupChatSurface(props: {
     retryJoin()
   }, [retryJoin, staleAwaitingJoin])
 
+  useEffect(() => {
+    if (
+      !syncTimedOut ||
+      joinStatus !== 'executed' ||
+      groupConversation ||
+      autoRecoveryRef.current ||
+      autoRecoveryBusy
+    ) {
+      return
+    }
+    autoRecoveryRef.current = true
+    setAutoRecoveryBusy(true)
+    void (async () => {
+      try {
+        setSyncTimedOut(false)
+        disconnect()
+        await resetLocalState()
+        await handleConnectMessaging()
+      } finally {
+        setAutoRecoveryBusy(false)
+      }
+    })()
+  }, [
+    autoRecoveryBusy,
+    disconnect,
+    groupConversation,
+    handleConnectMessaging,
+    joinStatus,
+    resetLocalState,
+    syncTimedOut,
+  ])
+
   if (localStateResetRequired) {
     return (
       <div className="space-y-3 rounded-xl border border-amber-400/20 bg-amber-500/5 p-3">
@@ -468,7 +502,9 @@ function WaitlistGroupChatSurface(props: {
       <div className="space-y-2">
         {statusMessage ? (
           <p className="text-xs text-zinc-400" role="status" aria-live="polite">
-            {statusMessage}
+            {autoRecoveryBusy
+              ? 'Refreshing your waitlist chat inbox…'
+              : statusMessage}
           </p>
         ) : null}
         {joinActionError &&

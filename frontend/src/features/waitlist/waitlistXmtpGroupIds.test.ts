@@ -34,4 +34,12 @@ describe('waitlistXmtpGroupIds', () => {
     )
     expect(match?.id).toBe('543a2ed196de4aa6a02df5145c5fdfaf')
   })
+
+  it('matches by conversation id even when type metadata is missing', () => {
+    const match = findWaitlistGroupConversation(
+      [{ id: 'ed6fbda34f2614536df5cec08dff2266', type: 'dm' }],
+      ['ed6fbda34f2614536df5cec08dff2266'],
+    )
+    expect(match?.id).toBe('ed6fbda34f2614536df5cec08dff2266')
+  })
 })
