@@ -1,6 +1,6 @@
 # AKITA Solana share-mesh audit
 
-Gap analysis for grandfathered AKITA against [Solana share mesh + lottery policy](./solana-share-mesh-lottery-policy.md).
+Gap analysis for AKITA vault against [Solana share mesh + lottery policy](./solana-share-mesh-lottery-policy.md).
 
 Audit date: 2026-05-25. Sources: `AKITA_DEFAULTS`, root `.env` (`OVAULT_*`), `kpr/.env` orchestrator vars, `verify-solana-mint-parity.ts` (live Base + Solana RPC).
 
@@ -26,8 +26,8 @@ Base ShareOFT lottery on Uniswap buys is the **live** jackpot path today.
 | `creatorMesh(akitaToken)` on composer | **NOT configured** | All zeros — verified 2026-05-25 via `read-akita-ovault-mesh-onchain.ts` |
 | Split batcher `getOVaultRuntimeConfig` | **Enabled on v1.11.2-pipe-a** | `0xa99058…0651` — `hubComposer=0x7dF44…CD1`, `solanaEid=30168`, `enabled=true` (verified 2026-05-26) |
 | Batcher `solanaShareOftPeer()` | **Unset** | Zero — blocks greenfield Pipe A finalize until LZ share-mesh peer bytes32 is wired |
-| AKITA wrapper `isBeneficiaryOperator(composer)` | **N/A** | Grandfathered wrapper predates beneficiary-operator gate |
-| `solana_ovault_mesh` paid feature | Unknown for AKITA | Grandfathered vault; may predate paid strategy rows |
+| AKITA wrapper `isBeneficiaryOperator(composer)` | **N/A** | Wrapper deployed before beneficiary-operator gate |
+| `solana_ovault_mesh` paid feature | Unknown for AKITA | Vault may predate paid strategy rows |
 | `shareMeshMint` / `assetMeshMint` | **Not in repo for AKITA** | No deploy-session mesh mint pubkeys recorded |
 | Composer beneficiary on AKITA wrapper | **Cannot verify** | Old wrapper ABI — must upgrade/wire wrapper or use operator path before `configureCreatorMesh` |
 
@@ -57,7 +57,7 @@ pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
 # exit 2: adapter_not_registered
 ```
 
-## Bridge-wrapped creator SPL (legacy Pipe C — not lottery token)
+## Bridge-wrapped creator SPL (Pipe C — wrong grain for lottery)
 
 Legacy adapter `0x90F578…` / `HuY4…9ouR` may still hold historical mapping — **not** canonical. Bridge-wrapped creator SPL parity: `pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts --creator 0x<creator>`.
 
@@ -84,7 +84,7 @@ Enabling `relay_entries` today would relay hook entries keyed to **creator SPL**
 | Transfer hook + pool on **same** mint | **Product fork** — B1: standard SPL mesh + Meteora; B2: Token-2022 + Meteora admin `token_badge` |
 | `relay_entries` enabled | **Should stay off** |
 
-## Meteora / provisioner (legacy vs target)
+## Meteora / provisioner (deprecated path vs target)
 
 | Path | Asset | Lottery? |
 |------|-------|----------|
@@ -106,7 +106,7 @@ Meteora **permissioned** Token-2022 extensions (incl. `TransferHook`) require ad
 1. Read on-chain: `OVaultHubComposer.creatorMesh(0x5b6741…)` and batcher `getOVaultRuntimeConfig()`.
 2. If mesh unset: operator wiring via `OperationalWiring.s.sol` / registry peer seeding + `configureCreatorMesh` (asset mesh + **share mesh** tokens, peers, EID 30168).
 3. Bridge AKITA ShareOFT `0x4df30f…` → Solana share mesh (record mint pubkey as **canonical lottery Solana mint**).
-4. **Set Solana mint display to product convention:** symbol **`■AKITA`**, name **`Akita Share Token`** (not `wsAKITA`, not creator SPL `akita`/`akita`). Run `prepare-token-badge` after mint is live.
+4. **Set Solana mint display:** symbol **`■AKITA`**, name **`Akita Share Token`** (same `■<TICKER>` rule as all creators). Run `prepare-token-badge` after mint is live.
 
 ### Phase B — Pool + lottery relay
 
@@ -137,7 +137,7 @@ SOLANA_ORCHESTRATOR_RELAY_ENTRIES_ENABLED=1
 | `relay_entries` on creator SPL | Wrong lottery entries if enabled |
 | Adapter not registered | Strategy bridge + some preflight paths |
 | Meteora + hook / badge fork unresolved | Solana pool-buy + lottery relay design (B1 vs B2) |
-| Grandfathered vault / no registry row | Keeper HTTP fan-out (separate — see keeper activation doc) |
+| Vault not in registry row | Keeper HTTP fan-out (separate — see keeper activation doc) |
 
 ## Cross-links
 

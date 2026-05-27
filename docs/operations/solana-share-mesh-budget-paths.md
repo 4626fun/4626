@@ -166,7 +166,7 @@ Replace the measured table above with Solscan payer deltas after the first mainn
 
 See mint-type fork in [policy Phase B](./solana-share-mesh-lottery-policy.md#phase-b--pool--lottery-relay). Summary:
 
-1. **Pick lane** — **B1:** LZ standard SPL share mesh; **B2:** Token-2022 + `TransferHook` (one mint for pool + relay; not the legacy creator SPL `9JWh…`).
+1. **Pick lane** — **B1:** LZ standard SPL share mesh; **B2:** Token-2022 + `TransferHook` (one mint for pool + relay; not creator SPL `9JWh…`).
 2. **B2 only (before pool create):** Meteora admin `token_badge` → `setup-creator-full` hook PDAs → allowlist Meteora program in `CreatorConfig`.
 3. Meteora DLMM — **B1:** base = LZ share mesh mint; **B2:** base = hook mint from step 2. Quote = WSOL/USDC. `ACTIVATION_DELAY_SECONDS=0`; `METEORA_HAS_ALPHA_VAULT=1` only for Alpha Vault lane.
 4. Seed LP (bridge share supply from Base first if needed).
@@ -200,42 +200,43 @@ Meteora DLMM is **permissionless for standard SPL mints** — no separate listin
 | **Display metadata** | Wallets/Meteora/Jupiter read mint name/symbol | Set at **LZ share-mesh deploy** + `prepare-token-badge` (see below) |
 | **Token-2022 + TransferHook (B2 only)** | Pool create fails without admin badge | Meteora `token_badge` **before** pool create, or use standard SPL mesh (B1) |
 
-### Share mesh display naming (product convention)
+### Share mesh display naming (product convention — all creators)
 
-4626 share tokens use a **black-square prefix** in product UI (`frontend/src/lib/tokens/tokenSymbols.ts`):
+Same rule for **every** creator, including AKITA. No special cases, no alternate tickers.
 
-| Surface | AKITA example |
-|---------|----------------|
-| **4626 app / docs (target label)** | **`■AKITA`** (U+25A0 + ticker) |
-| **Base ShareOFT on-chain today (legacy)** | `wsAKITA` / `Wrapped AKITA Shares` — app maps `ws*` → `■AKITA` |
-| **Creator SPL `9JWh…` (wrong grain)** | `akita` / `akita` — **not** the share token |
+Formula (`frontend/src/lib/tokens/tokenSymbols.ts`):
 
-**Solana share mesh should use the product label on-chain**, not the legacy `wsAKITA` ticker and not creator-coin lowercase `akita`.
+| Field | Rule | Examples |
+|-------|------|----------|
+| **Symbol** | `■` + uppercase underlying ticker | `■AKITA`, `■JESSE`, `■MYCOIN` |
+| **Name** | `{Creator} Share Token` | `Akita Share Token`, `Jesse Share Token` |
 
-At **LayerZero share-mesh OFT deploy** (Phase A), set Solana mint metadata to:
+At **LayerZero share-mesh OFT deploy** (Phase A), set Solana mint metadata to that symbol/name for the vault’s creator ticker.
 
-| Field | AKITA value |
-|-------|-------------|
-| **Symbol** | `■AKITA` |
-| **Name** | `Akita Share Token` (or `Wrapped AKITA Shares` if matching Base name exactly) |
+**Wrong grains (do not use for share mesh):**
 
-`■AKITA` is 8 UTF-8 bytes — within bridge/token-list symbol limits. Do **not** reuse the creator-coin lowercase wrap (`akita`/`akita`).
+| Grain | Example | Why |
+|-------|---------|-----|
+| Creator SPL (Pipe C) | `akita` / `akita` on `9JWh…` | Creator coin wrap, not vault shares |
+| `ws*` / unprefixed share tickers | `wsAKITA` | Not the product symbol; use **`■<TICKER>`** |
 
-After the mint exists, publish wallet/indexer JSON:
+After the mint exists, publish wallet/indexer JSON (substitute per creator):
 
 ```bash
 TOKEN_MINT=<share_mesh_mint_pubkey> \
-TOKEN_NAME="Akita Share Token" \
-TOKEN_SYMBOL='■AKITA' \
+TOKEN_NAME="<Creator> Share Token" \
+TOKEN_SYMBOL='■<TICKER>' \
 TOKEN_METADATA_URI=<stable_https_or_ipfs_uri> \
-CREATOR_TOKEN=0x5b674196812451b7cec024fe9d22d2c0b172fa75 \
+CREATOR_TOKEN=0x<creator_coin> \
 BADGE_TARGET=meteora \
 pnpm -C kpr solana:prepare-token-badge
 ```
 
-Greenfield creators: deploy UI already derives `■<TICKER>` for new ShareOFT lanes; AKITA is grandfathered with `wsAKITA` on Base only.
+AKITA instance: `TOKEN_SYMBOL='■AKITA'`, `TOKEN_NAME='Akita Share Token'`, `CREATOR_TOKEN=0x5b674196812451b7cec024fe9d22d2c0b172fa75`.
 
-**Share-mesh target (Path 2):** pair **LZ share-mesh mint** + WSOL — not legacy bridge-wrapped creator SPL (`9JWh…`).
+Deploy UI derives `■<TICKER>` for all vault deploys; Solana LZ deploy must match.
+
+**Share-mesh target (Path 2):** pair **LZ share-mesh mint** + WSOL — not bridge-wrapped creator SPL (`9JWh…`).
 
 **Verify after provisioning:**
 
@@ -247,7 +248,7 @@ open "https://app.meteora.ag/pools?search=<share_mesh_mint_or_pool_pda>"
 # Search mint on jup.ag — "all tokens" if not yet on strict list
 ```
 
-**Legacy provisioner note:** `SOLANA_AUTO_POOL=1` on `POST /provision` targets **creator SPL**, not share mesh — and passes `METEORA_HAS_ALPHA_VAULT=1` + 7-day activation for Alpha Vault launch. Do not use it for Path 2 share-mesh lottery.
+**Deprecated provisioner path:** `SOLANA_AUTO_POOL=1` on `POST /provision` targets **creator SPL**, not share mesh — and passes `METEORA_HAS_ALPHA_VAULT=1` + 7-day activation for Alpha Vault launch. Do not use for Path 2 share-mesh lottery.
 
 ---
 
