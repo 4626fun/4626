@@ -80,7 +80,7 @@ describe('resolveConversationById', () => {
   })
 
   it('uses syncAll and listGroups when resolving waitlist group memberships', async () => {
-    const { ConsentState } = await import('@xmtp/browser-sdk')
+    const { ConsentEntityType, ConsentState } = await import('@xmtp/browser-sdk')
     const { resolveConversationById } = await import('./xmtpHelpers')
 
     const group = {
@@ -89,17 +89,33 @@ describe('resolveConversationById', () => {
       consentState: vi.fn(async () => ConsentState.Unknown),
       updateConsentState: vi.fn(async () => undefined),
     }
+    const list = vi.fn(async () => [])
+    const listGroups = vi.fn(async () => [group])
     const api = {
       sync: vi.fn(async () => undefined),
       syncAll: vi.fn(async () => undefined),
       getConversationById: vi.fn(async () => null),
-      list: vi.fn(async () => []),
-      listGroups: vi.fn(async () => [group]),
+      list,
+      listGroups,
+    }
+    const preferencesApi = {
+      setConsentStates: vi.fn(async () => undefined),
     }
 
-    const resolved = await resolveConversationById(api, 'ed6fbda34f2614536df5cec08dff2266')
+    const resolved = await resolveConversationById(api, 'ed6fbda34f2614536df5cec08dff2266', {
+      preferencesApi,
+    })
     expect(resolved?.id).toBe(group.id)
+    expect(preferencesApi.setConsentStates).toHaveBeenCalledWith([
+      {
+        entityType: ConsentEntityType.GroupId,
+        entity: group.id,
+        state: ConsentState.Allowed,
+      },
+    ])
     expect(api.syncAll).toHaveBeenCalled()
+    expect(list).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
+    expect(listGroups).toHaveBeenCalledWith({ consentStates: [ConsentState.Unknown, ConsentState.Allowed] })
     expect(group.updateConsentState).toHaveBeenCalledWith(ConsentState.Allowed)
   })
 })

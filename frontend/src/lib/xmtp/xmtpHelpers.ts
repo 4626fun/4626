@@ -2,7 +2,7 @@
 // No React, no XMTP client instantiation, no module-level singleton state.
 // Safe for unit testing in isolation.
 
-import { ConsentState } from '@xmtp/browser-sdk'
+import { ConsentEntityType, ConsentState } from '@xmtp/browser-sdk'
 import { getAddress, isAddress } from 'viem'
 
 // Re-declared locally to avoid a circular import with provider.tsx.
@@ -304,12 +304,22 @@ export type ConversationLike = {
   updateConsentState?: (state: ConsentState) => Promise<unknown>
 }
 
+export type ListConversationsOptionsLike = {
+  consentStates?: ConsentState[]
+}
+
 export type ConversationsApiLike = {
   sync: () => Promise<unknown>
   syncAll?: (consentStates?: ConsentState[]) => Promise<unknown>
   getConversationById: (id: string) => Promise<ConversationLike | null>
-  list: () => Promise<ConversationLike[]>
-  listGroups?: () => Promise<ConversationLike[]>
+  list: (options?: ListConversationsOptionsLike) => Promise<ConversationLike[]>
+  listGroups?: (options?: ListConversationsOptionsLike) => Promise<ConversationLike[]>
+}
+
+export type PreferencesApiLike = {
+  setConsentStates?: (
+    records: Array<{ entityType: ConsentEntityType; entity: string; state: ConsentState }>,
+  ) => Promise<unknown>
 }
 
 /** Consent states included when pulling server-side group memberships into a fresh browser install. */
@@ -317,6 +327,29 @@ export const GROUP_MEMBERSHIP_CONSENT_SYNC_STATES = [
   ConsentState.Unknown,
   ConsentState.Allowed,
 ] as const
+
+export function groupMembershipListOptions(): ListConversationsOptionsLike {
+  return { consentStates: [...GROUP_MEMBERSHIP_CONSENT_SYNC_STATES] }
+}
+
+export async function allowGroupConsentById(
+  preferencesApi: PreferencesApiLike | null | undefined,
+  groupId: string,
+): Promise<void> {
+  const normalizedId = groupId.trim()
+  if (!normalizedId || typeof preferencesApi?.setConsentStates !== 'function') return
+  try {
+    await preferencesApi.setConsentStates([
+      {
+        entityType: ConsentEntityType.GroupId,
+        entity: normalizedId,
+        state: ConsentState.Allowed,
+      },
+    ])
+  } catch {
+    // best effort
+  }
+}
 
 async function syncConversationIfSupported(convo: ConversationLike): Promise<void> {
   if (typeof convo.sync === 'function') {
@@ -360,10 +393,11 @@ async function findConversationInLists(
   conversationsApi: ConversationsApiLike,
   normalizedId: string,
 ): Promise<ConversationLike | null> {
+  const listOptions = groupMembershipListOptions()
   const sources: Array<() => Promise<ConversationLike[]>> = [
-    () => conversationsApi.list(),
+    () => conversationsApi.list(listOptions),
     ...(typeof conversationsApi.listGroups === 'function'
-      ? [() => conversationsApi.listGroups!()]
+      ? [() => conversationsApi.listGroups!(listOptions)]
       : []),
   ]
 
@@ -389,9 +423,12 @@ async function finalizeResolvedConversation(convo: ConversationLike): Promise<Co
 export async function resolveConversationById(
   conversationsApi: ConversationsApiLike,
   conversationId: string,
+  options?: { preferencesApi?: PreferencesApiLike | null },
 ): Promise<ConversationLike | null> {
   const normalizedId = conversationId.trim()
   if (!normalizedId) return null
+
+  await allowGroupConsentById(options?.preferencesApi, normalizedId)
 
   const tryGet = async (): Promise<ConversationLike | null> => {
     try {
@@ -422,13 +459,15 @@ export async function resolveConversationById(
 export async function resolveConversationByIdWithSyncRetries(
   conversationsApi: ConversationsApiLike,
   conversationId: string,
-  options?: { rounds?: number; delayMs?: number },
+  options?: { rounds?: number; delayMs?: number; preferencesApi?: PreferencesApiLike | null },
 ): Promise<ConversationLike | null> {
   const rounds = Math.max(1, options?.rounds ?? 3)
   const delayMs = Math.max(0, options?.delayMs ?? 400)
 
   for (let round = 0; round < rounds; round += 1) {
-    const resolved = await resolveConversationById(conversationsApi, conversationId)
+    const resolved = await resolveConversationById(conversationsApi, conversationId, {
+      preferencesApi: options?.preferencesApi,
+    })
     if (resolved) return resolved
     if (round + 1 >= rounds) break
     await syncConversationsForGroupDiscovery(conversationsApi)

@@ -38,7 +38,19 @@ export function WaitlistGroupChatPanel(props: WaitlistGroupChatPanelProps) {
 function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
   const { signingReady, setupComplete } = props
   const statusQuery = useWaitlistXmtpStatus(setupComplete)
-  const identityHintAddress = statusQuery.data?.xmtpMemberAddress ?? null
+  const chatConfig = statusQuery.data
+  const identityHintAddress = chatConfig?.xmtpMemberAddress ?? null
+
+  if (statusQuery.isLoading && !chatConfig) {
+    return (
+      <section
+        aria-label="Waitlist group chat"
+        className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4"
+      >
+        <LoadingInline label="Loading waitlist chat…" />
+      </section>
+    )
+  }
 
   return (
     <XmtpChatProvider identityHintAddress={identityHintAddress}>

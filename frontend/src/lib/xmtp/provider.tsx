@@ -53,6 +53,7 @@ import {
   resolveConversationById,
   resolveConversationByIdWithSyncRetries,
   syncConversationsForGroupDiscovery,
+  groupMembershipListOptions,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
   buildXmtpDbPath,
@@ -1293,11 +1294,12 @@ export function XmtpChatProvider({
       listGroups?: () => Promise<Array<Conversation | Dm | Group>>
     }
     await syncConversationsForGroupDiscovery(conversationsApi)
-    const convos = await client.conversations.list()
+    const listOptions = groupMembershipListOptions()
+    const convos = await client.conversations.list(listOptions)
     let mergedConvos = [...convos]
     if (typeof conversationsApi.listGroups === 'function') {
       try {
-        const groups = await conversationsApi.listGroups()
+        const groups = await conversationsApi.listGroups(listOptions)
         for (const group of groups) {
           if (!mergedConvos.some((convo) => conversationIdsEqual(convo.id, group.id))) {
             mergedConvos.push(group)
@@ -1339,6 +1341,7 @@ export function XmtpChatProvider({
     const convo = await resolveConversationByIdWithSyncRetries(conversationsApi, normalizedId, {
       rounds: identityHintAddressRef.current ? 5 : 3,
       delayMs: 500,
+      preferencesApi: client.preferences,
     })
     if (!convo) return null
 
