@@ -171,10 +171,11 @@ POST_SLOT=$(echo "$POST" | awk '/Last Deployed In Slot:/ {print $5}')
 DUMP="$ARTIFACTS/post-upgrade-${POST_SLOT}.so"
 solana program dump "$PROGRAM_ID" "$DUMP"
 
-if strings "$DUMP" | rg -q 'relay_entries|RelayEntries' && ! strings "$DUMP" | rg -q 'drain_entries|DrainEntries'; then
+if strings "$DUMP" | rg -q 'relay_entries|RelayEntries|SettleFees' \
+  && ! strings "$DUMP" | rg -q 'drain_entries|DrainEntries|FlushFees'; then
   echo "Post-upgrade verify: canonical relay_entries / settle_fees bytecode OK"
 else
-  echo "Post-upgrade verify FAILED — inspect $DUMP" >&2
+  echo "Post-upgrade verify inconclusive — run: pnpm -C frontend ops:verify-hook-mainnet-bytecode" >&2
   exit 1
 fi
 

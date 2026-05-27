@@ -228,14 +228,20 @@ There is no dual-schema on-chain — legacy env var matches **old bytecode only*
 
 | Field | Value |
 |-------|-------|
-| Date | |
-| Operator | |
-| Pre-upgrade slot | |
-| Post-upgrade slot | |
-| Binary SHA256 | |
-| `anchor --version` / SBF toolchain | |
-| Orchestrator env diff | |
-| B2 mints enabled for relay | (list pubkeys) |
+| Date | 2026-05-27 |
+| Operator | automated (local deployer `7Qi3WW7…`) |
+| Pre-upgrade slot | 402671852 |
+| Post-upgrade slot | **422473128** |
+| Upgrade tx | `4gFYCMYUkQcAGuLXCZSNrfUgPembnnPMnoCAQ2LiGVzQaCPEsbGchpaRqRKLNv5wQzNv6GETbBEe7KohZ7r5vDfG` |
+| Binary SHA256 | `67b95c9765070cdc63e6549a33777184352f20752a40f75b239cd9346195f3a8` |
+| SBF toolchain | platform-tools v1.52 (Cargo 1.89) |
+| Orchestrator env diff | set `SOLANA_HOOK_IX_SCHEMA=canonical`; keep `RELAY_ENTRIES_ENABLED=0` until B2 |
+| B2 mints enabled for relay | (none yet) |
+
+Pre-upgrade backup: `artifacts/creator-share-hook/pre-upgrade-402671852-*.so`
+Post-upgrade dump: `artifacts/creator-share-hook/post-upgrade-422473128.so`
+
+Verify: `pnpm -C frontend ops:verify-hook-mainnet-bytecode` → **PASS (canonical)**
 
 ## Troubleshooting
 
