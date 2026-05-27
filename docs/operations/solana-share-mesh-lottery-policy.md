@@ -2,7 +2,7 @@
 
 Canonical product policy for Solana-side vault shares, pools, and lottery entry. Locked 2026-05-25.
 
-Related: [AKITA Solana share-mesh audit](./akita-solana-share-mesh-audit.md), [AKITA keeper stack activation](./akita-keeper-stack-activation.md), [Solana bridge naming invariant](./solana-bridge-naming-invariant.md).
+Related: [Solana share mesh budget paths](./solana-share-mesh-budget-paths.md), [AKITA Solana share-mesh audit](./akita-solana-share-mesh-audit.md), [AKITA keeper stack activation](./akita-keeper-stack-activation.md), [Solana bridge naming invariant](./solana-bridge-naming-invariant.md).
 
 ## Decisions (locked)
 

@@ -38,6 +38,7 @@
     "solana:init-creator-pdas": "tsx scripts/solana/deploy/initialize-creator-pdas.ts",
     "solana:bridge-supply": "tsx scripts/solana/deploy/bridge-supply.ts",
     "solana:setup-creator-full": "tsx scripts/solana/deploy/setup-creator-full.ts",
+    "solana:cost-probe-devnet": "tsx scripts/solana/cost-probe-devnet.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
