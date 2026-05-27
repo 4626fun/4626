@@ -1550,8 +1550,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
               cswOwnerIndexCache.current.set(ck, idx)
             }
             if (idx === null) {
-              console.warn('[xmtp] Could not resolve CSW owner index for', signerAddr)
-              return sigBytes
+              throw new Error(
+                'Smart contract wallet signature validation failed: could not resolve CSW owner index for XMTP signing',
+              )
             }
             const msgHash = hashMessage(message)
             try {
@@ -1603,11 +1604,51 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         if (alreadyRegistered) return
 
         const { signatureText, signatureRequestId } = await client.unsafe_createInboxSignatureText()
-        if (!signatureText || !signatureRequestId) return
+        if (!signatureText || !signatureRequestId) {
+          throw new Error('XMTP could not create inbox registration signature text for this installation')
+        }
 
         const signature = await activeSigner.signMessage(signatureText)
         const safeSigner = await toSafeSigner(activeSigner, signature)
         await client.unsafe_applySignatureRequest(safeSigner, signatureRequestId)
+
+        if (!(await client.isRegistered())) {
+          throw new Error(`XMTP identity registration did not complete (${activeSigner.type} signer)`)
+        }
+      }
+
+      const registerRestoredInstallationWithFallback = async (
+        client: Client,
+        signers: Signer[],
+      ): Promise<Signer> => {
+        const uniqueSigners: Signer[] = []
+        for (const candidate of signers) {
+          if (!uniqueSigners.some((existing) => existing.type === candidate.type)) {
+            uniqueSigners.push(candidate)
+          }
+        }
+
+        let lastError: unknown = null
+        for (const registrationSigner of uniqueSigners) {
+          try {
+            await registerRestoredInstallation(client, registrationSigner)
+            return registrationSigner
+          } catch (registerErr) {
+            lastError = registerErr
+            const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
+            if (/reject|denied|cancel|user rejected/i.test(registerMsg)) {
+              throw registerErr
+            }
+            console.warn(
+              `[xmtp] In-place registration with ${registrationSigner.type} signer failed; trying next signer if available…`,
+              registerMsg,
+            )
+          }
+        }
+
+        throw lastError instanceof Error
+          ? lastError
+          : new Error(String(lastError ?? 'XMTP identity registration failed for all signer types'))
       }
 
       // Shared setup: sync conversations, start streams, mark connected.
@@ -1846,33 +1887,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           setupConversations: () => setupConversations(buildClient),
           registerWithFallback: async () => {
             const signerSelection = await getSignerSelection()
-            let registrationSigner = signerSelection.signer
-            try {
-              await registerRestoredInstallation(buildClient, registrationSigner)
-              writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
-            } catch (registerErr) {
-              const registerMsg = registerErr instanceof Error ? registerErr.message : String(registerErr)
-              if (registrationSigner.type === 'EOA' && isWrongChainIdError(registerMsg)) {
-                console.warn(
-                  '[xmtp] Wrong chain id while registering restored installation with EOA; retrying SCW on Base (8453)…',
-                )
-                registrationSigner = signerSelection.scwSigner
-                await registerRestoredInstallation(buildClient, registrationSigner)
-                writeStoredSignerType(xmtpIdentityAddress, 'SCW')
-              } else if (
-                registrationSigner.type === 'SCW' &&
-                isScwSignatureValidationError(registerMsg)
-              ) {
-                console.warn(
-                  '[xmtp] SCW signature validation failed while registering restored installation; retrying EOA…',
-                )
-                registrationSigner = signerSelection.eoaSigner
-                await registerRestoredInstallation(buildClient, registrationSigner)
-                writeStoredSignerType(xmtpIdentityAddress, 'EOA')
-              } else {
-                throw registerErr
-              }
-            }
+            const registrationSigner = await registerRestoredInstallationWithFallback(buildClient, [
+              signerSelection.signer,
+              signerSelection.scwSigner,
+              signerSelection.eoaSigner,
+            ])
+            writeStoredSignerType(xmtpIdentityAddress, registrationSigner.type)
           },
           isLocalStateInvalidError: isLocalXmtpStateInvalidError,
         })
@@ -1898,8 +1918,9 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             setLocalStateResetRequired(true)
             setError(
               'XMTP restored local state but identity registration failed. ' +
+              `${finishResult.message} ` +
               'Refusing to auto-create a replacement installation to avoid revoke/grant churn. ' +
-              'Use "Reset local messaging state" only if you intentionally want a fresh installation.',
+              'Approve the wallet signature when prompted, or use "Reset local messaging state" if this browser install should be recreated.',
             )
             return
           }
@@ -2248,7 +2269,11 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         idx = await findCswOwnerIndex(publicClient, xmtpIdentityAddress, signerAddr)
         cswOwnerIndexCache.current.set(ck, idx)
       }
-      if (idx === null) return sigBytes
+      if (idx === null) {
+        throw new Error(
+          'Smart contract wallet signature validation failed: could not resolve CSW owner index for XMTP signing',
+        )
+      }
       const msgHash = hashMessage(message)
       try {
         const typedSig = await walletClient.signTypedData({
