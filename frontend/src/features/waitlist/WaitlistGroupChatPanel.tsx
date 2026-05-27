@@ -45,10 +45,7 @@ function WaitlistGroupChatPanelInner(props: WaitlistGroupChatPanelProps) {
 
   if (statusQuery.isLoading && !chatConfig) {
     return (
-      <section
-        aria-label="Waitlist group chat"
-        className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4"
-      >
+      <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
         <LoadingInline label="Loading waitlist chat…" />
       </section>
     )
@@ -99,10 +96,7 @@ function WaitlistGroupChatPanelBody({
   })
 
   return (
-    <section
-      aria-label="Waitlist group chat"
-      className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4"
-    >
+    <section aria-label="Waitlist group chat" className="space-y-3 pt-1">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 min-w-0">
           <MessageSquare className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden="true" />
@@ -210,13 +204,13 @@ function WaitlistJoinBadge(props: {
 
   const tone =
     joinStatus === 'executed'
-      ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200'
+      ? 'bg-emerald-500/12 text-emerald-200'
       : joinStatus === 'failed' || joinStatus === 'error'
-        ? 'border-red-400/25 bg-red-500/10 text-red-200'
-        : 'border-brand-primary/25 bg-brand-primary/10 text-brand-primary'
+        ? 'bg-red-500/12 text-red-200'
+        : 'bg-brand-primary/12 text-brand-primary'
 
   return (
-    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${tone}`}>
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${tone}`}>
       {label}
     </span>
   )
@@ -268,8 +262,6 @@ function WaitlistGroupChatSurface(props: {
   const [refreshBusy, setRefreshBusy] = useState(false)
   const [syncTimedOut, setSyncTimedOut] = useState(false)
   const mismatchRejoinRef = useRef(false)
-  const autoRecoveryRef = useRef(false)
-  const [autoRecoveryBusy, setAutoRecoveryBusy] = useState(false)
   const [resyncError, setResyncError] = useState<string | null>(null)
 
   const displayJoinActionError = useMemo(() => {
@@ -334,7 +326,7 @@ function WaitlistGroupChatSurface(props: {
       if (!options?.skipJoinRetry && joinStatus !== 'executed') {
         retryJoin()
       }
-      await syncWaitlistGroups({ resyncMembership: joinStatus === 'executed' })
+      await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' })
     } catch (err) {
       setPrepareError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -372,11 +364,11 @@ function WaitlistGroupChatSurface(props: {
     setRefreshBusy(true)
     setSyncTimedOut(false)
     try {
-      await syncWaitlistGroups({ resyncMembership: true })
+      await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' })
     } finally {
       setRefreshBusy(false)
     }
-  }, [groupIdCandidates.length, refreshConversations, syncWaitlistGroups])
+  }, [groupIdCandidates.length, joinStatus, refreshConversations, syncWaitlistGroups])
 
   const isConnecting = status === 'signing' || status === 'connecting'
   const messagingReady = status === 'connected'
@@ -390,11 +382,6 @@ function WaitlistGroupChatSurface(props: {
         : joinStatus !== 'idle'
           ? waitlistChatStatusMessage(joinStatus)
           : null
-
-  useEffect(() => {
-    if (joinStatus !== 'executed' || !messagingReady || groupConversation) return
-    void syncWaitlistGroups({ resyncMembership: true })
-  }, [groupConversation, joinStatus, messagingReady, syncWaitlistGroups])
 
   useEffect(() => {
     if (
@@ -430,13 +417,12 @@ function WaitlistGroupChatSurface(props: {
 
     let cancelled = false
     let attempts = 0
-    const maxAttempts = 40
+    const maxAttempts = 3
 
     const tick = async () => {
       if (cancelled || attempts >= maxAttempts) return
       attempts += 1
-      const shouldResync = attempts === 1 || attempts % 3 === 0
-      await syncWaitlistGroups({ resyncMembership: shouldResync })
+      await syncWaitlistGroups({ resyncMembership: joinStatus !== 'executed' && attempts === 1 })
       if (cancelled) return
       if (attempts >= maxAttempts) {
         setSyncTimedOut(true)
@@ -445,8 +431,12 @@ function WaitlistGroupChatSurface(props: {
 
     void tick()
     const intervalId = window.setInterval(() => {
+      if (attempts >= maxAttempts) {
+        window.clearInterval(intervalId)
+        return
+      }
       void tick()
-    }, 3_000)
+    }, 10_000)
 
     return () => {
       cancelled = true
@@ -459,41 +449,9 @@ function WaitlistGroupChatSurface(props: {
     retryJoin()
   }, [retryJoin, staleAwaitingJoin])
 
-  useEffect(() => {
-    if (
-      !syncTimedOut ||
-      joinStatus !== 'executed' ||
-      groupConversation ||
-      autoRecoveryRef.current ||
-      autoRecoveryBusy
-    ) {
-      return
-    }
-    autoRecoveryRef.current = true
-    setAutoRecoveryBusy(true)
-    void (async () => {
-      try {
-        setSyncTimedOut(false)
-        disconnect()
-        await resetLocalState()
-        await handleConnectMessaging({ skipJoinRetry: true })
-      } finally {
-        setAutoRecoveryBusy(false)
-      }
-    })()
-  }, [
-    autoRecoveryBusy,
-    disconnect,
-    groupConversation,
-    handleConnectMessaging,
-    joinStatus,
-    resetLocalState,
-    syncTimedOut,
-  ])
-
   if (localStateResetRequired) {
     return (
-      <div className="space-y-3 rounded-xl border border-amber-400/20 bg-amber-500/5 p-3">
+      <div className="space-y-3 py-1">
         <p className="text-xs leading-relaxed text-amber-100/90">
           This browser&apos;s XMTP cache no longer validates against your inbox. Reset local messaging state to
           reconnect on 4626.fun.
@@ -508,7 +466,7 @@ function WaitlistGroupChatSurface(props: {
   if (needsConnectMessaging) {
     const displayError = prepareError ?? error
     return (
-      <div className="space-y-3 rounded-xl border border-white/10 bg-black/40 p-4 text-center">
+      <div className="space-y-3 py-1 text-center">
         <p className="text-xs text-zinc-400">
           {displayError ? (
             <span className="text-red-300">{displayError}</span>
@@ -550,9 +508,7 @@ function WaitlistGroupChatSurface(props: {
       <div className="space-y-2">
         {statusMessage ? (
           <p className="text-xs text-zinc-400" role="status" aria-live="polite">
-            {autoRecoveryBusy
-              ? 'Refreshing your waitlist chat inbox…'
-              : statusMessage}
+            {statusMessage}
           </p>
         ) : null}
         {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
@@ -627,17 +583,25 @@ function WaitlistGroupChatSurface(props: {
 
   return (
     <div className="space-y-2">
-      {!groupConversation && joinStatus === 'executed' ? (
-        <p className="text-[11px] text-zinc-500" role="status" aria-live="polite">
-          {autoRecoveryBusy
-            ? 'Refreshing your waitlist chat inbox…'
-            : 'Opening waitlist chat. Messages may take a moment to appear.'}
-        </p>
-      ) : null}
       {statusMessage && joinStatus !== 'executed' ? (
         <p className="text-[11px] text-zinc-500">{statusMessage}</p>
       ) : null}
       {resyncError ? <p className="text-xs text-red-300">{resyncError}</p> : null}
+      {syncTimedOut && !groupConversation ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-xs text-zinc-400">Still syncing this group.</p>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            loading={refreshBusy}
+            disabled={refreshBusy}
+            onClick={() => void handleRefreshGroup()}
+          >
+            Refresh
+          </Button>
+        </div>
+      ) : null}
       <ChatWindow
         conversationId={effectiveGroupId}
         conversationName={groupConversation?.name || groupName}
@@ -645,6 +609,7 @@ function WaitlistGroupChatSurface(props: {
         conversationImageUrl={groupConversation?.imageUrl}
         minimized={false}
         variant="embedded"
+        embeddedChrome="inline"
         onMinimize={() => undefined}
         onClose={() => undefined}
       />

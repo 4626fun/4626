@@ -60,6 +60,8 @@ type Props = {
   onClose: () => void
   onConversationRekey?: (oldConversationId: string, newConversationId: string) => void
   variant?: 'desktop' | 'mobile' | 'embedded'
+  /** When embedded, `inline` drops duplicate header/chrome for parent-hosted surfaces like waitlist chat. */
+  embeddedChrome?: 'framed' | 'inline'
   seedCommandId?: string | null
   onSeedConsumed?: () => void
 }
@@ -262,6 +264,7 @@ export function ChatWindow({
   onClose,
   onConversationRekey,
   variant = 'desktop',
+  embeddedChrome = 'framed',
   seedCommandId = null,
   onSeedConsumed,
 }: Props) {
@@ -754,6 +757,7 @@ export function ChatWindow({
   }
 
   const isEmbedded = variant === 'embedded'
+  const isInlineEmbedded = isEmbedded && embeddedChrome === 'inline'
   const isMobile = variant === 'mobile' || isEmbedded
   const isMobileShell = variant === 'mobile'
   const showCommandCenter = conversationType === 'dm' && Boolean(agentIdentity)
@@ -1156,12 +1160,16 @@ export function ChatWindow({
 
   return (
     <div
-      className={`flex flex-col bg-zinc-900/95 backdrop-blur-xl border border-white/10 overflow-hidden shadow-2xl ${
-        isEmbedded
-          ? 'h-[min(480px,55vh)] w-full rounded-xl'
-          : isMobile
-            ? 'h-full w-full rounded-none'
-            : 'rounded-t-xl'
+      className={`flex flex-col overflow-hidden ${
+        isInlineEmbedded
+          ? 'h-[min(360px,42vh)] w-full rounded-lg bg-black/25'
+          : `bg-zinc-900/95 backdrop-blur-xl border border-white/10 shadow-2xl ${
+              isEmbedded
+                ? 'h-[min(480px,55vh)] w-full rounded-xl'
+                : isMobile
+                  ? 'h-full w-full rounded-none'
+                  : 'rounded-t-xl'
+            }`
       }`}
       style={
         isMobile
@@ -1173,7 +1181,7 @@ export function ChatWindow({
       }
     >
       {/* Header */}
-      {isEmbedded ? (
+      {isInlineEmbedded ? null : isEmbedded ? (
         <div className="flex items-center gap-2 px-4 py-3 bg-black/60 border-b border-white/10 shrink-0">
           <ChatHeaderAvatar
             avatar={headerAvatar}
@@ -1682,8 +1690,12 @@ export function ChatWindow({
 
           {/* Input */}
           <div
-            className={`space-y-2 border-t border-white/10 bg-zinc-900/90 px-3 py-2.5 shrink-0 ${
-              isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+3.25rem)]' : ''
+            className={`space-y-2 shrink-0 px-1 py-2 ${
+              isInlineEmbedded
+                ? 'bg-transparent pt-1'
+                : `border-t border-white/10 bg-zinc-900/90 px-3 py-2.5 ${
+                    isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+3.25rem)]' : ''
+                  }`
             }`}
           >
             {replyingToMessage && (
@@ -1713,7 +1725,11 @@ export function ChatWindow({
               onKeyDown={handleKeyDown}
               placeholder={showCommandCenter ? 'Type a message or tap an action…' : 'Type a message…'}
               disabled={sending}
-              className="flex-1 rounded-full border border-white/10 bg-white/[0.06] px-3.5 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-brand-primary/50 focus:outline-none disabled:opacity-50"
+              className={`flex-1 px-3.5 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none disabled:opacity-50 ${
+                isInlineEmbedded
+                  ? 'rounded-lg bg-white/[0.05] focus:bg-white/[0.07]'
+                  : 'rounded-full border border-white/10 bg-white/[0.06] focus:border-brand-primary/50'
+              }`}
             />
             <button
               type="button"
